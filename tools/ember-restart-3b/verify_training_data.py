@@ -66,18 +66,37 @@ def _replay_bound_specialist_records(
         raise ValueError("specialist records do not match the bound generator replay")
 
 SPECIALIST_MINIMUMS = {
-    "image": {"records": 128, "tokens": 4096, "derivation": "raw_image_property_execution"},
-    "audio": {"records": 128, "tokens": 4096, "derivation": "raw_audio_signal_execution"},
-    "reasoning": {"records": 128, "tokens": 4096, "derivation": "local_answer_execution"},
-    "tool": {"records": 128, "tokens": 4096, "derivation": "typed_tool_execution"},
+    "image": {"records": 4096, "tokens": 24576, "derivation": "raw_image_property_execution"},
+    "audio": {"records": 4096, "tokens": 24576, "derivation": "raw_audio_signal_execution"},
+    "reasoning": {"records": 4096, "tokens": 24576, "derivation": "local_answer_execution"},
+    "tool": {"records": 4096, "tokens": 24576, "derivation": "typed_tool_execution"},
 }
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _read_authority_bytes(path: Path, name: str) -> tuple[bytes, str]:
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"{name} cannot be read") from exc
+    return payload, hashlib.sha256(payload).hexdigest()
 
 
-def _bound_file(root: Path, record: object, name: str) -> Path:
+def _json_from_authority_bytes(payload: bytes, name: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(payload)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{name} is not valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{name} must be an object")
+    return parsed
+
+
+def _read_authority_json(path: Path, name: str) -> tuple[dict[str, Any], str]:
+    payload, digest = _read_authority_bytes(path, name)
+    return _json_from_authority_bytes(payload, name), digest
+
+
+def _bound_file(root: Path, record: object, name: str) -> tuple[Path, bytes, str]:
     if not isinstance(record, Mapping):
         raise ValueError(f"{name} must be a path and sha256 record")
     relative = record.get("path")
@@ -89,19 +108,10 @@ def _bound_file(root: Path, record: object, name: str) -> Path:
     path = (root / relative).resolve()
     if root not in path.parents or not path.is_file():
         raise ValueError(f"{name} path escapes verifier root")
-    if _sha256(path) != expected:
+    payload, digest = _read_authority_bytes(path, name)
+    if digest != expected:
         raise ValueError(f"{name} sha256 does not match")
-    return path
-
-
-def _load_json(path: Path, name: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"{name} is not valid JSON") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{name} must be an object")
-    return payload
+    return path, payload, digest
 
 
 def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path) -> dict[str, Any]:
@@ -110,20 +120,21 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
     data_path = data_path.resolve()
     if root not in data_path.parents:
         raise ValueError("data manifest escapes verifier root")
-    data = _load_json(data_path, "data manifest")
+    data, data_sha256 = _read_authority_json(data_path, "data manifest")
     if data.get("schema_version") != "ember-owned-training-data-v1":
         raise ValueError("data manifest schema is invalid")
     if data.get("capability") != capability or data.get("data_class") != "SEMANTIC_PRETRAINING":
         raise ValueError("data manifest capability or class is invalid")
     if data.get("model_mediated") is not False or data.get("borrowed_labels") is not False:
         raise ValueError("data manifest provenance is invalid")
-    tokenizer_hash = _sha256(tokenizer_path)
+    tokenizer_bytes, tokenizer_hash = _read_authority_bytes(tokenizer_path, "tokenizer")
+    verifier_bytes, verifier_sha256 = _read_authority_bytes(Path(__file__), "verifier source")
     if data.get("tokenizer_sha256") != tokenizer_hash:
         raise ValueError("data manifest tokenizer sha256 does not match")
     raw_contract: dict[str, int] | None = None
     if capability in {"image", "audio"}:
-        config_path = _bound_file(root, data.get("model_config"), "model config")
-        config = _load_json(config_path, "model config").get("model")
+        config_path, config_bytes, _config_sha256 = _bound_file(root, data.get("model_config"), "model config")
+        config = _json_from_authority_bytes(config_bytes, "model config").get("model")
         if not isinstance(config, Mapping) or not isinstance(config.get("vocab_size"), int):
             raise ValueError("model config lacks a valid vocabulary")
         image = config.get("image_projection")
@@ -132,9 +143,9 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
             raise ValueError("model config lacks the authorized raw modality shapes")
         raw_contract = {"image_marker": config["vocab_size"] - 2, "audio_marker": config["vocab_size"] - 1}
 
-    source_path = _bound_file(root, data.get("source_manifest"), "source manifest")
-    records_path = _bound_file(root, data.get("records_artifact"), "records artifact")
-    source = _load_json(source_path, "source manifest")
+    source_path, source_bytes, source_sha256 = _bound_file(root, data.get("source_manifest"), "source manifest")
+    records_path, records_bytes, records_sha256 = _bound_file(root, data.get("records_artifact"), "records artifact")
+    source = _json_from_authority_bytes(source_bytes, "source manifest")
     if (
         source.get("schema_version") != "ember-owned-source-v1"
         or source.get("capability") != capability
@@ -158,11 +169,11 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
             or semantic_source["minimum_token_count"] < specialist_minimum["tokens"]
         ):
             raise ValueError("semantic source provenance is insufficient for specialist pretraining")
-        generator_path = _bound_file(root, semantic_source.get("generator"), "semantic source generator")
+        generator_path, _generator_bytes, _generator_sha256 = _bound_file(root, semantic_source.get("generator"), "semantic source generator")
         if generator_path.suffix != ".py":
             raise ValueError("semantic source generator must bind Python generator bytes")
         generation = semantic_source.get("generation")
-    tokenizer = _load_json(tokenizer_path, "tokenizer")
+    tokenizer = _json_from_authority_bytes(tokenizer_bytes, "tokenizer")
     vocab = tokenizer.get("model", {}).get("vocab") if isinstance(tokenizer.get("model"), dict) else None
     if not isinstance(vocab, dict) or not vocab:
         raise ValueError("tokenizer does not declare a vocabulary")
@@ -173,10 +184,10 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
     if capability in {"image", "audio", "reasoning", "tool"}:
         try:
             from tokenizers import Tokenizer
-            frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
+            frozen_tokenizer = Tokenizer.from_str(tokenizer_bytes.decode("utf-8"))
         except Exception as error:
             raise ValueError(f"{capability} semantic verifier cannot load the exact frozen tokenizer") from error
-    records_payload = _load_json(records_path, "records artifact")
+    records_payload = _json_from_authority_bytes(records_bytes, "records artifact")
     records = records_payload.get("records")
     if records_payload.get("schema_version") != "ember-owned-semantic-records-v1" or not isinstance(records, list) or not records:
         raise ValueError("semantic records artifact is invalid")
@@ -278,15 +289,15 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         "schema_version": "ember-training-data-verification-v1",
         "result": "VERIFIED",
         "capability": capability,
-        "data_manifest_sha256": _sha256(data_path),
+        "data_manifest_sha256": data_sha256,
         "tokenizer_sha256": tokenizer_hash,
-        "verifier_sha256": _sha256(Path(__file__)),
+        "verifier_sha256": verifier_sha256,
         "data_class": "SEMANTIC_PRETRAINING",
         "generator_replay_verified": bool(generation is not None) if specialist_minimum is not None else None,
         "record_count": len(records),
         "token_count": token_count,
-        "source_manifest_sha256": _sha256(source_path),
-        "records_artifact_sha256": _sha256(records_path),
+        "source_manifest_sha256": source_sha256,
+        "records_artifact_sha256": records_sha256,
         "semantic_checks": SEMANTIC_CHECKS[capability],
     }
 

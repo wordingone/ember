@@ -36,7 +36,7 @@ class ParameterReceiptTests(unittest.TestCase):
         self.assertEqual(receipt["result"], "MEASURED")
         self.assertEqual(receipt["active_expert_ids"], ["reasoning"])
         self.assertEqual(receipt["expert_genesis_sha256"], genesis)
-        self.assertRegex(receipt["counter_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(receipt["counter_sha256"], hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest())
 
 
 if __name__ == "__main__":
