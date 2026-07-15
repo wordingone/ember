@@ -37,7 +37,11 @@ def main():
  args.output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=args.output.parent,delete=False)as handle:
   handle.write(f'# Ember evaluation result\n\nStatus: {label}\n\nCapability: {result.get("capability","unknown")}\n')
-  if raw_forward:handle.write('\nExecution: VERIFIED NON-CLAIM RAW FORWARD\n')
+  if raw_forward:
+   handle.write('\nExecution: VERIFIED NON-CLAIM RAW FORWARD\n')
+   output=result.get('output');boundary=result.get('truth_boundary')
+   if isinstance(output,dict) and isinstance(output.get('decoded_text'),str):handle.write(f"Decoded output: {output['decoded_text']}\n")
+   if isinstance(boundary,dict) and isinstance(boundary.get('training_tokens_seen'),int) and not isinstance(boundary['training_tokens_seen'],bool):handle.write(f"Training tokens seen: {boundary['training_tokens_seen']}\n")
   temporary=handle.name
  os.replace(temporary,args.output)
 

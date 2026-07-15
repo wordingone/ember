@@ -12,6 +12,6 @@ def test_renders_preflight_as_non_claim_bearing_not_measured():
 def test_renders_verified_non_claim_raw_forward_without_capability_credit():
  with tempfile.TemporaryDirectory() as tmp:
   root=Path(tmp);source=root/'raw-forward.json';out=root/'surface.md'
-  source.write_text(json.dumps({'result':'VERIFIED_NON_CLAIM_RAW_FORWARD','claim_status':'NON_ADMISSIBLE_RAW_PREDICTIONS','output':{'decoded_text':'lev'},'truth_boundary':{'capability_proven':False,'sufficient_pretraining_proven':False}}))
+  source.write_text(json.dumps({'result':'VERIFIED_NON_CLAIM_RAW_FORWARD','claim_status':'NON_ADMISSIBLE_RAW_PREDICTIONS','output':{'decoded_text':'lev'},'truth_boundary':{'capability_proven':False,'sufficient_pretraining_proven':False,'training_tokens_seen':2048}}))
   run=subprocess.run([sys.executable,str(SCRIPT),'--input',str(source),'--output',str(out)],capture_output=True,text=True);assert run.returncode==0,run.stderr
-  rendered=out.read_text();assert 'VERIFIED NON-CLAIM RAW FORWARD' in rendered and 'NOT CLAIM-BEARING' in rendered and 'MEASURED CAPABILITY' not in rendered
+  rendered=out.read_text();assert 'VERIFIED NON-CLAIM RAW FORWARD' in rendered and 'NOT CLAIM-BEARING' in rendered and 'Decoded output: lev' in rendered and 'Training tokens seen: 2048' in rendered and 'MEASURED CAPABILITY' not in rendered
