@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 #![cfg(windows)]
@@ -116,6 +116,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     let db = root.join("emberd.sqlite3");
     let identity = root.join("identity.json");
     let receipt = root.join("receipt.json");
+    let alarm_path = root.join("schedule-alarms.json");
     let content_addressed_receipts = root.join("content-addressed-receipts");
     fs::write(
         &identity,
@@ -244,6 +245,47 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         format!("{}.json", artifact["sha256"].as_str().unwrap())
     );
 
-    rpc(&pipe, 15, "shutdown", json!({}));
+    rpc(
+        &pipe,
+        15,
+        "register_schedule_prediction",
+        json!({
+            "job_id": "rpc-job",
+            "artifact_class": "cost-model",
+            "predicted_duration_ms": 60_000,
+            "predicted_tokens": 4096,
+            "predicted_program_completion_ms": now + 10_000,
+            "absolute_deadline_ms": now + 20_000,
+        }),
+    );
+    rpc(
+        &pipe,
+        16,
+        "acquire_lease",
+        json!({"resource": "schedule:cost-model", "job_id": "rpc-job"}),
+    );
+    rpc(
+        &pipe,
+        17,
+        "record_schedule_measurement",
+        json!({
+            "job_id": "rpc-job",
+            "measured_duration_ms": 55_000,
+            "measured_tokens": 4096,
+            "outcome": "COMPLETED",
+            "receipt_sha256": "b".repeat(64),
+        }),
+    );
+    rpc(
+        &pipe,
+        18,
+        "write_schedule_alarm_state",
+        json!({"path": alarm_path}),
+    );
+    let alarm: Value = serde_json::from_slice(&fs::read(&alarm_path).unwrap()).unwrap();
+    assert_eq!(alarm["schema_version"], "emberd-schedule-alarm-state-v1");
+    assert_eq!(alarm["alarms"]["prediction_overrun"], false);
+    assert_eq!(alarm["runs"][0]["measurement_outcome"], "COMPLETED");
+    rpc(&pipe, 19, "shutdown", json!({}));
     wait_for_exit(&mut second);
 }
