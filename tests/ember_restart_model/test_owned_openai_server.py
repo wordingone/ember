@@ -22,11 +22,13 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from serve_owned_openai import (
+    DevelopmentIdentity,
     OwnedIdentity,
     create_loopback_server,
     require_live_parent,
     LoadedOwnedRuntime,
     resolve_central_owned_admission,
+    resolve_development_identity,
     resolve_runtime_inputs,
     start_parent_watchdog,
     main as serve_main,
@@ -75,6 +77,35 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
 
+    def test_development_identity_and_sse_completion_are_non_admissible(self) -> None:
+        runtime = _Runtime()
+        runtime.identity = DevelopmentIdentity(
+            checkpoint_sha256="a" * 64, model_config_sha256="b" * 64,
+            tokenizer_sha256="c" * 64, server_source_sha256="d" * 64,
+            tokens_seen=2048, allocated_parameters=3_839_161_856,
+            active_parameters=1_020_589_568,
+        )
+        server = create_loopback_server(runtime, host="127.0.0.1", port=0, mode="INTERACTIVE")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+            with urllib.request.urlopen(base + "/v1/models", timeout=2) as response:
+                identity = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(identity["seat"], "OWNED_DEVELOPMENT")
+            self.assertEqual(identity["claim_status"], "NON_ADMISSIBLE")
+            self.assertEqual(identity["tokens_seen"], 2048)
+            request = urllib.request.Request(
+                base + "/v1/chat/completions",
+                data=json.dumps({"model": runtime.identity.model_name, "messages": [{"role": "user", "content": "hello"}], "stream": True}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=2) as response:
+                stream = response.read().decode("utf-8")
+            self.assertIn("data: ", stream)
+            self.assertTrue(stream.rstrip().endswith("data: [DONE]"))
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=2)
     def test_models_identity_and_chat_share_exact_owned_runtime(self) -> None:
         status, identity = self._request("/v1/models")
         expected_name = "ember-owned:" + ("a" * 12)
@@ -255,6 +286,18 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match frozen"):
                 runtime.chat([{"role": "user", "content": "unbound"}], frozen_row_id="row-1", max_tokens=3)
 
+    def test_development_resolver_requires_exact_non_admissible_seat(self) -> None:
+        payload = {"valid": True, "seat": "OWNED_DEVELOPMENT", "claim_status": "NON_ADMISSIBLE"}
+        calls: list[list[str]] = []
+        def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+        self.assertEqual(resolve_development_identity(Path("development.json"), runner=runner), payload)
+        self.assertEqual(calls[0][1], "-I")
+        self.assertEqual(calls[0][-1], "development.json")
+        payload["claim_status"] = "ADMISSIBLE"
+        with self.assertRaisesRegex(ValueError, "invalid identity"):
+            resolve_development_identity(Path("development.json"), runner=runner)
     def test_central_admission_requires_exact_resolved_owned_seat(self) -> None:
         checkpoint = "a" * 64
         payload = {
