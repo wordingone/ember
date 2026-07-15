@@ -6,11 +6,26 @@ export const REFERENCE_SEAT_FLAG = "--reference-seat";
 
 export type ModelSeat = "OWNED_ADMITTED" | "REFERENCE_ONLY" | "OFFLINE";
 
+export interface OwnedServerLaunch {
+  pythonExecutable: string;
+  serverPath: string;
+  checkpointDir: string;
+  tokenizerPath: string;
+  runManifestPath: string;
+  trustedVerifierRegistryPath: string;
+  mode: "INTERACTIVE";
+}
+
 export interface OwnedModelIdentity {
   checkpointSha256: string;
   endpointUrl: string;
   identityUrl: string;
+  modelConfigSha256: string;
   modelName: string;
+  modelFormat?: string;
+  serverSourceSha256: string;
+  tokenizerSha256: string;
+  launch?: OwnedServerLaunch;
 }
 
 const MODEL_FREE_FAST_FLAGS = new Set([
