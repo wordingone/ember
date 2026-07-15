@@ -37,6 +37,9 @@ def main() -> int:
         actual = subprocess.run(["git", "-C", str(arguments.swebench_root), "rev-parse", "HEAD"], text=True, capture_output=True, timeout=10, check=False)
         if actual.returncode or actual.stdout.strip() != arguments.expected_commit:
             raise ValueError("SWE-bench source commit does not match expected commit")
+        clean = subprocess.run(["git", "-C", str(arguments.swebench_root), "status", "--porcelain=v1", "--untracked-files=all"], text=True, capture_output=True, timeout=10, check=False)
+        if clean.returncode or clean.stdout.strip():
+            raise ValueError("SWE-bench source working tree must be clean")
         present = [name for name in TASK_RELEASE_PATHS if (arguments.swebench_root / name).exists()]
         release_names = {"swebench_lite.json", "swebench_verified.json"}
         present.extend(path.relative_to(arguments.swebench_root).as_posix() for path in arguments.swebench_root.rglob("*") if path.is_file() and path.name.lower() in release_names)

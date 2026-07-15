@@ -66,3 +66,14 @@ def test_source_audit_refuses_nested_swebench_task_release_file():
         assert result.returncode != 0
         assert "task-release assets are present" in result.stderr
         assert not output.exists()
+
+def test_source_audit_refuses_dirty_harness_after_commit_binding():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary) / "swebench"
+        commit = make_source(root)
+        (root / "swebench" / "harness" / "run_evaluation.py").write_text("print('mutated')\n", encoding="utf-8")
+        output = root.parent / "audit.json"
+        result = subprocess.run([sys.executable, str(SCRIPT), "--swebench-root", str(root), "--expected-commit", commit, "--output", str(output)], text=True, capture_output=True, check=False)
+        assert result.returncode != 0
+        assert "working tree must be clean" in result.stderr
+        assert not output.exists()
