@@ -281,8 +281,23 @@ def resolve_central_owned_admission(
         raise ValueError("central admission model name does not match loaded checkpoint")
     return payload
 
-def resolve_development_identity(development_manifest: Path, *, runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None) -> dict[str, object]:
-    command = [sys.executable, "-I", str(ROOT / "scripts" / "ember_restart" / "development_cli_seat.py"), str(development_manifest)]
+def resolve_development_identity(
+    development_manifest: Path,
+    *,
+    expected_manifest_sha256: str,
+    expected_runtime_index_sha256: str,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+) -> dict[str, object]:
+    command = [
+        sys.executable,
+        "-I",
+        str(ROOT / "scripts" / "ember_restart" / "development_cli_seat.py"),
+        str(development_manifest),
+        "--expected-manifest-sha256",
+        expected_manifest_sha256,
+        "--expected-runtime-index-sha256",
+        expected_runtime_index_sha256,
+    ]
     completed = runner(command) if runner is not None else subprocess.run(command, text=True, capture_output=True, timeout=120, check=False)
     if completed.returncode != 0:
         raise ValueError("development seat resolver rejected the manifest")
@@ -549,6 +564,8 @@ def main(argv: list[str] | None = None) -> int:
     authority = parser.add_mutually_exclusive_group(required=True)
     authority.add_argument("--run-manifest", type=Path)
     authority.add_argument("--development-manifest", type=Path)
+    parser.add_argument("--expected-development-manifest-sha256")
+    parser.add_argument("--expected-runtime-index-sha256")
     parser.add_argument("--trusted-verifier-registry", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--mode", choices=("INTERACTIVE", "FROZEN_EVAL"), required=True)
@@ -558,9 +575,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args(argv)
     frozen_split = resolve_runtime_inputs(args.mode, args.frozen_split)
+    if args.development_manifest is not None and (args.expected_development_manifest_sha256 is None or args.expected_runtime_index_sha256 is None):
+        raise ValueError("development server requires exact manifest and runtime-index hashes")
     start_parent_watchdog(args.parent_pid)
     if args.development_manifest is not None:
-        development = resolve_development_identity(args.development_manifest)
+        development = resolve_development_identity(
+            args.development_manifest,
+            expected_manifest_sha256=args.expected_development_manifest_sha256,
+            expected_runtime_index_sha256=args.expected_runtime_index_sha256,
+        )
         if development.get("server_source_sha256") != sha(Path(__file__)):
             raise ValueError("development authority does not match server source bytes")
         config_path = args.config
