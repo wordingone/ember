@@ -106,17 +106,24 @@ def _expected_expert(shape: Mapping[str, int], name: str) -> dict[str, tuple[int
 
 
 class _StorageRef:
-    def __init__(self, size: int) -> None:
+    def __init__(self, size: int, key: str = "", storage_type: str = "") -> None:
         self.size = int(size)
+        self.key = key
+        self.storage_type = storage_type
 
 
 class _TensorMetadata:
-    def __init__(self, shape: object) -> None:
+    def __init__(self, storage: _StorageRef, offset: object, shape: object, stride: object) -> None:
+        self.storage = storage
+        self.offset = int(offset)
         self.shape = tuple(int(value) for value in shape)
+        self.stride = tuple(int(value) for value in stride)
 
 
 def _rebuild_tensor(storage: _StorageRef, offset: object, shape: object, stride: object, *unused: object) -> _TensorMetadata:
-    return _TensorMetadata(shape)
+    if not isinstance(storage, _StorageRef):
+        raise ValueError("checkpoint tensor lacks an authorized storage reference")
+    return _TensorMetadata(storage, offset, shape, stride)
 
 
 def _rebuild_parameter(value: _TensorMetadata, *unused: object) -> _TensorMetadata:
@@ -144,7 +151,8 @@ class _CheckpointMetadataUnpickler(pickle.Unpickler):
     def persistent_load(self, persistent_id: object) -> _StorageRef:
         if not isinstance(persistent_id, tuple) or len(persistent_id) != 5 or persistent_id[0] != "storage":
             raise ValueError("checkpoint contains an unsupported persistent reference")
-        return _StorageRef(int(persistent_id[4]))
+        storage_type = persistent_id[1]
+        return _StorageRef(int(persistent_id[4]), str(persistent_id[2]), getattr(storage_type, "__name__", ""))
 
     def find_class(self, module: str, name: str) -> object:
         if module == "collections" and name == "OrderedDict":
@@ -181,6 +189,62 @@ def _validate_state(state: Any, expected: Mapping[str, tuple[int, ...]], *, labe
         if not isinstance(tensor, _TensorMetadata) or tensor.shape != expected[key]:
             raise ValueError(f"{label} tensor shape mismatch: {key}")
 
+
+def _contiguous_stride(shape: tuple[int, ...]) -> tuple[int, ...]:
+    stride: list[int] = []
+    next_stride = 1
+    for dimension in reversed(shape):
+        stride.append(next_stride)
+        next_stride *= dimension
+    return tuple(reversed(stride))
+
+
+def _storage_element_bytes(storage_type: str) -> int:
+    widths = {"BFloat16Storage": 2, "FloatStorage": 4, "DoubleStorage": 8, "HalfStorage": 2, "LongStorage": 8, "IntStorage": 4, "ShortStorage": 2, "CharStorage": 1, "ByteStorage": 1, "BoolStorage": 1}
+    if storage_type not in widths:
+        raise ValueError("shared expert genesis uses an unsupported storage type")
+    return widths[storage_type]
+
+
+def _tensor_raw_bytes(archive: zipfile.ZipFile, tensor: _TensorMetadata) -> bytes:
+    if tensor.offset != 0 or tensor.stride != _contiguous_stride(tensor.shape):
+        raise ValueError("shared expert genesis tensor is not a contiguous base storage")
+    width = _storage_element_bytes(tensor.storage.storage_type)
+    candidates = [name for name in archive.namelist() if name.endswith(f"data/{tensor.storage.key}")]
+    if len(candidates) != 1:
+        raise ValueError("shared expert genesis storage entry is ambiguous")
+    raw = archive.read(candidates[0])
+    expected = tensor.storage.size * width
+    if len(raw) != expected:
+        raise ValueError("shared expert genesis storage byte size mismatch")
+    required = width
+    for dimension in tensor.shape:
+        required *= dimension
+    if required != len(raw):
+        raise ValueError("shared expert genesis tensor does not own its full storage")
+    return raw
+
+
+def _verify_shared_expert_genesis(manifest_path: Path, manifest: Mapping[str, Any], shape: Mapping[str, int]) -> None:
+    """For shared-text episodes, prove every frozen specialist is still its genesis bank."""
+
+    genesis = manifest["expert_genesis_sha256"]
+    for name in EXPERT_NAMES:
+        payload = _load_checkpoint_metadata(manifest_path.parent / f"expert-{name}.pt")
+        state = payload.get("model") if isinstance(payload, dict) else None
+        expected = _expected_expert(shape, name)
+        if not isinstance(state, dict) or set(state) != set(expected):
+            raise ValueError(f"shared expert genesis payload state mismatch: {name}")
+        digest = hashlib.sha256()
+        with zipfile.ZipFile(manifest_path.parent / f"expert-{name}.pt") as archive:
+            for layer in range(shape["layers"]):
+                for suffix in ("up_gate.weight", "down.weight"):
+                    tensor = state.get(f"layers.{layer}.experts.{name}.{suffix}")
+                    if not isinstance(tensor, _TensorMetadata):
+                        raise ValueError(f"shared expert genesis payload tensor mismatch: {name}")
+                    digest.update(_tensor_raw_bytes(archive, tensor))
+        if digest.hexdigest() != genesis[name]:
+            raise ValueError(f"shared expert genesis hash mismatch: {name}")
 
 def _inspect_realization(manifest_path: Path, *, active_expert: str, shape: Mapping[str, int]) -> dict[str, Any]:
     manifest = _load_json(manifest_path)
@@ -230,6 +294,8 @@ def _inspect_realization(manifest_path: Path, *, active_expert: str, shape: Mapp
         if not isinstance(payload, dict) or payload.get("expert") != name:
             raise ValueError(f"expert realization identifies the wrong bank: {name}")
         _validate_state(payload.get("model"), _expected_expert(shape, name), label=f"expert {name}")
+    if active_expert == "shared":
+        _verify_shared_expert_genesis(manifest_path, manifest, shape)
     return manifest
 
 def _counts(shape: Mapping[str, int], *, active_expert: str) -> dict[str, int]:
