@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { existsSync } from "fs";
-import { isAbsolute, join, resolve } from "path";
+import { dirname, isAbsolute, join, resolve } from "path";
 import { spawnSync } from "child_process";
 
 import type { OwnedModelIdentity, OwnedServerLaunch } from "./model-seat.ts";
@@ -293,7 +293,7 @@ export function loadOwnedDevelopmentIdentity(
   }
 
   const resolverPath = resolve(
-    input.repoRoot,
+    dirname(manifestPath),
     "scripts",
     "ember_restart",
     "development_cli_seat.py",
