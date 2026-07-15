@@ -57,6 +57,33 @@ describe("ember-cli model seat authority", () => {
     expect(decision.ownedIdentity?.checkpointSha256).toBe("a".repeat(64));
   });
 
+  it("selects an exact non-claiming development identity when admission is not yet earned", () => {
+    const checkpoint = "9".repeat(64);
+    const decision = resolveModelSeat({
+      argv: ["node", "ember", "-p", "hello"],
+      explicitModelUrl: undefined,
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+      ownedIdentity: {
+        seat: "OWNED_DEVELOPMENT",
+        checkpointSha256: checkpoint,
+        endpointUrl: "http://127.0.0.1:8083",
+        identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
+        modelName: "ember-owned-development:" + checkpoint.slice(0, 12),
+        claimStatus: "NON_ADMISSIBLE",
+        tokensSeen: 2048,
+      },
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.seat).toBe("OWNED_DEVELOPMENT");
+    expect(decision.source).toBe("owned-development-manifest");
+    expect(decision.ownedIdentity?.claimStatus).toBe("NON_ADMISSIBLE");
+    expect(decision.ownedIdentity?.tokensSeen).toBe(2048);
+  });
   it("does not let an explicit endpoint override an admitted owned identity", () => {
     const decision = resolveModelSeat({
       argv: ["node", "ember", "-p", "hello"],

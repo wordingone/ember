@@ -25,6 +25,7 @@ function identity(): OwnedModelIdentity {
     serverSourceSha256: "a".repeat(64),
     tokenizerSha256: "c".repeat(64),
     launch: {
+      authorityKind: "ADMISSION",
       checkpointDir: "C:\\owned\\checkpoint",
       mode: "INTERACTIVE",
       pythonExecutable: "C:\\Python\\python.exe",
@@ -75,6 +76,40 @@ describe("owned server supervisor", () => {
     expect(JSON.stringify(command)).not.toContain("llama-server");
   });
 
+  it("builds the separate exact development launch command without admission arguments", () => {
+    const development: OwnedModelIdentity = {
+      ...identity(),
+      seat: "OWNED_DEVELOPMENT",
+      claimStatus: "NON_ADMISSIBLE",
+      tokensSeen: 2048,
+      allocatedParameters: 3_839_161_856,
+      activeParameters: 1_020_589_568,
+      modelName: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+      launch: {
+        authorityKind: "DEVELOPMENT",
+        checkpointDir: "C:\\owned\\checkpoint",
+        developmentManifestPath: "C:\\owned\\development.json",
+        mode: "INTERACTIVE",
+        pythonExecutable: "C:\\Python\\python.exe",
+        serverPath: "C:\\repo\\tools\\ember-restart-3b\\serve_owned_openai.py",
+        tokenizerPath: "C:\\owned\\tokenizer.json",
+      },
+    };
+    const command = buildOwnedServerCommand(development, "cuda");
+    expect(command.args).toEqual([
+      "C:\\repo\\tools\\ember-restart-3b\\serve_owned_openai.py",
+      "--checkpoint", "C:\\owned\\checkpoint",
+      "--tokenizer", "C:\\owned\\tokenizer.json",
+      "--development-manifest", "C:\\owned\\development.json",
+      "--host", "127.0.0.1",
+      "--port", "8083",
+      "--device", "cuda",
+      "--parent-pid", String(process.pid),
+      "--mode", "INTERACTIVE",
+    ]);
+    expect(command.args).not.toContain("--run-manifest");
+    expect(command.args).not.toContain("--trusted-verifier-registry");
+  });
   it("rejects every pre-existing listener instead of trusting self-reported identity", async () => {
     let verified = 0;
     let spawned = 0;

@@ -73,9 +73,15 @@ export function buildOwnedServerCommand(
 ): OwnedServerCommand {
   const launch = identity.launch;
   if (!launch || launch.mode !== "INTERACTIVE") {
-    throw new Error("admitted owned identity lacks an interactive launch descriptor");
+    throw new Error("owned identity lacks an interactive launch descriptor");
   }
   const { host, port } = endpoint(identity);
+  const authorityArgs = launch.authorityKind === "ADMISSION"
+    ? [
+        "--run-manifest", launch.runManifestPath,
+        "--trusted-verifier-registry", launch.trustedVerifierRegistryPath,
+      ]
+    : ["--development-manifest", launch.developmentManifestPath];
   return {
     executable: launch.pythonExecutable,
     port,
@@ -83,8 +89,7 @@ export function buildOwnedServerCommand(
       launch.serverPath,
       "--checkpoint", launch.checkpointDir,
       "--tokenizer", launch.tokenizerPath,
-      "--run-manifest", launch.runManifestPath,
-      "--trusted-verifier-registry", launch.trustedVerifierRegistryPath,
+      ...authorityArgs,
       "--host", host,
       "--port", String(port),
       "--device", device,
@@ -191,7 +196,7 @@ export async function ensureOwnedServer(
     );
   }
   if (!identity.launch) {
-    throw new Error("admitted owned identity lacks a launch descriptor");
+    throw new Error("owned identity lacks a launch descriptor");
   }
   const device = deps.device ?? (process.env["EMBER_OWNED_DEVICE"] === "cpu" ? "cpu" : "cuda");
   const command = buildOwnedServerCommand(identity, device);

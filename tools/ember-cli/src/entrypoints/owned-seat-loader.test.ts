@@ -6,6 +6,7 @@ import { describe, expect, it } from "bun:test";
 import { resolve } from "path";
 
 import {
+  loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
@@ -94,6 +95,7 @@ describe("owned seat loader", () => {
       serverSourceSha256: "a".repeat(64),
       tokenizerSha256: "c".repeat(64),
       launch: {
+        authorityKind: "ADMISSION",
         checkpointDir: resolve("C:/owned/checkpoint"),
         mode: "INTERACTIVE",
         pythonExecutable: "python-owned",
@@ -112,6 +114,101 @@ describe("owned seat loader", () => {
     ]);
   });
 
+  it("loads a closed development identity through the separate non-claiming resolver", () => {
+    let observedArgs: string[] = [];
+    const identity = loadOwnedDevelopmentIdentity(
+      {
+        repoRoot: "C:/repo",
+        configHome: "C:/home",
+        manifestPath: resolve("C:/development.json"),
+        pythonExecutable: "python-owned",
+      },
+      {
+        exists: () => true,
+        execute: (executable, args) => {
+          observedArgs = [executable, ...args];
+          return {
+            status: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              valid: true,
+              seat: "OWNED_DEVELOPMENT",
+              claim_status: "NON_ADMISSIBLE",
+              checkpoint_sha256: CHECKPOINT,
+              endpoint_url: "http://127.0.0.1:8083",
+              identity_url: "http://127.0.0.1:8083/v1/models",
+              model_config_sha256: "b".repeat(64),
+              model_name: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+              model_format: "pytorch-checkpoint-v3",
+              server_source_sha256: "a".repeat(64),
+              tokenizer_sha256: "c".repeat(64),
+              tokens_seen: 2048,
+              allocated_parameters: 3_839_161_856,
+              active_parameters: 1_020_589_568,
+              launch: {
+                checkpoint_dir: resolve("C:/owned/checkpoint"),
+                development_manifest_path: resolve("C:/development.json"),
+                mode: "INTERACTIVE",
+                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                tokenizer_path: resolve("C:/owned/tokenizer.json"),
+              },
+            }),
+          };
+        },
+      },
+    );
+
+    expect(identity?.seat).toBe("OWNED_DEVELOPMENT");
+    expect(identity?.claimStatus).toBe("NON_ADMISSIBLE");
+    expect(identity?.tokensSeen).toBe(2048);
+    expect(identity?.allocatedParameters).toBe(3_839_161_856);
+    expect(identity?.launch).toEqual({
+      authorityKind: "DEVELOPMENT",
+      checkpointDir: resolve("C:/owned/checkpoint"),
+      developmentManifestPath: resolve("C:/development.json"),
+      mode: "INTERACTIVE",
+      pythonExecutable: "python-owned",
+      serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+      tokenizerPath: resolve("C:/owned/tokenizer.json"),
+    });
+    expect(observedArgs).toEqual([
+      "python-owned",
+      "C:\\repo\\scripts\\ember_restart\\development_cli_seat.py",
+      "C:\\development.json",
+    ]);
+  });
+
+  it("verifies a live development endpoint without upgrading its claim status", async () => {
+    const identity = {
+      seat: "OWNED_DEVELOPMENT" as const,
+      claimStatus: "NON_ADMISSIBLE" as const,
+      tokensSeen: 2048,
+      allocatedParameters: 3_839_161_856,
+      activeParameters: 1_020_589_568,
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    await verifyOwnedEndpointIdentity(identity, async () =>
+      Response.json({
+        seat: "OWNED_DEVELOPMENT",
+        mode: "INTERACTIVE",
+        claim_status: "NON_ADMISSIBLE",
+        tokens_seen: 2048,
+        allocated_parameters: 3_839_161_856,
+        active_parameters: 1_020_589_568,
+        checkpoint_sha256: CHECKPOINT,
+        model_name: identity.modelName,
+        model_config_sha256: identity.modelConfigSha256,
+        server_source_sha256: identity.serverSourceSha256,
+        tokenizer_sha256: identity.tokenizerSha256,
+      }),
+    );
+  });
   it("surfaces admission errors and rejects malformed successful output", () => {
     const common = {
       repoRoot: "C:/repo",

@@ -4,19 +4,33 @@
 
 export const REFERENCE_SEAT_FLAG = "--reference-seat";
 
-export type ModelSeat = "OWNED_ADMITTED" | "REFERENCE_ONLY" | "OFFLINE";
+export type ModelSeat = "OWNED_ADMITTED" | "OWNED_DEVELOPMENT" | "REFERENCE_ONLY" | "OFFLINE";
 
-export interface OwnedServerLaunch {
+interface OwnedServerLaunchBase {
   pythonExecutable: string;
   serverPath: string;
   checkpointDir: string;
   tokenizerPath: string;
-  runManifestPath: string;
-  trustedVerifierRegistryPath: string;
   mode: "INTERACTIVE";
 }
 
+export type OwnedServerLaunch =
+  | (OwnedServerLaunchBase & {
+      authorityKind: "ADMISSION";
+      runManifestPath: string;
+      trustedVerifierRegistryPath: string;
+    })
+  | (OwnedServerLaunchBase & {
+      authorityKind: "DEVELOPMENT";
+      developmentManifestPath: string;
+    });
+
 export interface OwnedModelIdentity {
+  seat?: "OWNED_ADMITTED" | "OWNED_DEVELOPMENT";
+  claimStatus?: "NON_ADMISSIBLE";
+  tokensSeen?: number;
+  allocatedParameters?: number;
+  activeParameters?: number;
   checkpointSha256: string;
   endpointUrl: string;
   identityUrl: string;
@@ -62,7 +76,7 @@ export interface ModelSeatResolutionInput {
 export interface ModelSeatDecision {
   allowed: boolean;
   seat: ModelSeat | null;
-  source: "flag" | "env" | "gpu-free" | "owned-manifest" | "none";
+  source: "flag" | "env" | "gpu-free" | "owned-manifest" | "owned-development-manifest" | "none";
   argv: string[];
   ownedIdentity?: OwnedModelIdentity;
   error?: string;
@@ -98,6 +112,23 @@ export function resolveModelSeat(
   }
 
   if (input.ownedIdentity) {
+    const ownedSeat = input.ownedIdentity.seat ?? "OWNED_ADMITTED";
+    if (
+      ownedSeat === "OWNED_DEVELOPMENT" &&
+      (input.ownedIdentity.claimStatus !== "NON_ADMISSIBLE" ||
+        !Number.isSafeInteger(input.ownedIdentity.tokensSeen) ||
+        (input.ownedIdentity.tokensSeen ?? -1) < 0 ||
+        input.ownedIdentity.modelName !==
+          "ember-owned-development:" + input.ownedIdentity.checkpointSha256.slice(0, 12))
+    ) {
+      return {
+        allowed: false,
+        seat: null,
+        source: "none",
+        argv: sanitizedArgv,
+        error: "owned development identity is not exact and NON_ADMISSIBLE",
+      };
+    }
     const admittedEndpoint = input.ownedIdentity.endpointUrl.replace(/\/$/, "");
     const explicitEndpoint = input.explicitModelUrl?.replace(/\/$/, "");
     if (explicitEndpoint !== undefined && explicitEndpoint !== admittedEndpoint) {
@@ -114,8 +145,10 @@ export function resolveModelSeat(
     }
     return {
       allowed: true,
-      seat: "OWNED_ADMITTED",
-      source: "owned-manifest",
+      seat: ownedSeat,
+      source: ownedSeat === "OWNED_ADMITTED"
+        ? "owned-manifest"
+        : "owned-development-manifest",
       argv: sanitizedArgv,
       ownedIdentity: input.ownedIdentity,
     };
