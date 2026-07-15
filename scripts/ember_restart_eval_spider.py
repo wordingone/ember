@@ -9,6 +9,7 @@ import importlib.util
 import json
 import math
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -90,6 +91,17 @@ def database_tree_sha256(root: Path) -> str:
     return digest.hexdigest()
 
 
+def snapshot_spider_inputs(source: Path, gold: Path, tables: Path, database: Path, stage: Path) -> tuple[Path, Path, Path, Path]:
+    staged_source = stage / "spider"
+    staged_gold = stage / "gold.sql"
+    staged_tables = stage / "tables.json"
+    staged_database = stage / "database"
+    shutil.copytree(source, staged_source, ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy2(gold, staged_gold)
+    shutil.copy2(tables, staged_tables)
+    shutil.copytree(database, staged_database)
+    return staged_source, staged_gold, staged_tables, staged_database
+
 def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, database: Path) -> str:
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -131,20 +143,28 @@ def main() -> int:
         parser.error(f"invalid Spider predictions: {error}")
     if len(sql) != rows(arguments.gold):
         parser.error("non-empty predictions must exactly cover the frozen gold rows")
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=selected.parent, prefix=selected.name + ".", suffix=".spider.tmp", delete=False) as handle:
-        handle.write("\n".join(sql) + "\n")
-        temporary = Path(handle.name)
-    try:
-        evaluator = load_evaluator(arguments.spider_root)
-        foreign_keys = evaluator.build_foreign_key_map_from_json(str(arguments.tables))
-        captured = {}
-        evaluator.print_scores = lambda scores, _etype: captured.update(scores)
-        evaluator.evaluate(str(arguments.gold), str(temporary), str(arguments.database_dir), "match", foreign_keys)
-        exact = captured["all"]["exact"]
-    except Exception as error:
-        parser.error(f"pinned Spider scorer failed: {error}")
-    finally:
-        temporary.unlink(missing_ok=True)
+    with tempfile.TemporaryDirectory(dir=selected.parent, prefix="ember-spider-inputs-") as scratch:
+        staged_source, staged_gold, staged_tables, staged_database = snapshot_spider_inputs(
+            arguments.spider_root, arguments.gold, arguments.tables, arguments.database_dir, Path(scratch)
+        )
+        if verify_frozen_custody(
+            arguments.frozen_sql_manifest, staged_source, staged_gold, staged_tables, staged_database
+        ) != custody_sha256:
+            parser.error("staged Spider evaluator assets do not match frozen custody")
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=scratch, prefix=selected.name + ".", suffix=".spider.tmp", delete=False) as handle:
+            handle.write("\n".join(sql) + "\n")
+            temporary = Path(handle.name)
+        try:
+            evaluator = load_evaluator(staged_source)
+            foreign_keys = evaluator.build_foreign_key_map_from_json(str(staged_tables))
+            captured = {}
+            evaluator.print_scores = lambda scores, _etype: captured.update(scores)
+            evaluator.evaluate(str(staged_gold), str(temporary), str(staged_database), "match", foreign_keys)
+            exact = captured["all"]["exact"]
+        except Exception as error:
+            parser.error(f"pinned Spider scorer failed: {error}")
+        finally:
+            temporary.unlink(missing_ok=True)
     if isinstance(exact, bool) or not isinstance(exact, (int, float)) or not math.isfinite(exact):
         parser.error("pinned Spider scorer did not return finite exact match")
     payload = {"metrics": {"exact_match": float(exact)}, "sample_count": len(sql), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_sql_manifest_sha256": custody_sha256, "upstream": "pinned local Spider exact-match scorer"}
