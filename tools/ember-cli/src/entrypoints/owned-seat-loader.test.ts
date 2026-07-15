@@ -3,6 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, it } from "bun:test";
+import { resolve } from "path";
 
 import {
   loadOwnedModelIdentity,
@@ -47,8 +48,8 @@ describe("owned seat loader", () => {
       {
         repoRoot: "C:/repo",
         configHome: "C:/home",
-        manifestPath: "C:/run.json",
-        verifierRegistryPath: "C:/trusted.json",
+        manifestPath: resolve("C:/run.json"),
+        verifierRegistryPath: resolve("C:/trusted.json"),
         pythonExecutable: "python-owned",
       },
       {
@@ -65,6 +66,16 @@ describe("owned seat loader", () => {
               endpoint_url: "http://127.0.0.1:8083",
               identity_url: "http://127.0.0.1:8083/v1/models",
               model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
+              model_format: "safetensors",
+              server_source_sha256: "a".repeat(64),
+              launch: {
+                checkpoint_dir: resolve("C:/owned/checkpoint"),
+                mode: "INTERACTIVE",
+                run_manifest_path: resolve("C:/run.json"),
+                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                tokenizer_path: resolve("C:/owned/tokenizer.json"),
+                trusted_verifier_registry_path: resolve("C:/trusted.json"),
+              },
             }),
           };
         },
@@ -76,6 +87,17 @@ describe("owned seat loader", () => {
       endpointUrl: "http://127.0.0.1:8083",
       identityUrl: "http://127.0.0.1:8083/v1/models",
       modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      modelFormat: "safetensors",
+      serverSourceSha256: "a".repeat(64),
+      launch: {
+        checkpointDir: resolve("C:/owned/checkpoint"),
+        mode: "INTERACTIVE",
+        pythonExecutable: "python-owned",
+        runManifestPath: resolve("C:/run.json"),
+        serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+        tokenizerPath: resolve("C:/owned/tokenizer.json"),
+        trustedVerifierRegistryPath: resolve("C:/trusted.json"),
+      },
     });
     expect(observedArgs).toEqual([
       "python-owned",
@@ -90,8 +112,8 @@ describe("owned seat loader", () => {
     const common = {
       repoRoot: "C:/repo",
       configHome: "C:/home",
-      manifestPath: "C:/run.json",
-      verifierRegistryPath: "C:/trusted.json",
+      manifestPath: resolve("C:/run.json"),
+      verifierRegistryPath: resolve("C:/trusted.json"),
     };
     expect(() =>
       loadOwnedModelIdentity(common, {
