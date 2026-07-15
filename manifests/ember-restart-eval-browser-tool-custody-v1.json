@@ -6,6 +6,9 @@
     "browser_ui":  {
                        "benchmark_id":  "browsergym-miniwob",
                        "source_commit":  "9e779f087de9a65668b6974d11f9ce9816026e96",
+                       "source_tree":  "d33e398c18d04d5da742b1c1ec11c4aab8bc010b",
+                       "license":  "Apache-2.0",
+                       "license_sha256":  "b192c58991e8ff585cc574615d40e74185404d4b96c1109d423071ab1367344b",
                        "asset_disposition":  "NO_LOCAL_PINNED_BROWSERGYM_RUNTIME_OR_FROZEN_MINIWOB_TASKS",
                        "target_execution_permitted":  false
                    },
