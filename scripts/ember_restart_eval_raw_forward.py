@@ -79,6 +79,8 @@ def main() -> None:
     parser.add_argument("--row-id")
     parser.add_argument("--stop-token-id", type=int, default=2)
     arguments = parser.parse_args()
+    if arguments.benchmark_capability not in (None, "text"):
+        parser.error("generic raw forward accepts only text capability")
     if arguments.output.exists(): parser.error("refusing to overwrite existing output")
     if arguments.canonical_output is not None and arguments.canonical_output.exists(): parser.error("refusing to overwrite existing canonical output")
     if arguments.canonical_output is not None and arguments.canonical_output.resolve() == arguments.output.resolve(): parser.error("canonical output must differ from output")
