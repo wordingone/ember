@@ -53,7 +53,7 @@
                                                                                                    "claim_status":  "PREFLIGHT_ONLY"
                                                                                                }
                                                         },
-                             "asset_disposition":  "PINNED_BFCL_SOURCE_NO_LOCAL_RUNTIME_OR_FROZEN_TASKS",
+                             "asset_disposition":  "PINNED_BFCL_SOURCE_AND_PRIVATE_SIMPLE_TASKS_NO_EXECUTABLE_PINNED_HARNESS_ENVIRONMENT",
                              "target_execution_permitted":  false
                          }
 }
