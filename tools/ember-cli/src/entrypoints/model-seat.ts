@@ -17,6 +17,7 @@ interface OwnedServerLaunchBase {
 export type OwnedServerLaunch =
   | (OwnedServerLaunchBase & {
       authorityKind: "ADMISSION";
+      modelConfigPath: string;
       runManifestPath: string;
       trustedVerifierRegistryPath: string;
     })

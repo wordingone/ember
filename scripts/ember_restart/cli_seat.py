@@ -34,6 +34,7 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
     checkpoint_sha256 = manifest["checkpoint"]["sha256"]
     checkpoint_manifest_path = (root / manifest["checkpoint"]["manifest_path"]).resolve()
     tokenizer_path = (root / manifest["tokenizer"]["path"]).resolve()
+    model_config_path = (root / manifest["architecture"]["model_config"]["path"]).resolve()
     server_path = (root / serving["server_implementation"]["path"]).resolve()
     return {
         "valid": True,
@@ -48,6 +49,7 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
         "launch": {
             "checkpoint_dir": str(checkpoint_manifest_path.parent),
             "mode": "INTERACTIVE",
+            "model_config_path": str(model_config_path),
             "run_manifest_path": str(run_manifest_path),
             "server_path": str(server_path),
             "tokenizer_path": str(tokenizer_path),
