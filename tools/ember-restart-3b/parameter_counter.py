@@ -123,6 +123,21 @@ def _rebuild_parameter(value: _TensorMetadata, *unused: object) -> _TensorMetada
     return value
 
 
+class _TensorTypeSentinel:
+    """Non-executable placeholder for the exact torch.Tensor pickle global."""
+
+
+def _rebuild_tensor_from_type(func: object, new_type: object, args: object, state: object) -> _TensorMetadata:
+    """Extract only shape metadata from PyTorch's tensor-subtype pickle wrapper."""
+
+    if func is not _rebuild_tensor or new_type is not _TensorTypeSentinel or not isinstance(args, tuple):
+        raise ValueError("checkpoint tensor subtype wrapper is not an authorized metadata form")
+    value = _rebuild_tensor(*args)
+    if not isinstance(value, _TensorMetadata):
+        raise ValueError("checkpoint tensor subtype wrapper did not produce tensor metadata")
+    return value
+
+
 class _CheckpointMetadataUnpickler(pickle.Unpickler):
     """Read only tensor metadata from a Torch zip checkpoint."""
 
@@ -139,6 +154,10 @@ class _CheckpointMetadataUnpickler(pickle.Unpickler):
             return _rebuild_tensor
         if module == "torch._utils" and name == "_rebuild_parameter":
             return _rebuild_parameter
+        if module == "torch._tensor" and name == "_rebuild_from_type_v2":
+            return _rebuild_tensor_from_type
+        if module == "torch" and name == "Tensor":
+            return _TensorTypeSentinel
         if module == "torch" and name.endswith("Storage"):
             return type(name, (), {})
         raise ValueError(f"checkpoint references disallowed global {module}.{name}")
