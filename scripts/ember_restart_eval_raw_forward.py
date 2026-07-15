@@ -241,7 +241,57 @@ def hash_and_load_torch(torch_module, path: Path, expected_sha256: str, *, devic
         if digest.hexdigest() != expected_sha256:
             raise ValueError(f"runtime checkpoint shard hash mismatch: {path.name}")
         handle.seek(0)
-        return torch_module.load(handle, map_location=device, weights_only=True)
+        return torch_module.load(handle, map_location="cpu", weights_only=True)
+
+
+def canonicalize_tied_embedding_state(
+    torch_module,
+    state: dict[str, object],
+    *,
+    tied_embeddings: bool,
+) -> dict[str, object]:
+    """Validate duplicate checkpoint copies and restore one tied tensor identity."""
+
+    canonical = dict(state)
+    if not tied_embeddings:
+        return canonical
+    embedding_key, head_key = "token_embedding.weight", "lm_head.weight"
+    if embedding_key not in canonical or head_key not in canonical:
+        raise ValueError("tied embedding checkpoint tensors are missing")
+    embedding, head = canonical[embedding_key], canonical[head_key]
+    if (
+        tuple(embedding.shape) != tuple(head.shape)
+        or embedding.dtype != head.dtype
+        or not bool(torch_module.equal(embedding, head))
+    ):
+        raise ValueError("tied embedding checkpoint tensors differ")
+    canonical[head_key] = embedding
+    return canonical
+
+
+def materialize_state_map(state: dict[str, object], device: str) -> dict[str, object]:
+    """Move each unique validated model tensor onto the execution device once."""
+
+    materialized: dict[str, object] = {}
+    by_identity: dict[int, object] = {}
+    for key, value in state.items():
+        identity = id(value)
+        if identity not in by_identity:
+            by_identity[identity] = value.to(device=device)
+        materialized[key] = by_identity[identity]
+    return materialized
+
+
+def rebind_tied_embeddings(model, *, tied_embeddings: bool) -> None:
+    """Preserve the architecture's single embedding/output-head parameter."""
+
+    if not tied_embeddings:
+        return
+    if not hasattr(model, "token_embedding") or not hasattr(model, "lm_head"):
+        raise ValueError("tied embedding modules are missing")
+    model.lm_head.weight = model.token_embedding.weight
+    if model.lm_head.weight is not model.token_embedding.weight:
+        raise ValueError("runtime failed to preserve tied embeddings")
 
 
 def _load_model_module(source_bytes: bytes, source_path: Path):
@@ -290,6 +340,39 @@ def _config_from_payload(module, contract: dict[str, object]):
     if config.declared_total_unique_trainable_parameters != config.structural_parameter_count():
         raise ValueError("production contract total does not match the sparse architecture")
     return config
+
+def tied_embeddings_from_contract(config, contract: dict[str, object]) -> bool:
+    """Resolve the committed tying declaration and reject model/config drift."""
+
+    model = contract.get("model")
+    if isinstance(model, dict) and "tied_embeddings" in model:
+        declared = model["tied_embeddings"]
+        if not isinstance(declared, bool):
+            raise ValueError("production tied-embedding contract must be boolean")
+        runtime = getattr(config, "tied_embeddings", declared)
+        if not isinstance(runtime, bool) or runtime != declared:
+            raise ValueError("runtime tied-embedding config does not match its contract")
+        return declared
+    return bool(getattr(config, "tied_embeddings", False))
+
+
+def parameter_dtype_from_contract(torch_module, contract: dict[str, object]):
+    training = contract.get("training")
+    memory = training.get("memory") if isinstance(training, dict) else None
+    if not isinstance(memory, dict) or memory.get("parameter_dtype") != "bfloat16" or memory.get("parameter_bytes") != 2:
+        raise ValueError("production parameter dtype contract must be two-byte bfloat16")
+    return torch_module.bfloat16
+
+
+def construct_runtime_model(torch_module, model_module, config, contract: dict[str, object]):
+    parameter_dtype = parameter_dtype_from_contract(torch_module, contract)
+    previous_dtype = torch_module.get_default_dtype()
+    try:
+        torch_module.set_default_dtype(parameter_dtype)
+        return model_module.UnifiedDecoder(config, device="meta", allow_production_allocation=True)
+    finally:
+        torch_module.set_default_dtype(previous_dtype)
+
 
 def load_owned_prompt(path: Path) -> dict[str, object]:
     prompt = json.loads(path.read_text(encoding="utf-8"))
@@ -392,7 +475,8 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
         raise ValueError("input token and generation limit are invalid")
     if any(token >= config.vocab_size for token in input_token_ids):
         raise ValueError("input token is outside model vocabulary")
-    model = module.UnifiedDecoder(config, device="meta", allow_production_allocation=True)
+    model = construct_runtime_model(torch, module, config, checkpoint["model_config"])
+    tied_embeddings = tied_embeddings_from_contract(config, checkpoint["model_config"])
     active_route = require_active_route(checkpoint, str((bound_inputs or {}).get("active_expert", arguments.active_expert)))
     root = arguments.checkpoint_manifest.parent
     required_shards = checkpoint["required_shards"]
@@ -411,9 +495,18 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
         validate_state_map(expert["model"], expert_expected, f"expert {active_route}")
     if active_route != "shared" and not expert_expected:
         raise ValueError("selected expert has no expected model parameters")
-    model.load_state_dict(shared["model"], strict=False, assign=True)
+    shared_model_state = canonicalize_tied_embedding_state(
+        torch,
+        shared["model"],
+        tied_embeddings=tied_embeddings,
+    )
+    shared_state = materialize_state_map(shared_model_state, arguments.device)
+    expert_state = None if active_route == "shared" else materialize_state_map(expert["model"], arguments.device)
+    del shared, expert
+    model.load_state_dict(shared_state, strict=False, assign=True)
     if active_route != "shared":
-        model.load_state_dict(expert["model"], strict=False, assign=True)
+        model.load_state_dict(expert_state, strict=False, assign=True)
+    rebind_tied_embeddings(model, tied_embeddings=tied_embeddings)
     model.eval()
     tokens = torch.tensor([input_token_ids], device=arguments.device, dtype=torch.long)
     generated: list[int] = []
@@ -425,7 +518,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
             if token == arguments.stop_token_id:
                 break
             tokens = torch.cat((tokens, torch.tensor([[token]], device=arguments.device)), dim=1)
-    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": active_route, "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "model_source_sha256": source_sha256, "model_config_sha256": checkpoint["model_config_sha256"], "tokenizer_sha256": checkpoint["tokenizer_sha256"], "inference_implementation_sha256": authority["inference_implementation_sha256"], "parameter_receipt_sha256": checkpoint["parameter_receipt_sha256"]}
+    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": active_route, "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "model_source_sha256": source_sha256, "model_config_sha256": checkpoint["model_config_sha256"], "tokenizer_sha256": checkpoint["tokenizer_sha256"], "inference_implementation_sha256": authority["inference_implementation_sha256"], "parameter_receipt_sha256": checkpoint["parameter_receipt_sha256"], "parameter_counter_sha256": checkpoint["counter_sha256"], "trusted_verifier_registry_sha256": checkpoint["trusted_verifier_registry_sha256"]}
 
 
 def main() -> None:
