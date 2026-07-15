@@ -21,5 +21,6 @@ def test_files_family_is_explicitly_held_without_pinned_tasks_or_runtime():
     assert value["admission"] == "NOT_EXECUTABLE_NO_FROZEN_FILE_TASK_ASSETS"
     candidate = value['candidate_task_release']
     assert candidate == {'dataset': 'SWE-bench/SWE-bench_Lite', 'revision': '69611d31007e1c6731db8bd5b5c3f2d33f5bab6e', 'config': 'default', 'split': 'test', 'rows': 300, 'parquet_bytes': 1111559, 'license_disposition': 'UNDECLARED_IN_EXACT_DATASET_CARD', 'materialization_permitted': False}
+    assert value['verified_candidate'] == {'dataset': 'SWE-bench/SWE-bench_Verified', 'revision': '91aa3ed51b709be6457e12d00300a6a596d4c6a3', 'config': 'default', 'split': 'test', 'rows': 500, 'parquet_bytes': 2096679, 'license_disposition': 'UNDECLARED_IN_EXACT_DATASET_CARD', 'materialization_permitted': False}
     assert value["target_training_access"] == "FORBIDDEN"
     assert "local_path" not in value
