@@ -63,6 +63,22 @@ class NativeComputeScreenTests(unittest.TestCase):
                 source_sha256="e" * 64, total_vram_bytes=24 * 1024**3,
                 batch_measurements=[{"batch_size": 1, "elapsed_seconds": 1.0, "peak_allocated_bytes": 10, "peak_reserved_bytes": 11}],
             )
+    def test_receipt_rejects_missing_runtime_source_schedule_and_disk_custody(self) -> None:
+        with self.assertRaisesRegex(ValueError, "custody"):
+            screen_receipt(
+                model_config_sha256="a" * 64,
+                optimizer_contract_sha256="b" * 64,
+                tokenizer_sha256="c" * 64,
+                checkpoint_manifest_sha256="d" * 64,
+                source_sha256="e" * 64,
+                total_vram_bytes=24 * 1024**3,
+                available_vram_bytes=23 * 1024**3,
+                batch_measurements=[
+                    {"batch_size": 1, "elapsed_seconds": 1.0, "peak_allocated_bytes": 10, "peak_reserved_bytes": 11},
+                    {"batch_size": 2, "elapsed_seconds": 1.0, "peak_allocated_bytes": 12, "peak_reserved_bytes": 13},
+                ],
+                custody={},
+            )
     def test_receipt_binds_full_steps_and_native_identities(self) -> None:
         receipt = screen_receipt(
             model_config_sha256="a" * 64,
@@ -71,6 +87,12 @@ class NativeComputeScreenTests(unittest.TestCase):
             checkpoint_manifest_sha256="d" * 64,
             source_sha256="e" * 64,
             total_vram_bytes=24 * 1024**3,
+            custody={
+                "hardware_runtime": {"gpu_name": "gpu", "compute_capability": "8.9", "torch_version": "x", "cuda_version": "x", "cudnn_version": "x", "optimizer_implementation": "x", "optimizer_version": "x"},
+                "source_closure_sha256": {name: "f" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")},
+                "emberd_schedule_receipt_sha256": "g" * 64,
+                "disk_budget_receipt_sha256": "h" * 64,
+            },
             batch_measurements=[
                 {"batch_size": 1, "elapsed_seconds": 1.0, "peak_allocated_bytes": 10, "peak_reserved_bytes": 11},
                 {"batch_size": 2, "elapsed_seconds": 2.0, "peak_allocated_bytes": 12, "peak_reserved_bytes": 13},

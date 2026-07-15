@@ -49,6 +49,7 @@ def screen_receipt(
     source_sha256: str,
     total_vram_bytes: int,
     available_vram_bytes: int | None = None,
+    custody: dict[str, Any] | None = None,
     batch_measurements: list[dict[str, Any]],
 ) -> dict[str, object]:
     plan = screen_plan(total_vram_bytes=total_vram_bytes)
@@ -70,6 +71,18 @@ def screen_receipt(
     observed = [item.get("batch_size") for item in batch_measurements]
     if observed != required:
         raise ValueError("screen receipt requires exactly batch-1 then batch-2 full steps")
+    required_custody = {"hardware_runtime", "source_closure_sha256", "emberd_schedule_receipt_sha256", "disk_budget_receipt_sha256"}
+    if not isinstance(custody, dict) or set(custody) != required_custody:
+        raise ValueError("screen receipt custody must bind runtime, source closure, emberd, and disk evidence")
+    runtime = custody["hardware_runtime"]
+    if not isinstance(runtime, dict) or not {"gpu_name", "compute_capability", "torch_version", "cuda_version", "cudnn_version", "optimizer_implementation", "optimizer_version"}.issubset(runtime):
+        raise ValueError("screen receipt custody runtime identity is incomplete")
+    closure = custody["source_closure_sha256"]
+    needed_sources = {"model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py"}
+    if not isinstance(closure, dict) or set(closure) != needed_sources or any(not isinstance(value, str) or len(value) != 64 for value in closure.values()):
+        raise ValueError("screen receipt custody source closure is incomplete")
+    if any(not isinstance(custody[key], str) or len(custody[key]) != 64 for key in ("emberd_schedule_receipt_sha256", "disk_budget_receipt_sha256")):
+        raise ValueError("screen receipt custody receipt hashes are invalid")
     return {
         "schema_version": "ember-native-compute-screen-v1",
         "result": "MEASURED",
@@ -84,6 +97,9 @@ def screen_receipt(
         "tokenizer_sha256": tokenizer_sha256,
         "checkpoint_manifest_sha256": checkpoint_manifest_sha256,
         "source_sha256": source_sha256,
+        "total_vram_bytes": total_vram_bytes,
+        "available_vram_bytes_at_dispatch": available,
+        "custody": custody,
         "steps": batch_measurements,
     }
 
@@ -128,7 +144,7 @@ def _full_step(*, model: UnifiedDecoder, optimizer: torch.optim.Optimizer, recor
     }
 
 
-def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, reference_checkpoint_manifest: Path, output: Path, seed: int) -> dict[str, object]:
+def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, reference_checkpoint_manifest: Path, emberd_schedule_receipt: Path, disk_budget_receipt: Path, output: Path, seed: int) -> dict[str, object]:
     """Run both required clean-genesis batch arms; call only through disk_budget_runner."""
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the native full-step screen")
@@ -136,8 +152,8 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         raise ValueError("screen seed must be a nonnegative integer")
     if output.exists():
         raise FileExistsError("native screen output must be a fresh path")
-    if not reference_checkpoint_manifest.is_file():
-        raise ValueError("reference checkpoint manifest must be an existing custody artifact")
+    if not reference_checkpoint_manifest.is_file() or not emberd_schedule_receipt.is_file() or not disk_budget_receipt.is_file():
+        raise ValueError("reference checkpoint, emberd schedule, and disk-budget receipts must exist")
     # This is deliberately before model allocation: all 26 shard bytes and tokenizer bytes are rechecked first.
     stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path)
     root = Path(__file__).resolve().parents[2]
@@ -178,6 +194,7 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         source_sha256=_sha256(Path(__file__)),
         total_vram_bytes=int(total),
         available_vram_bytes=int(available),
+        custody={"hardware_runtime": {"gpu_name": torch.cuda.get_device_name(device), "compute_capability": ".".join(map(str, torch.cuda.get_device_capability(device))), "torch_version": torch.__version__, "cuda_version": torch.version.cuda or "unavailable", "cudnn_version": str(torch.backends.cudnn.version()), "optimizer_implementation": str(optimizer_contract["implementation"]), "optimizer_version": __import__("bitsandbytes").__version__}, "source_closure_sha256": {name: _sha256(root / "tools" / "ember-restart-3b" / name) for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")}, "emberd_schedule_receipt_sha256": _sha256(emberd_schedule_receipt), "disk_budget_receipt_sha256": _sha256(disk_budget_receipt)},
         batch_measurements=steps,
     )
     result.update({
@@ -197,11 +214,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--shards-root", type=Path, required=True)
     parser.add_argument("--tokenizer", type=Path, required=True)
     parser.add_argument("--reference-checkpoint-manifest", type=Path, required=True)
+    parser.add_argument("--emberd-schedule-receipt", type=Path, required=True)
+    parser.add_argument("--disk-budget-receipt", type=Path, required=True)
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        print(json.dumps(run_screen(receipt_path=args.receipt, shards_root=args.shards_root, tokenizer_path=args.tokenizer, reference_checkpoint_manifest=args.reference_checkpoint_manifest, output=args.output, seed=args.seed), sort_keys=True))
+        print(json.dumps(run_screen(receipt_path=args.receipt, shards_root=args.shards_root, tokenizer_path=args.tokenizer, reference_checkpoint_manifest=args.reference_checkpoint_manifest, emberd_schedule_receipt=args.emberd_schedule_receipt, disk_budget_receipt=args.disk_budget_receipt, output=args.output, seed=args.seed), sort_keys=True))
     except Exception as error:
         parser.error(str(error))
     return 0
