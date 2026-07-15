@@ -784,9 +784,6 @@ export async function main(opts: MainOptions = {}): Promise<void> {
         ensureOwnedServer(identity, { verifyEndpoint }));
       const ensured = await ensure(seatDecision.ownedIdentity);
       ownedServerOutcome = ensured.outcome;
-      if (ensured.outcome === "spawned") {
-        registerServerCleanup(ensured.handle);
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       process.stderr.write("[ember] ERROR: could not establish admitted owned server (" + message + ")\n");

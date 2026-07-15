@@ -20,9 +20,11 @@ export interface OwnedModelIdentity {
   checkpointSha256: string;
   endpointUrl: string;
   identityUrl: string;
+  modelConfigSha256: string;
   modelName: string;
   modelFormat?: string;
-  serverSourceSha256?: string;
+  serverSourceSha256: string;
+  tokenizerSha256: string;
   launch?: OwnedServerLaunch;
 }
 
