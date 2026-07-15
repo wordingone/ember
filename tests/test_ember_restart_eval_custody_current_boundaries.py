@@ -52,3 +52,12 @@ def test_spider_validation_pair_freeze_is_custody_only_without_databases():
         "runner_receipt_sha256": "76e04b0d5a79e928f8344514fd1a31f3e9ec1dc836abc429b7d7321157a403c5",
         "claim_status": "FROZEN_SPIDER_VALIDATION_PAIRS_NO_DATABASE_EXECUTION",
     }
+def test_mmmu_image_input_freeze_binds_all_pinned_validation_images_without_a_score():
+    custody = json.loads((ROOT / "manifests" / "ember-restart-mmmu-validation-custody-v1.json").read_text(encoding="utf-8"))
+    assert custody["image_input_materialization"] == {
+        "validation_freeze_sha256": "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
+        "artifact_sha256": "719619b79f85e56d42552d2935de3bf43e9bd5dee9529f037a7e32dc228d0ebd",
+        "runner_receipt_sha256": "10bbc5f517ebe7831ddb2d0bfc8acadbc13f5d525e92ddb813b97400f88c1b97",
+        "row_count": 900,
+        "claim_status": "FROZEN_MMMU_IMAGE_INPUTS_NO_CHECKPOINT_BOUND_PREDICTIONS",
+    }

@@ -22,5 +22,12 @@
                                                "artifact_sha256":  "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
                                                "runner_receipt_sha256":  "0302a0db75c07830ca0265c096379b0f5dd994e6c11c2699194d685f76bf4bfb",
                                                "claim_status":  "FROZEN_SOURCE_COMPATIBILITY_ONLY"
-                                           }
+                                           },
+    "image_input_materialization":  {
+                                        "validation_freeze_sha256":  "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
+                                        "artifact_sha256":  "719619b79f85e56d42552d2935de3bf43e9bd5dee9529f037a7e32dc228d0ebd",
+                                        "runner_receipt_sha256":  "10bbc5f517ebe7831ddb2d0bfc8acadbc13f5d525e92ddb813b97400f88c1b97",
+                                        "row_count":  900,
+                                        "claim_status":  "FROZEN_MMMU_IMAGE_INPUTS_NO_CHECKPOINT_BOUND_PREDICTIONS"
+                                    }
 }
