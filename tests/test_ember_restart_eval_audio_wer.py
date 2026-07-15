@@ -23,4 +23,5 @@ def test_audio_wer_fixture_receipt_is_selftest_and_binds_all_scored_inputs():
         assert run.returncode == 0, run.stderr
         value = json.loads(output.read_text(encoding="utf-8"))
         assert value["result"] == "SELFTEST"
+        assert value["claim_status"] == "SELFTEST_ONLY_FIXTURE_AUDIO_TRANSCRIPTS"
         assert value["predictions_sha256"] == hashlib.sha256(predictions.read_bytes()).hexdigest()
