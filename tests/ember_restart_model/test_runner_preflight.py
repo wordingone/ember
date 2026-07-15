@@ -42,7 +42,8 @@ class RunnerPreflightTests(unittest.TestCase):
             frozen.save(str(tokenizer))
             tokenizer_hash = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
             source = root / "source.json"
-            source_hash = write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectory generator with independently executed sums.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            generator = root / "generator.py"; generator.write_text("# owned reasoning fixture\n", encoding="utf-8"); generator_hash = hashlib.sha256(generator.read_bytes()).hexdigest()
+            source_hash = write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectory generator with independently executed sums.", "minimum_record_count": 128, "minimum_token_count": 4096, "generator": {"path": "generator.py", "sha256": generator_hash}}})
             records_list = build_records(frozen, count=704, capability="reasoning")
             records = root / "records.json"
             records_hash = write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": records_list})
