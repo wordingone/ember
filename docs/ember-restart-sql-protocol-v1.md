@@ -7,6 +7,12 @@
 
 - Evaluation source: `taoyds/spider`
 - Source commit: `b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c`
+- Source Git tree: `7687d1f709b5f2a645835d0c6c2ac13796e33491`
+- License: Apache-2.0; exact `LICENSE` SHA-256:
+  `a8d1d88a0f9cce3cdbff73b03a80dc5e5d69e3ba2443946c268815a550c9e0ec`
+- Evaluator cache disposition: exact source checkout verified read-only for
+  evaluation. It is not target-training data, target lineage, or a public
+  repository artifact.
 - Intended evidence: local exact-match and execution outcomes against frozen
   database snapshots; no remote evaluator, model judge, or leaderboard is an
   admissible scorer.

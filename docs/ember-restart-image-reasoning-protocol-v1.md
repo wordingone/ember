@@ -7,8 +7,12 @@
 
 - Evaluation source: `MMMU-Benchmark/MMMU`
 - Source commit: `bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa`
-- Source materialization: disk-budget receipt, C cap `0.20 GiB`, B cap
-  `0.01 GiB`, exit `0`, checkout equal to the stated commit.
+- Source Git tree: `07da47c733711a68dcbdfa3e258b7ae3e2e68974`
+- License: Apache-2.0; exact `LICENSE` SHA-256:
+  `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
+- Evaluator cache disposition: exact source checkout verified read-only for
+  evaluation. Answer-bearing upstream files and example outputs remain outside
+  the public repository and target-training lineage.
 
 ## Local scoring surface
 

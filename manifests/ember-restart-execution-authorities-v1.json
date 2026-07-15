@@ -1,0 +1,8 @@
+{
+  "schema_version": "ember-restart-execution-authorities-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02C",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "authorities": [],
+  "disposition": "NO_EXECUTION_AUTHORITY_PINNED"
+}
