@@ -13,8 +13,9 @@ from pathlib import Path
 from test_contract import REPO_ROOT, VALIDATOR, _candidate_manifest, _write_json
 
 
-TOTAL = 3_134_515_200
-ACTIVE = 1_020_585_984
+TOTAL = 3_839_161_856
+ACTIVE = 1_725_232_640
+SHARED_ACTIVE = 1_020_589_568
 DOMAINS = ("vision", "audio", "reasoning", "tool")
 
 
@@ -61,6 +62,38 @@ def _run(path: Path) -> subprocess.CompletedProcess[str]:
 def test_sparse_total_above_3b_with_one_active_expert_is_valid(tmp_path: Path) -> None:
     result = _run(_make_sparse(tmp_path))
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_shared_semantic_route_uses_the_always_active_nonlinear_ffn(tmp_path: Path) -> None:
+    path = _make_sparse(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    architecture = payload["architecture"]
+    architecture["active_expert_ids"] = ["shared"]
+    architecture["active_parameters"] = SHARED_ACTIVE
+    architecture["episode_trainable_parameters"] = SHARED_ACTIVE
+    receipt_ref = architecture["parameter_receipt"]
+    receipt_path = tmp_path / receipt_ref["path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["active_expert_ids"] = ["shared"]
+    receipt["active_parameters"] = SHARED_ACTIVE
+    receipt["episode_trainable_parameters"] = SHARED_ACTIVE
+    receipt_ref["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(path, payload)
+    result = _run(path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_v2_config_requires_the_shared_text_ffn_declaration(tmp_path: Path) -> None:
+    path = _make_sparse(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    model_config_ref = payload["architecture"]["model_config"]
+    model_config_path = tmp_path / model_config_ref["path"]
+    model_config = json.loads(model_config_path.read_text(encoding="utf-8"))
+    model_config["model"]["expert_routing"].pop("shared_text_ffn")
+    _write_json(model_config_path, model_config)
+    result = _run(path)
+    assert result.returncode == 1
+    assert any("expert routing mismatch" in error for error in json.loads(result.stdout)["errors"])
 
 
 def test_dense_shell_without_expert_banks_is_rejected(tmp_path: Path) -> None:

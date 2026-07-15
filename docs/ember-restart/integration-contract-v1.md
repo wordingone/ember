@@ -42,9 +42,9 @@ The registry is a separate command-line input for both candidate and admission v
 A candidate must bind all of the following:
 
 - clean owned random initialization, null parent, and explicit false values for borrowed weights, teachers, judges, filters, and generated labels;
-- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must equal the validator's independent recomputation for the content-addressed `ember-sparse-3b-v1` model config and also match the output of a content-addressed counter executed in isolated Python mode against that config and exact checkpoint manifest, with the receipt bound to the counter-source bytes, active expert, and expert-genesis shard hashes;
+- allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must equal the validator's independent recomputation for the content-addressed `ember-sparse-3b-v2` model config and also match the output of a content-addressed counter executed in isolated Python mode against that config and exact checkpoint manifest, with the receipt bound to the counter-source bytes, active route, and expert-genesis shard hashes;
 - one `ember-unified-decoder` using raw image patches and audio frames, decoder soft-token splicing, multimodal-span attention, 2D-capable positional treatment, and no separate pretrained encoder;
-- a shared core plus exactly four asymmetric vision, audio, reasoning, and tool expert banks, each bound to its own content-addressed checkpoint shard, with distinct verified bytes and exactly one declared expert active per episode;
+- a shared core with an always-active nonlinear SwiGLU text FFN plus exactly four asymmetric vision, audio, reasoning, and tool expert banks, each bound to its own content-addressed checkpoint shard with distinct verified bytes; exactly one route is active per episode: `shared` for semantic text or one declared domain expert in addition to the shared core;
 - an owned tokenizer with verified bytes;
 - exactly one owned and locally verified data-manifest binding for each of text, image, audio, reasoning, and typed tools;
 - positive observed token exposure for all five capabilities and the exact training command;
@@ -82,7 +82,7 @@ Admission adds all of the following without weakening the candidate gates:
   autoregressive with teacher forcing explicitly false. Text, reasoning, audio, MMMU,
   Spider, and typed-tool adapters materialize scorer inputs without changing answers;
 - verifier-byte hashes admitted for the correct evidence class by the externally supplied trusted-verifier registry;
-- a content-addressed serving manifest whose seat is exactly `OWNED_ADMITTED`, checkpoint binding matches the training and evaluation subject, endpoint is loopback HTTP, protocol is `openai-chat-v1`, and identity route is `/v1/models`.
+- a content-addressed serving manifest whose seat is exactly `OWNED_ADMITTED`, checkpoint binding matches the training and evaluation subject, endpoint is loopback HTTP, protocol is `openai-chat-v1`, identity route is `/v1/models`, and server implementation path/hash binds the exact local source bytes that serve the checkpoint.
 - Ember CLI executes the checked-in central resolver against the run manifest and independently supplied verifier registry before selecting that seat. It then requires the live identity route to return the exact admitted seat, checkpoint SHA-256, and derived `ember-owned:<12 hex>` model name before session initialization.
 - `EMBER_OWNED_RUNG_MANIFEST` selects an explicit run manifest; otherwise the CLI checks `EMBER_HOME/owned/current.json`. A present manifest without its independent registry fails closed. `EMBER_MODEL_URL` may not redirect the admitted identity.
 
@@ -96,4 +96,4 @@ Efficiency, retention, deletion/ablation, comparator gaps, and honest deficienci
 
 ## Next execution
 
-This contract directly enables the model-building founder to preserve the current bounded synthetic-ID run as `SMOKE_ONLY`, bind the checked-in owned tokenizer, replace arbitrary token cycles with content-addressed semantic text/image/audio/reasoning/tool records, make the optimizer declaration match the executed runtime, and run the first disk-budgeted semantic pretraining segment. That segment may emit a `CHECKPOINT_CANDIDATE` for the evaluation founder's frozen preflight. It does not authorize sufficient-pretraining or capability credit from allocation, a dry run, a smoke checkpoint, or a renamed data class.
+This contract directly enables the model-building founder to run a disk-budgeted sustained semantic pretraining segment through the v2 shared nonlinear language path, preserve an interruption-safe content-addressed checkpoint, and hand that exact immutable bundle to the evaluation founder. The segment may emit a `CHECKPOINT_CANDIDATE` for frozen preflight. It does not authorize sufficient-pretraining or capability credit from allocation, a forward-only probe, a smoke checkpoint, or a renamed data class.
