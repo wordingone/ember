@@ -296,12 +296,13 @@ def test_hash_and_load_uses_one_open_handle_for_digest_and_torch_load(tmp_path, 
             assert hasattr(source, "read")
             captured["position"] = source.tell()
             captured["bytes"] = source.read()
+            captured["kwargs"] = kwargs
             return {"model": {}}
 
     monkeypatch.setattr(Path, "open", counted_open)
-    assert module.hash_and_load_torch(FakeTorch, shard, expected, device="cpu") == {"model": {}}
+    assert module.hash_and_load_torch(FakeTorch, shard, expected, device="cuda") == {"model": {}}
     assert opens == 1
-    assert captured == {"position": 0, "bytes": b"same bytes"}
+    assert captured == {"position": 0, "bytes": b"same bytes", "kwargs": {"map_location": "cpu", "weights_only": True}}
 
 
 
@@ -372,3 +373,16 @@ def test_execute_rejects_out_of_vocabulary_tokens_before_model_allocation(tmp_pa
             model_source_bytes=source_bytes,
         )
     assert constructed == []
+
+def test_materialize_state_map_moves_only_selected_model_tensors_to_execution_device():
+    module = _load_module()
+    moves = []
+
+    class FakeTensor:
+        def to(self, **kwargs):
+            moves.append(kwargs)
+            return ("moved", kwargs["device"])
+
+    state = {"weight": FakeTensor()}
+    assert module.materialize_state_map(state, "cuda") == {"weight": ("moved", "cuda")}
+    assert moves == [{"device": "cuda"}]
