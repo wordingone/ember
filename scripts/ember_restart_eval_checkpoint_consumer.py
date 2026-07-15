@@ -15,6 +15,7 @@ EXPERTS = ("vision", "audio", "reasoning", "tool")
 SHARDS = {"shared.pt": "shared_model_and_optimizer", "replay-state.pt": "replay_state", **{f"expert-{name}.pt": f"expert_{name}" for name in EXPERTS}}
 MANIFEST_FIELDS = {"schema_version", "launch_seed", "rng_state_sha256", "data_cursor", "model_config_sha256", "contract_sha256", "active_expert_ids", "expert_genesis_sha256", "expert_checkpoint_sha256", "shared_optimizer_shard_sha256", "optimizer_contract", "optimizer_realization", "shards"}
 
+MANIFEST_FIELDS |= {"contract_version", "architecture_revision"}
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -36,6 +37,8 @@ def _verify(manifest_path: Path, model_config: Path) -> dict[str, object]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or set(manifest) != MANIFEST_FIELDS or manifest.get("schema_version") != "ember-sparse-checkpoint-v3":
         raise ValueError("corrected checkpoint requires closed v3 manifest")
+    if manifest.get("contract_version") != 3 or manifest.get("architecture_revision") != "ember-sparse-3b-v2":
+        raise ValueError("corrected checkpoint central architecture contract mismatch")
     if not isinstance(manifest["launch_seed"], int) or manifest["launch_seed"] < 0:
         raise ValueError("checkpoint launch seed is invalid")
     rng = manifest["rng_state_sha256"]
