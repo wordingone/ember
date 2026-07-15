@@ -34,17 +34,31 @@ def main() -> int:
         prediction_bytes = args.canonical_predictions.read_bytes()
         frozen = json.loads(frozen_bytes.decode("utf-8"))
         envelope = validate_predictions(json.loads(prediction_bytes.decode("utf-8")))
-        required = {"result", "benchmark_id", "benchmark_version", "capability", "split_sha256", "protocol_sha256", "tasks"}
-        if not isinstance(frozen, dict) or set(frozen) != required or frozen["result"] != "PREFLIGHT_ONLY" or frozen["benchmark_id"] != "bfcl-static-non-live" or frozen["capability"] != "tool" or not isinstance(frozen["tasks"], list) or not frozen["tasks"]:
+        legacy_required = {"result", "benchmark_id", "benchmark_version", "capability", "split_sha256", "protocol_sha256", "tasks"}
+        simple_required = legacy_required | {"schema_version", "source_files", "task_count"}
+        if not isinstance(frozen, dict) or frozen.get("result") != "PREFLIGHT_ONLY" or frozen.get("capability") != "tool" or not isinstance(frozen.get("tasks"), list) or not frozen["tasks"]:
+            raise ValueError("invalid frozen BFCL static manifest")
+        simple = frozen.get("benchmark_id") == "bfcl-static-simple"
+        if (simple and (set(frozen) != simple_required or frozen.get("schema_version") != "ember-restart-bfcl-simple-frozen-v1" or frozen.get("task_count") != len(frozen["tasks"]) or not isinstance(frozen.get("source_files"), list))) or (not simple and (set(frozen) != legacy_required or frozen.get("benchmark_id") != "bfcl-static-non-live")):
             raise ValueError("invalid frozen BFCL static manifest")
         benchmark = envelope["benchmark"]
         if any(benchmark.get(key) != frozen[field] for key, field in (("id", "benchmark_id"), ("version", "benchmark_version"), ("capability", "capability"), ("split_sha256", "split_sha256"), ("protocol_sha256", "protocol_sha256"))):
             raise ValueError("canonical predictions do not bind frozen BFCL identity")
         expected = {}
         for task in frozen["tasks"]:
-            if not isinstance(task, dict) or set(task) != {"id", "expected_call"} or not isinstance(task["id"], str) or not task["id"] or not isinstance(task["expected_call"], dict) or task["id"] in expected:
+            if not isinstance(task, dict) or not isinstance(task.get("id"), str) or not task["id"] or task["id"] in expected:
                 raise ValueError("invalid frozen BFCL task")
-            expected[task["id"]] = task["expected_call"]
+            if simple:
+                if set(task) != {"id", "category", "functions", "question", "ground_truth"} or not isinstance(task["category"], str) or not isinstance(task["functions"], list) or not isinstance(task["question"], list) or not isinstance(task["ground_truth"], list) or len(task["ground_truth"]) != 1 or not isinstance(task["ground_truth"][0], dict) or len(task["ground_truth"][0]) != 1:
+                    raise ValueError("invalid frozen BFCL simple task")
+                name, arguments = next(iter(task["ground_truth"][0].items()))
+                if not isinstance(name, str) or not name or not isinstance(arguments, dict):
+                    raise ValueError("invalid frozen BFCL simple oracle")
+                expected[task["id"]] = {"name": name, "arguments": arguments}
+            else:
+                if set(task) != {"id", "expected_call"} or not isinstance(task["expected_call"], dict):
+                    raise ValueError("invalid frozen BFCL task")
+                expected[task["id"]] = task["expected_call"]
         actual = {}
         for row in envelope["rows"]:
             output = row["output"]
