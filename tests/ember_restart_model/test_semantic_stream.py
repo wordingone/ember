@@ -130,7 +130,9 @@ class SemanticStreamTests(unittest.TestCase):
         self.assertEqual(result["steps"], 2)
         self.assertEqual(result["tokens_seen"], 4)
         self.assertEqual(result["expert_examples"], {"vision": 0, "audio": 0, "reasoning": 0, "tool": 0})
+        self.assertEqual(result["data_cursor"]["shard"], "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12])
+        self.assertEqual(result["data_cursor"]["record_index"], 2)
         self.assertEqual(
             result["data_cursor"],
-            {"receipt_sha256": stream.receipt_sha256, "tokenizer_sha256": stream.tokenizer_sha256, "shard_index": 0, "token_offset": 4, "global_step": 2, "tokens_seen": 4},
+            {"shard": "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12], "record_index": 2, "receipt_sha256": stream.receipt_sha256, "tokenizer_sha256": stream.tokenizer_sha256, "shard_index": 0, "token_offset": 4, "global_step": 2, "tokens_seen": 4},
         )
