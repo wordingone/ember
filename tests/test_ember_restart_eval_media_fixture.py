@@ -19,4 +19,4 @@ def test_scores_frozen_image_and_audio_rows_as_non_admissible_selftest(tmp_path)
     predictions = tmp_path / "predictions.json"; predictions.write_text(json.dumps({"image-1": "A", "audio-1": "wrong"}))
     output = tmp_path / "result.json"; script = __import__("pathlib").Path(__file__).parents[1] / "scripts" / "ember_restart_eval_media_fixture.py"
     subprocess.run([sys.executable, str(script), "--fixture", str(fixture), "--predictions", str(predictions), "--output", str(output)], check=True)
-    assert json.loads(output.read_text()) == {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "rows": [{"id": "image-1", "capability": "image", "correct": True}, {"id": "audio-1", "capability": "audio", "correct": False}], "correct": 1, "total": 2}
+    assert json.loads(output.read_text()) == {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(), "predictions_sha256": hashlib.sha256(predictions.read_bytes()).hexdigest(), "rows": [{"id": "image-1", "capability": "image", "correct": True}, {"id": "audio-1", "capability": "audio", "correct": False}], "correct": 1, "total": 2}
