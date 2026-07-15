@@ -161,22 +161,26 @@ def test_canonical_cli_passes_bound_inputs_to_execution_and_envelope(tmp_path, m
 
     class FakeTokenizer:
         @classmethod
-        def from_file(cls, path):
-            captured["tokenizer_path"] = path
+        def from_str(cls, payload):
+            captured["tokenizer_payload"] = payload
             return cls()
         def decode(self, tokens):
             return ",".join(map(str, tokens))
 
-    def fake_execute(arguments, checkpoint, bound_inputs):
+    def fake_execute(arguments, checkpoint, bound_inputs, *, model_source_bytes):
         captured["bound_inputs"] = bound_inputs
-        return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": bound_inputs["active_expert"], "generated_token_ids": [10, 11], "stop_reason": "max_new_tokens"}
+        captured["model_source_bytes"] = model_source_bytes
+        return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": bound_inputs["active_expert"], "generated_token_ids": [10, 11], "stop_reason": "max_new_tokens", "tokenizer_sha256": _sha256_bytes(tokenizer.read_bytes()), "inference_implementation_sha256": "f" * 64}
 
     monkeypatch.setattr(MODULE, "Tokenizer", FakeTokenizer)
-    monkeypatch.setattr(MODULE, "_verify", lambda *_: {"model_config_sha256": _sha256_bytes(config.read_bytes()), "shard_count": 6, "active_expert_ids": ["shared"]})
+    monkeypatch.setattr(MODULE, "load_verified_runtime_contract", lambda **_: {"model_config_sha256": _sha256_bytes(config.read_bytes()), "model_config": {}, "shard_count": 6, "active_expert_ids": ["shared"], "checkpoint_manifest_sha256": _sha256_bytes(manifest.read_bytes()), "counter_sha256": "e" * 64, "trusted_verifier_registry_sha256": "f" * 64, "parameter_receipt_sha256": "1" * 64, "required_shards": {}})
     monkeypatch.setattr(MODULE, "require_execution_authority", lambda *_: None)
     monkeypatch.setattr(MODULE, "execute", fake_execute)
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--tokenizer", str(tokenizer), "--checkpoint-manifest", str(manifest), "--checkpoint-sha256", _sha256_bytes(manifest.read_bytes()), "--output", str(output), "--execute", "--model-source", str(tmp_path / "model.py"), "--model-source-sha256", "c" * 64, "--model-config", str(config), "--model-config-sha256", _sha256_bytes(config.read_bytes()), "--max-new-tokens", "2", "--canonical-output", str(canonical), "--prompt", str(prompt), "--frozen-split", str(split), "--benchmark-id", "local-text", "--benchmark-version", "1", "--benchmark-capability", "text", "--split-sha256", _sha256_bytes(split.read_bytes()), "--protocol-sha256", "d" * 64])
+    model_source = tmp_path / "model.py"
+    model_source.write_bytes(b"# exact model bytes\n")
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--tokenizer", str(tokenizer), "--checkpoint-manifest", str(manifest), "--checkpoint-sha256", _sha256_bytes(manifest.read_bytes()), "--output", str(output), "--execute", "--model-source", str(model_source), "--model-source-sha256", _sha256_bytes(model_source.read_bytes()), "--model-config", str(config), "--model-config-sha256", _sha256_bytes(config.read_bytes()), "--max-new-tokens", "2", "--canonical-output", str(canonical), "--prompt", str(prompt), "--frozen-split", str(split), "--benchmark-id", "local-text", "--benchmark-version", "1", "--benchmark-capability", "text", "--split-sha256", _sha256_bytes(split.read_bytes()), "--protocol-sha256", "d" * 64, "--parameter-receipt", str(tmp_path / "receipt.json"), "--counter-source", str(tmp_path / "counter.py"), "--trusted-verifier-registry", str(tmp_path / "registry.json")])
     MODULE.main()
     assert captured["bound_inputs"] == {"row_id": "row-1", "active_expert": "shared", "token_ids": [8, 9], "input_sha256": prompt_sha256}
+    assert captured["model_source_bytes"] == b"# exact model bytes\n"
     envelope = json.loads(canonical.read_text(encoding="utf-8"))
     assert envelope["rows"] == [{"id": "row-1", "input_sha256": prompt_sha256, "generated_token_ids": [10, 11], "stop_reason": "max_new_tokens", "output": {"kind": "text", "text": "10,11"}}]
