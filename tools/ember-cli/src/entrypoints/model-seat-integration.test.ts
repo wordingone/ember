@@ -244,6 +244,7 @@ describe("process entry model-seat enforcement", () => {
           serverSourceSha256: "a".repeat(64),
           tokenizerSha256: "c".repeat(64),
           launch: {
+            authorityKind: "ADMISSION",
             checkpointDir: "C:\\owned\\checkpoint",
             mode: "INTERACTIVE",
             pythonExecutable: "python-owned",
@@ -295,6 +296,69 @@ describe("process entry model-seat enforcement", () => {
     expect(stdout).not.toContain("http://127.0.0.1:9999");
   });
 
+  it("defaults to the exact owned development checkpoint without borrowing Qwen credit", async () => {
+    await writeFile(
+      join(tmpDir, "models.json"),
+      JSON.stringify({ endpoint: "http://127.0.0.1:9999", modelName: "qwen3.6-27b" }),
+    );
+    let exitCode = -1;
+    let ensureCalls = 0;
+    let verifyCalls = 0;
+    let stdout = "";
+    const originalStdout = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => { stdout += chunk; return true; }) as typeof process.stdout.write;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => undefined,
+        loadOwnedDevelopmentIdentityFn: () => ({
+          seat: "OWNED_DEVELOPMENT",
+          claimStatus: "NON_ADMISSIBLE",
+          tokensSeen: 2048,
+          allocatedParameters: 3_839_161_856,
+          activeParameters: 1_020_589_568,
+          checkpointSha256: "f".repeat(64),
+          endpointUrl: "http://127.0.0.1:9",
+          identityUrl: "http://127.0.0.1:9/v1/models",
+          modelConfigSha256: "b".repeat(64),
+          modelName: "ember-owned-development:" + "f".repeat(12),
+          serverSourceSha256: "a".repeat(64),
+          tokenizerSha256: "c".repeat(64),
+          launch: {
+            authorityKind: "DEVELOPMENT",
+            checkpointDir: "C:\\owned\\checkpoint",
+            developmentManifestPath: "C:\\owned\\development.json",
+            mode: "INTERACTIVE",
+            pythonExecutable: "python-owned",
+            serverPath: "C:\\repo\\serve_owned_openai.py",
+            tokenizerPath: "C:\\owned\\tokenizer.json",
+          },
+        }),
+        ensureOwnedServerFn: async () => {
+          ensureCalls += 1;
+          return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never };
+        },
+        verifyOwnedEndpointFn: async () => { verifyCalls += 1; },
+        initFn: async () => {},
+        getLoopDepsFn: fakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stdout.write = originalStdout;
+    }
+
+    expect(exitCode).toBe(0);
+    expect(ensureCalls).toBe(1);
+    expect(verifyCalls).toBe(1);
+    expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_DEVELOPMENT");
+    expect(process.env["EMBER_MODEL_NAME"]).toBe("ember-owned-development:" + "f".repeat(12));
+    expect(stdout).toContain("model seat: OWNED_DEVELOPMENT");
+    expect(stdout).toContain("2,048 training tokens");
+    expect(stdout).toContain("NON_ADMISSIBLE");
+    expect(stdout).not.toContain("qwen3.6-27b");
+    expect(stdout).not.toContain("http://127.0.0.1:9999");
+  });
   it("allows the same endpoint only in an explicit visible reference seat", async () => {
     await writeFile(
       join(tmpDir, "models.json"),
