@@ -1329,6 +1329,12 @@ def _verify_admission(
             errors.append("cli serving manifest: seat must equal OWNED_ADMITTED")
         if serving_payload.get("checkpoint_sha256") != checkpoint_sha256:
             errors.append("cli serving manifest: checkpoint mismatch")
+        _verify_file(
+            root,
+            serving_payload.get("server_implementation"),
+            "cli serving manifest.server_implementation",
+            errors,
+        )
         model_format = serving_payload.get("model_format")
         if not isinstance(model_format, str) or not model_format.strip():
             errors.append("cli serving manifest: model_format must be non-empty")

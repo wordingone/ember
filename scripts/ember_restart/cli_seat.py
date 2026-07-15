@@ -39,6 +39,7 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
         "identity_url": serving["endpoint_url"].rstrip("/") + serving["identity_path"],
         "model_name": f"ember-owned:{checkpoint_sha256[:12]}",
         "model_format": serving["model_format"],
+        "server_source_sha256": serving["server_implementation"]["sha256"],
         "errors": [],
     }
 
