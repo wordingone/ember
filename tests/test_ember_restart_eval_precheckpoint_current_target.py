@@ -21,3 +21,24 @@ def test_precheckpoint_manifest_names_current_v3_structural_input_without_capabi
 def test_precheckpoint_manifest_keeps_files_family_in_required_matrix():
     value = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert "files" in value["required_new_families"]
+
+def test_precheckpoint_manifest_pins_required_comparators_without_authorizing_execution():
+    value = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    assert value["comparators"] == [
+        {
+            "model_id": "Qwen/Qwen2.5-3B",
+            "revision": "3aab1f1954e9cc14eb9509a215f9e5ca08227a9b",
+            "size_class": "open_3b",
+            "role": "comparison_only",
+            "license_status": "UNRESOLVED_CARD_METADATA",
+            "execution_status": "PREFLIGHT_ONLY_NO_LICENSE_EVIDENCE_OR_FROZEN_PROTOCOL",
+        },
+        {
+            "model_id": "google/gemma-3-27b-it",
+            "revision": "005ad3404e59d6023443cb575daa05336842228a",
+            "size_class": "open_27b_or_31b",
+            "role": "comparison_only",
+            "license_status": "UNRESOLVED_CARD_METADATA",
+            "execution_status": "PREFLIGHT_ONLY_NO_LICENSE_EVIDENCE_OR_FROZEN_PROTOCOL",
+        },
+    ]
