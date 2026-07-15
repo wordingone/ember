@@ -35,3 +35,11 @@ def test_mmmu_pinned_validation_materialization_is_source_compatible_not_a_score
         "runner_receipt_sha256": "b6a37be5fbe4b50db4758793863bb9361c99dbe0c5b40e327add77b4a39e1585",
         "claim_status": "FROZEN_SOURCE_COMPATIBILITY_ONLY",
     }
+
+def test_spider_source_only_audit_binds_the_absent_asset_boundary():
+    custody = json.loads((ROOT / "manifests" / "ember-restart-spider-custody-v1.json").read_text(encoding="utf-8"))
+    assert custody["source_only_audit"] == {
+        "artifact_sha256": "ac3f513e8e6a2436379b5db85269c86568f81285e7dd9603aa66c2d244895e31",
+        "runner_receipt_sha256": "fd3c3af5f5300c4c288a2ef8181c0bc08d40beee5a5d7c1254a79d4ee8fbfd71",
+        "claim_status": "SOURCE_ONLY_NO_FROZEN_SQL_EVALUATION_ASSETS",
+    }
