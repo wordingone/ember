@@ -68,8 +68,8 @@ def test_authority_registry_binds_the_canonical_git_blob_and_step2_tuple():
     blob = subprocess.run(["git", "show", "HEAD:scripts/ember_restart_eval_raw_forward.py"], cwd=ROOT, check=True, capture_output=True).stdout
     registry = json.loads((ROOT / "manifests" / "ember-restart-execution-authorities-v1.json").read_text(encoding="utf-8"))
 
-    assert len(blob) == 35_166
-    assert hashlib.sha256(blob).hexdigest() == "b87ad073fe1193be389a320b8aa34ea21093c2fd8d4287fb251f6425cf1a665d"
+    assert len(blob) == 37_075
+    assert hashlib.sha256(blob).hexdigest() == "3f8c25e09349197ac02af26a13893e14036a758aa626f45b0457d81602810a45"
     assert registry["disposition"] == "EXACT_OWNED_SHARED_ROUTE_EXECUTION_AUTHORIZED"
     assert registry["authorities"] == [{
         **_step2_identities(),
