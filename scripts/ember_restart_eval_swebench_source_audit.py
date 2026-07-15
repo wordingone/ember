@@ -47,6 +47,7 @@ def main() -> int:
         "result": "PREFLIGHT_ONLY",
         "claim_status": "SOURCE_ONLY_NO_FROZEN_SWEBENCH_TASK_RELEASE",
         "benchmark_id": "swe-bench",
+        "capability_families": ["code", "files"],
         "source_commit": arguments.expected_commit,
         "harness_sha256": digest(arguments.swebench_root / "swebench/harness/run_evaluation.py"),
         "license_sha256": digest(arguments.swebench_root / "LICENSE"),
