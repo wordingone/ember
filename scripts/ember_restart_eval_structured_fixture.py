@@ -4,6 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Score frozen reasoning/tool fixtures locally; output is not centrally admissible."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -19,8 +20,13 @@ def main() -> int:
     parser.add_argument("--predictions", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    fixture = json.loads(args.fixture.read_text(encoding="utf-8"))
-    predictions = json.loads(args.predictions.read_text(encoding="utf-8"))
+    try:
+        fixture_bytes = args.fixture.read_bytes()
+        prediction_bytes = args.predictions.read_bytes()
+        fixture = json.loads(fixture_bytes.decode("utf-8"))
+        predictions = json.loads(prediction_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        parser.error(f"invalid structured fixture input: {error}")
     if not isinstance(fixture, list) or not fixture or not isinstance(predictions, dict):
         parser.error("fixture must be non-empty and predictions must be an object")
     rows = []
@@ -33,7 +39,7 @@ def main() -> int:
         equal = actual == expected if args.capability == "reasoning" else canonical(actual) == canonical(expected)
         rows.append({"id": row["id"], "correct": equal})
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "capability": args.capability, "rows": rows, "correct": sum(row["correct"] for row in rows), "total": len(rows)}, sort_keys=True) + "\n", encoding="utf-8")
+    args.output.write_text(json.dumps({"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "capability": args.capability, "fixture_sha256": hashlib.sha256(fixture_bytes).hexdigest(), "predictions_sha256": hashlib.sha256(prediction_bytes).hexdigest(), "rows": rows, "correct": sum(row["correct"] for row in rows), "total": len(rows)}, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 
 

@@ -19,7 +19,7 @@ def test_scores_reasoning_predictions_as_non_admissible_selftest():
         predictions.write_text(json.dumps({"r1": "42", "r2": "red"}))
         result = subprocess.run([sys.executable, str(SCRIPT), "--capability", "reasoning", "--fixture", str(fixture), "--predictions", str(predictions), "--output", str(output)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
-        assert json.loads(output.read_text()) == {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "capability": "reasoning", "rows": [{"id": "r1", "correct": True}, {"id": "r2", "correct": False}], "correct": 1, "total": 2}
+        assert json.loads(output.read_text()).items() >= {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "capability": "reasoning", "rows": [{"id": "r1", "correct": True}, {"id": "r2", "correct": False}], "correct": 1, "total": 2}.items()
 
 
 def test_compares_tool_calls_canonically_as_non_admissible_selftest():
@@ -29,4 +29,17 @@ def test_compares_tool_calls_canonically_as_non_admissible_selftest():
         predictions.write_text(json.dumps({"t1": {"arguments": {"units": "metric", "city": "Paris"}, "name": "lookup"}, "t2": {"name": "search", "arguments": {"q": "wrong"}}}))
         result = subprocess.run([sys.executable, str(SCRIPT), "--capability", "tool", "--fixture", str(fixture), "--predictions", str(predictions), "--output", str(output)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
-        assert json.loads(output.read_text()) == {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "capability": "tool", "rows": [{"id": "t1", "correct": True}, {"id": "t2", "correct": False}], "correct": 1, "total": 2}
+        assert json.loads(output.read_text()).items() >= {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "capability": "tool", "rows": [{"id": "t1", "correct": True}, {"id": "t2", "correct": False}], "correct": 1, "total": 2}.items()
+
+
+def test_selftest_receipt_binds_exact_fixture_and_prediction_bytes():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp); fixture = root / "tool.json"; predictions = root / "predictions.json"; output = root / "output.json"
+        fixture.write_bytes(b'[{"id":"t1","expected_call":{"name":"lookup"}}]')
+        predictions.write_bytes(b'{"t1":{"name":"lookup"}}')
+        result = subprocess.run([sys.executable, str(SCRIPT), "--capability", "tool", "--fixture", str(fixture), "--predictions", str(predictions), "--output", str(output)], text=True, capture_output=True, check=False)
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        import hashlib
+        assert payload["fixture_sha256"] == hashlib.sha256(fixture.read_bytes()).hexdigest()
+        assert payload["predictions_sha256"] == hashlib.sha256(predictions.read_bytes()).hexdigest()
