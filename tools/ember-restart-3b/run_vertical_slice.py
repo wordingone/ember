@@ -7,13 +7,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable
 
+import tokenizers
 import torch
+import tokenizers
 import torch.nn.functional as F
 
 from batch import decode_owned_batch
@@ -187,25 +190,39 @@ def load_verified_specialist_records(
         raise ValueError("specialist data manifest must reside in the selected worktree")
     verifier = Path(__file__).with_name("verify_training_data.py")
     completed = subprocess.run(
-        [sys.executable, str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
-        cwd=root, text=True, capture_output=True, check=False,
+        [sys.executable, "-I", "-c", "import runpy,sys;sys.path.insert(0,sys.argv[1]);sys.path.insert(0,sys.argv[2]);sys.argv=sys.argv[3:];runpy.run_path(sys.argv[0],run_name=\"__main__\")", str(verifier.parent.resolve()), str(Path(tokenizers.__file__).resolve().parent.parent), str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
+        cwd=root, env={name: os.environ[name] for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP") if name in os.environ}, text=True, capture_output=True, check=False,
     )
     if completed.returncode != 0:
         raise RuntimeError(f"specialist data verifier failed: {completed.stderr.strip() or completed.stdout.strip()}")
     try:
         verification = json.loads(completed.stdout)
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        manifest_bytes = manifest.read_bytes()
+        payload = json.loads(manifest_bytes)
     except json.JSONDecodeError as error:
         raise RuntimeError("specialist data verifier or manifest did not emit JSON") from error
     if not isinstance(verification, dict) or verification.get("result") != "VERIFIED" or verification.get("capability") != capability:
         raise RuntimeError("specialist data verifier did not produce the required verified receipt")
     if verification.get("generator_replay_verified") is not True:
         raise RuntimeError("specialist data verifier did not prove canonical generator replay")
-    records_ref = payload.get("records_artifact") if isinstance(payload, dict) else None
-    relative = records_ref.get("path") if isinstance(records_ref, dict) else None
-    if not isinstance(relative, str):
-        raise RuntimeError("verified specialist manifest lacks a records artifact path")
-    records_payload = json.loads((root / relative).read_text(encoding="utf-8"))
+    if verification.get("data_manifest_sha256") != hashlib.sha256(manifest_bytes).hexdigest():
+        raise RuntimeError("verified specialist data manifest changed after verification")
+
+    def reread_bound_artifact(reference: object, *, receipt_field: str, label: str) -> tuple[Path, bytes]:
+        relative = reference.get("path") if isinstance(reference, dict) else None
+        if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+            raise RuntimeError(f"verified specialist manifest lacks a {label} artifact path")
+        path = (root / relative).resolve()
+        if root not in path.parents or not path.is_file():
+            raise RuntimeError(f"verified specialist {label} artifact path escapes the worktree")
+        artifact_bytes = path.read_bytes()
+        if verification.get(receipt_field) != hashlib.sha256(artifact_bytes).hexdigest():
+            raise RuntimeError(f"verified specialist {label} artifact changed after verification")
+        return path, artifact_bytes
+
+    reread_bound_artifact(payload.get("source_manifest") if isinstance(payload, dict) else None, receipt_field="source_manifest_sha256", label="source manifest")
+    _records_path, records_bytes = reread_bound_artifact(payload.get("records_artifact") if isinstance(payload, dict) else None, receipt_field="records_artifact_sha256", label="records")
+    records_payload = json.loads(records_bytes)
     records = records_payload.get("records") if isinstance(records_payload, dict) else None
     if not isinstance(records, list) or not records or any(not isinstance(record, dict) for record in records):
         raise RuntimeError("verified specialist records artifact is malformed")

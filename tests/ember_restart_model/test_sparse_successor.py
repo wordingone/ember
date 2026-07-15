@@ -61,6 +61,9 @@ class SparseSuccessorTests(unittest.TestCase):
         self.assertTrue(allowed[0, 3, 2])
         self.assertFalse(allowed[0, 0, 3])
 
+    def test_isolated_span_policy_has_a_durable_modality_rationale(self) -> None:
+        self.assertIn("raw modality tokens", MultimodalSpan.__doc__ or "")
+        self.assertIn("prior text", MultimodalSpan.__doc__ or "")
     def test_isolated_span_is_bidirectional_internally_but_cannot_read_prior_external_tokens(self) -> None:
         model = UnifiedDecoder(self.config)
         spans = [MultimodalSpan(start=1, length=2, modality="image", attention_mode="isolated")]
