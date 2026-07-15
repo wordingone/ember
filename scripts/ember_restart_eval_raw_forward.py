@@ -41,7 +41,7 @@ def load_owned_prompt(path: Path) -> dict[str, object]:
     tokens = prompt["token_ids"]
     if not isinstance(tokens, list) or not tokens or any(not isinstance(token, int) or isinstance(token, bool) or token < 0 for token in tokens):
         raise ValueError("owned inference prompt token ids are invalid")
-    return prompt
+    return {"id": prompt["id"], "active_expert": prompt["active_expert"], "token_ids": prompt["token_ids"]}
 
 
 def validate_state_map(state: object, expected: dict[str, object], label: str) -> None:
