@@ -575,10 +575,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args(argv)
     frozen_split = resolve_runtime_inputs(args.mode, args.frozen_split)
+    if args.development_manifest is not None and (args.expected_development_manifest_sha256 is None or args.expected_runtime_index_sha256 is None):
+        raise ValueError("development server requires exact manifest and runtime-index hashes")
     start_parent_watchdog(args.parent_pid)
     if args.development_manifest is not None:
-        if args.expected_development_manifest_sha256 is None or args.expected_runtime_index_sha256 is None:
-            raise ValueError("development server requires exact manifest and runtime-index hashes")
         development = resolve_development_identity(
             args.development_manifest,
             expected_manifest_sha256=args.expected_development_manifest_sha256,
