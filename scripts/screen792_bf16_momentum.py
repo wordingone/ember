@@ -972,6 +972,16 @@ def evaluate_verdict(*, losses_arm_b: list, losses_arm_a: list, band: dict,
          (on EITHER side of band_val) is INCONCLUSIVE -- matching
          AMENDMENT-1's actual text ("any loss-delta within 1.5x of the
          band edge = INCONCLUSIVE")."""
+    band_val = band["band"]
+    lower_edge = (band_val / band_tolerance) if band_val > 0 else 0.0
+    upper_edge = band_val * band_tolerance
+    decision_inputs = {
+        "band": band_val,
+        "band_lower_edge": lower_edge,
+        "band_upper_edge": upper_edge,
+        "losses_arm_a": list(losses_arm_a),
+        "losses_arm_b": list(losses_arm_b),
+    }
     if len(losses_arm_b) != len(losses_arm_a):
         return {
             "verdict": "REFUSE",
@@ -979,7 +989,8 @@ def evaluate_verdict(*, losses_arm_b: list, losses_arm_a: list, band: dict,
                       f"arm_a={len(losses_arm_a)}) -- matched-step comparison "
                       f"requires equal lengths; never a silent min() truncation "
                       f"(falsifier finding E)",
-            "max_loss_delta": None, "band": band.get("band"),
+            **decision_inputs,
+            "max_loss_delta": None, "per_step_loss_deltas": None,
             "n_steps_compared": None, "kill_text": REFUSAL_TEXT,
         }
     n = len(losses_arm_b)
@@ -988,7 +999,8 @@ def evaluate_verdict(*, losses_arm_b: list, losses_arm_a: list, band: dict,
             "verdict": "REFUSE",
             "reason": "empty losses -- zero steps compared is not evidence of "
                       "anything (falsifier finding E)",
-            "max_loss_delta": None, "band": band.get("band"),
+            **decision_inputs,
+            "max_loss_delta": None, "per_step_loss_deltas": None,
             "n_steps_compared": 0, "kill_text": REFUSAL_TEXT,
         }
     if n_active is not None and n != n_active:
@@ -997,15 +1009,13 @@ def evaluate_verdict(*, losses_arm_b: list, losses_arm_a: list, band: dict,
             "reason": f"n_steps_compared={n} != frozen n_active={n_active} -- "
                       f"a length mismatch against the run's own configured "
                       f"step count (falsifier finding E, CLI gate)",
-            "max_loss_delta": None, "band": band.get("band"),
+            **decision_inputs,
+            "max_loss_delta": None, "per_step_loss_deltas": None,
             "n_steps_compared": n, "kill_text": REFUSAL_TEXT,
         }
 
     deltas = [abs(losses_arm_b[i] - losses_arm_a[i]) for i in range(n)]
     max_delta = max(deltas)
-    band_val = band["band"]
-    lower_edge = (band_val / band_tolerance) if band_val > 0 else 0.0
-    upper_edge = band_val * band_tolerance
     beyond_band = max_delta > upper_edge
     near_edge = (not beyond_band) and (max_delta >= lower_edge)
 
@@ -1025,10 +1035,9 @@ def evaluate_verdict(*, losses_arm_b: list, losses_arm_a: list, band: dict,
     return {
         "verdict": verdict,
         "reason": reason,
+        **decision_inputs,
         "max_loss_delta": max_delta,
-        "band": band_val,
-        "band_lower_edge": lower_edge,
-        "band_upper_edge": upper_edge,
+        "per_step_loss_deltas": deltas,
         "n_steps_compared": n,
         "kill_text": REFUSAL_TEXT,
     }
@@ -1323,7 +1332,7 @@ def build_receipt(*, ts_str: str, live: bool, realized_split: dict,
                     "arm and any commit-adjacent diagnostic for it may be "
                     "polluted by retained state",
         },
-        "verdict": verdict["verdict"],
+        **verdict,
         "verdict_reason": verdict["reason"],
         "kills": REFUSAL_TEXT,
         "not_claimed": [
@@ -1664,11 +1673,30 @@ def _schema_probe() -> int:
         momentum_bytes_b={"applicable": False, "reason": "schema-probe dummy"},
         momentum_cosine={"applicable": False, "reason": "schema-probe dummy"},
         band=build_noise_band([0.0], [0.0]),
-        verdict={"verdict": "INVALID", "reason": "schema-probe dummy run, not a real verdict"},
+        verdict=evaluate_verdict(
+            losses_arm_b=[0.0], losses_arm_a=[0.0],
+            band=build_noise_band([0.0], [0.0]),
+            capacity_check={"verdict": "INVALID"}, n_active=1,
+        ),
         run_config={"schema_probe": True},
         provenance=compute_provenance(shard_dir=None, cfg={"schema_probe": True}),
     )
     findings = receipt_check.validate_receipt(dummy)
+    required_decision_fields = {
+        "max_loss_delta",
+        "band_lower_edge",
+        "band_upper_edge",
+        "n_steps_compared",
+        "losses_arm_a",
+        "losses_arm_b",
+        "per_step_loss_deltas",
+    }
+    missing_decision_fields = sorted(required_decision_fields - dummy.keys())
+    if missing_decision_fields:
+        print("SCREEN792_SCHEMA_PROBE_FAIL")
+        print(f"  missing decisive receipt fields: {missing_decision_fields}")
+        return 1
+
     if findings:
         print("SCREEN792_SCHEMA_PROBE_FAIL")
         for f in findings:
