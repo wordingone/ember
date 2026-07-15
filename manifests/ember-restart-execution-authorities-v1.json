@@ -11,5 +11,5 @@
       "inference_implementation_sha256": "1e7f6bbdb19bd2f98285d1cbeb0e53ef5449e537e1b7d67fec29c1df1612a59e"
     }
   ],
-  "disposition": "EXACT_OWNED_SHARED_ROUTE_EXECUTION_AUTHORIZED"
+  "disposition": "PREPARED_NOT_EXECUTABLE_AWAITING_PROMPT_AND_SAME_BYTE_RUNTIME_BINDING"
 }
