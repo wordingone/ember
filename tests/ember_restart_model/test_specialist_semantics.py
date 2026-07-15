@@ -37,7 +37,7 @@ class SpecialistSemanticTests(unittest.TestCase):
         encoded = list(tokenizer.encode(caption).ids)
         record = {
             "token_ids": [31_998, 31_998, 31_998, 31_998, *encoded[:-1]],
-            "target_ids": encoded,
+            "target_ids": [31_998, 31_998, 31_998, *encoded],
             "target_text": caption,
             "capability_evidence": {"image": {"caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "derivation": "raw_image_property_execution"}},
         }
