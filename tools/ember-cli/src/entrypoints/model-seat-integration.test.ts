@@ -224,6 +224,7 @@ describe("process entry model-seat enforcement", () => {
     let exitCode = -1;
     let initCalls = 0;
     let verifyCalls = 0;
+    let ensureCalls = 0;
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((chunk: string) => {
@@ -239,7 +240,21 @@ describe("process entry model-seat enforcement", () => {
           endpointUrl: "http://127.0.0.1:9",
           identityUrl: "http://127.0.0.1:9/v1/models",
           modelName: "ember-owned:" + "e".repeat(12),
+          launch: {
+            checkpointDir: "C:\owned\checkpoint",
+            mode: "INTERACTIVE",
+            pythonExecutable: "python-owned",
+            runManifestPath: "C:\owned\run.json",
+            serverPath: "C:\repo\serve_owned_openai.py",
+            tokenizerPath: "C:\owned\tokenizer.json",
+            trustedVerifierRegistryPath: "C:\owned\trusted.json",
+          },
         }),
+        ensureOwnedServerFn: async (ownedIdentity) => {
+          expect(ownedIdentity.launch?.mode).toBe("INTERACTIVE");
+          ensureCalls += 1;
+          return { outcome: "adopted", port: 9 };
+        },
         verifyOwnedEndpointFn: async () => {
           verifyCalls += 1;
         },
@@ -258,6 +273,7 @@ describe("process entry model-seat enforcement", () => {
 
     expect(exitCode).toBe(0);
     expect(initCalls).toBe(1);
+    expect(ensureCalls).toBe(1);
     expect(verifyCalls).toBe(1);
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_ADMITTED");
     expect(process.env["EMBER_MODEL_URL"]).toBe("http://127.0.0.1:9");

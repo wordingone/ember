@@ -27,9 +27,14 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     cli = manifest["cli"]
-    serving_path = (manifest_path.resolve().parent / cli["serving_manifest_path"]).resolve()
+    run_manifest_path = manifest_path.resolve()
+    root = run_manifest_path.parent
+    serving_path = (root / cli["serving_manifest_path"]).resolve()
     serving = json.loads(serving_path.read_text(encoding="utf-8"))
     checkpoint_sha256 = manifest["checkpoint"]["sha256"]
+    checkpoint_manifest_path = (root / manifest["checkpoint"]["manifest_path"]).resolve()
+    tokenizer_path = (root / manifest["tokenizer"]["path"]).resolve()
+    server_path = (root / serving["server_implementation"]["path"]).resolve()
     return {
         "valid": True,
         "seat": "OWNED_ADMITTED",
@@ -39,6 +44,14 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
         "identity_url": serving["endpoint_url"].rstrip("/") + serving["identity_path"],
         "model_name": f"ember-owned:{checkpoint_sha256[:12]}",
         "model_format": serving["model_format"],
+        "launch": {
+            "checkpoint_dir": str(checkpoint_manifest_path.parent),
+            "mode": "INTERACTIVE",
+            "run_manifest_path": str(run_manifest_path),
+            "server_path": str(server_path),
+            "tokenizer_path": str(tokenizer_path),
+            "trusted_verifier_registry_path": str(verifier_registry.resolve()),
+        },
         "server_source_sha256": serving["server_implementation"]["sha256"],
         "errors": [],
     }

@@ -3,10 +3,10 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { existsSync } from "fs";
-import { join, resolve } from "path";
+import { isAbsolute, join, resolve } from "path";
 import { spawnSync } from "child_process";
 
-import type { OwnedModelIdentity } from "./model-seat.ts";
+import type { OwnedModelIdentity, OwnedServerLaunch } from "./model-seat.ts";
 
 interface ResolverResult {
   status: number | null;
@@ -50,6 +50,60 @@ function resolverError(result: ResolverResult): string {
     // Fall through to bounded stderr/stdout disclosure.
   }
   return (result.stderr || result.stdout || "owned seat resolver failed").trim();
+}
+
+const OWNED_LAUNCH_FIELDS = [
+  "checkpoint_dir",
+  "mode",
+  "run_manifest_path",
+  "server_path",
+  "tokenizer_path",
+  "trusted_verifier_registry_path",
+] as const;
+
+function parseOwnedLaunch(
+  value: unknown,
+  expected: { manifestPath: string; registryPath: string; pythonExecutable: string },
+  exists: (path: string) => boolean,
+): OwnedServerLaunch {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("owned seat resolver returned an invalid launch descriptor");
+  }
+  const payload = value as Record<string, unknown>;
+  const fields = Object.keys(payload).sort();
+  const expectedFields = [...OWNED_LAUNCH_FIELDS].sort();
+  if (
+    fields.length !== expectedFields.length ||
+    fields.some((field, index) => field !== expectedFields[index]) ||
+    payload["mode"] !== "INTERACTIVE"
+  ) {
+    throw new Error("owned seat resolver returned an invalid launch descriptor");
+  }
+  const requireAbsolutePath = (field: string): string => {
+    const candidate = payload[field];
+    if (typeof candidate !== "string" || !isAbsolute(candidate)) {
+      throw new Error("owned seat resolver returned an invalid launch descriptor");
+    }
+    return resolve(candidate);
+  };
+  const launch: OwnedServerLaunch = {
+    checkpointDir: requireAbsolutePath("checkpoint_dir"),
+    mode: "INTERACTIVE",
+    pythonExecutable: expected.pythonExecutable,
+    runManifestPath: requireAbsolutePath("run_manifest_path"),
+    serverPath: requireAbsolutePath("server_path"),
+    tokenizerPath: requireAbsolutePath("tokenizer_path"),
+    trustedVerifierRegistryPath: requireAbsolutePath("trusted_verifier_registry_path"),
+  };
+  if (
+    launch.runManifestPath !== expected.manifestPath ||
+    launch.trustedVerifierRegistryPath !== expected.registryPath ||
+    [launch.checkpointDir, launch.runManifestPath, launch.serverPath, launch.tokenizerPath, launch.trustedVerifierRegistryPath]
+      .some((path) => !exists(path))
+  ) {
+    throw new Error("owned seat resolver returned an invalid launch descriptor");
+  }
+  return launch;
 }
 
 export function loadOwnedModelIdentity(
@@ -121,7 +175,30 @@ export function loadOwnedModelIdentity(
     throw new Error("owned seat resolver returned an invalid admitted identity");
   }
 
-  return { checkpointSha256, endpointUrl, identityUrl, modelName };
+  const modelFormat = payload["model_format"];
+  const serverSourceSha256 = payload["server_source_sha256"];
+  if (
+    typeof modelFormat !== "string" ||
+    modelFormat.trim() === "" ||
+    typeof serverSourceSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(serverSourceSha256)
+  ) {
+    throw new Error("owned seat resolver returned an invalid launch descriptor");
+  }
+  const launch = parseOwnedLaunch(
+    payload["launch"],
+    { manifestPath, registryPath, pythonExecutable: input.pythonExecutable ?? "python" },
+    exists,
+  );
+  return {
+    checkpointSha256,
+    endpointUrl,
+    identityUrl,
+    launch,
+    modelFormat,
+    modelName,
+    serverSourceSha256,
+  };
 }
 
 type FetchLike = (
