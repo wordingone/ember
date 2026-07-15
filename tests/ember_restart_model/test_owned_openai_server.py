@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import torch
 import sys
+import tempfile
 import subprocess
 import threading
 import unittest
@@ -35,10 +36,10 @@ class _Runtime:
             tokenizer_sha256="c" * 64,
             server_source_sha256="d" * 64,
         )
-        self.calls: list[list[dict[str, object]]] = []
+        self.calls: list[tuple[str, list[dict[str, object]]]] = []
 
-    def chat(self, messages: list[dict[str, object]], *, max_tokens: int) -> tuple[str, str]:
-        self.calls.append(messages)
+    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str, max_tokens: int) -> tuple[str, str]:
+        self.calls.append((frozen_row_id, messages))
         return ("owned answer", "stop")
 
 
@@ -76,11 +77,12 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(identity["checkpoint_sha256"], "a" * 64)
         self.assertEqual(identity["model_name"], expected_name)
         self.assertEqual(identity["data"][0]["id"], expected_name)
-        status, completion = self._request("/v1/chat/completions", {"model": expected_name, "messages": [{"role": "user", "content": "hello"}], "max_tokens": 3})
+        status, completion = self._request("/v1/chat/completions", {"model": expected_name, "ember_frozen_row_id": "row-1", "messages": [{"role": "user", "content": "hello"}], "max_tokens": 3})
         self.assertEqual(status, 200)
         self.assertEqual(completion["model"], expected_name)
         self.assertEqual(completion["choices"][0]["message"]["content"], "owned answer")
         self.assertEqual(len(self.runtime.calls), 1)
+        self.assertEqual(self.runtime.calls[0][0], "row-1")
 
     def test_chat_rejects_identity_mismatch_and_target_leak_before_runtime(self) -> None:
         status, response = self._request("/v1/chat/completions", {"model": "ember-owned:wrong", "messages": [{"role": "user", "content": "hello"}]})
@@ -89,6 +91,14 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         status, response = self._request("/v1/chat/completions", {"model": self.runtime.identity.model_name, "messages": [{"role": "user", "content": "hello", "target_ids": [1]}]})
         self.assertEqual(status, 400)
         self.assertIn("target", response["error"]["message"])
+        self.assertEqual(self.runtime.calls, [])
+    def test_chat_requires_a_frozen_row_id_before_runtime(self) -> None:
+        status, response = self._request("/v1/chat/completions", {
+            "model": self.runtime.identity.model_name,
+            "messages": [{"role": "user", "content": "hello"}],
+        })
+        self.assertEqual(status, 400)
+        self.assertIn("frozen row", response["error"]["message"])
         self.assertEqual(self.runtime.calls, [])
 
 
@@ -127,8 +137,38 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             device=torch.device("cpu"),
         )
 
-        answer, reason = runtime.chat([{"role": "user", "content": "hello"}], max_tokens=3)
+        answer, reason = runtime.chat([{"role": "user", "content": "hello"}], frozen_row_id="row-1", max_tokens=3)
         self.assertEqual((answer, reason, model.inputs), ("eos", "stop", [[1, 2]]))
+    def test_loaded_runtime_binds_chat_to_exact_frozen_split_row(self) -> None:
+        class Tokenizer:
+            eos_token_ids = {4}
+            sha256 = "c" * 64
+
+            def encode(self, text: str) -> list[int]:
+                if text != "hello":
+                    raise AssertionError(text)
+                return [1, 2]
+
+            def decode(self, token_ids: list[int]) -> str:
+                return "eos"
+
+        class Model:
+            def __call__(self, input_ids: torch.Tensor, **kwargs: object) -> torch.Tensor:
+                self.inputs = input_ids.squeeze(0).tolist()
+                logits = torch.full((1, input_ids.shape[1], 8), -100.0)
+                logits[0, -1, 4] = 100.0
+                return logits
+
+        with tempfile.TemporaryDirectory() as directory:
+            split = Path(directory) / "split.json"
+            split.write_text(json.dumps({"schema_version": "ember-owned-frozen-inference-split-v1", "tokenizer_sha256": "c" * 64, "rows": [{"id": "row-1", "prompt": "hello", "active_expert": "shared"}]}), encoding="utf-8")
+            model = Model()
+            runtime = LoadedOwnedRuntime(model=model, tokenizer=Tokenizer(), identity=self.runtime.identity, device=torch.device("cpu"), frozen_split=split)
+            answer, reason = runtime.chat([{"role": "user", "content": "hello"}], frozen_row_id="row-1", max_tokens=3)
+            self.assertEqual((answer, reason, model.inputs), ("eos", "stop", [1, 2]))
+            with self.assertRaisesRegex(ValueError, "does not match frozen"):
+                runtime.chat([{"role": "user", "content": "unbound"}], frozen_row_id="row-1", max_tokens=3)
+
     def test_central_admission_requires_exact_resolved_owned_seat(self) -> None:
         checkpoint = "a" * 64
         payload = {
