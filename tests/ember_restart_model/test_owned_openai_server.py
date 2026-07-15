@@ -81,6 +81,27 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
 
+    def test_central_resolver_uses_same_root_snapshot_not_mutable_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "run.json"
+            original = b'{"authority":"captured"}'
+            manifest.write_bytes(original)
+            snapshot = root / ".run.json.snapshot"
+            snapshot.write_bytes(original)
+            checkpoint = "a" * 64
+
+            def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                self.assertEqual(Path(command[3]), snapshot)
+                self.assertEqual(snapshot.read_bytes(), original)
+                manifest.write_text('{"authority":"mutated"}', encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, json.dumps({"valid": True, "seat": "OWNED_ADMITTED", "checkpoint_sha256": checkpoint, "model_name": "ember-owned:" + checkpoint[:12]}), "")
+
+            admitted = resolve_central_owned_admission(
+                run_manifest=manifest, snapshot_manifest=snapshot,
+                trusted_verifier_registry=root / "registry.json", checkpoint_sha256=checkpoint, runner=runner,
+            )
+        self.assertEqual(admitted["checkpoint_sha256"], checkpoint)
     def test_development_identity_and_sse_completion_are_non_admissible(self) -> None:
         runtime = _Runtime()
         runtime.identity = DevelopmentIdentity(
