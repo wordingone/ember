@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -202,10 +203,15 @@ def test_exact_model_source_and_config_construct_the_declared_production_shape_f
     source_path = ROOT / "tools" / "ember-restart-3b" / "model.py"
     config_path = ROOT / "configs" / "ember-restart-3b.json"
     loaded = module._load_model_module(source_path.read_bytes(), source_path)
-    config = module._config_from_payload(loaded, json.loads(config_path.read_bytes()))
+    contract = json.loads(config_path.read_bytes())
+    config = module._config_from_payload(loaded, contract)
+    default_dtype = torch.get_default_dtype()
+    model = module.construct_runtime_model(torch, loaded, config, contract)
+    assert torch.get_default_dtype() == default_dtype
     assert config.production is True
     assert config.structural_parameter_count() == 3_839_161_856
     assert config.declared_total_unique_trainable_parameters == 3_839_161_856
+    assert {value.dtype for value in model.state_dict().values()} == {torch.bfloat16}
 
 
 @pytest.mark.parametrize(
