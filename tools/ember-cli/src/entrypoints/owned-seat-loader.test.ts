@@ -182,6 +182,7 @@ describe("owned seat loader", () => {
       requested = String(input);
       return Response.json({
         seat: "OWNED_ADMITTED",
+        mode: "INTERACTIVE",
         checkpoint_sha256: CHECKPOINT,
         model_name: identity.modelName,
         model_config_sha256: identity.modelConfigSha256,
@@ -192,6 +193,30 @@ describe("owned seat loader", () => {
     expect(requested).toBe(identity.identityUrl);
   });
 
+  it("rejects a frozen-eval endpoint when the CLI requested interactive mode", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    await expect(
+      verifyOwnedEndpointIdentity(identity, async () =>
+        Response.json({
+          seat: "OWNED_ADMITTED",
+          mode: "FROZEN_EVAL",
+          checkpoint_sha256: CHECKPOINT,
+          model_name: identity.modelName,
+          model_config_sha256: identity.modelConfigSha256,
+          server_source_sha256: identity.serverSourceSha256,
+          tokenizer_sha256: identity.tokenizerSha256,
+        }),
+      ),
+    ).rejects.toThrow("does not match admitted checkpoint");
+  });
   it("rejects a live endpoint that reports another checkpoint or identity", async () => {
     const identity = {
       checkpointSha256: CHECKPOINT,
