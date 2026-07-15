@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -202,10 +203,15 @@ def test_exact_model_source_and_config_construct_the_declared_production_shape_f
     source_path = ROOT / "tools" / "ember-restart-3b" / "model.py"
     config_path = ROOT / "configs" / "ember-restart-3b.json"
     loaded = module._load_model_module(source_path.read_bytes(), source_path)
-    config = module._config_from_payload(loaded, json.loads(config_path.read_bytes()))
+    contract = json.loads(config_path.read_bytes())
+    config = module._config_from_payload(loaded, contract)
+    default_dtype = torch.get_default_dtype()
+    model = module.construct_runtime_model(torch, loaded, config, contract)
+    assert torch.get_default_dtype() == default_dtype
     assert config.production is True
     assert config.structural_parameter_count() == 3_839_161_856
     assert config.declared_total_unique_trainable_parameters == 3_839_161_856
+    assert {value.dtype for value in model.state_dict().values()} == {torch.bfloat16}
 
 
 @pytest.mark.parametrize(
@@ -296,12 +302,13 @@ def test_hash_and_load_uses_one_open_handle_for_digest_and_torch_load(tmp_path, 
             assert hasattr(source, "read")
             captured["position"] = source.tell()
             captured["bytes"] = source.read()
+            captured["kwargs"] = kwargs
             return {"model": {}}
 
     monkeypatch.setattr(Path, "open", counted_open)
-    assert module.hash_and_load_torch(FakeTorch, shard, expected, device="cpu") == {"model": {}}
+    assert module.hash_and_load_torch(FakeTorch, shard, expected, device="cuda") == {"model": {}}
     assert opens == 1
-    assert captured == {"position": 0, "bytes": b"same bytes"}
+    assert captured == {"position": 0, "bytes": b"same bytes", "kwargs": {"map_location": "cpu", "weights_only": True}}
 
 
 
@@ -372,3 +379,84 @@ def test_execute_rejects_out_of_vocabulary_tokens_before_model_allocation(tmp_pa
             model_source_bytes=source_bytes,
         )
     assert constructed == []
+
+def test_materialize_state_map_moves_only_selected_model_tensors_to_execution_device():
+    module = _load_module()
+    moves = []
+
+    class FakeTensor:
+        def to(self, **kwargs):
+            moves.append(kwargs)
+            return ("moved", kwargs["device"])
+
+    state = {"weight": FakeTensor()}
+    assert module.materialize_state_map(state, "cuda") == {"weight": ("moved", "cuda")}
+    assert moves == [{"device": "cuda"}]
+
+
+def test_tied_embedding_checkpoint_copies_must_match_exactly():
+    module = _load_module()
+    state = {
+        "token_embedding.weight": torch.tensor([[1.0, 2.0]], dtype=torch.bfloat16),
+        "lm_head.weight": torch.tensor([[1.0, 3.0]], dtype=torch.bfloat16),
+    }
+
+    with pytest.raises(ValueError, match="tied embedding checkpoint tensors differ"):
+        module.canonicalize_tied_embedding_state(torch, state, tied_embeddings=True)
+
+
+def test_tied_embedding_checkpoint_copy_is_materialized_once_and_reused():
+    module = _load_module()
+    moves = []
+
+    class FakeTensor:
+        shape = (2, 3)
+        dtype = "bfloat16"
+
+        def __init__(self, value):
+            self.value = value
+
+        def to(self, **kwargs):
+            moves.append((self.value, kwargs))
+            return object()
+
+    embedding = FakeTensor("embedding")
+    state = module.canonicalize_tied_embedding_state(
+        type("Torch", (), {"equal": staticmethod(lambda left, right: left.value == right.value)}),
+        {
+            "token_embedding.weight": embedding,
+            "lm_head.weight": FakeTensor("embedding"),
+            "final_norm.weight": FakeTensor("norm"),
+        },
+        tied_embeddings=True,
+    )
+    materialized = module.materialize_state_map(state, "cuda")
+
+    assert materialized["token_embedding.weight"] is materialized["lm_head.weight"]
+    assert moves == [
+        ("embedding", {"device": "cuda"}),
+        ("norm", {"device": "cuda"}),
+    ]
+
+
+def test_rebind_tied_embeddings_preserves_one_parameter_after_assign_load():
+    module = _load_module()
+
+    class TinyModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.token_embedding = torch.nn.Embedding(2, 3, device="meta")
+            self.lm_head = torch.nn.Linear(3, 2, bias=False, device="meta")
+            self.lm_head.weight = self.token_embedding.weight
+
+    model = TinyModel()
+    weight = torch.arange(6, dtype=torch.bfloat16).reshape(2, 3)
+    state = {
+        "token_embedding.weight": weight,
+        "lm_head.weight": weight,
+    }
+    model.load_state_dict(state, strict=True, assign=True)
+    module.rebind_tied_embeddings(model, tied_embeddings=True)
+
+    assert model.token_embedding.weight is model.lm_head.weight
+    assert model.token_embedding.weight.data_ptr() == model.lm_head.weight.data_ptr()
