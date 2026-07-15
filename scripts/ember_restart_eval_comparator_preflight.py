@@ -42,7 +42,7 @@ def main() -> int:
     for field in FIELDS:
         if target.get(field) != comparator.get(field) or not target.get(field):
             parser.error(f"target and comparator must share {field}")
-    payload = {"result": "COMPARISON_PREFLIGHT", "admission": "NOT_ELIGIBLE", "target_preflight_sha256": hashlib.sha256(target_bytes).hexdigest(), "comparator_preflight_sha256": hashlib.sha256(comparator_bytes).hexdigest(), **{field: target[field] for field in FIELDS[:3]}}
+    payload = {"result": "COMPARISON_PREFLIGHT", "admission": "NOT_ELIGIBLE", "target_preflight_sha256": hashlib.sha256(target_bytes).hexdigest(), "comparator_preflight_sha256": hashlib.sha256(comparator_bytes).hexdigest(), **{field: target[field] for field in FIELDS}}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
     return 0
