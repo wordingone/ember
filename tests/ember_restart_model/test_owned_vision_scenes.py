@@ -33,5 +33,12 @@ class OwnedVisionSceneTests(unittest.TestCase):
         self.assertGreaterEqual(len(captions), 16)
 
 
+    def test_512_owned_scenes_have_nontrivial_raw_diversity(self) -> None:
+        from build_owned_vision_scenes import build_records
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "image": 1, "scene": 2, "has": 3, "red": 4, "green": 5, "blue": 6, "squares": 7, **{str(index): index + 8 for index in range(16)}}, unk_token="<unk>"))
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        records = build_records(tokenizer, count=512, image_marker=31_998)
+        raw_scenes = {tuple(record["image_patches_u8_base64"]) for record in records}
+        self.assertGreaterEqual(len(raw_scenes), 480)
 if __name__ == "__main__":
     unittest.main()
