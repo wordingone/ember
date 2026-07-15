@@ -45,10 +45,10 @@
                                                                                         "irrelevance":  "NO_LOCAL_POSSIBLE_ANSWER_ORACLE"
                                                                                     },
                                                             "private_frozen_simple_artifact":  {
-                                                                                                   "artifact_sha256":  "fdb73e505e74fc2864b36af8a0e802296d6c7d3761383d6b1a24e55f21388126",
-                                                                                                   "disk_receipt_sha256":  "f4ee415ec3ee9061ada48290145d3fa22b792d2a6d9fbc1a02abf54270843e20",
+                                                                                                   "artifact_sha256":  "529bd686ba2828dce7104db3b4c25cdb0a6d00640f016ecffad02a574dbdf240",
+                                                                                                   "disk_receipt_sha256":  "0665899feec7b40e9721f879a7891042e1487739a0fb24b9d7904d372687e34d",
                                                                                                    "split_sha256":  "b5397a483dfe48b202c8907622e02276c3a8c33f1009066899cf50c097256aac",
-                                                                                                   "protocol_sha256":  "322ec131cc47cfb76416273efceca56192f61b78c0d8989f95a5c49f18e2a29c",
+                                                                                                   "protocol_sha256":  "571b4aa3e029a975fdfd512b915fdc85c908063d90fc5e72ac8ef7aa06ce05a4",
                                                                                                    "task_count":  550,
                                                                                                    "claim_status":  "PREFLIGHT_ONLY"
                                                                                                }
