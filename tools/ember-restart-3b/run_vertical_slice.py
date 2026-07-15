@@ -37,6 +37,16 @@ def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def specialist_resume_cursor(cursor: dict[str, object], *, data_shard_id: str) -> dict[str, object]:
+    """Preserve global accounting while starting a new verified specialist source at zero."""
+    if not isinstance(data_shard_id, str) or not data_shard_id.startswith("VERIFIED_SPECIALIST:"):
+        raise ValueError("specialist cursor requires a verified specialist source identity")
+    global_step, tokens_seen = cursor.get("global_step"), cursor.get("tokens_seen")
+    if type(global_step) is not int or global_step < 0 or type(tokens_seen) is not int or tokens_seen < 0:
+        raise ValueError("resume cursor lacks nonnegative global counters")
+    return {"shard": data_shard_id, "record_index": 0, "global_step": global_step, "tokens_seen": tokens_seen}
+
+
 def resume_expert_genesis(manifest: dict[str, Any], *, requested_seed: int) -> dict[str, str]:
     """Carry verified parent genesis through resume; a new launch seed cannot rewrite lineage."""
 
@@ -73,14 +83,16 @@ def production_memory_preflight(*, total_parameters: int, active_parameters: int
         "required_bytes": required_bytes,
         "device_free_bytes": device_free_bytes,
     }
-def semantic_publication_plan(*, steps: int, checkpoint_interval: int, estimated_checkpoint_bytes: int, write_budget_bytes: int) -> dict[str, int]:
+def semantic_publication_plan(*, steps: int, checkpoint_interval: int, estimated_checkpoint_bytes: int, write_budget_bytes: int, initial_global_step: int = 0) -> dict[str, int]:
     """Bound checkpoint publications and projected serialization before a semantic launch."""
 
     if (not isinstance(steps, int) or steps < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1
             or not isinstance(estimated_checkpoint_bytes, int) or estimated_checkpoint_bytes < 1
-            or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1):
+            or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1 or not isinstance(initial_global_step, int) or initial_global_step < 0):
         raise ValueError("semantic publication plan requires positive integer steps, interval, estimate, and write budget")
-    publication_count = (steps + checkpoint_interval - 1) // checkpoint_interval
+    final_global_step = initial_global_step + steps
+    periodic = sum(1 for step in range(initial_global_step + 1, final_global_step + 1) if step % checkpoint_interval == 0)
+    publication_count = periodic + (0 if final_global_step % checkpoint_interval == 0 else 1)
     projected_write_bytes = publication_count * estimated_checkpoint_bytes
     if projected_write_bytes > write_budget_bytes:
         raise ValueError("semantic publication plan exceeds the declared write budget")
@@ -401,6 +413,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
         for group in optimizer.param_groups:
             group["lr"] = 1e-5
+        resume_cursor = specialist_resume_cursor(resume_cursor, data_shard_id=data_shard_id)
         checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
     torch.cuda.reset_peak_memory_stats()
     segment = run_pretraining_segment(

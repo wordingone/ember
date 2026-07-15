@@ -118,6 +118,13 @@ class RunnerPreflightTests(unittest.TestCase):
             )
         self.assertEqual(result, "published")
 
+    def test_publication_plan_is_exact_for_a_resumed_phase(self) -> None:
+        plan = run_vertical_slice.semantic_publication_plan(steps=2, checkpoint_interval=32, estimated_checkpoint_bytes=10, write_budget_bytes=20, initial_global_step=31)
+        self.assertEqual(plan, {"publication_count": 2, "projected_write_bytes": 20})
+    def test_specialist_resume_preserves_global_counters_but_resets_new_source_cursor(self) -> None:
+        cursor = {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}
+        resumed = run_vertical_slice.specialist_resume_cursor(cursor, data_shard_id="VERIFIED_SPECIALIST:abc123")
+        self.assertEqual(resumed, {"shard": "VERIFIED_SPECIALIST:abc123", "record_index": 0, "global_step": 19, "tokens_seen": 19_456})
     def test_semantic_publication_plan_bounds_write_budget_by_interval_and_final_checkpoint(self) -> None:
         plan = run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, estimated_checkpoint_bytes=10, write_budget_bytes=40)
         self.assertEqual(plan, {"publication_count": 4, "projected_write_bytes": 40})
