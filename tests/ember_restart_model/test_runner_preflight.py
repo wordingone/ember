@@ -5,7 +5,10 @@
 
 from __future__ import annotations
 
+import inspect
+
 import sys
+import subprocess
 from types import SimpleNamespace
 import unittest
 from pathlib import Path
@@ -77,5 +80,46 @@ class RunnerPreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "retired bootstrap"):
                 run_vertical_slice.load_authorized_records(ROOT)
 
+
+    def test_retention_prunes_after_success_with_the_serialized_budget(self) -> None:
+        with patch.object(run_vertical_slice, "_enforce_retention") as retention:
+            result = run_vertical_slice._retain_after_success(
+                Path("B:/ember-artifacts/checkpoints"), max_serialized_bytes=24 * 1024**3, operation=lambda: "published"
+            )
+        self.assertEqual(result, "published")
+
+    def test_semantic_cli_dispatches_only_manifest_bound_stream_inputs(self) -> None:
+        with patch.object(run_vertical_slice, "run_semantic", return_value={"steps": 1}) as semantic:
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "run_vertical_slice.py", "semantic", "--seed", "83", "--artifact-root", "B:/ember-artifacts",
+                    "--receipt", "semantic/receipt.json", "--shards-root", "semantic/shards",
+                    "--tokenizer", "semantic/tokenizer.json", "--steps", "1", "--sequence-length", "1024",
+                ],
+            ):
+                run_vertical_slice.main()
+        semantic.assert_called_once_with(
+            seed=83,
+            artifact_root=Path("B:/ember-artifacts"),
+            receipt_path=Path("semantic/receipt.json"),
+            shards_root=Path("semantic/shards"),
+            tokenizer_path=Path("semantic/tokenizer.json"),
+            steps=1,
+            sequence_length=1024,
+            resume_checkpoint=None,
+        )
+
+    def test_runner_file_exposes_the_semantic_cli_entrypoint(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"), "semantic", "--help"],
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("--receipt", completed.stdout)
+
+    def test_runner_has_one_retention_implementation(self) -> None:
+        self.assertEqual(inspect.getsource(run_vertical_slice).count("def _retain_after_success("), 1)
 if __name__ == "__main__":
     unittest.main()

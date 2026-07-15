@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _validate_runtime_optimizer_realization, load_checkpoint_artifacts, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
+from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
 
 
@@ -39,6 +40,8 @@ class CheckpointArtifactTests(unittest.TestCase):
         optimizer = torch.optim.AdamW((parameter for parameter in model.parameters() if parameter.requires_grad), lr=1e-4)
         with tempfile.TemporaryDirectory() as directory:
             receipt = write_checkpoint_artifacts(model, optimizer, Path(directory) / "checkpoint-0001", launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            self.assertEqual(receipt["contract_version"], 3)
+            self.assertEqual(receipt["architecture_revision"], "ember-sparse-3b-v2")
             restored = UnifiedDecoder(config, genesis_seed=99)
             restore_optimizer = torch.optim.AdamW((parameter for parameter in restored.parameters() if parameter.requires_grad), lr=1e-4)
             load_checkpoint_artifacts(restored, restore_optimizer, Path(directory) / "checkpoint-0001", receipt)
@@ -106,5 +109,23 @@ class CheckpointArtifactTests(unittest.TestCase):
             wrong_optimizer = torch.optim.SGD(restored.parameters(), lr=1e-4)
             with self.assertRaisesRegex(ValueError, "runtime optimizer realization"):
                 load_checkpoint_artifacts(restored, wrong_optimizer, root, receipt)
+    def test_architecture_receipt_uses_measured_active_shared_route(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=23)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            receipt = write_checkpoint_artifacts(
+                model, optimizer, Path(directory) / "checkpoint-architecture", launch_seed=23,
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
+                data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 1, "global_step": 1, "tokens_seen": 16},
+                model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+            )
+        expected = measure_parameter_counts(model)
+        architecture = receipt["architecture"]
+        self.assertEqual(architecture["revision"], "ember-sparse-3b-v2")
+        for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
+            self.assertEqual(architecture[field], expected[field])
+        self.assertEqual(architecture["shared_text_ffn"], "always_active_SwiGLU_4H")
 if __name__ == "__main__":
     unittest.main()
