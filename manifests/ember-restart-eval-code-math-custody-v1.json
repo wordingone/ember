@@ -1,0 +1,19 @@
+{
+  "asset_disposition": "SOURCE_ONLY_NO_FROZEN_HUMANEVALPLUS_OR_MBPPPLUS_TASK_ASSETS",
+  "benchmark_id": "evalplus",
+  "goal_id": "EMBER-02",
+  "license": "Apache-2.0",
+  "license_sha256": "fcc1f77fe5443b21bfc4dfcc3d66f7654f599b91582df771850e5e876986a103",
+  "materialization": {
+    "max_b_write_gib": 0.25,
+    "outcome": "COMPLETED",
+    "receipt_sha256": "24d83ba7a732280e507e9e535f8f719c765ed5208ca9c0d5b3bfd2a412724fb7"
+  },
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-restart-benchmark-custody-v1",
+  "source_commit": "26d6d00bb1fd0fa37f39c99d5290da67891d1c5e",
+  "source_tree": "1d0063f35139d70988828fd669aeb365e5030b68",
+  "target_execution_permitted": false,
+  "upstream_url": "https://github.com/evalplus/evalplus",
+  "workstream_id": "EMBER-02C"
+}
