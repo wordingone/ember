@@ -244,10 +244,54 @@ def hash_and_load_torch(torch_module, path: Path, expected_sha256: str, *, devic
         return torch_module.load(handle, map_location="cpu", weights_only=True)
 
 
-def materialize_state_map(state: dict[str, object], device: str) -> dict[str, object]:
-    """Move only a validated model-state mapping onto the execution device."""
+def canonicalize_tied_embedding_state(
+    torch_module,
+    state: dict[str, object],
+    *,
+    tied_embeddings: bool,
+) -> dict[str, object]:
+    """Validate duplicate checkpoint copies and restore one tied tensor identity."""
 
-    return {key: value.to(device=device) for key, value in state.items()}
+    canonical = dict(state)
+    if not tied_embeddings:
+        return canonical
+    embedding_key, head_key = "token_embedding.weight", "lm_head.weight"
+    if embedding_key not in canonical or head_key not in canonical:
+        raise ValueError("tied embedding checkpoint tensors are missing")
+    embedding, head = canonical[embedding_key], canonical[head_key]
+    if (
+        tuple(embedding.shape) != tuple(head.shape)
+        or embedding.dtype != head.dtype
+        or not bool(torch_module.equal(embedding, head))
+    ):
+        raise ValueError("tied embedding checkpoint tensors differ")
+    canonical[head_key] = embedding
+    return canonical
+
+
+def materialize_state_map(state: dict[str, object], device: str) -> dict[str, object]:
+    """Move each unique validated model tensor onto the execution device once."""
+
+    materialized: dict[str, object] = {}
+    by_identity: dict[int, object] = {}
+    for key, value in state.items():
+        identity = id(value)
+        if identity not in by_identity:
+            by_identity[identity] = value.to(device=device)
+        materialized[key] = by_identity[identity]
+    return materialized
+
+
+def rebind_tied_embeddings(model, *, tied_embeddings: bool) -> None:
+    """Preserve the architecture's single embedding/output-head parameter."""
+
+    if not tied_embeddings:
+        return
+    if not hasattr(model, "token_embedding") or not hasattr(model, "lm_head"):
+        raise ValueError("tied embedding modules are missing")
+    model.lm_head.weight = model.token_embedding.weight
+    if model.lm_head.weight is not model.token_embedding.weight:
+        raise ValueError("runtime failed to preserve tied embeddings")
 
 
 def _load_model_module(source_bytes: bytes, source_path: Path):
@@ -435,12 +479,18 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
         validate_state_map(expert["model"], expert_expected, f"expert {active_route}")
     if active_route != "shared" and not expert_expected:
         raise ValueError("selected expert has no expected model parameters")
-    shared_state = materialize_state_map(shared["model"], arguments.device)
+    shared_model_state = canonicalize_tied_embedding_state(
+        torch,
+        shared["model"],
+        tied_embeddings=bool(config.tied_embeddings),
+    )
+    shared_state = materialize_state_map(shared_model_state, arguments.device)
     expert_state = None if active_route == "shared" else materialize_state_map(expert["model"], arguments.device)
     del shared, expert
     model.load_state_dict(shared_state, strict=False, assign=True)
     if active_route != "shared":
         model.load_state_dict(expert_state, strict=False, assign=True)
+    rebind_tied_embeddings(model, tied_embeddings=bool(config.tied_embeddings))
     model.eval()
     tokens = torch.tensor([input_token_ids], device=arguments.device, dtype=torch.long)
     generated: list[int] = []
