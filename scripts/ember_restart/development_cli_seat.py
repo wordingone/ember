@@ -266,6 +266,7 @@ def resolve_development_seat(manifest_path: Path) -> dict[str, Any]:
             "checkpoint_dir": str(checkpoint_path.parent),
             "development_manifest_path": str(manifest_path),
             "mode": "INTERACTIVE",
+            "model_config_path": str(resolved["model_config"][0]),
             "server_path": str(resolved["server"][0]),
             "tokenizer_path": str(resolved["tokenizer"][0]),
         },
