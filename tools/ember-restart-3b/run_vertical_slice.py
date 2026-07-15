@@ -37,6 +37,20 @@ def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def resume_expert_genesis(manifest: dict[str, Any], *, requested_seed: int) -> dict[str, str]:
+    """Carry verified parent genesis through resume; a new launch seed cannot rewrite lineage."""
+
+    if not isinstance(requested_seed, int) or requested_seed < 0:
+        raise ValueError("resume requested seed must be nonnegative")
+    genesis = manifest.get("expert_genesis_sha256")
+    expected = {"vision", "audio", "reasoning", "tool"}
+    if not isinstance(genesis, dict) or set(genesis) != expected:
+        raise ValueError("resume manifest lacks four verified expert genesis hashes")
+    for name, digest in genesis.items():
+        if not isinstance(digest, str) or len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+            raise ValueError(f"resume manifest has malformed {name} genesis hash")
+    return dict(genesis)
+
 def production_memory_preflight(*, total_parameters: int, active_parameters: int, device_free_bytes: int) -> dict[str, int | str]:
     """Derive the exact BF16 episode envelope before CUDA model construction."""
     if min(total_parameters, active_parameters, device_free_bytes) <= 0 or active_parameters > total_parameters:
@@ -59,6 +73,19 @@ def production_memory_preflight(*, total_parameters: int, active_parameters: int
         "required_bytes": required_bytes,
         "device_free_bytes": device_free_bytes,
     }
+def semantic_publication_plan(*, steps: int, checkpoint_interval: int, estimated_checkpoint_bytes: int, write_budget_bytes: int) -> dict[str, int]:
+    """Bound checkpoint publications and projected serialization before a semantic launch."""
+
+    if (not isinstance(steps, int) or steps < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1
+            or not isinstance(estimated_checkpoint_bytes, int) or estimated_checkpoint_bytes < 1
+            or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1):
+        raise ValueError("semantic publication plan requires positive integer steps, interval, estimate, and write budget")
+    publication_count = (steps + checkpoint_interval - 1) // checkpoint_interval
+    projected_write_bytes = publication_count * estimated_checkpoint_bytes
+    if projected_write_bytes > write_budget_bytes:
+        raise ValueError("semantic publication plan exceeds the declared write budget")
+    return {"publication_count": publication_count, "projected_write_bytes": projected_write_bytes}
+
 def production_artifact_root(candidate: Path) -> Path:
     """Require B: for production bundles; manifests themselves stay portable."""
 
@@ -362,6 +389,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
             raise ValueError("resume checkpoint must be a published B: bundle")
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
         receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
         resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
         for group in optimizer.param_groups:
@@ -435,13 +463,13 @@ def run_specialist(
 
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
-    steps: int, sequence_length: int, resume_checkpoint: Path | None = None,
+    steps: int, sequence_length: int, checkpoint_interval: int, estimated_checkpoint_bytes: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production semantic runner")
-    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1:
+    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(estimated_checkpoint_bytes, int) or estimated_checkpoint_bytes < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
         raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
     artifact_root = production_artifact_root(artifact_root)
     root = Path(__file__).resolve().parents[2]
@@ -453,6 +481,7 @@ def run_semantic(
         receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path
     )
     config = RestartDecoderConfig.from_contract(config_path)
+    publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, estimated_checkpoint_bytes=estimated_checkpoint_bytes, write_budget_bytes=write_budget_bytes)
     if stream.vocab_size != config.vocab_size:
         raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
     total_parameters = config.structural_parameter_count()
@@ -489,6 +518,7 @@ def run_semantic(
             raise ValueError("resume checkpoint must be a published B: bundle")
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
         loaded = load_checkpoint_artifacts(
             model, optimizer, resume_checkpoint, {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
         )
@@ -526,7 +556,7 @@ def run_semantic(
         device=torch.device("cuda"),
         sequence_length=sequence_length,
         steps=steps,
-        checkpoint_every=1,
+        checkpoint_every=checkpoint_interval,
         checkpoint_callback=checkpoint_callback,
         initial_data_cursor=resume_cursor,
         initial_global_step=initial_global_step,
@@ -553,6 +583,7 @@ def run_semantic(
         "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
         "post_step_checkpoint": checkpoint,
         "parameter_receipt": parameter_receipt,
+        "publication_plan": publication_plan,
         "stream_receipt_sha256": stream.receipt_sha256,
         "tokenizer_sha256": stream.tokenizer_sha256,
     }
@@ -582,6 +613,9 @@ def main() -> None:
     semantic.add_argument("--tokenizer", type=Path, required=True)
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
+    semantic.add_argument("--checkpoint-interval", type=int, required=True)
+    semantic.add_argument("--estimated-checkpoint-gib", type=int, required=True)
+    semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
@@ -595,6 +629,9 @@ def main() -> None:
             tokenizer_path=args.tokenizer,
             steps=args.steps,
             sequence_length=args.sequence_length,
+            checkpoint_interval=args.checkpoint_interval,
+            estimated_checkpoint_bytes=args.estimated_checkpoint_gib * 1024**3,
+            write_budget_bytes=args.write_budget_gib * 1024**3,
             resume_checkpoint=args.resume_checkpoint,
         )
     else:
