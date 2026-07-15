@@ -69,7 +69,7 @@ def main() -> int:
     words = sum(len(value.split()) for value in references.values())
     if words <= 0:
         parser.error("frozen references must contain at least one word")
-    payload = {"result": "SELFTEST", "criterion_id": "ember-3b-audio-capability-v1", "criterion_result": "FAILED", "metrics": {"word_error_rate": sum(distance(references[key].split(), predictions[key].split()) for key in references) / words}, "sample_count": len(references), "references_sha256": digest(reference_bytes), "predictions_sha256": digest(prediction_bytes), "frozen_audio_manifest_sha256": digest(manifest_bytes), "upstream": "fixture-only local word-error-rate scorer"}
+    payload = {"result": "SELFTEST", "claim_status": "SELFTEST_ONLY_FIXTURE_AUDIO_TRANSCRIPTS", "criterion_id": "ember-3b-audio-capability-v1", "criterion_result": "FAILED", "metrics": {"word_error_rate": sum(distance(references[key].split(), predictions[key].split()) for key in references) / words}, "sample_count": len(references), "references_sha256": digest(reference_bytes), "predictions_sha256": digest(prediction_bytes), "frozen_audio_manifest_sha256": digest(manifest_bytes), "upstream": "fixture-only local word-error-rate scorer"}
     args.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.score_output.parent, delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
