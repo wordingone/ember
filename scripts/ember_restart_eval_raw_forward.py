@@ -46,6 +46,43 @@ def load_owned_prompt(path: Path) -> dict[str, object]:
     return {"id": prompt["id"], "active_expert": prompt["active_expert"], "token_ids": prompt["token_ids"]}
 
 
+def load_canonical_prompt_binding(prompt_path: Path, split_path: Path, expected_split_sha256: str, benchmark_id: str, benchmark_version: str) -> dict[str, object]:
+    prompt_bytes, split_bytes = prompt_path.read_bytes(), split_path.read_bytes()
+    if hashlib.sha256(split_bytes).hexdigest() != expected_split_sha256:
+        raise ValueError("frozen prompt split digest mismatch")
+    try:
+        prompt, split = json.loads(prompt_bytes), json.loads(split_bytes)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"prompt binding JSON is invalid: {error}") from error
+    if not isinstance(prompt, dict) or prompt.get("schema_version") != "ember-owned-inference-prompt-v1":
+        raise ValueError("prompt schema is invalid")
+    if not isinstance(split, dict) or split.get("schema_version") != "ember-owned-frozen-local-text-split-v1" or split.get("benchmark_id") != benchmark_id or split.get("benchmark_version") != benchmark_version or split.get("target_training_access") != "FORBIDDEN":
+        raise ValueError("frozen prompt benchmark identity is invalid")
+    loaded = load_owned_prompt_bytes(prompt)
+    rows = split.get("rows")
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+        raise ValueError("frozen prompt row is invalid")
+    row, prompt_sha = rows[0], hashlib.sha256(prompt_bytes).hexdigest()
+    if row.get("id") != loaded["id"]: raise ValueError("frozen prompt row mismatch")
+    if row.get("prompt_sha256") != prompt_sha: raise ValueError("frozen prompt hash mismatch")
+    if row.get("active_expert") != loaded["active_expert"]: raise ValueError("frozen prompt route mismatch")
+    token_sha = hashlib.sha256(json.dumps(loaded["token_ids"], separators=(",", ":")).encode()).hexdigest()
+    if row.get("token_ids_sha256") != token_sha: raise ValueError("frozen prompt token mismatch")
+    return {"row_id": loaded["id"], "active_expert": loaded["active_expert"], "token_ids": loaded["token_ids"], "input_sha256": prompt_sha}
+
+
+def load_owned_prompt_bytes(prompt: object) -> dict[str, object]:
+    if not isinstance(prompt, dict) or "target_ids" in prompt:
+        raise ValueError("owned inference prompt rejects target_ids")
+    if set(prompt) != {"schema_version", "id", "active_expert", "token_ids"} or prompt.get("schema_version") != "ember-owned-inference-prompt-v1":
+        raise ValueError("owned inference prompt schema is invalid")
+    if not isinstance(prompt["id"], str) or not prompt["id"] or prompt["active_expert"] not in ("shared", "vision", "audio", "reasoning", "tool"):
+        raise ValueError("owned inference prompt identity is invalid")
+    tokens = prompt["token_ids"]
+    if not isinstance(tokens, list) or not tokens or any(not isinstance(token, int) or isinstance(token, bool) or token < 0 for token in tokens):
+        raise ValueError("owned inference prompt token ids are invalid")
+    return {"id": prompt["id"], "active_expert": prompt["active_expert"], "token_ids": tokens}
+
 def validate_state_map(state: object, expected: dict[str, object], label: str) -> None:
     if not isinstance(state, dict):
         raise ValueError(f"{label} state is not a mapping")
@@ -143,6 +180,8 @@ def main() -> None:
     parser.add_argument("--split-sha256")
     parser.add_argument("--protocol-sha256")
     parser.add_argument("--row-id")
+    parser.add_argument("--prompt", type=Path)
+    parser.add_argument("--frozen-split", type=Path)
     parser.add_argument("--stop-token-id", type=int, default=2)
     arguments = parser.parse_args()
     if arguments.benchmark_capability not in (None, "text"):
@@ -150,7 +189,10 @@ def main() -> None:
     if arguments.output.exists(): parser.error("refusing to overwrite existing output")
     if arguments.canonical_output is not None and arguments.canonical_output.exists(): parser.error("refusing to overwrite existing canonical output")
     if arguments.canonical_output is not None and arguments.canonical_output.resolve() == arguments.output.resolve(): parser.error("canonical output must differ from output")
+    if arguments.canonical_output is not None and (arguments.prompt is None or arguments.frozen_split is None): parser.error("canonical output requires owned prompt and frozen split")
+    if arguments.canonical_output is not None and any(value is not None for value in (arguments.input_token_id, arguments.active_expert, arguments.row_id)): parser.error("canonical output rejects detached manual prompt fields")
     try:
+        binding = load_canonical_prompt_binding(arguments.prompt, arguments.frozen_split, arguments.split_sha256, arguments.benchmark_id, arguments.benchmark_version) if arguments.canonical_output is not None else None
         tokenizer = Tokenizer.from_file(str(arguments.tokenizer))
         checkpoint = _verify(arguments.checkpoint_manifest, arguments.model_config)
         if arguments.execute and any(value is None for value in (arguments.model_source, arguments.model_source_sha256, arguments.model_config, arguments.model_config_sha256, arguments.active_expert, arguments.input_token_id, arguments.max_new_tokens)):
