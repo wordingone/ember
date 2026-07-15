@@ -5,7 +5,23 @@
 
 from __future__ import annotations
 
+import argparse
+import hashlib
+import json
+import os
+import tempfile
+import time
+from pathlib import Path
 from typing import Any
+
+import torch
+import torch.nn.functional as F
+
+from batch import decode_owned_batch
+from model import RestartDecoderConfig, UnifiedDecoder
+from parameter_counter import measure_parameter_counts
+from run_vertical_slice import build_production_optimizer, load_optimizer_contract
+from semantic_stream import ManifestBoundTokenStream
 
 _SEQUENCE_LENGTH = 1024
 _REQUIRED_BATCHES = (1, 2)
@@ -70,3 +86,126 @@ def screen_receipt(
         "source_sha256": source_sha256,
         "steps": batch_measurements,
     }
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _atomic_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+        json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
+        handle.write("\n")
+        temporary = Path(handle.name)
+    os.replace(temporary, path)
+
+
+def _full_step(*, model: UnifiedDecoder, optimizer: torch.optim.Optimizer, record: dict[str, object], config: RestartDecoderConfig, batch_size: int, device: torch.device) -> dict[str, object]:
+    batch = decode_owned_batch(record, config, device=device)
+    input_ids = batch["input_ids"].repeat(batch_size, 1)
+    target_ids = batch["target_ids"].repeat(batch_size, 1)
+    torch.cuda.reset_peak_memory_stats(device)
+    torch.cuda.synchronize(device)
+    started = time.perf_counter()
+    optimizer.zero_grad(set_to_none=True)
+    logits = model(input_ids, active_expert="shared")
+    loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), target_ids.reshape(-1))
+    if not torch.isfinite(loss):
+        raise RuntimeError("native full-step screen produced a non-finite loss")
+    loss.backward()
+    optimizer.step()
+    torch.cuda.synchronize(device)
+    return {
+        "batch_size": batch_size,
+        "elapsed_seconds": time.perf_counter() - started,
+        "loss": float(loss.detach().cpu()),
+        "peak_allocated_bytes": int(torch.cuda.max_memory_allocated(device)),
+        "peak_reserved_bytes": int(torch.cuda.max_memory_reserved(device)),
+    }
+
+
+def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, reference_checkpoint_manifest: Path, output: Path, seed: int) -> dict[str, object]:
+    """Run both required clean-genesis batch arms; call only through disk_budget_runner."""
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the native full-step screen")
+    if not isinstance(seed, int) or seed < 0:
+        raise ValueError("screen seed must be a nonnegative integer")
+    if output.exists():
+        raise FileExistsError("native screen output must be a fresh path")
+    if not reference_checkpoint_manifest.is_file():
+        raise ValueError("reference checkpoint manifest must be an existing custody artifact")
+    # This is deliberately before model allocation: all 26 shard bytes and tokenizer bytes are rechecked first.
+    stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path)
+    root = Path(__file__).resolve().parents[2]
+    config_path = root / "configs" / "ember-restart-3b.json"
+    config = RestartDecoderConfig.from_contract(config_path)
+    optimizer_contract = load_optimizer_contract(config_path)
+    device = torch.device("cuda")
+    available, total = torch.cuda.mem_get_info(device)
+    plan = screen_plan(total_vram_bytes=int(total))
+    if available < int(plan["minimum_free_margin_bytes"]):
+        raise MemoryError("native screen dispatch lacks the 1.5 GiB GPU free-memory floor")
+    record, _ = stream.next_episode(shard_index=0, token_offset=0, sequence_length=_SEQUENCE_LENGTH)
+    steps: list[dict[str, object]] = []
+    counts: dict[str, object] | None = None
+    for batch_size in _REQUIRED_BATCHES:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        previous_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(torch.bfloat16)
+        try:
+            model = UnifiedDecoder(config, device=device, allow_production_allocation=True, genesis_seed=seed)
+        finally:
+            torch.set_default_dtype(previous_dtype)
+        model.train()
+        model._activate_expert("shared")
+        counts = measure_parameter_counts(model)
+        if int(counts["unique_parameters"]) < 3_000_000_000 or counts["active_expert_ids"] != ["shared"]:
+            raise RuntimeError("native screen did not instantiate the required owned shared-active 3B path")
+        optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
+        steps.append(_full_step(model=model, optimizer=optimizer, record=record, config=config, batch_size=batch_size, device=device))
+        del optimizer, model
+        torch.cuda.empty_cache()
+    result = screen_receipt(
+        model_config_sha256=_sha256(config_path),
+        optimizer_contract_sha256=hashlib.sha256(json.dumps(optimizer_contract, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
+        tokenizer_sha256=stream.tokenizer_sha256,
+        checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest),
+        source_sha256=_sha256(Path(__file__)),
+        total_vram_bytes=int(total),
+        available_vram_bytes=int(available),
+        batch_measurements=steps,
+    )
+    result.update({
+        "genesis_seed": seed,
+        "reference_checkpoint_role": "CUSTODY_REFERENCE_ONLY_NOT_LOADED",
+        "stream_receipt_sha256": stream.receipt_sha256,
+        "total_parameters": counts["unique_parameters"] if counts else None,
+        "active_parameters": counts["active_parameters"] if counts else None,
+    })
+    _atomic_json(output, result)
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument("--shards-root", type=Path, required=True)
+    parser.add_argument("--tokenizer", type=Path, required=True)
+    parser.add_argument("--reference-checkpoint-manifest", type=Path, required=True)
+    parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        print(json.dumps(run_screen(receipt_path=args.receipt, shards_root=args.shards_root, tokenizer_path=args.tokenizer, reference_checkpoint_manifest=args.reference_checkpoint_manifest, output=args.output, seed=args.seed), sort_keys=True))
+    except Exception as error:
+        parser.error(str(error))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
