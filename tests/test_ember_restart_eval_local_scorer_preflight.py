@@ -1,9 +1,16 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-import hashlib,json,subprocess,sys,tempfile
+import hashlib, importlib.util, json, subprocess, sys, tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];SCORER=ROOT/'scripts'/'ember_restart_eval_text_exact.py';PREFLIGHT=ROOT/'scripts'/'ember_restart_eval_execution_preflight.py'
+def _load_text_scorer():
+    sys.path.insert(0, str(SCORER.parent))
+    specification = importlib.util.spec_from_file_location("text_scorer_single_read", SCORER)
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
 def test_text_scorer_consumes_checkpoint_bound_canonical_predictions(tmp_path):
     references, manifest, predictions, score = (tmp_path / name for name in ("references.json", "manifest.json", "predictions.json", "score.json"))
     references.write_text(json.dumps([{"id": "t1", "answer": "yes"}]), encoding="utf-8")
@@ -101,3 +108,23 @@ def test_text_scorer_rejects_canonical_benchmark_identity_drift(tmp_path):
         assert completed.returncode != 0
         assert "canonical prediction identity" in completed.stderr
         assert not score.exists()
+
+def test_text_scorer_reads_each_bound_input_once(tmp_path, monkeypatch):
+    references, manifest, predictions, score = _write_checkpoint_bound_text_inputs(tmp_path)
+    module = _load_text_scorer()
+    inputs = {references, manifest, predictions}
+    reads = {path: 0 for path in inputs}
+    original = Path.read_bytes
+
+    def read_once(path):
+        if path in inputs:
+            reads[path] += 1
+            if reads[path] > 1:
+                raise AssertionError(f"reopened bound input: {path.name}")
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", read_once)
+    monkeypatch.setattr(sys, "argv", [str(SCORER), "--frozen-text-manifest", str(manifest), "--references", str(references), "--predictions", str(predictions), "--score-output", str(score)])
+
+    assert module.main() == 0
+    assert reads == {references: 1, manifest: 1, predictions: 1}
