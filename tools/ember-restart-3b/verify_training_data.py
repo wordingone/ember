@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 SEMANTIC_CHECKS = {
+    "tool": ["token_roundtrip", "source_target_pair", "typed_tool_execution"],
     "text": ["token_roundtrip", "source_target_pair"],
     "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"],
 }
@@ -102,16 +103,16 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
             or target_ids[:-1] != token_ids[1:]
         ):
             raise ValueError("semantic record does not satisfy token roundtrip and source-target pairing")
-        if capability == "reasoning":
-            if record.get("active_expert") != "reasoning":
-                raise ValueError("reasoning semantic record must route to the reasoning expert")
+        if capability in {"reasoning", "tool"}:
+            if record.get("active_expert") != capability:
+                raise ValueError(f"{capability} semantic record must route to the {capability} expert")
             encoded = base64.b64encode(json.dumps(dict(record), sort_keys=True, separators=(",", ":")).encode("utf-8")).decode("ascii")
             completed = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("verify_capability_record.py")), "--record-json-base64", encoded], text=True, capture_output=True, timeout=15, check=False)
             if completed.returncode != 0:
-                raise ValueError("reasoning semantic record local verifier failed")
+                raise ValueError(f"{capability} semantic record local verifier failed")
             result = json.loads(completed.stdout)
             if not isinstance(result, dict) or result.get("result") != "PASSED" or not isinstance(result.get("receipt"), dict):
-                raise ValueError("reasoning semantic record lacks an executed local receipt")
+                raise ValueError(f"{capability} semantic record lacks an executed local receipt")
         token_count += len(token_ids)
     if data.get("record_count") != len(records) or data.get("token_count") != token_count:
         raise ValueError("data manifest counts do not match verified semantic records")
