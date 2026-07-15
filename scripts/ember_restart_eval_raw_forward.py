@@ -88,6 +88,8 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dic
             logits = model(tokens, active_expert=arguments.active_expert)
             token = int(torch.argmax(logits[:, -1, :], dim=-1).item())
             generated.append(token)
+            if token == arguments.stop_token_id:
+                break
             tokens = torch.cat((tokens, torch.tensor([[token]], device=arguments.device)), dim=1)
     return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": arguments.active_expert, "generated_token_ids": generated, "stop_reason": "max_new_tokens", "model_source_sha256": arguments.model_source_sha256, "model_config_sha256": arguments.model_config_sha256}
 
