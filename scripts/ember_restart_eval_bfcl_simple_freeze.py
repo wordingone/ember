@@ -50,9 +50,9 @@ def main() -> int:
             if len(prompts) != len(answers):
                 raise ValueError(f"BFCL {category} prompt/oracle counts differ")
             for prompt, answer in zip(prompts, answers):
-                if not isinstance(prompt.get("id"), str) or not isinstance(prompt.get("function"), list) or prompt["id"] != answer.get("id") or not isinstance(answer.get("ground_truth"), list) or len(answer["ground_truth"]) != 1 or not isinstance(answer["ground_truth"][0], dict) or len(answer["ground_truth"][0]) != 1:
+                if not isinstance(prompt.get("id"), str) or not isinstance(prompt.get("function"), list) or not isinstance(prompt.get("question"), list) or prompt["id"] != answer.get("id") or not isinstance(answer.get("ground_truth"), list) or len(answer["ground_truth"]) != 1 or not isinstance(answer["ground_truth"][0], dict) or len(answer["ground_truth"][0]) != 1:
                     raise ValueError(f"BFCL {category} prompt/oracle pairing is invalid")
-                tasks.append({"id": prompt["id"], "category": category, "functions": prompt["function"], "ground_truth": answer["ground_truth"]})
+                tasks.append({"id": prompt["id"], "category": category, "functions": prompt["function"], "question": prompt["question"], "ground_truth": answer["ground_truth"]})
             files.extend(({"category": category, "role": "prompts", "bytes": len(prompt_bytes), "sha256": digest(prompt_bytes)}, {"category": category, "role": "possible_answers", "bytes": len(answer_bytes), "sha256": digest(answer_bytes)}))
         if len({task["id"] for task in tasks}) != len(tasks):
             raise ValueError("BFCL task ids must be unique")
