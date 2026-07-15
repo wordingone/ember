@@ -5,7 +5,16 @@
   "schema_version": "ember-restart-benchmark-custody-v1",
   "benchmark_id": "swe-bench-lite",
   "upstream_url": "https://github.com/SWE-bench/SWE-bench",
-  "asset_disposition": "NO_LOCAL_PINNED_SWE_BENCH_TASKS_OR_RUNTIME",
+  "source_commit": "f7bbbb2ccdf479001d6467c9e34af59e44a840f9",
+  "source_tree": "81083caddb04c76896805b38eaa4e43ca3ce2d63",
+  "license": "MIT",
+  "license_sha256": "2bd2e08df7147f67a69b42c10efae09bd4bf119df397371036187d5dd1b02f57",
+  "materialization": {
+    "max_b_write_gib": 0.5,
+    "outcome": "COMPLETED",
+    "receipt_sha256": "b153682746bfcfacbe3f33d8f8749f13f59ea1bd5f17dc937143852c865a8f5c"
+  },
+  "asset_disposition": "PINNED_SWE_BENCH_SOURCE_NO_LOCAL_TASK_SPLIT_OR_RUNTIME",
   "target_execution_permitted": false,
   "target_training_access": "FORBIDDEN",
   "admission": "NOT_EXECUTABLE_NO_FROZEN_FILE_TASK_ASSETS",

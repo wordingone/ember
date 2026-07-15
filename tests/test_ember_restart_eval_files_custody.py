@@ -12,7 +12,12 @@ def test_files_family_is_explicitly_held_without_pinned_tasks_or_runtime():
     value = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert value["benchmark_id"] == "swe-bench-lite"
     assert value["target_execution_permitted"] is False
-    assert value["asset_disposition"] == "NO_LOCAL_PINNED_SWE_BENCH_TASKS_OR_RUNTIME"
+    assert value["asset_disposition"] == "PINNED_SWE_BENCH_SOURCE_NO_LOCAL_TASK_SPLIT_OR_RUNTIME"
+    assert value["source_commit"] == "f7bbbb2ccdf479001d6467c9e34af59e44a840f9"
+    assert value["source_tree"] == "81083caddb04c76896805b38eaa4e43ca3ce2d63"
+    assert value["license"] == "MIT"
+    assert value["license_sha256"] == "2bd2e08df7147f67a69b42c10efae09bd4bf119df397371036187d5dd1b02f57"
+    assert value["materialization"]["receipt_sha256"] == "b153682746bfcfacbe3f33d8f8749f13f59ea1bd5f17dc937143852c865a8f5c"
     assert value["admission"] == "NOT_EXECUTABLE_NO_FROZEN_FILE_TASK_ASSETS"
     assert value["target_training_access"] == "FORBIDDEN"
     assert "local_path" not in value
