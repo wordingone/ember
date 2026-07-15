@@ -167,7 +167,9 @@ export function loadOwnedModelIdentity(
     typeof checkpointSha256 !== "string" ||
     !/^[0-9a-f]{64}$/.test(checkpointSha256) ||
     typeof endpointUrl !== "string" ||
+    endpointUrl.trim() === "" ||
     typeof identityUrl !== "string" ||
+    identityUrl.trim() === "" ||
     identityUrl !== endpointUrl.replace(/\/$/, "") + "/v1/models" ||
     typeof modelName !== "string" ||
     modelName !== "ember-owned:" + checkpointSha256.slice(0, 12)
@@ -175,13 +177,19 @@ export function loadOwnedModelIdentity(
     throw new Error("owned seat resolver returned an invalid admitted identity");
   }
 
+  const modelConfigSha256 = payload["model_config_sha256"];
   const modelFormat = payload["model_format"];
   const serverSourceSha256 = payload["server_source_sha256"];
+  const tokenizerSha256 = payload["tokenizer_sha256"];
   if (
+    typeof modelConfigSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(modelConfigSha256) ||
     typeof modelFormat !== "string" ||
     modelFormat.trim() === "" ||
     typeof serverSourceSha256 !== "string" ||
-    !/^[0-9a-f]{64}$/.test(serverSourceSha256)
+    !/^[0-9a-f]{64}$/.test(serverSourceSha256) ||
+    typeof tokenizerSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(tokenizerSha256)
   ) {
     throw new Error("owned seat resolver returned an invalid launch descriptor");
   }
@@ -195,9 +203,11 @@ export function loadOwnedModelIdentity(
     endpointUrl,
     identityUrl,
     launch,
+    modelConfigSha256,
     modelFormat,
     modelName,
     serverSourceSha256,
+    tokenizerSha256,
   };
 }
 
@@ -239,7 +249,10 @@ export async function verifyOwnedEndpointIdentity(
   if (
     payload["seat"] !== "OWNED_ADMITTED" ||
     payload["checkpoint_sha256"] !== identity.checkpointSha256 ||
-    payload["model_name"] !== identity.modelName
+    payload["model_name"] !== identity.modelName ||
+    payload["model_config_sha256"] !== identity.modelConfigSha256 ||
+    payload["server_source_sha256"] !== identity.serverSourceSha256 ||
+    payload["tokenizer_sha256"] !== identity.tokenizerSha256
   ) {
     throw new Error("owned endpoint identity does not match admitted checkpoint");
   }

@@ -65,9 +65,11 @@ describe("owned seat loader", () => {
               checkpoint_sha256: CHECKPOINT,
               endpoint_url: "http://127.0.0.1:8083",
               identity_url: "http://127.0.0.1:8083/v1/models",
+              model_config_sha256: "b".repeat(64),
               model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
               model_format: "safetensors",
               server_source_sha256: "a".repeat(64),
+              tokenizer_sha256: "c".repeat(64),
               launch: {
                 checkpoint_dir: resolve("C:/owned/checkpoint"),
                 mode: "INTERACTIVE",
@@ -86,9 +88,11 @@ describe("owned seat loader", () => {
       checkpointSha256: CHECKPOINT,
       endpointUrl: "http://127.0.0.1:8083",
       identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
       modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
       modelFormat: "safetensors",
       serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
       launch: {
         checkpointDir: resolve("C:/owned/checkpoint"),
         mode: "INTERACTIVE",
@@ -143,6 +147,24 @@ describe("owned seat loader", () => {
         }),
       }),
     ).toThrow("invalid admitted identity");
+
+    expect(() =>
+      loadOwnedModelIdentity(common, {
+        exists: () => true,
+        execute: () => ({
+          status: 0,
+          stdout: JSON.stringify({
+            valid: true,
+            seat: "OWNED_ADMITTED",
+            checkpoint_sha256: CHECKPOINT,
+            endpoint_url: "",
+            identity_url: "/v1/models",
+            model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
+          }),
+          stderr: "",
+        }),
+      }),
+    ).toThrow("invalid admitted identity");
   });
 
   it("accepts only a live endpoint bound to the admitted checkpoint", async () => {
@@ -150,7 +172,10 @@ describe("owned seat loader", () => {
       checkpointSha256: CHECKPOINT,
       endpointUrl: "http://127.0.0.1:8083",
       identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
       modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
     };
     let requested = "";
     await verifyOwnedEndpointIdentity(identity, async (input) => {
@@ -159,6 +184,9 @@ describe("owned seat loader", () => {
         seat: "OWNED_ADMITTED",
         checkpoint_sha256: CHECKPOINT,
         model_name: identity.modelName,
+        model_config_sha256: identity.modelConfigSha256,
+        server_source_sha256: identity.serverSourceSha256,
+        tokenizer_sha256: identity.tokenizerSha256,
       });
     });
     expect(requested).toBe(identity.identityUrl);
@@ -169,7 +197,10 @@ describe("owned seat loader", () => {
       checkpointSha256: CHECKPOINT,
       endpointUrl: "http://127.0.0.1:8083",
       identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
       modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
     };
     expect(
       verifyOwnedEndpointIdentity(identity, async () =>
@@ -185,5 +216,29 @@ describe("owned seat loader", () => {
         new Response("unavailable", { status: 503 }),
       ),
     ).rejects.toThrow("identity request failed with HTTP 503");
+  });
+
+  it("rejects a live endpoint whose runtime bytes differ from the admitted identity", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    await expect(
+      verifyOwnedEndpointIdentity(identity, async () =>
+        Response.json({
+          seat: "OWNED_ADMITTED",
+          checkpoint_sha256: CHECKPOINT,
+          model_name: identity.modelName,
+          model_config_sha256: identity.modelConfigSha256,
+          tokenizer_sha256: identity.tokenizerSha256,
+          server_source_sha256: "f".repeat(64),
+        }),
+      ),
+    ).rejects.toThrow("does not match admitted checkpoint");
   });
 });

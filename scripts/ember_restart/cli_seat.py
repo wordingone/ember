@@ -41,6 +41,7 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
         "run_id": manifest["run_id"],
         "checkpoint_sha256": checkpoint_sha256,
         "endpoint_url": serving["endpoint_url"].rstrip("/"),
+        "model_config_sha256": manifest["architecture"]["model_config"]["sha256"],
         "identity_url": serving["endpoint_url"].rstrip("/") + serving["identity_path"],
         "model_name": f"ember-owned:{checkpoint_sha256[:12]}",
         "model_format": serving["model_format"],
@@ -53,6 +54,7 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
             "trusted_verifier_registry_path": str(verifier_registry.resolve()),
         },
         "server_source_sha256": serving["server_implementation"]["sha256"],
+        "tokenizer_sha256": manifest["tokenizer"]["sha256"],
         "errors": [],
     }
 

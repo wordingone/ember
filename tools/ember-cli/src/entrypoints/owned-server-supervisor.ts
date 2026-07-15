@@ -3,6 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { spawn, type ChildProcess } from "child_process";
+import { createConnection } from "node:net";
 
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import { verifyOwnedEndpointIdentity } from "./owned-seat-loader.ts";
@@ -32,6 +33,7 @@ type VerifyEndpoint = (identity: OwnedModelIdentity) => Promise<void>;
 export interface EnsureOwnedServerDeps {
   device?: OwnedServerDevice;
   probePresence?: (identity: OwnedModelIdentity) => Promise<OwnedEndpointPresence>;
+  registerCleanup?: (handle: OwnedServerHandle) => () => void;
   verifyEndpoint?: VerifyEndpoint;
   spawnServer?: (command: OwnedServerCommand) => OwnedServerHandle;
   waitUntilReady?: (
@@ -87,27 +89,52 @@ export function buildOwnedServerCommand(
       "--host", host,
       "--port", String(port),
       "--device", device,
+      "--parent-pid", String(process.pid),
       "--mode", "INTERACTIVE",
     ],
   };
 }
 
-async function defaultProbePresence(
+export async function probeOwnedEndpointPresence(
   identity: OwnedModelIdentity,
 ): Promise<OwnedEndpointPresence> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 1_000);
-  try {
-    await fetch(identity.identityUrl, {
-      headers: { accept: "application/json" },
-      signal: controller.signal,
+  const { host, port } = endpoint(identity);
+  return await new Promise<OwnedEndpointPresence>((resolvePromise) => {
+    const socket = createConnection({ host, port });
+    let settled = false;
+    const finish = (presence: OwnedEndpointPresence): void => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolvePromise(presence);
+    };
+    socket.once("connect", () => finish("present"));
+    socket.once("error", (error: NodeJS.ErrnoException) => {
+      finish(error.code === "ECONNREFUSED" ? "absent" : "present");
     });
-    return "present";
-  } catch {
-    return "absent";
-  } finally {
-    clearTimeout(timer);
-  }
+    socket.setTimeout(1_000, () => finish("present"));
+  });
+}
+
+export interface OwnedCleanupProcess {
+  on(event: string, listener: () => void): unknown;
+  exit(code?: number): unknown;
+}
+
+export function registerOwnedServerCleanup(
+  handle: OwnedServerHandle,
+  proc: OwnedCleanupProcess = process,
+): () => void {
+  let cleaned = false;
+  const cleanup = (): void => {
+    if (cleaned) return;
+    cleaned = true;
+    handle.kill();
+  };
+  proc.on("exit", cleanup);
+  proc.on("SIGINT", () => { cleanup(); proc.exit(0); });
+  proc.on("SIGTERM", () => { cleanup(); proc.exit(0); });
+  return cleanup;
 }
 
 function defaultSpawnServer(command: OwnedServerCommand): OwnedServerHandle {
@@ -156,7 +183,7 @@ export async function ensureOwnedServer(
   deps: EnsureOwnedServerDeps = {},
 ): Promise<EnsureOwnedServerResult> {
   const { port } = endpoint(identity);
-  const probePresence = deps.probePresence ?? defaultProbePresence;
+  const probePresence = deps.probePresence ?? probeOwnedEndpointPresence;
   const verifyEndpoint = deps.verifyEndpoint ?? verifyOwnedEndpointIdentity;
   const presence = await probePresence(identity);
   if (presence === "present") {
@@ -169,10 +196,11 @@ export async function ensureOwnedServer(
   const device = deps.device ?? (process.env["EMBER_OWNED_DEVICE"] === "cpu" ? "cpu" : "cuda");
   const command = buildOwnedServerCommand(identity, device);
   const handle = (deps.spawnServer ?? defaultSpawnServer)(command);
+  const cleanup = (deps.registerCleanup ?? registerOwnedServerCleanup)(handle);
   try {
     await (deps.waitUntilReady ?? defaultWaitUntilReady)(identity, handle, verifyEndpoint);
   } catch (error) {
-    handle.kill();
+    cleanup();
     throw error;
   }
   return { outcome: "spawned", port, handle };
