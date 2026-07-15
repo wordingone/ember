@@ -103,7 +103,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dic
             if token == arguments.stop_token_id:
                 break
             tokens = torch.cat((tokens, torch.tensor([[token]], device=arguments.device)), dim=1)
-    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": active_route, "generated_token_ids": generated, "stop_reason": "max_new_tokens", "model_source_sha256": arguments.model_source_sha256, "model_config_sha256": arguments.model_config_sha256}
+    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": active_route, "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "model_source_sha256": arguments.model_source_sha256, "model_config_sha256": arguments.model_config_sha256}
 
 
 def main() -> None:
