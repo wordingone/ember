@@ -22,6 +22,10 @@ def test_browser_and_structured_tool_protocols_refuse_execution_without_local_ru
     assert custody["structured_tools"] == {
         "benchmark_id": "bfcl",
         "source_commit": "6ea57973c7a6097fd7c5915698c54c17c5b1b6c8",
-        "asset_disposition": "NO_LOCAL_PINNED_BFCL_RUNTIME_OR_FROZEN_TASKS",
+        "source_tree": "8f9c7a04207ca8be448e084dd0802a6aecbd313f",
+        "license": "Apache-2.0",
+        "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "materialization": {"max_b_write_gib": 0.5, "outcome": "COMPLETED", "receipt_sha256": "f2aafee550b4252f2b352c92d93224fd0c86e1954fc9ff782bd51d2522b0d622"},
+        "asset_disposition": "PINNED_BFCL_SOURCE_NO_LOCAL_RUNTIME_OR_FROZEN_TASKS",
         "target_execution_permitted": False,
     }
