@@ -1,0 +1,84 @@
+{
+  "artifacts": {
+    "canonical_predictions_path": "manifests/ember-restart-eval-first-shared-raw-forward-v1-predictions.json",
+    "canonical_predictions_sha256": "7c2a788946fa1eca8ffb7bc0f98155e875658126919d6704650e56ab3983680f",
+    "disk_budget_private_receipt_sha256": "e693e3e8226433d439580b8f1360fc3cfbb1c9f2a548dda009619529a5801397",
+    "eta_private_receipt_sha256": "0b677f801f8a98ce2e6e7e2c69e581562ed7ccb96a0c8eb9ec5b1f55a76aca15",
+    "published_predictions_schema": "ember-restart-eval-public-predictions-v1",
+    "raw_forward_sha256": "1b156693433b73fb6f97e2fafbb804b6b560ded59432b1df0b9f37857c15632d"
+  },
+  "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS",
+  "executed_at_utc": "2026-07-15T17:01:27.387707+00:00",
+  "goal_id": "EMBER-02",
+  "identity_stamps": {
+    "checkpoint_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "inference_implementation_sha256": "42be91b92d0f4e497b324046122358d9b7e640e32e6c94b14863ffddcf22896a",
+    "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+    "model_source_sha256": "5609032c21aa6020ddc7a492ab5817a86d425571ae81a46efe951c784e70c5bf",
+    "parameter_counter_sha256": "6bb505470775a5b36c764a96a7b1e3475b4eaecce339b594efbaf9e16e8ce873",
+    "parameter_receipt_sha256": "f3cd8773c9db9e83a1f3566ecb7c02d33be185dde619ea7b4e4c7050bd44e042",
+    "tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "trusted_verifier_registry_sha256": "845ae1cdc34b4df29c4428cda2f2cee8d045a1db9df831e99e4a6f4c1960309e"
+  },
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "output": {
+    "decoded_text": "lev",
+    "generated_token_ids": [
+      13694
+    ],
+    "stop_reason": "max_new_tokens"
+  },
+  "prompt": {
+    "active_expert": "shared",
+    "input_sha256": "2464808ccba66cc129fc3ac1ff10c2905b2f5ed103ada9167687b021beb7161d",
+    "text": "Hello, Ember.",
+    "token_ids": [
+      15337,
+      19,
+      26206,
+      21
+    ]
+  },
+  "public_execution_commit": "841c406366f7f99042f7144abdcb7884ca9192a7",
+  "resource_receipt": {
+    "actual_seconds": 9.004964590072632,
+    "child_exit_code": 0,
+    "drift_alarm": true,
+    "drift_cause": {
+      "name": "cold CUDA initialization plus runtime validation overhead omitted from prior samples",
+      "residual_seconds": 2.4480540370020325,
+      "status": "INFERRED_FROM_RESIDUAL"
+    },
+    "end_free_gib": {
+      "B": 260.387996673584,
+      "C": 218.45671463012695
+    },
+    "operating_reserve_breaches": [],
+    "operating_reserves_gib": {
+      "B": 250.0,
+      "C": 150.0
+    },
+    "predicted_seconds": 6.556910553070599,
+    "prediction_error_ratio": 1.3733548013485726,
+    "prediction_error_seconds": 2.4480540370020325,
+    "runner_outcome": "COMPLETED",
+    "start_free_gib": {
+      "B": 260.387996673584,
+      "C": 218.4570541381836
+    },
+    "write_budget_gib": {
+      "B": 0.01,
+      "C": 0.05
+    }
+  },
+  "result": "VERIFIED_NON_CLAIM_RAW_FORWARD",
+  "schema_version": "ember-first-shared-raw-forward-v1",
+  "truth_boundary": {
+    "benchmark_score": null,
+    "capability_proven": false,
+    "interpretation": "Execution-path evidence only. The decoded output is weak and receives no capability credit.",
+    "sufficient_pretraining_proven": false,
+    "training_tokens_seen": 2048
+  },
+  "workstream_id": "EMBER-02C"
+}
