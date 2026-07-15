@@ -201,6 +201,11 @@ class CounterCliTests(unittest.TestCase):
             receipt = write_checkpoint_artifacts(candidate, candidate_optimizer, root / "candidate", launch_seed=52, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "vision", "record_index": 1, "global_step": 1, "tokens_seen": 3}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256={name: "0" * 64 for name in ("vision", "audio", "reasoning", "tool")}, specialist_lineage={"parent_manifest": root_manifest, "root_manifest": root_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": verification})
             candidate_manifest = root / "candidate" / "checkpoint-manifest.json"
             manifest = json.loads(candidate_manifest.read_text(encoding="utf-8"))
+            manifest["lineage"]["trained_expert_ids"] = []
+            candidate_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "closed expert accretion"):
+                execute_counter(model_config=config_path, checkpoint_manifest=candidate_manifest, active_expert="vision", parent_manifest=root_manifest, root_manifest=root_manifest)
+            manifest["lineage"]["trained_expert_ids"] = ["vision"]
             manifest["expert_parameter_sha256"]["vision"] = root_receipt["expert_genesis_sha256"]["vision"]
             candidate_manifest.write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "active expert parameter"):
