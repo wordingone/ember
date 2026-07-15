@@ -12,7 +12,7 @@
       "parameter_receipt_sha256": "f3cd8773c9db9e83a1f3566ecb7c02d33be185dde619ea7b4e4c7050bd44e042",
       "parameter_counter_sha256": "6bb505470775a5b36c764a96a7b1e3475b4eaecce339b594efbaf9e16e8ce873",
       "trusted_verifier_registry_sha256": "845ae1cdc34b4df29c4428cda2f2cee8d045a1db9df831e99e4a6f4c1960309e",
-      "inference_implementation_sha256": "3f8c25e09349197ac02af26a13893e14036a758aa626f45b0457d81602810a45"
+      "inference_implementation_sha256": "42be91b92d0f4e497b324046122358d9b7e640e32e6c94b14863ffddcf22896a"
     }
   ],
   "disposition": "EXACT_OWNED_SHARED_ROUTE_EXECUTION_AUTHORIZED"
