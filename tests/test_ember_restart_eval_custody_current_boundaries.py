@@ -16,6 +16,8 @@ def test_materialized_multimodal_and_audio_custody_names_current_prediction_boun
         custody = json.loads((ROOT / "manifests" / name).read_text(encoding="utf-8"))
 
         assert custody["admission"] == "NOT_EXECUTABLE_UNTRAINED_SPECIALIST_NO_CHECKPOINT_BOUND_PREDICTIONS"
+        if name == "ember-restart-audiobench-custody-v1.json":
+            assert custody["procedural_demo"] == {"artifact_sha256": "bd91917edb4ef4258624ea242fc4573364f18c8cae99423966002b6871cdcdf3", "disk_receipt_sha256": "41a06044333342cc998eefa2ed87bda34ae40647eca4b1bb4200eb8c35bdcb4f", "claim_status": "SELFTEST_ONLY_PROCEDURAL_AUDIO"}
         assert custody["target_training_access"] == "FORBIDDEN"
 
 
