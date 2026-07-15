@@ -17,6 +17,37 @@ export interface OwnedServerCommand {
   port: number;
 }
 
+const DEVELOPMENT_RUNTIME_BOOTSTRAP = [
+  "import hashlib",
+  "import json",
+  "import runpy",
+  "import sys",
+  "from pathlib import Path",
+  "index_path = Path(sys.argv[1]).resolve()",
+  "expected_index_sha256 = sys.argv[2]",
+  "server_path = Path(sys.argv[3]).resolve()",
+  "index_bytes = index_path.read_bytes()",
+  "if hashlib.sha256(index_bytes).hexdigest() != expected_index_sha256:",
+  "    raise SystemExit('runtime bundle index changed before development server import')",
+  "index = json.loads(index_bytes)",
+  "files = index.get('files')",
+  "if not isinstance(files, dict):",
+  "    raise SystemExit('runtime bundle index files are invalid')",
+  "root = index_path.parent",
+  "for relative_path, binding in files.items():",
+  "    if not isinstance(relative_path, str) or not isinstance(binding, dict):",
+  "        raise SystemExit('runtime bundle binding is invalid')",
+  "    path = (root / relative_path).resolve()",
+  "    if root != path and root not in path.parents:",
+  "        raise SystemExit('runtime bundle path escapes snapshot')",
+  "    payload = path.read_bytes()",
+  "    if len(payload) != binding.get('bytes') or hashlib.sha256(payload).hexdigest() != binding.get('sha256'):",
+  "        raise SystemExit('runtime bundle file changed before development server import: ' + relative_path)",
+  "sys.path.insert(0, str(server_path.parent))",
+  "sys.argv = sys.argv[3:]",
+  "runpy.run_path(str(server_path), run_name='__main__')",
+].join("\n");
+
 export interface OwnedServerHandle {
   process: ChildProcess;
   port: number;
@@ -85,21 +116,33 @@ export function buildOwnedServerCommand(
     : [
         "--config", launch.modelConfigPath,
         "--development-manifest", launch.developmentManifestPath,
+        "--expected-development-manifest-sha256", launch.developmentManifestSha256,
+        "--expected-runtime-index-sha256", launch.runtimeIndexSha256,
       ];
+  const serverArgs = [
+    "--checkpoint", launch.checkpointDir,
+    "--tokenizer", launch.tokenizerPath,
+    ...authorityArgs,
+    "--host", host,
+    "--port", String(port),
+    "--device", device,
+    "--parent-pid", String(process.pid),
+    "--mode", "INTERACTIVE",
+  ];
   return {
     executable: launch.pythonExecutable,
     port,
-    args: [
-      launch.serverPath,
-      "--checkpoint", launch.checkpointDir,
-      "--tokenizer", launch.tokenizerPath,
-      ...authorityArgs,
-      "--host", host,
-      "--port", String(port),
-      "--device", device,
-      "--parent-pid", String(process.pid),
-      "--mode", "INTERACTIVE",
-    ],
+    args: launch.authorityKind === "DEVELOPMENT"
+      ? [
+          "-I",
+          "-c",
+          DEVELOPMENT_RUNTIME_BOOTSTRAP,
+          launch.runtimeIndexPath,
+          launch.runtimeIndexSha256,
+          launch.serverPath,
+          ...serverArgs,
+        ]
+      : [launch.serverPath, ...serverArgs],
   };
 }
 
@@ -205,7 +248,19 @@ export async function ensureOwnedServer(
   const device = deps.device ?? (process.env["EMBER_OWNED_DEVICE"] === "cpu" ? "cpu" : "cuda");
   const command = buildOwnedServerCommand(identity, device);
   const handle = (deps.spawnServer ?? defaultSpawnServer)(command);
-  const cleanup = (deps.registerCleanup ?? registerOwnedServerCleanup)(handle);
+  const cleanupServer = (deps.registerCleanup ?? registerOwnedServerCleanup)(handle);
+  let cleaned = false;
+  const cleanup = (): void => {
+    if (cleaned) return;
+    cleaned = true;
+    cleanupServer();
+    if (identity.launch?.authorityKind === "DEVELOPMENT") {
+      identity.launch.cleanupRuntimeSnapshot();
+    }
+  };
+  if (typeof handle.process.once === "function") {
+    handle.process.once("exit", cleanup);
+  }
   try {
     await (deps.waitUntilReady ?? defaultWaitUntilReady)(identity, handle, verifyEndpoint);
   } catch (error) {

@@ -23,8 +23,12 @@ export type OwnedServerLaunch =
     })
   | (OwnedServerLaunchBase & {
       authorityKind: "DEVELOPMENT";
+      cleanupRuntimeSnapshot: () => void;
+      developmentManifestSha256: string;
       developmentManifestPath: string;
       modelConfigPath: string;
+      runtimeIndexPath: string;
+      runtimeIndexSha256: string;
     });
 
 export interface OwnedModelIdentity {

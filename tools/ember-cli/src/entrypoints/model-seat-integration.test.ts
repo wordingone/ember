@@ -327,6 +327,10 @@ describe("process entry model-seat enforcement", () => {
           tokenizerSha256: "c".repeat(64),
           launch: {
             authorityKind: "DEVELOPMENT",
+            cleanupRuntimeSnapshot: () => {},
+            developmentManifestSha256: "e".repeat(64),
+            runtimeIndexPath: "C:\\owned\\runtime-bundle-index.json",
+            runtimeIndexSha256: "f".repeat(64),
             checkpointDir: "C:\\owned\\checkpoint",
             developmentManifestPath: "C:\\owned\\development.json",
             mode: "INTERACTIVE",
