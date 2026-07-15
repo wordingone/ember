@@ -29,7 +29,7 @@ EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 
 @dataclass(frozen=True)
 class MultimodalSpan:
-    """An explicit contiguous multimodal span and its attention policy."""
+    """An explicit contiguous multimodal span and its attention policy.\n\n    ``isolated`` is an authorized optional raw-modality policy: raw modality tokens attend bidirectionally inside their own span but cannot read prior text, while later decoder tokens retain causal access to that span.\n    ``causal`` and ``bidirectional`` remain independently selectable.\n    """
 
     start: int
     length: int
