@@ -351,6 +351,34 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
                 raise ValueError(f"external {label} manifest lacks one active expert")
             external_manifests[label] = _inspect_realization(external_manifest, active_expert=external_active[0], shape=shape)
         parent_external, root_external = external_manifests["parent"], external_manifests["root"]
+        parent_lineage = parent_external.get("lineage")
+        if parent_external.get("schema_version") == "ember-sparse-checkpoint-v3":
+            if _sha256(parent_manifest) != _sha256(root_manifest):
+                raise ValueError("first specialist successor requires matching external parent and root")
+            parent_history: list[str] = []
+        else:
+            if not isinstance(parent_lineage, Mapping) or parent_lineage.get("root_genesis_checkpoint_sha256") != _sha256(root_manifest):
+                raise ValueError("external parent does not bind the supplied immutable root")
+            parent_history = parent_lineage.get("trained_expert_ids")
+            if not isinstance(parent_history, list):
+                raise ValueError("external parent has invalid trained expert history")
+        if any(name not in EXPERT_NAMES for name in parent_history) or len(set(parent_history)) != len(parent_history):
+            raise ValueError("external parent has invalid trained expert history")
+        expected_history = [*parent_history, *([] if active_expert in parent_history else [active_expert])]
+        episode = lineage.get("episode")
+        receipt_fields = {"schema_version", "result", "capability", "data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "data_class", "record_count", "token_count", "source_manifest_sha256", "records_artifact_sha256", "semantic_checks"}
+        capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
+        if (not isinstance(episode, Mapping) or set(episode) != {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256"}
+                or episode.get("active_expert") != active_expert or not isinstance(episode.get("data_verification_receipt"), Mapping)):
+            raise ValueError("specialist v4 lineage lacks a closed active episode")
+        verification = episode["data_verification_receipt"]
+        if (set(verification) != receipt_fields or verification.get("schema_version") != "ember-training-data-verification-v1"
+                or verification.get("result") != "VERIFIED" or verification.get("data_class") != "SEMANTIC_PRETRAINING"
+                or capability_experts.get(verification.get("capability")) != active_expert):
+            raise ValueError("specialist v4 lineage has an invalid data verification receipt")
+        canonical = hashlib.sha256(json.dumps(dict(verification), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if episode.get("data_verification_receipt_sha256") != canonical:
+            raise ValueError("specialist v4 lineage data verification receipt hash does not match")
         candidate_parameters = manifest.get("expert_parameter_sha256")
         parent_parameters = parent_external.get("expert_parameter_sha256", parent_external.get("expert_genesis_sha256"))
         root_parameters = root_external.get("expert_parameter_sha256", root_external.get("expert_genesis_sha256"))
@@ -361,7 +389,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
                 or not isinstance(parent_parameters, dict) or set(parent_parameters) != set(EXPERT_NAMES)
                 or not isinstance(root_parameters, dict) or set(root_parameters) != set(EXPERT_NAMES)
                 or not isinstance(candidate_files, dict) or not isinstance(parent_files, dict)
-                or not isinstance(history, list) or active_expert not in history):
+                or history != expected_history):
             raise ValueError("specialist v4 lineage lacks closed expert accretion fields")
         for name in EXPERT_NAMES:
             _sha256_value(candidate_parameters[name], label=f"candidate {name} parameter hash")
