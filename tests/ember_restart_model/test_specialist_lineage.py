@@ -36,6 +36,7 @@ def _verification(capability: str = "image") -> dict[str, object]:
         "tokenizer_sha256": "b" * 64,
         "verifier_sha256": "c" * 64,
         "data_class": "SEMANTIC_PRETRAINING",
+        "generator_replay_verified": True,
         "record_count": 4,
         "token_count": 64,
         "source_manifest_sha256": "d" * 64,

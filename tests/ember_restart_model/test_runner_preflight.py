@@ -29,30 +29,34 @@ from verify_capability_record import expected_receipt
 
 class RunnerPreflightTests(unittest.TestCase):
     def test_specialist_loader_executes_bound_verifier_and_returns_one_route(self) -> None:
-        def write_json(path: Path, payload: object) -> str:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
-            return hashlib.sha256(path.read_bytes()).hexdigest()
+        from build_specialist_bundle import emit_bundle
         from tokenizers import Tokenizer, models, pre_tokenizers
-        with tempfile.TemporaryDirectory() as directory:
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
             root = Path(directory)
             tokenizer = root / "tokenizer.json"
-            frozen = Tokenizer(models.WordLevel({"<unk>": 0, "reasoning": 1, "sum": 2, "plus": 3, "equals": 4, **{str(index): index + 5 for index in range(2048)}}, unk_token="<unk>"))
+            vocabulary = {"<unk>": 0, "image": 1, "scene": 2, "has": 3, "red": 4, "green": 5, "blue": 6, "squares": 7, "audio": 8, "signal": 9, "positive": 10, "negative": 11, "silent": 12, "frames": 13, "reasoning": 14, "sum": 15, "plus": 16, "equals": 17, "tool": 18, "calculator": 19, **{f"filler-{index}": index for index in range(20, 32_000)}}
+            frozen = Tokenizer(models.WordLevel(vocabulary, unk_token="<unk>"))
             frozen.pre_tokenizer = pre_tokenizers.Whitespace()
             frozen.save(str(tokenizer))
-            tokenizer_hash = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
-            source = root / "source.json"
-            generator = root / "generator.py"; generator.write_text("# owned reasoning fixture\n", encoding="utf-8"); generator_hash = hashlib.sha256(generator.read_bytes()).hexdigest()
-            source_hash = write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectory generator with independently executed sums.", "minimum_record_count": 128, "minimum_token_count": 4096, "generator": {"path": "generator.py", "sha256": generator_hash}}})
-            records_list = build_records(frozen, count=704, capability="reasoning")
-            records = root / "records.json"
-            records_hash = write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": records_list})
-            manifest = root / "manifest.json"
-            write_json(manifest, {"schema_version": "ember-owned-training-data-v1", "capability": "reasoning", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": len(records_list), "token_count": sum(len(record["token_ids"]) for record in records_list), "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
-            records_out, verification = run_vertical_slice.load_verified_specialist_records(root=root, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
-        self.assertEqual(records_out, records_list)
+            config = root / "config.json"
+            config.write_text(json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}), encoding="utf-8")
+            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=512)["reasoning"]
+            records_out, verification = run_vertical_slice.load_verified_specialist_records(root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
+        self.assertGreaterEqual(len(records_out), 512)
         self.assertEqual(verification["result"], "VERIFIED")
         self.assertEqual(verification["capability"], "reasoning")
+        self.assertIs(verification["generator_replay_verified"], True)
+    def test_specialist_loader_rejects_a_verified_receipt_without_generator_replay_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"records_artifact": {"path": "records.json"}}), encoding="utf-8")
+            with patch.object(run_vertical_slice.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout=json.dumps({"result": "VERIFIED", "capability": "image", "generator_replay_verified": False}), stderr="")):
+                with self.assertRaisesRegex(RuntimeError, "generator replay"):
+                    run_vertical_slice.load_verified_specialist_records(
+                        root=root, data_manifest=manifest, tokenizer_path=root / "tokenizer.json", capability="image",
+                    )
     def test_production_optimizer_uses_declared_paged_8bit_adamw_state(self) -> None:
         calls: dict[str, object] = {}
 

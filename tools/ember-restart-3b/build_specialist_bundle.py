@@ -111,6 +111,7 @@ def emit_bundle(*, repo_root: Path, output_root: Path, tokenizer_path: Path, mod
                 "target_derivation": DERIVATIONS[capability], "source_description": DESCRIPTIONS[capability],
                 "minimum_record_count": 512, "minimum_token_count": 4096,
                 "generator": {"path": _relative(repo_root, generator_path), "sha256": _sha256(generator_path)},
+                "generation": {"schema_version": "ember-owned-specialist-generation-v1", "record_count": len(records)},
             },
         })
         manifest_path = output_root / "manifests" / f"{capability}.json"
