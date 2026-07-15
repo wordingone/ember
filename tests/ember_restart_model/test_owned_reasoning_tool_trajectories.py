@@ -29,6 +29,12 @@ class OwnedReasoningToolTests(unittest.TestCase):
                 self.assertEqual(record["active_expert"], expert)
                 self.assertEqual(verify_record(record)["result"], "PASSED")
 
+    def test_receipt_rejects_transcript_that_disagrees_with_executed_evidence(self) -> None:
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "reasoning": 1, "sum": 2, "plus": 3, "equals": 4, **{str(index): index + 5 for index in range(1024)}}, unk_token="<unk>")); tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        record = build_records(tokenizer, count=512, capability="reasoning")[0]
+        record["target_text"] = "reasoning sum 1 plus 1 equals 3"
+        with self.assertRaisesRegex(ValueError, "transcript"):
+            verify_record(record)
 
 if __name__ == "__main__":
     unittest.main()
