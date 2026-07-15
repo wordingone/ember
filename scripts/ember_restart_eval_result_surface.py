@@ -33,9 +33,12 @@ def main():
  if not isinstance(result,dict):parser.error('input must be an object')
  measured=result.get('result')=='MEASURED' and _admitted(args.admission_manifest,args.trusted_verifier_registry,args.input)
  label='MEASURED CAPABILITY' if measured else 'NOT CLAIM-BEARING'
+ raw_forward=result.get('result')=='VERIFIED_NON_CLAIM_RAW_FORWARD' and result.get('claim_status')=='NON_ADMISSIBLE_RAW_PREDICTIONS'
  args.output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=args.output.parent,delete=False)as handle:
-  handle.write(f'# Ember evaluation result\n\nStatus: {label}\n\nCapability: {result.get("capability","unknown")}\n');temporary=handle.name
+  handle.write(f'# Ember evaluation result\n\nStatus: {label}\n\nCapability: {result.get("capability","unknown")}\n')
+  if raw_forward:handle.write('\nExecution: VERIFIED NON-CLAIM RAW FORWARD\n')
+  temporary=handle.name
  os.replace(temporary,args.output)
 
 if __name__=='__main__':main()
