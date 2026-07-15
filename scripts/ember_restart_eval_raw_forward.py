@@ -19,6 +19,8 @@ def require_execution_authority(arguments: argparse.Namespace) -> None:
     registry = json.loads(EXECUTION_AUTHORITY.read_text(encoding="utf-8"))
     if not isinstance(registry, dict) or set(registry) != {"schema_version", "goal_id", "workstream_id", "next_executed_outcome", "authorities", "disposition"} or registry.get("schema_version") != "ember-restart-execution-authorities-v1" or registry.get("goal_id") != "EMBER-02" or registry.get("workstream_id") != "EMBER-02C" or not isinstance(registry.get("authorities"), list):
         raise ValueError("committed execution authority registry is invalid")
+    if registry.get("disposition") != "EXACT_OWNED_SHARED_ROUTE_EXECUTION_AUTHORIZED":
+        raise ValueError("committed execution authority disposition is not authorized")
     expected = {"model_source_sha256": sha256(arguments.model_source), "model_config_sha256": sha256(arguments.model_config), "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__))}
     for authority in registry["authorities"]:
         if isinstance(authority, dict) and authority == expected:
