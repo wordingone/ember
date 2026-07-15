@@ -1,12 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""
-goal_id: EMBER-02
-next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-
-Current-native, non-admissible full-step throughput screen.
-"""
+"""Current-native, non-admissible full-step throughput screen."""
 
 from __future__ import annotations
 
@@ -37,11 +32,16 @@ def screen_receipt(
     checkpoint_manifest_sha256: str,
     source_sha256: str,
     total_vram_bytes: int,
+    available_vram_bytes: int | None = None,
     batch_measurements: list[dict[str, Any]],
 ) -> dict[str, object]:
     plan = screen_plan(total_vram_bytes=total_vram_bytes)
     required = list(plan["required_batches"])
     max_peak = int(plan["max_peak_allocated_bytes"])
+    available = total_vram_bytes if available_vram_bytes is None else available_vram_bytes
+    if not isinstance(available, int) or available <= 0 or available > total_vram_bytes:
+        raise ValueError("available VRAM bytes must be a positive value no greater than total VRAM")
+    minimum_margin = int(plan["minimum_free_margin_bytes"])
     for item in batch_measurements:
         if not isinstance(item.get("elapsed_seconds"), (int, float)) or item["elapsed_seconds"] <= 0:
             raise ValueError("screen step timing must be positive")
@@ -49,6 +49,8 @@ def screen_receipt(
             raise MemoryError("0.8 VRAM governor rejects the measured allocation")
         if not isinstance(item.get("peak_reserved_bytes"), int) or item["peak_reserved_bytes"] < item["peak_allocated_bytes"]:
             raise ValueError("screen reserved peak must cover allocated peak")
+        if available - item["peak_reserved_bytes"] < minimum_margin:
+            raise MemoryError("1.5 GiB free-memory governor rejects the measured reservation")
     observed = [item.get("batch_size") for item in batch_measurements]
     if observed != required:
         raise ValueError("screen receipt requires exactly batch-1 then batch-2 full steps")

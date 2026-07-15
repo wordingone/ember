@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""`ngoal_id: EMBER-02`nnext_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember`n`nContract tests for the clean-genesis native full-step compute screen.`n"""
+"""Contract tests for the clean-genesis native full-step compute screen."""
 
 from __future__ import annotations
 
@@ -39,6 +39,22 @@ class NativeComputeScreenTests(unittest.TestCase):
                 ],
             )
 
+    def test_receipt_rejects_peak_that_leaves_less_than_the_required_free_margin(self) -> None:
+        total = 24 * 1024**3
+        with self.assertRaisesRegex(MemoryError, "1.5 GiB"):
+            screen_receipt(
+                model_config_sha256="a" * 64,
+                optimizer_contract_sha256="b" * 64,
+                tokenizer_sha256="c" * 64,
+                checkpoint_manifest_sha256="d" * 64,
+                source_sha256="e" * 64,
+                total_vram_bytes=total,
+                available_vram_bytes=int(total * 0.75) + 1024**3,
+                batch_measurements=[
+                    {"batch_size": 1, "elapsed_seconds": 1.0, "peak_allocated_bytes": int(total * 0.75), "peak_reserved_bytes": int(total * 0.75)},
+                    {"batch_size": 2, "elapsed_seconds": 1.0, "peak_allocated_bytes": int(total * 0.75), "peak_reserved_bytes": int(total * 0.75)},
+                ],
+            )
     def test_receipt_rejects_missing_required_batch_two(self) -> None:
         with self.assertRaisesRegex(ValueError, "batch-1 then batch-2"):
             screen_receipt(
