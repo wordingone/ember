@@ -14,6 +14,27 @@ def test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path: Pa
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["stage"] = "OWNED_ADMITTED"
     manifest["training"]["input_class"] = "SEMANTIC_PRETRAINING"
+    sufficient_tokens = manifest["architecture"]["trainable_parameters"]
+    checkpoint_path = tmp_path / manifest["checkpoint"]["manifest_path"]
+    checkpoint_payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint_payload["schema_version"] = "ember-sparse-checkpoint-v3"
+    checkpoint_payload["data_cursor"] = {"tokens_seen": sufficient_tokens}
+    checkpoint_sha256 = _write_json(checkpoint_path, checkpoint_payload)
+    manifest["checkpoint"]["sha256"] = checkpoint_sha256
+    parameter_receipt_record = manifest["architecture"]["parameter_receipt"]
+    parameter_receipt_path = tmp_path / parameter_receipt_record["path"]
+    parameter_receipt = json.loads(
+        parameter_receipt_path.read_text(encoding="utf-8")
+    )
+    parameter_receipt["subject_checkpoint_sha256"] = checkpoint_sha256
+    parameter_receipt_record["sha256"] = _write_json(
+        parameter_receipt_path, parameter_receipt
+    )
+    manifest["training"]["tokens_seen"] = sufficient_tokens
+    manifest["training"]["modality_tokens"] = {
+        capability: 1_000_000
+        for capability in ("text", "image", "audio", "reasoning", "tool")
+    }
     semantic_checks = {
         "text": ["token_roundtrip", "source_target_pair"],
         "image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"],
@@ -34,7 +55,6 @@ def test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path: Pa
         entry["verification_receipt"]["sha256"] = _write_json(
             receipt_path, receipt_payload
         )
-    checkpoint_sha256 = manifest["checkpoint"]["sha256"]
 
     verifier = tmp_path / "verifiers" / "local-verifier.py"
     verifier.parent.mkdir(parents=True, exist_ok=True)
@@ -105,6 +125,7 @@ p.add_argument("--checkpoint-progression", required=True)
 a = p.parse_args()
 ledger = json.loads(Path(a.training_ledger).read_text(encoding="utf-8"))
 stopping = json.loads(Path(a.stopping_evaluation).read_text(encoding="utf-8"))
+progression = json.loads(Path(a.checkpoint_progression).read_text(encoding="utf-8"))
 print(json.dumps({
     "criterion_id": a.criterion_id,
     "result": "PASSED",
@@ -114,6 +135,17 @@ print(json.dumps({
     "checkpoint_progression_sha256": sha256(a.checkpoint_progression),
     "tokens_seen": ledger["tokens_seen"],
     "gpu_hours": ledger["gpu_hours"],
+    "modality_tokens": ledger["modality_tokens"],
+    "checkpoint_count": len(progression["entries"]),
+    "genesis_checkpoint_sha256": progression["entries"][0]["checkpoint_manifest"]["sha256"],
+    "terminal_checkpoint_sha256": progression["entries"][-1]["checkpoint_manifest"]["sha256"],
+    "heldout_tokens": stopping["heldout_tokens"],
+    "genesis_loss": stopping["genesis_loss"],
+    "heldout_split_sha256": stopping["evidence"]["heldout_split"]["sha256"],
+    "heldout_harness_sha256": stopping["evidence"]["harness"]["sha256"],
+    "heldout_protocol_sha256": stopping["evidence"]["protocol"]["sha256"],
+    "genesis_measurement_sha256": stopping["evidence"]["genesis_measurement"]["sha256"],
+    "final_measurement_sha256": stopping["evidence"]["final_measurement"]["sha256"],
     "final_loss": stopping["final_loss"],
 }, sort_keys=True))
 """,
@@ -141,16 +173,119 @@ print(json.dumps({
             "path": str(sufficient_verifier.relative_to(tmp_path)),
             "sha256": sufficient_verifier_sha256,
             "evidence_classes": ["sufficient_pretraining"],
-            "criterion_ids": ["ember-sufficient-pretraining-v1"],
+            "criterion_ids": ["ember-sufficient-pretraining-v2"],
         }
     )
     _write_json(registry, registry_payload)
 
+    progression_entries = []
+    for name, entry_tokens in (
+        ("genesis", 0),
+        ("middle", sufficient_tokens // 2),
+    ):
+        checkpoint_history = (
+            tmp_path / "training-evidence" / "checkpoint-history" / f"{name}.json"
+        )
+        checkpoint_shard = checkpoint_history.with_suffix(".bin")
+        checkpoint_shard.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_shard.write_bytes(f"{name}:{entry_tokens}".encode("utf-8"))
+        checkpoint_shard_sha256 = _sha256(checkpoint_shard)
+        checkpoint_history_sha256 = _write_json(
+            checkpoint_history,
+            {
+                "schema_version": "ember-sparse-checkpoint-v3",
+                "data_cursor": {"tokens_seen": entry_tokens},
+                "shards": [
+                    {
+                        "path": checkpoint_shard.name,
+                        "sha256": checkpoint_shard_sha256,
+                        "bytes": checkpoint_shard.stat().st_size,
+                    }
+                ],
+            },
+        )
+        progression_entries.append(
+            {
+                "checkpoint_manifest": {
+                    "path": str(checkpoint_history.relative_to(tmp_path)),
+                    "sha256": checkpoint_history_sha256,
+                },
+                "tokens_seen": entry_tokens,
+            }
+        )
+    progression_entries.append(
+        {
+            "checkpoint_manifest": {
+                "path": manifest["checkpoint"]["manifest_path"],
+                "sha256": checkpoint_sha256,
+            },
+            "tokens_seen": sufficient_tokens,
+        }
+    )
+    heldout_evidence = {}
+    for evidence_name in ("heldout_split", "harness", "protocol"):
+        artifact = tmp_path / "training-evidence" / "heldout" / f"{evidence_name}.json"
+        artifact_sha256 = _write_json(
+            artifact,
+            {
+                "schema_version": f"ember-{evidence_name}-v1",
+                "heldout_tokens": 1_000_000,
+            },
+        )
+        heldout_evidence[evidence_name] = {
+            "path": str(artifact.relative_to(tmp_path)),
+            "sha256": artifact_sha256,
+        }
+    for measurement_name, measurement_checkpoint, measurement_loss in (
+        (
+            "genesis_measurement",
+            progression_entries[0]["checkpoint_manifest"]["sha256"],
+            2.0,
+        ),
+        ("final_measurement", checkpoint_sha256, 1.0),
+    ):
+        measurement = (
+            tmp_path / "training-evidence" / "heldout" / f"{measurement_name}.json"
+        )
+        measurement_sha256 = _write_json(
+            measurement,
+            {
+                "schema_version": "ember-heldout-loss-measurement-v2",
+                "checkpoint_manifest_sha256": measurement_checkpoint,
+                "heldout_split_sha256": heldout_evidence["heldout_split"]["sha256"],
+                "harness_sha256": heldout_evidence["harness"]["sha256"],
+                "protocol_sha256": heldout_evidence["protocol"]["sha256"],
+                "heldout_tokens": 1_000_000,
+                "loss": measurement_loss,
+            },
+        )
+        heldout_evidence[measurement_name] = {
+            "path": str(measurement.relative_to(tmp_path)),
+            "sha256": measurement_sha256,
+        }
     sufficient_evidence = {}
     sufficient_payloads = {
-        "training_ledger": {"tokens_seen": 5, "gpu_hours": 0.01},
-        "stopping_evaluation": {"final_loss": 1.0, "criterion": "plateau-and-heldout-v1"},
-        "checkpoint_progression": {"checkpoints": 2, "monotonic_tokens": True},
+        "training_ledger": {
+            "schema_version": "ember-training-ledger-v2",
+            "subject_checkpoint_sha256": checkpoint_sha256,
+            "tokens_seen": sufficient_tokens,
+            "gpu_hours": 0.01,
+            "modality_tokens": manifest["training"]["modality_tokens"],
+        },
+        "stopping_evaluation": {
+            "schema_version": "ember-heldout-learning-v2",
+            "criterion": "plateau-and-heldout-v2",
+            "subject_checkpoint_sha256": checkpoint_sha256,
+            "genesis_checkpoint_sha256": progression_entries[0]["checkpoint_manifest"]["sha256"],
+            "heldout_tokens": 1_000_000,
+            "genesis_loss": 2.0,
+            "final_loss": 1.0,
+            "evidence": heldout_evidence,
+        },
+        "checkpoint_progression": {
+            "schema_version": "ember-checkpoint-progression-v2",
+            "entries": progression_entries,
+        },
     }
     sufficient_hashes = {}
     for evidence_name, evidence_payload in sufficient_payloads.items():
@@ -165,18 +300,29 @@ print(json.dumps({
     stopping_hash = _write_json(
         stopping_receipt,
         {
-            "criterion_id": "ember-sufficient-pretraining-v1",
+            "criterion_id": "ember-sufficient-pretraining-v2",
             "result": "PASSED",
             "subject_checkpoint_sha256": checkpoint_sha256,
             "verifier_sha256": sufficient_verifier_sha256,
             **sufficient_hashes,
-            "tokens_seen": 5,
+            "tokens_seen": sufficient_tokens,
             "gpu_hours": 0.01,
             "final_loss": 1.0,
+            "modality_tokens": manifest["training"]["modality_tokens"],
+            "checkpoint_count": len(progression_entries),
+            "genesis_checkpoint_sha256": progression_entries[0]["checkpoint_manifest"]["sha256"],
+            "terminal_checkpoint_sha256": checkpoint_sha256,
+            "heldout_tokens": 1_000_000,
+            "genesis_loss": 2.0,
+            "heldout_split_sha256": heldout_evidence["heldout_split"]["sha256"],
+            "heldout_harness_sha256": heldout_evidence["harness"]["sha256"],
+            "heldout_protocol_sha256": heldout_evidence["protocol"]["sha256"],
+            "genesis_measurement_sha256": heldout_evidence["genesis_measurement"]["sha256"],
+            "final_measurement_sha256": heldout_evidence["final_measurement"]["sha256"],
         },
     )
     manifest["training"]["sufficient_pretraining"] = {
-        "criterion_id": "ember-sufficient-pretraining-v1",
+        "criterion_id": "ember-sufficient-pretraining-v2",
         "result": "PASSED",
         "receipt_path": str(stopping_receipt.relative_to(tmp_path)),
         "sha256": stopping_hash,
@@ -332,6 +478,156 @@ print(json.dumps({
     payload = json.loads(result.stdout)
     assert payload == {"errors": [], "stage": "OWNED_ADMITTED", "valid": True}
 
+
+def test_admission_rejects_subscale_sufficient_pretraining_receipt(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    ledger_record = sufficient["evidence"]["training_ledger"]
+    ledger_path = tmp_path / ledger_record["path"]
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["tokens_seen"] = 5
+    ledger_sha256 = _write_json(ledger_path, ledger)
+    ledger_record["sha256"] = ledger_sha256
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["training_ledger_sha256"] = ledger_sha256
+    receipt["tokens_seen"] = 5
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    manifest["training"]["tokens_seen"] = 5
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "training.sufficient_pretraining: tokens_seen must be at least "
+        "trainable_parameters" in result.stdout
+    )
+
+
+def test_admission_rejects_trivial_native_modality_exposure(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["training"]["modality_tokens"]["image"] = 1
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "training.modality_tokens.image: admission requires at least 1000000" in result.stdout
+
+
+def test_admission_rejects_stopping_claim_without_heldout_learning_evidence(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    stopping_record = sufficient["evidence"]["stopping_evaluation"]
+    stopping_path = tmp_path / stopping_record["path"]
+    stopping = json.loads(stopping_path.read_text(encoding="utf-8"))
+    stopping.pop("heldout_tokens", None)
+    stopping.pop("genesis_loss", None)
+    stopping_sha256 = _write_json(stopping_path, stopping)
+    stopping_record["sha256"] = stopping_sha256
+
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["stopping_evaluation_sha256"] = stopping_sha256
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "training.sufficient_pretraining.stopping_evaluation: "
+        "requires checkpoint-bound common heldout evidence with 10% loss improvement"
+        in result.stdout
+    )
+
+
+def test_admission_rejects_two_checkpoint_progression(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    progression_record = sufficient["evidence"]["checkpoint_progression"]
+    progression_path = tmp_path / progression_record["path"]
+    progression = json.loads(progression_path.read_text(encoding="utf-8"))
+    progression["entries"] = progression["entries"][:2]
+    progression_sha256 = _write_json(progression_path, progression)
+    progression_record["sha256"] = progression_sha256
+
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["checkpoint_progression_sha256"] = progression_sha256
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "training.sufficient_pretraining.checkpoint_progression: "
+        "content-addressed checkpoint entries missing"
+        in result.stdout
+    )
+
 def test_admission_rejects_remote_or_unbound_serving_endpoint(tmp_path: Path):
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
     manifest_path = tmp_path / "run.json"
@@ -454,6 +750,77 @@ def _rerun_admission(tmp_path: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         capture_output=True,
         check=False,
+    )
+
+
+def _rewrite_sufficient_evidence(tmp_path: Path, evidence_name: str, payload: dict) -> None:
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    record = sufficient["evidence"][evidence_name]
+    evidence_path = tmp_path / record["path"]
+    evidence_sha256 = _write_json(evidence_path, payload)
+    record["sha256"] = evidence_sha256
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt[f"{evidence_name}_sha256"] = evidence_sha256
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+
+
+def test_admission_rejects_claimed_progression_without_bound_checkpoint_entries(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    _rewrite_sufficient_evidence(
+        tmp_path,
+        "checkpoint_progression",
+        {"checkpoints": 3, "monotonic_tokens": True},
+    )
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "checkpoint_progression: content-addressed checkpoint entries missing" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_manifest_only_modality_exposure(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    ledger_record = manifest["training"]["sufficient_pretraining"]["evidence"]["training_ledger"]
+    ledger = json.loads((tmp_path / ledger_record["path"]).read_text(encoding="utf-8"))
+    ledger.pop("modality_tokens", None)
+    _rewrite_sufficient_evidence(tmp_path, "training_ledger", ledger)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "training_ledger: modality exposure is not evidence-bound" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_unbound_heldout_improvement_summary(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    _rewrite_sufficient_evidence(
+        tmp_path,
+        "stopping_evaluation",
+        {
+            "criterion": "plateau-and-heldout-v1",
+            "heldout_tokens": 1_000_000,
+            "genesis_loss": 2.0,
+            "final_loss": 1.0,
+        },
+    )
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "stopping_evaluation: checkpoint-bound heldout evidence missing" in error
+        for error in json.loads(result.stdout)["errors"]
     )
 
 
@@ -599,3 +966,244 @@ def test_trusted_sufficiency_verifier_must_execute_successfully(tmp_path: Path):
         "sufficiency verifier execution" in error
         for error in json.loads(result.stdout)["errors"]
     )
+
+
+def test_admission_rejects_nonmonotonic_checkpoint_tokens(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    progression_record = manifest["training"]["sufficient_pretraining"]["evidence"][
+        "checkpoint_progression"
+    ]
+    progression = json.loads(
+        (tmp_path / progression_record["path"]).read_text(encoding="utf-8")
+    )
+    progression["entries"][1]["tokens_seen"] = progression["entries"][0]["tokens_seen"]
+    _rewrite_sufficient_evidence(tmp_path, "checkpoint_progression", progression)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "requires distinct checkpoints with strictly increasing tokens" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_terminal_checkpoint_alias_path(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    progression_record = manifest["training"]["sufficient_pretraining"]["evidence"][
+        "checkpoint_progression"
+    ]
+    progression = json.loads(
+        (tmp_path / progression_record["path"]).read_text(encoding="utf-8")
+    )
+    terminal = progression["entries"][-1]["checkpoint_manifest"]
+    source = tmp_path / terminal["path"]
+    alias = tmp_path / "training-evidence" / "checkpoint-history" / "final-alias.json"
+    alias.parent.mkdir(parents=True, exist_ok=True)
+    alias.write_bytes(source.read_bytes())
+    terminal["path"] = str(alias.relative_to(tmp_path))
+    _rewrite_sufficient_evidence(tmp_path, "checkpoint_progression", progression)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "terminal checkpoint does not bind admitted subject" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_less_than_ten_percent_bound_heldout_improvement(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    stopping_record = sufficient["evidence"]["stopping_evaluation"]
+    stopping_path = tmp_path / stopping_record["path"]
+    stopping = json.loads(stopping_path.read_text(encoding="utf-8"))
+    final_measurement_record = stopping["evidence"]["final_measurement"]
+    final_measurement_path = tmp_path / final_measurement_record["path"]
+    final_measurement = json.loads(final_measurement_path.read_text(encoding="utf-8"))
+    final_measurement["loss"] = 1.800001
+    final_measurement_sha256 = _write_json(final_measurement_path, final_measurement)
+    final_measurement_record["sha256"] = final_measurement_sha256
+    stopping["final_loss"] = 1.800001
+    stopping_sha256 = _write_json(stopping_path, stopping)
+    stopping_record["sha256"] = stopping_sha256
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["stopping_evaluation_sha256"] = stopping_sha256
+    receipt["final_measurement_sha256"] = final_measurement_sha256
+    receipt["final_loss"] = 1.800001
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "requires checkpoint-bound common heldout evidence with 10% loss improvement"
+        in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_tampered_intermediate_checkpoint_shard(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    progression_record = manifest["training"]["sufficient_pretraining"]["evidence"][
+        "checkpoint_progression"
+    ]
+    progression = json.loads(
+        (tmp_path / progression_record["path"]).read_text(encoding="utf-8")
+    )
+    checkpoint_path = tmp_path / progression["entries"][0]["checkpoint_manifest"]["path"]
+    checkpoint_manifest = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    shard_path = checkpoint_path.parent / checkpoint_manifest["shards"][0]["path"]
+    shard_path.write_bytes(b"tampered-intermediate-checkpoint")
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "checkpoint_manifest.shards[0].sha256: content hash mismatch" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_intermediate_checkpoint_cursor_mismatch(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    progression_record = manifest["training"]["sufficient_pretraining"]["evidence"][
+        "checkpoint_progression"
+    ]
+    progression_path = tmp_path / progression_record["path"]
+    progression = json.loads(progression_path.read_text(encoding="utf-8"))
+    first_entry = progression["entries"][0]
+    checkpoint_path = tmp_path / first_entry["checkpoint_manifest"]["path"]
+    checkpoint_manifest = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint_manifest["data_cursor"]["tokens_seen"] = 1
+    first_entry["checkpoint_manifest"]["sha256"] = _write_json(
+        checkpoint_path, checkpoint_manifest
+    )
+    _rewrite_sufficient_evidence(tmp_path, "checkpoint_progression", progression)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "checkpoint_manifest: invalid checkpoint structure" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+def test_admission_rejects_terminal_checkpoint_without_bound_cursor(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    checkpoint_path = tmp_path / manifest["checkpoint"]["manifest_path"]
+    checkpoint_manifest = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint_manifest.pop("data_cursor", None)
+    checkpoint_sha256 = _write_json(checkpoint_path, checkpoint_manifest)
+    manifest["checkpoint"]["sha256"] = checkpoint_sha256
+    progression_record = manifest["training"]["sufficient_pretraining"]["evidence"][
+        "checkpoint_progression"
+    ]
+    progression = json.loads(
+        (tmp_path / progression_record["path"]).read_text(encoding="utf-8")
+    )
+    progression["entries"][-1]["checkpoint_manifest"]["sha256"] = checkpoint_sha256
+    _write_json(manifest_path, manifest)
+    _rewrite_sufficient_evidence(tmp_path, "checkpoint_progression", progression)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "entries[2].checkpoint_manifest: invalid checkpoint structure" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_requires_modality_exposure_in_receipt_and_verifier(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sufficient = manifest["training"]["sufficient_pretraining"]
+    receipt_path = tmp_path / sufficient["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt.pop("modality_tokens")
+
+    registry_path = tmp_path / "trusted-verifiers.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    verifier_record = next(
+        record
+        for record in registry["verifiers"]
+        if "sufficient_pretraining" in record["evidence_classes"]
+    )
+    verifier_path = tmp_path / verifier_record["path"]
+    verifier_source = verifier_path.read_text(encoding="utf-8").replace(
+        '    "modality_tokens": ledger["modality_tokens"],\n', ""
+    )
+    verifier_path.write_text(verifier_source, encoding="utf-8")
+    verifier_sha256 = _sha256(verifier_path)
+    verifier_record["sha256"] = verifier_sha256
+    _write_json(registry_path, registry)
+    receipt["verifier_sha256"] = verifier_sha256
+    sufficient["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "receipt: missing modality_tokens" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_rejects_incomplete_intermediate_checkpoint_manifest(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    progression_record = manifest["training"]["sufficient_pretraining"]["evidence"][
+        "checkpoint_progression"
+    ]
+    progression = json.loads(
+        (tmp_path / progression_record["path"]).read_text(encoding="utf-8")
+    )
+    middle_entry = progression["entries"][1]
+    checkpoint_path = tmp_path / middle_entry["checkpoint_manifest"]["path"]
+    checkpoint_manifest = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint_manifest.pop("schema_version")
+    for shard in checkpoint_manifest["shards"]:
+        shard.pop("bytes")
+    middle_entry["checkpoint_manifest"]["sha256"] = _write_json(
+        checkpoint_path, checkpoint_manifest
+    )
+    _rewrite_sufficient_evidence(tmp_path, "checkpoint_progression", progression)
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    assert any(
+        "entries[1].checkpoint_manifest: invalid checkpoint structure" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
+def test_admission_missing_sufficiency_receipt_returns_structured_failure(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    receipt_path = (
+        tmp_path / manifest["training"]["sufficient_pretraining"]["receipt_path"]
+    )
+    receipt_path.unlink()
+
+    result = _rerun_admission(tmp_path)
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["valid"] is False
+    assert payload["errors"]
