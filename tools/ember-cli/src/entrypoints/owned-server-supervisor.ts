@@ -78,6 +78,7 @@ export function buildOwnedServerCommand(
   const { host, port } = endpoint(identity);
   const authorityArgs = launch.authorityKind === "ADMISSION"
     ? [
+        "--config", launch.modelConfigPath,
         "--run-manifest", launch.runManifestPath,
         "--trusted-verifier-registry", launch.trustedVerifierRegistryPath,
       ]

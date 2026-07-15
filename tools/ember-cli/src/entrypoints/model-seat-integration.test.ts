@@ -247,6 +247,7 @@ describe("process entry model-seat enforcement", () => {
             authorityKind: "ADMISSION",
             checkpointDir: "C:\\owned\\checkpoint",
             mode: "INTERACTIVE",
+      modelConfigPath: "C:\\owned\\model-config.json",
             pythonExecutable: "python-owned",
             runManifestPath: "C:\\owned\\run.json",
             serverPath: "C:\\repo\\serve_owned_openai.py",

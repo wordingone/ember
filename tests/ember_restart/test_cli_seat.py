@@ -47,6 +47,7 @@ def test_resolver_derives_owned_identity_from_admitted_bytes(tmp_path: Path):
         "launch": {
             "checkpoint_dir": str((tmp_path / manifest["checkpoint"]["manifest_path"]).parent.resolve()),
             "mode": "INTERACTIVE",
+            "model_config_path": str((tmp_path / manifest["architecture"]["model_config"]["path"]).resolve()),
             "run_manifest_path": str((tmp_path / "run.json").resolve()),
             "server_path": str((tmp_path / serving["server_implementation"]["path"]).resolve()),
             "tokenizer_path": str((tmp_path / manifest["tokenizer"]["path"]).resolve()),
