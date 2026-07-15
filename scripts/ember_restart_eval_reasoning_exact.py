@@ -56,7 +56,7 @@ def main() -> int:
         parser.error(f"invalid local answer artifacts: {error}")
     if references.keys() != predictions.keys():
         parser.error("predictions must exactly cover frozen reference ids")
-    payload = {"result": "SELFTEST", "criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_match": sum(references[key] == predictions[key] for key in references) / len(references)}, "sample_count": len(references), "references_sha256": digest(reference_bytes), "predictions_sha256": digest(prediction_bytes), "frozen_reasoning_manifest_sha256": digest(manifest_bytes), "upstream": "fixture-only local frozen-answer scorer"}
+    payload = {"result": "SELFTEST", "claim_status": "SELFTEST_ONLY_FIXTURE_REASONING_ANSWERS", "criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_match": sum(references[key] == predictions[key] for key in references) / len(references)}, "sample_count": len(references), "references_sha256": digest(reference_bytes), "predictions_sha256": digest(prediction_bytes), "frozen_reasoning_manifest_sha256": digest(manifest_bytes), "upstream": "fixture-only local frozen-answer scorer"}
     args.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.score_output.parent, delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
