@@ -6,12 +6,14 @@
 from __future__ import annotations
 
 import json
+import os
 import torch
 import sys
 import tempfile
 import subprocess
 import threading
 import unittest
+from unittest.mock import MagicMock, patch
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -22,8 +24,12 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 from serve_owned_openai import (
     OwnedIdentity,
     create_loopback_server,
+    require_live_parent,
     LoadedOwnedRuntime,
     resolve_central_owned_admission,
+    resolve_runtime_inputs,
+    start_parent_watchdog,
+    main as serve_main,
 )
 
 
@@ -46,7 +52,7 @@ class _Runtime:
 class OwnedOpenAiServerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.runtime = _Runtime()
-        self.server = create_loopback_server(self.runtime, host="127.0.0.1", port=0)
+        self.server = create_loopback_server(self.runtime, host="127.0.0.1", port=0, mode="FROZEN_EVAL")
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.base = f"http://127.0.0.1:{self.server.server_port}"
@@ -77,6 +83,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(identity["checkpoint_sha256"], "a" * 64)
         self.assertEqual(identity["model_name"], expected_name)
         self.assertEqual(identity["data"][0]["id"], expected_name)
+        self.assertEqual(identity["mode"], "FROZEN_EVAL")
         status, completion = self._request("/v1/chat/completions", {"model": expected_name, "ember_frozen_row_id": "row-1", "messages": [{"role": "user", "content": "hello"}], "max_tokens": 3})
         self.assertEqual(status, 200)
         self.assertEqual(completion["model"], expected_name)
@@ -101,8 +108,87 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertIn("frozen row", response["error"]["message"])
         self.assertEqual(self.runtime.calls, [])
 
+    def test_interactive_mode_accepts_chat_without_frozen_row(self) -> None:
+        runtime = _Runtime()
+        server = create_loopback_server(runtime, host="127.0.0.1", port=0, mode="INTERACTIVE")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+            request = urllib.request.Request(
+                base + "/v1/chat/completions",
+                data=json.dumps({
+                    "model": runtime.identity.model_name,
+                    "messages": [{"role": "user", "content": "hello"}],
+                }).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=2) as response:
+                self.assertEqual(response.status, 200)
+            self.assertEqual(runtime.calls, [(None, [{"role": "user", "content": "hello"}])])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_mode_inputs_and_parent_liveness_fail_closed_before_allocation(self) -> None:
+        split = Path("frozen.json")
+        self.assertIsNone(resolve_runtime_inputs("INTERACTIVE", None))
+        self.assertEqual(resolve_runtime_inputs("FROZEN_EVAL", split), split)
+        with self.assertRaisesRegex(ValueError, "forbids"):
+            resolve_runtime_inputs("INTERACTIVE", split)
+        with self.assertRaisesRegex(ValueError, "requires"):
+            resolve_runtime_inputs("FROZEN_EVAL", None)
+        with self.assertRaisesRegex(ValueError, "mode"):
+            resolve_runtime_inputs("UNKNOWN", None)
+        require_live_parent(os.getpid())
+        with self.assertRaisesRegex(RuntimeError, "parent process"):
+            require_live_parent(12345, checker=lambda _pid: False)
+        checks = iter((True, False))
+        exits: list[int] = []
+        watchdog = start_parent_watchdog(
+            12345,
+            poll_seconds=0.001,
+            checker=lambda _pid: next(checks),
+            exit_process=exits.append,
+        )
+        watchdog.join(timeout=1)
+        self.assertFalse(watchdog.is_alive())
+        self.assertEqual(exits, [0])
 
 
+
+    def test_main_checks_parent_before_loading_checkpoint(self) -> None:
+        events: list[tuple[str, object]] = []
+        runtime = object()
+        server = MagicMock()
+
+        def load_runtime(**kwargs: object) -> object:
+            events.append(("load", kwargs))
+            return runtime
+
+        with (
+            patch("serve_owned_openai.start_parent_watchdog", side_effect=lambda pid: events.append(("parent", pid))),
+            patch.object(LoadedOwnedRuntime, "from_paths", side_effect=load_runtime) as load,
+            patch("serve_owned_openai.create_loopback_server", return_value=server) as create,
+        ):
+            result = serve_main([
+                "--checkpoint", "checkpoint",
+                "--tokenizer", "tokenizer.json",
+                "--run-manifest", "run.json",
+                "--trusted-verifier-registry", "registry.json",
+                "--mode", "INTERACTIVE",
+                "--parent-pid", str(os.getpid()),
+                "--device", "cpu",
+            ])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(events[0], ("parent", os.getpid()))
+        self.assertEqual(events[1][0], "load")
+        self.assertIsNone(load.call_args.kwargs["frozen_split"])
+        create.assert_called_once_with(runtime, host="127.0.0.1", port=8000, mode="INTERACTIVE")
+        server.serve_forever.assert_called_once_with()
     def test_loaded_runtime_stops_on_tokenizer_derived_eos(self) -> None:
         class Tokenizer:
             eos_token_ids = {4}
