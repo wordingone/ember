@@ -213,12 +213,14 @@ def _external_checkpoint_manifest(path: Path, *, label: str) -> tuple[dict[str, 
     if not path.is_file() or path.name != "checkpoint-manifest.json":
         raise ValueError(f"{label} manifest must be an externally supplied checkpoint manifest")
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
+        manifest_bytes = path.read_bytes()
+        manifest = json.loads(manifest_bytes)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError(f"{label} manifest is not JSON") from error
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
     if manifest.get("schema_version") not in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
         raise ValueError(f"{label} manifest has an unsupported schema")
-    _validated_records(path.parent, {**manifest, "checkpoint_manifest_sha256": _sha256(path)})
+    _validated_records(path.parent, {**manifest, "checkpoint_manifest_sha256": manifest_sha256})
     experts = manifest.get("expert_checkpoint_sha256")
     genesis = manifest.get("expert_genesis_sha256")
     if not isinstance(experts, Mapping) or set(experts) != set(EXPERT_NAMES):
@@ -228,7 +230,7 @@ def _external_checkpoint_manifest(path: Path, *, label: str) -> tuple[dict[str, 
     for name in EXPERT_NAMES:
         _sha256_value(experts[name], name=f"{label} {name} expert hash")
         _sha256_value(genesis[name], name=f"{label} {name} expert genesis hash")
-    return dict(manifest), _sha256(path)
+    return dict(manifest), manifest_sha256
 
 
 def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest: Path) -> dict[str, Any]:
@@ -238,8 +240,8 @@ def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest
     root, root_sha256 = _external_checkpoint_manifest(Path(root_manifest), label="root genesis")
     if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
         if parent_sha256 != root_sha256:
-            raise ValueError("first specialist successor requires parent and root to be the same genesis bundle")
-        history: list[str] = []
+            raise ValueError("first specialist successor requires exact parent and root checkpoint hashes")
+        history = []
     else:
         lineage = parent.get("lineage")
         if not isinstance(lineage, Mapping) or lineage.get("root_genesis_checkpoint_sha256") != root_sha256:
@@ -274,9 +276,9 @@ def _specialist_lineage(
     root, root_sha256 = _external_checkpoint_manifest(root_path, label="root genesis")
     parent_lineage = parent.get("lineage")
     if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
-        parent_history: list[str] = []
         if parent_sha256 != root_sha256:
-            raise ValueError("first specialist successor requires parent and root to be the same genesis bundle")
+            raise ValueError("first specialist successor requires exact parent and root checkpoint hashes")
+        parent_history = []
     else:
         if not isinstance(parent_lineage, Mapping) or parent_lineage.get("root_genesis_checkpoint_sha256") != root_sha256:
             raise ValueError("specialist lineage root must match the immutable parent root genesis")
