@@ -61,7 +61,7 @@ def main() -> int:
             raise ValueError("EvalPlus result pass@1 does not reproduce task outcomes")
     except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         parser.error(f"invalid EvalPlus result inputs: {error}")
-    payload = {"criterion_id": "ember-3b-text-capability-v1", "criterion_result": "FAILED", "metrics": metrics, "sample_count": binding["sample_count"], "checkpoint_manifest_sha256": binding["checkpoint_manifest_sha256"], "model_config_sha256": binding["model_config_sha256"], "predictions_sha256": binding["predictions_sha256"], "samples_binding_sha256": sha256(binding_bytes), "evalplus_result_sha256": sha256(result_bytes), "upstream": "EvalPlus result artifact bound to canonical owned samples"}
+    payload = {"result": "SELFTEST", "criterion_id": "ember-3b-text-capability-v1", "criterion_result": "FAILED", "metrics": metrics, "sample_count": binding["sample_count"], "checkpoint_manifest_sha256": binding["checkpoint_manifest_sha256"], "model_config_sha256": binding["model_config_sha256"], "predictions_sha256": binding["predictions_sha256"], "samples_binding_sha256": sha256(binding_bytes), "evalplus_result_sha256": sha256(result_bytes), "upstream": "EvalPlus result artifact bound to canonical owned samples"}
     arguments.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.score_output.parent, prefix=arguments.score_output.name + ".", suffix=".tmp", delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")

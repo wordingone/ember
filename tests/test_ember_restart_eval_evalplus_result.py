@@ -29,6 +29,7 @@ def test_scores_only_result_bound_to_evalplus_samples_sidecar():
         assert payload["samples_binding_sha256"] == digest(binding)
         assert payload["evalplus_result_sha256"] == digest(result)
         assert payload["criterion_result"] == "FAILED"
+        assert payload["result"] == "SELFTEST"
 
 
 def test_refuses_evalplus_result_with_wrong_dataset_or_task_set():
