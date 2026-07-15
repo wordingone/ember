@@ -987,6 +987,28 @@ def _verify_admission(
 
     training = manifest.get("training")
     sufficient = training.get("sufficient_pretraining") if isinstance(training, dict) else None
+    trainable_parameters = (
+        architecture.get("trainable_parameters") if isinstance(architecture, dict) else None
+    )
+    tokens_seen = training.get("tokens_seen") if isinstance(training, dict) else None
+    if (
+        isinstance(trainable_parameters, int)
+        and not isinstance(trainable_parameters, bool)
+        and isinstance(tokens_seen, int)
+        and not isinstance(tokens_seen, bool)
+        and tokens_seen < trainable_parameters
+    ):
+        errors.append("training.sufficient_pretraining: tokens_seen must be at least trainable_parameters")
+    admission_mixture = training.get("modality_tokens") if isinstance(training, dict) else None
+    if isinstance(admission_mixture, dict):
+        for capability in CAPABILITIES:
+            exposure = admission_mixture.get(capability)
+            if (
+                not isinstance(exposure, int)
+                or isinstance(exposure, bool)
+                or exposure < 1_000_000
+            ):
+                errors.append(f"training.modality_tokens.{capability}: admission requires at least 1000000")
     sufficient_payload = _load_bound_json(
         root, sufficient, "receipt_path", "training.sufficient_pretraining", errors
     )
@@ -999,7 +1021,7 @@ def _verify_admission(
     if not isinstance(sufficient, dict):
         errors.append("training.sufficient_pretraining: expected object")
     else:
-        if sufficient.get("criterion_id") != "ember-sufficient-pretraining-v1":
+        if sufficient.get("criterion_id") != "ember-sufficient-pretraining-v2":
             errors.append("training.sufficient_pretraining.criterion_id: unsupported criterion")
         if sufficient.get("result") != "PASSED":
             errors.append("training.sufficient_pretraining.result: must equal PASSED")
@@ -1022,13 +1044,343 @@ def _verify_admission(
                     errors.append(
                         f"training.sufficient_pretraining receipt: executed evidence {receipt_field} mismatch"
                     )
+    ledger_path = sufficient_evidence_paths.get("training_ledger")
+    if ledger_path is not None:
+        try:
+            training_ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            training_ledger = None
+        ledger_modalities = (
+            training_ledger.get("modality_tokens") if isinstance(training_ledger, dict) else None
+        )
+        if (
+            not isinstance(training_ledger, dict)
+            or training_ledger.get("schema_version") != "ember-training-ledger-v2"
+            or training_ledger.get("subject_checkpoint_sha256") != checkpoint_sha256
+            or training_ledger.get("tokens_seen") != tokens_seen
+            or ledger_modalities != admission_mixture
+        ):
+            errors.append(
+                "training.sufficient_pretraining.training_ledger: "
+                "modality exposure is not evidence-bound"
+            )
+        if isinstance(sufficient_payload, dict):
+            if "modality_tokens" not in sufficient_payload:
+                errors.append(
+                    "training.sufficient_pretraining receipt: missing modality_tokens"
+                )
+            elif sufficient_payload.get("modality_tokens") != admission_mixture:
+                errors.append(
+                    "training.sufficient_pretraining receipt: modality_tokens mismatch"
+                )
+    stopping_path = sufficient_evidence_paths.get("stopping_evaluation")
+    heldout_tokens = None
+    genesis_loss = None
+    final_loss = None
+    stopping_genesis_checkpoint_sha256 = None
+    heldout_hashes: dict[str, str | None] = {
+        "heldout_split_sha256": None,
+        "heldout_harness_sha256": None,
+        "heldout_protocol_sha256": None,
+        "genesis_measurement_sha256": None,
+        "final_measurement_sha256": None,
+    }
+    if stopping_path is not None:
+        try:
+            stopping_evaluation = json.loads(stopping_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            stopping_evaluation = None
+        if (
+            not isinstance(stopping_evaluation, dict)
+            or stopping_evaluation.get("schema_version") != "ember-heldout-learning-v2"
+            or stopping_evaluation.get("criterion") != "plateau-and-heldout-v2"
+            or stopping_evaluation.get("subject_checkpoint_sha256") != checkpoint_sha256
+            or not isinstance(stopping_evaluation.get("evidence"), dict)
+        ):
+            errors.append(
+                "training.sufficient_pretraining.stopping_evaluation: "
+                "checkpoint-bound heldout evidence missing"
+            )
+        else:
+            heldout_tokens = stopping_evaluation.get("heldout_tokens")
+            genesis_loss = stopping_evaluation.get("genesis_loss")
+            final_loss = stopping_evaluation.get("final_loss")
+            stopping_genesis_checkpoint_sha256 = stopping_evaluation.get(
+                "genesis_checkpoint_sha256"
+            )
+            stopping_evidence = stopping_evaluation["evidence"]
+            evidence_paths: dict[str, Path] = {}
+            evidence_names = (
+                "heldout_split",
+                "harness",
+                "protocol",
+                "genesis_measurement",
+                "final_measurement",
+            )
+            for evidence_name in evidence_names:
+                record = stopping_evidence.get(evidence_name)
+                evidence_path = _verify_file(
+                    root,
+                    record,
+                    "training.sufficient_pretraining.stopping_evaluation"
+                    f".evidence.{evidence_name}",
+                    errors,
+                )
+                if evidence_path is not None:
+                    evidence_paths[evidence_name] = evidence_path
+                evidence_hash = record.get("sha256") if isinstance(record, dict) else None
+                receipt_field = {
+                    "heldout_split": "heldout_split_sha256",
+                    "harness": "heldout_harness_sha256",
+                    "protocol": "heldout_protocol_sha256",
+                    "genesis_measurement": "genesis_measurement_sha256",
+                    "final_measurement": "final_measurement_sha256",
+                }[evidence_name]
+                heldout_hashes[receipt_field] = evidence_hash
+            measurements: dict[str, Any] = {}
+            for measurement_name in ("genesis_measurement", "final_measurement"):
+                measurement_path = evidence_paths.get(measurement_name)
+                try:
+                    measurement = (
+                        json.loads(measurement_path.read_text(encoding="utf-8"))
+                        if measurement_path is not None
+                        else None
+                    )
+                except (OSError, UnicodeError, json.JSONDecodeError):
+                    measurement = None
+                measurements[measurement_name] = measurement
+            common_measurement = {
+                "heldout_split_sha256": heldout_hashes["heldout_split_sha256"],
+                "harness_sha256": heldout_hashes["heldout_harness_sha256"],
+                "protocol_sha256": heldout_hashes["heldout_protocol_sha256"],
+                "heldout_tokens": heldout_tokens,
+            }
+            genesis_measurement = measurements["genesis_measurement"]
+            final_measurement = measurements["final_measurement"]
+            measurements_bound = True
+            for measurement, expected_checkpoint, expected_loss in (
+                (
+                    genesis_measurement,
+                    stopping_genesis_checkpoint_sha256,
+                    genesis_loss,
+                ),
+                (final_measurement, checkpoint_sha256, final_loss),
+            ):
+                if (
+                    not isinstance(measurement, dict)
+                    or measurement.get("schema_version")
+                    != "ember-heldout-loss-measurement-v2"
+                    or measurement.get("checkpoint_manifest_sha256")
+                    != expected_checkpoint
+                    or any(
+                        measurement.get(field) != expected
+                        for field, expected in common_measurement.items()
+                    )
+                    or measurement.get("loss") != expected_loss
+                ):
+                    measurements_bound = False
+            if (
+                not isinstance(heldout_tokens, int)
+                or isinstance(heldout_tokens, bool)
+                or heldout_tokens < 1_000_000
+                or not isinstance(genesis_loss, (int, float))
+                or isinstance(genesis_loss, bool)
+                or not math.isfinite(genesis_loss)
+                or genesis_loss <= 0
+                or not isinstance(final_loss, (int, float))
+                or isinstance(final_loss, bool)
+                or not math.isfinite(final_loss)
+                or final_loss < 0
+                or final_loss > genesis_loss * 0.9
+                or not measurements_bound
+            ):
+                errors.append(
+                    "training.sufficient_pretraining.stopping_evaluation: "
+                    "requires checkpoint-bound common heldout evidence with 10% loss improvement"
+                )
+    progression_path = sufficient_evidence_paths.get("checkpoint_progression")
+    checkpoint_count = None
+    genesis_checkpoint_sha256 = None
+    terminal_checkpoint_sha256 = None
+    if progression_path is not None:
+        try:
+            progression = json.loads(progression_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            progression = None
+        entries = progression.get("entries") if isinstance(progression, dict) else None
+        if (
+            not isinstance(progression, dict)
+            or progression.get("schema_version") != "ember-checkpoint-progression-v2"
+            or not isinstance(entries, list)
+            or len(entries) < 3
+        ):
+            errors.append(
+                "training.sufficient_pretraining.checkpoint_progression: "
+                "content-addressed checkpoint entries missing"
+            )
+        else:
+            checkpoint_count = len(entries)
+            checkpoint_hashes: list[str] = []
+            checkpoint_tokens: list[int] = []
+            final_path = None
+            for index, entry in enumerate(entries):
+                prefix = (
+                    "training.sufficient_pretraining.checkpoint_progression"
+                    f".entries[{index}]"
+                )
+                if not isinstance(entry, dict):
+                    errors.append(f"{prefix}: expected object")
+                    continue
+                checkpoint_record = entry.get("checkpoint_manifest")
+                resolved_checkpoint = _verify_file(
+                    root, checkpoint_record, f"{prefix}.checkpoint_manifest", errors
+                )
+                checkpoint_hash = (
+                    checkpoint_record.get("sha256")
+                    if isinstance(checkpoint_record, dict)
+                    else None
+                )
+                entry_tokens = entry.get("tokens_seen")
+                if (
+                    not isinstance(entry_tokens, int)
+                    or isinstance(entry_tokens, bool)
+                    or entry_tokens < 0
+                ):
+                    errors.append(f"{prefix}.tokens_seen: expected nonnegative integer")
+                checkpoint_manifest = None
+                if resolved_checkpoint is not None:
+                    try:
+                        checkpoint_manifest = json.loads(
+                            resolved_checkpoint.read_text(encoding="utf-8")
+                        )
+                    except (OSError, UnicodeError, json.JSONDecodeError):
+                        checkpoint_manifest = None
+                checkpoint_shards = (
+                    checkpoint_manifest.get("shards")
+                    if isinstance(checkpoint_manifest, dict)
+                    else None
+                )
+                checkpoint_cursor = (
+                    checkpoint_manifest.get("data_cursor")
+                    if isinstance(checkpoint_manifest, dict)
+                    else None
+                )
+                checkpoint_manifest_valid = (
+                    isinstance(checkpoint_manifest, dict)
+                    and checkpoint_manifest.get("schema_version")
+                    == "ember-sparse-checkpoint-v3"
+                    and isinstance(checkpoint_shards, list)
+                    and bool(checkpoint_shards)
+                    and isinstance(checkpoint_cursor, dict)
+                    and checkpoint_cursor.get("tokens_seen") == entry_tokens
+                )
+                if not checkpoint_manifest_valid:
+                    errors.append(f"{prefix}.checkpoint_manifest: invalid checkpoint structure")
+                elif resolved_checkpoint is not None and index != checkpoint_count - 1:
+                    for shard_index, shard_record in enumerate(checkpoint_shards):
+                        shard_path = _verify_file(
+                            resolved_checkpoint.parent,
+                            shard_record,
+                            f"{prefix}.checkpoint_manifest.shards[{shard_index}]",
+                            errors,
+                        )
+                        expected_bytes = (
+                            shard_record.get("bytes")
+                            if isinstance(shard_record, dict)
+                            else None
+                        )
+                        if (
+                            not isinstance(expected_bytes, int)
+                            or isinstance(expected_bytes, bool)
+                            or expected_bytes < 0
+                        ):
+                            errors.append(
+                                f"{prefix}.checkpoint_manifest.shards[{shard_index}].bytes: "
+                                "expected non-negative integer"
+                            )
+                            checkpoint_manifest_valid = False
+                        elif shard_path is not None and shard_path.stat().st_size != expected_bytes:
+                            errors.append(
+                                f"{prefix}.checkpoint_manifest.shards[{shard_index}].bytes: "
+                                "size mismatch"
+                            )
+                            checkpoint_manifest_valid = False
+                        if shard_path is None:
+                            checkpoint_manifest_valid = False
+                if (
+                    checkpoint_manifest_valid
+                    and isinstance(entry_tokens, int)
+                    and not isinstance(entry_tokens, bool)
+                    and entry_tokens >= 0
+                    and isinstance(checkpoint_hash, str)
+                    and resolved_checkpoint is not None
+                ):
+                    checkpoint_hashes.append(checkpoint_hash)
+                    checkpoint_tokens.append(entry_tokens)
+                    final_path = checkpoint_record.get("path")
+            if (
+                len(checkpoint_hashes) != checkpoint_count
+                or len(set(checkpoint_hashes)) != checkpoint_count
+                or any(
+                    later <= earlier
+                    for earlier, later in zip(checkpoint_tokens, checkpoint_tokens[1:])
+                )
+            ):
+                errors.append(
+                    "training.sufficient_pretraining.checkpoint_progression: "
+                    "requires distinct checkpoints with strictly increasing tokens"
+                )
+            else:
+                genesis_checkpoint_sha256 = checkpoint_hashes[0]
+                terminal_checkpoint_sha256 = checkpoint_hashes[-1]
+                checkpoint_manifest_path = (
+                    checkpoint.get("manifest_path") if isinstance(checkpoint, dict) else None
+                )
+                if (
+                    terminal_checkpoint_sha256 != checkpoint_sha256
+                    or final_path != checkpoint_manifest_path
+                    or checkpoint_tokens[-1] != tokens_seen
+                ):
+                    errors.append(
+                        "training.sufficient_pretraining.checkpoint_progression: "
+                        "terminal checkpoint does not bind admitted subject"
+                    )
+    if stopping_genesis_checkpoint_sha256 != genesis_checkpoint_sha256:
+        errors.append(
+            "training.sufficient_pretraining.stopping_evaluation: "
+            "genesis measurement does not bind checkpoint progression"
+        )
     if sufficient_payload is not None:
-        if sufficient_payload.get("criterion_id") != "ember-sufficient-pretraining-v1":
+        if sufficient_payload.get("criterion_id") != "ember-sufficient-pretraining-v2":
             errors.append("training.sufficient_pretraining receipt: criterion mismatch")
         if sufficient_payload.get("result") != "PASSED":
             errors.append("training.sufficient_pretraining receipt: result must equal PASSED")
         if sufficient_payload.get("subject_checkpoint_sha256") != checkpoint_sha256:
             errors.append("training.sufficient_pretraining receipt: checkpoint mismatch")
+        if (
+            sufficient_payload.get("checkpoint_count") != checkpoint_count
+            or sufficient_payload.get("genesis_checkpoint_sha256")
+            != genesis_checkpoint_sha256
+            or sufficient_payload.get("terminal_checkpoint_sha256")
+            != terminal_checkpoint_sha256
+        ):
+            errors.append(
+                "training.sufficient_pretraining receipt: checkpoint progression mismatch"
+            )
+        expected_heldout_receipt = {
+            "heldout_tokens": heldout_tokens,
+            "genesis_loss": genesis_loss,
+            "final_loss": final_loss,
+            **heldout_hashes,
+        }
+        if any(
+            sufficient_payload.get(field) != expected
+            for field, expected in expected_heldout_receipt.items()
+        ):
+            errors.append(
+                "training.sufficient_pretraining receipt: "
+                "checkpoint-bound heldout evidence mismatch"
+            )
         training = manifest.get("training")
         tokens_seen = sufficient_payload.get("tokens_seen")
         if (
@@ -1051,7 +1403,7 @@ def _verify_admission(
         verifier = trusted_verifiers.get(sufficient_payload.get("verifier_sha256"))
         if verifier is None or "sufficient_pretraining" not in verifier.get("evidence_classes", []):
             errors.append("training.sufficient_pretraining receipt: verifier is not trusted")
-        elif "ember-sufficient-pretraining-v1" not in verifier.get("criterion_ids", []):
+        elif "ember-sufficient-pretraining-v2" not in verifier.get("criterion_ids", []):
             errors.append("training.sufficient_pretraining receipt: criterion is not trusted")
         else:
             verifier_path = verifier.get("_resolved_path")
@@ -1078,7 +1430,7 @@ def _verify_admission(
                     "--checkpoint-manifest",
                     str(checkpoint_path),
                     "--criterion-id",
-                    "ember-sufficient-pretraining-v1",
+                    "ember-sufficient-pretraining-v2",
                 ]
                 for evidence_name in sufficient_evidence_fields:
                     command.extend(
@@ -1118,6 +1470,17 @@ def _verify_admission(
                                 *sufficient_evidence_fields.values(),
                                 "tokens_seen",
                                 "gpu_hours",
+                                "modality_tokens",
+                                "checkpoint_count",
+                                "genesis_checkpoint_sha256",
+                                "terminal_checkpoint_sha256",
+                                "heldout_tokens",
+                                "genesis_loss",
+                                "heldout_split_sha256",
+                                "heldout_harness_sha256",
+                                "heldout_protocol_sha256",
+                                "genesis_measurement_sha256",
+                                "final_measurement_sha256",
                                 "final_loss",
                             )
                             if not isinstance(executed, dict):
@@ -1126,7 +1489,17 @@ def _verify_admission(
                                 )
                             else:
                                 for field in executed_fields:
-                                    if executed.get(field) != sufficient_payload.get(field):
+                                    if field not in sufficient_payload:
+                                        errors.append(
+                                            "training.sufficient_pretraining receipt: "
+                                            f"missing {field}"
+                                        )
+                                    elif field not in executed:
+                                        errors.append(
+                                            "training.sufficient_pretraining receipt: sufficiency verifier "
+                                            f"execution missing {field}"
+                                        )
+                                    elif executed[field] != sufficient_payload[field]:
                                         errors.append(
                                             "training.sufficient_pretraining receipt: sufficiency verifier "
                                             f"execution {field} mismatch"
