@@ -1,0 +1,17 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02C",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-restart-benchmark-custody-v1",
+  "benchmark_id": "swe-bench-lite",
+  "upstream_url": "https://github.com/SWE-bench/SWE-bench",
+  "asset_disposition": "NO_LOCAL_PINNED_SWE_BENCH_TASKS_OR_RUNTIME",
+  "target_execution_permitted": false,
+  "target_training_access": "FORBIDDEN",
+  "admission": "NOT_EXECUTABLE_NO_FROZEN_FILE_TASK_ASSETS",
+  "next_requirements": [
+    "pin a licensed SWE-bench Lite task release and split",
+    "pin a container-image digest and offline harness",
+    "bind canonical checkpoint predictions to task patch outcomes"
+  ]
+}
