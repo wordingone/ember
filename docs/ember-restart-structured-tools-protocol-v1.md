@@ -6,9 +6,9 @@
 ## Frozen source identity
 
 - Evaluation source: `ShishirPatil/gorilla`, BFCL component
-- Source commit: `6ea57973c7a6097fd7c5915698c54c17c5b1b6c8`
-- Intended surface: executable function-call correctness through BFCL's local
-  evaluator, not the public leaderboard.
+- Source commit candidate: `6ea57973c7a6097fd7c5915698c54c17c5b1b6c8`
+- Current custody: no local pinned BFCL runtime or frozen task set is available; this protocol is pre-execution only.
+- Intended surface after pinned materialization: executable function-call correctness through BFCL's local evaluator, not the public leaderboard.
 
 ## Target admission contract
 
