@@ -28,3 +28,4 @@ have no target score.
 
 The authoritative renderer-facing record is
 [`ember-restart-evaluation-results.md`](ember-restart-evaluation-results.md).
+The MATH-500 revision `2cd6fe926f1203a15d19f73c9a329cbe62b806fd` is custody-materialized as a 500-row frozen suite with disposition `FROZEN_MATH500_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS`. It has no checkpoint-bound predictions or capability score.
