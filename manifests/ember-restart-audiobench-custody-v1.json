@@ -12,5 +12,5 @@
   "source_materialization": "disk-budgeted source-only cache",
   "target_training_access": "FORBIDDEN",
   "public_source_or_answer_artifacts": "FORBIDDEN",
-  "admission": "NOT_EXECUTABLE_NO_OWNED_CHECKPOINT"
+  "admission": "NOT_EXECUTABLE_UNTRAINED_SPECIALIST_NO_CHECKPOINT_BOUND_PREDICTIONS"
 }
