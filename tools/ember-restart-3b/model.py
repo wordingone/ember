@@ -29,7 +29,7 @@ EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 
 @dataclass(frozen=True)
 class MultimodalSpan:
-    """An explicit contiguous multimodal span and its attention policy."""
+    """An explicit contiguous multimodal span and its attention policy.\n\n    ``isolated`` is an authorized optional raw-modality policy: raw modality tokens attend bidirectionally inside their own span but cannot read prior text, while later decoder tokens retain causal access to that span.\n    ``causal`` and ``bidirectional`` remain independently selectable.\n    """
 
     start: int
     length: int
@@ -41,8 +41,8 @@ class MultimodalSpan:
             raise ValueError("span start must be nonnegative and length must be positive")
         if self.modality not in {"image", "audio", "text"}:
             raise ValueError("span modality must be image, audio, or text")
-        if self.attention_mode not in {"causal", "bidirectional"}:
-            raise ValueError("span attention_mode must be causal or bidirectional")
+        if self.attention_mode not in {"causal", "bidirectional", "isolated"}:
+            raise ValueError("span attention_mode must be causal, bidirectional, or isolated")
 
 
 @dataclass(frozen=True)
@@ -397,8 +397,10 @@ class UnifiedDecoder(nn.Module):
             end = span.start + span.length
             if end > sequence_length:
                 raise ValueError("multimodal span exceeds sequence length")
-            if span.attention_mode == "bidirectional":
+            if span.attention_mode in {"bidirectional", "isolated"}:
                 allowed[:, span.start:end, span.start:end] = True
+            if span.attention_mode == "isolated":
+                allowed[:, span.start:end, :span.start] = False
         return allowed
 
     def _inject_modality(

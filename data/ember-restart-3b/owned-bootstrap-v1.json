@@ -1,42 +1,46 @@
 {
-  "active_expert": "reasoning",
-  "capability_evidence": {
-    "reasoning": {
-      "operands": [
-        1,
-        2
-      ],
-      "target": 3,
-      "trace": [
-        1,
-        2,
-        3
-      ]
-    }
-  },
-  "capability_receipt": {
-    "canonical_record_sha256": "847078e507a659de80e7d65305a709858fa03deed93dc08a8a90c5e85c25313b",
-    "reasoning_target_sha256": "663eed92626ad53deb3a550eb96ff730bd72009d3792f597e9d4662735b4a703",
-    "result": "PASSED",
-    "verifier_path": "tools/ember-restart-3b/verify_capability_record.py",
-    "verifier_sha256": "df6a589882b4493f3303b63939736b5d2b89d0eac417ea901034f95960f92190"
-  },
-  "goal_id": "EMBER-02",
-  "image_coordinates": [],
-  "multimodal_spans": [],
-  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "sample_id": "owned-bootstrap-reasoning-0001",
-  "schema_version": "ember-owned-bootstrap-batch-v1",
-  "slice_only": true,
-  "target_ids": [
-    2,
-    3,
-    4
-  ],
-  "token_ids": [
-    1,
-    2,
-    3
-  ],
-  "workstream_id": "EMBER-02B"
+    "active_expert":  "reasoning",
+    "capability_evidence":  {
+                                "reasoning":  {
+                                                  "operands":  [
+                                                                   1,
+                                                                   2
+                                                               ],
+                                                  "target":  3,
+                                                  "trace":  [
+                                                                1,
+                                                                2,
+                                                                3
+                                                            ]
+                                              }
+                            },
+    "capability_receipt":  {
+                               "canonical_record_sha256":  "847078e507a659de80e7d65305a709858fa03deed93dc08a8a90c5e85c25313b",
+                               "reasoning_target_sha256":  "663eed92626ad53deb3a550eb96ff730bd72009d3792f597e9d4662735b4a703",
+                               "result":  "PASSED",
+                               "verifier_path":  "tools/ember-restart-3b/verify_capability_record.py",
+                               "verifier_sha256":  "21690fd7d55b2a4376a6ae6723d68a9429eee792d3a1023cbb1e90f3f092b8a0"
+                           },
+    "goal_id":  "EMBER-02",
+    "image_coordinates":  [
+
+                          ],
+    "multimodal_spans":  [
+
+                         ],
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "sample_id":  "owned-bootstrap-reasoning-0001",
+    "schema_version":  "ember-owned-bootstrap-batch-v1",
+    "slice_only":  true,
+    "target_ids":  [
+                       2,
+                       3,
+                       4
+                   ],
+    "token_ids":  [
+                      1,
+                      2,
+                      3
+                  ],
+    "workstream_id":  "EMBER-02B"
 }

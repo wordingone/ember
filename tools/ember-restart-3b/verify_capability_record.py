@@ -11,6 +11,7 @@ import base64
 import hashlib
 import json
 import operator
+import re
 import sys
 from pathlib import Path
 from typing import Any, Mapping
@@ -90,6 +91,22 @@ def _tool_execution(record: Mapping[str, Any]) -> dict[str, Any]:
     return {"name": task["name"], "arguments": dict(task["arguments"]), "observation": dict(observed)}
 
 
+def _verify_target_transcript(record: Mapping[str, Any], *, expert: str) -> None:
+    if "target_text" not in record:
+        return
+    if not isinstance(record["target_text"], str):
+        raise ValueError("target transcript must be a string")
+    if expert == "reasoning":
+        task = _reasoning_target(record)
+        expected = f"reasoning sum {task['operands'][0]} plus {task['operands'][1]} equals {task['target']}"
+    else:
+        task = _tool_execution(record)
+        expression = task["arguments"]["expression"]
+        match = re.fullmatch(r"(-?\d+)\+(-?\d+)", expression)
+        expected = (f"tool calculator {match.group(1)} plus {match.group(2)} equals {task['observation']['value']}" if match else f"tool calculator {expression} equals {task['observation']['value']}")
+    if record["target_text"] != expected:
+        raise ValueError("target transcript does not match locally executed evidence")
+
 def expected_receipt(record: Mapping[str, Any]) -> dict[str, str] | None:
     expert = record.get("active_expert")
     if expert not in {"vision", "audio", "reasoning", "tool"}:
@@ -101,8 +118,10 @@ def expected_receipt(record: Mapping[str, Any]) -> dict[str, str] | None:
         "result": "PASSED",
     }
     if expert == "reasoning":
+        _verify_target_transcript(record, expert=expert)
         receipt["reasoning_target_sha256"] = hashlib.sha256(_canonical_bytes(_reasoning_target(record))).hexdigest()
     elif expert == "tool":
+        _verify_target_transcript(record, expert=expert)
         receipt["tool_execution_sha256"] = hashlib.sha256(_canonical_bytes(_tool_execution(record))).hexdigest()
     else:
         return None
@@ -121,15 +140,28 @@ def verify_record(record: Mapping[str, Any]) -> dict[str, str] | None:
 
 def _main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--record-json-base64", required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--record-json-base64")
+    inputs.add_argument("--records-json-base64")
+    inputs.add_argument("--records-json-stdin", action="store_true")
     arguments = parser.parse_args()
     try:
-        decoded = base64.b64decode(arguments.record_json_base64, validate=True)
-        record = json.loads(decoded)
-        if not isinstance(record, dict):
-            raise ValueError("record must be an object")
-        receipt = verify_record(record)
-        print(json.dumps({"result": "PASSED", "receipt": receipt}, sort_keys=True, separators=(",", ":")))
+        if arguments.records_json_stdin:
+            payload = json.load(sys.stdin)
+        else:
+            encoded = arguments.record_json_base64 or arguments.records_json_base64
+            decoded = base64.b64decode(encoded, validate=True)
+            payload = json.loads(decoded)
+        if arguments.record_json_base64 is not None:
+            if not isinstance(payload, dict):
+                raise ValueError("record must be an object")
+            receipt = verify_record(payload)
+            output: dict[str, object] = {"result": "PASSED", "receipt": receipt}
+        else:
+            if not isinstance(payload, list) or not payload or any(not isinstance(record, dict) for record in payload):
+                raise ValueError("records must be a nonempty array of objects")
+            output = {"result": "PASSED", "receipts": [verify_record(record) for record in payload]}
+        print(json.dumps(output, sort_keys=True, separators=(",", ":")))
         return 0
     except (ValueError, json.JSONDecodeError) as error:
         print(json.dumps({"result": "FAILED", "error": str(error)}, sort_keys=True, separators=(",", ":")))

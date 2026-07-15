@@ -22,6 +22,56 @@ SEMANTIC_CHECKS = {
     "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"],
 }
 
+# A source must be substantial before its structural records can be called semantic
+# pretraining.  These floors deliberately exclude the former one-row byte-ramp
+# fixture; they are an admission floor, not a claim of sufficient pretraining.
+CANONICAL_GENERATORS = {
+    "image": "build_owned_vision_scenes.py",
+    "audio": "build_owned_audio_frames.py",
+    "reasoning": "build_owned_reasoning_tool_trajectories.py",
+    "tool": "build_owned_reasoning_tool_trajectories.py",
+}
+
+
+def _replay_bound_specialist_records(
+    *, capability: str, generation: object, generator_path: Path, tokenizer: object,
+    raw_contract: Mapping[str, int] | None, records: list[Mapping[str, Any]],
+) -> None:
+    """Re-execute only known owned generators and compare their complete record sequence."""
+
+    if generation is None:
+        return
+    if not isinstance(generation, Mapping) or set(generation) != {"schema_version", "record_count"}:
+        raise ValueError("specialist generator replay metadata is invalid")
+    count = generation.get("record_count")
+    if generation.get("schema_version") != "ember-owned-specialist-generation-v1" or type(count) is not int or count < 512 or count != len(records):
+        raise ValueError("specialist generator replay metadata does not bind the records")
+    expected_name = CANONICAL_GENERATORS[capability]
+    if generator_path.resolve() != Path(__file__).with_name(expected_name).resolve():
+        raise ValueError("specialist generator replay requires the canonical owned generator path")
+    if capability == "image":
+        from build_owned_vision_scenes import build_records
+        if raw_contract is None:
+            raise ValueError("image generator replay lacks the bound marker")
+        replayed = build_records(tokenizer, count=count, image_marker=raw_contract["image_marker"])
+    elif capability == "audio":
+        from build_owned_audio_frames import build_records
+        if raw_contract is None:
+            raise ValueError("audio generator replay lacks the bound marker")
+        replayed = build_records(tokenizer, count=count, audio_marker=raw_contract["audio_marker"])
+    else:
+        from build_owned_reasoning_tool_trajectories import build_records
+        replayed = build_records(tokenizer, count=count, capability=capability)
+    if replayed != records:
+        raise ValueError("specialist records do not match the bound generator replay")
+
+SPECIALIST_MINIMUMS = {
+    "image": {"records": 128, "tokens": 4096, "derivation": "raw_image_property_execution"},
+    "audio": {"records": 128, "tokens": 4096, "derivation": "raw_audio_signal_execution"},
+    "reasoning": {"records": 128, "tokens": 4096, "derivation": "local_answer_execution"},
+    "tool": {"records": 128, "tokens": 4096, "derivation": "typed_tool_execution"},
+}
+
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -92,6 +142,26 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         or source.get("borrowed_labels") is not False
     ):
         raise ValueError("source manifest provenance is invalid")
+    specialist_minimum = SPECIALIST_MINIMUMS.get(capability)
+    if specialist_minimum is not None:
+        semantic_source = source.get("semantic_provenance")
+        if (
+            not isinstance(semantic_source, Mapping)
+            or semantic_source.get("schema_version") != "ember-owned-semantic-source-v1"
+            or semantic_source.get("origin") != "owned_raw_samples"
+            or semantic_source.get("target_derivation") != specialist_minimum["derivation"]
+            or not isinstance(semantic_source.get("source_description"), str)
+            or len(semantic_source["source_description"].strip()) < 40
+            or type(semantic_source.get("minimum_record_count")) is not int
+            or semantic_source["minimum_record_count"] < specialist_minimum["records"]
+            or type(semantic_source.get("minimum_token_count")) is not int
+            or semantic_source["minimum_token_count"] < specialist_minimum["tokens"]
+        ):
+            raise ValueError("semantic source provenance is insufficient for specialist pretraining")
+        generator_path = _bound_file(root, semantic_source.get("generator"), "semantic source generator")
+        if generator_path.suffix != ".py":
+            raise ValueError("semantic source generator must bind Python generator bytes")
+        generation = semantic_source.get("generation")
     tokenizer = _load_json(tokenizer_path, "tokenizer")
     vocab = tokenizer.get("model", {}).get("vocab") if isinstance(tokenizer.get("model"), dict) else None
     if not isinstance(vocab, dict) or not vocab:
@@ -99,11 +169,21 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
     vocab_size = max(vocab.values()) + 1 if all(isinstance(value, int) and value >= 0 for value in vocab.values()) else 0
     if vocab_size <= 0:
         raise ValueError("tokenizer vocabulary is invalid")
+    frozen_tokenizer = None
+    if capability in {"image", "audio", "reasoning", "tool"}:
+        try:
+            from tokenizers import Tokenizer
+            frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        except Exception as error:
+            raise ValueError(f"{capability} semantic verifier cannot load the exact frozen tokenizer") from error
     records_payload = _load_json(records_path, "records artifact")
     records = records_payload.get("records")
     if records_payload.get("schema_version") != "ember-owned-semantic-records-v1" or not isinstance(records, list) or not records:
         raise ValueError("semantic records artifact is invalid")
+    if specialist_minimum is not None:
+        _replay_bound_specialist_records(capability=capability, generation=generation, generator_path=generator_path, tokenizer=frozen_tokenizer, raw_contract=raw_contract, records=records)
     token_count = 0
+    capability_records: list[Mapping[str, Any]] = []
     for record in records:
         if not isinstance(record, Mapping):
             raise ValueError("semantic record is invalid")
@@ -150,19 +230,50 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
                     covered.update(range(start, start + length))
             if covered != positions:
                 raise ValueError(f"{capability} modality spans do not cover exactly its raw markers")
+        if capability == "image":
+            try:
+                from specialist_semantics import verify_image_supervision
+            except Exception as error:
+                raise ValueError("image semantic verifier cannot load the exact frozen tokenizer") from error
+            try:
+                verify_image_supervision(record, patches=decoded, tokenizer=frozen_tokenizer, image_marker=raw_contract["image_marker"])
+            except ValueError as error:
+                raise ValueError(str(error)) from error
+        if capability == "audio":
+            try:
+                from specialist_semantics import verify_audio_supervision
+                verify_audio_supervision(record, frames=decoded, tokenizer=frozen_tokenizer, audio_marker=raw_contract["audio_marker"])
+            except ValueError as error:
+                raise ValueError(str(error)) from error
+            except Exception as error:
+                raise ValueError("audio semantic verifier cannot load the exact frozen tokenizer") from error
         if capability in {"reasoning", "tool"}:
             if record.get("active_expert") != capability:
                 raise ValueError(f"{capability} semantic record must route to the {capability} expert")
-            encoded = base64.b64encode(json.dumps(dict(record), sort_keys=True, separators=(",", ":")).encode("utf-8")).decode("ascii")
-            completed = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("verify_capability_record.py")), "--record-json-base64", encoded], text=True, capture_output=True, timeout=15, check=False)
-            if completed.returncode != 0:
-                raise ValueError(f"{capability} semantic record local verifier failed")
-            result = json.loads(completed.stdout)
-            if not isinstance(result, dict) or result.get("result") != "PASSED" or not isinstance(result.get("receipt"), dict):
-                raise ValueError(f"{capability} semantic record lacks an executed local receipt")
+            target_text = record.get("target_text")
+            if not isinstance(target_text, str):
+                raise ValueError(f"{capability} semantic record lacks a target transcript")
+            try:
+                expected_target = list(frozen_tokenizer.encode(target_text).ids)
+            except Exception as error:
+                raise ValueError(f"{capability} semantic verifier cannot load the exact frozen tokenizer") from error
+            if len(expected_target) < 2 or token_ids != expected_target[:-1] or target_ids != expected_target[1:]:
+                raise ValueError(f"{capability} semantic target tokenization does not bind the frozen tokenizer and executed transcript")
+            capability_records.append(record)
         token_count += len(token_ids)
+    if capability_records:
+        records_json = json.dumps([dict(record) for record in capability_records], sort_keys=True, separators=(",", ":"))
+        completed = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("verify_capability_record.py")), "--records-json-stdin"], input=records_json, text=True, capture_output=True, timeout=15, check=False)
+        if completed.returncode != 0:
+            raise ValueError(f"{capability} semantic records local verifier failed")
+        result = json.loads(completed.stdout)
+        receipts = result.get("receipts") if isinstance(result, dict) else None
+        if result.get("result") != "PASSED" or not isinstance(receipts, list) or len(receipts) != len(capability_records) or any(not isinstance(receipt, dict) for receipt in receipts):
+            raise ValueError(f"{capability} semantic records lack executed local receipts")
     if data.get("record_count") != len(records) or data.get("token_count") != token_count:
         raise ValueError("data manifest counts do not match verified semantic records")
+    if specialist_minimum is not None and (len(records) < specialist_minimum["records"] or token_count < specialist_minimum["tokens"] or len(records) < semantic_source["minimum_record_count"] or token_count < semantic_source["minimum_token_count"]):
+        raise ValueError("specialist semantic data is below the nontrivial admission floor")
     return {
         "schema_version": "ember-training-data-verification-v1",
         "result": "VERIFIED",
@@ -171,6 +282,7 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         "tokenizer_sha256": tokenizer_hash,
         "verifier_sha256": _sha256(Path(__file__)),
         "data_class": "SEMANTIC_PRETRAINING",
+        "generator_replay_verified": bool(generation is not None) if specialist_minimum is not None else None,
         "record_count": len(records),
         "token_count": token_count,
         "source_manifest_sha256": _sha256(source_path),
