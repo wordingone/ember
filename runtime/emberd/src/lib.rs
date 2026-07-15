@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
@@ -89,6 +89,14 @@ pub enum EmberdError {
     InvalidPlannedOutage {
         resource: String,
         detail: String,
+    },
+    InvalidSchedulePrediction {
+        job_id: String,
+        detail: String,
+    },
+    SchedulePredictionRequired {
+        resource: String,
+        job_id: String,
     },
     PlannedOutageActive {
         resource: String,
@@ -213,6 +221,15 @@ pub struct ReceiptArtifact {
     pub path: PathBuf,
     pub sha256: String,
 }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SchedulePrediction {
+    pub job_id: String,
+    pub artifact_class: String,
+    pub predicted_duration_ms: i64,
+    pub predicted_tokens: i64,
+    pub predicted_program_completion_ms: i64,
+    pub absolute_deadline_ms: i64,
+}
 
 #[derive(Clone, Debug)]
 pub struct JobSpec {
@@ -301,6 +318,8 @@ pub struct Daemon {
     _state_writer_lock: fs::File,
     log_dir: PathBuf,
     db: Arc<Mutex<Connection>>,
+    emberd_binary_sha256: String,
+    emberd_source_sha256: String,
     #[cfg(windows)]
     live: Arc<Mutex<HashMap<String, RetainedProcess>>>,
     #[cfg(windows)]
@@ -337,6 +356,8 @@ impl Daemon {
         #[cfg(windows)]
         let monitor_shutdown = create_monitor_shutdown()?;
         let conn = Connection::open(path)?;
+        let emberd_binary_sha256 = hash_file(&std::env::current_exe()?)?;
+        let emberd_source_sha256 = emberd_source_hash();
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
             CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -345,14 +366,21 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS lease_generations(resource TEXT PRIMARY KEY, generation INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS leases(resource TEXT PRIMARY KEY, owner_job_id TEXT NOT NULL, lease_epoch INTEGER NOT NULL, acquired_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, restart_policy TEXT NOT NULL DEFAULT 'never', stdout_log_path TEXT NOT NULL, stderr_log_path TEXT NOT NULL, stdout_child_handle INTEGER NOT NULL DEFAULT 0, stderr_child_handle INTEGER NOT NULL DEFAULT 0, stdout_log_sha256 TEXT, stderr_log_sha256 TEXT, outage_event_cutoff_seq INTEGER, exit_code INTEGER, exited_at_ms INTEGER, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS schedule_runs(job_id TEXT PRIMARY KEY, artifact_class TEXT NOT NULL, predicted_at_ms INTEGER NOT NULL, predicted_duration_ms INTEGER NOT NULL, predicted_tokens INTEGER NOT NULL, predicted_program_completion_ms INTEGER NOT NULL, absolute_deadline_ms INTEGER NOT NULL, prediction_daemon_binary_sha256 TEXT NOT NULL, prediction_daemon_source_sha256 TEXT NOT NULL, measured_at_ms INTEGER, measured_duration_ms INTEGER, measured_tokens INTEGER, measurement_outcome TEXT, measurement_receipt_sha256 TEXT, measurement_daemon_binary_sha256 TEXT, measurement_daemon_source_sha256 TEXT);
             CREATE TABLE IF NOT EXISTS planned_outages(outage_id INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, starts_at_ms INTEGER NOT NULL, ends_at_ms INTEGER NOT NULL, reason TEXT NOT NULL, created_at_ms INTEGER NOT NULL, cancelled_at_ms INTEGER);
             CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);")?;
         migrate_schema(&conn, &log_dir)?;
+        conn.execute(
+            "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
+            [now_ms().to_string()],
+        )?;
         Ok(Self {
             _state_writer_lock: state_writer_lock,
             log_dir,
             db: Arc::new(Mutex::new(conn)),
+            emberd_binary_sha256,
+            emberd_source_sha256,
             #[cfg(windows)]
             live: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(windows)]
@@ -369,6 +397,13 @@ impl Daemon {
         Ok(self
             .conn()?
             .query_row("PRAGMA journal_mode", [], |r| r.get(0))?)
+    }
+    pub fn schedule_monitor_started_at_ms(&self) -> Result<i64> {
+        Ok(self.conn()?.query_row(
+            "SELECT CAST(value AS INTEGER) FROM metadata WHERE key='schedule_monitor_started_at_ms'",
+            [],
+            |row| row.get(0),
+        )?)
     }
 
     pub fn bind_identity(&self, job_id: &str, path: &Path, expected: &str) -> Result<()> {
@@ -443,9 +478,225 @@ impl Daemon {
             .optional()?)
     }
 
+    pub fn register_schedule_prediction(&self, prediction: SchedulePrediction) -> Result<()> {
+        const CLASSES: [&str; 4] = [
+            "training",
+            "capability-learning-curve",
+            "cost-model",
+            "compute-primitive",
+        ];
+        if prediction.job_id.trim().is_empty()
+            || !CLASSES.contains(&prediction.artifact_class.as_str())
+            || prediction.predicted_duration_ms <= 0
+            || prediction.predicted_tokens <= 0
+            || prediction.absolute_deadline_ms <= 0
+            || prediction.predicted_program_completion_ms <= 0
+        {
+            return Err(EmberdError::InvalidSchedulePrediction {
+                job_id: prediction.job_id,
+                detail: "closed artifact class and positive prediction fields are required".into(),
+            });
+        }
+        let predicted_at_ms = now_ms();
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let identity_exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM identities WHERE job_id=?1)",
+            [&prediction.job_id],
+            |row| row.get(0),
+        )?;
+        if !identity_exists {
+            return Err(EmberdError::IdentityNotFound {
+                job_id: prediction.job_id,
+            });
+        }
+        tx.execute(
+            "INSERT INTO schedule_runs(job_id,artifact_class,predicted_at_ms,predicted_duration_ms,predicted_tokens,predicted_program_completion_ms,absolute_deadline_ms,prediction_daemon_binary_sha256,prediction_daemon_source_sha256) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+            params![
+                prediction.job_id,
+                prediction.artifact_class,
+                predicted_at_ms,
+                prediction.predicted_duration_ms,
+                prediction.predicted_tokens,
+                prediction.predicted_program_completion_ms,
+                prediction.absolute_deadline_ms,
+                self.emberd_binary_sha256,
+                self.emberd_source_sha256,
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn record_schedule_measurement(
+        &self,
+        job_id: &str,
+        measured_duration_ms: i64,
+        measured_tokens: i64,
+        outcome: &str,
+        receipt_sha256: &str,
+    ) -> Result<()> {
+        validate_hash(receipt_sha256)?;
+        if measured_duration_ms <= 0
+            || measured_tokens <= 0
+            || !matches!(outcome, "COMPLETED" | "FAILED" | "ABORTED")
+        {
+            return Err(EmberdError::InvalidSchedulePrediction {
+                job_id: job_id.into(),
+                detail: "positive measured fields and a closed outcome are required".into(),
+            });
+        }
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE schedule_runs SET measured_at_ms=?2,measured_duration_ms=?3,measured_tokens=?4,measurement_outcome=?5,measurement_receipt_sha256=?6,measurement_daemon_binary_sha256=?7,measurement_daemon_source_sha256=?8 WHERE job_id=?1 AND measured_at_ms IS NULL",
+            params![
+                job_id,
+                now_ms(),
+                measured_duration_ms,
+                measured_tokens,
+                outcome,
+                receipt_sha256,
+                self.emberd_binary_sha256,
+                self.emberd_source_sha256,
+            ],
+        )?;
+        if changed != 1 {
+            return Err(EmberdError::InvalidSchedulePrediction {
+                job_id: job_id.into(),
+                detail: "prediction is missing or already measured".into(),
+            });
+        }
+        tx.execute(
+            "DELETE FROM leases WHERE owner_job_id=?1 AND resource LIKE 'schedule:%' AND NOT EXISTS(SELECT 1 FROM jobs WHERE job_id=?1)",
+            [job_id],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn schedule_alarm_state_at(&self, at_ms: i64) -> Result<Value> {
+        const WEEK_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+        let conn = self.conn()?;
+        let monitor_started_at_ms = conn.query_row("SELECT CAST(value AS INTEGER) FROM metadata WHERE key='schedule_monitor_started_at_ms'", [], |row| row.get(0))?;
+        let mut statement = conn.prepare(
+            "SELECT job_id,artifact_class,predicted_at_ms,predicted_duration_ms,predicted_tokens,predicted_program_completion_ms,absolute_deadline_ms,prediction_daemon_binary_sha256,prediction_daemon_source_sha256,measured_at_ms,measured_duration_ms,measured_tokens,measurement_outcome,measurement_receipt_sha256,measurement_daemon_binary_sha256,measurement_daemon_source_sha256 FROM schedule_runs ORDER BY predicted_at_ms,job_id",
+        )?;
+        let records: Vec<(
+            String,
+            String,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            String,
+            String,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                    row.get(11)?,
+                    row.get(12)?,
+                    row.get(13)?,
+                    row.get(14)?,
+                    row.get(15)?,
+                ))
+            })?
+            .collect::<std::result::Result<_, _>>()?;
+        let latest_measurement = records.iter().filter_map(|record| record.9).max();
+        let prediction_overrun = records
+            .iter()
+            .any(|record| record.9.is_none() && record.2.saturating_add(record.3) < at_ms);
+        let absolute_deadline_drift = records.iter().any(|record| record.5 > record.6);
+        let zero_schedule_receipts_7d = at_ms.saturating_sub(monitor_started_at_ms) >= WEEK_MS
+            && latest_measurement
+                .map(|latest| at_ms.saturating_sub(latest) >= WEEK_MS)
+                .unwrap_or(true);
+        let runs: Vec<Value> = records
+            .into_iter()
+            .map(|record| {
+                json!({
+                    "job_id": record.0,
+                    "artifact_class": record.1,
+                    "predicted_at_ms": record.2,
+                    "predicted_duration_ms": record.3,
+                    "predicted_tokens": record.4,
+                    "predicted_program_completion_ms": record.5,
+                    "absolute_deadline_ms": record.6,
+                    "prediction_daemon_identity": {
+                        "binary_sha256": record.7,
+                        "source_sha256": record.8,
+                    },
+                    "measured_at_ms": record.9,
+                    "measured_duration_ms": record.10,
+                    "measured_tokens": record.11,
+                    "measurement_outcome": record.12,
+                    "measurement_receipt_sha256": record.13,
+                    "measurement_daemon_identity": {
+                        "binary_sha256": record.14,
+                        "source_sha256": record.15,
+                    },
+                })
+            })
+            .collect();
+        Ok(json!({
+            "schema_version": "emberd-schedule-alarm-state-v1",
+            "generated_at_ms": at_ms,
+            "emberd_identity": {
+                "binary_sha256": self.emberd_binary_sha256,
+                "source_sha256": self.emberd_source_sha256,
+            },
+            "alarms": {
+                "prediction_overrun": prediction_overrun,
+                "zero_schedule_receipts_7d": zero_schedule_receipts_7d,
+                "absolute_deadline_drift": absolute_deadline_drift,
+            },
+            "runs": runs,
+        }))
+    }
+
+    pub fn write_schedule_alarm_state(&self, path: &Path) -> Result<()> {
+        self.write_schedule_alarm_state_at(path, now_ms())
+    }
+    pub fn write_schedule_alarm_state_at(&self, path: &Path, at_ms: i64) -> Result<()> {
+        let bytes = serde_json::to_vec_pretty(&self.schedule_alarm_state_at(at_ms)?)?;
+        atomic_replace(path, &bytes)
+    }
+
     pub fn acquire_lease(&self, resource: &str, job_id: &str) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Some(artifact_class) = resource.strip_prefix("schedule:") {
+            let predicted: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM schedule_runs WHERE job_id=?1 AND artifact_class=?2 AND measured_at_ms IS NULL)",
+                params![job_id, artifact_class],
+                |row| row.get(0),
+            )?;
+            if !predicted {
+                return Err(EmberdError::SchedulePredictionRequired {
+                    resource: resource.into(),
+                    job_id: job_id.into(),
+                });
+            }
+        }
         let owner: Option<String> = tx
             .query_row(
                 "SELECT owner_job_id FROM leases WHERE resource=?1",
@@ -1065,6 +1316,10 @@ impl Daemon {
         };
         let receipt = json!({
             "schema":"emberd-operational-receipt-v1",
+            "emberd_identity":{
+                "binary_sha256":self.emberd_binary_sha256,
+                "source_sha256":self.emberd_source_sha256
+            },
             "job_id":job_id,
             "identity_sha256":row.identity_sha256,
             "resource_lease":row.resource,
@@ -1718,6 +1973,21 @@ fn hash_file(path: &Path) -> Result<String> {
 fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+fn emberd_source_hash() -> String {
+    let sources: [&[u8]; 5] = [
+        include_bytes!("lib.rs"),
+        include_bytes!("rpc.rs"),
+        include_bytes!("main.rs"),
+        include_bytes!("../Cargo.toml"),
+        include_bytes!("../Cargo.lock"),
+    ];
+    let mut digest = Sha256::new();
+    for source in sources {
+        digest.update((source.len() as u64).to_le_bytes());
+        digest.update(source);
+    }
+    format!("{:x}", digest.finalize())
+}
 fn seal_log_hashes(tx: &rusqlite::Transaction<'_>, job_id: &str) -> Result<(String, String)> {
     let (stdout_path, stderr_path): (String, String) = tx.query_row(
         "SELECT stdout_log_path,stderr_log_path FROM jobs WHERE job_id=?1",
@@ -1778,7 +2048,7 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         [],
     )?;
     conn.execute(
-        "UPDATE metadata SET value='2' WHERE key='schema_version'",
+        "UPDATE metadata SET value='3' WHERE key='schema_version'",
         [],
     )?;
     Ok(())
@@ -1847,6 +2117,48 @@ fn same_executable(a: &str, b: &str) -> bool {
     } else {
         a == b
     }
+}
+fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temp = path.with_extension(format!("replace-{}-{}", std::process::id(), now_ms()));
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
+        let from: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
+        let to: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        if unsafe {
+            MoveFileExW(
+                from.as_ptr(),
+                to.as_ptr(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        } == 0
+        {
+            let error = std::io::Error::last_os_error();
+            let _ = fs::remove_file(&temp);
+            return Err(error.into());
+        }
+    }
+    #[cfg(not(windows))]
+    fs::rename(&temp, path)?;
+    if let Some(parent) = path.parent() {
+        if let Ok(directory) = OpenOptions::new().read(true).open(parent) {
+            let _ = directory.sync_all();
+        }
+    }
+    Ok(())
 }
 
 fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
