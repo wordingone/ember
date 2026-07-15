@@ -2,8 +2,10 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-import { existsSync } from "fs";
-import { dirname, isAbsolute, join, resolve } from "path";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { createHash } from "crypto";
+import { tmpdir } from "os";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { spawnSync } from "child_process";
 
 import type { OwnedModelIdentity, OwnedServerLaunch } from "./model-seat.ts";
@@ -12,6 +14,13 @@ interface ResolverResult {
   status: number | null;
   stdout: string;
   stderr: string;
+}
+
+export interface DevelopmentResolverBootstrap {
+  cleanup: () => void;
+  manifestSha256: string;
+  resolverPath: string;
+  runtimeIndexSha256: string;
 }
 
 export interface OwnedSeatLoaderInput {
@@ -30,8 +39,13 @@ export interface OwnedDevelopmentSeatLoaderInput {
 }
 
 export interface OwnedSeatLoaderDeps {
+  captureDevelopmentResolver?: (
+    manifestPath: string,
+    expectedSourceCommit: string,
+  ) => DevelopmentResolverBootstrap;
   exists?: (path: string) => boolean;
   execute?: (executable: string, args: string[]) => ResolverResult;
+  resolveBuildCommit?: () => string;
 }
 
 function defaultExecute(executable: string, args: string[]): ResolverResult {
@@ -44,6 +58,133 @@ function defaultExecute(executable: string, args: string[]): ResolverResult {
     status: result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
+  };
+}
+
+function sha256(payload: Uint8Array): string {
+  return createHash("sha256").update(payload).digest("hex");
+}
+
+function requireObject(value: unknown, label: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(label + " must be an object");
+  }
+  return value as Record<string, unknown>;
+}
+
+function requireExactFields(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  if (
+    actual.length !== wanted.length ||
+    actual.some((field, index) => field !== wanted[index])
+  ) {
+    throw new Error(label + " fields are not closed");
+  }
+}
+
+function parseJsonObject(payload: Uint8Array, label: string): Record<string, unknown> {
+  try {
+    return requireObject(JSON.parse(new TextDecoder().decode(payload)), label);
+  } catch (error) {
+    if (error instanceof Error && error.message.endsWith("must be an object")) throw error;
+    throw new Error(label + " is not valid JSON");
+  }
+}
+
+function resolveContainedFile(root: string, relativePath: unknown, label: string): string {
+  if (
+    typeof relativePath !== "string" ||
+    relativePath.length === 0 ||
+    isAbsolute(relativePath)
+  ) {
+    throw new Error(label + " must be bundle-relative");
+  }
+  const candidate = resolve(root, relativePath);
+  const fromRoot = relative(root, candidate);
+  if (fromRoot === ".." || fromRoot.startsWith(".." + sep)) {
+    throw new Error(label + " escapes the bundle");
+  }
+  return candidate;
+}
+
+function defaultResolveBuildCommit(): string {
+  const value = (globalThis as typeof globalThis & {
+    __EMBER_BUILD_COMMIT__?: unknown;
+  }).__EMBER_BUILD_COMMIT__;
+  if (typeof value !== "string" || !/^[0-9a-f]{40}$/.test(value)) {
+    throw new Error("compiled cockpit lacks an exact source-commit trust root");
+  }
+  return value;
+}
+
+export function captureDevelopmentResolver(
+  manifestPath: string,
+  expectedSourceCommit: string,
+): DevelopmentResolverBootstrap {
+  if (!/^[0-9a-f]{40}$/.test(expectedSourceCommit)) {
+    throw new Error("owned development source commit is invalid");
+  }
+  const manifestBytes = readFileSync(manifestPath);
+  const manifest = parseJsonObject(manifestBytes, "owned development manifest");
+  const runtimeBinding = requireObject(manifest["runtime_bundle"], "runtime_bundle");
+  requireExactFields(runtimeBinding, ["index_path", "sha256"], "runtime_bundle");
+  const expectedIndexSha256 = runtimeBinding["sha256"];
+  if (typeof expectedIndexSha256 !== "string" || !/^[0-9a-f]{64}$/.test(expectedIndexSha256)) {
+    throw new Error("runtime bundle index sha256 is invalid");
+  }
+  const bundleRoot = dirname(resolve(manifestPath));
+  const indexPath = resolveContainedFile(
+    bundleRoot,
+    runtimeBinding["index_path"],
+    "runtime bundle index",
+  );
+  const indexBytes = readFileSync(indexPath);
+  if (sha256(indexBytes) !== expectedIndexSha256) {
+    throw new Error("runtime bundle index content hash mismatch");
+  }
+  const index = parseJsonObject(indexBytes, "runtime bundle index");
+  requireExactFields(index, ["schema_version", "source_commit", "files"], "runtime bundle index");
+  if (
+    index["schema_version"] !== "ember-owned-runtime-bundle-v1" ||
+    index["source_commit"] !== expectedSourceCommit
+  ) {
+    throw new Error("runtime bundle is not bound to the exact compiled cockpit commit");
+  }
+  const files = requireObject(index["files"], "runtime bundle files");
+  const resolverRelative = "scripts/ember_restart/development_cli_seat.py";
+  const resolverBinding = requireObject(files[resolverRelative], "runtime resolver binding");
+  requireExactFields(resolverBinding, ["bytes", "sha256"], "runtime resolver binding");
+  const expectedResolverSha256 = resolverBinding["sha256"];
+  const expectedResolverBytes = resolverBinding["bytes"];
+  if (
+    typeof expectedResolverSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(expectedResolverSha256) ||
+    !Number.isSafeInteger(expectedResolverBytes) ||
+    (expectedResolverBytes as number) < 1
+  ) {
+    throw new Error("runtime resolver binding is invalid");
+  }
+  const resolverPath = resolveContainedFile(bundleRoot, resolverRelative, "runtime resolver");
+  const resolverBytes = readFileSync(resolverPath);
+  if (
+    resolverBytes.byteLength !== expectedResolverBytes ||
+    sha256(resolverBytes) !== expectedResolverSha256
+  ) {
+    throw new Error("runtime resolver bytes do not match the bundle index");
+  }
+  const snapshotRoot = mkdtempSync(join(tmpdir(), "ember-development-resolver-"));
+  const snapshotPath = join(snapshotRoot, "development_cli_seat.py");
+  writeFileSync(snapshotPath, resolverBytes, { flag: "wx" });
+  return {
+    cleanup: () => rmSync(snapshotRoot, { force: true, recursive: true }),
+    manifestSha256: sha256(manifestBytes),
+    resolverPath: snapshotPath,
+    runtimeIndexSha256: expectedIndexSha256,
   };
 }
 
@@ -292,17 +433,25 @@ export function loadOwnedDevelopmentIdentity(
     return undefined;
   }
 
-  const resolverPath = resolve(
-    dirname(manifestPath),
-    "scripts",
-    "ember_restart",
-    "development_cli_seat.py",
+  const expectedSourceCommit = (deps.resolveBuildCommit ?? defaultResolveBuildCommit)();
+  const bootstrap = (deps.captureDevelopmentResolver ?? captureDevelopmentResolver)(
+    manifestPath,
+    expectedSourceCommit,
   );
-  if (!exists(resolverPath)) {
-    throw new Error("owned development seat resolver does not exist: " + resolverPath);
-  }
   const pythonExecutable = input.pythonExecutable ?? "python";
-  const result = execute(pythonExecutable, [resolverPath, manifestPath]);
+  let result: ResolverResult;
+  try {
+    result = execute(pythonExecutable, [
+      bootstrap.resolverPath,
+      manifestPath,
+      "--expected-manifest-sha256",
+      bootstrap.manifestSha256,
+      "--expected-runtime-index-sha256",
+      bootstrap.runtimeIndexSha256,
+    ]);
+  } finally {
+    bootstrap.cleanup();
+  }
   if (result.status !== 0) {
     throw new Error("owned development seat rejected: " + resolverError(result));
   }
