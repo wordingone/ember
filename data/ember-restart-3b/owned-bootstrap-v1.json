@@ -19,7 +19,7 @@
     "reasoning_target_sha256": "663eed92626ad53deb3a550eb96ff730bd72009d3792f597e9d4662735b4a703",
     "result": "PASSED",
     "verifier_path": "tools/ember-restart-3b/verify_capability_record.py",
-    "verifier_sha256": "df6a589882b4493f3303b63939736b5d2b89d0eac417ea901034f95960f92190"
+    "verifier_sha256": "dd37e5226b159f140db650e3e7eb40ae311e19125845005ee93f2f0de8b1dce2"
   },
   "goal_id": "EMBER-02",
   "image_coordinates": [],
