@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import deque
+import struct
 from typing import Mapping, Sequence
 
 IMAGE_WIDTH = 48
@@ -75,3 +76,27 @@ def verify_image_supervision(
     target_ids = record.get("target_ids")
     if len(encoded) < 2 or target_ids != [*[image_marker] * (len(patches) - 1), *encoded] or token_ids != [*[image_marker] * len(patches), *encoded[:-1]]:
         raise ValueError("image semantic target tokenization does not bind the frozen tokenizer and raw scene")
+
+def _audio_frame_polarity(frame: bytes) -> str:
+    if len(frame) != 640 * 2:
+        raise ValueError("audio frame does not have the authorized 640-sample int16 shape")
+    total = sum(struct.unpack("<640h", frame))
+    return "positive" if total > 0 else "negative" if total < 0 else "silent"
+
+
+def audio_caption(frames: Sequence[bytes]) -> str:
+    if not frames:
+        raise ValueError("audio supervision requires at least one raw frame")
+    counts = {name: sum(_audio_frame_polarity(frame) == name for frame in frames) for name in ("positive", "negative", "silent")}
+    return "audio signal has {positive} positive frames {negative} negative frames {silent} silent frames".format(**counts)
+
+
+def verify_audio_supervision(record: Mapping[str, object], *, frames: Sequence[bytes], tokenizer: object, audio_marker: int) -> None:
+    """Prove target IDs encode the caption recomputed from exact raw PCM frames."""
+    caption = audio_caption(frames)
+    expected_evidence = {"audio": {"caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "derivation": "raw_audio_signal_execution"}}
+    if record.get("capability_evidence") != expected_evidence or record.get("target_text") != caption:
+        raise ValueError("audio semantic target is not the locally derived raw-signal caption")
+    encoded = list(tokenizer.encode(caption).ids)
+    if len(encoded) < 2 or record.get("target_ids") != [*[audio_marker] * (len(frames) - 1), *encoded] or record.get("token_ids") != [*[audio_marker] * len(frames), *encoded[:-1]]:
+        raise ValueError("audio semantic target tokenization does not bind the frozen tokenizer and raw signal")
