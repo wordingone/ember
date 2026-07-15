@@ -410,11 +410,25 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "model config"):
                     serve_main([
                         "--checkpoint", str(checkpoint), "--tokenizer", "tokenizer.json", "--config", str(config),
-                        "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                        "--development-manifest", "development.json", "--expected-development-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64, "--mode", "INTERACTIVE",
                         "--parent-pid", str(os.getpid()), "--device", "cpu",
                     ])
             tokenizer.assert_not_called()
             loader.assert_not_called()
+    def test_development_main_requires_both_hashes_before_side_effects(self) -> None:
+        for option in ("--expected-development-manifest-sha256", "--expected-runtime-index-sha256"):
+            with self.subTest(option=option), patch("serve_owned_openai.start_parent_watchdog") as watchdog, patch("serve_owned_openai.resolve_development_identity") as resolver, patch("serve_owned_openai.load_frozen_tokenizer") as tokenizer, patch("serve_owned_openai.load_development_shared_runtime") as loader:
+                args = ["--checkpoint", "checkpoint", "--tokenizer", "tokenizer.json", "--config", "config.json", "--development-manifest", "development.json", "--mode", "INTERACTIVE", "--parent-pid", str(os.getpid())]
+                if option != "--expected-development-manifest-sha256":
+                    args.extend(["--expected-development-manifest-sha256", "a" * 64])
+                if option != "--expected-runtime-index-sha256":
+                    args.extend(["--expected-runtime-index-sha256", "b" * 64])
+                with self.assertRaisesRegex(ValueError, "exact manifest and runtime-index"):
+                    serve_main(args)
+                watchdog.assert_not_called()
+                resolver.assert_not_called()
+                tokenizer.assert_not_called()
+                loader.assert_not_called()
     def test_development_main_binds_exact_config_and_constructs_resolved_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -439,17 +453,18 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             server = MagicMock()
             with (
                 patch("serve_owned_openai.start_parent_watchdog"),
-                patch("serve_owned_openai.resolve_development_identity", return_value=development),
+                patch("serve_owned_openai.resolve_development_identity", return_value=development) as resolver,
                 patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256=tokenizer_sha256)) as tokenizer,
                 patch("serve_owned_openai.load_development_shared_runtime", return_value=object()) as loader,
                 patch("serve_owned_openai.create_loopback_server", return_value=server) as create,
             ):
                 result = serve_main([
                     "--checkpoint", str(checkpoint), "--tokenizer", str(tokenizer_path), "--config", str(config),
-                    "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                    "--development-manifest", "development.json", "--expected-development-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64, "--mode", "INTERACTIVE",
                     "--parent-pid", str(os.getpid()), "--device", "cpu",
                 ])
         self.assertEqual(result, 0)
+        resolver.assert_called_once_with(Path("development.json"), expected_manifest_sha256="a" * 64, expected_runtime_index_sha256="b" * 64)
         loader.assert_called_once_with(checkpoint=checkpoint, config_path=config, checkpoint_manifest={}, device="cpu", config_bytes=b"{}")
         tokenizer.assert_called_once_with(tokenizer_path, expected_sha256=tokenizer_sha256, snapshot_bytes=b"{}")
         runtime = create.call_args.args[0]
@@ -479,7 +494,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "server source"):
                 serve_main([
                     "--checkpoint", "checkpoint", "--tokenizer", "tokenizer.json", "--config", "config.json",
-                    "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                    "--development-manifest", "development.json", "--expected-development-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64, "--mode", "INTERACTIVE",
                     "--parent-pid", str(os.getpid()), "--device", "cpu",
                 ])
         tokenizer.assert_not_called()
@@ -522,12 +537,25 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
             calls.append(command)
             return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
-        self.assertEqual(resolve_development_identity(Path("development.json"), runner=runner), payload)
+        self.assertEqual(
+            resolve_development_identity(
+                Path("development.json"),
+                expected_manifest_sha256="a" * 64,
+                expected_runtime_index_sha256="b" * 64,
+                runner=runner,
+            ),
+            payload,
+        )
         self.assertEqual(calls[0][1], "-I")
-        self.assertEqual(calls[0][-1], "development.json")
+        self.assertEqual(calls[0][-4:], ["--expected-manifest-sha256", "a" * 64, "--expected-runtime-index-sha256", "b" * 64])
         payload["claim_status"] = "ADMISSIBLE"
         with self.assertRaisesRegex(ValueError, "invalid identity"):
-            resolve_development_identity(Path("development.json"), runner=runner)
+            resolve_development_identity(
+                Path("development.json"),
+                expected_manifest_sha256="a" * 64,
+                expected_runtime_index_sha256="b" * 64,
+                runner=runner,
+            )
     def test_central_admission_requires_exact_resolved_owned_seat(self) -> None:
         checkpoint = "a" * 64
         payload = {
