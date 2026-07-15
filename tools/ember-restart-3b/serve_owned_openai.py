@@ -53,8 +53,34 @@ class OwnedIdentity:
         }
 
 
+@dataclass(frozen=True)
+class DevelopmentIdentity:
+    checkpoint_sha256: str
+    model_config_sha256: str
+    tokenizer_sha256: str
+    server_source_sha256: str
+    tokens_seen: int
+    allocated_parameters: int
+    active_parameters: int
+    seat: str = "OWNED_DEVELOPMENT"
+    claim_status: str = "NON_ADMISSIBLE"
+
+    @property
+    def model_name(self) -> str:
+        return "ember-owned-development:" + self.checkpoint_sha256[:12]
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "object": "list", "data": [{"id": self.model_name, "object": "model"}],
+            "seat": self.seat, "claim_status": self.claim_status,
+            "checkpoint_sha256": self.checkpoint_sha256, "model_name": self.model_name,
+            "model_config_sha256": self.model_config_sha256, "tokenizer_sha256": self.tokenizer_sha256,
+            "server_source_sha256": self.server_source_sha256, "tokens_seen": self.tokens_seen,
+            "allocated_parameters": self.allocated_parameters, "active_parameters": self.active_parameters,
+        }
+
 class OwnedChatRuntime(Protocol):
-    identity: OwnedIdentity
+    identity: OwnedIdentity | DevelopmentIdentity
 
     def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str | None, max_tokens: int) -> tuple[str, str]: ...
 
@@ -201,6 +227,20 @@ def resolve_central_owned_admission(
         raise ValueError("central admission model name does not match loaded checkpoint")
     return payload
 
+def resolve_development_identity(development_manifest: Path, *, runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None) -> dict[str, object]:
+    command = [sys.executable, "-I", str(ROOT / "scripts" / "ember_restart" / "development_cli_seat.py"), str(development_manifest)]
+    completed = runner(command) if runner is not None else subprocess.run(command, text=True, capture_output=True, timeout=120, check=False)
+    if completed.returncode != 0:
+        raise ValueError("development seat resolver rejected the manifest")
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("development seat resolver returned invalid JSON") from exc
+    required = {"valid": True, "seat": "OWNED_DEVELOPMENT", "claim_status": "NON_ADMISSIBLE"}
+    if not isinstance(payload, dict) or any(payload.get(key) != value for key, value in required.items()):
+        raise ValueError("development seat resolver returned an invalid identity")
+    return payload
+
 def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, mode: RuntimeMode) -> ThreadingHTTPServer:
     """Create a local-only server whose identity and completions share one runtime object."""
 
@@ -261,14 +301,18 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, m
                 self._write(400, _error("max_tokens must be an integer in [1, 1024]"))
                 return
             text, finish_reason = runtime.chat(messages, frozen_row_id=frozen_row_id, max_tokens=max_tokens)
-            self._write(200, {
+            completion = {
                 "id": "chatcmpl-owned-" + runtime.identity.checkpoint_sha256[:12],
                 "object": "chat.completion",
-                "created": int(time.time()),
-                "model": runtime.identity.model_name,
+                "created": int(time.time()), "model": runtime.identity.model_name,
                 "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": finish_reason}],
                 "owned_identity": runtime.identity.payload(),
-            })
+            }
+            if request.get("stream") is True:
+                self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.send_header("Cache-Control", "no-cache"); self.end_headers()
+                self.wfile.write(("data: " + json.dumps(completion, sort_keys=True, separators=(",", ":")) + "\n\ndata: [DONE]\n\n").encode("utf-8")); self.wfile.flush()
+                return
+            self._write(200, completion)
 
     return ThreadingHTTPServer((host, port), Handler)
 
@@ -374,8 +418,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--tokenizer", type=Path, required=True)
-    parser.add_argument("--run-manifest", type=Path, required=True)
-    parser.add_argument("--trusted-verifier-registry", type=Path, required=True)
+    authority = parser.add_mutually_exclusive_group(required=True)
+    authority.add_argument("--run-manifest", type=Path)
+    authority.add_argument("--development-manifest", type=Path)
+    parser.add_argument("--trusted-verifier-registry", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--mode", choices=("INTERACTIVE", "FROZEN_EVAL"), required=True)
     parser.add_argument("--parent-pid", type=int, required=True)
@@ -385,14 +431,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     frozen_split = resolve_runtime_inputs(args.mode, args.frozen_split)
     start_parent_watchdog(args.parent_pid)
-    runtime = LoadedOwnedRuntime.from_paths(
-        checkpoint=args.checkpoint,
-        tokenizer_path=args.tokenizer,
-        run_manifest=args.run_manifest,
-        trusted_verifier_registry=args.trusted_verifier_registry,
-        device=args.device,
-        frozen_split=frozen_split,
-    )
+    if args.development_manifest is not None:
+        development = resolve_development_identity(args.development_manifest)
+        config_path = ROOT / "configs" / "ember-restart-3b.json"
+        checkpoint_manifest = args.checkpoint / "checkpoint-manifest.json"
+        if sha(checkpoint_manifest) != development["checkpoint_sha256"] or sha(config_path) != development["model_config_sha256"]:
+            raise ValueError("development authority does not match checkpoint/config bytes")
+        tokenizer = load_frozen_tokenizer(args.tokenizer, expected_sha256=str(development["tokenizer_sha256"]))
+        model = UnifiedDecoder(RestartDecoderConfig.from_contract(config_path), device=args.device, allow_production_allocation=True).eval()
+        manifest = json.loads(checkpoint_manifest.read_text(encoding="utf-8"))
+        load_checkpoint_artifacts(model, None, args.checkpoint, {**manifest, "checkpoint_manifest_sha256": development["checkpoint_sha256"]})
+        identity = DevelopmentIdentity(checkpoint_sha256=str(development["checkpoint_sha256"]), model_config_sha256=str(development["model_config_sha256"]), tokenizer_sha256=tokenizer.sha256, server_source_sha256=sha(Path(__file__)), tokens_seen=int(development["tokens_seen"]), allocated_parameters=int(development["allocated_parameters"]), active_parameters=int(development["active_parameters"]))
+        runtime = LoadedOwnedRuntime(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(args.device), frozen_split=frozen_split)
+    else:
+        if args.trusted_verifier_registry is None:
+            raise ValueError("admitted server requires trusted verifier registry")
+        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, device=args.device, frozen_split=frozen_split)
     server = create_loopback_server(runtime, host=args.host, port=args.port, mode=args.mode)
     server.serve_forever()
     return 0
