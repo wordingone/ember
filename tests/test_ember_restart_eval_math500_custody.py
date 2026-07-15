@@ -10,6 +10,7 @@ MANIFEST = Path(__file__).resolve().parents[1] / "manifests" / "ember-restart-ev
 def test_math500_exact_mit_revision_and_frozen_test_split_are_custody_bound():
     custody = json.loads(MANIFEST.read_text(encoding="utf-8"))
     math = custody["mathematics"]
+    assert math["asset_disposition"] == "FROZEN_MATH500_TASKS_AND_DETERMINISTIC_SCORER_NO_CHECKPOINT_BOUND_PREDICTIONS"
     assert math["frozen_math500"] == {
         "revision": "2cd6fe926f1203a15d19f73c9a329cbe62b806fd",
         "rows": 500,
