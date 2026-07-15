@@ -366,7 +366,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
             raise ValueError("external parent has invalid trained expert history")
         expected_history = [*parent_history, *([] if active_expert in parent_history else [active_expert])]
         episode = lineage.get("episode")
-        receipt_fields = {"schema_version", "result", "capability", "data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "data_class", "record_count", "token_count", "source_manifest_sha256", "records_artifact_sha256", "semantic_checks"}
+        receipt_fields = {"schema_version", "result", "capability", "data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "data_class", "record_count", "token_count", "source_manifest_sha256", "records_artifact_sha256", "semantic_checks", "generator_replay_verified"}
         capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
         if (not isinstance(episode, Mapping) or set(episode) != {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256"}
                 or episode.get("active_expert") != active_expert or not isinstance(episode.get("data_verification_receipt"), Mapping)):
@@ -374,6 +374,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         verification = episode["data_verification_receipt"]
         if (set(verification) != receipt_fields or verification.get("schema_version") != "ember-training-data-verification-v1"
                 or verification.get("result") != "VERIFIED" or verification.get("data_class") != "SEMANTIC_PRETRAINING"
+                or verification.get("generator_replay_verified") is not True
                 or capability_experts.get(verification.get("capability")) != active_expert):
             raise ValueError("specialist v4 lineage has an invalid data verification receipt")
         canonical = hashlib.sha256(json.dumps(dict(verification), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
