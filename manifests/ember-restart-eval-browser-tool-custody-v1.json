@@ -20,6 +20,12 @@
       "outcome": "COMPLETED",
       "receipt_sha256": "f2aafee550b4252f2b352c92d93224fd0c86e1954fc9ff782bd51d2522b0d622"
     },
+    "frozen_static_non_live": {
+      "categories": ["simple_python", "simple_java", "simple_javascript", "multiple", "parallel", "parallel_multiple", "irrelevance"],
+      "file_count": 7,
+      "tree_sha256": "9d83acb5c37b78d87dd4ad12ccebad360376e3bbdae457c60079aeb6d191424d",
+      "execution_permitted": false
+    },
     "asset_disposition": "PINNED_BFCL_SOURCE_NO_LOCAL_RUNTIME_OR_FROZEN_TASKS",
     "target_execution_permitted": false
   }
