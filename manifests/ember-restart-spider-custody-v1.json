@@ -1,24 +1,29 @@
 {
-  "goal_id": "EMBER-02",
-  "workstream_id": "EMBER-02C",
-  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "schema_version": "ember-restart-benchmark-custody-v1",
-  "benchmark_id": "spider",
-  "benchmark_version": "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c",
-  "upstream_url": "https://github.com/taoyds/spider.git",
-  "upstream_tree_git_sha1": "7687d1f709b5f2a645835d0c6c2ac13796e33491",
-  "license": "Apache-2.0",
-  "license_sha256": "a8d1d88a0f9cce3cdbff73b03a80dc5e5d69e3ba2443946c268815a550c9e0ec",
-  "evaluator": {
-    "path": "evaluation.py",
-    "sha256": "c61f18f40bec5af1984af0e8731e678f6cee7976611d910e6e5c144d757fd827"
-  },
-  "frozen_evaluation_assets": {
-    "gold_sql": "ABSENT",
-    "tables_json": "ABSENT",
-    "database_directory": "ABSENT",
-    "examples": "SOURCE_EXAMPLES_ONLY_FORBIDDEN_AS_EVALUATION_DATA"
-  },
-  "target_training_access": "FORBIDDEN",
-  "admission": "NOT_EXECUTABLE_NO_FROZEN_GOLD_AND_DATABASE"
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-benchmark-custody-v1",
+    "benchmark_id":  "spider",
+    "benchmark_version":  "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c",
+    "upstream_url":  "https://github.com/taoyds/spider.git",
+    "upstream_tree_git_sha1":  "7687d1f709b5f2a645835d0c6c2ac13796e33491",
+    "license":  "Apache-2.0",
+    "license_sha256":  "a8d1d88a0f9cce3cdbff73b03a80dc5e5d69e3ba2443946c268815a550c9e0ec",
+    "evaluator":  {
+                      "path":  "evaluation.py",
+                      "sha256":  "c61f18f40bec5af1984af0e8731e678f6cee7976611d910e6e5c144d757fd827"
+                  },
+    "frozen_evaluation_assets":  {
+                                     "gold_sql":  "ABSENT",
+                                     "tables_json":  "ABSENT",
+                                     "database_directory":  "ABSENT",
+                                     "examples":  "SOURCE_EXAMPLES_ONLY_FORBIDDEN_AS_EVALUATION_DATA"
+                                 },
+    "target_training_access":  "FORBIDDEN",
+    "admission":  "NOT_EXECUTABLE_NO_FROZEN_GOLD_AND_DATABASE",
+    "source_only_audit":  {
+                              "artifact_sha256":  "ac3f513e8e6a2436379b5db85269c86568f81285e7dd9603aa66c2d244895e31",
+                              "runner_receipt_sha256":  "fd3c3af5f5300c4c288a2ef8181c0bc08d40beee5a5d7c1254a79d4ee8fbfd71",
+                              "claim_status":  "SOURCE_ONLY_NO_FROZEN_SQL_EVALUATION_ASSETS"
+                          }
 }
