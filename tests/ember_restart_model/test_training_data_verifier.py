@@ -27,6 +27,20 @@ def _write_json(path: Path, payload: object) -> str:
 
 
 class TrainingDataVerifierTests(unittest.TestCase):
+    def test_audio_manifest_rejects_raw_frames_with_fabricated_caption_target(self) -> None:
+        from tokenizers import Tokenizer, models, pre_tokenizers
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); tokenizer = root / "tokenizer.json"
+            frozen = Tokenizer(models.WordLevel({**{"<unk>": 0, "audio": 1, "signal": 2, "has": 3, "positive": 4, "negative": 5, "silent": 6, "frames": 7, "0": 8}, **{f"token-{index}": index for index in range(9, 32_000)}}, unk_token="<unk>")); frozen.pre_tokenizer = pre_tokenizers.Whitespace(); frozen.save(str(tokenizer)); tokenizer_hash = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
+            config = root / "config.json"; config_hash = _write_json(config, {"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}})
+            source = root / "source.json"; source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "audio", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_audio_signal_execution", "source_description": "Owned PCM signal generator with labels recomputed from raw samples.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            raw = base64.b64encode(b"\x00" * (640 * 2)).decode("ascii")
+            record = {"active_expert": "audio", "token_ids": [31_999, 1], "target_ids": [1, 2], "audio_frames_i16le_base64": [raw], "image_coordinates": [], "multimodal_spans": [{"start": 0, "length": 1, "modality": "audio", "attention_mode": "causal"}], "target_text": "fabricated label", "capability_evidence": {"audio": {"caption_sha256": "0" * 64, "derivation": "raw_audio_signal_execution"}}}
+            records = root / "records.json"; records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": [record]})
+            data = root / "data.json"; _write_json(data, {"schema_version": "ember-owned-training-data-v1", "capability": "audio", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 1, "token_count": 2, "model_config": {"path": "config.json", "sha256": config_hash}, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
+            completed = subprocess.run([sys.executable, str(VERIFIER), "--data-manifest", str(data), "--tokenizer", str(tokenizer), "--capability", "audio"], cwd=root, text=True, capture_output=True, timeout=15, check=False)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("locally derived raw-signal caption", completed.stderr)
     def test_image_manifest_rejects_raw_patch_with_fabricated_caption_target(self) -> None:
         from tokenizers import Tokenizer, models, pre_tokenizers
 

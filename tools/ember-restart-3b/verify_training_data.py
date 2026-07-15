@@ -187,6 +187,16 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
                 verify_image_supervision(record, patches=decoded, tokenizer=frozen_tokenizer, image_marker=raw_contract["image_marker"])
             except ValueError as error:
                 raise ValueError(str(error)) from error
+        if capability == "audio":
+            try:
+                from tokenizers import Tokenizer
+                from specialist_semantics import verify_audio_supervision
+                frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
+                verify_audio_supervision(record, frames=decoded, tokenizer=frozen_tokenizer, audio_marker=raw_contract["audio_marker"])
+            except ValueError as error:
+                raise ValueError(str(error)) from error
+            except Exception as error:
+                raise ValueError("audio semantic verifier cannot load the exact frozen tokenizer") from error
         if capability in {"reasoning", "tool"}:
             if record.get("active_expert") != capability:
                 raise ValueError(f"{capability} semantic record must route to the {capability} expert")

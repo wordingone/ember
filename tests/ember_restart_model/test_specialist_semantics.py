@@ -47,5 +47,16 @@ class SpecialistSemanticTests(unittest.TestCase):
             verify_image_supervision(record, patches=patches, tokenizer=tokenizer, image_marker=31_998)
 
 
+    def test_raw_audio_frames_require_locally_derived_signal_caption(self) -> None:
+        from specialist_semantics import audio_caption, verify_audio_supervision
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "audio": 1, "signal": 2, "has": 3, "positive": 4, "negative": 5, "silent": 6, "frames": 7, "0": 8, "1": 9, "2": 10}, unk_token="<unk>")); tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        frame = b"".join(int(value).to_bytes(2, "little", signed=True) for value in ([100, -100, 100, -100] * 160)); frames = [frame, frame]
+        caption = audio_caption(frames); encoded = list(tokenizer.encode(caption).ids)
+        record = {"token_ids": [31_999, 31_999, *encoded[:-1]], "target_ids": [31_999, *encoded], "target_text": caption, "capability_evidence": {"audio": {"caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "derivation": "raw_audio_signal_execution"}}}
+        verify_audio_supervision(record, frames=frames, tokenizer=tokenizer, audio_marker=31_999)
+        record["capability_evidence"]["audio"]["caption_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "locally derived"):
+            verify_audio_supervision(record, frames=frames, tokenizer=tokenizer, audio_marker=31_999)
+
 if __name__ == "__main__":
     unittest.main()
