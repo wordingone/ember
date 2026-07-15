@@ -1,37 +1,81 @@
 {
-  "goal_id": "EMBER-02",
-  "workstream_id": "EMBER-02C",
-  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "schema_version": "ember-restart-eval/v1",
-  "manifest_kind": "precheckpoint_template",
-  "execution_status": "NOT_EXECUTABLE_NO_OWNED_CHECKPOINT",
-  "target": {
-    "kind": "pending_owned_checkpoint",
-    "checkpoint_sha256": null,
-    "lineage_manifest": null,
-    "required_before_admission": ["run_id", "parent_null_genesis", "checkpoint_file_hashes", "model_config_hash", "tokenizer_hash", "data_manifest_hash", "optimizer_rng_resume_receipt", "prompt_tool_protocol_hash"]
-  },
-  "comparators": [],
-  "comparator_policy": {
-    "required_classes": ["open_3b", "open_27b_or_31b"],
-    "role": "comparison_only",
-    "prohibited": ["training", "judging", "filtering", "labeling", "routing", "target_lineage"]
-  },
-  "inherited_frozen_text_code_suite": {
-    "harness_commit": "97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176",
-    "splits": {
-      "MMLU-Pro": "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
-      "GSM8K": "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
-      "MATH-500": "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
-      "ARC-Challenge": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
-      "HumanEval+": "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
-      "MBPP": "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
-      "HellaSwag": "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f"
-    },
-    "scope_limit": "text and code only; cannot establish native image, audio, browser, terminal, SQL, or tool capability"
-  },
-  "required_new_families": ["terminal", "sql", "browser_ui", "image", "audio", "structured_tools", "efficiency", "retention", "deletion_ablation"],
-  "per_family_freeze_fields": ["benchmark_source_revision", "dataset_split_sha256", "harness_commit", "prompt_or_tool_protocol_sha256", "scoring_protocol_sha256", "resource_budget", "disk_budget_receipt", "target_checkpoint_sha256", "comparator_revision"],
-  "execution": {"runner": "disk_budget_runner.py", "receipt_namespace": "receipts/ember-restart-evaluation"},
-  "claim_rule": "No result is admissible until every required native capability family has a checkpoint-bound frozen score or a visible failure record."
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-eval/v1",
+    "manifest_kind":  "precheckpoint_template",
+    "execution_status":  "STRUCTURAL_INPUT_AVAILABLE_EXECUTION_AUTHORITY_REFUSES",
+    "target":  {
+                   "kind":  "v3_shared_route_structural_checkpoint",
+                   "checkpoint_sha256":  "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+                   "lineage_manifest":  "af954c22fb8fb7a0dc640bfd2e0ab97e8e4cde989607372fc45c3db7878699a4",
+                   "required_before_admission":  [
+                                                     "trusted_hardened_counter_receipt",
+                                                     "same_byte_runtime_binding",
+                                                     "canonical_checkpoint_predictions",
+                                                     "frozen_benchmark_scores"
+                                                 ],
+                   "model_config_sha256":  "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+                   "active_route":  "shared",
+                   "active_parameter_count":  1020589568,
+                   "capability_admission":  "FORBIDDEN_UNTRAINED_SHARED_ROUTE"
+               },
+    "comparators":  [
+
+                    ],
+    "comparator_policy":  {
+                              "required_classes":  [
+                                                       "open_3b",
+                                                       "open_27b_or_31b"
+                                                   ],
+                              "role":  "comparison_only",
+                              "prohibited":  [
+                                                 "training",
+                                                 "judging",
+                                                 "filtering",
+                                                 "labeling",
+                                                 "routing",
+                                                 "target_lineage"
+                                             ]
+                          },
+    "inherited_frozen_text_code_suite":  {
+                                             "harness_commit":  "97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176",
+                                             "splits":  {
+                                                            "MMLU-Pro":  "5fdd1b7583302292e6d71ecf27cec521ad532bf24773beed7c5f9fd382a1b8f5",
+                                                            "GSM8K":  "fb581f0270b25988e071316835842a1c8449f4e27af6fc0f539ef270b987f9ff",
+                                                            "MATH-500":  "200806fb17234213e909649c09a14ce01ef836b32d3bcb1a261fcf96cda4470f",
+                                                            "ARC-Challenge":  "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+                                                            "HumanEval+":  "4e8dbe9885c253ae507acd46b280ec7085db7c889316a87d8954ae25f4eedef2",
+                                                            "MBPP":  "88d690200dbe7f37274844b41276646481b217c4995df688914b5fb3eced79ce",
+                                                            "HellaSwag":  "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f"
+                                                        },
+                                             "scope_limit":  "text and code only; cannot establish native image, audio, browser, terminal, SQL, or tool capability"
+                                         },
+    "required_new_families":  [
+                                  "terminal",
+                                  "sql",
+                                  "browser_ui",
+                                  "image",
+                                  "audio",
+                                  "structured_tools",
+                                  "efficiency",
+                                  "retention",
+                                  "deletion_ablation"
+                              ],
+    "per_family_freeze_fields":  [
+                                     "benchmark_source_revision",
+                                     "dataset_split_sha256",
+                                     "harness_commit",
+                                     "prompt_or_tool_protocol_sha256",
+                                     "scoring_protocol_sha256",
+                                     "resource_budget",
+                                     "disk_budget_receipt",
+                                     "target_checkpoint_sha256",
+                                     "comparator_revision"
+                                 ],
+    "execution":  {
+                      "runner":  "disk_budget_runner.py",
+                      "receipt_namespace":  "receipts/ember-restart-evaluation"
+                  },
+    "claim_rule":  "No result is admissible until every required native capability family has a checkpoint-bound frozen score or a visible failure record."
 }
