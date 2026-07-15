@@ -6,6 +6,9 @@
 from __future__ import annotations
 
 import inspect
+import hashlib
+import json
+import tempfile
 
 import sys
 import subprocess
@@ -20,9 +23,31 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import run_vertical_slice
+from verify_capability_record import expected_receipt
 
 
 class RunnerPreflightTests(unittest.TestCase):
+    def test_specialist_loader_executes_bound_verifier_and_returns_one_route(self) -> None:
+        def write_json(path: Path, payload: object) -> str:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tokenizer = root / "tokenizer.json"
+            tokenizer_hash = write_json(tokenizer, {"model": {"vocab": {str(index): index for index in range(8, 32)}}})
+            source = root / "source.json"
+            source_hash = write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False})
+            record = {"schema_version": "ember-owned-bootstrap-batch-v1", "active_expert": "reasoning", "token_ids": [8, 9, 10], "target_ids": [9, 10, 11], "image_coordinates": [], "multimodal_spans": [], "capability_evidence": {"reasoning": {"operands": [1, 2], "target": 3, "trace": [1, 2, 3]}}}
+            record["capability_receipt"] = expected_receipt(record)
+            records = root / "records.json"
+            records_hash = write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": [record]})
+            manifest = root / "manifest.json"
+            write_json(manifest, {"schema_version": "ember-owned-training-data-v1", "capability": "reasoning", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 1, "token_count": 3, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
+            records_out, verification = run_vertical_slice.load_verified_specialist_records(root=root, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
+        self.assertEqual(records_out, [record])
+        self.assertEqual(verification["result"], "VERIFIED")
+        self.assertEqual(verification["capability"], "reasoning")
     def test_production_optimizer_uses_declared_paged_8bit_adamw_state(self) -> None:
         calls: dict[str, object] = {}
 
@@ -111,6 +136,11 @@ class RunnerPreflightTests(unittest.TestCase):
             resume_checkpoint=None,
         )
 
+    def test_specialist_cli_dispatches_one_verified_route(self) -> None:
+        with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image"]):
+                run_vertical_slice.main()
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=None)
     def test_runner_file_exposes_the_semantic_cli_entrypoint(self) -> None:
         completed = subprocess.run(
             [sys.executable, str(ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"), "semantic", "--help"],
