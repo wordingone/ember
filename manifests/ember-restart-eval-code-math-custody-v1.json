@@ -13,6 +13,12 @@
                                                    }
                            },
     "mathematics":  {
+                          "candidate_dataset":  "HuggingFaceH4/MATH-500",
+                          "candidate_revision":  "6e4ed1a2a79af7d8630a6b768ec859cb5af4d3be",
+                          "config":  "default",
+                          "split":  "test",
+                          "rows":  500,
+                          "license_disposition":  "UNDECLARED_IN_EXACT_DATASET_CARD",
                           "asset_disposition":  "NO_LOCAL_PINNED_FROZEN_MATHEMATICS_TASKS_OR_HARNESS",
                           "target_execution_permitted":  false
                       },
