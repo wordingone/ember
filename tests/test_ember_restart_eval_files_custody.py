@@ -19,5 +19,7 @@ def test_files_family_is_explicitly_held_without_pinned_tasks_or_runtime():
     assert value["license_sha256"] == "2bd2e08df7147f67a69b42c10efae09bd4bf119df397371036187d5dd1b02f57"
     assert value["materialization"]["receipt_sha256"] == "b153682746bfcfacbe3f33d8f8749f13f59ea1bd5f17dc937143852c865a8f5c"
     assert value["admission"] == "NOT_EXECUTABLE_NO_FROZEN_FILE_TASK_ASSETS"
+    candidate = value['candidate_task_release']
+    assert candidate == {'dataset': 'SWE-bench/SWE-bench_Lite', 'revision': '69611d31007e1c6731db8bd5b5c3f2d33f5bab6e', 'config': 'default', 'split': 'test', 'rows': 300, 'parquet_bytes': 1111559, 'license_disposition': 'UNDECLARED_IN_EXACT_DATASET_CARD', 'materialization_permitted': False}
     assert value["target_training_access"] == "FORBIDDEN"
     assert "local_path" not in value
