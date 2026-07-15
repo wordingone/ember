@@ -39,6 +39,14 @@ class NativeComputeScreenTests(unittest.TestCase):
                 ],
             )
 
+    def test_receipt_rejects_missing_required_batch_two(self) -> None:
+        with self.assertRaisesRegex(ValueError, "batch-1 then batch-2"):
+            screen_receipt(
+                model_config_sha256="a" * 64, optimizer_contract_sha256="b" * 64,
+                tokenizer_sha256="c" * 64, checkpoint_manifest_sha256="d" * 64,
+                source_sha256="e" * 64, total_vram_bytes=24 * 1024**3,
+                batch_measurements=[{"batch_size": 1, "elapsed_seconds": 1.0, "peak_allocated_bytes": 10, "peak_reserved_bytes": 11}],
+            )
     def test_receipt_binds_full_steps_and_native_identities(self) -> None:
         receipt = screen_receipt(
             model_config_sha256="a" * 64,

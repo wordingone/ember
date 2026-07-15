@@ -1,7 +1,12 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""`ngoal_id: EMBER-02`nnext_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember`n`nCurrent-native, non-admissible full-step throughput screen.`n"""
+"""
+goal_id: EMBER-02
+next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+Current-native, non-admissible full-step throughput screen.
+"""
 
 from __future__ import annotations
 
@@ -44,6 +49,9 @@ def screen_receipt(
             raise MemoryError("0.8 VRAM governor rejects the measured allocation")
         if not isinstance(item.get("peak_reserved_bytes"), int) or item["peak_reserved_bytes"] < item["peak_allocated_bytes"]:
             raise ValueError("screen reserved peak must cover allocated peak")
+    observed = [item.get("batch_size") for item in batch_measurements]
+    if observed != required:
+        raise ValueError("screen receipt requires exactly batch-1 then batch-2 full steps")
     return {
         "schema_version": "ember-native-compute-screen-v1",
         "result": "MEASURED",
