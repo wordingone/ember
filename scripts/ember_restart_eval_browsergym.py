@@ -49,6 +49,7 @@ def main() -> int:
         parser.error(str(error))
     payload = {
         "result": "SELFTEST",
+        "claim_status": "SELFTEST_ONLY_FIXTURE_BROWSER_OUTCOMES",
         "metrics": {"task_success_rate": sum(item["success"] for item in runs) / len(tasks)},
         "sample_count": len(tasks),
         "criterion_id": "ember-3b-tool-capability-v1",
