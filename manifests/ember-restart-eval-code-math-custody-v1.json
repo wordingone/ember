@@ -19,7 +19,7 @@
                         "split":  "test",
                         "rows":  500,
                         "license_disposition":  "UNDECLARED_IN_EXACT_DATASET_CARD",
-                        "asset_disposition":  "NO_LOCAL_PINNED_FROZEN_MATHEMATICS_TASKS_OR_HARNESS",                        "frozen_math500":  {
+                        "asset_disposition":  "FROZEN_MATH500_TASKS_AND_DETERMINISTIC_SCORER_NO_CHECKPOINT_BOUND_PREDICTIONS",                        "frozen_math500":  {
                                                  "revision":  "2cd6fe926f1203a15d19f73c9a329cbe62b806fd",
                                                  "rows":  500,
                                                  "split_sha256":  "35dc41080a3680858b27fa7e0533d2d547825316fc5dafe5d316f4ccc5a06132",
