@@ -65,7 +65,7 @@ def main() -> int:
     try:
         if not arguments.task_root.is_dir() or len(set(arguments.task_id)) != len(arguments.task_id):
             raise ValueError("Terminal-Bench frozen task selection is invalid")
-        tasks = [_task(arguments.task_root, task_id) for task_id in arguments.task_id]
+        tasks = [_task(arguments.task_root, task_id) for task_id in sorted(arguments.task_id)]
         _atomic(arguments.output, {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "result": "PREFLIGHT_ONLY", "benchmark_id": "terminal-bench", "benchmark_version": "2.0", "tasks": tasks})
     except ValueError as error:
         parser.error(str(error))
