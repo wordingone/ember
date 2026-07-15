@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { createHash } from "crypto";
 import { tmpdir } from "os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "path";
@@ -17,11 +17,38 @@ interface ResolverResult {
 }
 
 export interface DevelopmentResolverBootstrap {
+  checkpointDir?: string;
   cleanup: () => void;
+  manifestPath: string;
   manifestSha256: string;
   resolverPath: string;
+  runtimeIndexPath: string;
   runtimeIndexSha256: string;
 }
+
+type ReadGitBlob = (repoRoot: string, commit: string, relativePath: string) => Uint8Array;
+
+const TRUSTED_DEVELOPMENT_SOURCE_FILES = [
+  "configs/ember-restart-3b.json",
+  "scripts/ember_restart/development_cli_seat.py",
+  "scripts/ember_restart/prediction_contract.py",
+  "scripts/ember_restart_eval_checkpoint_consumer.py",
+  "scripts/ember_restart_eval_raw_forward.py",
+  "tokenizer/tokenizer.json",
+  "tools/ember-restart-3b/batch.py",
+  "tools/ember-restart-3b/checkpoint_artifacts.py",
+  "tools/ember-restart-3b/infer.py",
+  "tools/ember-restart-3b/model.py",
+  "tools/ember-restart-3b/parameter_counter.py",
+  "tools/ember-restart-3b/serve_owned_openai.py",
+] as const;
+
+const DEVELOPMENT_RUNTIME_FILES = [
+  ...TRUSTED_DEVELOPMENT_SOURCE_FILES,
+  "parameter-evidence/parameter_counter.py",
+  "parameter-evidence/step2-realization-receipt.json",
+  "parameter-evidence/trusted-verifiers.json",
+] as const;
 
 export interface OwnedSeatLoaderInput {
   repoRoot: string;
@@ -41,10 +68,13 @@ export interface OwnedDevelopmentSeatLoaderInput {
 export interface OwnedSeatLoaderDeps {
   captureDevelopmentResolver?: (
     manifestPath: string,
+    repoRoot: string,
     expectedSourceCommit: string,
+    readGitBlob: ReadGitBlob,
   ) => DevelopmentResolverBootstrap;
   exists?: (path: string) => boolean;
   execute?: (executable: string, args: string[]) => ResolverResult;
+  readGitBlob?: ReadGitBlob;
   resolveBuildCommit?: () => string;
 }
 
@@ -122,9 +152,27 @@ function defaultResolveBuildCommit(): string {
   return value;
 }
 
+function defaultReadGitBlob(
+  repoRoot: string,
+  commit: string,
+  relativePath: string,
+): Uint8Array {
+  const result = spawnSync(
+    "git",
+    ["-C", repoRoot, "show", commit + ":" + relativePath],
+    { encoding: "buffer", maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout: 30_000 },
+  );
+  if (result.status !== 0 || !(result.stdout instanceof Uint8Array)) {
+    throw new Error("cannot read trusted runtime source from embedded Git commit: " + relativePath);
+  }
+  return result.stdout;
+}
+
 export function captureDevelopmentResolver(
   manifestPath: string,
+  repoRoot: string,
   expectedSourceCommit: string,
+  readGitBlob: ReadGitBlob = defaultReadGitBlob,
 ): DevelopmentResolverBootstrap {
   if (!/^[0-9a-f]{40}$/.test(expectedSourceCommit)) {
     throw new Error("owned development source commit is invalid");
@@ -156,34 +204,84 @@ export function captureDevelopmentResolver(
     throw new Error("runtime bundle is not bound to the exact compiled cockpit commit");
   }
   const files = requireObject(index["files"], "runtime bundle files");
+  const capturedFiles = new Map<string, Uint8Array>();
+  for (const relativePath of DEVELOPMENT_RUNTIME_FILES) {
+    const binding = requireObject(files[relativePath], "trusted runtime source binding");
+    requireExactFields(binding, ["bytes", "sha256"], "trusted runtime source binding");
+    const expectedSha256 = binding["sha256"];
+    const expectedBytes = binding["bytes"];
+    if (
+      typeof expectedSha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(expectedSha256) ||
+      !Number.isSafeInteger(expectedBytes) ||
+      (expectedBytes as number) < 1
+    ) {
+      throw new Error("trusted runtime source binding is invalid: " + relativePath);
+    }
+    const bundlePath = resolveContainedFile(bundleRoot, relativePath, "trusted runtime source");
+    const bundleBytes = readFileSync(bundlePath);
+    const gitBytes = (TRUSTED_DEVELOPMENT_SOURCE_FILES as readonly string[]).includes(relativePath)
+      ? readGitBlob(repoRoot, expectedSourceCommit, relativePath)
+      : undefined;
+    if (
+      bundleBytes.byteLength !== expectedBytes ||
+      sha256(bundleBytes) !== expectedSha256 ||
+      (gitBytes !== undefined && (
+        gitBytes.byteLength !== expectedBytes ||
+        sha256(gitBytes) !== expectedSha256
+      ))
+    ) {
+      throw new Error("runtime source does not match the embedded Git commit: " + relativePath);
+    }
+    capturedFiles.set(relativePath, bundleBytes);
+  }
   const resolverRelative = "scripts/ember_restart/development_cli_seat.py";
-  const resolverBinding = requireObject(files[resolverRelative], "runtime resolver binding");
-  requireExactFields(resolverBinding, ["bytes", "sha256"], "runtime resolver binding");
-  const expectedResolverSha256 = resolverBinding["sha256"];
-  const expectedResolverBytes = resolverBinding["bytes"];
-  if (
-    typeof expectedResolverSha256 !== "string" ||
-    !/^[0-9a-f]{64}$/.test(expectedResolverSha256) ||
-    !Number.isSafeInteger(expectedResolverBytes) ||
-    (expectedResolverBytes as number) < 1
-  ) {
-    throw new Error("runtime resolver binding is invalid");
+  const resolverBytes = capturedFiles.get(resolverRelative);
+  if (resolverBytes === undefined) {
+    throw new Error("trusted runtime resolver was not captured");
   }
-  const resolverPath = resolveContainedFile(bundleRoot, resolverRelative, "runtime resolver");
-  const resolverBytes = readFileSync(resolverPath);
-  if (
-    resolverBytes.byteLength !== expectedResolverBytes ||
-    sha256(resolverBytes) !== expectedResolverSha256
-  ) {
-    throw new Error("runtime resolver bytes do not match the bundle index");
+  const snapshotRoot = mkdtempSync(join(tmpdir(), "ember-development-runtime-"));
+  for (const [relativePath, payload] of capturedFiles) {
+    const snapshotFile = join(snapshotRoot, relativePath);
+    mkdirSync(dirname(snapshotFile), { recursive: true });
+    writeFileSync(snapshotFile, payload, { flag: "wx" });
   }
-  const snapshotRoot = mkdtempSync(join(tmpdir(), "ember-development-resolver-"));
-  const snapshotPath = join(snapshotRoot, "development_cli_seat.py");
-  writeFileSync(snapshotPath, resolverBytes, { flag: "wx" });
+  const snapshotIndexPath = resolveContainedFile(
+    snapshotRoot,
+    runtimeBinding["index_path"],
+    "runtime bundle index snapshot",
+  );
+  mkdirSync(dirname(snapshotIndexPath), { recursive: true });
+  writeFileSync(snapshotIndexPath, indexBytes, { flag: "wx" });
+  const snapshotManifestPath = join(snapshotRoot, "development.json");
+  writeFileSync(snapshotManifestPath, manifestBytes, { flag: "wx" });
+  const checkpointBinding = manifest["checkpoint"];
+  let checkpointDir: string | undefined;
+  if (checkpointBinding !== null && typeof checkpointBinding === "object" && !Array.isArray(checkpointBinding)) {
+    const checkpointManifest = (checkpointBinding as Record<string, unknown>)["manifest_path"];
+    if (typeof checkpointManifest === "string") {
+      const checkpointManifestPath = isAbsolute(checkpointManifest)
+        ? resolve(checkpointManifest)
+        : resolveContainedFile(bundleRoot, checkpointManifest, "checkpoint manifest");
+      checkpointDir = dirname(checkpointManifestPath);
+      if (!isAbsolute(checkpointManifest)) {
+        const snapshotCheckpointPath = resolveContainedFile(
+          snapshotRoot,
+          checkpointManifest,
+          "checkpoint manifest snapshot",
+        );
+        mkdirSync(dirname(snapshotCheckpointPath), { recursive: true });
+        writeFileSync(snapshotCheckpointPath, readFileSync(checkpointManifestPath), { flag: "wx" });
+      }
+    }
+  }
   return {
+    checkpointDir,
     cleanup: () => rmSync(snapshotRoot, { force: true, recursive: true }),
+    manifestPath: snapshotManifestPath,
     manifestSha256: sha256(manifestBytes),
-    resolverPath: snapshotPath,
+    resolverPath: join(snapshotRoot, resolverRelative),
+    runtimeIndexPath: snapshotIndexPath,
     runtimeIndexSha256: expectedIndexSha256,
   };
 }
@@ -268,7 +366,15 @@ const DEVELOPMENT_LAUNCH_FIELDS = [
 
 function parseDevelopmentLaunch(
   value: unknown,
-  expected: { manifestPath: string; pythonExecutable: string },
+  expected: {
+    checkpointDir?: string;
+    cleanupRuntimeSnapshot: () => void;
+    manifestPath: string;
+    manifestSha256: string;
+    pythonExecutable: string;
+    runtimeIndexPath: string;
+    runtimeIndexSha256: string;
+  },
   exists: (path: string) => boolean,
 ): OwnedServerLaunch {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -293,11 +399,15 @@ function parseDevelopmentLaunch(
   };
   const launch: OwnedServerLaunch = {
     authorityKind: "DEVELOPMENT",
-    checkpointDir: requireAbsolutePath("checkpoint_dir"),
+    checkpointDir: expected.checkpointDir ?? requireAbsolutePath("checkpoint_dir"),
+    cleanupRuntimeSnapshot: expected.cleanupRuntimeSnapshot,
+    developmentManifestSha256: expected.manifestSha256,
     developmentManifestPath: requireAbsolutePath("development_manifest_path"),
     mode: "INTERACTIVE",
     modelConfigPath: requireAbsolutePath("model_config_path"),
     pythonExecutable: expected.pythonExecutable,
+    runtimeIndexPath: expected.runtimeIndexPath,
+    runtimeIndexSha256: expected.runtimeIndexSha256,
     serverPath: requireAbsolutePath("server_path"),
     tokenizerPath: requireAbsolutePath("tokenizer_path"),
   };
@@ -436,23 +546,27 @@ export function loadOwnedDevelopmentIdentity(
   const expectedSourceCommit = (deps.resolveBuildCommit ?? defaultResolveBuildCommit)();
   const bootstrap = (deps.captureDevelopmentResolver ?? captureDevelopmentResolver)(
     manifestPath,
+    input.repoRoot,
     expectedSourceCommit,
+    deps.readGitBlob ?? defaultReadGitBlob,
   );
   const pythonExecutable = input.pythonExecutable ?? "python";
   let result: ResolverResult;
   try {
     result = execute(pythonExecutable, [
       bootstrap.resolverPath,
-      manifestPath,
+      bootstrap.manifestPath,
       "--expected-manifest-sha256",
       bootstrap.manifestSha256,
       "--expected-runtime-index-sha256",
       bootstrap.runtimeIndexSha256,
     ]);
-  } finally {
+  } catch (error) {
     bootstrap.cleanup();
+    throw error;
   }
   if (result.status !== 0) {
+    bootstrap.cleanup();
     throw new Error("owned development seat rejected: " + resolverError(result));
   }
 
@@ -460,6 +574,7 @@ export function loadOwnedDevelopmentIdentity(
   try {
     payload = JSON.parse(result.stdout) as Record<string, unknown>;
   } catch {
+    bootstrap.cleanup();
     throw new Error("development seat resolver returned invalid JSON");
   }
   const checkpointSha256 = payload["checkpoint_sha256"];
@@ -501,13 +616,28 @@ export function loadOwnedDevelopmentIdentity(
     (activeParameters as number) <= 0 ||
     (activeParameters as number) > (allocatedParameters as number)
   ) {
+    bootstrap.cleanup();
     throw new Error("development seat resolver returned an invalid non-claiming identity");
   }
-  const launch = parseDevelopmentLaunch(
-    payload["launch"],
-    { manifestPath, pythonExecutable },
-    exists,
-  );
+  let launch: OwnedServerLaunch;
+  try {
+    launch = parseDevelopmentLaunch(
+      payload["launch"],
+      {
+        checkpointDir: bootstrap.checkpointDir,
+        cleanupRuntimeSnapshot: bootstrap.cleanup,
+        manifestPath: bootstrap.manifestPath,
+        manifestSha256: bootstrap.manifestSha256,
+        pythonExecutable,
+        runtimeIndexPath: bootstrap.runtimeIndexPath,
+        runtimeIndexSha256: bootstrap.runtimeIndexSha256,
+      },
+      exists,
+    );
+  } catch (error) {
+    bootstrap.cleanup();
+    throw error;
+  }
   return {
     seat: "OWNED_DEVELOPMENT",
     claimStatus: "NON_ADMISSIBLE",

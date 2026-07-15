@@ -18,6 +18,12 @@ export function buildCommitBanner(commit: string): string {
   return "globalThis.__EMBER_BUILD_COMMIT__=" + JSON.stringify(requireBuildCommit(commit)) + ";";
 }
 
+export function requireCleanTrackedStatus(status: string): void {
+  if (status.trim() !== "") {
+    throw new Error("cockpit build refuses dirty tracked source bytes");
+  }
+}
+
 if (import.meta.main) {
   const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
   const repositoryRoot = join(sourceRoot, "..", "..", "..");
@@ -30,6 +36,15 @@ if (import.meta.main) {
     throw new Error("cannot resolve exact Ember source commit for cockpit build");
   }
   const commit = requireBuildCommit(git.stdout ?? "");
+  const status = spawnSync(
+    "git",
+    ["-C", repositoryRoot, "status", "--porcelain", "--untracked-files=no"],
+    { encoding: "utf8", windowsHide: true, timeout: 15_000 },
+  );
+  if (status.status !== 0) {
+    throw new Error("cannot verify clean tracked Ember source for cockpit build");
+  }
+  requireCleanTrackedStatus(status.stdout ?? "");
   const result = spawnSync(
     process.execPath,
     [
