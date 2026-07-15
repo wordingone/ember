@@ -297,6 +297,24 @@ def _config_from_payload(module, contract: dict[str, object]):
         raise ValueError("production contract total does not match the sparse architecture")
     return config
 
+def parameter_dtype_from_contract(torch_module, contract: dict[str, object]):
+    training = contract.get("training")
+    memory = training.get("memory") if isinstance(training, dict) else None
+    if not isinstance(memory, dict) or memory.get("parameter_dtype") != "bfloat16" or memory.get("parameter_bytes") != 2:
+        raise ValueError("production parameter dtype contract must be two-byte bfloat16")
+    return torch_module.bfloat16
+
+
+def construct_runtime_model(torch_module, model_module, config, contract: dict[str, object]):
+    parameter_dtype = parameter_dtype_from_contract(torch_module, contract)
+    previous_dtype = torch_module.get_default_dtype()
+    try:
+        torch_module.set_default_dtype(parameter_dtype)
+        return model_module.UnifiedDecoder(config, device="meta", allow_production_allocation=True)
+    finally:
+        torch_module.set_default_dtype(previous_dtype)
+
+
 def load_owned_prompt(path: Path) -> dict[str, object]:
     prompt = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(prompt, dict) or "target_ids" in prompt:
@@ -398,7 +416,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
         raise ValueError("input token and generation limit are invalid")
     if any(token >= config.vocab_size for token in input_token_ids):
         raise ValueError("input token is outside model vocabulary")
-    model = module.UnifiedDecoder(config, device="meta", allow_production_allocation=True)
+    model = construct_runtime_model(torch, module, config, checkpoint["model_config"])
     active_route = require_active_route(checkpoint, str((bound_inputs or {}).get("active_expert", arguments.active_expert)))
     root = arguments.checkpoint_manifest.parent
     required_shards = checkpoint["required_shards"]
