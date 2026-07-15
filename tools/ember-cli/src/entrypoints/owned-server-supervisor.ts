@@ -25,8 +25,7 @@ export interface OwnedServerHandle {
 }
 
 export type EnsureOwnedServerResult =
-  | { outcome: "adopted"; port: number }
-  | { outcome: "spawned"; port: number; handle: OwnedServerHandle };
+  { outcome: "spawned"; port: number; handle: OwnedServerHandle };
 
 type VerifyEndpoint = (identity: OwnedModelIdentity) => Promise<void>;
 
@@ -187,8 +186,9 @@ export async function ensureOwnedServer(
   const verifyEndpoint = deps.verifyEndpoint ?? verifyOwnedEndpointIdentity;
   const presence = await probePresence(identity);
   if (presence === "present") {
-    await verifyEndpoint(identity);
-    return { outcome: "adopted", port };
+    throw new Error(
+      "owned endpoint has a pre-existing listener; loaded-weight identity cannot be independently verified",
+    );
   }
   if (!identity.launch) {
     throw new Error("admitted owned identity lacks a launch descriptor");

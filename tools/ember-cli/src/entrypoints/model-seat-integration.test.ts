@@ -256,7 +256,11 @@ describe("process entry model-seat enforcement", () => {
         ensureOwnedServerFn: async (ownedIdentity) => {
           expect(ownedIdentity.launch?.mode).toBe("INTERACTIVE");
           ensureCalls += 1;
-          return { outcome: "adopted", port: 9 };
+          return {
+            outcome: "spawned",
+            port: 9,
+            handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never,
+          };
         },
         verifyOwnedEndpointFn: async () => {
           verifyCalls += 1;
@@ -285,6 +289,8 @@ describe("process entry model-seat enforcement", () => {
     );
     expect(stdout).toContain("model seat: OWNED_ADMITTED");
     expect(stdout).toContain("bound by admitted checkpoint manifest");
+    expect(stdout).toContain("supervised server started");
+    expect(stdout).not.toContain("adopted");
     expect(stdout).not.toContain("qwen3.6-27b");
     expect(stdout).not.toContain("http://127.0.0.1:9999");
   });

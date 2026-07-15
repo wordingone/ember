@@ -75,16 +75,17 @@ describe("owned server supervisor", () => {
     expect(JSON.stringify(command)).not.toContain("llama-server");
   });
 
-  it("adopts only after the live endpoint verifies exact identity", async () => {
+  it("rejects every pre-existing listener instead of trusting self-reported identity", async () => {
     let verified = 0;
     let spawned = 0;
-    const result = await ensureOwnedServer(identity(), {
-      probePresence: async () => "present",
-      verifyEndpoint: async () => { verified += 1; },
-      spawnServer: () => { spawned += 1; throw new Error("must not spawn"); },
-    });
-    expect(result).toEqual({ outcome: "adopted", port: 8083 });
-    expect(verified).toBe(1);
+    await expect(
+      ensureOwnedServer(identity(), {
+        probePresence: async () => "present",
+        verifyEndpoint: async () => { verified += 1; },
+        spawnServer: () => { spawned += 1; throw new Error("must not spawn"); },
+      }),
+    ).rejects.toThrow("pre-existing listener");
+    expect(verified).toBe(0);
     expect(spawned).toBe(0);
   });
 
@@ -137,15 +138,17 @@ describe("owned server supervisor", () => {
     ).rejects.toThrow("owned server failed to start: ENOENT python-owned");
   });
 
-  it("never spawns over a present mismatched or unverifiable endpoint", async () => {
+  it("never verifies or spawns over any present endpoint", async () => {
+    let verified = 0;
     let spawned = 0;
     expect(
       ensureOwnedServer(identity(), {
         probePresence: async () => "present",
-        verifyEndpoint: async () => { throw new Error("checkpoint mismatch"); },
+        verifyEndpoint: async () => { verified += 1; },
         spawnServer: () => { spawned += 1; throw new Error("must not spawn"); },
       }),
-    ).rejects.toThrow("checkpoint mismatch");
+    ).rejects.toThrow("pre-existing listener");
+    expect(verified).toBe(0);
     expect(spawned).toBe(0);
   });
 
