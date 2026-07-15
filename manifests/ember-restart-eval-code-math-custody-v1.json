@@ -12,6 +12,10 @@
                                                        "sha256":  "af43697e8791c4c149bdfd6b489d8b5412507551ac20e28a439f650b8225db63"
                                                    }
                            },
+    "mathematics":  {
+                          "asset_disposition":  "NO_LOCAL_PINNED_FROZEN_MATHEMATICS_TASKS_OR_HARNESS",
+                          "target_execution_permitted":  false
+                      },
     "benchmark_id":  "evalplus",
     "goal_id":  "EMBER-02",
     "license":  "Apache-2.0",
