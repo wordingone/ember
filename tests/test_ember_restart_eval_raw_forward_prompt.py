@@ -152,3 +152,31 @@ def test_canonical_output_rejects_detached_manual_prompt_fields(tmp_path, monkey
     with pytest.raises(SystemExit, match="2"):
         MODULE.main()
     assert "detached manual" in capsys.readouterr().err
+def test_canonical_cli_passes_bound_inputs_to_execution_and_envelope(tmp_path, monkeypatch):
+    prompt, split, prompt_sha256 = _write_bound_inputs(tmp_path)
+    tokenizer, manifest, config = tmp_path / "tokenizer.json", tmp_path / "checkpoint.json", tmp_path / "config.json"
+    tokenizer.write_bytes(b"tokenizer"); manifest.write_bytes(b"manifest"); config.write_bytes(b"config")
+    output, canonical = tmp_path / "receipt.json", tmp_path / "predictions.json"
+    captured = {}
+
+    class FakeTokenizer:
+        @classmethod
+        def from_file(cls, path):
+            captured["tokenizer_path"] = path
+            return cls()
+        def decode(self, tokens):
+            return ",".join(map(str, tokens))
+
+    def fake_execute(arguments, checkpoint, bound_inputs):
+        captured["bound_inputs"] = bound_inputs
+        return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": bound_inputs["active_expert"], "generated_token_ids": [10, 11], "stop_reason": "max_new_tokens"}
+
+    monkeypatch.setattr(MODULE, "Tokenizer", FakeTokenizer)
+    monkeypatch.setattr(MODULE, "_verify", lambda *_: {"model_config_sha256": _sha256_bytes(config.read_bytes()), "shard_count": 6, "active_expert_ids": ["shared"]})
+    monkeypatch.setattr(MODULE, "require_execution_authority", lambda *_: None)
+    monkeypatch.setattr(MODULE, "execute", fake_execute)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--tokenizer", str(tokenizer), "--checkpoint-manifest", str(manifest), "--checkpoint-sha256", _sha256_bytes(manifest.read_bytes()), "--output", str(output), "--execute", "--model-source", str(tmp_path / "model.py"), "--model-source-sha256", "c" * 64, "--model-config", str(config), "--model-config-sha256", _sha256_bytes(config.read_bytes()), "--max-new-tokens", "2", "--canonical-output", str(canonical), "--prompt", str(prompt), "--frozen-split", str(split), "--benchmark-id", "local-text", "--benchmark-version", "1", "--benchmark-capability", "text", "--split-sha256", _sha256_bytes(split.read_bytes()), "--protocol-sha256", "d" * 64])
+    MODULE.main()
+    assert captured["bound_inputs"] == {"row_id": "row-1", "active_expert": "shared", "token_ids": [8, 9], "input_sha256": prompt_sha256}
+    envelope = json.loads(canonical.read_text(encoding="utf-8"))
+    assert envelope["rows"] == [{"id": "row-1", "input_sha256": prompt_sha256, "generated_token_ids": [10, 11], "stop_reason": "max_new_tokens", "output": {"kind": "text", "text": "10,11"}}]
