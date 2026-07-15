@@ -104,13 +104,14 @@ def snapshot_spider_inputs(source: Path, gold: Path, tables: Path, database: Pat
 
 def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, database: Path) -> str:
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        manifest_bytes = path.read_bytes()
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError(f"invalid frozen Spider custody manifest: {error}") from error
     expected = {"gold_sha256": sha256_file(gold), "tables_sha256": sha256_file(tables), "database_tree_sha256": database_tree_sha256(database), "evaluator_sha256": sha256_file(source / "evaluation.py")}
     if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "spider" or manifest.get("benchmark_version") != SPIDER_VERSION or any(manifest.get(key) != value for key, value in expected.items()):
         raise ValueError("frozen Spider custody manifest does not bind supplied evaluator assets")
-    return sha256_file(path)
+    return hashlib.sha256(manifest_bytes).hexdigest()
 
 
 def main() -> int:
