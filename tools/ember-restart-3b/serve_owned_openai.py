@@ -19,7 +19,7 @@ from typing import Any, Callable, Mapping, Protocol
 import torch
 
 from checkpoint_artifacts import load_checkpoint_artifacts
-from infer import FrozenTokenizer, greedy_generate, load_frozen_tokenizer, sha
+from infer import FrozenTokenizer, frozen_split_prompt, greedy_generate, load_frozen_tokenizer, sha
 from model import RestartDecoderConfig, UnifiedDecoder
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,7 +53,7 @@ class OwnedIdentity:
 class OwnedChatRuntime(Protocol):
     identity: OwnedIdentity
 
-    def chat(self, messages: list[dict[str, object]], *, max_tokens: int) -> tuple[str, str]: ...
+    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str, max_tokens: int) -> tuple[str, str]: ...
 
 
 def _contains_target_leak(value: Any) -> bool:
@@ -164,6 +164,10 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -
             if _contains_target_leak(request):
                 self._write(400, _error("request contains target leakage"))
                 return
+            frozen_row_id = request.get("ember_frozen_row_id")
+            if not isinstance(frozen_row_id, str) or not frozen_row_id:
+                self._write(400, _error("request requires a nonempty frozen row identifier"))
+                return
             messages = request.get("messages")
             if not isinstance(messages, list) or not messages or any(not isinstance(message, dict) for message in messages):
                 self._write(400, _error("messages must be a nonempty array of objects"))
@@ -172,7 +176,7 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -
             if not isinstance(max_tokens, int) or not 0 < max_tokens <= 1024:
                 self._write(400, _error("max_tokens must be an integer in [1, 1024]"))
                 return
-            text, finish_reason = runtime.chat(messages, max_tokens=max_tokens)
+            text, finish_reason = runtime.chat(messages, frozen_row_id=frozen_row_id, max_tokens=max_tokens)
             self._write(200, {
                 "id": "chatcmpl-owned-" + runtime.identity.checkpoint_sha256[:12],
                 "object": "chat.completion",
@@ -188,11 +192,12 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int) -
 class LoadedOwnedRuntime:
     """One checkpoint/model/tokenizer realization retained for every loopback request."""
 
-    def __init__(self, *, model: UnifiedDecoder, tokenizer: FrozenTokenizer, identity: OwnedIdentity, device: torch.device) -> None:
+    def __init__(self, *, model: UnifiedDecoder, tokenizer: FrozenTokenizer, identity: OwnedIdentity, device: torch.device, frozen_split: Path | None = None) -> None:
         self.model = model
         self.tokenizer = tokenizer
         self.identity = identity
         self.device = device
+        self.frozen_split = frozen_split
 
     @classmethod
     def from_paths(
@@ -201,6 +206,7 @@ class LoadedOwnedRuntime:
         checkpoint: Path,
         tokenizer_path: Path,
         run_manifest: Path,
+        frozen_split: Path,
         trusted_verifier_registry: Path,
         device: str,
     ) -> "LoadedOwnedRuntime":
@@ -256,11 +262,17 @@ class LoadedOwnedRuntime:
         )
         if admission["model_name"] != identity.model_name:
             raise ValueError("central admission model name does not match loaded checkpoint")
-        return cls(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(device))
+        return cls(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(device), frozen_split=frozen_split)
 
-    def chat(self, messages: list[dict[str, object]], *, max_tokens: int) -> tuple[str, str]:
-        prompt = "\n".join(f"{message.get('role', 'user')}: {message.get('content', '')}" for message in messages)
-        prompt_ids = self.tokenizer.encode(prompt)
+    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str, max_tokens: int) -> tuple[str, str]:
+        if self.frozen_split is None:
+            prompt = "\n".join(f"{message.get('role', 'user')}: {message.get('content', '')}" for message in messages)
+            prompt_ids = self.tokenizer.encode(prompt)
+        else:
+            _, record = frozen_split_prompt(self.frozen_split, frozen_row_id, self.tokenizer)
+            if messages != [{"role": "user", "content": record["prompt"]}]:
+                raise ValueError("chat does not match frozen split prompt")
+            prompt_ids = record["token_ids"]
         with torch.inference_mode():
             generated, reason = greedy_generate(
                 model=self.model,
@@ -279,6 +291,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-manifest", type=Path, required=True)
     parser.add_argument("--trusted-verifier-registry", type=Path, required=True)
     parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--frozen-split", type=Path, required=True)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args(argv)
@@ -288,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
         run_manifest=args.run_manifest,
         trusted_verifier_registry=args.trusted_verifier_registry,
         device=args.device,
+        frozen_split=args.frozen_split,
     )
     server = create_loopback_server(runtime, host=args.host, port=args.port)
     server.serve_forever()

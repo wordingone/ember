@@ -127,6 +127,7 @@ def frozen_split_prompt(split_path: Path, row_id: str, tokenizer: FrozenTokenize
         raise ValueError("frozen text inference row must route through the shared text path")
     return row_id, {
         "schema_version": "ember-owned-inference-prompt-v1",
+        "prompt": prompt,
         "id": row_id,
         "active_expert": "shared",
         "token_ids": tokenizer.encode(prompt),
