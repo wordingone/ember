@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import subprocess
 import sys
@@ -20,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
+from parameter_counter import _CheckpointMetadataUnpickler, _StorageRef, _TensorTypeSentinel, _rebuild_tensor, _rebuild_tensor_from_type
 
 
 class CounterCliTests(unittest.TestCase):
@@ -103,5 +105,16 @@ class CounterCliTests(unittest.TestCase):
         measured = json.loads(completed.stdout)
         self.assertEqual(measured["active_expert_ids"], ["shared"])
         self.assertEqual(measured["active_parameters"], model.count_unique_trainable_parameters())
+    def test_safe_metadata_rebuild_from_tensor_subtype_discards_subtype_state(self) -> None:
+        metadata = _rebuild_tensor_from_type(
+            _rebuild_tensor,
+            _TensorTypeSentinel,
+            (_StorageRef(6), 0, (2, 3), (3, 1)),
+            {"untrusted": "subtype-state"},
+        )
+        self.assertEqual(metadata.shape, (2, 3))
+    def test_safe_metadata_unpickler_rejects_arbitrary_global(self) -> None:
+        with self.assertRaisesRegex(ValueError, "disallowed global"):
+            _CheckpointMetadataUnpickler(io.BytesIO()).find_class("subprocess", "Popen")
 if __name__ == "__main__":
     unittest.main()
