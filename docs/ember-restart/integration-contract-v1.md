@@ -4,7 +4,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 
 # Ember owned-rung integration contract v1
 
-Status: executable candidate/admission boundary. A clean-genesis 3,839,161,856-parameter checkpoint exists after one 1,024-token optimizer step; it is a structural checkpoint, not sufficiently pretrained and not capability-admitted.
+Status: executable candidate/admission boundary, but the current public execution authority is fail closed. The exact clean-owned step-2 checkpoint manifest is `BF20F05018991EB611B0623EDD50A00EC30639DA2F8CCAE646F6962F152A2A2B`: 3,839,161,856 unique/trainable/served parameters, 1,020,589,568 active parameters, 2,048 observed text tokens, and the shared route only. It is structural resume/checkpoint evidence, not sufficiently pretrained and not capability-admitted. The public registry disposition is `PREPARED_NOT_EXECUTABLE_AWAITING_PROMPT_AND_SAME_BYTE_RUNTIME_BINDING`; allocation, custody, and a validated scorer do not authorize inference.
 
 ## Integration ownership
 
@@ -102,4 +102,11 @@ Efficiency, retention, deletion/ablation, comparator gaps, and honest deficienci
 
 ## Next execution
 
-This contract directly enables the model-building founder to run a disk-budgeted sustained semantic pretraining segment through the v2 shared nonlinear language path, preserve an interruption-safe content-addressed checkpoint, and hand that exact immutable bundle to the evaluation founder. The segment may emit a `CHECKPOINT_CANDIDATE` for frozen preflight. It does not authorize sufficient-pretraining or capability credit from allocation, a forward-only probe, a smoke checkpoint, or a renamed data class.
+The exact step-2 checkpoint is both parent and immutable root of the first v4 expert-accretion episode. The older step-1 checkpoint remains historical evidence; it is not claimed as a cryptographically proven parent of step 2. Before any checkpoint-consuming GPU command, the public path must:
+
+1. remove the permissive legacy continuation bridge and require exact step-2 parent/root identity;
+2. emit and independently trust a closed, same-byte hardened-counter realization receipt for the exact step-2 manifest, config, counts, route, expert genesis, and parameter bytes;
+3. consume the canonical owned prompt and frozen split, bind runtime source/config/tokenizer from the same byte snapshots, reject provisional receipts, and use same-open-handle required-shard loading;
+4. run the clean-checkout shared-text raw forward, scorer, preflight, and ordinary owned Ember CLI replay while retaining the `NON_CLAIM_RAW_FORWARD`/failed-criterion boundary.
+
+The immediate CPU commands are the focused lineage/counter/verifier and prompt/runtime contract suites plus the repository guard on their exact proposed heads. No GPU dispatch is authorized by this contract state. After those increments merge and independently pass, a disk-budgeted clean-checkout shared-text forward is the next GPU command; only its exact outputs may proceed to scoring and preflight. None of these steps authorize sufficient-pretraining, capability, competitiveness, admission, or field-level credit.
