@@ -75,13 +75,16 @@ def main() -> int:
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.canonical_predictions.parent, prefix=arguments.canonical_predictions.name + ".", suffix=".mmmu.tmp", delete=False) as handle:
         json.dump(converted, handle, sort_keys=True)
         temporary = Path(handle.name)
+    with tempfile.NamedTemporaryFile("wb", dir=arguments.answers.parent, prefix=arguments.answers.name + ".", suffix=".mmmu.answers.tmp", delete=False) as handle:
+        handle.write(answer_bytes)
+        answer_snapshot = Path(handle.name)
     try:
-        run = subprocess.run([sys.executable, str(scorer), "--output_path", str(temporary), "--answer_path", str(arguments.answers)], cwd=scorer.parent, text=True, capture_output=True, timeout=arguments.timeout_seconds, check=False)
+        run = subprocess.run([sys.executable, str(scorer), "--output_path", str(temporary), "--answer_path", str(answer_snapshot)], cwd=scorer.parent, text=True, capture_output=True, timeout=arguments.timeout_seconds, check=False)
     except subprocess.TimeoutExpired:
-        temporary.unlink(missing_ok=True)
         parser.error("MMMU scorer timed out")
     finally:
         temporary.unlink(missing_ok=True)
+        answer_snapshot.unlink(missing_ok=True)
     if run.returncode != 0:
         parser.error(f"MMMU scorer failed: {run.stderr.strip()}")
     try:
