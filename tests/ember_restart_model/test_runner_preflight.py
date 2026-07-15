@@ -113,6 +113,12 @@ class RunnerPreflightTests(unittest.TestCase):
             )
         self.assertEqual(result, "published")
 
+    def test_semantic_publication_plan_bounds_write_budget_by_interval_and_final_checkpoint(self) -> None:
+        plan = run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, estimated_checkpoint_bytes=10, write_budget_bytes=40)
+        self.assertEqual(plan, {"publication_count": 4, "projected_write_bytes": 40})
+        with self.assertRaisesRegex(ValueError, "write budget"):
+            run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, estimated_checkpoint_bytes=10, write_budget_bytes=39)
+
     def test_semantic_cli_dispatches_only_manifest_bound_stream_inputs(self) -> None:
         with patch.object(run_vertical_slice, "run_semantic", return_value={"steps": 1}) as semantic:
             with patch.object(
@@ -121,7 +127,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 [
                     "run_vertical_slice.py", "semantic", "--seed", "83", "--artifact-root", "B:/ember-artifacts",
                     "--receipt", "semantic/receipt.json", "--shards-root", "semantic/shards",
-                    "--tokenizer", "semantic/tokenizer.json", "--steps", "1", "--sequence-length", "1024",
+                    "--tokenizer", "semantic/tokenizer.json", "--steps", "1", "--sequence-length", "1024", "--checkpoint-interval", "32", "--estimated-checkpoint-gib", "10", "--write-budget-gib", "24",
                 ],
             ):
                 run_vertical_slice.main()
@@ -133,6 +139,9 @@ class RunnerPreflightTests(unittest.TestCase):
             tokenizer_path=Path("semantic/tokenizer.json"),
             steps=1,
             sequence_length=1024,
+            checkpoint_interval=32,
+            estimated_checkpoint_bytes=10 * 1024**3,
+            write_budget_bytes=24 * 1024**3,
             resume_checkpoint=None,
         )
 
@@ -141,6 +150,10 @@ class RunnerPreflightTests(unittest.TestCase):
             with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image"]):
                 run_vertical_slice.main()
         specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=None)
+    def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
+        genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
+        self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
+
     def test_runner_file_exposes_the_semantic_cli_entrypoint(self) -> None:
         completed = subprocess.run(
             [sys.executable, str(ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"), "semantic", "--help"],

@@ -1,0 +1,223 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Deletion-testable v4 specialist accretion checkpoint lineage."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+from unittest.mock import patch
+import torch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+
+from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
+from model import RestartDecoderConfig, UnifiedDecoder
+from parameter_counter import execute_counter
+
+
+def _rng_state() -> dict[str, torch.Tensor]:
+    return {"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}
+
+
+def _verification(capability: str = "image") -> dict[str, object]:
+    return {
+        "schema_version": "ember-training-data-verification-v1",
+        "result": "VERIFIED",
+        "capability": capability,
+        "data_manifest_sha256": "a" * 64,
+        "tokenizer_sha256": "b" * 64,
+        "verifier_sha256": "c" * 64,
+        "data_class": "SEMANTIC_PRETRAINING",
+        "record_count": 4,
+        "token_count": 64,
+        "source_manifest_sha256": "d" * 64,
+        "records_artifact_sha256": "e" * 64,
+        "semantic_checks": {"image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"], "audio": ["token_roundtrip", "source_target_pair", "raw_audio_text_pair"], "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"], "tool": ["token_roundtrip", "source_target_pair", "typed_tool_execution"]}[capability],
+    }
+
+
+def _write_root(model: UnifiedDecoder, optimizer: torch.optim.Optimizer, root: Path) -> dict[str, object]:
+    model._activate_expert("shared")
+    return write_checkpoint_artifacts(
+        model, optimizer, root, launch_seed=83, rng_state=_rng_state(),
+        data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 1, "global_step": 1, "tokens_seen": 16},
+        model_config_sha256="c" * 64, contract_sha256="d" * 64,
+        expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+    )
+
+
+class SpecialistLineageTests(unittest.TestCase):
+    def _root_and_candidate(self, base: Path) -> tuple[dict[str, object], Path, UnifiedDecoder, torch.optim.Optimizer]:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        manifest_path = base / "root" / "checkpoint-manifest.json"
+        if not manifest_path.is_file():
+            root_model = UnifiedDecoder(config, genesis_seed=83)
+            root_optimizer = torch.optim.AdamW(root_model.parameters(), lr=1e-4)
+            _write_root(root_model, root_optimizer, base / "root")
+        parent = json.loads(manifest_path.read_text(encoding="utf-8"))
+        candidate = UnifiedDecoder(config, genesis_seed=991)
+        optimizer = torch.optim.AdamW(candidate.parameters(), lr=1e-4)
+        load_checkpoint_artifacts(candidate, optimizer, base / "root", {**parent, "checkpoint_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest()})
+        candidate._activate_expert("vision")
+        return parent, manifest_path, candidate, optimizer
+
+    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None) -> dict[str, object]:
+        parent, default_manifest, candidate, optimizer = self._root_and_candidate(base)
+        parent_manifest = parent_manifest or default_manifest
+        root_manifest = root_manifest or default_manifest
+        next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
+        return write_checkpoint_artifacts(
+            candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(),
+            data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32},
+            model_config_sha256="c" * 64, contract_sha256="d" * 64,
+            expert_genesis_sha256=parent["expert_genesis_sha256"],
+            specialist_lineage={
+                "parent_manifest": parent_manifest,
+                "root_manifest": root_manifest,
+                "trained_expert_ids": trained if trained is not None else ["vision"],
+                "data_verification_receipt": _verification(),
+            },
+        )
+
+    def test_first_v4_successor_binds_external_parent_root_exact_history_and_closed_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            parent, parent_manifest, _candidate, _optimizer = self._root_and_candidate(base)
+            receipt = self._write_vision_successor(base, parent_manifest=parent_manifest, root_manifest=parent_manifest)
+            parent_sha256 = hashlib.sha256(parent_manifest.read_bytes()).hexdigest()
+        self.assertEqual(receipt["schema_version"], "ember-sparse-checkpoint-v4")
+        self.assertEqual(receipt["contract_version"], 4)
+        self.assertEqual(receipt["lineage"]["parent_checkpoint_sha256"], parent_sha256)
+        self.assertEqual(receipt["lineage"]["root_genesis_checkpoint_sha256"], parent_sha256)
+        self.assertEqual(receipt["lineage"]["trained_expert_ids"], ["vision"])
+        self.assertEqual(receipt["lineage"]["episode"]["active_expert"], "vision")
+        self.assertEqual(receipt["lineage"]["episode"]["data_verification_receipt"], _verification())
+        self.assertNotIn("parent_manifest", json.dumps(receipt))
+        self.assertNotIn("root_manifest", json.dumps(receipt))
+        self.assertEqual(parent["active_expert_ids"], ["shared"])
+
+    def test_first_successor_requires_parent_and_root_to_be_the_same_genesis_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            self._root_and_candidate(base)
+            second_root = base / "other-root"
+            model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=99)
+            _write_root(model, torch.optim.AdamW(model.parameters(), lr=1e-4), second_root)
+            with self.assertRaisesRegex(ValueError, "parent and root"):
+                self._write_vision_successor(base, root_manifest=second_root / "checkpoint-manifest.json")
+
+    def test_specialist_writer_rejects_missing_or_non_content_addressed_parent_or_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            missing = base / "missing" / "checkpoint-manifest.json"
+            with self.assertRaisesRegex(ValueError, "parent manifest"):
+                self._write_vision_successor(base, parent_manifest=missing)
+            with self.assertRaisesRegex(ValueError, "root genesis manifest"):
+                self._write_vision_successor(base, root_manifest=missing)
+            self.assertFalse(list(base.glob(".candidate.*.staging")))
+
+    def test_specialist_writer_rejects_tampered_parent_shard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            self._root_and_candidate(base)
+            parent_manifest = base / "root" / "checkpoint-manifest.json"
+            (base / "root" / "expert-audio.pt").write_bytes(b"tampered")
+            with self.assertRaisesRegex(ValueError, "hash mismatch"):
+                self._write_vision_successor(base, parent_manifest=parent_manifest, root_manifest=parent_manifest)
+
+    def test_specialist_writer_rejects_active_unchanged_and_inactive_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            parent, parent_manifest, candidate, optimizer = self._root_and_candidate(base)
+            with self.assertRaisesRegex(ValueError, "active expert parameter content"):
+                write_checkpoint_artifacts(candidate, optimizer, base / "same", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification()})
+            next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
+            next(parameter for name, parameter in candidate.named_parameters() if ".experts.audio." in name).data.add_(1)
+            with self.assertRaisesRegex(ValueError, "inactive expert.*parent"):
+                write_checkpoint_artifacts(candidate, optimizer, base / "drift", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification()})
+
+    def test_specialist_writer_rejects_wrong_history_or_capability_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            with self.assertRaisesRegex(ValueError, "history union"):
+                self._write_vision_successor(base, trained=[])
+            base = Path(directory) / "capability"
+            parent, parent_manifest, candidate, optimizer = self._root_and_candidate(base)
+            next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
+            with self.assertRaisesRegex(ValueError, "capability"):
+                write_checkpoint_artifacts(candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification("audio")})
+
+
+
+    def test_v4_requires_parameter_content_digests_and_canonical_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            parent, parent_manifest, candidate, optimizer = self._root_and_candidate(base)
+            next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
+            receipt = write_checkpoint_artifacts(candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification()})
+        self.assertEqual(set(receipt["expert_parameter_sha256"]), {"vision", "audio", "reasoning", "tool"})
+        self.assertNotEqual(receipt["expert_parameter_sha256"]["vision"], parent["expert_genesis_sha256"]["vision"])
+
+    def test_specialist_writer_rejects_noncanonical_semantic_checks_and_boolean_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            parent, parent_manifest, candidate, optimizer = self._root_and_candidate(base)
+            next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
+            bad = _verification()
+            bad["semantic_checks"] = ["locally_derived"]
+            with self.assertRaisesRegex(ValueError, "semantic checks"):
+                write_checkpoint_artifacts(candidate, optimizer, base / "bad-checks", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad})
+            bad = _verification()
+            bad["record_count"] = True
+            with self.assertRaisesRegex(ValueError, "training evidence"):
+                write_checkpoint_artifacts(candidate, optimizer, base / "bad-count", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad})
+
+
+    def test_writer_cleans_only_generated_staging_directory_after_write_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+            model = UnifiedDecoder(config, genesis_seed=83)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+            import checkpoint_artifacts
+            original = checkpoint_artifacts._write_atomic
+            def fail_replay(root: Path, filename: str, writer: object) -> Path:
+                if filename == "replay-state.pt":
+                    raise RuntimeError("injected write failure")
+                return original(root, filename, writer)
+            with patch.object(checkpoint_artifacts, "_write_atomic", side_effect=fail_replay):
+                with self.assertRaisesRegex(RuntimeError, "injected write failure"):
+                    write_checkpoint_artifacts(model, optimizer, base / "failed", launch_seed=83, rng_state=_rng_state(), data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            self.assertFalse((base / "failed").exists())
+            self.assertFalse(list(base.glob(".failed.*.staging")))
+
+
+    def test_later_successor_keeps_immutable_root_and_exact_union_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            first = self._write_vision_successor(base)
+            first_manifest_path = base / "candidate" / "checkpoint-manifest.json"
+            root_manifest_path = base / "root" / "checkpoint-manifest.json"
+            root_sha256 = hashlib.sha256(root_manifest_path.read_bytes()).hexdigest()
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+            model = UnifiedDecoder(config, genesis_seed=7)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+            load_checkpoint_artifacts(model, optimizer, base / "candidate", {**first, "checkpoint_manifest_sha256": hashlib.sha256(first_manifest_path.read_bytes()).hexdigest()})
+            model._activate_expert("audio")
+            next(parameter for name, parameter in model.named_parameters() if ".experts.audio." in name).data.add_(1)
+            second = write_checkpoint_artifacts(model, optimizer, base / "second", launch_seed=1001, rng_state=_rng_state(), data_cursor={"shard": "verified-audio", "record_index": 3, "global_step": 3, "tokens_seen": 48}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256={"vision": "0" * 64, "audio": "0" * 64, "reasoning": "0" * 64, "tool": "0" * 64}, specialist_lineage={"parent_manifest": first_manifest_path, "root_manifest": root_manifest_path, "trained_expert_ids": ["vision", "audio"], "data_verification_receipt": _verification("audio")})
+        self.assertEqual(second["lineage"]["root_genesis_checkpoint_sha256"], root_sha256)
+        self.assertEqual(second["lineage"]["trained_expert_ids"], ["vision", "audio"])
+        self.assertEqual(second["expert_checkpoint_sha256"]["vision"], first["expert_checkpoint_sha256"]["vision"])
+        self.assertEqual(second["expert_parameter_sha256"]["tool"], first["expert_parameter_sha256"]["tool"])
+
+if __name__ == "__main__":
+    unittest.main()

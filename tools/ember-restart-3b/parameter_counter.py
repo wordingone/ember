@@ -273,6 +273,8 @@ def _inspect_realization(manifest_path: Path, *, active_expert: str, shape: Mapp
         raise ValueError("checkpoint realization must have one shared and four expert shards")
     if manifest.get("active_expert_ids") != [active_expert]:
         raise ValueError("checkpoint active expert does not match executed counter argument")
+    if active_expert != "shared" and manifest.get("schema_version") != "ember-sparse-checkpoint-v4":
+        raise ValueError("specialist-active realization requires a v4 lineage manifest")
     genesis = manifest.get("expert_genesis_sha256")
     if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES):
         raise ValueError("checkpoint lacks the four expert genesis hashes")
@@ -321,7 +323,7 @@ def _counts(shape: Mapping[str, int], *, active_expert: str) -> dict[str, int]:
     }
 
 
-def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_expert: str) -> dict[str, Any]:
+def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_expert: str, parent_manifest: Path | None = None, root_manifest: Path | None = None) -> dict[str, Any]:
     if active_expert not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("active expert must be shared or one of the four authorized banks")
     config = _load_json(model_config)
@@ -329,6 +331,51 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         raise ValueError("model config revision is not ember-sparse-3b-v2")
     shape = _model_shape(config)
     manifest = _inspect_realization(checkpoint_manifest, active_expert=active_expert, shape=shape)
+    if active_expert != "shared" and (parent_manifest is None or root_manifest is None):
+        raise ValueError("specialist-active realization requires external parent and root manifests")
+    if active_expert != "shared":
+        lineage = manifest.get("lineage")
+        if not isinstance(lineage, Mapping):
+            raise ValueError("specialist-active realization lacks v4 lineage")
+        parent_manifest = Path(parent_manifest).resolve()
+        root_manifest = Path(root_manifest).resolve()
+        if lineage.get("parent_checkpoint_sha256") != _sha256(parent_manifest):
+            raise ValueError("specialist lineage parent checkpoint hash does not match external manifest")
+        if lineage.get("root_genesis_checkpoint_sha256") != _sha256(root_manifest):
+            raise ValueError("specialist lineage root checkpoint hash does not match external manifest")
+        external_manifests: dict[str, dict[str, Any]] = {}
+        for external_manifest, label in ((parent_manifest, "parent"), (root_manifest, "root")):
+            external = _load_json(external_manifest)
+            external_active = external.get("active_expert_ids")
+            if not isinstance(external_active, list) or len(external_active) != 1:
+                raise ValueError(f"external {label} manifest lacks one active expert")
+            external_manifests[label] = _inspect_realization(external_manifest, active_expert=external_active[0], shape=shape)
+        parent_external, root_external = external_manifests["parent"], external_manifests["root"]
+        candidate_parameters = manifest.get("expert_parameter_sha256")
+        parent_parameters = parent_external.get("expert_parameter_sha256", parent_external.get("expert_genesis_sha256"))
+        root_parameters = root_external.get("expert_parameter_sha256", root_external.get("expert_genesis_sha256"))
+        candidate_files = manifest.get("expert_checkpoint_sha256")
+        parent_files = parent_external.get("expert_checkpoint_sha256")
+        history = lineage.get("trained_expert_ids")
+        if (not isinstance(candidate_parameters, dict) or set(candidate_parameters) != set(EXPERT_NAMES)
+                or not isinstance(parent_parameters, dict) or set(parent_parameters) != set(EXPERT_NAMES)
+                or not isinstance(root_parameters, dict) or set(root_parameters) != set(EXPERT_NAMES)
+                or not isinstance(candidate_files, dict) or not isinstance(parent_files, dict)
+                or not isinstance(history, list) or active_expert not in history):
+            raise ValueError("specialist v4 lineage lacks closed expert accretion fields")
+        for name in EXPERT_NAMES:
+            _sha256_value(candidate_parameters[name], label=f"candidate {name} parameter hash")
+        if candidate_parameters[active_expert] == parent_parameters[active_expert]:
+            raise ValueError("active expert parameter content does not differ from parent")
+        for name in EXPERT_NAMES:
+            if name == active_expert:
+                continue
+            if candidate_files.get(name) != parent_files.get(name):
+                raise ValueError(f"inactive expert file does not match parent: {name}")
+            if candidate_parameters[name] != parent_parameters[name]:
+                raise ValueError(f"inactive expert parameter content does not match parent: {name}")
+            if name not in history and candidate_parameters[name] != root_parameters[name]:
+                raise ValueError(f"untrained expert parameter content does not match root: {name}")
     config_sha256 = _sha256(model_config)
     if manifest.get("model_config_sha256") != config_sha256:
         raise ValueError("checkpoint model-config hash mismatch")
@@ -386,12 +433,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model-config", type=Path, required=True)
     parser.add_argument("--checkpoint-manifest", type=Path, required=True)
     parser.add_argument("--active-expert", required=True)
+    parser.add_argument("--parent-manifest", type=Path)
+    parser.add_argument("--root-manifest", type=Path)
     args = parser.parse_args(argv)
     try:
         print(json.dumps(execute_counter(
             model_config=args.model_config,
             checkpoint_manifest=args.checkpoint_manifest,
             active_expert=args.active_expert,
+            parent_manifest=args.parent_manifest,
+            root_manifest=args.root_manifest,
         ), sort_keys=True))
     except Exception as error:
         print(f"parameter realization failed: {error}", file=sys.stderr)
