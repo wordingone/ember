@@ -43,3 +43,12 @@ def test_spider_source_only_audit_binds_the_absent_asset_boundary():
         "runner_receipt_sha256": "fd3c3af5f5300c4c288a2ef8181c0bc08d40beee5a5d7c1254a79d4ee8fbfd71",
         "claim_status": "SOURCE_ONLY_NO_FROZEN_SQL_EVALUATION_ASSETS",
     }
+
+def test_spider_validation_pair_freeze_is_custody_only_without_databases():
+    custody = json.loads((ROOT / "manifests" / "ember-restart-spider-custody-v1.json").read_text(encoding="utf-8"))
+    assert custody["validation_pairs_materialization"] == {
+        "upstream_revision": "0c350918f3f29ec754f1181c65cdce76cd6c133c",
+        "artifact_sha256": "6fa91248385896a6e74dff55a01fdc8df9fc7854bd007bd092a75c663631c6de",
+        "runner_receipt_sha256": "76e04b0d5a79e928f8344514fd1a31f3e9ec1dc836abc429b7d7321157a403c5",
+        "claim_status": "FROZEN_SPIDER_VALIDATION_PAIRS_NO_DATABASE_EXECUTION",
+    }
