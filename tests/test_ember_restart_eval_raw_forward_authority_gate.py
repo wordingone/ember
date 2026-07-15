@@ -26,8 +26,8 @@ def _load_raw_forward():
     return module
 
 
-def test_committed_authority_accepts_the_current_public_forward_dependency_bytes():
-    """No monkeypatch: this is the exact gate used before model loading."""
+def test_current_registry_rejects_exact_tuple_while_runtime_same_byte_binding_is_unimplemented():
+    """The real gate must fail closed until runtime consumes authorized bytes once."""
     module = _load_raw_forward()
     arguments = argparse.Namespace(
         model_source=ROOT / "tools" / "ember-restart-3b" / "model.py",
@@ -35,9 +35,8 @@ def test_committed_authority_accepts_the_current_public_forward_dependency_bytes
         tokenizer=ROOT / "tokenizer" / "tokenizer.json",
     )
 
-    # RED until a reviewed successor records the public PR #839 model/config
-    # bytes and this file's current implementation hash in the registry.
-    module.require_execution_authority(arguments)
+    with pytest.raises(ValueError, match="execution authority disposition"):
+        module.require_execution_authority(arguments)
 
 def test_authority_rejects_correct_tuple_when_registry_disposition_is_not_authorized(tmp_path):
     module = _load_raw_forward()
@@ -61,6 +60,7 @@ def test_authority_registry_binds_the_canonical_git_blob_bytes():
 
     assert len(blob) == 13_398
     assert hashlib.sha256(blob).hexdigest() == "1e7f6bbdb19bd2f98285d1cbeb0e53ef5449e537e1b7d67fec29c1df1612a59e"
+    assert registry["disposition"] == "PREPARED_NOT_EXECUTABLE_AWAITING_PROMPT_AND_SAME_BYTE_RUNTIME_BINDING"
     assert registry["authorities"] == [{
         "model_source_sha256": "5609032c21aa6020ddc7a492ab5817a86d425571ae81a46efe951c784e70c5bf",
         "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
