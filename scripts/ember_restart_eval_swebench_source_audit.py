@@ -38,6 +38,8 @@ def main() -> int:
         if actual.returncode or actual.stdout.strip() != arguments.expected_commit:
             raise ValueError("SWE-bench source commit does not match expected commit")
         present = [name for name in TASK_RELEASE_PATHS if (arguments.swebench_root / name).exists()]
+        release_names = {"swebench_lite.json", "swebench_verified.json"}
+        present.extend(path.relative_to(arguments.swebench_root).as_posix() for path in arguments.swebench_root.rglob("*") if path.is_file() and path.name.lower() in release_names)
         if present:
             raise ValueError("task-release assets are present in source-only checkout")
     except (OSError, subprocess.SubprocessError, ValueError) as error:
