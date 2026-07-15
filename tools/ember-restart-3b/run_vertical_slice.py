@@ -109,6 +109,44 @@ def _retain_after_success(
     return result
 
 
+def load_verified_specialist_records(
+    *, root: Path, data_manifest: Path, tokenizer_path: Path, capability: str,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Execute the independent manifest verifier and admit one routed expert family."""
+
+    expert_for_capability = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
+    if capability not in expert_for_capability:
+        raise ValueError("specialist capability must be image, audio, reasoning, or tool")
+    root = root.resolve()
+    manifest = data_manifest.resolve()
+    if root not in manifest.parents:
+        raise ValueError("specialist data manifest must reside in the selected worktree")
+    verifier = Path(__file__).with_name("verify_training_data.py")
+    completed = subprocess.run(
+        [sys.executable, "-I", str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
+        cwd=root, text=True, capture_output=True, check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"specialist data verifier failed: {completed.stderr.strip() or completed.stdout.strip()}")
+    try:
+        verification = json.loads(completed.stdout)
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise RuntimeError("specialist data verifier or manifest did not emit JSON") from error
+    if not isinstance(verification, dict) or verification.get("result") != "VERIFIED" or verification.get("capability") != capability:
+        raise RuntimeError("specialist data verifier did not produce the required verified receipt")
+    records_ref = payload.get("records_artifact") if isinstance(payload, dict) else None
+    relative = records_ref.get("path") if isinstance(records_ref, dict) else None
+    if not isinstance(relative, str):
+        raise RuntimeError("verified specialist manifest lacks a records artifact path")
+    records_payload = json.loads((root / relative).read_text(encoding="utf-8"))
+    records = records_payload.get("records") if isinstance(records_payload, dict) else None
+    if not isinstance(records, list) or not records or any(not isinstance(record, dict) for record in records):
+        raise RuntimeError("verified specialist records artifact is malformed")
+    if {record.get("active_expert") for record in records} != {expert_for_capability[capability]}:
+        raise RuntimeError("verified specialist records do not contain exactly the requested route")
+    return records, verification
+
 def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
     """Consume #812 identity before reading the exact owned four-domain bytes."""
 
@@ -269,7 +307,7 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
         block_wise=bool(hyperparameters["block_wise"]),
     )
 
-def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None) -> dict[str, object]:
+def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, records_override: list[dict[str, object]] | None = None, specialist_verification: dict[str, object] | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
@@ -288,7 +326,16 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     memory_preflight = production_memory_preflight(total_parameters=total_parameters, active_parameters=active_parameters, device_free_bytes=int(device_free_bytes))
     if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
         raise RuntimeError("memory preflight and production numerics disagree")
-    records, launch_packet, input_receipt = load_authorized_records(root)
+    if records_override is None:
+        records, launch_packet, input_receipt = load_authorized_records(root)
+        data_shard_id = str(launch_packet["input_identity"]["shard_path"])
+    else:
+        if not records_override or not isinstance(specialist_verification, dict):
+            raise ValueError("specialist production run requires verified routed records")
+        records = records_override
+        launch_packet = {"input_identity": {"shard_path": "verified-specialist"}}
+        input_receipt = specialist_verification
+        data_shard_id = "VERIFIED_SPECIALIST:" + str(specialist_verification["data_manifest_sha256"])[:12]
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
 
@@ -325,11 +372,13 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
         checkpoint_every=len(records), checkpoint_callback=lambda _step, _result: None,
         initial_global_step=int(resume_cursor["global_step"]), initial_tokens_seen=int(resume_cursor["tokens_seen"]),
-        initial_data_cursor=int(resume_cursor["record_index"]), data_shard_id=str(launch_packet["input_identity"]["shard_path"]),
+        initial_data_cursor=int(resume_cursor["record_index"]), data_shard_id=data_shard_id, require_complete_coverage=(records_override is None),
     )
     rng_state_after_step = _rng_state(torch.device("cuda"))
     data_cursor = dict(segment["data_cursor"])
     data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
+    if records_override is not None:
+        data_cursor["specialist_verification"] = specialist_verification
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
@@ -368,6 +417,21 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         "post_step_checkpoint": checkpoint,
         "parameter_receipt": parameter_receipt,
     }
+
+def run_specialist(
+    *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
+    capability: str, resume_checkpoint: Path | None = None,
+) -> dict[str, object]:
+    """Run one verifier-bound specialist family through the canonical checkpoint path."""
+
+    root = Path(__file__).resolve().parents[2]
+    records, verification = load_verified_specialist_records(
+        root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
+    )
+    return run(
+        seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint,
+        records_override=records, specialist_verification=verification,
+    )
 
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
@@ -503,6 +567,13 @@ def main() -> None:
     vertical.add_argument("--seed", type=int, required=True)
     vertical.add_argument("--artifact-root", type=Path, required=True)
     vertical.add_argument("--resume-checkpoint", type=Path)
+    specialist = subparsers.add_parser("specialist")
+    specialist.add_argument("--seed", type=int, required=True)
+    specialist.add_argument("--artifact-root", type=Path, required=True)
+    specialist.add_argument("--data-manifest", type=Path, required=True)
+    specialist.add_argument("--tokenizer", type=Path, required=True)
+    specialist.add_argument("--capability", choices=("image", "audio", "reasoning", "tool"), required=True)
+    specialist.add_argument("--resume-checkpoint", type=Path)
     semantic = subparsers.add_parser("semantic")
     semantic.add_argument("--seed", type=int, required=True)
     semantic.add_argument("--artifact-root", type=Path, required=True)
@@ -513,7 +584,9 @@ def main() -> None:
     semantic.add_argument("--sequence-length", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
-    if args.command == "semantic":
+    if args.command == "specialist":
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint)
+    elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
             artifact_root=args.artifact_root,
