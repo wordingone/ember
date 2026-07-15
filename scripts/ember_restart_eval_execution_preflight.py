@@ -21,7 +21,7 @@ def main():
  if envelope['checkpoint_manifest_sha256']!=checkpoint or benchmark['capability']!=a.capability or benchmark['id']!=a.benchmark_id or benchmark['version']!=a.benchmark_version or benchmark['split_sha256']!=split or benchmark['protocol_sha256']!=protocol:p.error('canonical prediction envelope does not bind supplied evaluation inputs')
  expected=f'ember-3b-{a.capability}-capability-v1';rows=envelope['rows']
  if not isinstance(score,dict) or score.get('criterion_id')!=expected or score.get('criterion_result') not in ('PASSED','FAILED'):p.error('evaluator score artifact must explicitly provide the pinned criterion')
- if a.capability in {'text','image','tool'} and score.get('predictions_sha256')!=predictions_sha256:p.error(f'{a.capability} score source hashes do not bind supplied evidence')
+ if a.capability in {'text','image','reasoning','tool'} and score.get('predictions_sha256')!=predictions_sha256:p.error(f'{a.capability} score source hashes do not bind supplied evidence')
  if a.benchmark_id=='audiobench':
   if a.closed_run_artifact is None:p.error('AudioBench preflight requires closed run artifact')
   if score.get('predictions_sha256')!=predictions_sha256 or score.get('run_artifact_sha256')!=sha256(a.closed_run_artifact):p.error('AudioBench score source hashes do not bind supplied evidence')
