@@ -51,7 +51,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}),
                 encoding="utf-8",
             )
-            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=512)["reasoning"]
+            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)["reasoning"]
             poison = root / "ambient-poison"
             poison.mkdir()
             marker = root / "ambient-imported.txt"
@@ -64,7 +64,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning",
                 )
             self.assertFalse(marker.exists(), "the isolated verifier imported an ambient PYTHONPATH candidate")
-            self.assertGreaterEqual(len(records), 512)
+            self.assertGreaterEqual(len(records), 4_096)
             self.assertEqual(receipt["result"], "VERIFIED")
         wrapper = inspect.getsource(run_vertical_slice.load_verified_specialist_records)
         self.assertIn("sys.path[:0]=[sys.argv[1],sys.argv[2]]", wrapper)
@@ -81,9 +81,9 @@ class RunnerPreflightTests(unittest.TestCase):
             frozen.save(str(tokenizer))
             config = root / "config.json"
             config.write_text(json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}), encoding="utf-8")
-            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=512)["reasoning"]
+            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)["reasoning"]
             records_out, verification = run_vertical_slice.load_verified_specialist_records(root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
-        self.assertGreaterEqual(len(records_out), 512)
+        self.assertGreaterEqual(len(records_out), 4_096)
         self.assertEqual(verification["result"], "VERIFIED")
         self.assertEqual(verification["capability"], "reasoning")
         self.assertIs(verification["generator_replay_verified"], True)

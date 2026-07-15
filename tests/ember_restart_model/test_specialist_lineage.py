@@ -105,6 +105,44 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertNotIn("root_manifest", json.dumps(receipt))
         self.assertEqual(parent["active_expert_ids"], ["shared"])
 
+    def test_first_successor_accepts_shared_v3_continuation_with_immutable_root_experts(self) -> None:
+        """A shared-only v3 continuation may be the immediate parent when all expert bytes remain root-identical."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, root_manifest, _candidate, _optimizer = self._root_and_candidate(base)
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+            shared = UnifiedDecoder(config, genesis_seed=101)
+            shared_optimizer = torch.optim.AdamW(shared.parameters(), lr=1e-4)
+            load_checkpoint_artifacts(shared, shared_optimizer, base / "root", {**root, "checkpoint_manifest_sha256": hashlib.sha256(root_manifest.read_bytes()).hexdigest()})
+            shared._activate_expert("shared")
+            next(parameter for name, parameter in shared.named_parameters() if ".experts." not in name).data.add_(1)
+            step2 = write_checkpoint_artifacts(
+                shared, shared_optimizer, base / "step2", launch_seed=83, rng_state=_rng_state(),
+                data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 2, "global_step": 2, "tokens_seen": 32},
+                model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                expert_genesis_sha256=root["expert_genesis_sha256"],
+            )
+            step2_manifest = base / "step2" / "checkpoint-manifest.json"
+            step2_sha256 = hashlib.sha256(step2_manifest.read_bytes()).hexdigest()
+            root_sha256 = hashlib.sha256(root_manifest.read_bytes()).hexdigest()
+            candidate = UnifiedDecoder(config, genesis_seed=202)
+            candidate_optimizer = torch.optim.AdamW(candidate.parameters(), lr=1e-4)
+            load_checkpoint_artifacts(candidate, candidate_optimizer, base / "step2", {**step2, "checkpoint_manifest_sha256": step2_sha256})
+            candidate._activate_expert("vision")
+            next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
+            receipt = write_checkpoint_artifacts(
+                candidate, candidate_optimizer, base / "vision", launch_seed=84, rng_state=_rng_state(),
+                data_cursor={"shard": "VERIFIED_SPECIALIST:test", "record_index": 1, "global_step": 3, "tokens_seen": 48},
+                model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                expert_genesis_sha256=root["expert_genesis_sha256"],
+                specialist_lineage={
+                    "parent_manifest": step2_manifest, "root_manifest": root_manifest,
+                    "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(),
+                },
+            )
+        self.assertEqual(receipt["lineage"]["parent_checkpoint_sha256"], step2_sha256)
+        self.assertEqual(receipt["lineage"]["root_genesis_checkpoint_sha256"], root_sha256)
+        self.assertEqual(receipt["lineage"]["trained_expert_ids"], ["vision"])
     def test_first_successor_requires_parent_and_root_to_be_the_same_genesis_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

@@ -21,6 +21,20 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 
 class SpecialistBundleTests(unittest.TestCase):
+    def test_production_corpus_policy_rejects_legacy_512_record_route_for_every_family(self) -> None:
+        from build_specialist_bundle import DEFAULT_PRODUCTION_RECORDS, MIN_ADMISSIBLE_RECORDS, emit_bundle
+        from verify_training_data import SPECIALIST_MINIMUMS
+
+        self.assertEqual(DEFAULT_PRODUCTION_RECORDS, 65_536)
+        self.assertEqual(MIN_ADMISSIBLE_RECORDS, 4_096)
+        self.assertEqual(SPECIALIST_MINIMUMS["image"]["records"], 4_096)
+        self.assertEqual(SPECIALIST_MINIMUMS["image"]["tokens"], 24_576)
+        with self.assertRaisesRegex(ValueError, "at least 4096"):
+            emit_bundle(
+                repo_root=ROOT, output_root=ROOT / "never-created", tokenizer_path=ROOT / "missing-tokenizer.json",
+                model_config_path=ROOT / "missing-config.json", count=512,
+            )
+
     def test_emitter_produces_four_independently_verified_source_bound_manifests(self) -> None:
         from build_specialist_bundle import emit_bundle
 
@@ -33,15 +47,15 @@ class SpecialistBundleTests(unittest.TestCase):
             frozen.save(str(tokenizer))
             config = root / "config.json"
             config.write_text(json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}), encoding="utf-8")
-            emitted = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=512)
+            emitted = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)
             self.assertEqual(set(emitted), {"image", "audio", "reasoning", "tool"})
             for capability, manifest in emitted.items():
-                completed = subprocess.run([sys.executable, str(VERIFIER), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer), "--capability", capability], cwd=ROOT, text=True, capture_output=True, timeout=30, check=False)
+                completed = subprocess.run([sys.executable, str(VERIFIER), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer), "--capability", capability], cwd=ROOT, text=True, capture_output=True, timeout=180, check=False)
                 self.assertEqual(completed.returncode, 0, completed.stderr)
                 receipt = json.loads(completed.stdout)
                 self.assertEqual(receipt["result"], "VERIFIED")
-                self.assertGreaterEqual(receipt["record_count"], 512)
-                self.assertGreaterEqual(receipt["token_count"], 4096)
+                self.assertGreaterEqual(receipt["record_count"], 4_096)
+                self.assertGreaterEqual(receipt["token_count"], 24_576)
                 payload = json.loads(manifest.read_text(encoding="utf-8"))
                 source_path = ROOT / payload["source_manifest"]["path"]
                 source = json.loads(source_path.read_text(encoding="utf-8"))
@@ -62,7 +76,7 @@ class SpecialistBundleTests(unittest.TestCase):
             frozen.save(str(tokenizer))
             config = root / "config.json"
             config.write_text(json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}), encoding="utf-8")
-            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=512)["image"]
+            manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)["image"]
             payload = json.loads(manifest.read_text(encoding="utf-8"))
             records_path = ROOT / payload["records_artifact"]["path"]
             records_payload = json.loads(records_path.read_text(encoding="utf-8"))
@@ -70,7 +84,7 @@ class SpecialistBundleTests(unittest.TestCase):
             records_path.write_text(json.dumps(records_payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
             payload["records_artifact"]["sha256"] = hashlib.sha256(records_path.read_bytes()).hexdigest()
             manifest.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
-            completed = subprocess.run([sys.executable, str(VERIFIER), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer), "--capability", "image"], cwd=ROOT, text=True, capture_output=True, timeout=30, check=False)
+            completed = subprocess.run([sys.executable, str(VERIFIER), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer), "--capability", "image"], cwd=ROOT, text=True, capture_output=True, timeout=180, check=False)
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("generator replay", completed.stderr)
 if __name__ == "__main__":
