@@ -319,8 +319,14 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, m
                 "owned_identity": runtime.identity.payload(),
             }
             if request.get("stream") is True:
+                chunk = {
+                    "id": completion["id"], "object": "chat.completion.chunk", "created": completion["created"],
+                    "model": runtime.identity.model_name,
+                    "choices": [{"index": 0, "delta": {"role": "assistant", "content": text}, "finish_reason": finish_reason}],
+                    "owned_identity": runtime.identity.payload(),
+                }
                 self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.send_header("Cache-Control", "no-cache"); self.end_headers()
-                self.wfile.write(("data: " + json.dumps(completion, sort_keys=True, separators=(",", ":")) + "\n\ndata: [DONE]\n\n").encode("utf-8")); self.wfile.flush()
+                self.wfile.write(("data: " + json.dumps(chunk, sort_keys=True, separators=(",", ":")) + "\n\ndata: [DONE]\n\n").encode("utf-8")); self.wfile.flush()
                 return
             self._write(200, completion)
 
@@ -490,6 +496,8 @@ def main(argv: list[str] | None = None) -> int:
     start_parent_watchdog(args.parent_pid)
     if args.development_manifest is not None:
         development = resolve_development_identity(args.development_manifest)
+        if development.get("server_source_sha256") != sha(Path(__file__)):
+            raise ValueError("development authority does not match server source bytes")
         config_path = ROOT / "configs" / "ember-restart-3b.json"
         checkpoint_manifest = args.checkpoint / "checkpoint-manifest.json"
         if sha(checkpoint_manifest) != development["checkpoint_sha256"] or sha(config_path) != development["model_config_sha256"]:

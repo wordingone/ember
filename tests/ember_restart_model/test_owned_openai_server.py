@@ -103,8 +103,12 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             )
             with urllib.request.urlopen(request, timeout=2) as response:
                 stream = response.read().decode("utf-8")
-            self.assertIn("data: ", stream)
-            self.assertTrue(stream.rstrip().endswith("data: [DONE]"))
+            lines = [line for line in stream.splitlines() if line.startswith("data: ")]
+            self.assertEqual(len(lines), 2)
+            chunk = json.loads(lines[0][6:])
+            self.assertEqual(chunk["object"], "chat.completion.chunk")
+            self.assertEqual(chunk["choices"], [{"index": 0, "delta": {"role": "assistant", "content": "owned answer"}, "finish_reason": "stop"}])
+            self.assertEqual(lines[1], "data: [DONE]")
         finally:
             server.shutdown(); server.server_close(); thread.join(timeout=2)
     def test_models_identity_and_chat_share_exact_owned_runtime(self) -> None:
@@ -287,6 +291,30 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match frozen"):
                 runtime.chat([{"role": "user", "content": "unbound"}], frozen_row_id="row-1", max_tokens=3)
 
+    def test_development_source_mismatch_stops_before_tokenizer_or_loader(self) -> None:
+        development = {
+            "checkpoint_sha256": "a" * 64,
+            "model_config_sha256": "b" * 64,
+            "tokenizer_sha256": "c" * 64,
+            "server_source_sha256": "0" * 64,
+            "tokens_seen": 2048,
+            "allocated_parameters": 3_839_161_856,
+            "active_parameters": 1_020_589_568,
+        }
+        with (
+            patch("serve_owned_openai.start_parent_watchdog"),
+            patch("serve_owned_openai.resolve_development_identity", return_value=development),
+            patch("serve_owned_openai.load_frozen_tokenizer") as tokenizer,
+            patch("serve_owned_openai.load_development_shared_runtime") as loader,
+        ):
+            with self.assertRaisesRegex(ValueError, "server source"):
+                serve_main([
+                    "--checkpoint", "checkpoint", "--tokenizer", "tokenizer.json",
+                    "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                    "--parent-pid", str(os.getpid()), "--device", "cpu",
+                ])
+        tokenizer.assert_not_called()
+        loader.assert_not_called()
     def test_development_loader_uses_bf16_meta_shared_route_without_specialist_loads(self) -> None:
         model = MagicMock()
         model.state_dict.return_value = {
