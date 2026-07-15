@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import torch
 import sys
@@ -212,6 +213,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             result = serve_main([
                 "--checkpoint", "checkpoint",
                 "--tokenizer", "tokenizer.json",
+                "--config", "config.json",
                 "--run-manifest", "run.json",
                 "--trusted-verifier-registry", "registry.json",
                 "--mode", "INTERACTIVE",
@@ -222,6 +224,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(events[0], ("parent", os.getpid()))
         self.assertEqual(events[1][0], "load")
+        self.assertEqual(load.call_args.kwargs["config_path"], Path("config.json"))
         self.assertIsNone(load.call_args.kwargs["frozen_split"])
         create.assert_called_once_with(runtime, host="127.0.0.1", port=8000, mode="INTERACTIVE")
         server.serve_forever.assert_called_once_with()
@@ -291,6 +294,55 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match frozen"):
                 runtime.chat([{"role": "user", "content": "unbound"}], frozen_row_id="row-1", max_tokens=3)
 
+    def test_main_requires_explicit_config_before_any_runtime_loader(self) -> None:
+        with (
+            patch("serve_owned_openai.start_parent_watchdog") as watchdog,
+            patch.object(LoadedOwnedRuntime, "from_paths") as admitted_loader,
+            patch("serve_owned_openai.resolve_development_identity") as development_resolver,
+            patch("serve_owned_openai.create_loopback_server"),
+        ):
+            with self.assertRaises(SystemExit):
+                serve_main([
+                    "--checkpoint", "checkpoint", "--tokenizer", "tokenizer.json",
+                    "--run-manifest", "run.json", "--trusted-verifier-registry", "registry.json",
+                    "--mode", "INTERACTIVE", "--parent-pid", str(os.getpid()), "--device", "cpu",
+                ])
+        watchdog.assert_not_called()
+        admitted_loader.assert_not_called()
+        development_resolver.assert_not_called()
+
+    def test_development_config_mismatch_stops_before_tokenizer_or_loader(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "checkpoint"
+            checkpoint.mkdir()
+            checkpoint_manifest = checkpoint / "checkpoint-manifest.json"
+            checkpoint_manifest.write_text("{}", encoding="utf-8")
+            config = root / "config.json"
+            config.write_text("{}", encoding="utf-8")
+            development = {
+                "checkpoint_sha256": hashlib.sha256(checkpoint_manifest.read_bytes()).hexdigest(),
+                "model_config_sha256": "0" * 64,
+                "tokenizer_sha256": "c" * 64,
+                "server_source_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "serve_owned_openai.py").read_bytes()).hexdigest(),
+                "tokens_seen": 2048,
+                "allocated_parameters": 3_839_161_856,
+                "active_parameters": 1_020_589_568,
+            }
+            with (
+                patch("serve_owned_openai.start_parent_watchdog"),
+                patch("serve_owned_openai.resolve_development_identity", return_value=development),
+                patch("serve_owned_openai.load_frozen_tokenizer") as tokenizer,
+                patch("serve_owned_openai.load_development_shared_runtime") as loader,
+            ):
+                with self.assertRaisesRegex(ValueError, "checkpoint/config"):
+                    serve_main([
+                        "--checkpoint", str(checkpoint), "--tokenizer", "tokenizer.json", "--config", str(config),
+                        "--development-manifest", "development.json", "--mode", "INTERACTIVE",
+                        "--parent-pid", str(os.getpid()), "--device", "cpu",
+                    ])
+            tokenizer.assert_not_called()
+            loader.assert_not_called()
     def test_development_source_mismatch_stops_before_tokenizer_or_loader(self) -> None:
         development = {
             "checkpoint_sha256": "a" * 64,
@@ -309,7 +361,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ValueError, "server source"):
                 serve_main([
-                    "--checkpoint", "checkpoint", "--tokenizer", "tokenizer.json",
+                    "--checkpoint", "checkpoint", "--tokenizer", "tokenizer.json", "--config", "config.json",
                     "--development-manifest", "development.json", "--mode", "INTERACTIVE",
                     "--parent-pid", str(os.getpid()), "--device", "cpu",
                 ])
