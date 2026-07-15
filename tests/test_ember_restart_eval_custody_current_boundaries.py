@@ -31,8 +31,8 @@ def test_mmmu_pinned_validation_materialization_is_source_compatible_not_a_score
     custody = json.loads((ROOT / "manifests" / "ember-restart-mmmu-validation-custody-v1.json").read_text(encoding="utf-8"))
     assert custody["validation_parquet_materialization"] == {
         "upstream_revision": "f87afafe4afe71650b99ef5236d7b5bb3f6345c7",
-        "artifact_sha256": "9fd83f534080d8ae85a3c79203ffa6c5b216e3accc4429f23a3ead6f83f3f512",
-        "runner_receipt_sha256": "b6a37be5fbe4b50db4758793863bb9361c99dbe0c5b40e327add77b4a39e1585",
+        "artifact_sha256": "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
+        "runner_receipt_sha256": "0302a0db75c07830ca0265c096379b0f5dd994e6c11c2699194d685f76bf4bfb",
         "claim_status": "FROZEN_SOURCE_COMPATIBILITY_ONLY",
     }
 

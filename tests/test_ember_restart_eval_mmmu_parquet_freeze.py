@@ -36,6 +36,7 @@ def test_freezer_binds_validation_parquet_answers_to_existing_snapshot():
         assert payload["validation_row_count"] == 2
         assert payload["answer_dictionary_sha256"] == digest(answers)
         assert payload["validation_answer_dictionary_sha256"] == digest(answers)
+        assert payload["validation_parquet_files"] == [{"path": "Math/validation-00000-of-00001.parquet", "sha256": digest(parquet_root / "validation-00000-of-00001.parquet")} ]
 
 
 def test_freezer_refuses_answer_drift_and_does_not_publish_output():
