@@ -26,16 +26,24 @@
                             "revision":  "3aab1f1954e9cc14eb9509a215f9e5ca08227a9b",
                             "size_class":  "open_3b",
                             "role":  "comparison_only",
-                            "license_status":  "UNRESOLVED_CARD_METADATA",
-                            "execution_status":  "PREFLIGHT_ONLY_NO_LICENSE_EVIDENCE_OR_FROZEN_PROTOCOL"
+                            "license_status":  "DECLARED_QWEN_RESEARCH_RESTRICTED",
+                            "license_evidence":  {
+                                                     "card_license":  "other",
+                                                     "license_name":  "qwen-research"
+                                                 },
+                            "execution_status":  "PREFLIGHT_ONLY_RESTRICTED_LICENSE_AND_NO_FROZEN_PROTOCOL"
                         },
                         {
                             "model_id":  "google/gemma-3-27b-it",
                             "revision":  "005ad3404e59d6023443cb575daa05336842228a",
                             "size_class":  "open_27b_or_31b",
                             "role":  "comparison_only",
-                            "license_status":  "UNRESOLVED_CARD_METADATA",
-                            "execution_status":  "PREFLIGHT_ONLY_NO_LICENSE_EVIDENCE_OR_FROZEN_PROTOCOL"
+                            "license_status":  "DECLARED_GEMMA_GATED_LICENSE",
+                            "license_evidence":  {
+                                                     "card_license":  "gemma",
+                                                     "access":  "gated_license_acceptance_required"
+                                                 },
+                            "execution_status":  "PREFLIGHT_ONLY_GATED_LICENSE_AND_NO_FROZEN_PROTOCOL"
                         }
                     ],
     "comparator_policy":  {
