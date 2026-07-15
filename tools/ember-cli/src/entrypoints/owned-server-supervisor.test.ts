@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "bun:test";
 import { createServer } from "node:net";
+import { resolve } from "node:path";
 
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import {
@@ -114,6 +115,41 @@ describe("owned server supervisor", () => {
     expect(command.args).not.toContain("--run-manifest");
     expect(command.args).not.toContain("--trusted-verifier-registry");
   });
+
+  it("passes the constructed development argv through the real Python receiver", () => {
+    const serverPath = resolve(
+      import.meta.dir,
+      "../../../ember-restart-3b/serve_owned_openai.py",
+    );
+    const development: OwnedModelIdentity = {
+      ...identity(),
+      seat: "OWNED_DEVELOPMENT",
+      claimStatus: "NON_ADMISSIBLE",
+      tokensSeen: 2048,
+      allocatedParameters: 3_839_161_856,
+      activeParameters: 1_020_589_568,
+      modelName: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+      launch: {
+        authorityKind: "DEVELOPMENT",
+        checkpointDir: "missing-checkpoint",
+        developmentManifestPath: "missing-development.json",
+        mode: "INTERACTIVE",
+        modelConfigPath: "missing-model-config.json",
+        pythonExecutable: process.env.PYTHON ?? "python",
+        serverPath,
+        tokenizerPath: "missing-tokenizer.json",
+      },
+    };
+
+    const command = buildOwnedServerCommand(development, "cpu");
+    const result = Bun.spawnSync([command.executable, ...command.args]);
+    const stderr = new TextDecoder().decode(result.stderr);
+
+    expect(result.exitCode).toBe(1);
+    expect(stderr).toContain("development seat resolver rejected the manifest");
+    expect(stderr).not.toContain("unrecognized arguments");
+  });
+
   it("rejects every pre-existing listener instead of trusting self-reported identity", async () => {
     let verified = 0;
     let spawned = 0;
