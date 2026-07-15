@@ -25,6 +25,7 @@ ROOT_FIELDS = {
     "model_config",
     "tokenizer",
     "server",
+    "runtime_bundle",
     "parameter_evidence",
     "training",
 }
@@ -41,6 +42,26 @@ PARAMETER_FIELDS = {
     "active_parameters",
 }
 TRAINING_FIELDS = {"tokens_seen"}
+RUNTIME_BUNDLE_FIELDS = {"index_path", "sha256"}
+RUNTIME_INDEX_FIELDS = {"schema_version", "source_commit", "files"}
+RUNTIME_FILE_FIELDS = {"sha256", "bytes"}
+RUNTIME_FILES = {
+    "configs/ember-restart-3b.json",
+    "parameter-evidence/parameter_counter.py",
+    "parameter-evidence/step2-realization-receipt.json",
+    "parameter-evidence/trusted-verifiers.json",
+    "scripts/ember_restart/development_cli_seat.py",
+    "scripts/ember_restart/prediction_contract.py",
+    "scripts/ember_restart_eval_checkpoint_consumer.py",
+    "scripts/ember_restart_eval_raw_forward.py",
+    "tokenizer/tokenizer.json",
+    "tools/ember-restart-3b/batch.py",
+    "tools/ember-restart-3b/checkpoint_artifacts.py",
+    "tools/ember-restart-3b/infer.py",
+    "tools/ember-restart-3b/model.py",
+    "tools/ember-restart-3b/parameter_counter.py",
+    "tools/ember-restart-3b/serve_owned_openai.py",
+}
 
 
 def _require_object(value: Any, label: str) -> dict[str, Any]:
@@ -74,6 +95,17 @@ def _resolve_file(root: Path, value: Any, label: str) -> Path:
     if not candidate.is_absolute():
         candidate = root / candidate
     candidate = candidate.resolve()
+    if not candidate.is_file():
+        raise ValueError(f"{label} does not exist: {candidate}")
+    return candidate
+
+
+def _resolve_bundle_file(root: Path, value: Any, label: str) -> Path:
+    if not isinstance(value, str) or not value or Path(value).is_absolute():
+        raise ValueError(f"{label} must be a bundle-relative path")
+    candidate = (root / value).resolve()
+    if root != candidate and root not in candidate.parents:
+        raise ValueError(f"{label} escapes the runtime bundle")
     if not candidate.is_file():
         raise ValueError(f"{label} does not exist: {candidate}")
     return candidate
@@ -145,6 +177,43 @@ def resolve_development_seat(manifest_path: Path) -> dict[str, Any]:
         raise ValueError("claim_status must be NON_ADMISSIBLE")
 
     root = manifest_path.parent
+    runtime_binding = _require_object(manifest["runtime_bundle"], "runtime_bundle")
+    _require_exact_fields(runtime_binding, RUNTIME_BUNDLE_FIELDS, "runtime_bundle")
+    runtime_index_path = _resolve_bundle_file(
+        root, runtime_binding["index_path"], "runtime bundle index"
+    )
+    _require_file_hash(
+        runtime_index_path, runtime_binding["sha256"], "runtime bundle index"
+    )
+    runtime_index = _read_json(runtime_index_path, "runtime bundle index")
+    _require_exact_fields(runtime_index, RUNTIME_INDEX_FIELDS, "runtime bundle index")
+    if runtime_index["schema_version"] != "ember-owned-runtime-bundle-v1":
+        raise ValueError("runtime bundle index schema_version is invalid")
+    source_commit = runtime_index["source_commit"]
+    if (
+        not isinstance(source_commit, str)
+        or len(source_commit) != 40
+        or any(character not in HEX64 for character in source_commit)
+    ):
+        raise ValueError("runtime bundle source_commit must be a lowercase Git SHA-1")
+    runtime_files = _require_object(runtime_index["files"], "runtime bundle files")
+    if set(runtime_files) != RUNTIME_FILES:
+        raise ValueError("runtime bundle files do not equal the required source closure")
+    resolved_runtime: dict[str, tuple[Path, str]] = {}
+    for relative in sorted(RUNTIME_FILES):
+        binding = _require_object(runtime_files[relative], f"runtime file {relative}")
+        _require_exact_fields(binding, RUNTIME_FILE_FIELDS, f"runtime file {relative}")
+        path = _resolve_bundle_file(root, relative, f"runtime file {relative}")
+        size = binding["bytes"]
+        if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+            raise ValueError(f"runtime file {relative} bytes must be a non-negative integer")
+        if path.stat().st_size != size:
+            raise ValueError(f"runtime file {relative} byte size mismatch")
+        resolved_runtime[relative] = (
+            path,
+            _require_file_hash(path, binding["sha256"], f"runtime file {relative}"),
+        )
+
     checkpoint_binding = _require_object(manifest["checkpoint"], "checkpoint")
     _require_exact_fields(checkpoint_binding, CHECKPOINT_BINDING_FIELDS, "checkpoint")
     checkpoint_path = _resolve_file(
@@ -164,6 +233,13 @@ def resolve_development_seat(manifest_path: Path) -> dict[str, Any]:
         _require_exact_fields(binding, FILE_BINDING_FIELDS, field)
         path = _resolve_file(root, binding["path"], label)
         resolved[field] = (path, _require_file_hash(path, binding["sha256"], label))
+    for field, relative in (
+        ("model_config", "configs/ember-restart-3b.json"),
+        ("tokenizer", "tokenizer/tokenizer.json"),
+        ("server", "tools/ember-restart-3b/serve_owned_openai.py"),
+    ):
+        if resolved[field] != resolved_runtime[relative]:
+            raise ValueError(f"{field} does not match the indexed runtime bundle artifact")
 
     parameters = _require_object(manifest["parameter_evidence"], "parameter_evidence")
     _require_exact_fields(parameters, PARAMETER_FIELDS, "parameter_evidence")
@@ -178,6 +254,15 @@ def resolve_development_seat(manifest_path: Path) -> dict[str, Any]:
             path,
             _require_file_hash(path, parameters[f"{prefix}_sha256"], label),
         )
+    for prefix, relative in (
+        ("counter", "parameter-evidence/parameter_counter.py"),
+        ("receipt", "parameter-evidence/step2-realization-receipt.json"),
+        ("registry", "parameter-evidence/trusted-verifiers.json"),
+    ):
+        if evidence_files[prefix] != resolved_runtime[relative]:
+            raise ValueError(
+                f"parameter {prefix} does not match the indexed runtime bundle artifact"
+            )
 
     training = _require_object(manifest["training"], "training")
     _require_exact_fields(training, TRAINING_FIELDS, "training")

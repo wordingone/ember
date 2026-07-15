@@ -177,7 +177,7 @@ describe("owned seat loader", () => {
     });
     expect(observedArgs).toEqual([
       "python-owned",
-      "C:\\repo\\scripts\\ember_restart\\development_cli_seat.py",
+      "C:\\scripts\\ember_restart\\development_cli_seat.py",
       "C:\\development.json",
     ]);
   });
