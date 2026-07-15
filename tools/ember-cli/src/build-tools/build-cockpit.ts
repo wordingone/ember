@@ -1,0 +1,49 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+import { spawnSync } from "child_process";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+export function requireBuildCommit(value: string): string {
+  const commit = value.trim();
+  if (!/^[0-9a-f]{40}$/.test(commit)) {
+    throw new Error("cockpit build requires an exact lowercase Git commit");
+  }
+  return commit;
+}
+
+export function buildCommitBanner(commit: string): string {
+  return "globalThis.__EMBER_BUILD_COMMIT__=" + JSON.stringify(requireBuildCommit(commit)) + ";";
+}
+
+if (import.meta.main) {
+  const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const repositoryRoot = join(sourceRoot, "..", "..", "..");
+  const git = spawnSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 15_000,
+  });
+  if (git.status !== 0) {
+    throw new Error("cannot resolve exact Ember source commit for cockpit build");
+  }
+  const commit = requireBuildCommit(git.stdout ?? "");
+  const result = spawnSync(
+    process.execPath,
+    [
+      "build",
+      "./entrypoints/main.ts",
+      "--compile",
+      "--outfile",
+      "ember.exe",
+      "--banner",
+      buildCommitBanner(commit),
+    ],
+    { cwd: sourceRoot, stdio: "inherit", windowsHide: true },
+  );
+  if (result.status !== 0) {
+    throw new Error("cockpit build failed with exit code " + result.status);
+  }
+}

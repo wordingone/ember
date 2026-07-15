@@ -169,8 +169,18 @@ def _fixture(tmp_path: Path) -> Path:
 
 
 def _resolve(manifest: Path) -> subprocess.CompletedProcess[str]:
+    source = json.loads(manifest.read_text(encoding="utf-8"))
+    runtime_index = manifest.parent / source["runtime_bundle"]["index_path"]
     return subprocess.run(
-        [sys.executable, str(RESOLVER), str(manifest)],
+        [
+            sys.executable,
+            str(RESOLVER),
+            str(manifest),
+            "--expected-manifest-sha256",
+            _sha256(manifest),
+            "--expected-runtime-index-sha256",
+            _sha256(runtime_index),
+        ],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,

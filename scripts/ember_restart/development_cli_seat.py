@@ -129,11 +129,17 @@ def _require_file_hash(path: Path, expected: Any, label: str) -> str:
     return actual_hash
 
 
-def _read_json(path: Path, label: str) -> dict[str, Any]:
+def _read_json_snapshot(path: Path, label: str) -> tuple[dict[str, Any], str]:
     try:
-        return _require_object(json.loads(path.read_text(encoding="utf-8")), label)
+        payload = path.read_bytes()
+        value = _require_object(json.loads(payload), label)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"{label} is not valid UTF-8 JSON: {exc}") from exc
+    return value, hashlib.sha256(payload).hexdigest()
+
+
+def _read_json(path: Path, label: str) -> dict[str, Any]:
+    return _read_json_snapshot(path, label)[0]
 
 
 def _require_positive_int(value: Any, label: str) -> int:
@@ -165,9 +171,18 @@ def _require_endpoint(value: Any) -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def resolve_development_seat(manifest_path: Path) -> dict[str, Any]:
+def resolve_development_seat(
+    manifest_path: Path,
+    *,
+    expected_manifest_sha256: str,
+    expected_runtime_index_sha256: str,
+) -> dict[str, Any]:
     manifest_path = manifest_path.resolve()
-    manifest = _read_json(manifest_path, "development manifest")
+    manifest, manifest_sha256 = _read_json_snapshot(manifest_path, "development manifest")
+    if manifest_sha256 != _require_hash(
+        expected_manifest_sha256, "expected development manifest sha256"
+    ):
+        raise ValueError("development manifest bytes differ from the CLI bootstrap snapshot")
     _require_exact_fields(manifest, ROOT_FIELDS, "development manifest")
     if manifest["schema_version"] != "ember-owned-development-seat-v1":
         raise ValueError("schema_version must be ember-owned-development-seat-v1")
@@ -182,10 +197,19 @@ def resolve_development_seat(manifest_path: Path) -> dict[str, Any]:
     runtime_index_path = _resolve_bundle_file(
         root, runtime_binding["index_path"], "runtime bundle index"
     )
-    _require_file_hash(
-        runtime_index_path, runtime_binding["sha256"], "runtime bundle index"
+    manifest_runtime_index_sha256 = _require_hash(
+        runtime_binding["sha256"], "runtime bundle index sha256"
     )
-    runtime_index = _read_json(runtime_index_path, "runtime bundle index")
+    expected_index_sha256 = _require_hash(
+        expected_runtime_index_sha256, "expected runtime bundle index sha256"
+    )
+    if manifest_runtime_index_sha256 != expected_index_sha256:
+        raise ValueError("runtime bundle index identity differs from the CLI bootstrap snapshot")
+    runtime_index, runtime_index_sha256 = _read_json_snapshot(
+        runtime_index_path, "runtime bundle index"
+    )
+    if runtime_index_sha256 != expected_index_sha256:
+        raise ValueError("runtime bundle index bytes differ from the CLI bootstrap snapshot")
     _require_exact_fields(runtime_index, RUNTIME_INDEX_FIELDS, "runtime bundle index")
     if runtime_index["schema_version"] != "ember-owned-runtime-bundle-v1":
         raise ValueError("runtime bundle index schema_version is invalid")
@@ -362,9 +386,15 @@ def resolve_development_seat(manifest_path: Path) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
+    parser.add_argument("--expected-manifest-sha256", required=True)
+    parser.add_argument("--expected-runtime-index-sha256", required=True)
     args = parser.parse_args(argv)
     try:
-        result = resolve_development_seat(args.manifest)
+        result = resolve_development_seat(
+            args.manifest,
+            expected_manifest_sha256=args.expected_manifest_sha256,
+            expected_runtime_index_sha256=args.expected_runtime_index_sha256,
+        )
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         result = {
             "valid": False,

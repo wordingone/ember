@@ -3,9 +3,12 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, it } from "bun:test";
-import { resolve } from "path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
 
 import {
+  captureDevelopmentResolver,
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
   verifyOwnedEndpointIdentity,
@@ -14,6 +17,52 @@ import {
 const CHECKPOINT = "d".repeat(64);
 
 describe("owned seat loader", () => {
+  it("authenticates and snapshots the bundle resolver before execution", () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-bootstrap-test-"));
+    try {
+      const resolver = join(root, "scripts", "ember_restart", "development_cli_seat.py");
+      mkdirSync(join(root, "scripts", "ember_restart"), { recursive: true });
+      const resolverBytes = new TextEncoder().encode("# exact resolver\n");
+      writeFileSync(resolver, resolverBytes);
+      const resolverSha256 = new Bun.CryptoHasher("sha256").update(resolverBytes).digest("hex");
+      const index = {
+        schema_version: "ember-owned-runtime-bundle-v1",
+        source_commit: "a".repeat(40),
+        files: {
+          "scripts/ember_restart/development_cli_seat.py": {
+            bytes: resolverBytes.byteLength,
+            sha256: resolverSha256,
+          },
+        },
+      };
+      const indexBytes = new TextEncoder().encode(JSON.stringify(index));
+      writeFileSync(join(root, "runtime-bundle-index.json"), indexBytes);
+      const manifest = {
+        runtime_bundle: {
+          index_path: "runtime-bundle-index.json",
+          sha256: new Bun.CryptoHasher("sha256").update(indexBytes).digest("hex"),
+        },
+      };
+      const manifestPath = join(root, "development.json");
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+
+      const captured = captureDevelopmentResolver(manifestPath, "a".repeat(40));
+      writeFileSync(resolver, "# drifted resolver\n");
+      expect(new TextDecoder().decode(readFileSync(captured.resolverPath))).toBe(
+        "# exact resolver\n",
+      );
+      expect(captured.manifestSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(captured.runtimeIndexSha256).toBe(manifest.runtime_bundle.sha256);
+      captured.cleanup();
+      expect(existsSync(captured.resolverPath)).toBe(false);
+      expect(() => captureDevelopmentResolver(manifestPath, "b".repeat(40))).toThrow(
+        "exact compiled cockpit commit",
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it("returns unavailable when the default pointer does not exist", () => {
     let executed = false;
     const identity = loadOwnedModelIdentity(
@@ -118,6 +167,7 @@ describe("owned seat loader", () => {
 
   it("loads a closed development identity through the separate non-claiming resolver", () => {
     let observedArgs: string[] = [];
+    let cleanupCalls = 0;
     const identity = loadOwnedDevelopmentIdentity(
       {
         repoRoot: "C:/repo",
@@ -127,6 +177,13 @@ describe("owned seat loader", () => {
       },
       {
         exists: () => true,
+        resolveBuildCommit: () => "a".repeat(40),
+        captureDevelopmentResolver: () => ({
+          cleanup: () => { cleanupCalls += 1; },
+          manifestSha256: "e".repeat(64),
+          resolverPath: resolve("C:/snapshot/development_cli_seat.py"),
+          runtimeIndexSha256: "f".repeat(64),
+        }),
         execute: (executable, args) => {
           observedArgs = [executable, ...args];
           return {
@@ -177,9 +234,14 @@ describe("owned seat loader", () => {
     });
     expect(observedArgs).toEqual([
       "python-owned",
-      "C:\\scripts\\ember_restart\\development_cli_seat.py",
+      "C:\\snapshot\\development_cli_seat.py",
       "C:\\development.json",
+      "--expected-manifest-sha256",
+      "e".repeat(64),
+      "--expected-runtime-index-sha256",
+      "f".repeat(64),
     ]);
+    expect(cleanupCalls).toBe(1);
   });
 
   it("verifies a live development endpoint without upgrading its claim status", async () => {
