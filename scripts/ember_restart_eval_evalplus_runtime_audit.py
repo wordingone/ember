@@ -33,7 +33,7 @@ def main() -> int:
         mutable_base = "@sha256:" not in base
         lowered = "\n".join(lines).lower()
         live_dependency = "pip install" in lowered and ("--require-hashes" not in lowered or "pip install --upgrade" in lowered)
-        live_dataset = "get_human_eval_plus" in lowered or "get_mbpp_plus" in lowered or "get_evalperf_data" in lowered
+        live_dataset = any(marker in lowered for marker in ("get_human_eval_plus", "get_mbpp_plus", "get_evalperf_data", "curl ", "wget ", "git clone ", "http://", "https://"))
     except (OSError, UnicodeDecodeError, ValueError) as error:
         parser.error(str(error))
     payload = {

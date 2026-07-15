@@ -36,3 +36,14 @@ def test_runtime_audit_refuses_digest_pinned_claim_when_live_build_step_remains(
         payload = json.loads(output.read_text(encoding="utf-8"))
         assert payload["target_execution_permitted"] is False
         assert payload["live_dependency_resolution"] is True
+
+def test_runtime_audit_reports_network_fetch_tool_as_live_dataset_input():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "evalplus"; root.mkdir()
+        (root / "Dockerfile").write_text("FROM python@sha256:" + "a" * 64 + "\nRUN curl -fsSL https://example.invalid/frozen-task.json -o task.json\n", encoding="utf-8")
+        output = root.parent / "audit.json"
+        run = subprocess.run([sys.executable, str(SCRIPT), "--evalplus-root", str(root), "--output", str(output)], text=True, capture_output=True, check=False)
+        assert run.returncode == 0, run.stderr
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        assert payload["live_dataset_fetch"] is True
+        assert payload["target_execution_permitted"] is False
