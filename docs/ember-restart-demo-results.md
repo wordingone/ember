@@ -13,7 +13,7 @@ Any interactive surface must show that refusal and identify borrowed reference
 models as `REFERENCE_ONLY`; it must not substitute them for Ember or display
 fixture/selftest outputs as owned capability. Frozen benchmark families that
 lack eligible pinned local assets or runtimes remain unavailable in the demo,
-including Terminal-Bench, BrowserGym MiniWoB, BFCL, and SWE-bench Lite.
+including Terminal-Bench, BrowserGym MiniWoB, BFCL, and SWE-bench Lite. BrowserGym source is custody-bound, but there is no local runtime or frozen MiniWoB task set.
 
 For the exact structural input and future admitted results, link to
 [`ember-restart-evaluation-results.md`](ember-restart-evaluation-results.md).
