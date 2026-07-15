@@ -81,7 +81,10 @@ export function buildOwnedServerCommand(
         "--run-manifest", launch.runManifestPath,
         "--trusted-verifier-registry", launch.trustedVerifierRegistryPath,
       ]
-    : ["--development-manifest", launch.developmentManifestPath];
+    : [
+        "--config", launch.modelConfigPath,
+        "--development-manifest", launch.developmentManifestPath,
+      ];
   return {
     executable: launch.pythonExecutable,
     port,

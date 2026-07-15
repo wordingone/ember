@@ -146,6 +146,9 @@ def test_development_resolver_binds_exact_non_claiming_checkpoint(tmp_path: Path
     assert payload["checkpoint_sha256"] == checkpoint
     assert payload["model_name"] == f"ember-owned-development:{checkpoint[:12]}"
     assert payload["launch"]["development_manifest_path"] == str(manifest.resolve())
+    assert payload["launch"]["model_config_path"] == str(
+        Path(source["model_config"]["path"]).resolve()
+    )
     assert payload["launch"]["mode"] == "INTERACTIVE"
 
 
