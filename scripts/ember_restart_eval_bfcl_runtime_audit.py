@@ -48,7 +48,7 @@ def main() -> int:
             raise ValueError("BFCL pyproject requires a dependencies list")
         dependencies = DEPENDENCY.findall(dependency_block.group(1))
         mutable = sorted(item for item in dependencies if not SHA256.search(item))
-        live_network = b"requests.get(" in web_bytes or b"http://" in web_bytes or b"https://" in web_bytes
+        live_network = any(marker in web_bytes for marker in (b"requests.", b"urllib.request.", b"httpx.", b"aiohttp.", b"http://", b"https://"))
     except (OSError, UnicodeDecodeError, subprocess.SubprocessError, ValueError) as error:
         parser.error(str(error))
     payload = {

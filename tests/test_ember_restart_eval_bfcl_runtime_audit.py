@@ -66,3 +66,19 @@ def test_bfcl_runtime_audit_ignores_quoted_metadata_outside_dependency_list():
         result = subprocess.run([sys.executable, str(SCRIPT), "--bfcl-root", str(root), "--expected-commit", commit, "--output", str(output)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
         assert json.loads(output.read_text(encoding="utf-8"))["mutable_dependencies"] == ["openai>=1.86.0"]
+
+def test_bfcl_runtime_audit_reports_urllib_network_call_without_literal_url():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary) / "bfcl"
+        commit = make_source(root, live_network=False)
+        web = root / "berkeley-function-call-leaderboard" / "bfcl_eval" / "eval_checker" / "multi_turn_eval" / "func_source_code" / "web_search.py"
+        web.write_text("import urllib.request\nurllib.request.urlopen(endpoint)\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(root), "commit", "-qm", "urllib"], check=True)
+        commit = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        output = root.parent / "audit.json"
+        result = subprocess.run([sys.executable, str(SCRIPT), "--bfcl-root", str(root), "--expected-commit", commit, "--output", str(output)], text=True, capture_output=True, check=False)
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        assert payload["live_network_tool_source"] is True
+        assert payload["target_execution_permitted"] is False
