@@ -73,5 +73,5 @@ def verify_image_supervision(
     encoded = list(tokenizer.encode(caption).ids)
     token_ids = record.get("token_ids")
     target_ids = record.get("target_ids")
-    if len(encoded) < 2 or target_ids != encoded or token_ids != [*[image_marker] * len(patches), *encoded[:-1]]:
+    if len(encoded) < 2 or target_ids != [*[image_marker] * (len(patches) - 1), *encoded] or token_ids != [*[image_marker] * len(patches), *encoded[:-1]]:
         raise ValueError("image semantic target tokenization does not bind the frozen tokenizer and raw scene")

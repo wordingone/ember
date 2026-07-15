@@ -112,8 +112,10 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
             or semantic_source.get("target_derivation") != specialist_minimum["derivation"]
             or not isinstance(semantic_source.get("source_description"), str)
             or len(semantic_source["source_description"].strip()) < 40
-            or semantic_source.get("minimum_record_count") != specialist_minimum["records"]
-            or semantic_source.get("minimum_token_count") != specialist_minimum["tokens"]
+            or type(semantic_source.get("minimum_record_count")) is not int
+            or semantic_source["minimum_record_count"] < specialist_minimum["records"]
+            or type(semantic_source.get("minimum_token_count")) is not int
+            or semantic_source["minimum_token_count"] < specialist_minimum["tokens"]
         ):
             raise ValueError("semantic source provenance is insufficient for specialist pretraining")
     tokenizer = _load_json(tokenizer_path, "tokenizer")
@@ -198,7 +200,7 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         token_count += len(token_ids)
     if data.get("record_count") != len(records) or data.get("token_count") != token_count:
         raise ValueError("data manifest counts do not match verified semantic records")
-    if specialist_minimum is not None and (len(records) < specialist_minimum["records"] or token_count < specialist_minimum["tokens"]):
+    if specialist_minimum is not None and (len(records) < specialist_minimum["records"] or token_count < specialist_minimum["tokens"] or len(records) < semantic_source["minimum_record_count"] or token_count < semantic_source["minimum_token_count"]):
         raise ValueError("specialist semantic data is below the nontrivial admission floor")
     return {
         "schema_version": "ember-training-data-verification-v1",
