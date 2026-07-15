@@ -43,7 +43,15 @@
                                                                                     ],
                                                             "excluded_categories":  {
                                                                                         "irrelevance":  "NO_LOCAL_POSSIBLE_ANSWER_ORACLE"
-                                                                                    }
+                                                                                    },
+                                                            "private_frozen_simple_artifact":  {
+                                                                                                   "artifact_sha256":  "fdb73e505e74fc2864b36af8a0e802296d6c7d3761383d6b1a24e55f21388126",
+                                                                                                   "disk_receipt_sha256":  "f4ee415ec3ee9061ada48290145d3fa22b792d2a6d9fbc1a02abf54270843e20",
+                                                                                                   "split_sha256":  "b5397a483dfe48b202c8907622e02276c3a8c33f1009066899cf50c097256aac",
+                                                                                                   "protocol_sha256":  "322ec131cc47cfb76416273efceca56192f61b78c0d8989f95a5c49f18e2a29c",
+                                                                                                   "task_count":  550,
+                                                                                                   "claim_status":  "PREFLIGHT_ONLY"
+                                                                                               }
                                                         },
                              "asset_disposition":  "PINNED_BFCL_SOURCE_NO_LOCAL_RUNTIME_OR_FROZEN_TASKS",
                              "target_execution_permitted":  false
