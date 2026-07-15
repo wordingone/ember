@@ -4,10 +4,11 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
+import sys
 import tempfile
+import types
 from pathlib import Path
 
 from ember_restart_eval_checkpoint_consumer import _verify
@@ -15,22 +16,280 @@ from ember_restart.prediction_contract import validate_predictions
 
 EXECUTION_AUTHORITY = Path(__file__).parents[1] / "manifests" / "ember-restart-execution-authorities-v1.json"
 
-def require_execution_authority(arguments: argparse.Namespace) -> None:
-    registry = json.loads(EXECUTION_AUTHORITY.read_text(encoding="utf-8"))
+def require_execution_authority(arguments: argparse.Namespace, identities: dict[str, str] | None = None) -> dict[str, str]:
+    registry, _registry_sha256, _registry_bytes = _read_json_snapshot(EXECUTION_AUTHORITY, "execution authority registry")
     if not isinstance(registry, dict) or set(registry) != {"schema_version", "goal_id", "workstream_id", "next_executed_outcome", "authorities", "disposition"} or registry.get("schema_version") != "ember-restart-execution-authorities-v1" or registry.get("goal_id") != "EMBER-02" or registry.get("workstream_id") != "EMBER-02C" or not isinstance(registry.get("authorities"), list):
         raise ValueError("committed execution authority registry is invalid")
     if registry.get("disposition") != "EXACT_OWNED_SHARED_ROUTE_EXECUTION_AUTHORIZED":
         raise ValueError("committed execution authority disposition is not authorized")
-    expected = {"model_source_sha256": sha256(arguments.model_source), "model_config_sha256": sha256(arguments.model_config), "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__))}
+    if identities is None:
+        expected = {"model_source_sha256": sha256(arguments.model_source), "model_config_sha256": sha256(arguments.model_config), "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__))}
+    else:
+        _implementation_bytes, implementation_sha256 = _read_snapshot(Path(__file__), "inference implementation")
+        expected = {**identities, "inference_implementation_sha256": implementation_sha256}
     for authority in registry["authorities"]:
         if isinstance(authority, dict) and authority == expected:
-            return
+            return expected
     raise ValueError("committed execution authority does not authorize supplied source/config/tokenizer/inference bytes")
 from tokenizers import Tokenizer
+
+EXPERTS = ("vision", "audio", "reasoning", "tool")
+REALIZATION_COUNTS = {
+    "allocated_parameters": 3_839_161_856,
+    "unique_parameters": 3_839_161_856,
+    "trainable_parameters": 3_839_161_856,
+    "served_parameters": 3_839_161_856,
+}
+ACTIVE_COUNTS = {"shared": 1_020_589_568, **{name: 1_725_232_640 for name in EXPERTS}}
+REALIZATION_RECEIPT_FIELDS = {
+    "schema_version", "verification_boundary", "result", "model_config_sha256",
+    "subject_checkpoint_sha256", "architecture_revision", "counter_sha256",
+    *REALIZATION_COUNTS, "active_parameters", "episode_trainable_parameters",
+    "active_expert_ids", "expert_genesis_sha256", "expert_parameter_sha256",
+}
+
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _read_snapshot(path: Path, label: str) -> tuple[bytes, str]:
+    try:
+        value = path.read_bytes()
+    except OSError as error:
+        raise ValueError(f"{label} cannot be read: {error}") from error
+    return value, hashlib.sha256(value).hexdigest()
+
+
+def _read_json_snapshot(path: Path, label: str) -> tuple[dict[str, object], str, bytes]:
+    value, digest = _read_snapshot(path, label)
+    try:
+        payload = json.loads(value)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} JSON is invalid: {error}") from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object")
+    return payload, digest, value
+
+
+def _digest_map(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == set(EXPERTS)
+        and all(isinstance(digest, str) and len(digest) == 64 and set(digest) <= set("0123456789abcdef") for digest in value.values())
+    )
+
+
+def _trusted_counter(registry: dict[str, object], *, registry_root: Path, counter_source_path: Path, counter_sha256: str) -> bool:
+    if set(registry) not in ({"schema_version", "verifiers"}, {"schema_version", "verifiers", "realization_receipts"}) or registry.get("schema_version") != "ember-trusted-verifiers-v1":
+        return False
+    entries = registry.get("verifiers")
+    if not isinstance(entries, list) or not entries:
+        return False
+    resolved_counter = counter_source_path.resolve()
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256", "evidence_classes", "criterion_ids"}:
+            continue
+        relative = entry.get("path")
+        if not isinstance(relative, str) or Path(relative).is_absolute():
+            continue
+        candidate = (registry_root / relative).resolve()
+        if (
+            registry_root in candidate.parents
+            and candidate == resolved_counter
+            and entry.get("sha256") == counter_sha256
+            and isinstance(entry.get("evidence_classes"), list)
+            and "parameter_realization" in entry["evidence_classes"]
+            and isinstance(entry.get("criterion_ids"), list)
+            and "ember-sparse-step2-realization-v1" in entry["criterion_ids"]
+        ):
+            return True
+    return False
+
+
+def _trusted_receipt_binding(registry: dict[str, object], *, registry_root: Path, receipt_path: Path, receipt_sha256: str, subject_checkpoint_sha256: str, model_config_sha256: str, counter_sha256: str, active_expert: str) -> bool:
+    bindings = registry.get("realization_receipts")
+    if not isinstance(bindings, list) or not bindings:
+        return False
+    resolved_receipt = receipt_path.resolve()
+    for entry in bindings:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256", "subject_checkpoint_sha256", "model_config_sha256", "counter_sha256", "active_expert"}:
+            continue
+        relative = entry.get("path")
+        if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+            continue
+        candidate = (registry_root / relative).resolve()
+        if (
+            registry_root in candidate.parents
+            and candidate == resolved_receipt
+            and entry.get("sha256") == receipt_sha256
+            and entry.get("subject_checkpoint_sha256") == subject_checkpoint_sha256
+            and entry.get("model_config_sha256") == model_config_sha256
+            and entry.get("counter_sha256") == counter_sha256
+            and entry.get("active_expert") == active_expert
+        ):
+            return True
+    return False
+
+
+def load_verified_runtime_contract(*, manifest_path: Path, model_config_path: Path, parameter_receipt_path: Path, counter_source_path: Path, trusted_verifier_registry_path: Path, requested_route: str) -> dict[str, object]:
+    """Bind runtime execution to one independently measured sparse realization."""
+
+    if requested_route not in ("shared", *EXPERTS):
+        raise ValueError("runtime route is invalid")
+    manifest, manifest_sha256, manifest_bytes = _read_json_snapshot(manifest_path, "checkpoint manifest")
+    config, config_sha256, config_bytes = _read_json_snapshot(model_config_path, "model config")
+    receipt, receipt_sha256, receipt_bytes = _read_json_snapshot(parameter_receipt_path, "parameter receipt")
+    registry, registry_sha256, registry_bytes = _read_json_snapshot(trusted_verifier_registry_path, "trusted verifier registry")
+    counter_bytes, counter_sha256 = _read_snapshot(counter_source_path, "parameter counter source")
+
+    if set(receipt) != REALIZATION_RECEIPT_FIELDS:
+        raise ValueError("runtime receipt schema is not closed")
+    if (
+        receipt.get("schema_version") != "ember-sparse-realization-receipt-v1"
+        or receipt.get("verification_boundary") != "VERIFIED_MEASURED"
+        or receipt.get("result") != "MEASURED"
+    ):
+        raise ValueError("runtime receipt is not verified measured evidence")
+    if receipt.get("subject_checkpoint_sha256") != manifest_sha256:
+        raise ValueError("runtime receipt checkpoint subject mismatch")
+    if receipt.get("model_config_sha256") != config_sha256 or manifest.get("model_config_sha256") != config_sha256:
+        raise ValueError("runtime receipt or checkpoint config mismatch")
+    if receipt.get("architecture_revision") != "ember-sparse-3b-v2" or manifest.get("architecture_revision") != "ember-sparse-3b-v2" or config.get("architecture_revision") != "ember-sparse-3b-v2":
+        raise ValueError("runtime architecture revision mismatch")
+    if receipt.get("counter_sha256") != counter_sha256:
+        raise ValueError("runtime receipt counter mismatch")
+    if not _trusted_counter(registry, registry_root=trusted_verifier_registry_path.resolve().parent, counter_source_path=counter_source_path, counter_sha256=counter_sha256):
+        raise ValueError("runtime lacks a trusted parameter-realization counter")
+    expected_route = [requested_route]
+    if receipt.get("active_expert_ids") != expected_route or manifest.get("active_expert_ids") != expected_route:
+        raise ValueError("runtime receipt route mismatch")
+    expected_counts = {
+        **REALIZATION_COUNTS,
+        "active_parameters": ACTIVE_COUNTS[requested_route],
+        "episode_trainable_parameters": ACTIVE_COUNTS[requested_route],
+    }
+    if any(receipt.get(field) != expected for field, expected in expected_counts.items()):
+        raise ValueError("runtime receipt parameter count mismatch")
+    genesis = manifest.get("expert_genesis_sha256")
+    parameters = manifest.get("expert_parameter_sha256", genesis)
+    if not _digest_map(genesis) or receipt.get("expert_genesis_sha256") != genesis:
+        raise ValueError("runtime receipt expert genesis mismatch")
+    if not _digest_map(parameters) or receipt.get("expert_parameter_sha256") != parameters:
+        raise ValueError("runtime receipt expert parameter mismatch")
+
+    records = manifest.get("shards")
+    if not isinstance(records, list):
+        raise ValueError("runtime checkpoint shard records are invalid")
+    by_path: dict[str, dict[str, object]] = {}
+    for record in records:
+        if not isinstance(record, dict) or set(record) != {"path", "role", "bytes", "sha256"}:
+            raise ValueError("runtime checkpoint shard record schema is invalid")
+        relative = record.get("path")
+        if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts or relative in by_path:
+            raise ValueError("runtime checkpoint shard path is invalid")
+        by_path[relative] = record
+    required_names = ["shared.pt"] if requested_route == "shared" else ["shared.pt", f"expert-{requested_route}.pt"]
+    required_shards: dict[str, str] = {}
+    for relative in required_names:
+        record = by_path.get(relative)
+        if record is None or not isinstance(record.get("sha256"), str):
+            raise ValueError(f"runtime checkpoint lacks required shard: {relative}")
+        required_shards[relative] = str(record["sha256"])
+    if requested_route != "shared" and manifest.get("expert_checkpoint_sha256", {}).get(requested_route) != required_shards[f"expert-{requested_route}.pt"]:
+        raise ValueError("runtime active expert shard is not checkpoint-bound")
+    if not _trusted_receipt_binding(
+        registry,
+        registry_root=trusted_verifier_registry_path.resolve().parent,
+        receipt_path=parameter_receipt_path,
+        receipt_sha256=receipt_sha256,
+        subject_checkpoint_sha256=manifest_sha256,
+        model_config_sha256=config_sha256,
+        counter_sha256=counter_sha256,
+        active_expert=requested_route,
+    ):
+        raise ValueError("runtime lacks an exact content-addressed realization receipt binding")
+
+    return {
+        "checkpoint_manifest": manifest,
+        "checkpoint_manifest_bytes": manifest_bytes,
+        "checkpoint_manifest_sha256": manifest_sha256,
+        "model_config": config,
+        "model_config_bytes": config_bytes,
+        "model_config_sha256": config_sha256,
+        "parameter_receipt": receipt,
+        "parameter_receipt_bytes": receipt_bytes,
+        "parameter_receipt_sha256": receipt_sha256,
+        "counter_source_bytes": counter_bytes,
+        "counter_sha256": counter_sha256,
+        "trusted_verifier_registry_bytes": registry_bytes,
+        "trusted_verifier_registry_sha256": registry_sha256,
+        "active_expert_ids": expected_route,
+        "required_shards": required_shards,
+        "shard_count": len(by_path),
+    }
+
+
+def hash_and_load_torch(torch_module, path: Path, expected_sha256: str, *, device: str):
+    """Hash and deserialize one required shard through the same open handle."""
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+        if digest.hexdigest() != expected_sha256:
+            raise ValueError(f"runtime checkpoint shard hash mismatch: {path.name}")
+        handle.seek(0)
+        return torch_module.load(handle, map_location=device, weights_only=True)
+
+
+def _load_model_module(source_bytes: bytes, source_path: Path):
+    module_name = "ember_restart_exact_model"
+    module = types.ModuleType(module_name)
+    module.__file__ = str(source_path)
+    sys.modules[module_name] = module
+    try:
+        exec(compile(source_bytes, str(source_path), "exec"), module.__dict__)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    return module
+
+
+def _config_from_payload(module, contract: dict[str, object]):
+    factory = getattr(module.RestartDecoderConfig, "from_contract_payload", None)
+    if callable(factory):
+        return factory(contract)
+    if contract.get("architecture_revision") != "ember-sparse-3b-v2":
+        raise ValueError("production contract must declare ember-sparse-3b-v2")
+    model = contract.get("model")
+    training = contract.get("training")
+    if not isinstance(model, dict) or not isinstance(training, dict):
+        raise ValueError("production model config schema is invalid")
+    image, audio, routing = model.get("image_projection"), model.get("audio_projection"), model.get("expert_routing")
+    if not isinstance(image, dict) or not isinstance(audio, dict) or not isinstance(routing, dict):
+        raise ValueError("production modality/routing config is invalid")
+    config = module.RestartDecoderConfig(
+        hidden_size=int(model["hidden_size"]),
+        layers=int(model["layers"]),
+        attention_heads=int(model["attention_heads"]),
+        vocab_size=int(model["vocab_size"]),
+        image_input_shape=tuple(int(value) for value in image["input_shape"]),
+        audio_frame_samples=int(audio["frame_samples"]),
+        gradient_checkpointing=bool(training["gradient_checkpointing"]),
+        tied_embeddings=bool(model["tied_embeddings"]),
+        expert_names=tuple(routing["expert_names"]),
+        default_active_expert=str(routing["default_active_expert"]),
+        contract_name=str(contract["contract_name"]),
+        contract_version=int(contract["contract_version"]),
+        production=True,
+        declared_total_unique_trainable_parameters=int(model["total_unique_trainable_parameters"]),
+        lineage=dict(contract["lineage"]),
+    )
+    if config.declared_total_unique_trainable_parameters != config.structural_parameter_count():
+        raise ValueError("production contract total does not match the sparse architecture")
+    return config
 
 def load_owned_prompt(path: Path) -> dict[str, object]:
     prompt = json.loads(path.read_text(encoding="utf-8"))
@@ -108,24 +367,37 @@ def require_active_route(checkpoint: dict[str, object], requested: str) -> str:
     return requested
 
 
-def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_inputs: dict[str, object] | None = None) -> dict[str, object]:
+def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_inputs: dict[str, object] | None = None, *, model_source_bytes: bytes | None = None) -> dict[str, object]:
     import torch
 
-    require_execution_authority(arguments)
-    for path, expected, label in ((arguments.model_source, arguments.model_source_sha256, "model source"), (arguments.model_config, arguments.model_config_sha256, "model config")):
-        if sha256(path) != expected:
-            raise ValueError(f"{label} SHA-256 does not match its argument")
-    specification = importlib.util.spec_from_file_location("ember_restart_exact_model", arguments.model_source)
-    if specification is None or specification.loader is None:
-        raise ValueError("model source cannot be imported")
-    module = importlib.util.module_from_spec(specification)
-    specification.loader.exec_module(module)
-    config = module.RestartDecoderConfig.from_contract(arguments.model_config)
+    if model_source_bytes is None:
+        raise ValueError("verified execution requires captured model source bytes")
+    source_sha256 = hashlib.sha256(model_source_bytes).hexdigest()
+    if source_sha256 != arguments.model_source_sha256:
+        raise ValueError("model source SHA-256 does not match its argument")
+    identities = {
+        "model_source_sha256": source_sha256,
+        "model_config_sha256": str(checkpoint["model_config_sha256"]),
+        "tokenizer_sha256": str(checkpoint["tokenizer_sha256"]),
+        "checkpoint_manifest_sha256": str(checkpoint["checkpoint_manifest_sha256"]),
+        "parameter_receipt_sha256": str(checkpoint["parameter_receipt_sha256"]),
+        "parameter_counter_sha256": str(checkpoint["counter_sha256"]),
+        "trusted_verifier_registry_sha256": str(checkpoint["trusted_verifier_registry_sha256"]),
+    }
+    authority = require_execution_authority(arguments, identities)
+    module = _load_model_module(model_source_bytes, arguments.model_source)
+    config = _config_from_payload(module, checkpoint["model_config"])
+    input_token_ids = (bound_inputs or {}).get("token_ids", [arguments.input_token_id])
+    if not isinstance(input_token_ids, list) or not input_token_ids or any(not isinstance(token, int) or isinstance(token, bool) or token < 0 for token in input_token_ids) or arguments.max_new_tokens <= 0 or arguments.max_new_tokens > 32:
+        raise ValueError("input token and generation limit are invalid")
+    if any(token >= config.vocab_size for token in input_token_ids):
+        raise ValueError("input token is outside model vocabulary")
     model = module.UnifiedDecoder(config, device="meta", allow_production_allocation=True)
     active_route = require_active_route(checkpoint, str((bound_inputs or {}).get("active_expert", arguments.active_expert)))
     root = arguments.checkpoint_manifest.parent
-    shared = torch.load(root / "shared.pt", map_location=arguments.device, weights_only=True)
-    expert = None if active_route == "shared" else torch.load(root / f"expert-{active_route}.pt", map_location=arguments.device, weights_only=True)
+    required_shards = checkpoint["required_shards"]
+    shared = hash_and_load_torch(torch, root / "shared.pt", required_shards["shared.pt"], device=arguments.device)
+    expert = None if active_route == "shared" else hash_and_load_torch(torch, root / f"expert-{active_route}.pt", required_shards[f"expert-{active_route}.pt"], device=arguments.device)
     if not isinstance(shared, dict) or not isinstance(shared.get("model"), dict):
         raise ValueError("shared checkpoint lacks a model state")
     if active_route != "shared" and (not isinstance(expert, dict) or expert.get("expert") != active_route or not isinstance(expert.get("model"), dict)):
@@ -143,9 +415,6 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
     if active_route != "shared":
         model.load_state_dict(expert["model"], strict=False, assign=True)
     model.eval()
-    input_token_ids = (bound_inputs or {}).get("token_ids", [arguments.input_token_id])
-    if not isinstance(input_token_ids, list) or not input_token_ids or any(not isinstance(token, int) or token < 0 for token in input_token_ids) or arguments.max_new_tokens <= 0 or arguments.max_new_tokens > 32:
-        raise ValueError("input token and generation limit are invalid")
     tokens = torch.tensor([input_token_ids], device=arguments.device, dtype=torch.long)
     generated: list[int] = []
     with torch.no_grad():
@@ -156,7 +425,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
             if token == arguments.stop_token_id:
                 break
             tokens = torch.cat((tokens, torch.tensor([[token]], device=arguments.device)), dim=1)
-    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": active_route, "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "model_source_sha256": arguments.model_source_sha256, "model_config_sha256": arguments.model_config_sha256}
+    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": active_route, "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "model_source_sha256": source_sha256, "model_config_sha256": checkpoint["model_config_sha256"], "tokenizer_sha256": checkpoint["tokenizer_sha256"], "inference_implementation_sha256": authority["inference_implementation_sha256"], "parameter_receipt_sha256": checkpoint["parameter_receipt_sha256"]}
 
 
 def main() -> None:
@@ -183,6 +452,9 @@ def main() -> None:
     parser.add_argument("--row-id")
     parser.add_argument("--prompt", type=Path)
     parser.add_argument("--frozen-split", type=Path)
+    parser.add_argument("--parameter-receipt", type=Path)
+    parser.add_argument("--counter-source", type=Path)
+    parser.add_argument("--trusted-verifier-registry", type=Path)
     parser.add_argument("--stop-token-id", type=int, default=2)
     arguments = parser.parse_args()
     if arguments.benchmark_capability not in (None, "text"):
@@ -194,31 +466,54 @@ def main() -> None:
     if arguments.canonical_output is not None and any(value is not None for value in (arguments.input_token_id, arguments.active_expert, arguments.row_id)): parser.error("canonical output rejects detached manual prompt fields")
     try:
         binding = load_canonical_prompt_binding(arguments.prompt, arguments.frozen_split, arguments.split_sha256, arguments.benchmark_id, arguments.benchmark_version) if arguments.canonical_output is not None else None
-        tokenizer = Tokenizer.from_file(str(arguments.tokenizer))
-        checkpoint = _verify(arguments.checkpoint_manifest, arguments.model_config)
         if arguments.execute and any(value is None for value in (arguments.model_source, arguments.model_source_sha256, arguments.model_config, arguments.model_config_sha256, arguments.max_new_tokens)):
             raise ValueError("execution requires model/config identities, active expert, input token, and limit")
-        execution = execute(arguments, checkpoint, binding) if arguments.execute else {"result": "PREFLIGHT_ONLY"}
+        tokenizer_bytes, tokenizer_sha256 = _read_snapshot(arguments.tokenizer, "tokenizer")
+        tokenizer = Tokenizer.from_str(tokenizer_bytes.decode("utf-8"))
+        if arguments.execute:
+            if any(value is None for value in (arguments.parameter_receipt, arguments.counter_source, arguments.trusted_verifier_registry)):
+                raise ValueError("verified execution requires parameter receipt, counter source, and trusted verifier registry")
+            requested_route = str((binding or {}).get("active_expert", arguments.active_expert))
+            checkpoint = load_verified_runtime_contract(
+                manifest_path=arguments.checkpoint_manifest,
+                model_config_path=arguments.model_config,
+                parameter_receipt_path=arguments.parameter_receipt,
+                counter_source_path=arguments.counter_source,
+                trusted_verifier_registry_path=arguments.trusted_verifier_registry,
+                requested_route=requested_route,
+            )
+            model_source_bytes, model_source_sha256 = _read_snapshot(arguments.model_source, "model source")
+            if model_source_sha256 != arguments.model_source_sha256:
+                raise ValueError("model source SHA-256 does not match its argument")
+            if checkpoint["model_config_sha256"] != arguments.model_config_sha256:
+                raise ValueError("model config SHA-256 does not match --model-config-sha256")
+            if checkpoint["checkpoint_manifest_sha256"] != arguments.checkpoint_sha256:
+                raise ValueError("checkpoint manifest SHA-256 does not match --checkpoint-sha256")
+            checkpoint["tokenizer_sha256"] = tokenizer_sha256
+            execution = execute(arguments, checkpoint, binding, model_source_bytes=model_source_bytes)
+        else:
+            checkpoint = _verify(arguments.checkpoint_manifest, arguments.model_config)
+            execution = {"result": "PREFLIGHT_ONLY"}
     except Exception as error:
         parser.error(str(error))
-    checkpoint_sha256 = sha256(arguments.checkpoint_manifest)
+    checkpoint_sha256 = str(checkpoint["checkpoint_manifest_sha256"]) if "checkpoint_manifest_sha256" in checkpoint else sha256(arguments.checkpoint_manifest)
     if checkpoint_sha256 != arguments.checkpoint_sha256:
         parser.error("checkpoint manifest SHA-256 does not match --checkpoint-sha256")
-    if sha256(arguments.model_config) != arguments.model_config_sha256:
+    if checkpoint["model_config_sha256"] != arguments.model_config_sha256:
         parser.error("model config SHA-256 does not match --model-config-sha256")
     if arguments.canonical_output is not None:
         required = (arguments.execute, arguments.benchmark_id, arguments.benchmark_version, arguments.benchmark_capability, arguments.split_sha256, arguments.protocol_sha256)
         if any(value is None or value is False for value in required):
             parser.error("canonical output requires execution and benchmark identities")
         generated = execution["generated_token_ids"]
-        envelope = {"schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", "checkpoint_manifest_sha256": checkpoint_sha256, "model_config_sha256": arguments.model_config_sha256, "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__)), "benchmark": {"id": arguments.benchmark_id, "version": arguments.benchmark_version, "capability": arguments.benchmark_capability, "split_sha256": arguments.split_sha256, "protocol_sha256": arguments.protocol_sha256}, "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": arguments.max_new_tokens, "temperature": 0, "top_p": 1, "stop_token_ids": [arguments.stop_token_id]}, "rows": [{"id": binding["row_id"], "input_sha256": binding["input_sha256"], "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "output": {"kind": "text", "text": tokenizer.decode(generated)}}]}
+        envelope = {"schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", "checkpoint_manifest_sha256": checkpoint_sha256, "model_config_sha256": arguments.model_config_sha256, "tokenizer_sha256": execution["tokenizer_sha256"], "inference_implementation_sha256": execution["inference_implementation_sha256"], "benchmark": {"id": arguments.benchmark_id, "version": arguments.benchmark_version, "capability": arguments.benchmark_capability, "split_sha256": arguments.split_sha256, "protocol_sha256": arguments.protocol_sha256}, "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": arguments.max_new_tokens, "temperature": 0, "top_p": 1, "stop_token_ids": [arguments.stop_token_id]}, "rows": [{"id": binding["row_id"], "input_sha256": binding["input_sha256"], "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "output": {"kind": "text", "text": tokenizer.decode(generated)}}]}
         validate_predictions(envelope)
         arguments.canonical_output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.canonical_output.parent, delete=False) as handle:
             json.dump(envelope, handle, sort_keys=True); handle.write("\n"); temporary_canonical = handle.name
         os.replace(temporary_canonical, arguments.canonical_output)
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "checkpoint_sha256": checkpoint_sha256, "checkpoint_model_config_sha256": checkpoint["model_config_sha256"], "shard_count": checkpoint["shard_count"], "tokenizer_sha256": sha256(arguments.tokenizer), **execution}
+    payload = {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "checkpoint_sha256": checkpoint_sha256, "checkpoint_model_config_sha256": checkpoint["model_config_sha256"], "shard_count": checkpoint["shard_count"], "tokenizer_sha256": tokenizer_sha256, **execution}
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.output.parent, delete=False) as handle:
         json.dump(payload, handle, sort_keys=True)
         handle.write("\n")

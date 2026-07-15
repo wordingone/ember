@@ -16,7 +16,7 @@ from test_ember_restart_eval_checkpoint_consumer_v3_contract import write_v3
 SCRIPT = Path(__file__).parents[1] / "scripts" / "ember_restart_eval_raw_forward.py"
 
 
-def test_execute_rejects_self_hashed_model_source_without_committed_authority():
+def test_execute_rejects_detached_canonical_scalars_before_model_or_checkpoint_consumption():
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         source, config, tokenizer, output, canonical = root / "model.py", root / "config.json", root / "tokenizer.json", root / "receipt.json", root / "canonical.json"
@@ -35,7 +35,7 @@ def test_execute_rejects_self_hashed_model_source_without_committed_authority():
         checkpoint.write_text(json.dumps(manifest), encoding="utf-8")
         completed = subprocess.run([sys.executable, str(SCRIPT), "--tokenizer", str(tokenizer), "--checkpoint-manifest", str(checkpoint), "--checkpoint-sha256", hashlib.sha256(checkpoint.read_bytes()).hexdigest(), "--output", str(output), "--execute", "--model-source", str(source), "--model-source-sha256", hashlib.sha256(source.read_bytes()).hexdigest(), "--model-config", str(config), "--model-config-sha256", hashlib.sha256(config.read_bytes()).hexdigest(), "--active-expert", "tool", "--input-token-id", "0", "--max-new-tokens", "2", "--device", "cpu", "--canonical-output", str(canonical), "--benchmark-id", "fixture", "--benchmark-version", "v1", "--benchmark-capability", "text", "--split-sha256", "a" * 64, "--protocol-sha256", "b" * 64, "--row-id", "fixture-1"], capture_output=True, text=True)
         assert completed.returncode != 0
-        assert "committed execution authority" in completed.stderr
+        assert "canonical output requires owned prompt and frozen split" in completed.stderr
         assert not output.exists()
         assert not canonical.exists()
 
