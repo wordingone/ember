@@ -267,19 +267,20 @@ print(json.dumps({
         {"shards": shard_records, "optimizer": optimizer},
     )
     parameter_counts = {
-        "allocated_parameters": 3_134_515_200,
-        "unique_parameters": 3_134_515_200,
-        "trainable_parameters": 3_134_515_200,
-        "active_parameters": 1_020_585_984,
-        "episode_trainable_parameters": 1_020_585_984,
-        "served_parameters": 3_134_515_200,
+        "allocated_parameters": 3_839_161_856,
+        "unique_parameters": 3_839_161_856,
+        "trainable_parameters": 3_839_161_856,
+        "active_parameters": 1_725_232_640,
+        "episode_trainable_parameters": 1_725_232_640,
+        "served_parameters": 3_839_161_856,
     }
     model_config = tmp_path / "configs" / "ember-restart-3b.json"
     model_config_hash = _write_json(
         model_config,
         {
             "contract_name": "ember-restart-3b",
-            "contract_version": 2,
+            "contract_version": 3,
+            "architecture_revision": "ember-sparse-3b-v2",
             "model": {
                 "hidden_size": 2048,
                 "layers": 14,
@@ -288,8 +289,11 @@ print(json.dumps({
                 "tied_embeddings": True,
                 "image_projection": {"input_shape": [48, 48, 3]},
                 "audio_projection": {"frame_samples": 640},
-                "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
-                "total_unique_trainable_parameters": 3_134_515_200,
+                "expert_routing": {
+                    "expert_names": ["vision", "audio", "reasoning", "tool"],
+                    "shared_text_ffn": "always_active_SwiGLU_4H",
+                },
+                "total_unique_trainable_parameters": 3_839_161_856,
             },
             "training": {"optimizer": optimizer},
         },
@@ -324,19 +328,21 @@ experts = model["expert_routing"]["expert_names"]
 image_input = math.prod(model["image_projection"]["input_shape"])
 audio_input = model["audio_projection"]["frame_samples"]
 expert_per_layer = 12 * hidden * hidden
-total = (
+head_dim = hidden // model["attention_heads"]
+shared = (
     model["vocab_size"] * hidden
-    + layers * (4 * hidden * hidden + 2 * hidden + len(experts) * expert_per_layer)
+    + layers * (4 * hidden * hidden + 12 * hidden * hidden + 2 * hidden + 2 * head_dim)
     + image_input * hidden
     + audio_input * hidden
     + hidden
 )
-active = total - layers * (len(experts) - 1) * expert_per_layer
+total = shared + len(experts) * layers * expert_per_layer
+active = shared if args.active_expert == "shared" else shared + layers * expert_per_layer
 print(json.dumps({
     "result": "MEASURED",
     "subject_checkpoint_sha256": sha256(args.checkpoint_manifest),
     "model_config_sha256": sha256(args.model_config),
-    "architecture_revision": "ember-sparse-3b-v1",
+    "architecture_revision": "ember-sparse-3b-v2",
     "allocated_parameters": total,
     "unique_parameters": total,
     "trainable_parameters": total,
@@ -383,7 +389,7 @@ print(json.dumps({
             "subject_checkpoint_sha256": checkpoint_index_hash,
             "counter_sha256": counter_record["sha256"],
             "model_config_sha256": model_config_hash,
-            "architecture_revision": "ember-sparse-3b-v1",
+            "architecture_revision": "ember-sparse-3b-v2",
             **parameter_counts,
             "active_expert_ids": ["reasoning"],
             "expert_genesis_sha256": {
@@ -418,7 +424,7 @@ print(json.dumps({
         },
         "architecture": {
             "family": "ember-unified-decoder",
-            "revision": "ember-sparse-3b-v1",
+            "revision": "ember-sparse-3b-v2",
             "model_config": {
                 "path": str(model_config.relative_to(tmp_path)),
                 "sha256": model_config_hash,

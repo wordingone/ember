@@ -69,7 +69,7 @@ TOTAL_PARAMETER_FIELDS = (
     "served_parameters",
 )
 EXPERT_DOMAINS = ("vision", "audio", "reasoning", "tool")
-ARCHITECTURE_REVISION = "ember-sparse-3b-v1"
+ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
 ARCHITECTURE_SHAPE = {
     "hidden_size": 2048,
     "layers": 14,
@@ -223,10 +223,15 @@ def _verify_architecture(
         if bank_domains != set(EXPERT_DOMAINS):
             errors.append("architecture.expert_banks: domains must equal vision/audio/reasoning/tool")
     active_experts = architecture.get("active_expert_ids")
+    active_route = (
+        active_experts[0]
+        if isinstance(active_experts, list) and len(active_experts) == 1
+        else None
+    )
     if not isinstance(active_experts, list) or len(active_experts) != 1:
-        errors.append("architecture.active_expert_ids: exactly one expert must be active per episode")
-    elif active_experts[0] not in bank_ids:
-        errors.append("architecture.active_expert_ids: active expert is not declared")
+        errors.append("architecture.active_expert_ids: exactly one route must be active per episode")
+    elif active_route != "shared" and active_route not in bank_ids:
+        errors.append("architecture.active_expert_ids: active route is not declared")
 
     if architecture.get("revision") != ARCHITECTURE_REVISION:
         errors.append(f"architecture.revision: must equal {ARCHITECTURE_REVISION}")
@@ -250,8 +255,10 @@ def _verify_architecture(
     if model_config is not None:
         if model_config.get("contract_name") != "ember-restart-3b":
             errors.append("architecture.model_config: contract_name mismatch")
-        if model_config.get("contract_version") != 2:
+        if model_config.get("contract_version") != 3:
             errors.append("architecture.model_config: contract_version mismatch")
+        if model_config.get("architecture_revision") != ARCHITECTURE_REVISION:
+            errors.append("architecture.model_config: architecture_revision mismatch")
         model = model_config.get("model")
         if not isinstance(model, dict):
             errors.append("architecture.model_config.model: expected object")
@@ -275,7 +282,11 @@ def _verify_architecture(
             if observed_shape != ARCHITECTURE_SHAPE:
                 errors.append("architecture.model_config: shape does not match revision")
             routing = model.get("expert_routing")
-            if not isinstance(routing, dict) or routing.get("expert_names") != list(EXPERT_DOMAINS):
+            if (
+                not isinstance(routing, dict)
+                or routing.get("expert_names") != list(EXPERT_DOMAINS)
+                or routing.get("shared_text_ffn") != "always_active_SwiGLU_4H"
+            ):
                 errors.append("architecture.model_config: expert routing mismatch")
             if model.get("tied_embeddings") is not True:
                 errors.append("architecture.model_config: tied_embeddings must be true")
@@ -287,16 +298,23 @@ def _verify_architecture(
                 for size in ARCHITECTURE_SHAPE["image_input_shape"]:
                     image_input *= size
                 audio_input = ARCHITECTURE_SHAPE["audio_frame_samples"]
-                shared_per_layer = 4 * hidden * hidden + 2 * hidden
+                head_dim = hidden // ARCHITECTURE_SHAPE["attention_heads"]
+                shared_per_layer = (
+                    4 * hidden * hidden + 12 * hidden * hidden + 2 * hidden + 2 * head_dim
+                )
                 expert_per_layer = 12 * hidden * hidden
-                total = (
+                shared_total = (
                     vocab * hidden
-                    + layers * (shared_per_layer + len(EXPERT_DOMAINS) * expert_per_layer)
+                    + layers * shared_per_layer
                     + image_input * hidden
                     + audio_input * hidden
                     + hidden
                 )
-                active_count = total - layers * (len(EXPERT_DOMAINS) - 1) * expert_per_layer
+                expert_total = layers * expert_per_layer
+                total = shared_total + len(EXPERT_DOMAINS) * expert_total
+                active_count = (
+                    shared_total if active_route == "shared" else shared_total + expert_total
+                )
                 config_counts = {
                     "allocated_parameters": total,
                     "unique_parameters": total,
