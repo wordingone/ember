@@ -55,7 +55,7 @@ def test_authority_rejects_correct_tuple_when_registry_disposition_is_not_author
         module.require_execution_authority(arguments)
 
 def test_authority_registry_binds_the_canonical_git_blob_bytes():
-    blob = subprocess.run(["git", "show", "public/master:scripts/ember_restart_eval_raw_forward.py"], cwd=ROOT, check=True, capture_output=True).stdout
+    blob = subprocess.run(["git", "show", "d2f2574c3e666f0c8d16a4311c1423e10ba66637:scripts/ember_restart_eval_raw_forward.py"], cwd=ROOT, check=True, capture_output=True).stdout
     registry = json.loads((ROOT / "manifests" / "ember-restart-execution-authorities-v1.json").read_text(encoding="utf-8"))
 
     assert len(blob) == 13_398
