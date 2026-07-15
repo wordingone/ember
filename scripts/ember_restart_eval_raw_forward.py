@@ -30,6 +30,19 @@ from tokenizers import Tokenizer
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
+def load_owned_prompt(path: Path) -> dict[str, object]:
+    prompt = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(prompt, dict) or "target_ids" in prompt:
+        raise ValueError("owned inference prompt rejects target_ids")
+    if set(prompt) != {"schema_version", "id", "active_expert", "token_ids"} or prompt.get("schema_version") != "ember-owned-inference-prompt-v1":
+        raise ValueError("owned inference prompt schema is invalid")
+    if not isinstance(prompt["id"], str) or not prompt["id"] or prompt["active_expert"] not in ("shared", "vision", "audio", "reasoning", "tool"):
+        raise ValueError("owned inference prompt identity is invalid")
+    tokens = prompt["token_ids"]
+    if not isinstance(tokens, list) or not tokens or any(not isinstance(token, int) or isinstance(token, bool) or token < 0 for token in tokens):
+        raise ValueError("owned inference prompt token ids are invalid")
+    return prompt
+
 
 def validate_state_map(state: object, expected: dict[str, object], label: str) -> None:
     if not isinstance(state, dict):
