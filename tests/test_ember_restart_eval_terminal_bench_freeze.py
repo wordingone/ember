@@ -59,3 +59,22 @@ def test_rejects_tag_only_or_network_enabled_task_before_output():
 
         assert completed.returncode != 0
         assert not output.exists()
+
+
+def test_freeze_canonicalizes_equivalent_task_selection_order():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        _write_task(root, image="example.invalid/bounded@sha256:" + "a" * 64)
+        second = root / "another-task"; second.mkdir()
+        (second / "task.toml").write_text("\n".join((
+            'schema_version = "1.1"',
+            "[task]",
+            'name = "terminal-bench/another-task"',
+            "[environment]",
+            'docker_image = "example.invalid/another@sha256:' + "b" * 64 + '"',
+            "allow_internet = false",
+        )), encoding="utf-8")
+        output = root / "frozen.json"
+        completed = subprocess.run([sys.executable, str(SCRIPT), "--task-root", str(root), "--task-id", "bounded-task", "--task-id", "another-task", "--output", str(output)], capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stderr
+        assert [task["task_id"] for task in json.loads(output.read_text(encoding="utf-8"))["tasks"]] == ["another-task", "bounded-task"]
