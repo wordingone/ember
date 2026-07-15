@@ -224,6 +224,7 @@ describe("process entry model-seat enforcement", () => {
     let exitCode = -1;
     let initCalls = 0;
     let verifyCalls = 0;
+    let ensureCalls = 0;
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((chunk: string) => {
@@ -238,8 +239,29 @@ describe("process entry model-seat enforcement", () => {
           checkpointSha256: "e".repeat(64),
           endpointUrl: "http://127.0.0.1:9",
           identityUrl: "http://127.0.0.1:9/v1/models",
+          modelConfigSha256: "b".repeat(64),
           modelName: "ember-owned:" + "e".repeat(12),
+          serverSourceSha256: "a".repeat(64),
+          tokenizerSha256: "c".repeat(64),
+          launch: {
+            checkpointDir: "C:\\owned\\checkpoint",
+            mode: "INTERACTIVE",
+            pythonExecutable: "python-owned",
+            runManifestPath: "C:\\owned\\run.json",
+            serverPath: "C:\\repo\\serve_owned_openai.py",
+            tokenizerPath: "C:\\owned\\tokenizer.json",
+            trustedVerifierRegistryPath: "C:\\owned\\trusted.json",
+          },
         }),
+        ensureOwnedServerFn: async (ownedIdentity) => {
+          expect(ownedIdentity.launch?.mode).toBe("INTERACTIVE");
+          ensureCalls += 1;
+          return {
+            outcome: "spawned",
+            port: 9,
+            handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never,
+          };
+        },
         verifyOwnedEndpointFn: async () => {
           verifyCalls += 1;
         },
@@ -258,6 +280,7 @@ describe("process entry model-seat enforcement", () => {
 
     expect(exitCode).toBe(0);
     expect(initCalls).toBe(1);
+    expect(ensureCalls).toBe(1);
     expect(verifyCalls).toBe(1);
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_ADMITTED");
     expect(process.env["EMBER_MODEL_URL"]).toBe("http://127.0.0.1:9");
@@ -266,6 +289,8 @@ describe("process entry model-seat enforcement", () => {
     );
     expect(stdout).toContain("model seat: OWNED_ADMITTED");
     expect(stdout).toContain("bound by admitted checkpoint manifest");
+    expect(stdout).toContain("supervised server started");
+    expect(stdout).not.toContain("adopted");
     expect(stdout).not.toContain("qwen3.6-27b");
     expect(stdout).not.toContain("http://127.0.0.1:9999");
   });

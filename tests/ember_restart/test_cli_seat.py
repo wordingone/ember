@@ -44,11 +44,21 @@ def test_resolver_derives_owned_identity_from_admitted_bytes(tmp_path: Path):
         "endpoint_url": "http://127.0.0.1:8083",
         "errors": [],
         "identity_url": "http://127.0.0.1:8083/v1/models",
+        "launch": {
+            "checkpoint_dir": str((tmp_path / manifest["checkpoint"]["manifest_path"]).parent.resolve()),
+            "mode": "INTERACTIVE",
+            "run_manifest_path": str((tmp_path / "run.json").resolve()),
+            "server_path": str((tmp_path / serving["server_implementation"]["path"]).resolve()),
+            "tokenizer_path": str((tmp_path / manifest["tokenizer"]["path"]).resolve()),
+            "trusted_verifier_registry_path": str((tmp_path / "trusted-verifiers.json").resolve()),
+        },
+        "model_config_sha256": manifest["architecture"]["model_config"]["sha256"],
         "model_format": "safetensors",
         "model_name": f"ember-owned:{checkpoint_sha256[:12]}",
         "run_id": manifest["run_id"],
         "seat": "OWNED_ADMITTED",
         "server_source_sha256": serving["server_implementation"]["sha256"],
+        "tokenizer_sha256": manifest["tokenizer"]["sha256"],
         "valid": True,
     }
 

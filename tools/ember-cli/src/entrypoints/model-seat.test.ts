@@ -44,6 +44,9 @@ describe("ember-cli model seat authority", () => {
         checkpointSha256: "a".repeat(64),
         endpointUrl: "http://127.0.0.1:8083",
         identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
         modelName: "ember-owned:a" + "a".repeat(11),
       },
     });
@@ -64,6 +67,9 @@ describe("ember-cli model seat authority", () => {
         checkpointSha256: "b".repeat(64),
         endpointUrl: "http://127.0.0.1:8083",
         identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
         modelName: "ember-owned:b" + "b".repeat(11),
       },
     });
@@ -82,6 +88,9 @@ describe("ember-cli model seat authority", () => {
         checkpointSha256: "c".repeat(64),
         endpointUrl: "http://127.0.0.1:8083",
         identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
         modelName: "ember-owned:c" + "c".repeat(11),
       },
     });

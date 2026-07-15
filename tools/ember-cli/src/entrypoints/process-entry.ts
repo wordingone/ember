@@ -22,6 +22,7 @@ import {
   loadOwnedModelIdentity,
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
+import { ensureOwnedServer } from "./owned-server-supervisor.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
@@ -663,6 +664,7 @@ export interface MainOptions {
   probeExisting?:  (port: number) => Promise<boolean>;
   loadOwnedIdentityFn?: typeof loadOwnedModelIdentity;
   verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
+  ensureOwnedServerFn?: typeof ensureOwnedServer;
   initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
@@ -774,6 +776,20 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   const didSeatGatedFastPath = await dispatchFastPath(argv);
   if (didSeatGatedFastPath) return;
 
+  if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
+    try {
+      const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
+      const ensure = opts.ensureOwnedServerFn ?? ((identity) =>
+        ensureOwnedServer(identity, { verifyEndpoint }));
+      await ensure(seatDecision.ownedIdentity);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: could not establish admitted owned server (" + message + ")\n");
+      doExitMain(1);
+      return;
+    }
+  }
+
   // issue #196 / #602: one disclosure line, always -- so a leaked/stale EMBER_MODEL_URL (or
   // a models.json "binary"/"endpoint" field silently discarding an explicit override, or a
   // persisted endpoint silently discarding EMBER_GPU_FREE=1) can never reroute the cockpit
@@ -781,7 +797,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
     process.stdout.write(
       "[ember] model endpoint: " + seatDecision.ownedIdentity.endpointUrl +
-        " -- bound by admitted checkpoint manifest\n",
+        " -- bound by admitted checkpoint manifest; supervised server started\n",
     );
   } else {
     process.stdout.write(
