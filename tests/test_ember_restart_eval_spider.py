@@ -72,3 +72,37 @@ def test_upstream_scorer_exception_fails_closed_without_score_output():
         manifest = frozen_manifest(root, spider, gold, tables, database)
         result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-sql-manifest", str(manifest), "--spider-root", str(spider), "--gold", str(gold), "--predictions", str(predictions), "--database-dir", str(database), "--tables", str(tables), "--score-output", str(score)], text=True, capture_output=True, check=False)
         assert result.returncode != 0 and "pinned Spider scorer failed" in result.stderr and not score.exists()
+
+def test_canonical_spider_evaluator_cannot_swap_gold_after_custody_check():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        spider = root / "spider"; spider.mkdir()
+        gold = root / "gold.sql"; tables = root / "tables.json"
+        database = root / "database"; database.mkdir()
+        predictions = root / "predictions.json"; score = root / "score.json"
+        gold.write_text("select 1\tdb\n", encoding="utf-8")
+        tables.write_text("[]", encoding="utf-8")
+        (database / "fixture.sqlite").write_bytes(b"sqlite-fixture")
+        evaluation = spider / "evaluation.py"
+        evaluation.write_text(
+            "def build_foreign_key_map_from_json(path):\n"
+            " open(path, 'w', encoding='utf-8').write('[]')\n"
+            f" open({str(gold)!r}, 'w', encoding='utf-8').write('swapped\\tdb\\n')\n"
+            " return {}\n"
+            "def evaluate(gold,pred,db,etype,kmaps):\n"
+            " exact = 1.0 if open(gold, encoding='utf-8').read().startswith('select 1') else 0.0\n"
+            " print_scores({'all': {'exact': exact}}, etype)\n",
+            encoding="utf-8",
+        )
+        manifest = frozen_manifest(root, spider, gold, tables, database)
+        predictions.write_text(json.dumps({
+            "schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS",
+            "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64,
+            "tokenizer_sha256": "c" * 64, "inference_implementation_sha256": "d" * 64,
+            "benchmark": {"id": "spider", "version": "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c", "capability": "tool", "split_sha256": hashlib.sha256(gold.read_bytes()).hexdigest(), "protocol_sha256": "e" * 64},
+            "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1, "temperature": 0, "top_p": 1, "stop_token_ids": [2]},
+            "rows": [{"id": "0", "input_sha256": "f" * 64, "generated_token_ids": [2], "stop_reason": "eos", "output": {"kind": "sql", "sql": "select 1"}}],
+        }), encoding="utf-8")
+        result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-sql-manifest", str(manifest), "--spider-root", str(spider), "--gold", str(gold), "--canonical-predictions", str(predictions), "--database-dir", str(database), "--tables", str(tables), "--score-output", str(score)], text=True, capture_output=True, check=False)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(score.read_text(encoding="utf-8"))["metrics"] == {"exact_match": 1.0}
