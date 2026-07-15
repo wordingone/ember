@@ -1,20 +1,26 @@
 {
-  "goal_id": "EMBER-02",
-  "workstream_id": "EMBER-02C",
-  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "schema_version": "ember-restart-benchmark-custody-v1",
-  "benchmark_id": "MMMU",
-  "benchmark_version": "bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa",
-  "upstream_url": "https://github.com/MMMU-Benchmark/MMMU.git",
-  "upstream_tree_git_sha1": "07da47c733711a68dcbdfa3e258b7ae3e2e68974",
-  "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-  "split": {
-    "name": "validation",
-    "answer_dictionary_sha256": "76080f5597b8f4d29abba8551489c4b82e4a285b9d62b946fd67a1952e95502c",
-    "total_items": 900,
-    "eligible_multiple_choice_items": 847,
-    "eligible_id_set_sha256": "7a8800c96f0a6003b004d4bc3dfc089b8d6d5aa56a5f85e8c4719fbadd63ecc6"
-  },
-  "target_training_access": "FORBIDDEN",
-  "admission": "NOT_EXECUTABLE_UNTRAINED_SPECIALIST_NO_CHECKPOINT_BOUND_PREDICTIONS"
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-benchmark-custody-v1",
+    "benchmark_id":  "MMMU",
+    "benchmark_version":  "bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa",
+    "upstream_url":  "https://github.com/MMMU-Benchmark/MMMU.git",
+    "upstream_tree_git_sha1":  "07da47c733711a68dcbdfa3e258b7ae3e2e68974",
+    "license_sha256":  "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "split":  {
+                  "name":  "validation",
+                  "answer_dictionary_sha256":  "76080f5597b8f4d29abba8551489c4b82e4a285b9d62b946fd67a1952e95502c",
+                  "total_items":  900,
+                  "eligible_multiple_choice_items":  847,
+                  "eligible_id_set_sha256":  "7a8800c96f0a6003b004d4bc3dfc089b8d6d5aa56a5f85e8c4719fbadd63ecc6"
+              },
+    "target_training_access":  "FORBIDDEN",
+    "admission":  "NOT_EXECUTABLE_UNTRAINED_SPECIALIST_NO_CHECKPOINT_BOUND_PREDICTIONS",
+    "validation_parquet_materialization":  {
+                                               "upstream_revision":  "f87afafe4afe71650b99ef5236d7b5bb3f6345c7",
+                                               "artifact_sha256":  "9fd83f534080d8ae85a3c79203ffa6c5b216e3accc4429f23a3ead6f83f3f512",
+                                               "runner_receipt_sha256":  "b6a37be5fbe4b50db4758793863bb9361c99dbe0c5b40e327add77b4a39e1585",
+                                               "claim_status":  "FROZEN_SOURCE_COMPATIBILITY_ONLY"
+                                           }
 }
