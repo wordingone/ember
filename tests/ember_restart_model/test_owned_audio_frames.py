@@ -32,5 +32,12 @@ class OwnedAudioFrameTests(unittest.TestCase):
         self.assertGreaterEqual(len(captions), 12)
 
 
+    def test_512_owned_audio_episodes_have_nontrivial_raw_diversity(self) -> None:
+        from build_owned_audio_frames import build_records
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "audio": 1, "signal": 2, "has": 3, "positive": 4, "negative": 5, "silent": 6, "frames": 7, **{str(index): index + 8 for index in range(16)}}, unk_token="<unk>"))
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        records = build_records(tokenizer, count=512, audio_marker=31_999)
+        raw_episodes = {tuple(record["audio_frames_i16le_base64"]) for record in records}
+        self.assertGreaterEqual(len(raw_episodes), 480)
 if __name__ == "__main__":
     unittest.main()

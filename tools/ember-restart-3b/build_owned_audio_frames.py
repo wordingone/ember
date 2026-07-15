@@ -13,17 +13,19 @@ from specialist_semantics import audio_caption
 
 
 def _frame(polarity: str, variant: int) -> bytes:
+    """Emit a deterministic signed or zero-sum 40ms frame with index-bound variation."""
+
+    amplitude = 400 + (variant % 1024) * 12
+    phase = (variant * 37) % 97
     if polarity == "positive":
-        value = 400 + variant * 30
+        samples = [amplitude + ((sample * (1 + variant % 31) + phase) % 97) - 48 for sample in range(640)]
     elif polarity == "negative":
-        value = -400 - variant * 30
+        samples = [-(amplitude + ((sample * (1 + variant % 31) + phase) % 97) - 48) for sample in range(640)]
     elif polarity == "silent":
-        value = 0
+        samples = [amplitude if sample % 2 == 0 else -amplitude for sample in range(640)]
     else:
         raise ValueError("unknown owned audio frame polarity")
-    return b"".join(int(value).to_bytes(2, "little", signed=True) for _ in range(640))
-
-
+    return b"".join(int(value).to_bytes(2, "little", signed=True) for value in samples)
 def _episode_frames(index: int) -> list[bytes]:
     patterns = tuple(
         tuple(["positive"] * positive + ["negative"] * negative + ["silent"] * (4 - positive - negative))
@@ -31,7 +33,7 @@ def _episode_frames(index: int) -> list[bytes]:
         for negative in range(5 - positive)
     )
     pattern = patterns[index % len(patterns)]
-    return [_frame(polarity, (index + offset) % 8) for offset, polarity in enumerate(pattern)]
+    return [_frame(polarity, index * 4 + offset) for offset, polarity in enumerate(pattern)]
 
 def build_records(tokenizer: Any, *, count: int, audio_marker: int) -> list[dict[str, object]]:
     """Build deterministic, diverse owned PCM episodes; targets derive from the raw frames."""

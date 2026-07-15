@@ -27,17 +27,21 @@ def _patch(rectangles: list[tuple[str, int, int]]) -> bytes:
 
 
 def _scene(index: int) -> list[bytes]:
+    """Generate a deterministic high-variation four-patch scene from its index."""
+
     counts = {"red": 1 + index % 4, "green": 1 + (index // 4) % 4, "blue": 1 + (index // 16) % 4}
     per_patch: list[list[tuple[str, int, int]]] = [[], [], [], []]
-    placement = 0
+    stride_choices = (1, 2, 3, 4, 6, 7, 8, 9, 11, 12)
+    stride = stride_choices[(index // 25) % len(stride_choices)]
+    placement = (index * 7 + index // 125) % len(_PLACEMENTS)
+    object_index = 0
     for color in ("red", "green", "blue"):
         for _ in range(counts[color]):
-            x, y = _PLACEMENTS[placement % len(_PLACEMENTS)]
-            per_patch[placement % 4].append((color, x, y))
-            placement += 1
+            x, y = _PLACEMENTS[(placement + object_index * stride) % len(_PLACEMENTS)]
+            patch_index = (index + object_index + index // 7) % len(per_patch)
+            per_patch[patch_index].append((color, x, y))
+            object_index += 1
     return [_patch(rectangles) for rectangles in per_patch]
-
-
 def build_records(tokenizer: Any, *, count: int, image_marker: int) -> list[dict[str, object]]:
     """Build deterministic, diverse owned scenes; labels are recomputed from raw pixels."""
 
