@@ -231,15 +231,31 @@ def _external_checkpoint_manifest(path: Path, *, label: str) -> tuple[dict[str, 
     return dict(manifest), _sha256(path)
 
 
+def _v3_shared_continuation_history(
+    parent: Mapping[str, Any], root: Mapping[str, Any], *, parent_sha256: str, root_sha256: str,
+) -> list[str]:
+    """Admit a shared-only v3 continuation only when its four expert banks remain root-identical."""
+
+    if parent_sha256 == root_sha256:
+        return []
+    if parent.get("active_expert_ids") != ["shared"] or root.get("schema_version") != "ember-sparse-checkpoint-v3" or root.get("active_expert_ids") != ["shared"]:
+        raise ValueError("first specialist successor requires parent and root to be the same genesis bundle or a shared v3 continuation")
+    for field in ("expert_checkpoint_sha256", "expert_genesis_sha256"):
+        if parent.get(field) != root.get(field):
+            raise ValueError("first specialist v3 parent and root expert banks must remain identical")
+    parent_parameters = parent.get("expert_parameter_sha256", parent.get("expert_genesis_sha256"))
+    root_parameters = root.get("expert_parameter_sha256", root.get("expert_genesis_sha256"))
+    if parent_parameters != root_parameters:
+        raise ValueError("first specialist v3 parent and root expert parameter digests must remain identical")
+    return []
+
 def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest: Path) -> dict[str, Any]:
     """Verify immutable parent/root bundles and history before CUDA allocation or staging."""
 
     parent, parent_sha256 = _external_checkpoint_manifest(Path(parent_manifest), label="parent")
     root, root_sha256 = _external_checkpoint_manifest(Path(root_manifest), label="root genesis")
     if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
-        if parent_sha256 != root_sha256:
-            raise ValueError("first specialist successor requires parent and root to be the same genesis bundle")
-        history: list[str] = []
+        history = _v3_shared_continuation_history(parent, root, parent_sha256=parent_sha256, root_sha256=root_sha256)
     else:
         lineage = parent.get("lineage")
         if not isinstance(lineage, Mapping) or lineage.get("root_genesis_checkpoint_sha256") != root_sha256:
@@ -274,9 +290,7 @@ def _specialist_lineage(
     root, root_sha256 = _external_checkpoint_manifest(root_path, label="root genesis")
     parent_lineage = parent.get("lineage")
     if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
-        parent_history: list[str] = []
-        if parent_sha256 != root_sha256:
-            raise ValueError("first specialist successor requires parent and root to be the same genesis bundle")
+        parent_history = _v3_shared_continuation_history(parent, root, parent_sha256=parent_sha256, root_sha256=root_sha256)
     else:
         if not isinstance(parent_lineage, Mapping) or parent_lineage.get("root_genesis_checkpoint_sha256") != root_sha256:
             raise ValueError("specialist lineage root must match the immutable parent root genesis")

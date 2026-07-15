@@ -19,6 +19,9 @@ from build_owned_vision_scenes import build_records as build_vision_records
 
 
 CAPABILITIES = ("image", "audio", "reasoning", "tool")
+MIN_ADMISSIBLE_RECORDS = 4_096
+MIN_ADMISSIBLE_TOKENS = 24_576
+DEFAULT_PRODUCTION_RECORDS = 65_536
 GENERATOR_NAMES = {
     "image": "build_owned_vision_scenes.py",
     "audio": "build_owned_audio_frames.py",
@@ -80,8 +83,8 @@ def _records(tokenizer: Tokenizer, capability: str, *, count: int, image_marker:
 def emit_bundle(*, repo_root: Path, output_root: Path, tokenizer_path: Path, model_config_path: Path, count: int) -> dict[str, Path]:
     """Emit four source-bound manifests. Output is preparation, never admission."""
 
-    if not isinstance(count, int) or count < 512:
-        raise ValueError("specialist bundle requires at least 512 requested records per family")
+    if not isinstance(count, int) or count < MIN_ADMISSIBLE_RECORDS:
+        raise ValueError(f"specialist bundle requires at least {MIN_ADMISSIBLE_RECORDS} requested records per family")
     repo_root = repo_root.resolve()
     output_root = output_root.resolve()
     if repo_root not in output_root.parents:
@@ -109,7 +112,7 @@ def emit_bundle(*, repo_root: Path, output_root: Path, tokenizer_path: Path, mod
             "semantic_provenance": {
                 "schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples",
                 "target_derivation": DERIVATIONS[capability], "source_description": DESCRIPTIONS[capability],
-                "minimum_record_count": 512, "minimum_token_count": 4096,
+                "minimum_record_count": MIN_ADMISSIBLE_RECORDS, "minimum_token_count": MIN_ADMISSIBLE_TOKENS,
                 "generator": {"path": _relative(repo_root, generator_path), "sha256": _sha256(generator_path)},
                 "generation": {"schema_version": "ember-owned-specialist-generation-v1", "record_count": len(records)},
             },
@@ -136,7 +139,7 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--tokenizer", type=Path, required=True)
     parser.add_argument("--model-config", type=Path, required=True)
-    parser.add_argument("--count", type=int, default=512)
+    parser.add_argument("--count", type=int, default=DEFAULT_PRODUCTION_RECORDS)
     args = parser.parse_args()
     emitted = emit_bundle(repo_root=args.repo_root, output_root=args.output_root, tokenizer_path=args.tokenizer, model_config_path=args.model_config, count=args.count)
     print(json.dumps({capability: str(path) for capability, path in emitted.items()}, sort_keys=True))
