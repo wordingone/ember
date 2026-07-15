@@ -29,6 +29,7 @@ from serve_owned_openai import (
     LoadedOwnedRuntime,
     resolve_central_owned_admission,
     resolve_development_identity,
+    load_development_shared_runtime,
     resolve_runtime_inputs,
     start_parent_watchdog,
     main as serve_main,
@@ -286,6 +287,39 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match frozen"):
                 runtime.chat([{"role": "user", "content": "unbound"}], frozen_row_id="row-1", max_tokens=3)
 
+    def test_development_loader_uses_bf16_meta_shared_route_without_specialist_loads(self) -> None:
+        model = MagicMock()
+        model.state_dict.return_value = {
+            "token_embedding.weight": object(),
+            "layers.0.experts.vision.up.weight": object(),
+        }
+        payload = {"model": {"token_embedding.weight": object()}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config.json"
+            config.write_text("{}", encoding="utf-8")
+            with (
+                patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=object()),
+                patch("serve_owned_openai.construct_runtime_model", return_value=model) as construct,
+                patch("serve_owned_openai.tied_embeddings_from_contract", return_value=True),
+                patch("serve_owned_openai.hash_and_load_torch", return_value=payload) as load,
+                patch("serve_owned_openai.validate_state_map", return_value=payload["model"]),
+                patch("serve_owned_openai.canonicalize_tied_embedding_state", return_value=payload["model"]),
+                patch("serve_owned_openai.materialize_state_map", return_value=payload["model"]),
+                patch("serve_owned_openai.rebind_tied_embeddings") as rebind,
+            ):
+                loaded = load_development_shared_runtime(
+                    checkpoint=root,
+                    config_path=config,
+                    checkpoint_manifest={"shards": [{"path": "shared.pt", "sha256": "a" * 64}]},
+                    device="cpu",
+                )
+        self.assertIs(loaded, model.eval.return_value)
+        construct.assert_called_once()
+        load.assert_called_once_with(torch, root / "shared.pt", "a" * 64, device="cpu")
+        self.assertNotIn("expert-vision.pt", str(load.call_args))
+        model._activate_expert.assert_called_once_with("shared")
+        rebind.assert_called_once_with(model, tied_embeddings=True)
     def test_development_resolver_requires_exact_non_admissible_seat(self) -> None:
         payload = {"valid": True, "seat": "OWNED_DEVELOPMENT", "claim_status": "NON_ADMISSIBLE"}
         calls: list[list[str]] = []
