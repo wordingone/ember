@@ -1,0 +1,18 @@
+{
+  "asset_disposition": "PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK",
+  "benchmark_id": "terminal-bench",
+  "benchmark_version": "2.0",
+  "eligibility": {
+    "digest_pinned_image_task_count": 0,
+    "eligible_task_count": 0,
+    "network_disabled_task_count": 0,
+    "task_count": 89
+  },
+  "license": "Apache-2.0",
+  "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+  "schema_version": "ember-restart-benchmark-custody-v1",
+  "source_commit": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
+  "source_tree": "ec7c02c7f0b59ce8ed2f7c88d1e70cda7427edfa",
+  "target_execution_permitted": false,
+  "upstream_url": "https://github.com/harbor-framework/terminal-bench-2"
+}
