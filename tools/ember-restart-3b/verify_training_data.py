@@ -22,6 +22,16 @@ SEMANTIC_CHECKS = {
     "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"],
 }
 
+# A source must be substantial before its structural records can be called semantic
+# pretraining.  These floors deliberately exclude the former one-row byte-ramp
+# fixture; they are an admission floor, not a claim of sufficient pretraining.
+SPECIALIST_MINIMUMS = {
+    "image": {"records": 128, "tokens": 4096, "derivation": "raw_image_property_execution"},
+    "audio": {"records": 128, "tokens": 4096, "derivation": "raw_audio_signal_execution"},
+    "reasoning": {"records": 128, "tokens": 4096, "derivation": "local_answer_execution"},
+    "tool": {"records": 128, "tokens": 4096, "derivation": "typed_tool_execution"},
+}
+
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -92,6 +102,20 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         or source.get("borrowed_labels") is not False
     ):
         raise ValueError("source manifest provenance is invalid")
+    specialist_minimum = SPECIALIST_MINIMUMS.get(capability)
+    if specialist_minimum is not None:
+        semantic_source = source.get("semantic_provenance")
+        if (
+            not isinstance(semantic_source, Mapping)
+            or semantic_source.get("schema_version") != "ember-owned-semantic-source-v1"
+            or semantic_source.get("origin") != "owned_raw_samples"
+            or semantic_source.get("target_derivation") != specialist_minimum["derivation"]
+            or not isinstance(semantic_source.get("source_description"), str)
+            or len(semantic_source["source_description"].strip()) < 40
+            or semantic_source.get("minimum_record_count") != specialist_minimum["records"]
+            or semantic_source.get("minimum_token_count") != specialist_minimum["tokens"]
+        ):
+            raise ValueError("semantic source provenance is insufficient for specialist pretraining")
     tokenizer = _load_json(tokenizer_path, "tokenizer")
     vocab = tokenizer.get("model", {}).get("vocab") if isinstance(tokenizer.get("model"), dict) else None
     if not isinstance(vocab, dict) or not vocab:
@@ -150,6 +174,17 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
                     covered.update(range(start, start + length))
             if covered != positions:
                 raise ValueError(f"{capability} modality spans do not cover exactly its raw markers")
+        if capability == "image":
+            try:
+                from tokenizers import Tokenizer
+                from specialist_semantics import verify_image_supervision
+                frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
+            except Exception as error:
+                raise ValueError("image semantic verifier cannot load the exact frozen tokenizer") from error
+            try:
+                verify_image_supervision(record, patches=decoded, tokenizer=frozen_tokenizer, image_marker=raw_contract["image_marker"])
+            except ValueError as error:
+                raise ValueError(str(error)) from error
         if capability in {"reasoning", "tool"}:
             if record.get("active_expert") != capability:
                 raise ValueError(f"{capability} semantic record must route to the {capability} expert")
@@ -163,6 +198,8 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         token_count += len(token_ids)
     if data.get("record_count") != len(records) or data.get("token_count") != token_count:
         raise ValueError("data manifest counts do not match verified semantic records")
+    if specialist_minimum is not None and (len(records) < specialist_minimum["records"] or token_count < specialist_minimum["tokens"]):
+        raise ValueError("specialist semantic data is below the nontrivial admission floor")
     return {
         "schema_version": "ember-training-data-verification-v1",
         "result": "VERIFIED",

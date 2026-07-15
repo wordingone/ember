@@ -150,7 +150,7 @@ def load_verified_specialist_records(
         raise ValueError("specialist data manifest must reside in the selected worktree")
     verifier = Path(__file__).with_name("verify_training_data.py")
     completed = subprocess.run(
-        [sys.executable, "-I", str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
+        [sys.executable, str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
         cwd=root, text=True, capture_output=True, check=False,
     )
     if completed.returncode != 0:
@@ -276,20 +276,27 @@ def _execute_realization_counter(
     checkpoint_manifest_path: Path,
     active_expert: str,
     expected_counts: dict[str, object],
+    parent_manifest: Path | None = None,
+    root_manifest: Path | None = None,
 ) -> dict[str, object]:
     counter_path = root / "tools" / "ember-restart-3b" / "parameter_counter.py"
+    if (parent_manifest is None) != (root_manifest is None):
+        raise ValueError("counter replay requires both external parent and root manifests")
+    arguments = [
+        sys.executable,
+        "-I",
+        str(counter_path),
+        "--model-config",
+        str(config_path),
+        "--checkpoint-manifest",
+        str(checkpoint_manifest_path),
+        "--active-expert",
+        active_expert,
+    ]
+    if parent_manifest is not None and root_manifest is not None:
+        arguments.extend(["--parent-manifest", str(parent_manifest), "--root-manifest", str(root_manifest)])
     completed = subprocess.run(
-        [
-            sys.executable,
-            "-I",
-            str(counter_path),
-            "--model-config",
-            str(config_path),
-            "--checkpoint-manifest",
-            str(checkpoint_manifest_path),
-            "--active-expert",
-            active_expert,
-        ],
+        arguments,
         text=True,
         capture_output=True,
         check=False,
@@ -334,7 +341,7 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
         block_wise=bool(hyperparameters["block_wise"]),
     )
 
-def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, records_override: list[dict[str, object]] | None = None, specialist_verification: dict[str, object] | None = None) -> dict[str, object]:
+def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, records_override: list[dict[str, object]] | None = None, specialist_verification: dict[str, object] | None = None, specialist_lineage: dict[str, object] | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
@@ -357,8 +364,8 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         records, launch_packet, input_receipt = load_authorized_records(root)
         data_shard_id = str(launch_packet["input_identity"]["shard_path"])
     else:
-        if not records_override or not isinstance(specialist_verification, dict):
-            raise ValueError("specialist production run requires verified routed records")
+        if not records_override or not isinstance(specialist_verification, dict) or not isinstance(specialist_lineage, dict):
+            raise ValueError("specialist production run requires verified routed records and v4 lineage")
         records = records_override
         launch_packet = {"input_identity": {"shard_path": "verified-specialist"}}
         input_receipt = specialist_verification
@@ -424,6 +431,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
             contract_sha256=_sha256(integration_contract_path),
             expert_genesis_sha256=genesis_hashes,
             optimizer_contract=optimizer_contract,
+            specialist_lineage=specialist_lineage,
         ),
     )
     parameter_receipt = _execute_realization_counter(
@@ -432,6 +440,8 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
         active_expert=str(model.active_expert),
         expected_counts=counts,
+        parent_manifest=(Path(specialist_lineage["parent_manifest"]) if specialist_lineage is not None else None),
+        root_manifest=(Path(specialist_lineage["root_manifest"]) if specialist_lineage is not None else None),
     )
     return {
         "losses": segment["losses"],
@@ -446,21 +456,53 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         "parameter_receipt": parameter_receipt,
     }
 
+def specialist_lineage_request(
+    *, capability: str, verification: dict[str, object], resume_checkpoint: Path | None,
+    parent_manifest: Path, root_manifest: Path,
+) -> dict[str, object]:
+    """Bind a specialist launch to externally supplied parent/root manifests before allocation."""
+
+    expected_expert = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}.get(capability)
+    if expected_expert is None or verification.get("capability") != capability or verification.get("result") != "VERIFIED":
+        raise ValueError("specialist lineage requires a verified capability-matched data receipt")
+    if resume_checkpoint is None:
+        raise ValueError("specialist v4 launch requires the parent checkpoint for resume")
+    resume_manifest = resume_checkpoint.resolve() / "checkpoint-manifest.json"
+    if parent_manifest.resolve() != resume_manifest:
+        raise ValueError("specialist parent manifest must be the exact resumed checkpoint manifest")
+    try:
+        parent = json.loads(parent_manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("specialist parent manifest is unreadable") from error
+    parent_history = [] if parent.get("schema_version") == "ember-sparse-checkpoint-v3" else parent.get("lineage", {}).get("trained_expert_ids")
+    if not isinstance(parent_history, list) or any(not isinstance(name, str) for name in parent_history):
+        raise ValueError("specialist parent manifest has invalid trained expert history")
+    return {
+        "parent_manifest": parent_manifest.resolve(),
+        "root_manifest": root_manifest.resolve(),
+        "trained_expert_ids": [*parent_history, *([] if expected_expert in parent_history else [expected_expert])],
+        "data_verification_receipt": verification,
+    }
+
+
 def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
-    capability: str, resume_checkpoint: Path | None = None,
+    capability: str, resume_checkpoint: Path | None = None, parent_manifest: Path, root_manifest: Path,
 ) -> dict[str, object]:
-    """Run one verifier-bound specialist family through the canonical checkpoint path."""
+    """Run one verifier-bound specialist family through the canonical v4 lineage path."""
 
     root = Path(__file__).resolve().parents[2]
     records, verification = load_verified_specialist_records(
         root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
     )
+    lineage = specialist_lineage_request(
+        capability=capability, verification=verification, resume_checkpoint=resume_checkpoint,
+        parent_manifest=parent_manifest, root_manifest=root_manifest,
+    )
     return run(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint,
-        records_override=records, specialist_verification=verification,
+        records_override=records, specialist_verification=verification, specialist_lineage=lineage,
     )
-
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
     steps: int, sequence_length: int, checkpoint_interval: int, estimated_checkpoint_bytes: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
@@ -604,7 +646,9 @@ def main() -> None:
     specialist.add_argument("--data-manifest", type=Path, required=True)
     specialist.add_argument("--tokenizer", type=Path, required=True)
     specialist.add_argument("--capability", choices=("image", "audio", "reasoning", "tool"), required=True)
-    specialist.add_argument("--resume-checkpoint", type=Path)
+    specialist.add_argument("--resume-checkpoint", type=Path, required=True)
+    specialist.add_argument("--parent-manifest", type=Path, required=True)
+    specialist.add_argument("--root-manifest", type=Path, required=True)
     semantic = subparsers.add_parser("semantic")
     semantic.add_argument("--seed", type=int, required=True)
     semantic.add_argument("--artifact-root", type=Path, required=True)
@@ -619,7 +663,7 @@ def main() -> None:
     semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
