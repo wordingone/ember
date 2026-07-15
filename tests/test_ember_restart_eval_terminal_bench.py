@@ -15,6 +15,9 @@ def test_consumes_exact_frozen_harbor_task_outcomes_with_transcript_hashes():
   assert run.returncode==0,run.stderr
   payload=json.loads(score.read_text(encoding="utf-8"))
   assert payload["metrics"]=={"task_success_rate":0.5}
+  assert payload["result"]=="SELFTEST"
+  assert payload["admission"]=="NOT_ELIGIBLE"
+  assert payload["claim_status"]=="SELFTEST_ONLY_FIXTURE_HARBOR_OUTCOMES"
   assert payload["sample_count"]==2
   assert payload["criterion_id"]=="ember-3b-tool-capability-v1"
   assert payload["criterion_result"]=="FAILED"

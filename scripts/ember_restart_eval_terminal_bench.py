@@ -64,7 +64,7 @@ def main() -> int:
             passed += item["status"] == "passed"
         if observed != [task["task_id"] for task in tasks]:
             raise ValueError("Harbor results must preserve exact frozen task order")
-        _atomic(arguments.score_output, {"result": "SELFTEST", "metrics": {"task_success_rate": passed / len(tasks)}, "sample_count": len(tasks), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_task_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(), "harbor_task_results_sha256": hashlib.sha256(result_bytes).hexdigest(), "upstream": "fixture-only Harbor task-outcome validator"})
+        _atomic(arguments.score_output, {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "claim_status": "SELFTEST_ONLY_FIXTURE_HARBOR_OUTCOMES", "metrics": {"task_success_rate": passed / len(tasks)}, "sample_count": len(tasks), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_task_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(), "harbor_task_results_sha256": hashlib.sha256(result_bytes).hexdigest(), "upstream": "fixture-only Harbor task-outcome validator"})
     except ValueError as error:
         parser.error(str(error))
     return 0
