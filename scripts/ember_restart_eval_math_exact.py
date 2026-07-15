@@ -76,7 +76,7 @@ def main() -> int:
         parser.error(f"invalid frozen math artifacts: {error}")
     if references.keys() != predicted.keys():
         parser.error("predictions must exactly cover frozen math ids")
-    payload = {"criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_match": sum(references[key] == predicted[key] for key in references) / len(references)}, "sample_count": len(references), "references_sha256": sha256(reference_bytes), "predictions_sha256": sha256(prediction_bytes), "frozen_math_manifest_sha256": sha256(manifest_bytes), "upstream": "deterministic frozen math exact-match scorer"}
+    payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_MATH_SCORER", "criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_match": sum(references[key] == predicted[key] for key in references) / len(references)}, "sample_count": len(references), "references_sha256": sha256(reference_bytes), "predictions_sha256": sha256(prediction_bytes), "frozen_math_manifest_sha256": sha256(manifest_bytes), "upstream": "deterministic frozen math exact-match scorer"}
     args.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.score_output.parent, delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
