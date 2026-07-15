@@ -51,6 +51,7 @@ def test_executes_local_spider_scorer_and_derives_coverage_from_predictions():
         assert payload["sample_count"] == 2
         assert payload["criterion_id"] == "ember-3b-tool-capability-v1"
         assert payload["criterion_result"] == "FAILED"
+        assert payload["result"] == "SELFTEST"
 
 
 def test_upstream_scorer_exception_fails_closed_without_score_output():
