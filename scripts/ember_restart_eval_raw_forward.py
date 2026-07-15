@@ -241,7 +241,13 @@ def hash_and_load_torch(torch_module, path: Path, expected_sha256: str, *, devic
         if digest.hexdigest() != expected_sha256:
             raise ValueError(f"runtime checkpoint shard hash mismatch: {path.name}")
         handle.seek(0)
-        return torch_module.load(handle, map_location=device, weights_only=True)
+        return torch_module.load(handle, map_location="cpu", weights_only=True)
+
+
+def materialize_state_map(state: dict[str, object], device: str) -> dict[str, object]:
+    """Move only a validated model-state mapping onto the execution device."""
+
+    return {key: value.to(device=device) for key, value in state.items()}
 
 
 def _load_model_module(source_bytes: bytes, source_path: Path):
@@ -411,9 +417,12 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
         validate_state_map(expert["model"], expert_expected, f"expert {active_route}")
     if active_route != "shared" and not expert_expected:
         raise ValueError("selected expert has no expected model parameters")
-    model.load_state_dict(shared["model"], strict=False, assign=True)
+    shared_state = materialize_state_map(shared["model"], arguments.device)
+    expert_state = None if active_route == "shared" else materialize_state_map(expert["model"], arguments.device)
+    del shared, expert
+    model.load_state_dict(shared_state, strict=False, assign=True)
     if active_route != "shared":
-        model.load_state_dict(expert["model"], strict=False, assign=True)
+        model.load_state_dict(expert_state, strict=False, assign=True)
     model.eval()
     tokens = torch.tensor([input_token_ids], device=arguments.device, dtype=torch.long)
     generated: list[int] = []
