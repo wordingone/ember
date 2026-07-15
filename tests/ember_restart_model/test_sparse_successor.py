@@ -61,9 +61,18 @@ class SparseSuccessorTests(unittest.TestCase):
         self.assertTrue(allowed[0, 3, 2])
         self.assertFalse(allowed[0, 0, 3])
 
-    def test_legacy_isolated_mode_is_rejected_by_the_claim_bearing_span_type(self) -> None:
-        with self.assertRaisesRegex(ValueError, "bidirectional"):
-            MultimodalSpan(start=0, length=1, modality="image", attention_mode="isolated")
+    def test_isolated_span_policy_has_a_durable_modality_rationale(self) -> None:
+        self.assertIn("raw modality tokens", MultimodalSpan.__doc__ or "")
+        self.assertIn("prior text", MultimodalSpan.__doc__ or "")
+    def test_isolated_span_is_bidirectional_internally_but_cannot_read_prior_external_tokens(self) -> None:
+        model = UnifiedDecoder(self.config)
+        spans = [MultimodalSpan(start=1, length=2, modality="image", attention_mode="isolated")]
+        allowed = model.build_attention_mask(batch_size=1, sequence_length=4, spans=spans, device=torch.device("cpu"))
+        self.assertTrue(allowed[0, 1, 2])
+        self.assertTrue(allowed[0, 2, 1])
+        self.assertFalse(allowed[0, 1, 0])
+        self.assertFalse(allowed[0, 2, 0])
+        self.assertTrue(allowed[0, 3, 1])
 
     def test_four_expert_banks_are_distinct_and_named(self) -> None:
         model = UnifiedDecoder(self.config)

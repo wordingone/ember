@@ -107,6 +107,15 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(result["expert_examples"], {"vision": 1, "audio": 1, "reasoning": 1, "tool": 1})
         self.assertEqual(checkpoints, [1, 2, 3, 4])
 
+    def test_checkpoint_interval_publishes_bounded_milestones_and_mandatory_final_state(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=27)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        checkpoints: list[int] = []
+        result = run_pretraining_segment(model=model, optimizer=optimizer, records=self._domain_records(config)[:3], config=config, device=torch.device("cpu"), checkpoint_every=2, checkpoint_callback=lambda step, _result: checkpoints.append(step), require_complete_coverage=False)
+        self.assertEqual(result["global_step"], 3)
+        self.assertEqual(checkpoints, [2, 3])
+
     def test_rejects_self_declared_reasoning_or_tool_without_executed_receipt(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=29)

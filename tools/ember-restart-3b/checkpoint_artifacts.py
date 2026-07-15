@@ -9,6 +9,7 @@ import hashlib
 import inspect
 import json
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -205,6 +206,137 @@ def _validate_replay_bindings(
         _sha256_value(digest, name=f"{name} expert genesis hash")
 
 
+def _external_checkpoint_manifest(path: Path, *, label: str) -> tuple[dict[str, Any], str]:
+    """Verify an externally supplied parent/root bundle without serializing its path."""
+
+    path = Path(path).resolve()
+    if not path.is_file() or path.name != "checkpoint-manifest.json":
+        raise ValueError(f"{label} manifest must be an externally supplied checkpoint manifest")
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{label} manifest is not JSON") from error
+    if manifest.get("schema_version") not in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
+        raise ValueError(f"{label} manifest has an unsupported schema")
+    _validated_records(path.parent, {**manifest, "checkpoint_manifest_sha256": _sha256(path)})
+    experts = manifest.get("expert_checkpoint_sha256")
+    genesis = manifest.get("expert_genesis_sha256")
+    if not isinstance(experts, Mapping) or set(experts) != set(EXPERT_NAMES):
+        raise ValueError(f"{label} manifest lacks the four expert checkpoint hashes")
+    if not isinstance(genesis, Mapping) or set(genesis) != set(EXPERT_NAMES):
+        raise ValueError(f"{label} manifest lacks the four expert genesis hashes")
+    for name in EXPERT_NAMES:
+        _sha256_value(experts[name], name=f"{label} {name} expert hash")
+        _sha256_value(genesis[name], name=f"{label} {name} expert genesis hash")
+    return dict(manifest), _sha256(path)
+
+
+def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest: Path) -> dict[str, Any]:
+    """Verify immutable parent/root bundles and history before CUDA allocation or staging."""
+
+    parent, parent_sha256 = _external_checkpoint_manifest(Path(parent_manifest), label="parent")
+    root, root_sha256 = _external_checkpoint_manifest(Path(root_manifest), label="root genesis")
+    if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
+        if parent_sha256 != root_sha256:
+            raise ValueError("first specialist successor requires parent and root to be the same genesis bundle")
+        history: list[str] = []
+    else:
+        lineage = parent.get("lineage")
+        if not isinstance(lineage, Mapping) or lineage.get("root_genesis_checkpoint_sha256") != root_sha256:
+            raise ValueError("specialist lineage root must match the immutable parent root genesis")
+        history = lineage.get("trained_expert_ids")
+        if not isinstance(history, list):
+            raise ValueError("parent lineage has invalid trained expert history")
+    if any(name not in EXPERT_NAMES for name in history) or len(set(history)) != len(history):
+        raise ValueError("parent lineage has invalid trained expert history")
+    return {
+        "parent_checkpoint_sha256": parent_sha256,
+        "root_genesis_checkpoint_sha256": root_sha256,
+        "parent_history": list(history),
+    }
+
+def _specialist_lineage(
+    lineage: Mapping[str, Any], *, active_expert: str, candidate_parameter_sha256: Mapping[str, str],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Close one-family accretion against independently supplied parent/root bundles."""
+
+    if active_expert not in EXPERT_NAMES:
+        raise ValueError("specialist lineage requires one specialist active expert")
+    required = {"parent_manifest", "root_manifest", "trained_expert_ids", "data_verification_receipt"}
+    if not isinstance(lineage, Mapping) or set(lineage) != required:
+        raise ValueError("specialist lineage has an invalid shape")
+    parent_source, root_source = lineage["parent_manifest"], lineage["root_manifest"]
+    if not isinstance(parent_source, (str, Path)) or not isinstance(root_source, (str, Path)):
+        raise ValueError("specialist lineage requires content-addressed external manifests")
+    parent_path = Path(parent_source).resolve()
+    root_path = Path(root_source).resolve()
+    parent, parent_sha256 = _external_checkpoint_manifest(parent_path, label="parent")
+    root, root_sha256 = _external_checkpoint_manifest(root_path, label="root genesis")
+    parent_lineage = parent.get("lineage")
+    if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
+        parent_history: list[str] = []
+        if parent_sha256 != root_sha256:
+            raise ValueError("first specialist successor requires parent and root to be the same genesis bundle")
+    else:
+        if not isinstance(parent_lineage, Mapping) or parent_lineage.get("root_genesis_checkpoint_sha256") != root_sha256:
+            raise ValueError("specialist lineage root must match the immutable parent root genesis")
+        parent_history = parent_lineage.get("trained_expert_ids")
+        if not isinstance(parent_history, list):
+            raise ValueError("parent lineage has invalid trained expert history")
+    if any(name not in EXPERT_NAMES for name in parent_history) or len(set(parent_history)) != len(parent_history):
+        raise ValueError("parent lineage has invalid trained expert history")
+    trained = lineage["trained_expert_ids"]
+    expected_history = [*parent_history, *([] if active_expert in parent_history else [active_expert])]
+    if trained != expected_history:
+        raise ValueError("specialist lineage trained experts must be parent history union active expert")
+    parent_experts = parent["expert_checkpoint_sha256"]
+    root_experts = root["expert_checkpoint_sha256"]
+    parent_parameters = parent.get("expert_parameter_sha256", parent["expert_genesis_sha256"])
+    root_parameters = root.get("expert_parameter_sha256", root["expert_genesis_sha256"])
+    if candidate_parameter_sha256[active_expert] == parent_parameters[active_expert]:
+        raise ValueError("active expert parameter content must change from parent")
+    for name in EXPERT_NAMES:
+        if name == active_expert:
+            continue
+        if candidate_parameter_sha256[name] != parent_parameters[name]:
+            raise ValueError(f"inactive expert parameter content changed from parent: {name}")
+        if name not in trained and candidate_parameter_sha256[name] != root_parameters[name]:
+            raise ValueError(f"not-yet-trained expert must remain equal to root genesis: {name}")
+    verification = lineage["data_verification_receipt"]
+    verification_fields = {"schema_version", "result", "capability", "data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "data_class", "record_count", "token_count", "source_manifest_sha256", "records_artifact_sha256", "semantic_checks", "generator_replay_verified"}
+    capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
+    if not isinstance(verification, Mapping) or set(verification) != verification_fields:
+        raise ValueError("specialist lineage requires the exact executed data verification receipt")
+    if verification.get("schema_version") != "ember-training-data-verification-v1" or verification.get("result") != "VERIFIED" or verification.get("data_class") != "SEMANTIC_PRETRAINING" or verification.get("generator_replay_verified") is not True:
+        raise ValueError("specialist lineage data verification was not replay-verified")
+    expected_checks = {"image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"], "audio": ["token_roundtrip", "source_target_pair", "raw_audio_text_pair"], "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"], "tool": ["token_roundtrip", "source_target_pair", "typed_tool_execution"]}
+    if capability_experts.get(verification.get("capability")) != active_expert:
+        raise ValueError("specialist lineage verification capability does not map to active expert")
+    if verification.get("semantic_checks") != expected_checks[verification["capability"]]:
+        raise ValueError("specialist lineage verification semantic checks are not canonical")
+    for field in ("data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "source_manifest_sha256", "records_artifact_sha256"):
+        _sha256_value(verification.get(field), name=f"specialist verification {field}")
+    if type(verification.get("record_count")) is not int or verification["record_count"] <= 0 or type(verification.get("token_count")) is not int or verification["token_count"] <= 0:
+        raise ValueError("specialist lineage verification has no training evidence")
+    return ({
+        "parent_checkpoint_sha256": parent_sha256,
+        "root_genesis_checkpoint_sha256": root_sha256,
+        "trained_expert_ids": list(trained),
+        "episode": {
+            "active_expert": active_expert,
+            "data_verification_receipt": dict(verification),
+            "data_verification_receipt_sha256": _canonical_sha256(verification),
+        },
+    }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
+def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> Path:
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copyfile(source, target)
+    if _sha256(target) != expected_sha256:
+        raise ValueError("parent expert shard hash mismatch during inactive-bank reuse")
+    return target
+
 def write_checkpoint_artifacts(
     model: UnifiedDecoder,
     optimizer: torch.optim.Optimizer,
@@ -217,9 +349,13 @@ def write_checkpoint_artifacts(
     contract_sha256: str,
     expert_genesis_sha256: Mapping[str, str],
     optimizer_contract: Mapping[str, Any] | None = None,
+    specialist_lineage: Mapping[str, Any] | None = None,
+    max_serialized_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
+    if max_serialized_bytes is not None and (type(max_serialized_bytes) is not int or max_serialized_bytes < 1):
+        raise ValueError("max_serialized_bytes must be a positive integer")
     _validate_replay_bindings(
         launch_seed=launch_seed,
         rng_state=rng_state,
@@ -230,75 +366,99 @@ def write_checkpoint_artifacts(
     )
     optimizer_contract = _validate_optimizer_contract(optimizer_contract or _default_optimizer_contract(optimizer))
     optimizer_realization = _optimizer_realization(optimizer, optimizer_contract)
+    expert_parameter_sha256 = model.expert_bank_genesis_hashes()
+    preflight_lineage = None
+    preflight_genesis = None
+    if specialist_lineage is not None:
+        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256)
     published_root = root
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
     published_root.parent.mkdir(parents=True, exist_ok=True)
     root = published_root.parent / f".{published_root.name}.{uuid.uuid4().hex}.staging"
     root.mkdir()
-    shared_state = {
-        name: value.detach().cpu()
-        for name, value in model.state_dict().items()
-        if ".experts." not in name
-    }
-    shared = _write_atomic(
-        root,
-        "shared.pt",
-        lambda handle: torch.save({"model": shared_state, "optimizer": optimizer.state_dict(), "optimizer_contract": optimizer_contract, "optimizer_realization": optimizer_realization}, handle),
-    )
-    shards = [_record(shared, root, role="shared_model_and_optimizer")]
-    replay = _write_atomic(root, "replay-state.pt", lambda handle: torch.save({"rng_state": {name: state.detach().cpu() for name, state in rng_state.items()}, "data_cursor": dict(data_cursor)}, handle))
-    shards.append(_record(replay, root, role="replay_state"))
-    expert_checkpoint_sha256: dict[str, str] = {}
-    for name in EXPERT_NAMES:
-        state = {
-            key: value.detach().cpu()
-            for key, value in model.state_dict().items()
-            if f".experts.{name}." in key
+    try:
+        shared_state = {
+            name: value.detach().cpu()
+            for name, value in model.state_dict().items()
+            if ".experts." not in name
         }
-        path = _write_atomic(
+        shared = _write_atomic(
             root,
-            f"expert-{name}.pt",
-            lambda handle, selected=name, selected_state=state: torch.save(
-                {"expert": selected, "model": selected_state}, handle
-            ),
+            "shared.pt",
+            lambda handle: torch.save({"model": shared_state, "optimizer": optimizer.state_dict(), "optimizer_contract": optimizer_contract, "optimizer_realization": optimizer_realization}, handle),
         )
-        record = _record(path, root, role=f"expert_{name}")
-        shards.append(record)
-        expert_checkpoint_sha256[name] = record["sha256"]
+        shards = [_record(shared, root, role="shared_model_and_optimizer")]
+        replay = _write_atomic(root, "replay-state.pt", lambda handle: torch.save({"rng_state": {name: state.detach().cpu() for name, state in rng_state.items()}, "data_cursor": dict(data_cursor)}, handle))
+        shards.append(_record(replay, root, role="replay_state"))
+        expert_checkpoint_sha256: dict[str, str] = {}
+        for name in EXPERT_NAMES:
+            state = {
+                key: value.detach().cpu()
+                for key, value in model.state_dict().items()
+                if f".experts.{name}." in key
+            }
+            if specialist_lineage is not None and name != model.active_expert:
+                path = _link_or_copy_verified(preflight_parent_root / f"expert-{name}.pt", root / f"expert-{name}.pt", preflight_parent_shards[name])
+            else:
+                path = _write_atomic(
+                    root,
+                    f"expert-{name}.pt",
+                    lambda handle, selected=name, selected_state=state: torch.save(
+                        {"expert": selected, "model": selected_state}, handle
+                    ),
+                )
+            record = _record(path, root, role=f"expert_{name}")
+            shards.append(record)
+            expert_checkpoint_sha256[name] = record["sha256"]
 
-    counts = measure_parameter_counts(model)
-    manifest = {
-        "schema_version": "ember-sparse-checkpoint-v3",
-        "contract_version": 3,
-        "architecture_revision": "ember-sparse-3b-v2",
-        "architecture": {
-            "revision": "ember-sparse-3b-v2",
-            "allocated_parameters": int(counts["allocated_parameters"]),
-            "unique_parameters": int(counts["unique_parameters"]),
-            "trainable_parameters": int(counts["trainable_parameters"]),
-            "served_parameters": int(counts["served_parameters"]),
-            "active_parameters": int(counts["active_parameters"]),
-            "episode_trainable_parameters": int(counts["episode_trainable_parameters"]),
-            "shared_text_ffn": "always_active_SwiGLU_4H",
-        },
-        "launch_seed": launch_seed,
-        "rng_state_sha256": {name: hashlib.sha256(state.detach().cpu().numpy().tobytes()).hexdigest() for name, state in rng_state.items()},
-        "data_cursor": dict(data_cursor),
-        "model_config_sha256": model_config_sha256,
-        "contract_sha256": contract_sha256,
-        "active_expert_ids": [model.active_expert],
-        "expert_genesis_sha256": dict(expert_genesis_sha256),
-        "expert_checkpoint_sha256": expert_checkpoint_sha256,
-        "shared_optimizer_shard_sha256": shards[0]["sha256"],
-        "optimizer_contract": optimizer_contract,
-        "optimizer_realization": optimizer_realization,
-        "shards": shards,
-    }
-    manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
-    receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
-    os.replace(root, published_root)
-    return receipt
+        counts = measure_parameter_counts(model)
+        expert_parameter_sha256 = model.expert_bank_genesis_hashes()
+        lineage = None
+        manifest_genesis = dict(expert_genesis_sha256)
+        if specialist_lineage is not None:
+            lineage, manifest_genesis = preflight_lineage, preflight_genesis
+        manifest = {
+            "schema_version": "ember-sparse-checkpoint-v4" if lineage is not None else "ember-sparse-checkpoint-v3",
+            "contract_version": 4 if lineage is not None else 3,
+            "architecture_revision": "ember-sparse-3b-v2",
+            "architecture": {
+                "revision": "ember-sparse-3b-v2",
+                "allocated_parameters": int(counts["allocated_parameters"]),
+                "unique_parameters": int(counts["unique_parameters"]),
+                "trainable_parameters": int(counts["trainable_parameters"]),
+                "served_parameters": int(counts["served_parameters"]),
+                "active_parameters": int(counts["active_parameters"]),
+                "episode_trainable_parameters": int(counts["episode_trainable_parameters"]),
+                "shared_text_ffn": "always_active_SwiGLU_4H",
+            },
+            "launch_seed": launch_seed,
+            "rng_state_sha256": {name: hashlib.sha256(state.detach().cpu().numpy().tobytes()).hexdigest() for name, state in rng_state.items()},
+            "data_cursor": dict(data_cursor),
+            "model_config_sha256": model_config_sha256,
+            "contract_sha256": contract_sha256,
+            "active_expert_ids": [model.active_expert],
+            "expert_genesis_sha256": manifest_genesis,
+            "expert_checkpoint_sha256": expert_checkpoint_sha256,
+            "expert_parameter_sha256": expert_parameter_sha256,
+            "shared_optimizer_shard_sha256": shards[0]["sha256"],
+            "optimizer_contract": optimizer_contract,
+            "optimizer_realization": optimizer_realization,
+            "shards": shards,
+        }
+        if lineage is not None:
+            manifest["lineage"] = lineage
+        manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
+        actual_serialized_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+        if max_serialized_bytes is not None and actual_serialized_bytes > max_serialized_bytes:
+            raise ValueError("serialized checkpoint exceeds the derived byte bound")
+        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path), "serialized_bytes": actual_serialized_bytes}
+        os.replace(root, published_root)
+        return receipt
+    except Exception:
+        if root.exists():
+            shutil.rmtree(root)
+        raise
 
 
 def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
@@ -351,8 +511,8 @@ def load_checkpoint_artifacts(
 ) -> None:
     """Verify every manifest/shard/payload before mutating model or optimizer."""
 
-    if receipt.get("schema_version") != "ember-sparse-checkpoint-v3":
-        raise ValueError("checkpoint optimizer contract requires v3 manifest")
+    if receipt.get("schema_version") not in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
+        raise ValueError("checkpoint optimizer contract requires a v3 or v4 manifest")
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
     optimizer_realization = _validate_optimizer_realization(optimizer_contract, receipt.get("optimizer_realization"))
     if optimizer is not None:

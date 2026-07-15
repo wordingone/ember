@@ -123,7 +123,7 @@ def run_pretraining_segment(
             "data_cursor": cursor, "modality_examples": dict(modality_examples),
             "expert_examples": dict(expert_examples), "active_expert": active_expert,
         }
-        if global_step % checkpoint_every == 0:
+        if global_step % checkpoint_every == 0 or local_step == len(remaining_records):
             checkpoint_callback(global_step, result)
     if require_complete_coverage:
         missing_capabilities = [name for name, value in modality_examples.items() if value <= 0]

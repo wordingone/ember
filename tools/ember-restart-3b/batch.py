@@ -105,7 +105,7 @@ def decode_owned_batch(
     """Decode explicit raw sequences, 2D coordinates, and exact-cover attention spans."""
 
     schema_version = record.get("schema_version")
-    if schema_version not in {"ember-owned-bootstrap-batch-v1", "ember-owned-semantic-text-v1"}:
+    if schema_version not in {"ember-owned-bootstrap-batch-v1", "ember-owned-semantic-text-v1", "ember-owned-semantic-record-v1"}:
         raise ValueError("unrecognized owned batch schema")
     token_ids = record.get("token_ids")
     target_ids = record.get("target_ids")

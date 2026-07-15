@@ -7,17 +7,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable
 
+import tokenizers
 import torch
 import torch.nn.functional as F
 
 from batch import decode_owned_batch
-from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from parameter_counter import measure_parameter_counts
@@ -36,6 +38,30 @@ def _sha256(path: Path) -> str:
 def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
+
+def specialist_resume_cursor(cursor: dict[str, object], *, data_shard_id: str) -> dict[str, object]:
+    """Preserve global accounting while starting a new verified specialist source at zero."""
+    if not isinstance(data_shard_id, str) or not data_shard_id.startswith("VERIFIED_SPECIALIST:"):
+        raise ValueError("specialist cursor requires a verified specialist source identity")
+    global_step, tokens_seen = cursor.get("global_step"), cursor.get("tokens_seen")
+    if type(global_step) is not int or global_step < 0 or type(tokens_seen) is not int or tokens_seen < 0:
+        raise ValueError("resume cursor lacks nonnegative global counters")
+    return {"shard": data_shard_id, "record_index": 0, "global_step": global_step, "tokens_seen": tokens_seen}
+
+
+def resume_expert_genesis(manifest: dict[str, Any], *, requested_seed: int) -> dict[str, str]:
+    """Carry verified parent genesis through resume; a new launch seed cannot rewrite lineage."""
+
+    if not isinstance(requested_seed, int) or requested_seed < 0:
+        raise ValueError("resume requested seed must be nonnegative")
+    genesis = manifest.get("expert_genesis_sha256")
+    expected = {"vision", "audio", "reasoning", "tool"}
+    if not isinstance(genesis, dict) or set(genesis) != expected:
+        raise ValueError("resume manifest lacks four verified expert genesis hashes")
+    for name, digest in genesis.items():
+        if not isinstance(digest, str) or len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+            raise ValueError(f"resume manifest has malformed {name} genesis hash")
+    return dict(genesis)
 
 def production_memory_preflight(*, total_parameters: int, active_parameters: int, device_free_bytes: int) -> dict[str, int | str]:
     """Derive the exact BF16 episode envelope before CUDA model construction."""
@@ -59,6 +85,46 @@ def production_memory_preflight(*, total_parameters: int, active_parameters: int
         "required_bytes": required_bytes,
         "device_free_bytes": device_free_bytes,
     }
+def checkpoint_serialization_byte_bound(config_path: Path, *, active_parameters: int | None = None) -> int:
+    """Derive one publishable checkpoint bound from the frozen architecture and optimizer contract."""
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    serialization = payload.get("checkpoints", {}).get("serialization")
+    required = {"model_parameter_bytes", "optimizer_state_bytes_per_active_parameter", "format_overhead_bytes"}
+    if not isinstance(serialization, dict) or set(serialization) != required:
+        raise ValueError("checkpoint serialization contract has an invalid shape")
+    if any(type(serialization[field]) is not int or serialization[field] < 1 for field in required):
+        raise ValueError("checkpoint serialization contract requires positive integer bounds")
+    memory = load_memory_contract(config_path)
+    if serialization["model_parameter_bytes"] != memory["parameter_bytes"] or serialization["optimizer_state_bytes_per_active_parameter"] != memory["optimizer_state_bytes_per_active_parameter"]:
+        raise ValueError("checkpoint serialization contract drifts from the BF16 optimizer memory contract")
+    config = RestartDecoderConfig.from_contract(config_path)
+    specialist_parameters = config.layers * 12 * config.hidden_size * config.hidden_size
+    shared_active_parameters = config.structural_parameter_count() - len(config.expert_names) * specialist_parameters
+    selected_active_parameters = shared_active_parameters if active_parameters is None else active_parameters
+    if type(selected_active_parameters) is not int or selected_active_parameters < shared_active_parameters or selected_active_parameters > config.structural_parameter_count():
+        raise ValueError("checkpoint serialization active parameter count is outside the frozen architecture")
+    return (
+        config.structural_parameter_count() * serialization["model_parameter_bytes"]
+        + selected_active_parameters * serialization["optimizer_state_bytes_per_active_parameter"]
+        + serialization["format_overhead_bytes"]
+    )
+
+
+def semantic_publication_plan(*, steps: int, checkpoint_interval: int, checkpoint_byte_bound: int, write_budget_bytes: int, initial_global_step: int = 0) -> dict[str, int]:
+    """Bound checkpoint publications using a frozen derived byte bound, never a caller estimate."""
+
+    if (not isinstance(steps, int) or steps < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1
+            or not isinstance(checkpoint_byte_bound, int) or checkpoint_byte_bound < 1
+            or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1 or not isinstance(initial_global_step, int) or initial_global_step < 0):
+        raise ValueError("semantic publication plan requires positive integer steps, interval, derived bound, and write budget")
+    final_global_step = initial_global_step + steps
+    periodic = sum(1 for step in range(initial_global_step + 1, final_global_step + 1) if step % checkpoint_interval == 0)
+    publication_count = periodic + (0 if final_global_step % checkpoint_interval == 0 else 1)
+    projected_write_bytes = publication_count * checkpoint_byte_bound
+    if projected_write_bytes > write_budget_bytes:
+        raise ValueError("semantic publication plan exceeds the declared write budget")
+    return {"publication_count": publication_count, "checkpoint_byte_bound": checkpoint_byte_bound, "projected_write_bytes": projected_write_bytes}
 def production_artifact_root(candidate: Path) -> Path:
     """Require B: for production bundles; manifests themselves stay portable."""
 
@@ -108,6 +174,60 @@ def _retain_after_success(
     _enforce_retention(parent, max_count=max_count, max_serialized_bytes=max_serialized_bytes)
     return result
 
+
+def load_verified_specialist_records(
+    *, root: Path, data_manifest: Path, tokenizer_path: Path, capability: str,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Execute the independent manifest verifier and admit one routed expert family."""
+
+    expert_for_capability = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
+    if capability not in expert_for_capability:
+        raise ValueError("specialist capability must be image, audio, reasoning, or tool")
+    root = root.resolve()
+    manifest = data_manifest.resolve()
+    if root not in manifest.parents:
+        raise ValueError("specialist data manifest must reside in the selected worktree")
+    verifier = Path(__file__).with_name("verify_training_data.py")
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", "import runpy,sys;sys.path[:0]=[sys.argv[1],sys.argv[2]];sys.argv=sys.argv[3:];runpy.run_path(sys.argv[0],run_name=\"__main__\")", str(verifier.parent.resolve()), str(Path(tokenizers.__file__).resolve().parent.parent), str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
+        cwd=root, env={name: os.environ[name] for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP") if name in os.environ}, text=True, capture_output=True, check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"specialist data verifier failed: {completed.stderr.strip() or completed.stdout.strip()}")
+    try:
+        verification = json.loads(completed.stdout)
+        manifest_bytes = manifest.read_bytes()
+        payload = json.loads(manifest_bytes)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("specialist data verifier or manifest did not emit JSON") from error
+    if not isinstance(verification, dict) or verification.get("result") != "VERIFIED" or verification.get("capability") != capability:
+        raise RuntimeError("specialist data verifier did not produce the required verified receipt")
+    if verification.get("generator_replay_verified") is not True:
+        raise RuntimeError("specialist data verifier did not prove canonical generator replay")
+    if verification.get("data_manifest_sha256") != hashlib.sha256(manifest_bytes).hexdigest():
+        raise RuntimeError("verified specialist data manifest changed after verification")
+
+    def reread_bound_artifact(reference: object, *, receipt_field: str, label: str) -> tuple[Path, bytes]:
+        relative = reference.get("path") if isinstance(reference, dict) else None
+        if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+            raise RuntimeError(f"verified specialist manifest lacks a {label} artifact path")
+        path = (root / relative).resolve()
+        if root not in path.parents or not path.is_file():
+            raise RuntimeError(f"verified specialist {label} artifact path escapes the worktree")
+        artifact_bytes = path.read_bytes()
+        if verification.get(receipt_field) != hashlib.sha256(artifact_bytes).hexdigest():
+            raise RuntimeError(f"verified specialist {label} artifact changed after verification")
+        return path, artifact_bytes
+
+    reread_bound_artifact(payload.get("source_manifest") if isinstance(payload, dict) else None, receipt_field="source_manifest_sha256", label="source manifest")
+    _records_path, records_bytes = reread_bound_artifact(payload.get("records_artifact") if isinstance(payload, dict) else None, receipt_field="records_artifact_sha256", label="records")
+    records_payload = json.loads(records_bytes)
+    records = records_payload.get("records") if isinstance(records_payload, dict) else None
+    if not isinstance(records, list) or not records or any(not isinstance(record, dict) for record in records):
+        raise RuntimeError("verified specialist records artifact is malformed")
+    if {record.get("active_expert") for record in records} != {expert_for_capability[capability]}:
+        raise RuntimeError("verified specialist records do not contain exactly the requested route")
+    return records, verification
 
 def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
     """Consume #812 identity before reading the exact owned four-domain bytes."""
@@ -211,20 +331,27 @@ def _execute_realization_counter(
     checkpoint_manifest_path: Path,
     active_expert: str,
     expected_counts: dict[str, object],
+    parent_manifest: Path | None = None,
+    root_manifest: Path | None = None,
 ) -> dict[str, object]:
     counter_path = root / "tools" / "ember-restart-3b" / "parameter_counter.py"
+    if (parent_manifest is None) != (root_manifest is None):
+        raise ValueError("counter replay requires both external parent and root manifests")
+    arguments = [
+        sys.executable,
+        "-I",
+        str(counter_path),
+        "--model-config",
+        str(config_path),
+        "--checkpoint-manifest",
+        str(checkpoint_manifest_path),
+        "--active-expert",
+        active_expert,
+    ]
+    if parent_manifest is not None and root_manifest is not None:
+        arguments.extend(["--parent-manifest", str(parent_manifest), "--root-manifest", str(root_manifest)])
     completed = subprocess.run(
-        [
-            sys.executable,
-            "-I",
-            str(counter_path),
-            "--model-config",
-            str(config_path),
-            "--checkpoint-manifest",
-            str(checkpoint_manifest_path),
-            "--active-expert",
-            active_expert,
-        ],
+        arguments,
         text=True,
         capture_output=True,
         check=False,
@@ -269,7 +396,7 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
         block_wise=bool(hyperparameters["block_wise"]),
     )
 
-def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None) -> dict[str, object]:
+def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, records_override: list[dict[str, object]] | None = None, specialist_verification: dict[str, object] | None = None, specialist_lineage: dict[str, object] | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
@@ -288,7 +415,16 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     memory_preflight = production_memory_preflight(total_parameters=total_parameters, active_parameters=active_parameters, device_free_bytes=int(device_free_bytes))
     if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
         raise RuntimeError("memory preflight and production numerics disagree")
-    records, launch_packet, input_receipt = load_authorized_records(root)
+    if records_override is None:
+        records, launch_packet, input_receipt = load_authorized_records(root)
+        data_shard_id = str(launch_packet["input_identity"]["shard_path"])
+    else:
+        if not records_override or not isinstance(specialist_verification, dict) or not isinstance(specialist_lineage, dict):
+            raise ValueError("specialist production run requires verified routed records and v4 lineage")
+        records = records_override
+        launch_packet = {"input_identity": {"shard_path": "verified-specialist"}}
+        input_receipt = specialist_verification
+        data_shard_id = "VERIFIED_SPECIALIST:" + str(specialist_verification["data_manifest_sha256"])[:12]
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
 
@@ -315,21 +451,27 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
             raise ValueError("resume checkpoint must be a published B: bundle")
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
         receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
         resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
         for group in optimizer.param_groups:
             group["lr"] = 1e-5
+        if records_override is not None:
+            resume_cursor = specialist_resume_cursor(resume_cursor, data_shard_id=data_shard_id)
         checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
+    checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=active_parameters)
     torch.cuda.reset_peak_memory_stats()
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
         checkpoint_every=len(records), checkpoint_callback=lambda _step, _result: None,
         initial_global_step=int(resume_cursor["global_step"]), initial_tokens_seen=int(resume_cursor["tokens_seen"]),
-        initial_data_cursor=int(resume_cursor["record_index"]), data_shard_id=str(launch_packet["input_identity"]["shard_path"]),
+        initial_data_cursor=int(resume_cursor["record_index"]), data_shard_id=data_shard_id, require_complete_coverage=(records_override is None),
     )
     rng_state_after_step = _rng_state(torch.device("cuda"))
     data_cursor = dict(segment["data_cursor"])
     data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
+    if records_override is not None:
+        data_cursor["specialist_verification"] = specialist_verification
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
@@ -347,6 +489,8 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
             contract_sha256=_sha256(integration_contract_path),
             expert_genesis_sha256=genesis_hashes,
             optimizer_contract=optimizer_contract,
+            specialist_lineage=specialist_lineage,
+            max_serialized_bytes=checkpoint_byte_bound,
         ),
     )
     parameter_receipt = _execute_realization_counter(
@@ -355,6 +499,8 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
         active_expert=str(model.active_expert),
         expected_counts=counts,
+        parent_manifest=(Path(specialist_lineage["parent_manifest"]) if specialist_lineage is not None else None),
+        root_manifest=(Path(specialist_lineage["root_manifest"]) if specialist_lineage is not None else None),
     )
     return {
         "losses": segment["losses"],
@@ -369,15 +515,59 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         "parameter_receipt": parameter_receipt,
     }
 
+def specialist_lineage_request(
+    *, capability: str, verification: dict[str, object], resume_checkpoint: Path | None,
+    parent_manifest: Path, root_manifest: Path,
+) -> dict[str, object]:
+    """Bind a specialist launch to externally supplied parent/root manifests before allocation."""
+
+    expected_expert = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}.get(capability)
+    if expected_expert is None or verification.get("capability") != capability or verification.get("result") != "VERIFIED":
+        raise ValueError("specialist lineage requires a verified capability-matched data receipt")
+    if resume_checkpoint is None:
+        raise ValueError("specialist v4 launch requires the parent checkpoint for resume")
+    resume_manifest = resume_checkpoint.resolve() / "checkpoint-manifest.json"
+    if parent_manifest.resolve() != resume_manifest:
+        raise ValueError("specialist parent manifest must be the exact resumed checkpoint manifest")
+    preflight = preflight_specialist_lineage_sources(
+        parent_manifest=parent_manifest.resolve(), root_manifest=root_manifest.resolve(),
+    )
+    parent_history = preflight["parent_history"]
+    return {
+        "parent_manifest": parent_manifest.resolve(),
+        "root_manifest": root_manifest.resolve(),
+        "trained_expert_ids": [*parent_history, *([] if expected_expert in parent_history else [expected_expert])],
+        "data_verification_receipt": verification,
+    }
+
+
+def run_specialist(
+    *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
+    capability: str, resume_checkpoint: Path | None = None, parent_manifest: Path, root_manifest: Path,
+) -> dict[str, object]:
+    """Run one verifier-bound specialist family through the canonical v4 lineage path."""
+
+    root = Path(__file__).resolve().parents[2]
+    records, verification = load_verified_specialist_records(
+        root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
+    )
+    lineage = specialist_lineage_request(
+        capability=capability, verification=verification, resume_checkpoint=resume_checkpoint,
+        parent_manifest=parent_manifest, root_manifest=root_manifest,
+    )
+    return run(
+        seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint,
+        records_override=records, specialist_verification=verification, specialist_lineage=lineage,
+    )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
-    steps: int, sequence_length: int, resume_checkpoint: Path | None = None,
+    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production semantic runner")
-    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1:
+    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
         raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
     artifact_root = production_artifact_root(artifact_root)
     root = Path(__file__).resolve().parents[2]
@@ -425,12 +615,15 @@ def run_semantic(
             raise ValueError("resume checkpoint must be a published B: bundle")
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
         loaded = load_checkpoint_artifacts(
             model, optimizer, resume_checkpoint, {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
         )
         resume_cursor = dict(loaded["data_cursor"])
         initial_global_step = int(resume_cursor["global_step"])
         initial_tokens_seen = int(resume_cursor["tokens_seen"])
+    checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=shared_active_parameters)
+    publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, checkpoint_byte_bound=checkpoint_byte_bound, write_budget_bytes=write_budget_bytes, initial_global_step=initial_global_step)
     torch.cuda.reset_peak_memory_stats()
     checkpoint: dict[str, object] | None = None
 
@@ -451,6 +644,7 @@ def run_semantic(
                 contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes,
                 optimizer_contract=optimizer_contract,
+            max_serialized_bytes=checkpoint_byte_bound,
             ),
         )
 
@@ -462,7 +656,7 @@ def run_semantic(
         device=torch.device("cuda"),
         sequence_length=sequence_length,
         steps=steps,
-        checkpoint_every=1,
+        checkpoint_every=checkpoint_interval,
         checkpoint_callback=checkpoint_callback,
         initial_data_cursor=resume_cursor,
         initial_global_step=initial_global_step,
@@ -489,6 +683,7 @@ def run_semantic(
         "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
         "post_step_checkpoint": checkpoint,
         "parameter_receipt": parameter_receipt,
+        "publication_plan": publication_plan,
         "stream_receipt_sha256": stream.receipt_sha256,
         "tokenizer_sha256": stream.tokenizer_sha256,
     }
@@ -503,6 +698,15 @@ def main() -> None:
     vertical.add_argument("--seed", type=int, required=True)
     vertical.add_argument("--artifact-root", type=Path, required=True)
     vertical.add_argument("--resume-checkpoint", type=Path)
+    specialist = subparsers.add_parser("specialist")
+    specialist.add_argument("--seed", type=int, required=True)
+    specialist.add_argument("--artifact-root", type=Path, required=True)
+    specialist.add_argument("--data-manifest", type=Path, required=True)
+    specialist.add_argument("--tokenizer", type=Path, required=True)
+    specialist.add_argument("--capability", choices=("image", "audio", "reasoning", "tool"), required=True)
+    specialist.add_argument("--resume-checkpoint", type=Path, required=True)
+    specialist.add_argument("--parent-manifest", type=Path, required=True)
+    specialist.add_argument("--root-manifest", type=Path, required=True)
     semantic = subparsers.add_parser("semantic")
     semantic.add_argument("--seed", type=int, required=True)
     semantic.add_argument("--artifact-root", type=Path, required=True)
@@ -511,9 +715,13 @@ def main() -> None:
     semantic.add_argument("--tokenizer", type=Path, required=True)
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
+    semantic.add_argument("--checkpoint-interval", type=int, required=True)
+    semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
-    if args.command == "semantic":
+    if args.command == "specialist":
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest)
+    elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
             artifact_root=args.artifact_root,
@@ -522,6 +730,8 @@ def main() -> None:
             tokenizer_path=args.tokenizer,
             steps=args.steps,
             sequence_length=args.sequence_length,
+            checkpoint_interval=args.checkpoint_interval,
+            write_budget_bytes=args.write_budget_gib * 1024**3,
             resume_checkpoint=args.resume_checkpoint,
         )
     else:
