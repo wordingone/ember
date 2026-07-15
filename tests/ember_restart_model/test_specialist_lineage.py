@@ -56,6 +56,12 @@ def _write_root(model: UnifiedDecoder, optimizer: torch.optim.Optimizer, root: P
 
 
 class SpecialistLineageTests(unittest.TestCase):
+    def test_legacy_shared_v3_bridge_helper_is_absent(self) -> None:
+        """First accretion starts from one immutable v3 parent/root, not an inferred bridge."""
+        import checkpoint_artifacts
+
+        self.assertFalse(hasattr(checkpoint_artifacts, "_v3_shared_continuation_history"))
+
     def _root_and_candidate(self, base: Path) -> tuple[dict[str, object], Path, UnifiedDecoder, torch.optim.Optimizer]:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         manifest_path = base / "root" / "checkpoint-manifest.json"
@@ -105,8 +111,8 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertNotIn("root_manifest", json.dumps(receipt))
         self.assertEqual(parent["active_expert_ids"], ["shared"])
 
-    def test_first_successor_accepts_shared_v3_continuation_with_immutable_root_experts(self) -> None:
-        """A shared-only v3 continuation may be the immediate parent when all expert bytes remain root-identical."""
+    def test_first_successor_rejects_unreceipted_shared_v3_continuation(self) -> None:
+        """Equal specialist bytes cannot launder an arbitrary shared-core v3 mutation."""
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             root, root_manifest, _candidate, _optimizer = self._root_and_candidate(base)
@@ -130,19 +136,17 @@ class SpecialistLineageTests(unittest.TestCase):
             load_checkpoint_artifacts(candidate, candidate_optimizer, base / "step2", {**step2, "checkpoint_manifest_sha256": step2_sha256})
             candidate._activate_expert("vision")
             next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
-            receipt = write_checkpoint_artifacts(
-                candidate, candidate_optimizer, base / "vision", launch_seed=84, rng_state=_rng_state(),
-                data_cursor={"shard": "VERIFIED_SPECIALIST:test", "record_index": 1, "global_step": 3, "tokens_seen": 48},
-                model_config_sha256="c" * 64, contract_sha256="d" * 64,
-                expert_genesis_sha256=root["expert_genesis_sha256"],
-                specialist_lineage={
-                    "parent_manifest": step2_manifest, "root_manifest": root_manifest,
-                    "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(),
-                },
-            )
-        self.assertEqual(receipt["lineage"]["parent_checkpoint_sha256"], step2_sha256)
-        self.assertEqual(receipt["lineage"]["root_genesis_checkpoint_sha256"], root_sha256)
-        self.assertEqual(receipt["lineage"]["trained_expert_ids"], ["vision"])
+            with self.assertRaisesRegex(ValueError, "exact parent and root"):
+                write_checkpoint_artifacts(
+                    candidate, candidate_optimizer, base / "vision", launch_seed=84, rng_state=_rng_state(),
+                    data_cursor={"shard": "VERIFIED_SPECIALIST:test", "record_index": 1, "global_step": 3, "tokens_seen": 48},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=root["expert_genesis_sha256"],
+                    specialist_lineage={
+                        "parent_manifest": step2_manifest, "root_manifest": root_manifest,
+                        "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(),
+                    },
+                )
     def test_first_successor_requires_parent_and_root_to_be_the_same_genesis_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -163,6 +167,32 @@ class SpecialistLineageTests(unittest.TestCase):
                 self._write_vision_successor(base, root_manifest=missing)
             self.assertFalse(list(base.glob(".candidate.*.staging")))
 
+    def test_external_manifest_hashes_and_parses_one_byte_snapshot(self) -> None:
+        """Authority binding cannot hash one manifest revision and parse another."""
+        import checkpoint_artifacts
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            self._root_and_candidate(base)
+            manifest_path = base / "root" / "checkpoint-manifest.json"
+            original_bytes = Path.read_bytes
+            original_text = Path.read_text
+            reads = 0
+
+            def read_bytes_once(path: Path, *args: object, **kwargs: object) -> bytes:
+                nonlocal reads
+                if path.resolve() == manifest_path.resolve():
+                    reads += 1
+                return original_bytes(path, *args, **kwargs)
+
+            def reject_manifest_text(path: Path, *args: object, **kwargs: object) -> str:
+                if path.resolve() == manifest_path.resolve():
+                    raise AssertionError("manifest must be parsed from its authority bytes")
+                return original_text(path, *args, **kwargs)
+
+            with patch.object(Path, "read_bytes", new=read_bytes_once), patch.object(Path, "read_text", new=reject_manifest_text):
+                _manifest, digest = checkpoint_artifacts._external_checkpoint_manifest(manifest_path, label="parent")
+            self.assertEqual(reads, 1)
+            self.assertEqual(digest, hashlib.sha256(original_bytes(manifest_path)).hexdigest())
     def test_lineage_source_preflight_rejects_missing_root_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +33,39 @@ def _write_generator(root: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 class TrainingDataVerifierTests(unittest.TestCase):
+    def test_text_verify_uses_one_byte_snapshot_per_authority_artifact(self) -> None:
+        """The receipt must describe the exact bytes parsed for every bound input."""
+        import verify_training_data
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tokenizer = root / "tokenizer.json"
+            tokenizer_hash = _write_json(tokenizer, {"model": {"vocab": {"token-0": 0, "token-1": 1, "token-2": 2, "token-3": 3}}})
+            source = root / "source.json"
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "text", "model_mediated": False, "borrowed_labels": False})
+            records = root / "records.json"
+            records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": [{"token_ids": [0, 1, 2], "target_ids": [1, 2, 3]}]})
+            data = root / "data.json"
+            data_sha256 = _write_json(data, {"schema_version": "ember-owned-training-data-v1", "capability": "text", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 1, "token_count": 3, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
+            tracked = {path.resolve() for path in (data, tokenizer, source, records, Path(verify_training_data.__file__))}
+            original_bytes, original_text = Path.read_bytes, Path.read_text
+            reads: dict[Path, int] = {}
+
+            def read_bytes_once(path: Path, *args: object, **kwargs: object) -> bytes:
+                resolved = path.resolve()
+                if resolved in tracked:
+                    reads[resolved] = reads.get(resolved, 0) + 1
+                return original_bytes(path, *args, **kwargs)
+
+            def reject_authority_text(path: Path, *args: object, **kwargs: object) -> str:
+                if path.resolve() in tracked:
+                    raise AssertionError("authority bytes must be parsed from their one read snapshot")
+                return original_text(path, *args, **kwargs)
+
+            with patch.object(Path, "read_bytes", new=read_bytes_once), patch.object(Path, "read_text", new=reject_authority_text):
+                receipt = verify_training_data.verify(data, tokenizer, "text", root=root)
+        self.assertEqual(reads, {path: 1 for path in tracked})
+        self.assertEqual(receipt["data_manifest_sha256"], data_sha256)
     def test_audio_manifest_rejects_raw_frames_with_fabricated_caption_target(self) -> None:
         from tokenizers import Tokenizer, models, pre_tokenizers
         with tempfile.TemporaryDirectory() as temporary:
