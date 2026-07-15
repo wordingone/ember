@@ -130,6 +130,7 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
     if records_payload.get("schema_version") != "ember-owned-semantic-records-v1" or not isinstance(records, list) or not records:
         raise ValueError("semantic records artifact is invalid")
     token_count = 0
+    capability_records: list[Mapping[str, Any]] = []
     for record in records:
         if not isinstance(record, Mapping):
             raise ValueError("semantic record is invalid")
@@ -200,14 +201,28 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         if capability in {"reasoning", "tool"}:
             if record.get("active_expert") != capability:
                 raise ValueError(f"{capability} semantic record must route to the {capability} expert")
-            encoded = base64.b64encode(json.dumps(dict(record), sort_keys=True, separators=(",", ":")).encode("utf-8")).decode("ascii")
-            completed = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("verify_capability_record.py")), "--record-json-base64", encoded], text=True, capture_output=True, timeout=15, check=False)
-            if completed.returncode != 0:
-                raise ValueError(f"{capability} semantic record local verifier failed")
-            result = json.loads(completed.stdout)
-            if not isinstance(result, dict) or result.get("result") != "PASSED" or not isinstance(result.get("receipt"), dict):
-                raise ValueError(f"{capability} semantic record lacks an executed local receipt")
+            target_text = record.get("target_text")
+            if not isinstance(target_text, str):
+                raise ValueError(f"{capability} semantic record lacks a target transcript")
+            try:
+                from tokenizers import Tokenizer
+                frozen_tokenizer = Tokenizer.from_file(str(tokenizer_path))
+                expected_target = list(frozen_tokenizer.encode(target_text).ids)
+            except Exception as error:
+                raise ValueError(f"{capability} semantic verifier cannot load the exact frozen tokenizer") from error
+            if len(expected_target) < 2 or token_ids != expected_target[:-1] or target_ids != expected_target[1:]:
+                raise ValueError(f"{capability} semantic target tokenization does not bind the frozen tokenizer and executed transcript")
+            capability_records.append(record)
         token_count += len(token_ids)
+    if capability_records:
+        records_json = json.dumps([dict(record) for record in capability_records], sort_keys=True, separators=(",", ":"))
+        completed = subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("verify_capability_record.py")), "--records-json-stdin"], input=records_json, text=True, capture_output=True, timeout=15, check=False)
+        if completed.returncode != 0:
+            raise ValueError(f"{capability} semantic records local verifier failed")
+        result = json.loads(completed.stdout)
+        receipts = result.get("receipts") if isinstance(result, dict) else None
+        if result.get("result") != "PASSED" or not isinstance(receipts, list) or len(receipts) != len(capability_records) or any(not isinstance(receipt, dict) for receipt in receipts):
+            raise ValueError(f"{capability} semantic records lack executed local receipts")
     if data.get("record_count") != len(records) or data.get("token_count") != token_count:
         raise ValueError("data manifest counts do not match verified semantic records")
     if specialist_minimum is not None and (len(records) < specialist_minimum["records"] or token_count < specialist_minimum["tokens"] or len(records) < semantic_source["minimum_record_count"] or token_count < semantic_source["minimum_token_count"]):
