@@ -20,11 +20,21 @@ from typing import Any, Callable, Literal, Mapping, Protocol
 
 import torch
 
-from checkpoint_artifacts import load_checkpoint_artifacts
 from infer import FrozenTokenizer, frozen_split_prompt, greedy_generate, load_frozen_tokenizer, sha
+import model as model_module
 from model import RestartDecoderConfig, UnifiedDecoder
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from ember_restart_eval_raw_forward import (  # noqa: E402
+    canonicalize_tied_embedding_state,
+    construct_runtime_model,
+    hash_and_load_torch,
+    materialize_state_map,
+    rebind_tied_embeddings,
+    tied_embeddings_from_contract,
+    validate_state_map,
+)
 RuntimeMode = Literal["INTERACTIVE", "FROZEN_EVAL"]
 
 
@@ -375,6 +385,7 @@ class LoadedOwnedRuntime:
         tokenizer = load_frozen_tokenizer(tokenizer_path, expected_sha256=expected_tokenizer_sha256)
         config = RestartDecoderConfig.from_contract(config_path)
         model = UnifiedDecoder(config, device=device, allow_production_allocation=True).eval()
+        from checkpoint_artifacts import load_checkpoint_artifacts
         load_checkpoint_artifacts(
             model,
             None,
@@ -414,6 +425,52 @@ class LoadedOwnedRuntime:
         return self.tokenizer.decode(generated), "stop" if reason == "eos" else "length"
 
 
+def load_development_shared_runtime(
+    *,
+    checkpoint: Path,
+    config_path: Path,
+    checkpoint_manifest: Mapping[str, object],
+    device: str,
+) -> UnifiedDecoder:
+    """Load the development seat shared route through the #848 BF16/meta loader."""
+
+    try:
+        contract = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"development model contract is invalid: {exc}") from exc
+    if not isinstance(contract, dict):
+        raise ValueError("development model contract must be an object")
+    config = RestartDecoderConfig.from_contract(config_path)
+    model = construct_runtime_model(torch, model_module, config, contract)
+    tied_embeddings = tied_embeddings_from_contract(config, contract)
+    shards = checkpoint_manifest.get("shards")
+    if not isinstance(shards, list):
+        raise ValueError("development checkpoint lacks shard records")
+    records: dict[str, Mapping[str, object]] = {}
+    for record in shards:
+        if not isinstance(record, Mapping) or not isinstance(record.get("path"), str):
+            raise ValueError("development checkpoint shard record is invalid")
+        path = str(record["path"])
+        if path in records:
+            raise ValueError("development checkpoint contains duplicate shard records")
+        records[path] = record
+    shared_record = records.get("shared.pt")
+    shared_sha256 = shared_record.get("sha256") if isinstance(shared_record, Mapping) else None
+    if not isinstance(shared_sha256, str):
+        raise ValueError("development checkpoint lacks shared shard identity")
+    payload = hash_and_load_torch(torch, checkpoint / "shared.pt", shared_sha256, device=device)
+    if not isinstance(payload, dict) or not isinstance(payload.get("model"), dict):
+        raise ValueError("development shared checkpoint lacks a model state")
+    expected = model.state_dict()
+    shared_expected = {key: value for key, value in expected.items() if ".experts." not in key}
+    shared_state = validate_state_map(payload["model"], shared_expected, "shared")
+    canonical = canonicalize_tied_embedding_state(torch, shared_state, tied_embeddings=tied_embeddings)
+    model.load_state_dict(materialize_state_map(canonical, device), strict=False, assign=True)
+    rebind_tied_embeddings(model, tied_embeddings=tied_embeddings)
+    model._activate_expert("shared")
+    return model.eval()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
@@ -438,9 +495,15 @@ def main(argv: list[str] | None = None) -> int:
         if sha(checkpoint_manifest) != development["checkpoint_sha256"] or sha(config_path) != development["model_config_sha256"]:
             raise ValueError("development authority does not match checkpoint/config bytes")
         tokenizer = load_frozen_tokenizer(args.tokenizer, expected_sha256=str(development["tokenizer_sha256"]))
-        model = UnifiedDecoder(RestartDecoderConfig.from_contract(config_path), device=args.device, allow_production_allocation=True).eval()
         manifest = json.loads(checkpoint_manifest.read_text(encoding="utf-8"))
-        load_checkpoint_artifacts(model, None, args.checkpoint, {**manifest, "checkpoint_manifest_sha256": development["checkpoint_sha256"]})
+        if not isinstance(manifest, dict):
+            raise ValueError("development checkpoint manifest must be an object")
+        model = load_development_shared_runtime(
+            checkpoint=args.checkpoint,
+            config_path=config_path,
+            checkpoint_manifest=manifest,
+            device=args.device,
+        )
         identity = DevelopmentIdentity(checkpoint_sha256=str(development["checkpoint_sha256"]), model_config_sha256=str(development["model_config_sha256"]), tokenizer_sha256=tokenizer.sha256, server_source_sha256=sha(Path(__file__)), tokens_seen=int(development["tokens_seen"]), allocated_parameters=int(development["allocated_parameters"]), active_parameters=int(development["active_parameters"]))
         runtime = LoadedOwnedRuntime(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(args.device), frozen_split=frozen_split)
     else:
