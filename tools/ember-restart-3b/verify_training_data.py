@@ -25,6 +25,46 @@ SEMANTIC_CHECKS = {
 # A source must be substantial before its structural records can be called semantic
 # pretraining.  These floors deliberately exclude the former one-row byte-ramp
 # fixture; they are an admission floor, not a claim of sufficient pretraining.
+CANONICAL_GENERATORS = {
+    "image": "build_owned_vision_scenes.py",
+    "audio": "build_owned_audio_frames.py",
+    "reasoning": "build_owned_reasoning_tool_trajectories.py",
+    "tool": "build_owned_reasoning_tool_trajectories.py",
+}
+
+
+def _replay_bound_specialist_records(
+    *, capability: str, generation: object, generator_path: Path, tokenizer: object,
+    raw_contract: Mapping[str, int] | None, records: list[Mapping[str, Any]],
+) -> None:
+    """Re-execute only known owned generators and compare their complete record sequence."""
+
+    if generation is None:
+        return
+    if not isinstance(generation, Mapping) or set(generation) != {"schema_version", "record_count"}:
+        raise ValueError("specialist generator replay metadata is invalid")
+    count = generation.get("record_count")
+    if generation.get("schema_version") != "ember-owned-specialist-generation-v1" or type(count) is not int or count < 512 or count != len(records):
+        raise ValueError("specialist generator replay metadata does not bind the records")
+    expected_name = CANONICAL_GENERATORS[capability]
+    if generator_path.resolve() != Path(__file__).with_name(expected_name).resolve():
+        raise ValueError("specialist generator replay requires the canonical owned generator path")
+    if capability == "image":
+        from build_owned_vision_scenes import build_records
+        if raw_contract is None:
+            raise ValueError("image generator replay lacks the bound marker")
+        replayed = build_records(tokenizer, count=count, image_marker=raw_contract["image_marker"])
+    elif capability == "audio":
+        from build_owned_audio_frames import build_records
+        if raw_contract is None:
+            raise ValueError("audio generator replay lacks the bound marker")
+        replayed = build_records(tokenizer, count=count, audio_marker=raw_contract["audio_marker"])
+    else:
+        from build_owned_reasoning_tool_trajectories import build_records
+        replayed = build_records(tokenizer, count=count, capability=capability)
+    if replayed != records:
+        raise ValueError("specialist records do not match the bound generator replay")
+
 SPECIALIST_MINIMUMS = {
     "image": {"records": 128, "tokens": 4096, "derivation": "raw_image_property_execution"},
     "audio": {"records": 128, "tokens": 4096, "derivation": "raw_audio_signal_execution"},
@@ -121,6 +161,7 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         generator_path = _bound_file(root, semantic_source.get("generator"), "semantic source generator")
         if generator_path.suffix != ".py":
             raise ValueError("semantic source generator must bind Python generator bytes")
+        generation = semantic_source.get("generation")
     tokenizer = _load_json(tokenizer_path, "tokenizer")
     vocab = tokenizer.get("model", {}).get("vocab") if isinstance(tokenizer.get("model"), dict) else None
     if not isinstance(vocab, dict) or not vocab:
@@ -139,6 +180,8 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
     records = records_payload.get("records")
     if records_payload.get("schema_version") != "ember-owned-semantic-records-v1" or not isinstance(records, list) or not records:
         raise ValueError("semantic records artifact is invalid")
+    if specialist_minimum is not None:
+        _replay_bound_specialist_records(capability=capability, generation=generation, generator_path=generator_path, tokenizer=frozen_tokenizer, raw_contract=raw_contract, records=records)
     token_count = 0
     capability_records: list[Mapping[str, Any]] = []
     for record in records:
@@ -239,6 +282,7 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         "tokenizer_sha256": tokenizer_hash,
         "verifier_sha256": _sha256(Path(__file__)),
         "data_class": "SEMANTIC_PRETRAINING",
+        "generator_replay_verified": bool(generation is not None) if specialist_minimum is not None else None,
         "record_count": len(records),
         "token_count": token_count,
         "source_manifest_sha256": _sha256(source_path),

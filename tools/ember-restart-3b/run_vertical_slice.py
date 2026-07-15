@@ -196,6 +196,8 @@ def load_verified_specialist_records(
         raise RuntimeError("specialist data verifier or manifest did not emit JSON") from error
     if not isinstance(verification, dict) or verification.get("result") != "VERIFIED" or verification.get("capability") != capability:
         raise RuntimeError("specialist data verifier did not produce the required verified receipt")
+    if verification.get("generator_replay_verified") is not True:
+        raise RuntimeError("specialist data verifier did not prove canonical generator replay")
     records_ref = payload.get("records_artifact") if isinstance(payload, dict) else None
     relative = records_ref.get("path") if isinstance(records_ref, dict) else None
     if not isinstance(relative, str):
