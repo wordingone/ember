@@ -47,6 +47,15 @@ def validate_state_map(state: object, expected: dict[str, object], label: str) -
             raise ValueError(f"{label} state dtype mismatch: {key}")
 
 
+def require_active_route(checkpoint: dict[str, object], requested: str) -> str:
+    active = checkpoint.get("active_expert_ids")
+    if not isinstance(active, list) or len(active) != 1 or active[0] not in ("shared", "vision", "audio", "reasoning", "tool"):
+        raise ValueError("verified checkpoint active route is invalid")
+    if requested != active[0]:
+        raise ValueError("active route does not match verified checkpoint manifest")
+    return requested
+
+
 def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dict[str, object]:
     import torch
 
@@ -61,23 +70,26 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dic
     specification.loader.exec_module(module)
     config = module.RestartDecoderConfig.from_contract(arguments.model_config)
     model = module.UnifiedDecoder(config, device="meta", allow_production_allocation=True)
+    active_route = require_active_route(checkpoint, arguments.active_expert)
     root = arguments.checkpoint_manifest.parent
     shared = torch.load(root / "shared.pt", map_location=arguments.device, weights_only=True)
-    expert = torch.load(root / f"expert-{arguments.active_expert}.pt", map_location=arguments.device, weights_only=True)
+    expert = None if active_route == "shared" else torch.load(root / f"expert-{active_route}.pt", map_location=arguments.device, weights_only=True)
     if not isinstance(shared, dict) or not isinstance(shared.get("model"), dict):
         raise ValueError("shared checkpoint lacks a model state")
-    if not isinstance(expert, dict) or expert.get("expert") != arguments.active_expert or not isinstance(expert.get("model"), dict):
+    if active_route != "shared" and (not isinstance(expert, dict) or expert.get("expert") != active_route or not isinstance(expert.get("model"), dict)):
         raise ValueError("selected expert checkpoint is invalid")
     expected = model.state_dict()
     shared_expected = {key: value for key, value in expected.items() if ".experts." not in key}
-    expert_marker = f".experts.{arguments.active_expert}."
+    expert_marker = f".experts.{active_route}."
     expert_expected = {key: value for key, value in expected.items() if expert_marker in key}
     validate_state_map(shared["model"], shared_expected, "shared")
-    validate_state_map(expert["model"], expert_expected, f"expert {arguments.active_expert}")
-    if not expert_expected:
+    if active_route != "shared":
+        validate_state_map(expert["model"], expert_expected, f"expert {active_route}")
+    if active_route != "shared" and not expert_expected:
         raise ValueError("selected expert has no expected model parameters")
     model.load_state_dict(shared["model"], strict=False, assign=True)
-    model.load_state_dict(expert["model"], strict=False, assign=True)
+    if active_route != "shared":
+        model.load_state_dict(expert["model"], strict=False, assign=True)
     model.eval()
     if arguments.input_token_id < 0 or arguments.max_new_tokens <= 0 or arguments.max_new_tokens > 32:
         raise ValueError("input token and generation limit are invalid")
@@ -85,13 +97,13 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dic
     generated: list[int] = []
     with torch.no_grad():
         for _ in range(arguments.max_new_tokens):
-            logits = model(tokens, active_expert=arguments.active_expert)
+            logits = model(tokens, active_expert=active_route)
             token = int(torch.argmax(logits[:, -1, :], dim=-1).item())
             generated.append(token)
             if token == arguments.stop_token_id:
                 break
             tokens = torch.cat((tokens, torch.tensor([[token]], device=arguments.device)), dim=1)
-    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": arguments.active_expert, "generated_token_ids": generated, "stop_reason": "max_new_tokens", "model_source_sha256": arguments.model_source_sha256, "model_config_sha256": arguments.model_config_sha256}
+    return {"result": "NON_CLAIM_RAW_FORWARD", "active_expert": active_route, "generated_token_ids": generated, "stop_reason": "max_new_tokens", "model_source_sha256": arguments.model_source_sha256, "model_config_sha256": arguments.model_config_sha256}
 
 
 def main() -> None:
@@ -105,7 +117,7 @@ def main() -> None:
     parser.add_argument("--model-source-sha256")
     parser.add_argument("--model-config", required=True, type=Path)
     parser.add_argument("--model-config-sha256", required=True)
-    parser.add_argument("--active-expert", choices=("vision", "audio", "reasoning", "tool"))
+    parser.add_argument("--active-expert", choices=("shared", "vision", "audio", "reasoning", "tool"))
     parser.add_argument("--input-token-id", type=int)
     parser.add_argument("--max-new-tokens", type=int)
     parser.add_argument("--device", default="cuda")
