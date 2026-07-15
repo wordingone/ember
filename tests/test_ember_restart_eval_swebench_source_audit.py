@@ -50,3 +50,19 @@ def test_source_audit_refuses_swebench_task_release_in_source_tree():
         assert result.returncode != 0
         assert "task-release assets are present" in result.stderr
         assert not output.exists()
+
+
+def test_source_audit_refuses_nested_swebench_task_release_file():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary) / "swebench"
+        commit = make_source(root)
+        nested = root / "swebench" / "data"; nested.mkdir()
+        (nested / "swebench_lite.json").write_text('{"instance_id":"x"}\n', encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(root), "commit", "-qm", "nested-release"], check=True)
+        commit = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        output = root.parent / "audit.json"
+        result = subprocess.run([sys.executable, str(SCRIPT), "--swebench-root", str(root), "--expected-commit", commit, "--output", str(output)], text=True, capture_output=True, check=False)
+        assert result.returncode != 0
+        assert "task-release assets are present" in result.stderr
+        assert not output.exists()
