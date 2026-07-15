@@ -349,12 +349,12 @@ class LoadedOwnedRuntime:
         *,
         checkpoint: Path,
         tokenizer_path: Path,
+        config_path: Path,
         run_manifest: Path,
         frozen_split: Path | None,
         trusted_verifier_registry: Path,
         device: str,
     ) -> "LoadedOwnedRuntime":
-        config_path = ROOT / "configs" / "ember-restart-3b.json"
         manifest_path = checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         checkpoint_sha256 = sha(manifest_path)
@@ -481,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--tokenizer", type=Path, required=True)
+    parser.add_argument("--config", type=Path, required=True)
     authority = parser.add_mutually_exclusive_group(required=True)
     authority.add_argument("--run-manifest", type=Path)
     authority.add_argument("--development-manifest", type=Path)
@@ -498,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
         development = resolve_development_identity(args.development_manifest)
         if development.get("server_source_sha256") != sha(Path(__file__)):
             raise ValueError("development authority does not match server source bytes")
-        config_path = ROOT / "configs" / "ember-restart-3b.json"
+        config_path = args.config
         checkpoint_manifest = args.checkpoint / "checkpoint-manifest.json"
         if sha(checkpoint_manifest) != development["checkpoint_sha256"] or sha(config_path) != development["model_config_sha256"]:
             raise ValueError("development authority does not match checkpoint/config bytes")
@@ -517,7 +518,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if args.trusted_verifier_registry is None:
             raise ValueError("admitted server requires trusted verifier registry")
-        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, device=args.device, frozen_split=frozen_split)
+        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, device=args.device, frozen_split=frozen_split)
     server = create_loopback_server(runtime, host=args.host, port=args.port, mode=args.mode)
     server.serve_forever()
     return 0
