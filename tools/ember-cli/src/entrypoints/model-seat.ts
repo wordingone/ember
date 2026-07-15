@@ -23,6 +23,7 @@ export type OwnedServerLaunch =
   | (OwnedServerLaunchBase & {
       authorityKind: "DEVELOPMENT";
       developmentManifestPath: string;
+      modelConfigPath: string;
     });
 
 export interface OwnedModelIdentity {

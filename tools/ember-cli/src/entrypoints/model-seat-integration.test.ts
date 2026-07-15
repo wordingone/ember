@@ -329,6 +329,7 @@ describe("process entry model-seat enforcement", () => {
             checkpointDir: "C:\\owned\\checkpoint",
             developmentManifestPath: "C:\\owned\\development.json",
             mode: "INTERACTIVE",
+            modelConfigPath: "C:\\owned\\model-config.json",
             pythonExecutable: "python-owned",
             serverPath: "C:\\repo\\serve_owned_openai.py",
             tokenizerPath: "C:\\owned\\tokenizer.json",

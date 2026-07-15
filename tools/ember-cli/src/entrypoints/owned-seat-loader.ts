@@ -118,6 +118,7 @@ const DEVELOPMENT_LAUNCH_FIELDS = [
   "checkpoint_dir",
   "development_manifest_path",
   "mode",
+  "model_config_path",
   "server_path",
   "tokenizer_path",
 ] as const;
@@ -152,13 +153,14 @@ function parseDevelopmentLaunch(
     checkpointDir: requireAbsolutePath("checkpoint_dir"),
     developmentManifestPath: requireAbsolutePath("development_manifest_path"),
     mode: "INTERACTIVE",
+    modelConfigPath: requireAbsolutePath("model_config_path"),
     pythonExecutable: expected.pythonExecutable,
     serverPath: requireAbsolutePath("server_path"),
     tokenizerPath: requireAbsolutePath("tokenizer_path"),
   };
   if (
     launch.developmentManifestPath !== expected.manifestPath ||
-    [launch.checkpointDir, launch.developmentManifestPath, launch.serverPath, launch.tokenizerPath]
+    [launch.checkpointDir, launch.developmentManifestPath, launch.modelConfigPath, launch.serverPath, launch.tokenizerPath]
       .some((path) => !exists(path))
   ) {
     throw new Error("development seat resolver returned an invalid launch descriptor");
