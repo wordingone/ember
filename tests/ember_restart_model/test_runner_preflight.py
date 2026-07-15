@@ -37,15 +37,19 @@ class RunnerPreflightTests(unittest.TestCase):
             tokenizer = root / "tokenizer.json"
             tokenizer_hash = write_json(tokenizer, {"model": {"vocab": {str(index): index for index in range(8, 32)}}})
             source = root / "source.json"
-            source_hash = write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False})
-            record = {"schema_version": "ember-owned-bootstrap-batch-v1", "active_expert": "reasoning", "token_ids": [8, 9, 10], "target_ids": [9, 10, 11], "image_coordinates": [], "multimodal_spans": [], "capability_evidence": {"reasoning": {"operands": [1, 2], "target": 3, "trace": [1, 2, 3]}}}
-            record["capability_receipt"] = expected_receipt(record)
+            source_hash = write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectory generator with independently executed sums.", "minimum_record_count": 128, "minimum_token_count": 4096}})
+            records_list = []
+            for index in range(128):
+                token_ids = [8 + (offset % 24) for offset in range(32)]
+                record = {"schema_version": "ember-owned-bootstrap-batch-v1", "active_expert": "reasoning", "token_ids": token_ids, "target_ids": [*token_ids[1:], token_ids[0]], "image_coordinates": [], "multimodal_spans": [], "capability_evidence": {"reasoning": {"operands": [index, 2], "target": index + 2, "trace": [index, 2, index + 2]}}}
+                record["capability_receipt"] = expected_receipt(record)
+                records_list.append(record)
             records = root / "records.json"
-            records_hash = write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": [record]})
+            records_hash = write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": records_list})
             manifest = root / "manifest.json"
-            write_json(manifest, {"schema_version": "ember-owned-training-data-v1", "capability": "reasoning", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 1, "token_count": 3, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
+            write_json(manifest, {"schema_version": "ember-owned-training-data-v1", "capability": "reasoning", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 128, "token_count": 4096, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
             records_out, verification = run_vertical_slice.load_verified_specialist_records(root=root, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
-        self.assertEqual(records_out, [record])
+        self.assertEqual(records_out, records_list)
         self.assertEqual(verification["result"], "VERIFIED")
         self.assertEqual(verification["capability"], "reasoning")
     def test_production_optimizer_uses_declared_paged_8bit_adamw_state(self) -> None:
@@ -145,11 +149,28 @@ class RunnerPreflightTests(unittest.TestCase):
             resume_checkpoint=None,
         )
 
+    def test_specialist_lineage_request_binds_parent_to_exact_resume_bundle(self) -> None:
+        verification = {"result": "VERIFIED", "capability": "image"}
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory) / "parent"
+            parent.mkdir()
+            manifest = parent / "checkpoint-manifest.json"
+            manifest.write_text(json.dumps({"schema_version": "ember-sparse-checkpoint-v3"}), encoding="utf-8")
+            lineage = run_vertical_slice.specialist_lineage_request(
+                capability="image", verification=verification, resume_checkpoint=parent,
+                parent_manifest=manifest, root_manifest=manifest,
+            )
+            self.assertEqual(lineage["trained_expert_ids"], ["vision"])
+            with self.assertRaisesRegex(ValueError, "exact resumed"):
+                run_vertical_slice.specialist_lineage_request(
+                    capability="image", verification=verification, resume_checkpoint=Path(directory) / "other",
+                    parent_manifest=manifest, root_manifest=manifest,
+                )
     def test_specialist_cli_dispatches_one_verified_route(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=None)
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"))
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
