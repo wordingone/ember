@@ -31,5 +31,7 @@ def test_scores_canonical_math_answers_against_identity_bound_frozen_references(
         assert payload["metrics"] == {"exact_match": 0.5}
         assert payload["sample_count"] == 2
         assert payload["criterion_id"] == "ember-3b-reasoning-capability-v1"
+        assert payload["result"] == "PREFLIGHT_ONLY"
+        assert payload["claim_status"] == "NON_ADMISSIBLE_FROZEN_MATH_SCORER"
         assert payload["criterion_result"] == "FAILED"
         assert payload["predictions_sha256"] == hashlib.sha256(predictions.read_bytes()).hexdigest()
