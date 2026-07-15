@@ -43,6 +43,12 @@ class VerticalSliceTests(unittest.TestCase):
         self.assertEqual(audio["audio_frames"].shape, (1, 1, 640))
         self.assertEqual((vision["active_expert"], audio["active_expert"]), ("vision", "audio"))
 
+    def test_verified_specialist_schema_reaches_its_declared_route(self) -> None:
+        record = self._record("vision")
+        record["schema_version"] = "ember-owned-semantic-record-v1"
+        decoded = decode_owned_batch(record, self.config, device=torch.device("cpu"))
+        self.assertEqual(decoded["active_expert"], "vision")
+        self.assertEqual(decoded["image_patches"].shape, (1, 1, 48, 48, 3))
     def test_audio_frame_bytes_decode_as_explicit_little_endian_i16(self) -> None:
         raw = bytes((0x00, 0x80, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0x7F))
         self.assertTrue(hasattr(batch, "_decode_i16le"))
