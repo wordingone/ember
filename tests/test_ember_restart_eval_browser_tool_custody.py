@@ -26,7 +26,7 @@ def test_browser_and_structured_tool_protocols_refuse_execution_without_local_ru
         "license": "Apache-2.0",
         "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
         "materialization": {"max_b_write_gib": 0.5, "outcome": "COMPLETED", "receipt_sha256": "f2aafee550b4252f2b352c92d93224fd0c86e1954fc9ff782bd51d2522b0d622"},
-        "frozen_static_non_live": {"categories": ["simple_python", "simple_java", "simple_javascript", "multiple", "parallel", "parallel_multiple", "irrelevance"], "file_count": 7, "tree_sha256": "9d83acb5c37b78d87dd4ad12ccebad360376e3bbdae457c60079aeb6d191424d", "execution_permitted": False},
+        "frozen_static_non_live": {"categories": ["simple_python", "simple_java", "simple_javascript", "multiple", "parallel", "parallel_multiple", "irrelevance"], "file_count": 7, "tree_sha256": "9d83acb5c37b78d87dd4ad12ccebad360376e3bbdae457c60079aeb6d191424d", "scorable_categories": ["simple_python", "simple_java", "simple_javascript", "multiple", "parallel", "parallel_multiple"], "excluded_categories": {"irrelevance": "NO_LOCAL_POSSIBLE_ANSWER_ORACLE"}, "execution_permitted": False},
         "asset_disposition": "PINNED_BFCL_SOURCE_NO_LOCAL_RUNTIME_OR_FROZEN_TASKS",
         "target_execution_permitted": False,
     }
