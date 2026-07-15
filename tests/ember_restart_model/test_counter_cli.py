@@ -105,6 +105,48 @@ class CounterCliTests(unittest.TestCase):
         measured = json.loads(completed.stdout)
         self.assertEqual(measured["active_expert_ids"], ["shared"])
         self.assertEqual(measured["active_parameters"], model.count_unique_trainable_parameters())
+    def test_isolated_cli_rejects_shared_checkpoint_with_specialist_drift_from_genesis(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=13)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW((parameter for parameter in model.parameters() if parameter.requires_grad), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_payload = {
+                "architecture_revision": "ember-sparse-3b-v2",
+                "model": {
+                    "hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64,
+                    "tied_embeddings": True,
+                    "image_projection": {"input_shape": [48, 48, 3], "output_size": 32},
+                    "audio_projection": {"frame_samples": 640, "output_size": 32},
+                    "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
+                },
+            }
+            config_path.write_text(json.dumps(config_payload), encoding="utf-8")
+            write_checkpoint_artifacts(
+                model, optimizer, root / "checkpoint", launch_seed=13,
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                data_cursor={"shard": "TOKEN-SHARDS-V0:receipt", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+            )
+            checkpoint = root / "checkpoint"
+            payload = torch.load(checkpoint / "expert-vision.pt", map_location="cpu", weights_only=True)
+            payload["model"]["layers.0.experts.vision.up_gate.weight"].add_(1)
+            torch.save(payload, checkpoint / "expert-vision.pt")
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            digest = hashlib.sha256((checkpoint / "expert-vision.pt").read_bytes()).hexdigest()
+            manifest["expert_checkpoint_sha256"]["vision"] = digest
+            for record in manifest["shards"]:
+                if record["path"] == "expert-vision.pt":
+                    record["sha256"] = digest
+                    record["bytes"] = (checkpoint / "expert-vision.pt").stat().st_size
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            command = [sys.executable, "-I", str(ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py"), "--model-config", str(config_path), "--checkpoint-manifest", str(manifest_path), "--active-expert", "shared"]
+            completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("genesis", completed.stderr)
     def test_safe_metadata_rebuild_from_tensor_subtype_discards_subtype_state(self) -> None:
         metadata = _rebuild_tensor_from_type(
             _rebuild_tensor,
