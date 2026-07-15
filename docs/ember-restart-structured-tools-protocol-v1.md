@@ -7,7 +7,7 @@
 
 - Evaluation source: `ShishirPatil/gorilla`, BFCL component
 - Source commit candidate: `6ea57973c7a6097fd7c5915698c54c17c5b1b6c8`
-- Current custody: no local pinned BFCL runtime or frozen task set is available; this protocol is pre-execution only.
+- Current custody: a private frozen static BFCL simple-task set exists and can be scored only as `PREFLIGHT_ONLY`; no local pinned BFCL runtime is available, so live tool execution remains non-executable.
 - Intended surface after pinned materialization: executable function-call correctness through BFCL's local evaluator, not the public leaderboard.
 
 ## Target admission contract
