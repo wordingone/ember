@@ -140,15 +140,28 @@ def verify_record(record: Mapping[str, Any]) -> dict[str, str] | None:
 
 def _main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--record-json-base64", required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--record-json-base64")
+    inputs.add_argument("--records-json-base64")
+    inputs.add_argument("--records-json-stdin", action="store_true")
     arguments = parser.parse_args()
     try:
-        decoded = base64.b64decode(arguments.record_json_base64, validate=True)
-        record = json.loads(decoded)
-        if not isinstance(record, dict):
-            raise ValueError("record must be an object")
-        receipt = verify_record(record)
-        print(json.dumps({"result": "PASSED", "receipt": receipt}, sort_keys=True, separators=(",", ":")))
+        if arguments.records_json_stdin:
+            payload = json.load(sys.stdin)
+        else:
+            encoded = arguments.record_json_base64 or arguments.records_json_base64
+            decoded = base64.b64decode(encoded, validate=True)
+            payload = json.loads(decoded)
+        if arguments.record_json_base64 is not None:
+            if not isinstance(payload, dict):
+                raise ValueError("record must be an object")
+            receipt = verify_record(payload)
+            output: dict[str, object] = {"result": "PASSED", "receipt": receipt}
+        else:
+            if not isinstance(payload, list) or not payload or any(not isinstance(record, dict) for record in payload):
+                raise ValueError("records must be a nonempty array of objects")
+            output = {"result": "PASSED", "receipts": [verify_record(record) for record in payload]}
+        print(json.dumps(output, sort_keys=True, separators=(",", ":")))
         return 0
     except (ValueError, json.JSONDecodeError) as error:
         print(json.dumps({"result": "FAILED", "error": str(error)}, sort_keys=True, separators=(",", ":")))

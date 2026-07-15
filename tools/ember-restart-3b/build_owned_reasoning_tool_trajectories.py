@@ -34,7 +34,7 @@ def build_records(tokenizer: Any, *, count: int, capability: str) -> list[dict[s
             "sample_id": f"owned-{capability}-trajectory-{index:08d}",
             "active_expert": capability,
             "token_ids": encoded[:-1],
-            "target_ids": encoded,
+            "target_ids": encoded[1:],
             "target_text": target_text,
             "image_coordinates": [],
             "multimodal_spans": [],

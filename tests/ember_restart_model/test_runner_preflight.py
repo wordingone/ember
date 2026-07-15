@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import run_vertical_slice
+from build_owned_reasoning_tool_trajectories import build_records
 from verify_capability_record import expected_receipt
 
 
@@ -32,22 +33,21 @@ class RunnerPreflightTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
             return hashlib.sha256(path.read_bytes()).hexdigest()
+        from tokenizers import Tokenizer, models, pre_tokenizers
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tokenizer = root / "tokenizer.json"
-            tokenizer_hash = write_json(tokenizer, {"model": {"vocab": {str(index): index for index in range(8, 32)}}})
+            frozen = Tokenizer(models.WordLevel({"<unk>": 0, "reasoning": 1, "sum": 2, "plus": 3, "equals": 4, **{str(index): index + 5 for index in range(2048)}}, unk_token="<unk>"))
+            frozen.pre_tokenizer = pre_tokenizers.Whitespace()
+            frozen.save(str(tokenizer))
+            tokenizer_hash = hashlib.sha256(tokenizer.read_bytes()).hexdigest()
             source = root / "source.json"
             source_hash = write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "reasoning", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "local_answer_execution", "source_description": "Owned arithmetic trajectory generator with independently executed sums.", "minimum_record_count": 128, "minimum_token_count": 4096}})
-            records_list = []
-            for index in range(128):
-                token_ids = [8 + (offset % 24) for offset in range(32)]
-                record = {"schema_version": "ember-owned-bootstrap-batch-v1", "active_expert": "reasoning", "token_ids": token_ids, "target_ids": [*token_ids[1:], token_ids[0]], "image_coordinates": [], "multimodal_spans": [], "capability_evidence": {"reasoning": {"operands": [index, 2], "target": index + 2, "trace": [index, 2, index + 2]}}}
-                record["capability_receipt"] = expected_receipt(record)
-                records_list.append(record)
+            records_list = build_records(frozen, count=704, capability="reasoning")
             records = root / "records.json"
             records_hash = write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": records_list})
             manifest = root / "manifest.json"
-            write_json(manifest, {"schema_version": "ember-owned-training-data-v1", "capability": "reasoning", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 128, "token_count": 4096, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
+            write_json(manifest, {"schema_version": "ember-owned-training-data-v1", "capability": "reasoning", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": len(records_list), "token_count": sum(len(record["token_ids"]) for record in records_list), "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
             records_out, verification = run_vertical_slice.load_verified_specialist_records(root=root, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
         self.assertEqual(records_out, records_list)
         self.assertEqual(verification["result"], "VERIFIED")
