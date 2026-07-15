@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Execute a pinned local Spider scorer and write a non-admissible score envelope."""
-import argparse, importlib.util, json, math, os, sys, tempfile
+import argparse, hashlib, importlib.util, json, math, os, sys, tempfile
 from pathlib import Path
 
 def rows(path: Path) -> int:
@@ -30,11 +30,32 @@ def load_evaluator(root: Path):
   module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
  finally: sys.path.pop(0)
 
+def _sha256(path: Path) -> str:
+ return hashlib.sha256(path.read_bytes()).hexdigest()
+
+def _database_tree_sha256(root: Path) -> str:
+ digest=hashlib.sha256()
+ files=sorted(path for path in root.rglob("*") if path.is_file())
+ if not files: raise ValueError("frozen Spider database directory must contain files")
+ for path in files:
+  relative=path.relative_to(root).as_posix().encode("utf-8")
+  digest.update(relative+b"\0")
+  digest.update(path.read_bytes())
+ return digest.hexdigest()
+
+def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, database: Path) -> str:
+ try: manifest=json.loads(path.read_text(encoding="utf-8"))
+ except (OSError,json.JSONDecodeError) as exc: raise ValueError(f"invalid frozen Spider custody manifest: {exc}") from exc
+ expected={"gold_sha256":_sha256(gold),"tables_sha256":_sha256(tables),"database_tree_sha256":_database_tree_sha256(database),"evaluator_sha256":_sha256(source/"evaluation.py")}
+ if not isinstance(manifest,dict) or manifest.get("result")!="PREFLIGHT_ONLY" or manifest.get("benchmark_id")!="spider" or manifest.get("benchmark_version")!="b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c" or any(manifest.get(key)!=value for key,value in expected.items()): raise ValueError("frozen Spider custody manifest does not bind supplied evaluator assets")
+ return _sha256(path)
 def main() -> int:
- p=argparse.ArgumentParser();p.add_argument("--spider-root",required=True,type=Path);p.add_argument("--gold",required=True,type=Path);p.add_argument("--predictions",required=True,type=Path);p.add_argument("--database-dir",required=True,type=Path);p.add_argument("--tables",required=True,type=Path);p.add_argument("--score-output",required=True,type=Path);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument("--frozen-sql-manifest",required=True,type=Path);p.add_argument("--spider-root",required=True,type=Path);p.add_argument("--gold",required=True,type=Path);p.add_argument("--predictions",required=True,type=Path);p.add_argument("--database-dir",required=True,type=Path);p.add_argument("--tables",required=True,type=Path);p.add_argument("--score-output",required=True,type=Path);a=p.parse_args()
  if a.score_output.exists(): p.error("score output must not pre-exist")
  if not all(x.is_file() for x in(a.gold,a.predictions,a.tables)): p.error("gold, predictions, and tables must be files")
  if not a.database_dir.is_dir(): p.error("database directory must exist")
+ try: frozen_custody_sha256=verify_frozen_custody(a.frozen_sql_manifest,a.spider_root,a.gold,a.tables,a.database_dir)
+ except ValueError as exc: p.error(str(exc))
  try: predictions=sql_lines(a.predictions)
  except (OSError,ValueError,json.JSONDecodeError) as exc:p.error(f"invalid Spider predictions: {exc}")
  if len(predictions)!=rows(a.gold): p.error("non-empty predictions must exactly cover the frozen gold rows")
@@ -44,7 +65,7 @@ def main() -> int:
  except Exception as exc: p.error(f"pinned Spider scorer failed: {exc}")
  finally: temporary.unlink(missing_ok=True)
  if isinstance(exact,bool) or not isinstance(exact,(int,float)) or not math.isfinite(exact): p.error("pinned Spider scorer did not return finite exact match")
- payload={"metrics":{"exact_match":float(exact)},"sample_count":len(predictions),"criterion_id":"ember-3b-tool-capability-v1","criterion_result":"FAILED","upstream":"pinned local Spider exact-match scorer"}
+ payload={"metrics":{"exact_match":float(exact)},"sample_count":len(predictions),"criterion_id":"ember-3b-tool-capability-v1","criterion_result":"FAILED","frozen_sql_manifest_sha256":frozen_custody_sha256,"upstream":"pinned local Spider exact-match scorer"}
  a.score_output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile("w",encoding="utf-8",dir=a.score_output.parent,prefix=a.score_output.name+".",suffix=".tmp",delete=False) as handle:handle.write(json.dumps(payload,sort_keys=True)+"\n");temporary=Path(handle.name)
  os.replace(temporary,a.score_output);return 0
