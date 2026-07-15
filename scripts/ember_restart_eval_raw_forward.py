@@ -108,7 +108,7 @@ def require_active_route(checkpoint: dict[str, object], requested: str) -> str:
     return requested
 
 
-def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dict[str, object]:
+def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_inputs: dict[str, object] | None = None) -> dict[str, object]:
     import torch
 
     require_execution_authority(arguments)
@@ -122,7 +122,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dic
     specification.loader.exec_module(module)
     config = module.RestartDecoderConfig.from_contract(arguments.model_config)
     model = module.UnifiedDecoder(config, device="meta", allow_production_allocation=True)
-    active_route = require_active_route(checkpoint, arguments.active_expert)
+    active_route = require_active_route(checkpoint, str((bound_inputs or {}).get("active_expert", arguments.active_expert)))
     root = arguments.checkpoint_manifest.parent
     shared = torch.load(root / "shared.pt", map_location=arguments.device, weights_only=True)
     expert = None if active_route == "shared" else torch.load(root / f"expert-{active_route}.pt", map_location=arguments.device, weights_only=True)
@@ -143,9 +143,10 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dic
     if active_route != "shared":
         model.load_state_dict(expert["model"], strict=False, assign=True)
     model.eval()
-    if arguments.input_token_id < 0 or arguments.max_new_tokens <= 0 or arguments.max_new_tokens > 32:
+    input_token_ids = (bound_inputs or {}).get("token_ids", [arguments.input_token_id])
+    if not isinstance(input_token_ids, list) or not input_token_ids or any(not isinstance(token, int) or token < 0 for token in input_token_ids) or arguments.max_new_tokens <= 0 or arguments.max_new_tokens > 32:
         raise ValueError("input token and generation limit are invalid")
-    tokens = torch.tensor([[arguments.input_token_id]], device=arguments.device, dtype=torch.long)
+    tokens = torch.tensor([input_token_ids], device=arguments.device, dtype=torch.long)
     generated: list[int] = []
     with torch.no_grad():
         for _ in range(arguments.max_new_tokens):
@@ -195,9 +196,9 @@ def main() -> None:
         binding = load_canonical_prompt_binding(arguments.prompt, arguments.frozen_split, arguments.split_sha256, arguments.benchmark_id, arguments.benchmark_version) if arguments.canonical_output is not None else None
         tokenizer = Tokenizer.from_file(str(arguments.tokenizer))
         checkpoint = _verify(arguments.checkpoint_manifest, arguments.model_config)
-        if arguments.execute and any(value is None for value in (arguments.model_source, arguments.model_source_sha256, arguments.model_config, arguments.model_config_sha256, arguments.active_expert, arguments.input_token_id, arguments.max_new_tokens)):
+        if arguments.execute and any(value is None for value in (arguments.model_source, arguments.model_source_sha256, arguments.model_config, arguments.model_config_sha256, arguments.max_new_tokens)):
             raise ValueError("execution requires model/config identities, active expert, input token, and limit")
-        execution = execute(arguments, checkpoint) if arguments.execute else {"result": "PREFLIGHT_ONLY"}
+        execution = execute(arguments, checkpoint, binding) if arguments.execute else {"result": "PREFLIGHT_ONLY"}
     except Exception as error:
         parser.error(str(error))
     checkpoint_sha256 = sha256(arguments.checkpoint_manifest)
@@ -206,11 +207,11 @@ def main() -> None:
     if sha256(arguments.model_config) != arguments.model_config_sha256:
         parser.error("model config SHA-256 does not match --model-config-sha256")
     if arguments.canonical_output is not None:
-        required = (arguments.execute, arguments.benchmark_id, arguments.benchmark_version, arguments.benchmark_capability, arguments.split_sha256, arguments.protocol_sha256, arguments.row_id)
+        required = (arguments.execute, arguments.benchmark_id, arguments.benchmark_version, arguments.benchmark_capability, arguments.split_sha256, arguments.protocol_sha256)
         if any(value is None or value is False for value in required):
             parser.error("canonical output requires execution and benchmark identities")
         generated = execution["generated_token_ids"]
-        envelope = {"schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", "checkpoint_manifest_sha256": checkpoint_sha256, "model_config_sha256": arguments.model_config_sha256, "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__)), "benchmark": {"id": arguments.benchmark_id, "version": arguments.benchmark_version, "capability": arguments.benchmark_capability, "split_sha256": arguments.split_sha256, "protocol_sha256": arguments.protocol_sha256}, "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": arguments.max_new_tokens, "temperature": 0, "top_p": 1, "stop_token_ids": [arguments.stop_token_id]}, "rows": [{"id": arguments.row_id, "input_sha256": hashlib.sha256(str(arguments.input_token_id).encode()).hexdigest(), "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "output": {"kind": "text", "text": tokenizer.decode(generated)}}]}
+        envelope = {"schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", "checkpoint_manifest_sha256": checkpoint_sha256, "model_config_sha256": arguments.model_config_sha256, "tokenizer_sha256": sha256(arguments.tokenizer), "inference_implementation_sha256": sha256(Path(__file__)), "benchmark": {"id": arguments.benchmark_id, "version": arguments.benchmark_version, "capability": arguments.benchmark_capability, "split_sha256": arguments.split_sha256, "protocol_sha256": arguments.protocol_sha256}, "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": arguments.max_new_tokens, "temperature": 0, "top_p": 1, "stop_token_ids": [arguments.stop_token_id]}, "rows": [{"id": binding["row_id"], "input_sha256": binding["input_sha256"], "generated_token_ids": generated, "stop_reason": "eos" if generated[-1] == arguments.stop_token_id else "max_new_tokens", "output": {"kind": "text", "text": tokenizer.decode(generated)}}]}
         validate_predictions(envelope)
         arguments.canonical_output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.canonical_output.parent, delete=False) as handle:
