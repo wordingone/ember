@@ -189,6 +189,8 @@ def run_manifest_bound_semantic_segment(
 
     def bound_cursor(cursor: Mapping[str, int], global_step: int, tokens_seen: int) -> dict[str, object]:
         return {
+            "shard": "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12],
+            "record_index": global_step,
             "receipt_sha256": stream.receipt_sha256,
             "tokenizer_sha256": stream.tokenizer_sha256,
             "shard_index": cursor["shard_index"],

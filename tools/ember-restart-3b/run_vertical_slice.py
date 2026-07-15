@@ -19,8 +19,9 @@ import torch.nn.functional as F
 from batch import decode_owned_batch
 from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
-from pretrain import run_pretraining_segment
+from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from parameter_counter import measure_parameter_counts
+from semantic_stream import ManifestBoundTokenStream
 from train import run_launch
 
 
@@ -96,11 +97,15 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
             raise RuntimeError("published checkpoint exceeds serialized-byte retention budget while preserving the final known-good bundle")
 
 
-def _retain_after_success(parent: Path, *, max_count: int, operation: Callable[[], Any]) -> Any:
-    """Preserve every known-good bundle when a new publication operation fails."""
+def _retain_after_success(
+    parent: Path, *, operation: Callable[[], Any], max_count: int | None = None, max_serialized_bytes: int | None = None
+) -> Any:
+    """Publish first, then prune only successful older bundles."""
 
+    if max_count is None and max_serialized_bytes is None:
+        raise ValueError("successful checkpoint retention requires a bound")
     result = operation()
-    _enforce_retention(parent, max_count=max_count)
+    _enforce_retention(parent, max_count=max_count, max_serialized_bytes=max_serialized_bytes)
     return result
 
 
@@ -364,13 +369,163 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         "parameter_receipt": parameter_receipt,
     }
 
+def run_semantic(
+    *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
+    steps: int, sequence_length: int, resume_checkpoint: Path | None = None,
+) -> dict[str, object]:
+    """Train receipt-bound semantic text through the shared nonlinear language path."""
 
-if __name__ == "__main__":
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the production semantic runner")
+    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1:
+        raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
+    artifact_root = production_artifact_root(artifact_root)
+    root = Path(__file__).resolve().parents[2]
+    config_path = root / "configs" / "ember-restart-3b.json"
+    integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
+    if not integration_contract_path.is_file():
+        raise RuntimeError("the merged Ember integration contract is required for production launch")
+    stream = ManifestBoundTokenStream.from_receipt(
+        receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path
+    )
+    config = RestartDecoderConfig.from_contract(config_path)
+    if stream.vocab_size != config.vocab_size:
+        raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
+    total_parameters = config.structural_parameter_count()
+    shared_active_parameters = 1_020_589_568
+    device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
+    memory_preflight = production_memory_preflight(
+        total_parameters=total_parameters, active_parameters=shared_active_parameters, device_free_bytes=int(device_free_bytes)
+    )
+    if memory_preflight["parameter_dtype"] != load_memory_contract(config_path)["parameter_dtype"]:
+        raise RuntimeError("memory preflight and production numerics disagree")
+    checkpoint_parent = artifact_root / "checkpoints"
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    rng_state_before_init = _rng_state_hash(torch.device("cuda"))
+    previous_dtype = torch.get_default_dtype()
+    torch.set_default_dtype(torch.bfloat16)
+    try:
+        model = UnifiedDecoder(config, device="cuda", allow_production_allocation=True, genesis_seed=seed)
+    finally:
+        torch.set_default_dtype(previous_dtype)
+    model._activate_expert("shared")
+    genesis_hashes = model.expert_bank_genesis_hashes()
+    counts = measure_parameter_counts(model)
+    if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != shared_active_parameters:
+        raise RuntimeError("instantiated shared semantic counts differ from the authorized architecture")
+    optimizer_contract = load_optimizer_contract(config_path)
+    optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
+    resume_cursor: dict[str, object] | None = None
+    initial_global_step = 0
+    initial_tokens_seen = 0
+    if resume_checkpoint is not None:
+        resume_checkpoint = resume_checkpoint.resolve()
+        if resume_checkpoint.drive.upper() != "B:" or not resume_checkpoint.is_dir():
+            raise ValueError("resume checkpoint must be a published B: bundle")
+        manifest_path = resume_checkpoint / "checkpoint-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        loaded = load_checkpoint_artifacts(
+            model, optimizer, resume_checkpoint, {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+        )
+        resume_cursor = dict(loaded["data_cursor"])
+        initial_global_step = int(resume_cursor["global_step"])
+        initial_tokens_seen = int(resume_cursor["tokens_seen"])
+    torch.cuda.reset_peak_memory_stats()
+    checkpoint: dict[str, object] | None = None
+
+    def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
+        nonlocal checkpoint
+        checkpoint_root = checkpoint_parent / f"checkpoint-semantic-seed-{seed}-step-{global_step}"
+        checkpoint = _retain_after_success(
+            checkpoint_parent,
+            max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
+            operation=lambda: write_checkpoint_artifacts(
+                model,
+                optimizer,
+                checkpoint_root,
+                launch_seed=seed,
+                rng_state=_rng_state(torch.device("cuda")),
+                data_cursor=dict(state["data_cursor"]),
+                model_config_sha256=_sha256(config_path),
+                contract_sha256=_sha256(integration_contract_path),
+                expert_genesis_sha256=genesis_hashes,
+                optimizer_contract=optimizer_contract,
+            ),
+        )
+
+    segment = run_manifest_bound_semantic_segment(
+        model=model,
+        optimizer=optimizer,
+        stream=stream,
+        config=config,
+        device=torch.device("cuda"),
+        sequence_length=sequence_length,
+        steps=steps,
+        checkpoint_every=1,
+        checkpoint_callback=checkpoint_callback,
+        initial_data_cursor=resume_cursor,
+        initial_global_step=initial_global_step,
+        initial_tokens_seen=initial_tokens_seen,
+    )
+    if checkpoint is None:
+        raise RuntimeError("semantic runner did not publish its required post-step checkpoint")
+    counts = measure_parameter_counts(model)
+    checkpoint_root = checkpoint_parent / f"checkpoint-semantic-seed-{seed}-step-{segment['global_step']}"
+    parameter_receipt = _execute_realization_counter(
+        root=root,
+        config_path=config_path,
+        checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
+        active_expert="shared",
+        expected_counts=counts,
+    )
+    return {
+        "segment": segment,
+        "counts": counts,
+        "memory_preflight": memory_preflight,
+        "launch_seed": seed,
+        "rng_state_before_init_sha256": rng_state_before_init,
+        "expert_genesis_sha256": genesis_hashes,
+        "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
+        "post_step_checkpoint": checkpoint,
+        "parameter_receipt": parameter_receipt,
+        "stream_receipt_sha256": stream.receipt_sha256,
+        "tokenizer_sha256": stream.tokenizer_sha256,
+    }
+
+
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", type=int, required=True)
-    parser.add_argument("--artifact-root", type=Path, required=True)
-    parser.add_argument("--resume-checkpoint", type=Path)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    vertical = subparsers.add_parser("vertical")
+    vertical.add_argument("--seed", type=int, required=True)
+    vertical.add_argument("--artifact-root", type=Path, required=True)
+    vertical.add_argument("--resume-checkpoint", type=Path)
+    semantic = subparsers.add_parser("semantic")
+    semantic.add_argument("--seed", type=int, required=True)
+    semantic.add_argument("--artifact-root", type=Path, required=True)
+    semantic.add_argument("--receipt", type=Path, required=True)
+    semantic.add_argument("--shards-root", type=Path, required=True)
+    semantic.add_argument("--tokenizer", type=Path, required=True)
+    semantic.add_argument("--steps", type=int, required=True)
+    semantic.add_argument("--sequence-length", type=int, required=True)
+    semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
-    print(json.dumps(run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint), sort_keys=True))
+    if args.command == "semantic":
+        result = run_semantic(
+            seed=args.seed,
+            artifact_root=args.artifact_root,
+            receipt_path=args.receipt,
+            shards_root=args.shards_root,
+            tokenizer_path=args.tokenizer,
+            steps=args.steps,
+            sequence_length=args.sequence_length,
+            resume_checkpoint=args.resume_checkpoint,
+        )
+    else:
+        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint)
+    print(json.dumps(result, sort_keys=True))
+if __name__ == "__main__":
+    main()

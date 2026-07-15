@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping
 import torch
 
 from model import EXPERT_NAMES, UnifiedDecoder
+from parameter_counter import measure_parameter_counts
 
 
 def _sha256(path: Path) -> str:
@@ -266,8 +267,21 @@ def write_checkpoint_artifacts(
         shards.append(record)
         expert_checkpoint_sha256[name] = record["sha256"]
 
+    counts = measure_parameter_counts(model)
     manifest = {
         "schema_version": "ember-sparse-checkpoint-v3",
+        "contract_version": 3,
+        "architecture_revision": "ember-sparse-3b-v2",
+        "architecture": {
+            "revision": "ember-sparse-3b-v2",
+            "allocated_parameters": int(counts["allocated_parameters"]),
+            "unique_parameters": int(counts["unique_parameters"]),
+            "trainable_parameters": int(counts["trainable_parameters"]),
+            "served_parameters": int(counts["served_parameters"]),
+            "active_parameters": int(counts["active_parameters"]),
+            "episode_trainable_parameters": int(counts["episode_trainable_parameters"]),
+            "shared_text_ffn": "always_active_SwiGLU_4H",
+        },
         "launch_seed": launch_seed,
         "rng_state_sha256": {name: hashlib.sha256(state.detach().cpu().numpy().tobytes()).hexdigest() for name, state in rng_state.items()},
         "data_cursor": dict(data_cursor),
