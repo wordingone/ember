@@ -19,6 +19,7 @@ import {
   resolveModelSeat,
 } from "./model-seat.ts";
 import {
+  loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
@@ -537,6 +538,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `Environment:\n` +
       `  EMBER_MODEL_URL       External endpoint; requires admitted owned identity match or explicit reference seat\n` +
       `  EMBER_OWNED_RUNG_MANIFEST  Admitted run manifest (default: EMBER_HOME/owned/current.json)\n` +
+      `  EMBER_OWNED_DEVELOPMENT_MANIFEST  Exact non-claiming manifest (default: EMBER_HOME/owned/development.json)\n` +
       `  EMBER_TRUSTED_VERIFIER_REGISTRY  Independent verifier registry for owned admission\n` +
       `  EMBER_PYTHON          Python executable used for the checked-in admission resolver\n` +
       `  EMBER_REFERENCE_SEAT  Set to 1 for explicit REFERENCE_ONLY automation\n` +
@@ -663,6 +665,7 @@ export interface MainOptions {
    *  short real health probe; tests inject a fake to avoid real network I/O. */
   probeExisting?:  (port: number) => Promise<boolean>;
   loadOwnedIdentityFn?: typeof loadOwnedModelIdentity;
+  loadOwnedDevelopmentIdentityFn?: typeof loadOwnedDevelopmentIdentity;
   verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
   ensureOwnedServerFn?: typeof ensureOwnedServer;
   initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
@@ -716,13 +719,22 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   let seatDecision = resolveModelSeat(seatInput);
   if (!seatDecision.allowed) {
     try {
-      const ownedIdentity = (opts.loadOwnedIdentityFn ?? loadOwnedModelIdentity)({
-        repoRoot: resolveEmberRepoRootOrCwd({}, "[ember-cli]"),
-        configHome: getEmberConfigHomeDir(),
+      const repoRoot = resolveEmberRepoRootOrCwd({}, "[ember-cli]");
+      const configHome = getEmberConfigHomeDir();
+      const admittedIdentity = (opts.loadOwnedIdentityFn ?? loadOwnedModelIdentity)({
+        repoRoot,
+        configHome,
         manifestPath: process.env["EMBER_OWNED_RUNG_MANIFEST"],
         verifierRegistryPath: process.env["EMBER_TRUSTED_VERIFIER_REGISTRY"],
         pythonExecutable: process.env["EMBER_PYTHON"],
       });
+      const ownedIdentity = admittedIdentity ??
+        (opts.loadOwnedDevelopmentIdentityFn ?? loadOwnedDevelopmentIdentity)({
+          repoRoot,
+          configHome,
+          manifestPath: process.env["EMBER_OWNED_DEVELOPMENT_MANIFEST"],
+          pythonExecutable: process.env["EMBER_PYTHON"],
+        });
       if (ownedIdentity) {
         seatDecision = resolveModelSeat({ ...seatInput, ownedIdentity });
       }
@@ -758,14 +770,24 @@ export async function main(opts: MainOptions = {}): Promise<void> {
         seatDecision.source +
         "); owned completion disabled\n",
     );
-  } else if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
-    process.env["EMBER_MODEL_URL"] = seatDecision.ownedIdentity.endpointUrl;
-    process.env["EMBER_MODEL_NAME"] = seatDecision.ownedIdentity.modelName;
-    seatBannerStream.write(
-      "[ember] model seat: OWNED_ADMITTED (checkpoint " +
-        seatDecision.ownedIdentity.checkpointSha256.slice(0, 12) +
-        ")\n",
-    );
+  } else if (seatDecision.ownedIdentity) {
+    const ownedIdentity = seatDecision.ownedIdentity;
+    process.env["EMBER_MODEL_URL"] = ownedIdentity.endpointUrl;
+    process.env["EMBER_MODEL_NAME"] = ownedIdentity.modelName;
+    if (seatDecision.seat === "OWNED_DEVELOPMENT") {
+      seatBannerStream.write(
+        "[ember] model seat: OWNED_DEVELOPMENT (checkpoint " +
+          ownedIdentity.checkpointSha256.slice(0, 12) + "; " +
+          (ownedIdentity.tokensSeen ?? 0).toLocaleString("en-US") +
+          " training tokens; NON_ADMISSIBLE)\n",
+      );
+    } else {
+      seatBannerStream.write(
+        "[ember] model seat: OWNED_ADMITTED (checkpoint " +
+          ownedIdentity.checkpointSha256.slice(0, 12) +
+          ")\n",
+      );
+    }
   } else {
     process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
     seatBannerStream.write(
@@ -776,7 +798,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   const didSeatGatedFastPath = await dispatchFastPath(argv);
   if (didSeatGatedFastPath) return;
 
-  if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
+  if (seatDecision.ownedIdentity) {
     try {
       const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
       const ensure = opts.ensureOwnedServerFn ?? ((identity) =>
@@ -784,7 +806,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       await ensure(seatDecision.ownedIdentity);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write("[ember] ERROR: could not establish admitted owned server (" + message + ")\n");
+      process.stderr.write("[ember] ERROR: could not establish bound owned server (" + message + ")\n");
       doExitMain(1);
       return;
     }
@@ -794,10 +816,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // a models.json "binary"/"endpoint" field silently discarding an explicit override, or a
   // persisted endpoint silently discarding EMBER_GPU_FREE=1) can never reroute the cockpit
   // with zero visible signal.
-  if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
+  if (seatDecision.ownedIdentity) {
+    const authority = seatDecision.seat === "OWNED_DEVELOPMENT"
+      ? "exact NON_ADMISSIBLE development manifest"
+      : "admitted checkpoint manifest";
     process.stdout.write(
       "[ember] model endpoint: " + seatDecision.ownedIdentity.endpointUrl +
-        " -- bound by admitted checkpoint manifest; supervised server started\n",
+        " -- bound by " + authority + "; supervised server started\n",
     );
   } else {
     process.stdout.write(
@@ -942,7 +967,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     }
   }
 
-  if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
+  if (seatDecision.ownedIdentity) {
     try {
       await (opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity)(
         seatDecision.ownedIdentity,

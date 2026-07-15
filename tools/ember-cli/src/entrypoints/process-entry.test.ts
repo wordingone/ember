@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // process-entry.test.ts — AC1–AC12 tests for process-entry.ts
@@ -1505,5 +1505,7 @@ describe("process-entry — AC13 --help contract: EMBER_MODEL_URL precedence par
     expect(out).toContain("requires admitted owned identity");
     expect(out).toContain("--reference-seat");
     expect(out).toContain("EMBER_REFERENCE_SEAT");
+    expect(out).toContain("EMBER_OWNED_DEVELOPMENT_MANIFEST");
+    expect(out).toContain("Exact non-claiming manifest");
   });
 });
