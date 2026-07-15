@@ -64,6 +64,7 @@ def main() -> int:
         if not files:
             raise ValueError("validation parquet files are required")
         observed = {}
+        file_index = [{"path": path.relative_to(arguments.validation_root).as_posix(), "sha256": sha256(path.read_bytes())} for path in files]
         for path in files:
             table = parquet.read_table(path, columns=["id", "answer", "question_type"])
             for row in table.to_pylist():
@@ -82,6 +83,7 @@ def main() -> int:
         "benchmark_id": "MMMU",
         "upstream_revision": arguments.upstream_revision,
         "validation_parquet_file_count": len(files),
+        "validation_parquet_files": file_index,
         "validation_row_count": len(observed),
         "eligible_multiple_choice_count": sum(1 for question_type, _ in observed.values() if question_type == "multiple-choice"),
         "answer_dictionary_sha256": sha256(answer_bytes),
