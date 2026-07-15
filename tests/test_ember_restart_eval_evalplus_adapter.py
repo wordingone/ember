@@ -31,6 +31,8 @@ def test_derives_evalplus_samples_only_from_canonical_code_predictions():
         assert proof["predictions_sha256"] == digest(predictions)
         assert proof["task_asset_sha256"] == digest(asset)
         assert proof["samples_sha256"] == digest(samples)
+        assert proof["evalplus_dataset_md5"] == hashlib.md5(gzip.decompress(asset.read_bytes())).hexdigest()
+        assert proof["task_ids_sha256"] == hashlib.sha256(b"HumanEval/0\n").hexdigest()
         assert proof["sample_count"] == 1
 
 

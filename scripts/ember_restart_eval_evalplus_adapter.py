@@ -93,7 +93,7 @@ def main() -> int:
     except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         parser.error(f"invalid EvalPlus adapter inputs: {error}")
     samples_bytes = b"".join((json.dumps({"task_id": task_id, "completion": rows[task_id]}, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n") for task_id in sorted(rows))
-    binding = {"schema_version": "ember-restart-evalplus-samples-binding-v1", "suite": arguments.suite, "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "task_asset_sha256": asset_sha256, "predictions_sha256": sha256(prediction_bytes), "samples_sha256": sha256(samples_bytes), "sample_count": len(rows), "frozen_code_manifest_sha256": sha256(manifest_bytes), "result": "PREFLIGHT_ONLY"}
+    binding = {"schema_version": "ember-restart-evalplus-samples-binding-v1", "suite": arguments.suite, "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "task_asset_sha256": asset_sha256, "evalplus_dataset_md5": hashlib.md5(gzip.decompress(asset_bytes)).hexdigest(), "predictions_sha256": sha256(prediction_bytes), "samples_sha256": sha256(samples_bytes), "task_ids_sha256": sha256(("\n".join(sorted(rows)) + "\n").encode("utf-8")), "sample_count": len(rows), "frozen_code_manifest_sha256": sha256(manifest_bytes), "result": "PREFLIGHT_ONLY"}
     binding_bytes = (json.dumps(binding, sort_keys=True) + "\n").encode("utf-8")
     try:
         atomic_write(arguments.samples_output, samples_bytes)
