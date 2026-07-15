@@ -1,0 +1,18 @@
+{
+  "browser_ui": {
+    "asset_disposition": "NO_LOCAL_PINNED_BROWSERGYM_RUNTIME_OR_FROZEN_MINIWOB_TASKS",
+    "benchmark_id": "browsergym-miniwob",
+    "source_commit": "9e779f087de9a65668b6974d11f9ce9816026e96",
+    "target_execution_permitted": false
+  },
+  "goal_id": "EMBER-02",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-restart-benchmark-custody-v1",
+  "structured_tools": {
+    "asset_disposition": "NO_LOCAL_PINNED_BFCL_RUNTIME_OR_FROZEN_TASKS",
+    "benchmark_id": "bfcl",
+    "source_commit": "6ea57973c7a6097fd7c5915698c54c17c5b1b6c8",
+    "target_execution_permitted": false
+  },
+  "workstream_id": "EMBER-02C"
+}
