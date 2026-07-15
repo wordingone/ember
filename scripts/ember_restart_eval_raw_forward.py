@@ -341,6 +341,21 @@ def _config_from_payload(module, contract: dict[str, object]):
         raise ValueError("production contract total does not match the sparse architecture")
     return config
 
+def tied_embeddings_from_contract(config, contract: dict[str, object]) -> bool:
+    """Resolve the committed tying declaration and reject model/config drift."""
+
+    model = contract.get("model")
+    if isinstance(model, dict) and "tied_embeddings" in model:
+        declared = model["tied_embeddings"]
+        if not isinstance(declared, bool):
+            raise ValueError("production tied-embedding contract must be boolean")
+        runtime = getattr(config, "tied_embeddings", declared)
+        if not isinstance(runtime, bool) or runtime != declared:
+            raise ValueError("runtime tied-embedding config does not match its contract")
+        return declared
+    return bool(getattr(config, "tied_embeddings", False))
+
+
 def parameter_dtype_from_contract(torch_module, contract: dict[str, object]):
     training = contract.get("training")
     memory = training.get("memory") if isinstance(training, dict) else None
@@ -461,6 +476,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
     if any(token >= config.vocab_size for token in input_token_ids):
         raise ValueError("input token is outside model vocabulary")
     model = construct_runtime_model(torch, module, config, checkpoint["model_config"])
+    tied_embeddings = tied_embeddings_from_contract(config, checkpoint["model_config"])
     active_route = require_active_route(checkpoint, str((bound_inputs or {}).get("active_expert", arguments.active_expert)))
     root = arguments.checkpoint_manifest.parent
     required_shards = checkpoint["required_shards"]
@@ -482,7 +498,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
     shared_model_state = canonicalize_tied_embedding_state(
         torch,
         shared["model"],
-        tied_embeddings=bool(config.tied_embeddings),
+        tied_embeddings=tied_embeddings,
     )
     shared_state = materialize_state_map(shared_model_state, arguments.device)
     expert_state = None if active_route == "shared" else materialize_state_map(expert["model"], arguments.device)
@@ -490,7 +506,7 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object], bound_
     model.load_state_dict(shared_state, strict=False, assign=True)
     if active_route != "shared":
         model.load_state_dict(expert_state, strict=False, assign=True)
-    rebind_tied_embeddings(model, tied_embeddings=bool(config.tied_embeddings))
+    rebind_tied_embeddings(model, tied_embeddings=tied_embeddings)
     model.eval()
     tokens = torch.tensor([input_token_ids], device=arguments.device, dtype=torch.long)
     generated: list[int] = []
