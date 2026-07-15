@@ -43,7 +43,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(contract["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
         self.assertEqual(contract["hyperparameters"]["learning_rate"], 1e-5)
         self.assertEqual(calls["parameters"], ["parameter"])
-        self.assertEqual(calls["percentile_clipping"], 5)
+        self.assertEqual(calls["percentile_clipping"], 100)
         self.assertEqual(calls["lr"], 1e-5)
     def test_contract_retention_limit_is_used_as_the_runner_limit(self) -> None:
         contract = ROOT / "configs" / "ember-restart-3b.json"
@@ -121,5 +121,8 @@ class RunnerPreflightTests(unittest.TestCase):
 
     def test_runner_has_one_retention_implementation(self) -> None:
         self.assertEqual(inspect.getsource(run_vertical_slice).count("def _retain_after_success("), 1)
+    def test_bf16_contract_disables_unsupported_percentile_clipping(self) -> None:
+        contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        self.assertEqual(contract["hyperparameters"]["percentile_clipping"], 100)
 if __name__ == "__main__":
     unittest.main()
