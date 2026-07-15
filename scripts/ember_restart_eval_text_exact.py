@@ -19,7 +19,7 @@ def read_rows(path: Path) -> dict[str,str]:
   rows[value["id"]]=value["answer"]
  if not rows: raise ValueError("rows must be non-empty")
  return rows
-def read_predictions(path: Path) -> dict[str,str]:
+def read_predictions(path: Path) -> tuple[dict[str,object],dict[str,str]]:
  try:
   envelope=load_predictions(path)
  except ContractError as error:
