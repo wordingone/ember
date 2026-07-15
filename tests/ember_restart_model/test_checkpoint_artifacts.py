@@ -61,6 +61,24 @@ class CheckpointArtifactTests(unittest.TestCase):
         contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         realization = _optimizer_realization(optimizer, contract)
         self.assertEqual(realization["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+    def test_writes_and_restores_shared_semantic_checkpoint(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=17)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "semantic-checkpoint"
+            receipt = write_checkpoint_artifacts(
+                model, optimizer, root, launch_seed=17,
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
+                data_cursor={"shard": "TOKEN-SHARDS-V0:receipt", "record_index": 2, "global_step": 2, "tokens_seen": 2048},
+                model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+            )
+            restored = UnifiedDecoder(config, genesis_seed=18)
+            restore_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
+            load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+        self.assertEqual(receipt["active_expert_ids"], ["shared"])
+        self.assertEqual(restored.active_expert, "shared")
     def test_optimizer_realization_recomputes_runtime_class_source_hyperparameters_and_state_format(self) -> None:
         model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=11)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.02)

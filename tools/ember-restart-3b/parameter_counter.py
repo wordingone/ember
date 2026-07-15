@@ -213,7 +213,7 @@ def _inspect_realization(manifest_path: Path, *, active_expert: str, shape: Mapp
         _validate_state(payload.get("model"), _expected_expert(shape, name), label=f"expert {name}")
     return manifest
 
-def _counts(shape: Mapping[str, int]) -> dict[str, int]:
+def _counts(shape: Mapping[str, int], *, active_expert: str) -> dict[str, int]:
     hidden, layers, vocab = shape["hidden_size"], shape["layers"], shape["vocab_size"]
     head_dim = hidden // shape["attention_heads"]
     shared = (
@@ -225,7 +225,7 @@ def _counts(shape: Mapping[str, int]) -> dict[str, int]:
     )
     expert = layers * 12 * hidden * hidden
     total = shared + len(EXPERT_NAMES) * expert
-    active = shared + expert
+    active = shared if active_expert == "shared" else shared + expert
     return {
         "allocated_parameters": total,
         "unique_parameters": total,
@@ -237,8 +237,8 @@ def _counts(shape: Mapping[str, int]) -> dict[str, int]:
 
 
 def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_expert: str) -> dict[str, Any]:
-    if active_expert not in EXPERT_NAMES:
-        raise ValueError("active expert must be one of the four authorized banks")
+    if active_expert not in {*EXPERT_NAMES, "shared"}:
+        raise ValueError("active expert must be shared or one of the four authorized banks")
     config = _load_json(model_config)
     if config.get("architecture_revision") != ARCHITECTURE_REVISION:
         raise ValueError("model config revision is not ember-sparse-3b-v2")
@@ -253,7 +253,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         "subject_checkpoint_sha256": _sha256(checkpoint_manifest),
         "architecture_revision": ARCHITECTURE_REVISION,
         "counter_sha256": _sha256(Path(__file__)),
-        **_counts(shape),
+        **_counts(shape, active_expert=active_expert),
         "active_expert_ids": [active_expert],
         "expert_genesis_sha256": dict(manifest["expert_genesis_sha256"]),
     }
