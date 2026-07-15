@@ -776,14 +776,12 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   const didSeatGatedFastPath = await dispatchFastPath(argv);
   if (didSeatGatedFastPath) return;
 
-  let ownedServerOutcome: "adopted" | "spawned" | null = null;
   if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
     try {
       const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
       const ensure = opts.ensureOwnedServerFn ?? ((identity) =>
         ensureOwnedServer(identity, { verifyEndpoint }));
-      const ensured = await ensure(seatDecision.ownedIdentity);
-      ownedServerOutcome = ensured.outcome;
+      await ensure(seatDecision.ownedIdentity);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       process.stderr.write("[ember] ERROR: could not establish admitted owned server (" + message + ")\n");
@@ -799,9 +797,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   if (seatDecision.seat === "OWNED_ADMITTED" && seatDecision.ownedIdentity) {
     process.stdout.write(
       "[ember] model endpoint: " + seatDecision.ownedIdentity.endpointUrl +
-        " -- bound by admitted checkpoint manifest; " +
-        (ownedServerOutcome === "spawned" ? "supervised server started" : "verified server adopted") +
-        "\n",
+        " -- bound by admitted checkpoint manifest; supervised server started\n",
     );
   } else {
     process.stdout.write(
