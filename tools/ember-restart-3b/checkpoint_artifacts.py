@@ -231,6 +231,30 @@ def _external_checkpoint_manifest(path: Path, *, label: str) -> tuple[dict[str, 
     return dict(manifest), _sha256(path)
 
 
+def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest: Path) -> dict[str, Any]:
+    """Verify immutable parent/root bundles and history before CUDA allocation or staging."""
+
+    parent, parent_sha256 = _external_checkpoint_manifest(Path(parent_manifest), label="parent")
+    root, root_sha256 = _external_checkpoint_manifest(Path(root_manifest), label="root genesis")
+    if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
+        if parent_sha256 != root_sha256:
+            raise ValueError("first specialist successor requires parent and root to be the same genesis bundle")
+        history: list[str] = []
+    else:
+        lineage = parent.get("lineage")
+        if not isinstance(lineage, Mapping) or lineage.get("root_genesis_checkpoint_sha256") != root_sha256:
+            raise ValueError("specialist lineage root must match the immutable parent root genesis")
+        history = lineage.get("trained_expert_ids")
+        if not isinstance(history, list):
+            raise ValueError("parent lineage has invalid trained expert history")
+    if any(name not in EXPERT_NAMES for name in history) or len(set(history)) != len(history):
+        raise ValueError("parent lineage has invalid trained expert history")
+    return {
+        "parent_checkpoint_sha256": parent_sha256,
+        "root_genesis_checkpoint_sha256": root_sha256,
+        "parent_history": list(history),
+    }
+
 def _specialist_lineage(
     lineage: Mapping[str, Any], *, active_expert: str, candidate_parameter_sha256: Mapping[str, str],
 ) -> tuple[dict[str, Any], dict[str, str]]:
@@ -326,9 +350,12 @@ def write_checkpoint_artifacts(
     expert_genesis_sha256: Mapping[str, str],
     optimizer_contract: Mapping[str, Any] | None = None,
     specialist_lineage: Mapping[str, Any] | None = None,
+    max_serialized_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
+    if max_serialized_bytes is not None and (type(max_serialized_bytes) is not int or max_serialized_bytes < 1):
+        raise ValueError("max_serialized_bytes must be a positive integer")
     _validate_replay_bindings(
         launch_seed=launch_seed,
         rng_state=rng_state,
@@ -422,7 +449,10 @@ def write_checkpoint_artifacts(
         if lineage is not None:
             manifest["lineage"] = lineage
         manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
-        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+        actual_serialized_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+        if max_serialized_bytes is not None and actual_serialized_bytes > max_serialized_bytes:
+            raise ValueError("serialized checkpoint exceeds the derived byte bound")
+        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path), "serialized_bytes": actual_serialized_bytes}
         os.replace(root, published_root)
         return receipt
     except Exception:

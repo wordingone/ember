@@ -119,17 +119,23 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(result, "published")
 
     def test_publication_plan_is_exact_for_a_resumed_phase(self) -> None:
-        plan = run_vertical_slice.semantic_publication_plan(steps=2, checkpoint_interval=32, estimated_checkpoint_bytes=10, write_budget_bytes=20, initial_global_step=31)
-        self.assertEqual(plan, {"publication_count": 2, "projected_write_bytes": 20})
+        plan = run_vertical_slice.semantic_publication_plan(steps=2, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=20, initial_global_step=31)
+        self.assertEqual(plan, {"publication_count": 2, "checkpoint_byte_bound": 10, "projected_write_bytes": 20})
     def test_specialist_resume_preserves_global_counters_but_resets_new_source_cursor(self) -> None:
         cursor = {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}
         resumed = run_vertical_slice.specialist_resume_cursor(cursor, data_shard_id="VERIFIED_SPECIALIST:abc123")
         self.assertEqual(resumed, {"shard": "VERIFIED_SPECIALIST:abc123", "record_index": 0, "global_step": 19, "tokens_seen": 19_456})
+    def test_checkpoint_byte_bound_is_derived_from_the_frozen_contract(self) -> None:
+        bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json")
+        self.assertEqual(
+            bound,
+            3_839_161_856 * 2 + 1_020_589_568 * 2 + 1024**3,
+        )
     def test_semantic_publication_plan_bounds_write_budget_by_interval_and_final_checkpoint(self) -> None:
-        plan = run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, estimated_checkpoint_bytes=10, write_budget_bytes=40)
-        self.assertEqual(plan, {"publication_count": 4, "projected_write_bytes": 40})
+        plan = run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=40)
+        self.assertEqual(plan, {"publication_count": 4, "checkpoint_byte_bound": 10, "projected_write_bytes": 40})
         with self.assertRaisesRegex(ValueError, "write budget"):
-            run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, estimated_checkpoint_bytes=10, write_budget_bytes=39)
+            run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=39)
 
     def test_semantic_cli_dispatches_only_manifest_bound_stream_inputs(self) -> None:
         with patch.object(run_vertical_slice, "run_semantic", return_value={"steps": 1}) as semantic:
@@ -139,7 +145,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 [
                     "run_vertical_slice.py", "semantic", "--seed", "83", "--artifact-root", "B:/ember-artifacts",
                     "--receipt", "semantic/receipt.json", "--shards-root", "semantic/shards",
-                    "--tokenizer", "semantic/tokenizer.json", "--steps", "1", "--sequence-length", "1024", "--checkpoint-interval", "32", "--estimated-checkpoint-gib", "10", "--write-budget-gib", "24",
+                    "--tokenizer", "semantic/tokenizer.json", "--steps", "1", "--sequence-length", "1024", "--checkpoint-interval", "32", "--write-budget-gib", "24",
                 ],
             ):
                 run_vertical_slice.main()
@@ -152,7 +158,6 @@ class RunnerPreflightTests(unittest.TestCase):
             steps=1,
             sequence_length=1024,
             checkpoint_interval=32,
-            estimated_checkpoint_bytes=10 * 1024**3,
             write_budget_bytes=24 * 1024**3,
             resume_checkpoint=None,
         )
@@ -164,16 +169,30 @@ class RunnerPreflightTests(unittest.TestCase):
             parent.mkdir()
             manifest = parent / "checkpoint-manifest.json"
             manifest.write_text(json.dumps({"schema_version": "ember-sparse-checkpoint-v3"}), encoding="utf-8")
-            lineage = run_vertical_slice.specialist_lineage_request(
-                capability="image", verification=verification, resume_checkpoint=parent,
-                parent_manifest=manifest, root_manifest=manifest,
-            )
-            self.assertEqual(lineage["trained_expert_ids"], ["vision"])
-            with self.assertRaisesRegex(ValueError, "exact resumed"):
-                run_vertical_slice.specialist_lineage_request(
-                    capability="image", verification=verification, resume_checkpoint=Path(directory) / "other",
+            with patch.object(run_vertical_slice, "preflight_specialist_lineage_sources") as preflight:
+                lineage = run_vertical_slice.specialist_lineage_request(
+                    capability="image", verification=verification, resume_checkpoint=parent,
                     parent_manifest=manifest, root_manifest=manifest,
                 )
+                self.assertEqual(lineage["trained_expert_ids"], ["vision"])
+                preflight.assert_called_once_with(parent_manifest=manifest.resolve(), root_manifest=manifest.resolve())
+                with self.assertRaisesRegex(ValueError, "exact resumed"):
+                    run_vertical_slice.specialist_lineage_request(
+                        capability="image", verification=verification, resume_checkpoint=Path(directory) / "other",
+                        parent_manifest=manifest, root_manifest=manifest,
+                    )
+    def test_specialist_dispatch_does_not_enter_cuda_runner_when_lineage_preflight_fails(self) -> None:
+        verification = {"result": "VERIFIED", "capability": "image"}
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([], verification)):
+            with patch.object(run_vertical_slice, "specialist_lineage_request", side_effect=ValueError("parent shard hash mismatch")):
+                with patch.object(run_vertical_slice, "run") as cuda_runner:
+                    with self.assertRaisesRegex(ValueError, "hash mismatch"):
+                        run_vertical_slice.run_specialist(
+                            seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"),
+                            tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"),
+                            parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"),
+                        )
+        cuda_runner.assert_not_called()
     def test_specialist_cli_dispatches_one_verified_route(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
             with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json"]):
@@ -191,6 +210,10 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("--receipt", completed.stdout)
 
+    def test_nonsemantic_vertical_runner_does_not_depend_on_semantic_publication_inputs(self) -> None:
+        source = inspect.getsource(run_vertical_slice.run)
+        self.assertNotIn("checkpoint_serialization_byte_bound", source)
+        self.assertNotIn("semantic_publication_plan", source)
     def test_runner_has_one_retention_implementation(self) -> None:
         self.assertEqual(inspect.getsource(run_vertical_slice).count("def _retain_after_success("), 1)
     def test_bf16_contract_disables_unsupported_percentile_clipping(self) -> None:
