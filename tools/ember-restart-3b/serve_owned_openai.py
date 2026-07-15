@@ -131,6 +131,16 @@ def _read_bound_json_snapshot(path: Path, *, expected_sha256: str, label: str) -
     return payload, actual, snapshot
 
 
+def _same_root_snapshot(path: Path, payload: bytes) -> Path:
+    """Publish one private immutable authority copy beside its relative artifacts."""
+
+    snapshot = path.parent / f".{path.name}.{uuid.uuid4().hex}.snapshot"
+    with snapshot.open("xb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return snapshot
+
 def _config_snapshot_path(config_bytes: bytes) -> Path:
     handle = tempfile.NamedTemporaryFile("wb", suffix=".json", delete=False)
     try:
@@ -228,6 +238,7 @@ def resolve_central_owned_admission(
     run_manifest: Path,
     trusted_verifier_registry: Path,
     checkpoint_sha256: str,
+    snapshot_manifest: Path | None = None,
     runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
 ) -> dict[str, object]:
     """Execute the central seat resolver and bind its decision to the loaded checkpoint."""
@@ -236,7 +247,7 @@ def resolve_central_owned_admission(
         sys.executable,
         "-I",
         str(ROOT / "scripts" / "ember_restart" / "cli_seat.py"),
-        str(run_manifest),
+        str(snapshot_manifest if snapshot_manifest is not None else run_manifest),
         "--trusted-verifier-registry",
         str(trusted_verifier_registry),
     ]
@@ -394,11 +405,16 @@ class LoadedOwnedRuntime:
         manifest = json.loads(manifest_bytes)
         run_manifest_bytes = run_manifest.read_bytes()
         run_manifest_sha256 = hashlib.sha256(run_manifest_bytes).hexdigest()
-        admission = resolve_central_owned_admission(
-            run_manifest=run_manifest,
-            trusted_verifier_registry=trusted_verifier_registry,
-            checkpoint_sha256=checkpoint_sha256,
-        )
+        resolver_snapshot = _same_root_snapshot(run_manifest, run_manifest_bytes)
+        try:
+            admission = resolve_central_owned_admission(
+                run_manifest=run_manifest,
+                snapshot_manifest=resolver_snapshot,
+                trusted_verifier_registry=trusted_verifier_registry,
+                checkpoint_sha256=checkpoint_sha256,
+            )
+        finally:
+            resolver_snapshot.unlink(missing_ok=True)
         if sha(run_manifest) != run_manifest_sha256:
             raise ValueError("central run manifest changed during owned-seat resolution")
         try:
