@@ -113,7 +113,7 @@
                                        "hyperparameters":  {
                                                                    "learning_rate":  1e-05,
                                                                    "weight_decay":  0.01,
-                                                                   "percentile_clipping":  5,
+                                                                   "percentile_clipping":  100,
                                                                    "block_wise":  true
                                                                },
                                        "state_format":  "bitsandbytes-paged-8bit-adamw-state-dict-v1"

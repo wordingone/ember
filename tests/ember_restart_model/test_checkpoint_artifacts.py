@@ -60,7 +60,7 @@ class CheckpointArtifactTests(unittest.TestCase):
 
             import bitsandbytes as bnb
         model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=11)
-        optimizer = bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=5, block_wise=True)
+        optimizer = bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
         contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         realization = _optimizer_realization(optimizer, contract)
         self.assertEqual(realization["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
