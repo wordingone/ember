@@ -83,7 +83,7 @@ def production_memory_preflight(*, total_parameters: int, active_parameters: int
         "required_bytes": required_bytes,
         "device_free_bytes": device_free_bytes,
     }
-def checkpoint_serialization_byte_bound(config_path: Path) -> int:
+def checkpoint_serialization_byte_bound(config_path: Path, *, active_parameters: int | None = None) -> int:
     """Derive one publishable checkpoint bound from the frozen architecture and optimizer contract."""
 
     payload = json.loads(config_path.read_text(encoding="utf-8"))
@@ -99,9 +99,12 @@ def checkpoint_serialization_byte_bound(config_path: Path) -> int:
     config = RestartDecoderConfig.from_contract(config_path)
     specialist_parameters = config.layers * 12 * config.hidden_size * config.hidden_size
     shared_active_parameters = config.structural_parameter_count() - len(config.expert_names) * specialist_parameters
+    selected_active_parameters = shared_active_parameters if active_parameters is None else active_parameters
+    if type(selected_active_parameters) is not int or selected_active_parameters < shared_active_parameters or selected_active_parameters > config.structural_parameter_count():
+        raise ValueError("checkpoint serialization active parameter count is outside the frozen architecture")
     return (
         config.structural_parameter_count() * serialization["model_parameter_bytes"]
-        + shared_active_parameters * serialization["optimizer_state_bytes_per_active_parameter"]
+        + selected_active_parameters * serialization["optimizer_state_bytes_per_active_parameter"]
         + serialization["format_overhead_bytes"]
     )
 
@@ -437,8 +440,10 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
         resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
         for group in optimizer.param_groups:
             group["lr"] = 1e-5
-        resume_cursor = specialist_resume_cursor(resume_cursor, data_shard_id=data_shard_id)
+        if records_override is not None:
+            resume_cursor = specialist_resume_cursor(resume_cursor, data_shard_id=data_shard_id)
         checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
+    checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=active_parameters)
     torch.cuda.reset_peak_memory_stats()
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
@@ -469,6 +474,7 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
             expert_genesis_sha256=genesis_hashes,
             optimizer_contract=optimizer_contract,
             specialist_lineage=specialist_lineage,
+            max_serialized_bytes=checkpoint_byte_bound,
         ),
     )
     parameter_receipt = _execute_realization_counter(
@@ -600,6 +606,8 @@ def run_semantic(
         resume_cursor = dict(loaded["data_cursor"])
         initial_global_step = int(resume_cursor["global_step"])
         initial_tokens_seen = int(resume_cursor["tokens_seen"])
+    checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=shared_active_parameters)
+    publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, checkpoint_byte_bound=checkpoint_byte_bound, write_budget_bytes=write_budget_bytes, initial_global_step=initial_global_step)
     torch.cuda.reset_peak_memory_stats()
     checkpoint: dict[str, object] | None = None
 

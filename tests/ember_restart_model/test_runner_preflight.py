@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import inspect
+from contextlib import ExitStack
 import hashlib
 import json
 import tempfile
@@ -15,7 +16,7 @@ import subprocess
 from types import SimpleNamespace
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import torch
 
@@ -141,6 +142,156 @@ class RunnerPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "write budget"):
             run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=39)
 
+    def _run_semantic_with_mocks(self, *, resume: bool) -> tuple[dict[str, object], dict[str, object], MagicMock, list[int]]:
+        model = SimpleNamespace(active_expert="reasoning")
+        model._activate_expert = lambda expert: setattr(model, "active_expert", expert)
+        model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
+        optimizer = SimpleNamespace(param_groups=[{"lr": 1e-5}])
+        stream = SimpleNamespace(vocab_size=32_000, receipt_sha256="r" * 64, tokenizer_sha256="t" * 64)
+        counts = {"unique_parameters": 3_839_161_856, "active_parameters": 1_020_589_568}
+        segment_kwargs: dict[str, object] = {}
+        retention_bounds: list[int] = []
+        writer = MagicMock(return_value={"published": True})
+        parent = Path("B:/semantic-parent")
+        parent_manifest = parent / "checkpoint-manifest.json"
+        real_read_text = Path.read_text
+        genesis = {name: (index.to_bytes(1, "little") * 32).hex() for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)}
+
+        def read_text(path: Path, *args: object, **kwargs: object) -> str:
+            if path.resolve() == parent_manifest.resolve():
+                return json.dumps({"expert_genesis_sha256": genesis})
+            return real_read_text(path, *args, **kwargs)
+
+        def retain(_parent: Path, *, max_serialized_bytes: int, operation: object, **_kwargs: object) -> object:
+            retention_bounds.append(max_serialized_bytes)
+            return operation()
+
+        def segment(**kwargs: object) -> dict[str, object]:
+            segment_kwargs.update(kwargs)
+            initial = int(kwargs["initial_global_step"])
+            steps = int(kwargs["steps"])
+            interval = int(kwargs["checkpoint_every"])
+            callback = kwargs["checkpoint_callback"]
+            for step in range(initial + 1, initial + steps + 1):
+                if step % interval == 0 or step == initial + steps:
+                    callback(step, {"data_cursor": {"shard": "TOKEN-SHARDS-V0:current", "record_index": step, "global_step": step, "tokens_seen": step * 1024}})
+            return {"global_step": initial + steps, "tokens_seen": (initial + steps) * 1024, "data_cursor": {"shard": "TOKEN-SHARDS-V0:current", "record_index": initial + steps, "global_step": initial + steps, "tokens_seen": (initial + steps) * 1024}}
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=True))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "mem_get_info", return_value=(32 * 1024**3, 32 * 1024**3)))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "manual_seed_all"))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "reset_peak_memory_stats"))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "max_memory_allocated", return_value=0))
+            stack.enter_context(patch.object(run_vertical_slice.torch, "manual_seed"))
+            stack.enter_context(patch.object(run_vertical_slice.torch, "get_default_dtype", return_value=torch.float32))
+            stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
+            stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path: path))
+            stack.enter_context(patch.object(run_vertical_slice.ManifestBoundTokenStream, "from_receipt", return_value=stream))
+            stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", return_value=model))
+            stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", return_value=counts))
+            stack.enter_context(patch.object(run_vertical_slice, "build_production_optimizer", return_value=optimizer))
+            stack.enter_context(patch.object(run_vertical_slice, "_rng_state_hash", return_value={"cpu": "c" * 64, "cuda": "d" * 64}))
+            stack.enter_context(patch.object(run_vertical_slice, "_rng_state", return_value={"cpu": torch.tensor([1]), "cuda": torch.tensor([2])}))
+            stack.enter_context(patch.object(run_vertical_slice, "run_manifest_bound_semantic_segment", side_effect=segment))
+            stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=retain))
+            stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
+            stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
+            stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 7, "global_step": 31, "tokens_seen": 31 * 1024}}))
+            stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
+            stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
+            stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="h" * 64))
+            result = run_vertical_slice.run_semantic(
+                seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
+                shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=2,
+                sequence_length=1024, checkpoint_interval=32, write_budget_bytes=24 * 1024**3,
+                resume_checkpoint=parent if resume else None,
+            )
+        return result, segment_kwargs, writer, retention_bounds
+
+    def test_semantic_run_fresh_binds_publication_plan_and_writer_limit(self) -> None:
+        result, segment_kwargs, writer, retention_bounds = self._run_semantic_with_mocks(resume=False)
+        bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json", active_parameters=1_020_589_568)
+        self.assertEqual(segment_kwargs["initial_global_step"], 0)
+        self.assertEqual(segment_kwargs["initial_tokens_seen"], 0)
+        self.assertEqual(result["publication_plan"], {"publication_count": 1, "checkpoint_byte_bound": bound, "projected_write_bytes": bound})
+        self.assertEqual(retention_bounds, [run_vertical_slice.checkpoint_retention_budget_bytes(ROOT / "configs" / "ember-restart-3b.json")])
+        self.assertEqual(writer.call_count, 1)
+        self.assertEqual(writer.call_args.kwargs["max_serialized_bytes"], bound)
+
+    def test_semantic_run_resume_uses_parent_step_and_final_publication(self) -> None:
+        result, segment_kwargs, writer, _retention_bounds = self._run_semantic_with_mocks(resume=True)
+        bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json", active_parameters=1_020_589_568)
+        self.assertEqual(segment_kwargs["initial_global_step"], 31)
+        self.assertEqual(segment_kwargs["initial_tokens_seen"], 31 * 1024)
+        self.assertEqual(result["publication_plan"], {"publication_count": 2, "checkpoint_byte_bound": bound, "projected_write_bytes": 2 * bound})
+        self.assertEqual(writer.call_count, 2)
+        self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
+    def _run_vertical_resume_with_mocks(self, *, specialist: bool) -> tuple[dict[str, object], dict[str, object], MagicMock]:
+        model = SimpleNamespace(active_expert="reasoning")
+        model.train = lambda: None
+        model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
+        optimizer = SimpleNamespace(param_groups=[{"lr": 1e-5}])
+        counts = {"unique_parameters": 3_839_161_856, "active_parameters": 1_725_232_640}
+        segment_kwargs: dict[str, object] = {}
+        writer = MagicMock(return_value={"published": True})
+        parent = Path("B:/vertical-parent")
+        parent_manifest = parent / "checkpoint-manifest.json"
+        real_read_text = Path.read_text
+        genesis = {name: (index.to_bytes(1, "little") * 32).hex() for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)}
+
+        def read_text(path: Path, *args: object, **kwargs: object) -> str:
+            if path.resolve() == parent_manifest.resolve():
+                return json.dumps({"expert_genesis_sha256": genesis})
+            return real_read_text(path, *args, **kwargs)
+
+        def segment(**kwargs: object) -> dict[str, object]:
+            segment_kwargs.update(kwargs)
+            return {"losses": [0.1], "data_cursor": {"shard": str(kwargs["data_shard_id"]), "record_index": 1, "global_step": 20, "tokens_seen": 20_480}}
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=True))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "mem_get_info", return_value=(32 * 1024**3, 32 * 1024**3)))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "manual_seed_all"))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "reset_peak_memory_stats"))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "max_memory_allocated", return_value=0))
+            stack.enter_context(patch.object(run_vertical_slice.torch, "manual_seed"))
+            stack.enter_context(patch.object(run_vertical_slice.torch, "get_default_dtype", return_value=torch.float32))
+            stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
+            stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path: path))
+            stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", return_value=model))
+            stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", return_value=counts))
+            stack.enter_context(patch.object(run_vertical_slice, "build_production_optimizer", return_value=optimizer))
+            stack.enter_context(patch.object(run_vertical_slice, "_rng_state_hash", return_value={"cpu": "c" * 64, "cuda": "d" * 64}))
+            stack.enter_context(patch.object(run_vertical_slice, "_rng_state", return_value={"cpu": torch.tensor([1]), "cuda": torch.tensor([2])}))
+            stack.enter_context(patch.object(run_vertical_slice, "run_pretraining_segment", side_effect=segment))
+            stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=lambda _parent, *, operation, **_kwargs: operation()))
+            stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
+            stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
+            stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}}))
+            stack.enter_context(patch.object(run_vertical_slice, "load_authorized_records", return_value=([{"active_expert": "shared"}], {"input_identity": {"shard_path": "TOKEN-SHARDS-V0:prior"}}, {"receipt": "bound"})))
+            stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
+            stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
+            stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="h" * 64))
+            result = run_vertical_slice.run(
+                seed=84, artifact_root=Path("B:/vertical-artifacts"), resume_checkpoint=parent,
+                records_override=[{"active_expert": "vision"}] if specialist else None,
+                specialist_verification={"data_manifest_sha256": "a" * 64} if specialist else None,
+                specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest)} if specialist else None,
+            )
+        return result, segment_kwargs, writer
+
+    def test_vertical_resume_preserves_owned_cursor_but_resets_only_specialist_cursor(self) -> None:
+        _ordinary_result, ordinary_kwargs, ordinary_writer = self._run_vertical_resume_with_mocks(specialist=False)
+        _specialist_result, specialist_kwargs, specialist_writer = self._run_vertical_resume_with_mocks(specialist=True)
+        bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json", active_parameters=1_725_232_640)
+        self.assertEqual(ordinary_kwargs["initial_data_cursor"], 37)
+        self.assertEqual(ordinary_kwargs["initial_global_step"], 19)
+        self.assertEqual(specialist_kwargs["initial_data_cursor"], 0)
+        self.assertEqual(specialist_kwargs["initial_global_step"], 19)
+        self.assertTrue(str(specialist_kwargs["data_shard_id"]).startswith("VERIFIED_SPECIALIST:"))
+        self.assertEqual(ordinary_writer.call_args.kwargs["max_serialized_bytes"], bound)
+        self.assertEqual(specialist_writer.call_args.kwargs["max_serialized_bytes"], bound)
     def test_semantic_cli_dispatches_only_manifest_bound_stream_inputs(self) -> None:
         with patch.object(run_vertical_slice, "run_semantic", return_value={"steps": 1}) as semantic:
             with patch.object(
@@ -216,7 +367,7 @@ class RunnerPreflightTests(unittest.TestCase):
 
     def test_nonsemantic_vertical_runner_does_not_depend_on_semantic_publication_inputs(self) -> None:
         source = inspect.getsource(run_vertical_slice.run)
-        self.assertNotIn("checkpoint_serialization_byte_bound", source)
+        self.assertIn("checkpoint_serialization_byte_bound", source)
         self.assertNotIn("semantic_publication_plan", source)
     def test_runner_has_one_retention_implementation(self) -> None:
         self.assertEqual(inspect.getsource(run_vertical_slice).count("def _retain_after_success("), 1)
