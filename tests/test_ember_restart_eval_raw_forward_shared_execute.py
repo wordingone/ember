@@ -31,3 +31,5 @@ def test_execute_shared_route_loads_only_shared_state(tmp_path, monkeypatch):
     result = MODULE.execute(arguments, checkpoint, model_source_bytes=source.read_bytes())
 
     assert result["active_expert"] == "shared"
+    assert result["parameter_counter_sha256"] == "c" * 64
+    assert result["trusted_verifier_registry_sha256"] == "d" * 64
