@@ -36,8 +36,8 @@ def test_execute_specialist_route_loads_only_shared_and_selected_expert(tmp_path
         encoding="utf-8",
     )
     shared_path, expert_path = tmp_path / "shared.pt", tmp_path / "expert-tool.pt"
-    torch.save({"model": {"weight": torch.zeros(1)}}, shared_path)
-    torch.save({"expert": "tool", "model": {"layers.0.experts.tool.weight": torch.zeros(4, 1)}}, expert_path)
+    torch.save({"model": {"weight": torch.zeros(1, dtype=torch.bfloat16)}}, shared_path)
+    torch.save({"expert": "tool", "model": {"layers.0.experts.tool.weight": torch.zeros(4, 1, dtype=torch.bfloat16)}}, expert_path)
     shared_sha = hashlib.sha256(shared_path.read_bytes()).hexdigest()
     expert_sha = hashlib.sha256(expert_path.read_bytes()).hexdigest()
     loaded = []
@@ -61,7 +61,7 @@ def test_execute_specialist_route_loads_only_shared_and_selected_expert(tmp_path
     )
     checkpoint = {
         "active_expert_ids": ["tool"],
-        "model_config": {},
+        "model_config": {"training": {"memory": {"parameter_dtype": "bfloat16", "parameter_bytes": 2}}},
         "model_config_sha256": "a" * 64,
         "tokenizer_sha256": "b" * 64,
         "checkpoint_manifest_sha256": "0" * 64,
