@@ -25,6 +25,7 @@ def test_freezes_aligned_bfcl_simple_prompt_and_oracle_pairs(tmp_path):
     assert [item["id"] for item in value["tasks"]] == ["simple_python_0", "simple_java_0", "simple_javascript_0"]
     assert value["tasks"][0]["functions"] == []
     assert value["tasks"][0]["category"] == "simple_python"
+    assert value["tasks"][0]["question"] == []
 
 
 def test_refuses_misaligned_bfcl_simple_oracle(tmp_path):
