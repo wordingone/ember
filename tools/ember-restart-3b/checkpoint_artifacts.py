@@ -350,7 +350,7 @@ def load_checkpoint_artifacts(
         raise ValueError("checkpoint receipt lacks the four expert hashes")
     if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES):
         raise ValueError("checkpoint receipt lacks the four expert genesis hashes")
-    if not isinstance(active, list) or len(active) != 1 or active[0] not in EXPERT_NAMES:
+    if not isinstance(active, list) or len(active) != 1 or active[0] not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("checkpoint receipt lacks exactly one declared active expert")
     records = _validated_records(root, receipt)
 
