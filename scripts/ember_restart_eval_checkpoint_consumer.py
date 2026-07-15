@@ -78,6 +78,14 @@ def _verify(manifest_path: Path, model_config: Path) -> dict[str, object]:
     for expert in EXPERTS:
         if manifest["expert_checkpoint_sha256"][expert] != records[f"expert-{expert}.pt"]["sha256"]:
             raise ValueError(f"checkpoint expert shard binding mismatch: {expert}")
+    for expert in EXPERTS:
+        genesis = manifest_path.parent / "genesis" / f"{expert}.json"
+        if not genesis.is_file() or _sha256(genesis) != manifest["expert_genesis_sha256"][expert]:
+            raise ValueError(f"checkpoint expert genesis evidence mismatch: {expert}")
+        evidence = json.loads(genesis.read_text(encoding="utf-8"))
+        if not isinstance(evidence, dict) or evidence != {"schema_version": "ember-expert-genesis-v1", "expert": expert}:
+            raise ValueError(f"checkpoint expert genesis evidence schema mismatch: {expert}")
+
     contract = manifest["optimizer_contract"]
     if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"} or not all(isinstance(contract[field], str) and contract[field] for field in ("name", "implementation", "state_format")) or not isinstance(contract["hyperparameters"], dict) or not contract["hyperparameters"]:
         raise ValueError("checkpoint optimizer contract is invalid")
