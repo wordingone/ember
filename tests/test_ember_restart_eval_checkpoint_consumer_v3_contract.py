@@ -28,6 +28,9 @@ def write_v3(root: Path, *, mutate=None) -> Path:
         artifact=genesis/f"{expert}.json";artifact.write_text(json.dumps({"schema_version":"ember-expert-genesis-v1","expert":expert}),encoding="utf-8");genesis_hashes[expert]=_sha(artifact)
         shard=root/f"expert-{expert}.pt";torch.save({"expert":expert,"genesis_sha256":genesis_hashes[expert],"model":{}},shard);records.append({"path":shard.name,"role":f"expert_{expert}","bytes":shard.stat().st_size,"sha256":_sha(shard)})
     manifest={"schema_version":"ember-sparse-checkpoint-v3","launch_seed":82,"rng_state_sha256":{"cpu":hashlib.sha256(cpu.numpy().tobytes()).hexdigest(),"cuda":hashlib.sha256(cuda.numpy().tobytes()).hexdigest()},"data_cursor":cursor,"model_config_sha256":_sha(config),"contract_sha256":"d"*64,"active_expert_ids":["tool"],"expert_genesis_sha256":genesis_hashes,"expert_checkpoint_sha256":{name:next(x["sha256"] for x in records if x["path"]==f"expert-{name}.pt") for name in EXPERTS},"shared_optimizer_shard_sha256":records[0]["sha256"],"optimizer_contract":contract,"optimizer_realization":realization,"shards":records}
+    manifest["contract_version"]=3
+    manifest["architecture_revision"]="ember-sparse-3b-v2"
+    manifest["architecture"]={"revision":"ember-sparse-3b-v2","allocated_parameters":3839161856,"unique_parameters":3839161856,"trainable_parameters":3839161856,"served_parameters":3839161856,"active_parameters":1725232640,"episode_trainable_parameters":1725232640,"shared_text_ffn":"always_active_SwiGLU_4H"}
     if mutate: mutate(manifest)
     path=root/"checkpoint-manifest.json";path.write_text(json.dumps(manifest),encoding="utf-8");return path
 def invoke(manifest:Path,output:Path): return subprocess.run([sys.executable,str(SCRIPT),"verify",str(manifest),"--model-config",str(manifest.parent/"config.json"),"--output",str(output)],capture_output=True,text=True)
@@ -40,3 +43,9 @@ def test_rejects_missing_optimizer_contract_before_output():
 def test_rejects_wrong_expert_checkpoint_mapping_before_output():
  with tempfile.TemporaryDirectory()as temporary:
   root=Path(temporary);output=root/"receipt.json";completed=invoke(write_v3(root,mutate=lambda x:x["expert_checkpoint_sha256"].__setitem__("tool","0"*64)),output);assert completed.returncode!=0 and not output.exists()
+def test_rejects_missing_central_contract_version_before_output():
+ with tempfile.TemporaryDirectory()as temporary:
+  root=Path(temporary);output=root/"receipt.json";completed=invoke(write_v3(root,mutate=lambda x:x.pop("contract_version",None)),output);assert completed.returncode!=0 and not output.exists()
+def test_rejects_missing_central_architecture_declaration_before_output():
+ with tempfile.TemporaryDirectory()as temporary:
+  root=Path(temporary);output=root/"receipt.json";completed=invoke(write_v3(root,mutate=lambda x:x.pop("architecture",None)),output);assert completed.returncode!=0 and not output.exists()

@@ -15,6 +15,8 @@ EXPERTS = ("vision", "audio", "reasoning", "tool")
 SHARDS = {"shared.pt": "shared_model_and_optimizer", "replay-state.pt": "replay_state", **{f"expert-{name}.pt": f"expert_{name}" for name in EXPERTS}}
 MANIFEST_FIELDS = {"schema_version", "launch_seed", "rng_state_sha256", "data_cursor", "model_config_sha256", "contract_sha256", "active_expert_ids", "expert_genesis_sha256", "expert_checkpoint_sha256", "shared_optimizer_shard_sha256", "optimizer_contract", "optimizer_realization", "shards"}
 
+MANIFEST_FIELDS |= {"contract_version", "architecture_revision"}
+MANIFEST_FIELDS |= {"architecture"}
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -36,6 +38,16 @@ def _verify(manifest_path: Path, model_config: Path) -> dict[str, object]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or set(manifest) != MANIFEST_FIELDS or manifest.get("schema_version") != "ember-sparse-checkpoint-v3":
         raise ValueError("corrected checkpoint requires closed v3 manifest")
+    if manifest.get("contract_version") != 3 or manifest.get("architecture_revision") != "ember-sparse-3b-v2":
+        raise ValueError("corrected checkpoint central architecture contract mismatch")
+    active = manifest["active_expert_ids"]
+    if not isinstance(active, list) or len(active) != 1 or active[0] not in ("shared", *EXPERTS):
+        raise ValueError("checkpoint active expert identity is invalid")
+    active_parameters = 1020589568 if active[0] == "shared" else 1725232640
+    expected_architecture={"revision":"ember-sparse-3b-v2","allocated_parameters":3839161856,"unique_parameters":3839161856,"trainable_parameters":3839161856,"served_parameters":3839161856,"active_parameters":active_parameters,"episode_trainable_parameters":active_parameters,"shared_text_ffn":"always_active_SwiGLU_4H"}
+    if manifest.get("architecture") != expected_architecture:
+        raise ValueError("corrected checkpoint central architecture evidence mismatch")
+
     if not isinstance(manifest["launch_seed"], int) or manifest["launch_seed"] < 0:
         raise ValueError("checkpoint launch seed is invalid")
     rng = manifest["rng_state_sha256"]
@@ -51,9 +63,6 @@ def _verify(manifest_path: Path, model_config: Path) -> dict[str, object]:
     config = json.loads(model_config.read_text(encoding="utf-8"))
     if not isinstance(config, dict) or not isinstance(config.get("training"), dict):
         raise ValueError("checkpoint model config training contract is invalid")
-    active = manifest["active_expert_ids"]
-    if not isinstance(active, list) or len(active) != 1 or active[0] not in EXPERTS:
-        raise ValueError("checkpoint active expert identity is invalid")
     records: dict[str, dict[str, object]] = {}
     if not isinstance(manifest["shards"], list) or len(manifest["shards"]) != len(SHARDS):
         raise ValueError("checkpoint v3 shard set is incomplete")
