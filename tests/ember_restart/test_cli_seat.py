@@ -36,6 +36,9 @@ def test_resolver_derives_owned_identity_from_admitted_bytes(tmp_path: Path):
     payload = json.loads(result.stdout)
     manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
     checkpoint_sha256 = manifest["checkpoint"]["sha256"]
+    serving = json.loads(
+        (tmp_path / manifest["cli"]["serving_manifest_path"]).read_text(encoding="utf-8")
+    )
     assert payload == {
         "checkpoint_sha256": checkpoint_sha256,
         "endpoint_url": "http://127.0.0.1:8083",
@@ -45,6 +48,7 @@ def test_resolver_derives_owned_identity_from_admitted_bytes(tmp_path: Path):
         "model_name": f"ember-owned:{checkpoint_sha256[:12]}",
         "run_id": manifest["run_id"],
         "seat": "OWNED_ADMITTED",
+        "server_source_sha256": serving["server_implementation"]["sha256"],
         "valid": True,
     }
 

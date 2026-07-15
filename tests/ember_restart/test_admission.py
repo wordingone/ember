@@ -286,6 +286,10 @@ print(json.dumps({
         )
     manifest["evaluations"] = evaluations
 
+    server_source = tmp_path / "serving" / "serve_owned.py"
+    server_source.parent.mkdir(parents=True, exist_ok=True)
+    server_source.write_text("print('owned serving runtime')\n", encoding="utf-8")
+
     serving_manifest = tmp_path / "serving" / "owned-seat.json"
     serving_hash = _write_json(
         serving_manifest,
@@ -296,6 +300,10 @@ print(json.dumps({
             "endpoint_url": "http://127.0.0.1:8083",
             "protocol": "openai-chat-v1",
             "identity_path": "/v1/models",
+            "server_implementation": {
+                "path": str(server_source.relative_to(tmp_path)),
+                "sha256": _sha256(server_source),
+            },
         },
     )
     manifest["cli"] = {
@@ -351,6 +359,44 @@ def test_admission_rejects_remote_or_unbound_serving_endpoint(tmp_path: Path):
 
     assert result.returncode != 0
     assert "cli serving manifest: endpoint_url must be loopback HTTP" in result.stdout
+
+
+def test_admission_rejects_missing_or_tampered_server_source(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    serving_path = tmp_path / manifest["cli"]["serving_manifest_path"]
+    serving = json.loads(serving_path.read_text(encoding="utf-8"))
+    source_path = tmp_path / serving["server_implementation"]["path"]
+
+    serving.pop("server_implementation")
+    manifest["cli"]["sha256"] = _write_json(serving_path, serving)
+    _write_json(manifest_path, manifest)
+    missing = subprocess.run(
+        [sys.executable, str(VALIDATOR), "validate", str(manifest_path),
+         "--trusted-verifier-registry", str(tmp_path / "trusted-verifiers.json")],
+        cwd=REPO_ROOT, text=True, capture_output=True, check=False,
+    )
+    assert missing.returncode != 0
+    assert "cli serving manifest.server_implementation: expected object" in missing.stdout
+
+    tampered_root = tmp_path / "tampered"
+    tampered_root.mkdir()
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tampered_root)
+    manifest_path = tampered_root / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    serving_path = tampered_root / manifest["cli"]["serving_manifest_path"]
+    serving = json.loads(serving_path.read_text(encoding="utf-8"))
+    source_path = tampered_root / serving["server_implementation"]["path"]
+    source_path.write_text("print('tampered runtime')\n", encoding="utf-8")
+    tampered = subprocess.run(
+        [sys.executable, str(VALIDATOR), "validate", str(manifest_path),
+         "--trusted-verifier-registry", str(tampered_root / "trusted-verifiers.json")],
+        cwd=REPO_ROOT, text=True, capture_output=True, check=False,
+    )
+    assert tampered.returncode != 0
+    assert "cli serving manifest.server_implementation.sha256: content hash mismatch" in tampered.stdout
+
 
 def test_admission_rejects_measurement_envelope_without_executed_evidence(tmp_path: Path):
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
