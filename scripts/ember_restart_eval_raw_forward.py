@@ -31,6 +31,22 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def validate_state_map(state: object, expected: dict[str, object], label: str) -> None:
+    if not isinstance(state, dict):
+        raise ValueError(f"{label} state is not a mapping")
+    actual_keys, expected_keys = set(state), set(expected)
+    if actual_keys - expected_keys:
+        raise ValueError(f"{label} state has unexpected keys")
+    if expected_keys - actual_keys:
+        raise ValueError(f"{label} state has missing keys")
+    for key in expected_keys:
+        actual, reference = state[key], expected[key]
+        if not hasattr(actual, "shape") or not hasattr(reference, "shape") or tuple(actual.shape) != tuple(reference.shape):
+            raise ValueError(f"{label} state shape mismatch: {key}")
+        if actual.dtype != reference.dtype:
+            raise ValueError(f"{label} state dtype mismatch: {key}")
+
+
 def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dict[str, object]:
     import torch
 
@@ -52,6 +68,14 @@ def execute(arguments: argparse.Namespace, checkpoint: dict[str, object]) -> dic
         raise ValueError("shared checkpoint lacks a model state")
     if not isinstance(expert, dict) or expert.get("expert") != arguments.active_expert or not isinstance(expert.get("model"), dict):
         raise ValueError("selected expert checkpoint is invalid")
+    expected = model.state_dict()
+    shared_expected = {key: value for key, value in expected.items() if ".experts." not in key}
+    expert_marker = f".experts.{arguments.active_expert}."
+    expert_expected = {key: value for key, value in expected.items() if expert_marker in key}
+    validate_state_map(shared["model"], shared_expected, "shared")
+    validate_state_map(expert["model"], expert_expected, f"expert {arguments.active_expert}")
+    if not expert_expected:
+        raise ValueError("selected expert has no expected model parameters")
     model.load_state_dict(shared["model"], strict=False, assign=True)
     model.load_state_dict(expert["model"], strict=False, assign=True)
     model.eval()
