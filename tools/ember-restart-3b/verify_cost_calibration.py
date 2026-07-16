@@ -46,6 +46,20 @@ def verify(certificate_path: Path, receipt_path: Path) -> dict[str, object]:
     for field in scalar_binding_fields:
         if receipt.get(field) != receipt_binding[field]:
             raise ValueError(f"receipt binding {field} mismatch")
+    required_source_closure_fields = {
+        "batch.py",
+        "model.py",
+        "native_compute_screen.py",
+        "parameter_counter.py",
+        "run_vertical_slice.py",
+        "semantic_stream.py",
+    }
+    bound_source_closure = receipt_binding["source_closure_sha256"]
+    if not isinstance(bound_source_closure, dict) or set(bound_source_closure) != required_source_closure_fields:
+        raise ValueError("certificate must bind the canonical six-file source closure")
+    for digest in bound_source_closure.values():
+        if not isinstance(digest, str) or len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+            raise ValueError("source closure values must be lowercase SHA-256 digests")
     custody = receipt.get("custody")
     if not isinstance(custody, dict):
         raise ValueError("receipt custody must be an object")

@@ -40,6 +40,9 @@ class CostCalibrationReceiptTests(unittest.TestCase):
                     "batch.py": "093b4e3c50a6e099b1ac46746729f673522a2f902d18822fb8cef4f4a608f92d",
                     "model.py": "5609032c21aa6020ddc7a492ab5817a86d425571ae81a46efe951c784e70c5bf",
                     "native_compute_screen.py": "1f4616bce05177ce85f7708353ba535bbd8c0521f0e1999719c3c1a79b3d49d6",
+                    "parameter_counter.py": "6bb505470775a5b36c764a96a7b1e3475b4eaecce339b594efbaf9e16e8ce873",
+                    "run_vertical_slice.py": "9926071dcdec326aed9519b2d45d90d4d7ab9865f331366db310a569bb7b6f9d",
+                    "semantic_stream.py": "143ac866cc007068cdc02526acd3684e6ad96ca6ed99debadee71d64cbc1f978",
                 }
             },
             "steps": [
@@ -68,6 +71,9 @@ class CostCalibrationReceiptTests(unittest.TestCase):
                     "batch.py": "093b4e3c50a6e099b1ac46746729f673522a2f902d18822fb8cef4f4a608f92d",
                     "model.py": "5609032c21aa6020ddc7a492ab5817a86d425571ae81a46efe951c784e70c5bf",
                     "native_compute_screen.py": "1f4616bce05177ce85f7708353ba535bbd8c0521f0e1999719c3c1a79b3d49d6",
+                    "parameter_counter.py": "6bb505470775a5b36c764a96a7b1e3475b4eaecce339b594efbaf9e16e8ce873",
+                    "run_vertical_slice.py": "9926071dcdec326aed9519b2d45d90d4d7ab9865f331366db310a569bb7b6f9d",
+                    "semantic_stream.py": "143ac866cc007068cdc02526acd3684e6ad96ca6ed99debadee71d64cbc1f978",
                 },
             },
             "anchor": {
@@ -86,14 +92,17 @@ class CostCalibrationReceiptTests(unittest.TestCase):
             "credit": "NON_ADMISSIBLE_COMPUTE_PRIMITIVE_AND_COST_CALIBRATION_ONLY",
         }
 
-    def _run(self, receipt: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    def _run(self, receipt: dict[str, object], *, rebind_source_closure: bool = False) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             receipt_path = root / "receipt.json"
             receipt_bytes = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
             receipt_path.write_bytes(receipt_bytes)
             certificate_path = root / "certificate.json"
-            certificate_path.write_text(json.dumps(self._certificate(receipt_bytes)), encoding="utf-8")
+            certificate = self._certificate(receipt_bytes)
+            if rebind_source_closure:
+                certificate["receipt_binding"]["source_closure_sha256"] = dict(receipt["custody"]["source_closure_sha256"])  # type: ignore[index]
+            certificate_path.write_text(json.dumps(certificate), encoding="utf-8")
             return subprocess.run(
                 [sys.executable, str(VERIFIER), "--certificate", str(certificate_path), "--receipt", str(receipt_path)],
                 capture_output=True,
@@ -136,6 +145,27 @@ class CostCalibrationReceiptTests(unittest.TestCase):
         result = self._run(receipt)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("receipt binding source_closure_sha256 mismatch", result.stderr)
+
+    def test_rejects_source_closure_missing_a_canonical_file_even_when_rebound(self) -> None:
+        receipt = self._receipt()
+        del receipt["custody"]["source_closure_sha256"]["semantic_stream.py"]  # type: ignore[index]
+        result = self._run(receipt, rebind_source_closure=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("canonical six-file source closure", result.stderr)
+
+    def test_rejects_source_closure_with_an_extra_file_even_when_rebound(self) -> None:
+        receipt = self._receipt()
+        receipt["custody"]["source_closure_sha256"]["unreviewed.py"] = "a" * 64  # type: ignore[index]
+        result = self._run(receipt, rebind_source_closure=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("canonical six-file source closure", result.stderr)
+
+    def test_rejects_source_closure_with_noncanonical_digest_even_when_rebound(self) -> None:
+        receipt = self._receipt()
+        receipt["custody"]["source_closure_sha256"]["batch.py"] = "A" * 64  # type: ignore[index]
+        result = self._run(receipt, rebind_source_closure=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("lowercase SHA-256", result.stderr)
 
 
 if __name__ == "__main__":
