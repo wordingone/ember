@@ -11,6 +11,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import threading
 import tempfile
 import time
 from pathlib import Path
@@ -355,6 +357,68 @@ def _atomic_json(path: Path, payload: dict[str, object]) -> None:
     os.replace(temporary, path)
 
 
+def _power_sample() -> dict[str, object]:
+    """Read one GPU-board power sample from the driver, never from self-reported model state."""
+
+    completed = subprocess.run(
+        ["nvidia-smi", "--query-gpu=power.draw,power.limit,driver_version,name", "--format=csv,noheader,nounits"],
+        text=True, capture_output=True, check=False, timeout=5,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or "nvidia-smi power query failed")
+    fields = [field.strip() for field in completed.stdout.strip().split(",")]
+    if len(fields) != 4:
+        raise RuntimeError("nvidia-smi power query emitted an invalid row")
+    return {"monotonic_s": time.monotonic(), "watts": float(fields[0]), "power_limit_w": float(fields[1]), "driver_version": fields[2], "gpu_name": fields[3]}
+
+
+class _PowerSampler:
+    """Low-overhead same-run GPU-board sampler; failures remove efficiency credit, not training custody."""
+
+    def __init__(self, cadence_s: float = 1.0) -> None:
+        self.cadence_s = cadence_s
+        self.samples: list[dict[str, object]] = []
+        self.missing_sample_count = 0
+        self.errors: list[str] = []
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=self.cadence_s + 6.0)
+        if self._thread.is_alive():
+            self.missing_sample_count += 1
+            self.errors.append("power sampler did not stop")
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                self.samples.append(_power_sample())
+            except Exception as error:
+                self.missing_sample_count += 1
+                self.errors.append(f"{type(error).__name__}: {error}")
+            self._stop.wait(self.cadence_s)
+
+
+def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_processed: int, active_parameters: int, target_vector_sha256: str, checkpoint_manifest_sha256: str) -> dict[str, object]:
+    """Derive board-energy quantities from raw same-run driver samples, or mark credit unavailable."""
+
+    raw = json.dumps(trace, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    samples = trace.get("samples")
+    missing = trace.get("missing_sample_count")
+    cadence = trace.get("sampling_cadence_s")
+    if not isinstance(samples, list) or not isinstance(missing, int) or not isinstance(cadence, (int, float)) or cadence <= 0:
+        raise ValueError("power trace has an invalid closed shape")
+    watts = [sample.get("watts") for sample in samples if isinstance(sample, dict)]
+    if not watts or any(not isinstance(value, (int, float)) or value <= 0 for value in watts):
+        return {"result": "UNAVAILABLE", "energy_scope": "GPU_BOARD_ONLY", "raw_power_trace_sha256": hashlib.sha256(raw).hexdigest(), "sampling_cadence_s": cadence, "missing_sample_count": missing, "wall_s": wall_s, "tokens_processed": tokens_processed, "target_vector_sha256": target_vector_sha256, "checkpoint_manifest_sha256": checkpoint_manifest_sha256, "evaluation_receipt_sha256": None}
+    mean = sum(float(value) for value in watts) / len(watts)
+    joules = mean * wall_s
+    return {"result": "MEASURED", "energy_scope": "GPU_BOARD_ONLY", "raw_power_trace_sha256": hashlib.sha256(raw).hexdigest(), "sampling_cadence_s": cadence, "missing_sample_count": missing, "gpu_joules": joules, "mean_watts": mean, "peak_watts": max(float(value) for value in watts), "gpu_power_limit_w": float(samples[-1]["power_limit_w"]), "gpu_driver_version": samples[-1]["driver_version"], "gpu_name": samples[-1]["gpu_name"], "wall_s": wall_s, "tokens_processed": tokens_processed, "active_flops": active_parameters * 6 * tokens_processed, "tok_s": tokens_processed / wall_s, "tok_per_gpu_joule": tokens_processed / joules, "target_vector_sha256": target_vector_sha256, "first_target_crossing_step": None, "checkpoint_manifest_sha256": checkpoint_manifest_sha256, "evaluation_receipt_sha256": None}
+
 def _full_step(*, model: UnifiedDecoder, optimizer: torch.optim.Optimizer, record: dict[str, object], config: RestartDecoderConfig, batch_size: int, device: torch.device) -> dict[str, object]:
     batch = decode_owned_batch(record, config, device=device)
     input_ids = batch["input_ids"].repeat(batch_size, 1)
@@ -413,6 +477,9 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
     record, _ = stream.next_episode(shard_index=0, token_offset=0, sequence_length=_SEQUENCE_LENGTH)
     steps: list[dict[str, object]] = []
     counts: dict[str, object] | None = None
+    sampler = _PowerSampler(cadence_s=1.0)
+    screen_started = time.perf_counter()
+    sampler.start()
     for batch_size in _REQUIRED_BATCHES:
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -431,6 +498,13 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         steps.append(_full_step(model=model, optimizer=optimizer, record=record, config=config, batch_size=batch_size, device=device))
         del optimizer, model
         torch.cuda.empty_cache()
+    sampler.stop()
+    wall_s = time.perf_counter() - screen_started
+    power_trace = {"schema_version": "ember-gpu-board-power-trace-v1", "sampling_cadence_s": sampler.cadence_s, "missing_sample_count": sampler.missing_sample_count, "errors": sampler.errors, "samples": sampler.samples}
+    power_trace_path = output.with_name(output.stem + ".power-trace.json")
+    _atomic_json(power_trace_path, power_trace)
+    target_vector_sha256 = hashlib.sha256(json.dumps({"sequence_length": _SEQUENCE_LENGTH, "required_batches": list(_REQUIRED_BATCHES)}, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    efficiency = _power_efficiency(trace=power_trace, wall_s=wall_s, tokens_processed=sum(_SEQUENCE_LENGTH * batch for batch in _REQUIRED_BATCHES), active_parameters=int(counts["active_parameters"]) if counts else 0, target_vector_sha256=target_vector_sha256, checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest))
     if _source_closure(root) != source_closure_before:
         raise RuntimeError("native screen source closure changed before receipt publication")
     result = screen_receipt(
@@ -450,6 +524,8 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         "stream_receipt_sha256": stream.receipt_sha256,
         "total_parameters": counts["unique_parameters"] if counts else None,
         "active_parameters": counts["active_parameters"] if counts else None,
+        "power_trace_path": power_trace_path.name,
+        "energy_efficiency": efficiency,
         "validated_external": {
             "emberd_schedule": schedule_binding,
             "disk_preflight": disk_preflight_binding,
