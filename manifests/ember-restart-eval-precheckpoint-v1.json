@@ -108,16 +108,49 @@
                   },
     "claim_rule":  "No result is admissible until every required native capability family has a checkpoint-bound frozen score or a visible failure record.",
     "frozen_family_artifacts":  {
-                                    "text": {"path": "manifests/ember-restart-gsm8k-custody-v1.json", "sha256": "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6"},
-                                    "reasoning": {"path": "manifests/ember-restart-mmlu-pro-custody-v1.json", "sha256": "e3b28449e918fb50ed0b26f7bd8f09adab30b068be19a0d34fe5a03584942f63"},
-                                    "code": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "6509403e4ff759b89adc31efcbcb28d6efb8d48eb00b088d9f4cacecfcab611c"},
-                                    "mathematics": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "6509403e4ff759b89adc31efcbcb28d6efb8d48eb00b088d9f4cacecfcab611c"},
-                                    "terminal": {"path": "manifests/ember-restart-terminal-bench-custody-v1.json", "sha256": "2065ef84c0f92f9dd0d10c12c98a792c1a8254d2de65c6faf391d552f8e25fc2"},
-                                    "sql": {"path": "manifests/ember-restart-spider-custody-v1.json", "sha256": "de3750c0abf6a90bffbdf22f14e80260ca8f0df17c1bd35ae1b2a508f8453878"},
-                                    "files": {"path": "manifests/ember-restart-swebench-custody-v1.json", "sha256": "084f8696742b69eee00db0776fd9216c3147b92afc2e825710666fa16f807621"},
-                                    "browser_ui": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"},
-                                    "image": {"path": "manifests/ember-restart-mmmu-validation-custody-v1.json", "sha256": "b72171bb5928cffb460e70b0019205a990f0256055c86b761c5c09325c99d4b2"},
-                                    "audio": {"path": "manifests/ember-restart-audiobench-custody-v1.json", "sha256": "fbd84002cbdebf801049543815c753a077cdb063b160e3ea05c7d93b0938bca6"},
-                                    "structured_tools": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"}
+                                    "text":  {
+                                                 "path":  "manifests/ember-restart-gsm8k-custody-v1.json",
+                                                 "sha256":  "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6"
+                                             },
+                                    "reasoning":  {
+                                                      "path":  "manifests/ember-restart-mmlu-pro-custody-v1.json",
+                                                      "sha256":  "e3b28449e918fb50ed0b26f7bd8f09adab30b068be19a0d34fe5a03584942f63"
+                                                  },
+                                    "code":  {
+                                                 "path":  "manifests/ember-restart-eval-code-math-custody-v1.json",
+                                                 "sha256":  "90a29f1bf86f489f244eaa3ea220dc3caed354276ad3ddc607cd92f810e3729c"
+                                             },
+                                    "mathematics":  {
+                                                        "path":  "manifests/ember-restart-eval-code-math-custody-v1.json",
+                                                        "sha256":  "90a29f1bf86f489f244eaa3ea220dc3caed354276ad3ddc607cd92f810e3729c"
+                                                    },
+                                    "terminal":  {
+                                                     "path":  "manifests/ember-restart-terminal-bench-custody-v1.json",
+                                                     "sha256":  "2065ef84c0f92f9dd0d10c12c98a792c1a8254d2de65c6faf391d552f8e25fc2"
+                                                 },
+                                    "sql":  {
+                                                "path":  "manifests/ember-restart-spider-custody-v1.json",
+                                                "sha256":  "b6671168a42ea4ac351e779d134a0c0374c800ff3c91282bdd1bcc4741c25c21"
+                                            },
+                                    "files":  {
+                                                  "path":  "manifests/ember-restart-swebench-custody-v1.json",
+                                                  "sha256":  "084f8696742b69eee00db0776fd9216c3147b92afc2e825710666fa16f807621"
+                                              },
+                                    "browser_ui":  {
+                                                       "path":  "manifests/ember-restart-eval-browser-tool-custody-v1.json",
+                                                       "sha256":  "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"
+                                                   },
+                                    "image":  {
+                                                  "path":  "manifests/ember-restart-mmmu-validation-custody-v1.json",
+                                                  "sha256":  "09d1c9586049a3bf323c2118573979e0898cd6f4eb2a22b4615b32b97f6321f0"
+                                              },
+                                    "audio":  {
+                                                  "path":  "manifests/ember-restart-audiobench-custody-v1.json",
+                                                  "sha256":  "fbd84002cbdebf801049543815c753a077cdb063b160e3ea05c7d93b0938bca6"
+                                              },
+                                    "structured_tools":  {
+                                                             "path":  "manifests/ember-restart-eval-browser-tool-custody-v1.json",
+                                                             "sha256":  "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"
+                                                         }
                                 }
 }
