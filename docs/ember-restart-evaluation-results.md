@@ -32,6 +32,10 @@ canonical-envelope scorers. Their outputs remain `PREFLIGHT_ONLY` with a failed
 criterion until a conforming checkpoint prediction envelope is produced. HellaSwag
 is explicitly held at `NOT_EXECUTABLE_NO_FROZEN_LABELS`; its frozen test split
 withholds labels, so no score is inferred or fabricated.
+The public MMLU-Pro descriptor additionally requires the exact scorer-adapter
+bytes and a protocol derived from version, frozen references, license-card bytes,
+and adapter identity; it remains `NOT_EXECUTABLE_LICENSE_CARD_HASH_MISSING` until
+that exact license-card artifact is custody-bound.
 
 MATH-500, MMLU-Pro, and static BFCL strict freeze manifests now derive protocol identity from exact scorer bytes plus frozen split/reference and license/version identity; valid-hex caller substitutions are rejected. These remain preflight-only and do not create checkpoint-bound scores.
 
