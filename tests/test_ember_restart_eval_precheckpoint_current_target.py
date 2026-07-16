@@ -1,6 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+import hashlib
 import json
 from pathlib import Path
 
@@ -29,13 +30,15 @@ def test_precheckpoint_manifest_binds_every_new_family_to_a_custody_or_protocol_
     assert set(bindings) == {"text", "reasoning", "code", "mathematics", "terminal", "sql", "files", "browser_ui", "image", "audio", "structured_tools"}
     for family, artifact in bindings.items():
         assert isinstance(family, str) and family
-        assert artifact.startswith("manifests/")
-        assert (MANIFEST.parents[1] / artifact).is_file()
+        assert set(artifact) == {"path", "sha256"}
+        assert isinstance(artifact["path"], str) and artifact["path"].startswith("manifests/")
+        assert isinstance(artifact["sha256"], str) and len(artifact["sha256"]) == 64
+        assert hashlib.sha256((MANIFEST.parents[1] / artifact["path"]).read_bytes()).hexdigest() == artifact["sha256"]
 
 def test_precheckpoint_manifest_binds_materialized_text_reasoning_code_and_mathematics_custody():
     value = json.loads(MANIFEST.read_text(encoding="utf-8"))
     bindings = value["frozen_family_artifacts"]
-    assert {key: bindings[key] for key in ("text", "reasoning", "code", "mathematics")} == {
+    assert {key: bindings[key]["path"] for key in ("text", "reasoning", "code", "mathematics")} == {
         "text": "manifests/ember-restart-gsm8k-custody-v1.json",
         "reasoning": "manifests/ember-restart-mmlu-pro-custody-v1.json",
         "code": "manifests/ember-restart-eval-code-math-custody-v1.json",
