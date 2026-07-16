@@ -35,6 +35,8 @@ from serve_owned_openai import (
     resolve_runtime_inputs,
     start_parent_watchdog,
     _read_bound_json_snapshot,
+    _config_snapshot_path,
+    _same_root_snapshot,
     main as serve_main,
 )
 
@@ -499,6 +501,23 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 ])
         tokenizer.assert_not_called()
         loader.assert_not_called()
+
+    def test_private_snapshot_helpers_execute_with_real_stdlib_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            authority = root / "authority.json"
+            authority.write_bytes(b"original")
+            same_root = _same_root_snapshot(authority, b"exact-authority")
+            self.assertEqual(same_root.parent, root)
+            self.assertEqual(same_root.read_bytes(), b"exact-authority")
+            self.assertNotEqual(same_root, authority)
+
+            config_snapshot = _config_snapshot_path(b'{"exact":true}')
+            try:
+                self.assertEqual(config_snapshot.read_bytes(), b'{"exact":true}')
+            finally:
+                config_snapshot.unlink(missing_ok=True)
+
     def test_development_loader_uses_real_validator_canonicalize_materialize_chain(self) -> None:
         from model import RestartDecoderConfig, UnifiedDecoder
 
