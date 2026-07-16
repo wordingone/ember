@@ -117,7 +117,7 @@
                                     "files": {"path": "manifests/ember-restart-swebench-custody-v1.json", "sha256": "084f8696742b69eee00db0776fd9216c3147b92afc2e825710666fa16f807621"},
                                     "browser_ui": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"},
                                     "image": {"path": "manifests/ember-restart-mmmu-validation-custody-v1.json", "sha256": "127906142bb8ccdaeb3464486766e3b5868c804e0e789373426839c56230d845"},
-                                    "audio": {"path": "manifests/ember-restart-audiobench-custody-v1.json", "sha256": "63bd86016e74914281a5c62673e94c4886455a3926e4529834c6c286e9a9981c"},
+                                    "audio": {"path": "manifests/ember-restart-audiobench-custody-v1.json", "sha256": "524e93ce142f4250d3a4403d0ed6f8eb6fb41a4ed64e08b5c50724b8205f522c"},
                                     "structured_tools": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"}
                                 }
 }
