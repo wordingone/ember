@@ -57,6 +57,11 @@ class NativeComputeScreenTests(unittest.TestCase):
         self.assertEqual(receipt["gpu_joules"], 220.0)
         self.assertGreater(receipt["tok_per_gpu_joule"], 0)
 
+    def test_power_measurement_below_coverage_floor_withholds_credit(self) -> None:
+        trace = {"sampling_cadence_s": 1.0, "missing_sample_count": 0, "errors": [], "samples": [{"monotonic_s": 1.0, "watts": 100.0, "power_limit_w": 250.0, "driver_version": "1", "gpu_name": "GPU"}]}
+        receipt = _power_efficiency(trace=trace, wall_s=2.0, tokens_processed=3072, active_parameters=1_020_589_568, target_vector_sha256="a" * 64, checkpoint_manifest_sha256="b" * 64)
+        self.assertEqual(receipt["result"], "UNAVAILABLE")
+        self.assertLess(receipt["coverage_ratio"], 0.9)
     def test_missing_same_run_power_samples_withholds_energy_credit(self) -> None:
         receipt = _power_efficiency(trace={"sampling_cadence_s": 1.0, "missing_sample_count": 1, "errors": ["missing"], "samples": []}, wall_s=2.0, tokens_processed=3072, active_parameters=1, target_vector_sha256="a" * 64, checkpoint_manifest_sha256="b" * 64)
         self.assertEqual(receipt["result"], "UNAVAILABLE")

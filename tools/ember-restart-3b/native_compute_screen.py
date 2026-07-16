@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -403,22 +404,93 @@ class _PowerSampler:
             self._stop.wait(self.cadence_s)
 
 
-def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_processed: int, active_parameters: int, target_vector_sha256: str, checkpoint_manifest_sha256: str) -> dict[str, object]:
+def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_processed: int, active_parameters: int, target_vector_sha256: str, checkpoint_manifest_sha256: str, total_parameters: int | None = None, peak_flops: float | None = None) -> dict[str, object]:
     """Derive board-energy quantities from raw same-run driver samples, or mark credit unavailable."""
 
+    if not isinstance(wall_s, (int, float)) or wall_s <= 0:
+        raise ValueError("power efficiency requires positive wall time")
     raw = json.dumps(trace, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    trace_sha256 = hashlib.sha256(raw).hexdigest()
     samples = trace.get("samples")
     missing = trace.get("missing_sample_count")
     cadence = trace.get("sampling_cadence_s")
-    if not isinstance(samples, list) or not isinstance(missing, int) or not isinstance(cadence, (int, float)) or cadence <= 0:
+    if not isinstance(samples, list) or not isinstance(missing, int) or missing < 0 or not isinstance(cadence, (int, float)) or cadence <= 0:
         raise ValueError("power trace has an invalid closed shape")
-    watts = [sample.get("watts") for sample in samples if isinstance(sample, dict)]
-    if not watts or any(not isinstance(value, (int, float)) or value <= 0 for value in watts):
-        return {"result": "UNAVAILABLE", "energy_scope": "GPU_BOARD_ONLY", "raw_power_trace_sha256": hashlib.sha256(raw).hexdigest(), "sampling_cadence_s": cadence, "missing_sample_count": missing, "wall_s": wall_s, "tokens_processed": tokens_processed, "target_vector_sha256": target_vector_sha256, "checkpoint_manifest_sha256": checkpoint_manifest_sha256, "evaluation_receipt_sha256": None}
-    mean = sum(float(value) for value in watts) / len(watts)
-    joules = mean * wall_s
-    return {"result": "MEASURED", "energy_scope": "GPU_BOARD_ONLY", "raw_power_trace_sha256": hashlib.sha256(raw).hexdigest(), "sampling_cadence_s": cadence, "missing_sample_count": missing, "gpu_joules": joules, "mean_watts": mean, "peak_watts": max(float(value) for value in watts), "gpu_power_limit_w": float(samples[-1]["power_limit_w"]), "gpu_driver_version": samples[-1]["driver_version"], "gpu_name": samples[-1]["gpu_name"], "wall_s": wall_s, "tokens_processed": tokens_processed, "active_flops": active_parameters * 6 * tokens_processed, "tok_s": tokens_processed / wall_s, "tok_per_gpu_joule": tokens_processed / joules, "target_vector_sha256": target_vector_sha256, "first_target_crossing_step": None, "checkpoint_manifest_sha256": checkpoint_manifest_sha256, "evaluation_receipt_sha256": None}
-
+    expected_samples = max(1, math.ceil(float(wall_s) / float(cadence)))
+    valid: list[dict[str, object]] = []
+    for sample in samples:
+        if not isinstance(sample, dict):
+            continue
+        watts = sample.get("watts")
+        limit = sample.get("power_limit_w")
+        timestamp = sample.get("monotonic_s")
+        if (
+            not isinstance(watts, (int, float)) or not math.isfinite(float(watts)) or watts <= 0
+            or not isinstance(limit, (int, float)) or not math.isfinite(float(limit)) or limit <= 0
+            or not isinstance(timestamp, (int, float)) or not math.isfinite(float(timestamp))
+            or not isinstance(sample.get("driver_version"), str) or not sample["driver_version"].strip()
+            or not isinstance(sample.get("gpu_name"), str) or not sample["gpu_name"].strip()
+        ):
+            continue
+        valid.append(sample)
+    coverage_ratio = min(1.0, len(valid) / max(expected_samples, len(valid) + missing))
+    base: dict[str, object] = {
+        "energy_scope": "GPU_BOARD_ONLY",
+        "raw_power_trace_sha256": trace_sha256,
+        "sampling_cadence_s": float(cadence),
+        "missing_sample_count": missing,
+        "coverage_ratio": coverage_ratio,
+        "wall_s": float(wall_s),
+        "tokens_processed": int(tokens_processed),
+        "tokens": int(tokens_processed),
+        "active_flops": int(active_parameters) * 6 * int(tokens_processed),
+        "active_param_pct": (int(active_parameters) / int(total_parameters)) if isinstance(total_parameters, int) and total_parameters > 0 else None,
+        "target_vector_sha256": target_vector_sha256,
+        "checkpoint_manifest_sha256": checkpoint_manifest_sha256,
+        "evaluation_receipt_sha256": None,
+        "gpu_joules": None,
+        "energy_j": None,
+        "mean_watts": None,
+        "avg_power_w": None,
+        "peak_watts": None,
+        "peak_power_w": None,
+        "tok_s": int(tokens_processed) / float(wall_s),
+        "tok_per_gpu_joule": None,
+        "tok_j": None,
+        "mfu": None,
+    }
+    if len(valid) != len(samples) or missing != 0 or coverage_ratio < 0.90:
+        return {"result": "UNAVAILABLE", **base}
+    identities = {(sample["driver_version"], sample["gpu_name"], float(sample["power_limit_w"])) for sample in valid}
+    timestamps = [float(sample["monotonic_s"]) for sample in valid]
+    if len(identities) != 1 or timestamps != sorted(timestamps):
+        return {"result": "UNAVAILABLE", **base}
+    watts = [float(sample["watts"]) for sample in valid]
+    mean = sum(watts) / len(watts)
+    joules = mean * float(wall_s)
+    active_flops = int(base["active_flops"])
+    mfu = None
+    if peak_flops is not None:
+        if not isinstance(peak_flops, (int, float)) or not math.isfinite(float(peak_flops)) or peak_flops <= 0:
+            raise ValueError("pinned peak FLOPS must be positive")
+        mfu = active_flops / (float(peak_flops) * float(wall_s))
+    base.update({
+        "result": "MEASURED",
+        "gpu_joules": joules,
+        "energy_j": joules,
+        "mean_watts": mean,
+        "avg_power_w": mean,
+        "peak_watts": max(watts),
+        "peak_power_w": max(watts),
+        "tok_per_gpu_joule": int(tokens_processed) / joules,
+        "tok_j": int(tokens_processed) / joules,
+        "mfu": mfu,
+        "gpu_power_limit_w": float(valid[-1]["power_limit_w"]),
+        "gpu_driver_version": valid[-1]["driver_version"],
+        "gpu_name": valid[-1]["gpu_name"],
+        "first_target_crossing_step": None,
+    })
+    return base
 def _full_step(*, model: UnifiedDecoder, optimizer: torch.optim.Optimizer, record: dict[str, object], config: RestartDecoderConfig, batch_size: int, device: torch.device) -> dict[str, object]:
     batch = decode_owned_batch(record, config, device=device)
     input_ids = batch["input_ids"].repeat(batch_size, 1)
@@ -504,7 +576,7 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
     power_trace_path = output.with_name(output.stem + ".power-trace.json")
     _atomic_json(power_trace_path, power_trace)
     target_vector_sha256 = hashlib.sha256(json.dumps({"sequence_length": _SEQUENCE_LENGTH, "required_batches": list(_REQUIRED_BATCHES)}, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-    efficiency = _power_efficiency(trace=power_trace, wall_s=wall_s, tokens_processed=sum(_SEQUENCE_LENGTH * batch for batch in _REQUIRED_BATCHES), active_parameters=int(counts["active_parameters"]) if counts else 0, target_vector_sha256=target_vector_sha256, checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest))
+    efficiency = _power_efficiency(trace=power_trace, wall_s=wall_s, tokens_processed=sum(_SEQUENCE_LENGTH * batch for batch in _REQUIRED_BATCHES), active_parameters=int(counts["active_parameters"]) if counts else 0, total_parameters=int(counts["unique_parameters"]) if counts else None, target_vector_sha256=target_vector_sha256, checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest))
     if _source_closure(root) != source_closure_before:
         raise RuntimeError("native screen source closure changed before receipt publication")
     result = screen_receipt(

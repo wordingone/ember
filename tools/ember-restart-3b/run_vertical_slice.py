@@ -192,6 +192,35 @@ def _receipt_valid_for_retention(bundle: Path) -> bool:
         return False
     return True
 
+def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
+    """Remove an unselectable checkpoint while preserving only bounded evidence."""
+
+    if not bundle.is_dir() or not bundle.name.startswith("checkpoint-"):
+        raise ValueError("retention quarantine requires a checkpoint-* directory")
+    manifest = bundle / "checkpoint-manifest.json"
+    try:
+        manifest_sha256 = _sha256(manifest) if manifest.is_file() else None
+    except OSError as error:
+        manifest_sha256 = None
+        reason = f"{reason}; manifest_hash_error={type(error).__name__}"
+    evidence_dir = bundle.parent / ".checkpoint-quarantine"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence_path = evidence_dir / f"{bundle.name}.json"
+    evidence = {
+        "schema_version": "ember-checkpoint-quarantine-v1",
+        "result": "UNSELECTABLE",
+        "source_bundle": bundle.name,
+        "reason": reason[:512],
+        "manifest_sha256": manifest_sha256,
+        "bulk_candidate_cleanup": "deleted",
+    }
+    _atomic_json(evidence_path, evidence)
+    try:
+        shutil.rmtree(bundle)
+    except Exception:
+        evidence["bulk_candidate_cleanup"] = "failed"
+        _atomic_json(evidence_path, evidence)
+        raise
 def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serialized_bytes: int | None = None, receipt_aware: bool = False) -> None:
     """Prune only older successful bundles; never delete the final known-good bundle."""
     if max_count is None and max_serialized_bytes is None:
@@ -201,11 +230,19 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
     if max_serialized_bytes is not None and max_serialized_bytes < 1:
         raise ValueError("checkpoint retention serialized-byte budget must be positive")
     parent.mkdir(parents=True, exist_ok=True)
-    candidates = (path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-"))
-    bundles = sorted(
-        (path for path in candidates if not receipt_aware or _receipt_valid_for_retention(path)),
-        key=lambda path: (path.stat().st_mtime_ns, path.name),
-    )
+    candidates = [path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-")]
+    bundles: list[Path] = []
+    for candidate in candidates:
+        if not receipt_aware:
+            bundles.append(candidate)
+            continue
+        try:
+            require_counter_success_receipt(candidate)
+        except (OSError, ValueError, TypeError) as error:
+            _quarantine_unverified_bundle(candidate, reason=f"counter receipt invalid: {type(error).__name__}: {error}")
+        else:
+            bundles.append(candidate)
+    bundles.sort(key=lambda path: (path.stat().st_mtime_ns, path.name))
     if max_count is not None:
         while len(bundles) > max_count:
             shutil.rmtree(bundles.pop(0))
