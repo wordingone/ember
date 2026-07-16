@@ -72,6 +72,14 @@ def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> tuple[
     return protocol, source
 
 
+def validate_manifest_identity(manifest: dict[str, object], envelope: dict[str, object]) -> None:
+    """Reject canonical predictions whose checkpoint/config identity is not custody-bound."""
+    for identity in ("checkpoint_manifest_sha256", "model_config_sha256"):
+        expected = manifest.get(identity)
+        if expected is not None and envelope.get(identity) != expected:
+            raise ValueError(f"MMMU {identity} is not bound by frozen custody")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mmmu-root", required=True, type=Path)
@@ -93,6 +101,7 @@ def main() -> int:
         answers = json.loads(answer_bytes.decode("utf-8"))
         manifest = json.loads(manifest_bytes.decode("utf-8"))
         envelope, converted = canonical_predictions(prediction_bytes)
+        validate_manifest_identity(manifest, envelope)
         benchmark = envelope["benchmark"]
         if not isinstance(answers, dict) or not answers or any(not isinstance(value, dict) or value.get("question_type") != "multiple-choice" for value in answers.values()):
             raise ValueError("MMMU adapter permits multiple-choice answers only")

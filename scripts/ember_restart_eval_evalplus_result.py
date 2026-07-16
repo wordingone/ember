@@ -72,6 +72,11 @@ def _load_frozen_code_manifest(path: Path, binding: dict[str, object], suite: st
         raise ValueError("EvalPlus frozen code manifest lacks required adapter identities")
     if not isinstance(protocol, str) or not SHA256_RE.fullmatch(protocol) or protocol != evalplus_protocol_sha256(manifest, suite, adapters) or binding.get("protocol_sha256") != protocol:
         raise ValueError("EvalPlus protocol is not derived from frozen code custody")
+    for identity in ("checkpoint_manifest_sha256", "model_config_sha256"):
+        expected = manifest.get(identity)
+        if expected is not None:
+            if not isinstance(expected, str) or not SHA256_RE.fullmatch(expected) or binding.get(identity) != expected:
+                raise ValueError(f"EvalPlus {identity} is not bound by frozen custody")
     return manifest_bytes, manifest
 
 
