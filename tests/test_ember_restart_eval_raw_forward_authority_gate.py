@@ -37,19 +37,11 @@ def _step2_identities():
     }
 
 
-def test_current_registry_authorizes_only_the_exact_measured_step2_tuple():
+def test_current_registry_refuses_step2_until_same_byte_runtime_binding_lands():
     module = _load_raw_forward()
     identities = _step2_identities()
-    expected = {
-        **identities,
-        "inference_implementation_sha256": hashlib.sha256(SCRIPT.read_bytes()).hexdigest(),
-    }
-    assert module.require_execution_authority(object(), identities) == expected
-
-    wrong_receipt = dict(identities)
-    wrong_receipt["parameter_receipt_sha256"] = "0" * 64
-    with pytest.raises(ValueError, match="does not authorize"):
-        module.require_execution_authority(object(), wrong_receipt)
+    with pytest.raises(ValueError, match="execution authority disposition"):
+        module.require_execution_authority(object(), identities)
 
 
 def test_authority_rejects_correct_tuple_when_registry_disposition_is_not_authorized(tmp_path):
@@ -70,7 +62,7 @@ def test_authority_registry_binds_the_canonical_git_blob_and_step2_tuple():
 
     assert len(blob) == 37_869
     assert hashlib.sha256(blob).hexdigest() == "42be91b92d0f4e497b324046122358d9b7e640e32e6c94b14863ffddcf22896a"
-    assert registry["disposition"] == "EXACT_OWNED_SHARED_ROUTE_EXECUTION_AUTHORIZED"
+    assert registry["disposition"] == "PREPARED_NOT_EXECUTABLE_AWAITING_PROMPT_AND_SAME_BYTE_RUNTIME_BINDING"
     assert registry["authorities"] == [{
         **_step2_identities(),
         "inference_implementation_sha256": hashlib.sha256(blob).hexdigest(),
