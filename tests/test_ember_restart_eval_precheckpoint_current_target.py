@@ -26,11 +26,22 @@ def test_precheckpoint_manifest_keeps_files_family_in_required_matrix():
 def test_precheckpoint_manifest_binds_every_new_family_to_a_custody_or_protocol_artifact():
     value = json.loads(MANIFEST.read_text(encoding="utf-8"))
     bindings = value["frozen_family_artifacts"]
-    assert set(bindings) == {"terminal", "sql", "files", "browser_ui", "image", "audio", "structured_tools"}
+    assert set(bindings) == {"text", "reasoning", "code", "mathematics", "terminal", "sql", "files", "browser_ui", "image", "audio", "structured_tools"}
     for family, artifact in bindings.items():
         assert isinstance(family, str) and family
         assert artifact.startswith("manifests/")
         assert (MANIFEST.parents[1] / artifact).is_file()
+
+def test_precheckpoint_manifest_binds_materialized_text_reasoning_code_and_mathematics_custody():
+    value = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    bindings = value["frozen_family_artifacts"]
+    assert {key: bindings[key] for key in ("text", "reasoning", "code", "mathematics")} == {
+        "text": "manifests/ember-restart-gsm8k-custody-v1.json",
+        "reasoning": "manifests/ember-restart-mmlu-pro-custody-v1.json",
+        "code": "manifests/ember-restart-eval-code-math-custody-v1.json",
+        "mathematics": "manifests/ember-restart-eval-code-math-custody-v1.json",
+    }
+
 
 def test_precheckpoint_manifest_pins_required_comparators_without_authorizing_execution():
     value = json.loads(MANIFEST.read_text(encoding="utf-8"))
