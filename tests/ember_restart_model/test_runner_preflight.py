@@ -260,6 +260,8 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=retain))
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
+            stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
+            stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True}))
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 7, "global_step": 31, "tokens_seen": 31 * 1024}}))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
             stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
@@ -341,6 +343,8 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=lambda _parent, *, operation, **_kwargs: operation()))
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
+            stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
+            stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True}))
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}}))
             stack.enter_context(patch.object(run_vertical_slice, "load_authorized_records", return_value=([{"active_expert": "shared"}], {"input_identity": {"shard_path": "TOKEN-SHARDS-V0:prior"}}, {"receipt": "bound"})))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
@@ -419,6 +423,7 @@ class RunnerPreflightTests(unittest.TestCase):
             checkpoint_interval=32,
             write_budget_bytes=24 * 1024**3,
             resume_checkpoint=None,
+            resume_counter_receipt=None,
         )
 
     def test_specialist_lineage_request_binds_parent_to_exact_resume_bundle(self) -> None:
@@ -452,25 +457,76 @@ class RunnerPreflightTests(unittest.TestCase):
                             parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3,
                         )
         cuda_runner.assert_not_called()
+    def test_specialist_forwards_counter_success_receipt_to_cuda_runner(self) -> None:
+        verification = {"result": "VERIFIED", "capability": "image"}
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision"}], verification)):
+            with patch.object(run_vertical_slice, "specialist_lineage_request", return_value={"parent_manifest": "parent", "root_manifest": "root"}):
+                with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as cuda_runner:
+                    run_vertical_slice.run_specialist(
+                        seed=84,
+                        artifact_root=Path("B:/ember-artifacts"),
+                        data_manifest=Path("data/vision.json"),
+                        tokenizer_path=Path("tokenizer.json"),
+                        capability="image",
+                        resume_checkpoint=Path("B:/parent"),
+                        resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"),
+                        parent_manifest=Path("B:/parent/checkpoint-manifest.json"),
+                        root_manifest=Path("B:/root/checkpoint-manifest.json"),
+                        checkpoint_interval=8_192,
+                        write_budget_bytes=120 * 1024**3,
+                    )
+        self.assertEqual(cuda_runner.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
     def test_specialist_cli_dispatches_one_verified_route(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None)
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None)
     def test_specialist_cli_forwards_explicit_c_relocation_custody(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
                 run_vertical_slice.main()
         self.assertIs(specialist.call_args.kwargs["c_relocated_under_disk_budget_runner"], True)
         self.assertEqual(specialist.call_args.kwargs["artifact_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))
         self.assertEqual(specialist.call_args.kwargs["relocation_custody_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts"))
         self.assertEqual(specialist.call_args.kwargs["checkpoint_interval"], 8_192)
         self.assertEqual(specialist.call_args.kwargs["write_budget_bytes"], 120 * 1024**3)
+        self.assertEqual(specialist.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
     def test_c_custody_resume_bundle_requires_the_declared_disk_runner_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             custody = Path(directory)
             checkpoint = custody / "checkpoint"
             checkpoint.mkdir()
+            manifest = {
+                "schema_version": "ember-sparse-checkpoint-v4",
+                "model_config_sha256": "a" * 64,
+                "architecture_revision": "ember-sparse-3b-v2",
+                "active_expert_ids": ["vision"],
+                "architecture": {
+                    "allocated_parameters": 3_839_161_856,
+                    "unique_parameters": 3_839_161_856,
+                    "trainable_parameters": 3_839_161_856,
+                    "served_parameters": 3_839_161_856,
+                    "active_parameters": 1_725_232_640,
+                    "episode_trainable_parameters": 1_725_232_640,
+                },
+            }
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            checkpoint.joinpath("parameter-counter-receipt.json").write_text(
+                json.dumps({
+                    "schema_version": "ember-sparse-realization-receipt-v1",
+                    "verification_boundary": "VERIFIED_MEASURED",
+                    "result": "MEASURED",
+                    "subject_checkpoint_sha256": manifest_sha256,
+                    "model_config_sha256": manifest["model_config_sha256"],
+                    "architecture_revision": manifest["architecture_revision"],
+                    "active_expert_ids": manifest["active_expert_ids"],
+                    "counter_sha256": run_vertical_slice._sha256(ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py"),
+                    **manifest["architecture"],
+                }),
+                encoding="utf-8",
+            )
             self.assertEqual(
                 run_vertical_slice.production_resume_checkpoint(
                     checkpoint,
@@ -481,6 +537,63 @@ class RunnerPreflightTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "published B: bundle"):
                 run_vertical_slice.production_resume_checkpoint(checkpoint)
+
+    def test_published_bundle_without_counter_success_receipt_is_unresumable(self) -> None:
+        """A manifest alone is not a durable checkpoint-selection capability."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            checkpoint.joinpath("checkpoint-manifest.json").write_text(
+                json.dumps({
+                    "schema_version": "ember-sparse-checkpoint-v4",
+                    "model_config_sha256": "a" * 64,
+                    "architecture_revision": "ember-sparse-3b-v2",
+                    "active_expert_ids": ["vision"],
+                    "architecture": {
+                        "allocated_parameters": 3_839_161_856,
+                        "unique_parameters": 3_839_161_856,
+                        "trainable_parameters": 3_839_161_856,
+                        "served_parameters": 3_839_161_856,
+                        "active_parameters": 1_725_232_640,
+                        "episode_trainable_parameters": 1_725_232_640,
+                    },
+                }),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "counter-success receipt"):
+                run_vertical_slice.production_resume_checkpoint(
+                    checkpoint,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=checkpoint.parent,
+                )
+
+    def test_counter_failure_quarantines_new_candidate_and_preserves_prior_bundle(self) -> None:
+        """A counter failure cannot leave the just-published bundle selectable."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            previous = parent / "checkpoint-known-good"
+            previous.mkdir()
+            candidate = parent / "checkpoint-candidate"
+
+            def write_candidate() -> dict[str, object]:
+                candidate.mkdir()
+                candidate.joinpath("checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+                return {"published": True}
+
+            with self.assertRaisesRegex(RuntimeError, "counter failed"):
+                run_vertical_slice.publish_counter_verified_checkpoint(
+                    checkpoint_target=candidate,
+                    write_candidate=write_candidate,
+                    execute_counter=lambda: (_ for _ in ()).throw(RuntimeError("counter failed")),
+                )
+            self.assertTrue(previous.is_dir())
+            self.assertFalse(candidate.exists())
+            quarantines = list(parent.glob(".counter-failed-checkpoint-candidate-*"))
+            self.assertEqual(len(quarantines), 1)
+            self.assertTrue(quarantines[0].joinpath("counter-failure.json").is_file())
+
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
