@@ -100,6 +100,23 @@ def database_tree_sha256(root: Path) -> str:
         digest.update(path.read_bytes())
     return digest.hexdigest()
 
+def spider_protocol_sha256(manifest: dict[str, object], expected: dict[str, str] | None = None) -> str:
+    license_sha = manifest.get("license_sha256")
+    if not isinstance(license_sha, str) or len(license_sha) != 64 or license_sha.lower() != license_sha or any(c not in "0123456789abcdef" for c in license_sha):
+        raise ValueError("Spider protocol custody requires license_sha256")
+    evaluator = manifest.get("evaluator")
+    evaluator_sha = evaluator.get("sha256") if isinstance(evaluator, dict) else None
+    if not isinstance(evaluator_sha, str) or len(evaluator_sha) != 64:
+        raise ValueError("Spider protocol custody requires evaluator identity")
+    if expected is None:
+        assets = json.dumps(manifest.get("frozen_evaluation_assets", {}), sort_keys=True, separators=(",", ":"))
+        source_identity = hashlib.sha256(assets.encode("utf-8")).hexdigest()
+        gold_identity = tables_identity = database_identity = assets
+    else:
+        gold_identity = expected["gold_sha256"]; tables_identity = expected["tables_sha256"]; database_identity = expected["database_tree_sha256"]; source_identity = expected["source_tree_sha256"]
+    material = ":".join(["spider", str(manifest.get("benchmark_version", "")), str(gold_identity), str(tables_identity), str(database_identity), evaluator_sha, source_identity, license_sha, str(manifest.get("upstream_tree_git_sha1", "")), str(manifest.get("admission", ""))])
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
 
 def snapshot_spider_inputs(source: Path, gold: Path, tables: Path, database: Path, stage: Path) -> tuple[Path, Path, Path, Path]:
     staged_source = stage / "spider"
@@ -123,8 +140,11 @@ def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, da
         raise ValueError("frozen Spider custody manifest does not bind supplied evaluator assets")
     digest = hashlib.sha256(manifest_bytes).hexdigest()
     protocol = manifest.get("protocol_sha256")
-    if include_protocol and manifest.get("schema_version") == "ember-restart-benchmark-custody-v1" and (not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol or any(character not in "0123456789abcdef" for character in protocol)):
-        raise ValueError("frozen Spider custody manifest requires protocol_sha256 for canonical scoring")
+    if include_protocol and manifest.get("schema_version") == "ember-restart-benchmark-custody-v1":
+        if not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol or any(character not in "0123456789abcdef" for character in protocol):
+            raise ValueError("frozen Spider custody manifest requires protocol_sha256 for canonical scoring")
+        if protocol != spider_protocol_sha256(manifest, expected):
+            raise ValueError("frozen Spider protocol is not derived from custody identity")
     return (digest, protocol) if include_protocol else digest
 
 

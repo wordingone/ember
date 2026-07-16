@@ -39,7 +39,7 @@ def canonical_predictions(data: bytes) -> tuple[dict, dict[str, object]]:
     return envelope, converted
 
 
-def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> str:
+def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> tuple[str, Path]:
     strict = manifest.get("schema_version") == "ember-restart-benchmark-custody-v1" or "scorer" in manifest
     if not strict:
         split = manifest.get("split")
@@ -47,7 +47,7 @@ def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> str:
         version = manifest.get("benchmark_version")
         if not isinstance(answer_sha, str) or not isinstance(version, str):
             raise ValueError("MMMU frozen custody requires benchmark split identity")
-        return sha256(f"MMMU:{version}:{answer_sha}".encode())
+        return sha256(f"MMMU:{version}:{answer_sha}".encode()), (mmmu_root / "mmmu" / "main_eval_only.py").resolve()
     scorer = manifest.get("scorer")
     if not isinstance(scorer, dict) or not isinstance(scorer.get("path"), str) or not isinstance(scorer.get("sha256"), str) or len(scorer["sha256"]) != 64 or scorer["sha256"].lower() != scorer["sha256"]:
         raise ValueError("MMMU frozen custody requires scorer path and sha256")
@@ -59,11 +59,17 @@ def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> str:
         raise ValueError("MMMU scorer bytes do not match frozen custody")
     license_sha256 = manifest.get("license_sha256")
     protocol = manifest.get("protocol_sha256")
-    if not isinstance(license_sha256, str) or len(license_sha256) != 64 or license_sha256.lower() != license_sha256:
+    if not isinstance(license_sha256, str) or len(license_sha256) != 64 or license_sha256.lower() != license_sha256 or any(character not in "0123456789abcdef" for character in license_sha256):
         raise ValueError("MMMU frozen custody requires license_sha256")
-    if not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol:
+    if not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol or any(character not in "0123456789abcdef" for character in protocol):
         raise ValueError("MMMU frozen custody requires protocol_sha256")
-    return protocol
+    version = manifest.get("benchmark_version")
+    split = manifest.get("split")
+    answer_sha = split.get("answer_dictionary_sha256") if isinstance(split, dict) else None
+    expected = sha256(f"MMMU:{version}:{answer_sha}:{scorer['sha256']}:{license_sha256}".encode())
+    if protocol != expected:
+        raise ValueError("MMMU protocol is not derived from scorer/license custody")
+    return protocol, source
 
 
 def main() -> int:
@@ -91,7 +97,7 @@ def main() -> int:
         if not isinstance(answers, dict) or not answers or any(not isinstance(value, dict) or value.get("question_type") != "multiple-choice" for value in answers.values()):
             raise ValueError("MMMU adapter permits multiple-choice answers only")
         split = manifest.get("split") if isinstance(manifest, dict) else None
-        frozen_protocol_sha256 = verify_frozen_scorer(manifest, arguments.mmmu_root)
+        frozen_protocol_sha256, scorer = verify_frozen_scorer(manifest, arguments.mmmu_root)
         if not isinstance(split, dict) or manifest.get("benchmark_id") != "MMMU" or manifest.get("benchmark_version") != benchmark.get("version") or split.get("name") != "validation" or split.get("answer_dictionary_sha256") != sha256(answer_bytes) or benchmark.get("split_sha256") != sha256(answer_bytes) or benchmark.get("protocol_sha256") != frozen_protocol_sha256:
             raise ValueError("frozen MMMU custody does not bind canonical predictions")
         image_materialization = manifest.get("image_input_materialization")
@@ -115,9 +121,8 @@ def main() -> int:
         parser.error(f"invalid MMMU evaluator inputs: {error}")
     if answers.keys() != converted.keys():
         parser.error("MMMU predictions must exactly cover frozen answer ids")
-    scorer = arguments.mmmu_root / "mmmu" / "main_eval_only.py"
     if not scorer.is_file():
-        parser.error("cached MMMU main_eval_only.py is required")
+        parser.error("cached MMMU scorer selected by custody is required")
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.canonical_predictions.parent, prefix=arguments.canonical_predictions.name + ".", suffix=".mmmu.tmp", delete=False) as handle:
         json.dump(converted, handle, sort_keys=True)
         temporary = Path(handle.name)
