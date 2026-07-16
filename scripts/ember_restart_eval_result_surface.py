@@ -35,7 +35,10 @@ def main():
  label='MEASURED CAPABILITY' if measured else 'NOT CLAIM-BEARING'
  args.output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=args.output.parent,delete=False)as handle:
-  handle.write(f'# Ember evaluation result\n\nStatus: {label}\n\nCapability: {result.get("capability","unknown")}\n');temporary=handle.name
- os.replace(temporary,args.output)
+  handle.write(f'# Ember evaluation result\n\nStatus: {label}\n\nCapability: {result.get("capability","unknown")}\n');temporary=Path(handle.name)
+ try:
+  os.replace(temporary,args.output)
+ finally:
+  temporary.unlink(missing_ok=True)
 
 if __name__=='__main__':main()
