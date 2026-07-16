@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
@@ -296,26 +297,151 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
     return records, packet, input_receipt
 
 
+_COUNTER_SUCCESS_RECEIPT = "parameter-counter-receipt.json"
+_COUNTER_FAILURE_RECEIPT = "counter-failure.json"
+_COUNTER_COUNT_FIELDS = (
+    "allocated_parameters",
+    "unique_parameters",
+    "trainable_parameters",
+    "served_parameters",
+    "active_parameters",
+    "episode_trainable_parameters",
+)
+
+
+def _atomic_json(path: Path, payload: dict[str, object]) -> None:
+    """Publish a small custody record only after its complete bytes are durable."""
+
+    temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
+    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _json_snapshot(path: Path, *, label: str) -> tuple[dict[str, object], str]:
+    try:
+        payload = path.read_bytes()
+        parsed = json.loads(payload)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is not valid JSON") from error
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    return parsed, hashlib.sha256(payload).hexdigest()
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def require_counter_success_receipt(
+    checkpoint_root: Path,
+    *,
+    receipt_path: Path | None = None,
+) -> dict[str, object]:
+    """Make resumability contingent on the exact successful realization counter output."""
+
+    checkpoint_root = checkpoint_root.resolve()
+    manifest, manifest_sha256 = _json_snapshot(checkpoint_root / "checkpoint-manifest.json", label="checkpoint manifest")
+    receipt_source = (receipt_path if receipt_path is not None else checkpoint_root / _COUNTER_SUCCESS_RECEIPT).resolve()
+    receipt, _receipt_sha256 = _json_snapshot(receipt_source, label="counter-success receipt")
+    expected = {
+        "schema_version": "ember-sparse-realization-receipt-v1",
+        "verification_boundary": "VERIFIED_MEASURED",
+        "result": "MEASURED",
+        "subject_checkpoint_sha256": manifest_sha256,
+        "model_config_sha256": manifest.get("model_config_sha256"),
+        "architecture_revision": manifest.get("architecture_revision"),
+        "active_expert_ids": manifest.get("active_expert_ids"),
+        "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
+    }
+    if any(receipt.get(field) != value for field, value in expected.items()):
+        raise ValueError("counter-success receipt does not bind this checkpoint realization")
+    architecture = manifest.get("architecture")
+    if not isinstance(architecture, dict) or any(receipt.get(field) != architecture.get(field) for field in _COUNTER_COUNT_FIELDS):
+        raise ValueError("counter-success receipt does not reproduce checkpoint capacity")
+    if not _is_sha256(receipt.get("counter_sha256")):
+        raise ValueError("counter-success receipt has an invalid counter source hash")
+    return receipt
+
+
+def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseException) -> Path | None:
+    """Move a failed candidate out of the selectable namespace, retaining failure evidence first."""
+
+    if not checkpoint_target.exists():
+        return None
+    manifest_path = checkpoint_target / "checkpoint-manifest.json"
+    manifest_sha256 = _sha256(manifest_path) if manifest_path.is_file() else None
+    _atomic_json(
+        checkpoint_target / _COUNTER_FAILURE_RECEIPT,
+        {
+            "schema_version": "ember-counter-failure-v1",
+            "result": "COUNTER_FAILED",
+            "checkpoint_manifest_sha256": manifest_sha256,
+            "error_type": type(error).__name__,
+            "error": str(error),
+        },
+    )
+    quarantined = checkpoint_target.parent / f".counter-failed-{checkpoint_target.name}-{uuid.uuid4().hex}"
+    try:
+        os.replace(checkpoint_target, quarantined)
+    except OSError:
+        # A receipt-less candidate is rejected by require_counter_success_receipt even if an
+        # external file lock prevents relocation. Prefer deletion over a selectable partial bundle.
+        shutil.rmtree(checkpoint_target, ignore_errors=True)
+        if checkpoint_target.exists():
+            raise RuntimeError("counter-failed checkpoint could not be removed from the selectable namespace")
+        return None
+    return quarantined
+
+
+def publish_counter_verified_checkpoint(
+    *,
+    checkpoint_target: Path,
+    write_candidate: Callable[[], dict[str, object]],
+    execute_counter: Callable[[], dict[str, object]],
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Publish, realize, and mark one checkpoint as a single fail-closed transaction."""
+
+    published = write_candidate()
+    try:
+        counter_receipt = execute_counter()
+        _atomic_json(checkpoint_target / _COUNTER_SUCCESS_RECEIPT, counter_receipt)
+        require_counter_success_receipt(checkpoint_target)
+    except BaseException as error:
+        _quarantine_counter_failed_checkpoint(checkpoint_target, error)
+        raise
+    return published, counter_receipt
+
+
 def production_resume_checkpoint(
     candidate: Path,
     *,
+    counter_success_receipt: Path | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
 ) -> Path:
-    """Accept a published B: bundle or an explicitly runner-custodied C: bundle."""
+    """Accept only a published, counter-verified B: or runner-custodied C: bundle."""
 
     resolved = candidate.resolve()
-    if resolved.drive.upper() == "B:" and resolved.is_dir():
-        return resolved
-    if c_relocated_under_disk_budget_runner:
+    accepted = resolved.drive.upper() == "B:" and resolved.is_dir()
+    if not accepted and c_relocated_under_disk_budget_runner:
         resolved = production_artifact_root(
             resolved,
             c_relocated_under_disk_budget_runner=True,
             relocation_custody_root=relocation_custody_root,
         )
-        if resolved.is_dir():
-            return resolved
-    raise ValueError("resume checkpoint must be a published B: bundle or declared C: custody bundle")
+        accepted = resolved.is_dir()
+    if not accepted:
+        raise ValueError("resume checkpoint must be a published B: bundle or declared C: custody bundle")
+    require_counter_success_receipt(resolved, receipt_path=counter_success_receipt)
+    return resolved
 
 def checkpoint_retention_budget_bytes(config_path: Path) -> int:
     """Load the measured serialized-byte ceiling for published checkpoint bundles."""
@@ -464,7 +590,7 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
     )
 
 def run(
-    *, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None,
+    *, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
     records_override: list[dict[str, object]] | None = None,
     specialist_verification: dict[str, object] | None = None,
     specialist_lineage: dict[str, object] | None = None,
@@ -534,6 +660,7 @@ def run(
     if resume_checkpoint is not None:
         resume_checkpoint = production_resume_checkpoint(
             resume_checkpoint,
+            counter_success_receipt=resume_counter_receipt,
             c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
             relocation_custody_root=relocation_custody_root,
         )
@@ -575,21 +702,23 @@ def run(
             checkpoint_target = checkpoint_root
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
-            published = write_checkpoint_artifacts(
-                model, optimizer, checkpoint_target, launch_seed=seed,
-                rng_state=_rng_state(torch.device("cuda")), data_cursor=data_cursor,
-                model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
-                expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
-                specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
+            return publish_counter_verified_checkpoint(
+                checkpoint_target=checkpoint_target,
+                write_candidate=lambda: write_checkpoint_artifacts(
+                    model, optimizer, checkpoint_target, launch_seed=seed,
+                    rng_state=_rng_state(torch.device("cuda")), data_cursor=data_cursor,
+                    model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
+                    expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
+                    specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
+                ),
+                execute_counter=lambda: _execute_realization_counter(
+                    root=root, config_path=config_path,
+                    checkpoint_manifest_path=checkpoint_target / "checkpoint-manifest.json",
+                    active_expert=str(model.active_expert), expected_counts=counts,
+                    parent_manifest=(Path(current_lineage["parent_manifest"]) if current_lineage is not None else None),
+                    root_manifest=(Path(current_lineage["root_manifest"]) if current_lineage is not None else None),
+                ),
             )
-            verified = _execute_realization_counter(
-                root=root, config_path=config_path,
-                checkpoint_manifest_path=checkpoint_target / "checkpoint-manifest.json",
-                active_expert=str(model.active_expert), expected_counts=counts,
-                parent_manifest=(Path(current_lineage["parent_manifest"]) if current_lineage is not None else None),
-                root_manifest=(Path(current_lineage["root_manifest"]) if current_lineage is not None else None),
-            )
-            return published, verified
 
         checkpoint, parameter_receipt = _retain_after_success(
             checkpoint_parent,
@@ -647,7 +776,7 @@ def specialist_lineage_request(
 
 def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
-    capability: str, resume_checkpoint: Path | None = None, parent_manifest: Path, root_manifest: Path,
+    capability: str, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None, parent_manifest: Path, root_manifest: Path,
     checkpoint_interval: int, write_budget_bytes: int,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
@@ -663,7 +792,7 @@ def run_specialist(
         parent_manifest=parent_manifest, root_manifest=root_manifest,
     )
     return run(
-        seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint,
+        seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
         records_override=records, specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
@@ -671,7 +800,7 @@ def run_specialist(
     )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
-    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
+    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -720,9 +849,10 @@ def run_semantic(
     initial_global_step = 0
     initial_tokens_seen = 0
     if resume_checkpoint is not None:
-        resume_checkpoint = resume_checkpoint.resolve()
-        if resume_checkpoint.drive.upper() != "B:" or not resume_checkpoint.is_dir():
-            raise ValueError("resume checkpoint must be a published B: bundle")
+        resume_checkpoint = production_resume_checkpoint(
+            resume_checkpoint,
+            counter_success_receipt=resume_counter_receipt,
+        )
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
@@ -736,25 +866,36 @@ def run_semantic(
     publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, checkpoint_byte_bound=checkpoint_byte_bound, write_budget_bytes=write_budget_bytes, initial_global_step=initial_global_step)
     torch.cuda.reset_peak_memory_stats()
     checkpoint: dict[str, object] | None = None
+    parameter_receipt: dict[str, object] | None = None
 
     def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
-        nonlocal checkpoint
+        nonlocal checkpoint, parameter_receipt
         checkpoint_root = checkpoint_parent / f"checkpoint-semantic-seed-{seed}-step-{global_step}"
-        checkpoint = _retain_after_success(
+        checkpoint, parameter_receipt = _retain_after_success(
             checkpoint_parent,
             max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
-            operation=lambda: write_checkpoint_artifacts(
-                model,
-                optimizer,
-                checkpoint_root,
-                launch_seed=seed,
-                rng_state=_rng_state(torch.device("cuda")),
-                data_cursor=dict(state["data_cursor"]),
-                model_config_sha256=_sha256(config_path),
-                contract_sha256=_sha256(integration_contract_path),
-                expert_genesis_sha256=genesis_hashes,
-                optimizer_contract=optimizer_contract,
-            max_serialized_bytes=checkpoint_byte_bound,
+            operation=lambda: publish_counter_verified_checkpoint(
+                checkpoint_target=checkpoint_root,
+                write_candidate=lambda: write_checkpoint_artifacts(
+                    model,
+                    optimizer,
+                    checkpoint_root,
+                    launch_seed=seed,
+                    rng_state=_rng_state(torch.device("cuda")),
+                    data_cursor=dict(state["data_cursor"]),
+                    model_config_sha256=_sha256(config_path),
+                    contract_sha256=_sha256(integration_contract_path),
+                    expert_genesis_sha256=genesis_hashes,
+                    optimizer_contract=optimizer_contract,
+                    max_serialized_bytes=checkpoint_byte_bound,
+                ),
+                execute_counter=lambda: _execute_realization_counter(
+                    root=root,
+                    config_path=config_path,
+                    checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
+                    active_expert="shared",
+                    expected_counts=counts,
+                ),
             ),
         )
 
@@ -772,17 +913,9 @@ def run_semantic(
         initial_global_step=initial_global_step,
         initial_tokens_seen=initial_tokens_seen,
     )
-    if checkpoint is None:
-        raise RuntimeError("semantic runner did not publish its required post-step checkpoint")
+    if checkpoint is None or parameter_receipt is None:
+        raise RuntimeError("semantic runner did not publish its required counter-verified checkpoint")
     counts = measure_parameter_counts(model)
-    checkpoint_root = checkpoint_parent / f"checkpoint-semantic-seed-{seed}-step-{segment['global_step']}"
-    parameter_receipt = _execute_realization_counter(
-        root=root,
-        config_path=config_path,
-        checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
-        active_expert="shared",
-        expected_counts=counts,
-    )
     return {
         "segment": segment,
         "counts": counts,
@@ -808,6 +941,7 @@ def main() -> None:
     vertical.add_argument("--seed", type=int, required=True)
     vertical.add_argument("--artifact-root", type=Path, required=True)
     vertical.add_argument("--resume-checkpoint", type=Path)
+    vertical.add_argument("--resume-counter-receipt", type=Path)
     specialist = subparsers.add_parser("specialist")
     specialist.add_argument("--seed", type=int, required=True)
     specialist.add_argument("--artifact-root", type=Path, required=True)
@@ -815,6 +949,7 @@ def main() -> None:
     specialist.add_argument("--tokenizer", type=Path, required=True)
     specialist.add_argument("--capability", choices=("image", "audio", "reasoning", "tool"), required=True)
     specialist.add_argument("--resume-checkpoint", type=Path, required=True)
+    specialist.add_argument("--resume-counter-receipt", type=Path, required=True)
     specialist.add_argument("--parent-manifest", type=Path, required=True)
     specialist.add_argument("--root-manifest", type=Path, required=True)
     specialist.add_argument("--checkpoint-interval", type=int, required=True)
@@ -832,9 +967,10 @@ def main() -> None:
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
     semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
+    semantic.add_argument("--resume-counter-receipt", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
@@ -847,9 +983,10 @@ def main() -> None:
             checkpoint_interval=args.checkpoint_interval,
             write_budget_bytes=args.write_budget_gib * 1024**3,
             resume_checkpoint=args.resume_checkpoint,
+            resume_counter_receipt=args.resume_counter_receipt,
         )
     else:
-        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint)
+        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt)
     print(json.dumps(result, sort_keys=True))
 if __name__ == "__main__":
     main()
