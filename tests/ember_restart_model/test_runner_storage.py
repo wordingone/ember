@@ -49,6 +49,14 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertTrue(newest.exists())
             self.assertEqual(run_vertical_slice._bundle_serialized_bytes(newest), 7)
 
+    def test_receipt_aware_retention_ignores_unverified_orphans(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            orphan = parent / "checkpoint-orphan"
+            orphan.mkdir()
+            (orphan / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            run_vertical_slice._enforce_retention(parent, max_count=1, receipt_aware=True)
+            self.assertTrue(orphan.exists())
     def test_production_artifact_root_requires_b_unless_c_relocation_is_explicitly_runner_bound(self) -> None:
         with self.assertRaisesRegex(ValueError, "B:"):
             run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))

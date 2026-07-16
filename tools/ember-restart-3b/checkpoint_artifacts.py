@@ -377,6 +377,7 @@ def write_checkpoint_artifacts(
     optimizer_contract: Mapping[str, Any] | None = None,
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
+    pre_publish_verifier: Callable[[Path, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
@@ -493,6 +494,11 @@ def write_checkpoint_artifacts(
             "serialized_bytes": logical_serialized_bytes,
             "incremental_publication_bytes": incremental_publication_bytes,
         }
+        if pre_publish_verifier is not None:
+            pre_publish_verifier(root, receipt)
+            post_verifier_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+            if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
+                raise ValueError("counter evidence exceeds the derived byte bound")
         os.replace(root, published_root)
         return receipt
     except Exception:

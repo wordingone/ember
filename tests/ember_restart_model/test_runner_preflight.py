@@ -215,6 +215,7 @@ class RunnerPreflightTests(unittest.TestCase):
         segment_kwargs: dict[str, object] = {}
         retention_bounds: list[int] = []
         writer = MagicMock(return_value={"published": True})
+        writer.side_effect = lambda *args, **kwargs: (args[2].mkdir(parents=True, exist_ok=True), kwargs["pre_publish_verifier"](args[2], {}), {"published": True})[-1]
         parent = Path("B:/semantic-parent")
         parent_manifest = parent / "checkpoint-manifest.json"
         real_read_text = Path.read_text
@@ -302,6 +303,7 @@ class RunnerPreflightTests(unittest.TestCase):
         counts = {"unique_parameters": 3_839_161_856, "active_parameters": 1_725_232_640}
         segment_kwargs: dict[str, object] = {}
         writer = MagicMock(return_value={"published": True})
+        writer.side_effect = lambda *args, **kwargs: (args[2].mkdir(parents=True, exist_ok=True), kwargs["pre_publish_verifier"](args[2], {}), {"published": True})[-1]
         parent = Path("B:/vertical-parent")
         parent_manifest = parent / "checkpoint-manifest.json"
         real_read_text = Path.read_text
@@ -594,6 +596,25 @@ class RunnerPreflightTests(unittest.TestCase):
             self.assertEqual(len(quarantines), 1)
             self.assertTrue(quarantines[0].joinpath("counter-failure.json").is_file())
 
+    def test_preexisting_target_is_refused_before_writer_and_bytes_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "checkpoint-existing"
+            target.mkdir()
+            original = target.joinpath("sentinel"); original.write_bytes(b"known-good")
+            called = False
+
+            def writer() -> dict[str, object]:
+                nonlocal called
+                called = True
+                original.write_bytes(b"corrupted")
+                return {"published": True}
+
+            with self.assertRaisesRegex(FileExistsError, "already exists"):
+                run_vertical_slice.publish_counter_verified_checkpoint(
+                    checkpoint_target=target, write_candidate=writer, execute_counter=lambda: {"unexpected": True},
+                )
+            self.assertFalse(called)
+            self.assertEqual(original.read_bytes(), b"known-good")
     def test_partial_writer_failure_deletes_candidate_and_preserves_bounded_evidence(self) -> None:
         """A writer exception cannot strand a partial checkpoint in the resumable namespace."""
 
