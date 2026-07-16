@@ -122,7 +122,10 @@ def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, da
     if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "spider" or manifest.get("benchmark_version") != SPIDER_VERSION or any(manifest.get(key) != value for key, value in expected.items()):
         raise ValueError("frozen Spider custody manifest does not bind supplied evaluator assets")
     digest = hashlib.sha256(manifest_bytes).hexdigest()
-    return (digest, manifest.get("protocol_sha256")) if include_protocol else digest
+    protocol = manifest.get("protocol_sha256")
+    if include_protocol and manifest.get("schema_version") == "ember-restart-benchmark-custody-v1" and (not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol or any(character not in "0123456789abcdef" for character in protocol)):
+        raise ValueError("frozen Spider custody manifest requires protocol_sha256 for canonical scoring")
+    return (digest, protocol) if include_protocol else digest
 
 
 def main() -> int:
@@ -146,7 +149,11 @@ def main() -> int:
     if not selected.is_file():
         parser.error("prediction input must be a file")
     try:
-        custody_sha256, protocol_sha256 = verify_frozen_custody(arguments.frozen_sql_manifest, arguments.spider_root, arguments.gold, arguments.tables, arguments.database_dir, include_protocol=True)
+        custody_result = verify_frozen_custody(arguments.frozen_sql_manifest, arguments.spider_root, arguments.gold, arguments.tables, arguments.database_dir, include_protocol=arguments.canonical_predictions is not None)
+        if arguments.canonical_predictions is not None:
+            custody_sha256, protocol_sha256 = custody_result
+        else:
+            custody_sha256, protocol_sha256 = custody_result, None
         if arguments.canonical_predictions is not None:
             prediction_bytes = arguments.canonical_predictions.read_bytes()
             envelope, sql = canonical_sql(prediction_bytes, sha256_file(arguments.gold), protocol_sha256)

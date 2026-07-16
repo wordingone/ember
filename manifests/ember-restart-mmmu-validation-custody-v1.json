@@ -3,7 +3,11 @@
     "workstream_id":  "EMBER-02C",
     "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "schema_version":  "ember-restart-benchmark-custody-v1",
-    "scoring_adapter": {"path": "scripts/ember_restart_eval_mmmu.py", "sha256": "27071892e8a96cdb4474fadcf62c283022beb72d645fbe484ded20228be42cd2", "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"},
+    "scoring_adapter":  {
+                            "path":  "scripts/ember_restart_eval_mmmu.py",
+                            "sha256":  "7546e5a3f21c9123edaf485c9f54a447c7388fd9b0a3f79abad4e116285aaf83",
+                            "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+                        },
     "benchmark_id":  "MMMU",
     "benchmark_version":  "bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa",
     "upstream_url":  "https://github.com/MMMU-Benchmark/MMMU.git",
@@ -30,5 +34,10 @@
                                         "runner_receipt_sha256":  "10bbc5f517ebe7831ddb2d0bfc8acadbc13f5d525e92ddb813b97400f88c1b97",
                                         "row_count":  900,
                                         "claim_status":  "FROZEN_MMMU_IMAGE_INPUTS_NO_CHECKPOINT_BOUND_PREDICTIONS"
-                                    }
+                                    },
+    "scorer":  {
+                   "path":  "mmmu/main_eval_only.py",
+                   "sha256":  "d527738e3beeccb0620d41bdaa94324f89e376a9935b28a48f4975b1815234d6"
+               },
+    "protocol_sha256":  "12e3c2c6b226c095d7a66b2b44d6162ef9972e4422594ef13c4c8182891e5721"
 }

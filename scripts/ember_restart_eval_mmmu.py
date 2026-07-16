@@ -39,6 +39,33 @@ def canonical_predictions(data: bytes) -> tuple[dict, dict[str, object]]:
     return envelope, converted
 
 
+def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> str:
+    strict = manifest.get("schema_version") == "ember-restart-benchmark-custody-v1" or "scorer" in manifest
+    if not strict:
+        split = manifest.get("split")
+        answer_sha = split.get("answer_dictionary_sha256") if isinstance(split, dict) else None
+        version = manifest.get("benchmark_version")
+        if not isinstance(answer_sha, str) or not isinstance(version, str):
+            raise ValueError("MMMU frozen custody requires benchmark split identity")
+        return sha256(f"MMMU:{version}:{answer_sha}".encode())
+    scorer = manifest.get("scorer")
+    if not isinstance(scorer, dict) or not isinstance(scorer.get("path"), str) or not isinstance(scorer.get("sha256"), str) or len(scorer["sha256"]) != 64 or scorer["sha256"].lower() != scorer["sha256"]:
+        raise ValueError("MMMU frozen custody requires scorer path and sha256")
+    relative = Path(scorer["path"])
+    if relative.is_absolute() or relative.drive:
+        raise ValueError("MMMU scorer path escapes frozen root")
+    source = (mmmu_root / relative).resolve()
+    if not source.is_file() or not source.is_relative_to(mmmu_root.resolve()) or sha256(source.read_bytes()) != scorer["sha256"]:
+        raise ValueError("MMMU scorer bytes do not match frozen custody")
+    license_sha256 = manifest.get("license_sha256")
+    protocol = manifest.get("protocol_sha256")
+    if not isinstance(license_sha256, str) or len(license_sha256) != 64 or license_sha256.lower() != license_sha256:
+        raise ValueError("MMMU frozen custody requires license_sha256")
+    if not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol:
+        raise ValueError("MMMU frozen custody requires protocol_sha256")
+    return protocol
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mmmu-root", required=True, type=Path)
@@ -64,8 +91,8 @@ def main() -> int:
         if not isinstance(answers, dict) or not answers or any(not isinstance(value, dict) or value.get("question_type") != "multiple-choice" for value in answers.values()):
             raise ValueError("MMMU adapter permits multiple-choice answers only")
         split = manifest.get("split") if isinstance(manifest, dict) else None
-        expected_protocol_sha256 = sha256(f"MMMU:{manifest.get('benchmark_version')}:{sha256(answer_bytes)}".encode())
-        if not isinstance(split, dict) or manifest.get("benchmark_id") != "MMMU" or manifest.get("benchmark_version") != benchmark.get("version") or split.get("name") != "validation" or split.get("answer_dictionary_sha256") != sha256(answer_bytes) or benchmark.get("split_sha256") != sha256(answer_bytes) or benchmark.get("protocol_sha256") != expected_protocol_sha256:
+        frozen_protocol_sha256 = verify_frozen_scorer(manifest, arguments.mmmu_root)
+        if not isinstance(split, dict) or manifest.get("benchmark_id") != "MMMU" or manifest.get("benchmark_version") != benchmark.get("version") or split.get("name") != "validation" or split.get("answer_dictionary_sha256") != sha256(answer_bytes) or benchmark.get("split_sha256") != sha256(answer_bytes) or benchmark.get("protocol_sha256") != frozen_protocol_sha256:
             raise ValueError("frozen MMMU custody does not bind canonical predictions")
         image_materialization = manifest.get("image_input_materialization")
         if image_materialization is not None:

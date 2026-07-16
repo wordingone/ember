@@ -90,3 +90,21 @@ def test_scores_mmmu_when_declared_image_inputs_match_canonical_rows(tmp_path):
     result = subprocess.run([sys.executable, str(SCRIPT), "--mmmu-root", str(root / "mmmu-root"), "--answers", str(answers), "--canonical-predictions", str(predictions), "--frozen-mmmu-manifest", str(custody), "--frozen-image-inputs", str(image_inputs), "--score-output", str(score)], text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stderr
     assert json.loads(score.read_text(encoding="utf-8"))["sample_count"] == 1
+
+def test_mmmu_rejects_unpinned_scorer_source_even_when_answer_protocol_matches(tmp_path):
+    import importlib.util
+    sys.path.insert(0, str(SCRIPT.parent))
+    spec = importlib.util.spec_from_file_location("mmmu_scorer_custody", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    root = tmp_path / "mmmu-root"; scorer = root / "mmmu" / "main_eval_only.py"; scorer.parent.mkdir(parents=True); scorer.write_text("print({'Overall': {'num': 1, 'acc': 1.0}})\n", encoding="utf-8")
+    answers = tmp_path / "answers.json"; answers.write_text(json.dumps({"validation_math_1": {"question_type": "multiple-choice", "ground_truth": "A"}}), encoding="utf-8")
+    predictions = tmp_path / "predictions.json"; answer_sha = hashlib.sha256(answers.read_bytes()).hexdigest()
+    predictions.write_text(json.dumps({"schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64, "tokenizer_sha256": "c" * 64, "inference_implementation_sha256": "d" * 64, "benchmark": {"id": "MMMU", "version": "v", "capability": "image", "split_sha256": answer_sha, "protocol_sha256": hashlib.sha256(f"MMMU:v:{answer_sha}".encode()).hexdigest()}, "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1, "temperature": 0, "top_p": 1, "stop_token_ids": [2]}, "rows": [{"id": "validation_math_1", "input_sha256": "f" * 64, "generated_token_ids": [2], "stop_reason": "eos", "output": {"kind": "text", "text": "A"}}]}), encoding="utf-8")
+    custody = tmp_path / "custody.json"; custody.write_text(json.dumps({"schema_version": "ember-restart-benchmark-custody-v1", "benchmark_id": "MMMU", "benchmark_version": "v", "split": {"name": "validation", "answer_dictionary_sha256": answer_sha}}), encoding="utf-8")
+    score = tmp_path / "score.json"
+    completed = subprocess.run([sys.executable, str(SCRIPT), "--mmmu-root", str(root), "--answers", str(answers), "--canonical-predictions", str(predictions), "--frozen-mmmu-manifest", str(custody), "--score-output", str(score)], text=True, capture_output=True, check=False)
+    assert completed.returncode != 0
+    assert "scorer" in completed.stderr or "protocol" in completed.stderr
+    assert not score.exists()

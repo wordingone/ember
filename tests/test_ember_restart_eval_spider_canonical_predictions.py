@@ -44,3 +44,17 @@ def test_spider_rejects_altered_protocol_identity(tmp_path):
     envelope = {"schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64, "tokenizer_sha256": "c" * 64, "inference_implementation_sha256": "d" * 64, "benchmark": {"id": "spider", "version": module.SPIDER_VERSION, "capability": "tool", "split_sha256": "e" * 64, "protocol_sha256": "0" * 64}, "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1, "temperature": 0, "top_p": 1, "stop_token_ids": [2]}, "rows": [{"id": "0", "input_sha256": "f" * 64, "generated_token_ids": [2], "stop_reason": "eos", "output": {"kind": "sql", "sql": "select 1"}}]}
     with pytest.raises(ValueError, match="canonical Spider predictions"):
         module.canonical_sql(json.dumps(envelope).encode(), "e" * 64, "1" * 64)
+def test_spider_custody_requires_protocol_identity_for_canonical_scoring(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("spider_protocol_required", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    source = tmp_path / "spider"; source.mkdir(); (source / "evaluation.py").write_text("# evaluator\n", encoding="utf-8")
+    gold = tmp_path / "gold.sql"; gold.write_text("select 1\tdb\n", encoding="utf-8")
+    tables = tmp_path / "tables.json"; tables.write_text("[]", encoding="utf-8")
+    database = tmp_path / "database"; database.mkdir(); (database / "db.sqlite").write_bytes(b"db")
+    manifest = tmp_path / "custody.json"
+    manifest.write_text(json.dumps({"schema_version": "ember-restart-benchmark-custody-v1", "result": "PREFLIGHT_ONLY", "benchmark_id": "spider", "benchmark_version": module.SPIDER_VERSION, "gold_sha256": digest(gold), "tables_sha256": digest(tables), "database_tree_sha256": hashlib.sha256(b"db.sqlite\0db").hexdigest(), "evaluator_sha256": digest(source / "evaluation.py"), "source_tree_sha256": module.source_tree_sha256(source)}), encoding="utf-8")
+    with pytest.raises(ValueError, match="protocol"):
+        module.verify_frozen_custody(manifest, source, gold, tables, database, include_protocol=True)
