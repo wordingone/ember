@@ -29,6 +29,29 @@ def verify(certificate_path: Path, receipt_path: Path) -> dict[str, object]:
     observed_hash = hashlib.sha256(receipt_bytes).hexdigest()
     if certificate.get("replication_receipt_sha256") != observed_hash:
         raise ValueError("replication_receipt_sha256 mismatch")
+    receipt_binding = certificate.get("receipt_binding")
+    if not isinstance(receipt_binding, dict):
+        raise ValueError("certificate receipt_binding must be an object")
+    scalar_binding_fields = (
+        "checkpoint_manifest_sha256",
+        "model_config_sha256",
+        "tokenizer_sha256",
+        "source_sha256",
+        "optimizer_contract_sha256",
+        "stream_receipt_sha256",
+    )
+    required_binding_fields = {*scalar_binding_fields, "source_closure_sha256"}
+    if set(receipt_binding) != required_binding_fields:
+        raise ValueError("certificate receipt_binding fields mismatch")
+    for field in scalar_binding_fields:
+        if receipt.get(field) != receipt_binding[field]:
+            raise ValueError(f"receipt binding {field} mismatch")
+    custody = receipt.get("custody")
+    if not isinstance(custody, dict):
+        raise ValueError("receipt custody must be an object")
+    source_closure = custody.get("source_closure_sha256")
+    if not isinstance(source_closure, dict) or source_closure != receipt_binding["source_closure_sha256"]:
+        raise ValueError("receipt binding source_closure_sha256 mismatch")
     expected_identity = {
         "schema_version": "ember-native-compute-screen-v1",
         "result": "MEASURED",
