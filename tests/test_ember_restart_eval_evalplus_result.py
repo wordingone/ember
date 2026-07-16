@@ -89,7 +89,7 @@ def test_refuses_valid_hex_protocol_not_derived_from_custody_tuple(tmp_path):
             if entry["path"] == relative:
                 entry["sha256"] = digest(destination)
     custody = root / "manifests" / "custody.json"; custody.write_text(json.dumps(manifest), encoding="utf-8")
-    binding = {"frozen_code_manifest_sha256": digest(custody), "suite": "humanevalplus_v0.1.10", "task_asset_sha256": manifest["frozen_task_assets"]["humanevalplus_v0.1.10"]["sha256"], "protocol_sha256": "0" * 64}
+    binding = {"frozen_code_manifest_sha256": digest(custody), "benchmark_id": "evalplus", "benchmark_version": "v0.1.10", "suite": "humanevalplus_v0.1.10", "task_asset_sha256": manifest["frozen_task_assets"]["humanevalplus_v0.1.10"]["sha256"], "protocol_sha256": "0" * 64}
     with pytest.raises(ValueError, match="protocol"):
         module._load_frozen_code_manifest(custody, binding, binding["suite"])
 

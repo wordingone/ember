@@ -110,7 +110,7 @@ def test_evalplus_rejects_checkpoint_identity_drift_when_frozen_custody_declares
     source_manifest["protocol_sha256"] = module.evalplus_protocol_sha256(source_manifest, "humanevalplus_v0.1.10", source_manifest["scoring_adapters"])
     manifest = repo / "manifests" / "custody.json"
     manifest.write_text(json.dumps(source_manifest), encoding="utf-8")
-    binding = {"checkpoint_manifest_sha256": "c" * 64, "model_config_sha256": "b" * 64, "protocol_sha256": source_manifest["protocol_sha256"], "suite": "humanevalplus_v0.1.10", "task_asset_sha256": source_manifest["frozen_task_assets"]["humanevalplus_v0.1.10"]["sha256"], "frozen_code_manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest()}
+    binding = {"checkpoint_manifest_sha256": "c" * 64, "model_config_sha256": "b" * 64, "benchmark_id": "evalplus", "benchmark_version": "v0.1.10", "protocol_sha256": source_manifest["protocol_sha256"], "suite": "humanevalplus_v0.1.10", "task_asset_sha256": source_manifest["frozen_task_assets"]["humanevalplus_v0.1.10"]["sha256"], "frozen_code_manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest()}
     with pytest.raises(ValueError, match="checkpoint"):
         module._load_frozen_code_manifest(manifest, binding, binding["suite"])
 

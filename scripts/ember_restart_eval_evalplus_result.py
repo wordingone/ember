@@ -51,6 +51,9 @@ def _load_frozen_code_manifest(path: Path, binding: dict[str, object], suite: st
     manifest = json.loads(manifest_bytes.decode("utf-8"))
     if not isinstance(manifest, dict) or manifest.get("schema_version") != "ember-restart-benchmark-custody-v1" or manifest.get("benchmark_id") != "evalplus":
         raise ValueError("invalid EvalPlus frozen code manifest")
+    expected_version = suite.rsplit("_", 1)[-1]
+    if binding.get("benchmark_id") != manifest.get("benchmark_id") or binding.get("benchmark_version") != expected_version:
+        raise ValueError("EvalPlus benchmark version/identity is not bound by frozen custody")
     assets = manifest.get("frozen_task_assets")
     asset = assets.get(suite) if isinstance(assets, dict) else None
     if not isinstance(asset, dict) or asset.get("sha256") != binding.get("task_asset_sha256"):
@@ -99,7 +102,7 @@ def main() -> int:
         binding = json.loads(binding_bytes.decode("utf-8"))
         result = json.loads(result_bytes.decode("utf-8"))
         required = {"schema_version", "result", "suite", "benchmark_id", "benchmark_version", "split_sha256", "protocol_sha256", "checkpoint_manifest_sha256", "model_config_sha256", "task_asset_sha256", "evalplus_dataset_md5", "predictions_sha256", "samples_sha256", "task_ids_sha256", "sample_count", "frozen_code_manifest_sha256"}
-        if not isinstance(binding, dict) or set(binding) != required or binding["schema_version"] != "ember-restart-evalplus-samples-binding-v1" or binding["result"] != "PREFLIGHT_ONLY" or binding["suite"] not in SUITES or not isinstance(binding["sample_count"], int) or isinstance(binding["sample_count"], bool) or binding["sample_count"] <= 0:
+        if not isinstance(binding, dict) or set(binding) != required or binding["schema_version"] != "ember-restart-evalplus-samples-binding-v1" or binding["result"] != "PREFLIGHT_ONLY" or binding["suite"] not in SUITES or binding.get("benchmark_id") != "evalplus" or binding.get("benchmark_version") != binding["suite"].rsplit("_", 1)[-1] or not isinstance(binding["sample_count"], int) or isinstance(binding["sample_count"], bool) or binding["sample_count"] <= 0:
             raise ValueError("invalid EvalPlus samples sidecar")
         _load_frozen_code_manifest(arguments.frozen_code_manifest, binding, binding["suite"])
         if not isinstance(result, dict) or not isinstance(result.get("hash"), str) or not isinstance(result.get("eval"), dict) or not isinstance(result.get("pass_at_k"), dict):
