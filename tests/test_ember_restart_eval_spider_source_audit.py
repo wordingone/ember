@@ -51,3 +51,27 @@ def test_source_audit_refuses_a_source_tree_with_evaluation_gold():
         assert result.returncode != 0
         assert "evaluation assets are present" in result.stderr
         assert not output.exists()
+
+def test_source_audit_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+    import importlib.util
+    import pytest
+    spec = importlib.util.spec_from_file_location("spider_cleanup", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    root = tmp_path / "spider"
+    root.mkdir()
+    (root / "evaluation.py").write_text("print('evaluator')\n", encoding="utf-8")
+    (root / "LICENSE").write_text("Apache-2.0\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.email", "audit@example.invalid"], check=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.name", "audit"], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(root), "commit", "-qm", "fixture"], check=True)
+    commit = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+    output = tmp_path / "audit.json"
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--spider-root", str(root), "--expected-commit", commit, "--output", str(output)])
+    monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+    with pytest.raises(OSError, match="replace denied"):
+        module.main()
+    assert not output.exists()
+    assert not list(tmp_path.glob("audit.json.*.tmp"))
