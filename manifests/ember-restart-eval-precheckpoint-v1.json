@@ -110,14 +110,14 @@
     "frozen_family_artifacts":  {
                                     "text": {"path": "manifests/ember-restart-gsm8k-custody-v1.json", "sha256": "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6"},
                                     "reasoning": {"path": "manifests/ember-restart-mmlu-pro-custody-v1.json", "sha256": "e3b28449e918fb50ed0b26f7bd8f09adab30b068be19a0d34fe5a03584942f63"},
-                                    "code": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "3bc1c43871a602f8a1aab8815a89ead9883a09141848adf3ef4db4d82f87660c"},
-                                    "mathematics": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "3bc1c43871a602f8a1aab8815a89ead9883a09141848adf3ef4db4d82f87660c"},
+                                    "code": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "6509403e4ff759b89adc31efcbcb28d6efb8d48eb00b088d9f4cacecfcab611c"},
+                                    "mathematics": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "6509403e4ff759b89adc31efcbcb28d6efb8d48eb00b088d9f4cacecfcab611c"},
                                     "terminal": {"path": "manifests/ember-restart-terminal-bench-custody-v1.json", "sha256": "cd8562e4c4fc4b4f0e07065bf9a76e086f55ddfa36dbdd344ea0cdd645eb04d6"},
-                                    "sql": {"path": "manifests/ember-restart-spider-custody-v1.json", "sha256": "ead47ff19a060257258658598697d9e4625f44fa39d5b121fce006d5890e62e4"},
+                                    "sql": {"path": "manifests/ember-restart-spider-custody-v1.json", "sha256": "de3750c0abf6a90bffbdf22f14e80260ca8f0df17c1bd35ae1b2a508f8453878"},
                                     "files": {"path": "manifests/ember-restart-swebench-custody-v1.json", "sha256": "084f8696742b69eee00db0776fd9216c3147b92afc2e825710666fa16f807621"},
                                     "browser_ui": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"},
-                                    "image": {"path": "manifests/ember-restart-mmmu-validation-custody-v1.json", "sha256": "127906142bb8ccdaeb3464486766e3b5868c804e0e789373426839c56230d845"},
-                                    "audio": {"path": "manifests/ember-restart-audiobench-custody-v1.json", "sha256": "524e93ce142f4250d3a4403d0ed6f8eb6fb41a4ed64e08b5c50724b8205f522c"},
+                                    "image": {"path": "manifests/ember-restart-mmmu-validation-custody-v1.json", "sha256": "b72171bb5928cffb460e70b0019205a990f0256055c86b761c5c09325c99d4b2"},
+                                    "audio": {"path": "manifests/ember-restart-audiobench-custody-v1.json", "sha256": "fbd84002cbdebf801049543815c753a077cdb063b160e3ea05c7d93b0938bca6"},
                                     "structured_tools": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "34c3fa1b9f0dfd9512a9405395d6925cd6ab5663a3dc77beb7fa33b7e3400538"}
                                 }
 }

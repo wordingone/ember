@@ -34,7 +34,7 @@
                                          },
     "scoring_adapter":  {
                             "path":  "scripts/ember_restart_eval_spider.py",
-                            "sha256":  "8d70e57db47f518e25d16b196a7cfb4a68ea34c47b85d1855f516a8bc7bff022",
+                            "sha256":  "b339a8ab3eefe4b233bc85779b0e90186adc6290dc59c774f5ccabbfd0a712af",
                             "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
                         }
 }
