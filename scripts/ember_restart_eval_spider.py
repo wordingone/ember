@@ -80,6 +80,16 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def source_tree_sha256(root: Path) -> str:
+    digest = hashlib.sha256()
+    files = sorted(path for path in root.rglob("*") if path.is_file() and "__pycache__" not in path.parts)
+    if not files:
+        raise ValueError("frozen Spider evaluator directory must contain files")
+    for path in files:
+        digest.update(path.relative_to(root).as_posix().encode("utf-8") + b"\0")
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
 def database_tree_sha256(root: Path) -> str:
     digest = hashlib.sha256()
     files = sorted(path for path in root.rglob("*") if path.is_file())
@@ -108,7 +118,7 @@ def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, da
         manifest = json.loads(manifest_bytes.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError(f"invalid frozen Spider custody manifest: {error}") from error
-    expected = {"gold_sha256": sha256_file(gold), "tables_sha256": sha256_file(tables), "database_tree_sha256": database_tree_sha256(database), "evaluator_sha256": sha256_file(source / "evaluation.py")}
+    expected = {"gold_sha256": sha256_file(gold), "tables_sha256": sha256_file(tables), "database_tree_sha256": database_tree_sha256(database), "evaluator_sha256": sha256_file(source / "evaluation.py"), "source_tree_sha256": source_tree_sha256(source)}
     if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "spider" or manifest.get("benchmark_version") != SPIDER_VERSION or any(manifest.get(key) != value for key, value in expected.items()):
         raise ValueError("frozen Spider custody manifest does not bind supplied evaluator assets")
     return hashlib.sha256(manifest_bytes).hexdigest()
