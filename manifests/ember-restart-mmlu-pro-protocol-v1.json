@@ -8,6 +8,11 @@
     "split_path":  "data/test-00000-of-00001.parquet",
     "capability":  "reasoning",
     "result":  "PREFLIGHT_ONLY",
+    "scoring_adapter": {
+        "path": "scripts/ember_restart_eval_mmlu_pro_score.py",
+        "sha256": "3cc5e2edf7e84978c22449b48fa94cd2bedefdc1d9676f511176047eff63f211",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "prohibited_claims":  [
                               "checkpoint_score",
                               "capability_admission",

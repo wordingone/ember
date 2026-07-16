@@ -8,6 +8,11 @@
     "split_path":  "ARC-Challenge/test-00000-of-00001.parquet",
     "capability":  "reasoning",
     "result":  "PREFLIGHT_ONLY",
+    "scoring_adapter": {
+        "path": "scripts/ember_restart_eval_arc_challenge.py",
+        "sha256": "c906d8f00b431d243137a7119ddaec58cd8a04f0312c44cab46d1e5da67b2772",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "prohibited_claims":  [
                               "checkpoint_score",
                               "capability_admission",
