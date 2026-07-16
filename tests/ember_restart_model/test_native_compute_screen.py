@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -30,19 +31,20 @@ from native_compute_screen import (
 class NativeComputeScreenTests(unittest.TestCase):
     @staticmethod
     def _valid_schedule_payload() -> dict[str, object]:
+        now_ms = int(time.time() * 1000)
         identity = {"binary_sha256": "a" * 64, "source_sha256": "b" * 64}
         return {
             "schema_version": "emberd-schedule-alarm-state-v1",
-            "generated_at_ms": 100,
+            "generated_at_ms": now_ms,
             "emberd_identity": identity,
             "runs": [{
                 "job_id": "ember-02b-native-clean-genesis-screen-b1-b2-seed83",
                 "artifact_class": "compute-primitive",
                 "predicted_tokens": 3072,
                 "predicted_duration_ms": 720000,
-                "predicted_at_ms": 100,
-                "predicted_program_completion_ms": 720100,
-                "absolute_deadline_ms": 720200,
+                "predicted_at_ms": now_ms,
+                "predicted_program_completion_ms": now_ms + 720000,
+                "absolute_deadline_ms": now_ms + 720001,
                 "prediction_daemon_identity": identity,
             }],
         }
@@ -141,6 +143,14 @@ class NativeComputeScreenTests(unittest.TestCase):
             path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "prediction identity"):
                 _validate_schedule_receipt(path)
+
+    def test_schedule_rejects_a_prediction_whose_deadline_has_elapsed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "schedule.json"
+            payload = self._valid_schedule_payload()
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "deadline has elapsed"):
+                _validate_schedule_receipt(path, now_ms=payload["runs"][0]["absolute_deadline_ms"])
 
     def test_disk_preflight_persists_the_canonical_output_bound_dispatch(self) -> None:
         closure = {name: "c" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")}

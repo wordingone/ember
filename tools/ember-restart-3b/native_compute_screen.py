@@ -176,7 +176,7 @@ def _validated_daemon_identity(value: object, label: str) -> dict[str, str]:
     return dict(value)
 
 
-def _validate_schedule_receipt(path: Path) -> dict[str, object]:
+def _validate_schedule_receipt(path: Path, *, now_ms: int | None = None) -> dict[str, object]:
     payload, digest = _read_json_receipt(path, "emberd schedule receipt")
     runs = payload.get("runs")
     if payload.get("schema_version") != "emberd-schedule-alarm-state-v1" or not isinstance(runs, list):
@@ -195,6 +195,11 @@ def _validate_schedule_receipt(path: Path) -> dict[str, object]:
         raise ValueError("emberd schedule receipt lacks integer prediction timestamps and deadline")
     if not run["predicted_at_ms"] <= run["predicted_program_completion_ms"] <= run["absolute_deadline_ms"]:
         raise ValueError("emberd schedule prediction timestamps are not ordered")
+    observed_now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+    if not isinstance(observed_now_ms, int) or observed_now_ms <= 0:
+        raise ValueError("schedule validation requires a positive current timestamp")
+    if observed_now_ms >= run["absolute_deadline_ms"]:
+        raise ValueError("emberd schedule deadline has elapsed")
     prediction_identity = _validated_daemon_identity(run.get("prediction_daemon_identity"), "emberd prediction identity")
     if prediction_identity != top_identity:
         raise ValueError("emberd prediction identity does not match the schedule identity")
