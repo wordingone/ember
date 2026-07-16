@@ -11,6 +11,7 @@ checkpoint-bound manifest.
 | Required family | Candidate source | Resolved source commit | Why it is included | Still required before scoring |
 | --- | --- | --- | --- | --- |
 | Terminal | `harbor-framework/terminal-bench-2` | `2fd12b88aafdd04a52c298e3940bcb189f9766d6` | Real command-line task outcomes | no eligible pinned image/network-safe local task; fixture-only validator remains non-admissible |
+| Text | owned frozen `local-text` v1 | `local-v1` | Deterministic exact-answer text check | canonical checkpoint predictions bound to the frozen split; no benchmark score from a raw-forward smoke |
 | Code | `evalplus/evalplus` | `26d6d00bb1fd0fa37f39c99d5290da67891d1c5e` | HumanEval+ and MBPP+ task outcomes | digest-pinned offline code sandbox; the mutable upstream Docker tag is forbidden |
 | Mathematics | frozen local MATH-500 exact scorer | `local-v1` | Deterministic exact-answer reasoning check | canonical checkpoint predictions on the frozen split |
 | SQL | `taoyds/spider` | `b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c` | Executable text-to-SQL evaluation | database snapshot hashes and canonical checkpoint predictions |
