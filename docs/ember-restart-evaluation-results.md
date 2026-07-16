@@ -18,12 +18,13 @@ active parameters, global step 2, and 2,048 observed shared-text tokens. It is
 structural bootstrap-mechanics evidence only. Specialists remain untrained;
 there is no sufficient-pretraining, capability, or admission claim.
 
-The public execution authority intentionally remains
-`PREPARED_NOT_EXECUTABLE_AWAITING_PROMPT_AND_SAME_BYTE_RUNTIME_BINDING`.
-Accordingly, no checkpoint-bound forward, canonical prediction envelope, or
-capability score has been emitted from this v3 checkpoint. Historical v2
-snapshots remain bootstrap/raw-forward evidence only and are not corrected-rung
-capability evidence.
+One exact execution-path record is now public: `VERIFIED_NON_CLAIM_RAW_FORWARD`
+for `ember-step2-raw-forward/1` generated one greedy token decoded as `lev`
+from this checkpoint. It is a bounded raw-forward record, not the frozen
+local-text suite: it carries no benchmark score, capability, admission, or
+sufficient-pretraining credit. No frozen-suite canonical prediction envelope or
+score has been emitted. Historical v2 snapshots remain bootstrap/raw-forward
+evidence only and are not corrected-rung capability evidence.
 
 ## Required result record
 
