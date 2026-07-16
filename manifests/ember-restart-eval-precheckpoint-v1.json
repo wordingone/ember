@@ -108,6 +108,10 @@
                   },
     "claim_rule":  "No result is admissible until every required native capability family has a checkpoint-bound frozen score or a visible failure record.",
     "frozen_family_artifacts":  {
+                                    "text":  "manifests/ember-restart-gsm8k-custody-v1.json",
+                                    "reasoning":  "manifests/ember-restart-mmlu-pro-custody-v1.json",
+                                    "code":  "manifests/ember-restart-eval-code-math-custody-v1.json",
+                                    "mathematics":  "manifests/ember-restart-eval-code-math-custody-v1.json",
                                     "terminal":  "manifests/ember-restart-terminal-bench-custody-v1.json",
                                     "sql":  "manifests/ember-restart-spider-custody-v1.json",
                                     "files":  "manifests/ember-restart-swebench-custody-v1.json",
