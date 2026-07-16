@@ -116,6 +116,28 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(result["global_step"], 3)
         self.assertEqual(checkpoints, [2, 3])
 
+    def test_progress_callback_observes_every_completed_optimizer_step(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=28)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        progress: list[dict[str, object]] = []
+        result = run_pretraining_segment(
+            model=model,
+            optimizer=optimizer,
+            records=self._domain_records(config)[:2],
+            config=config,
+            device=torch.device("cpu"),
+            checkpoint_every=2,
+            checkpoint_callback=lambda _step, _result: None,
+            progress_callback=progress.append,
+            initial_global_step=7,
+            require_complete_coverage=False,
+        )
+        self.assertEqual([event["step"] for event in progress], [8, 9])
+        self.assertEqual([event["total_steps"] for event in progress], [9, 9])
+        self.assertEqual([event["loss"] for event in progress], result["losses"])
+        self.assertTrue(all(isinstance(event["step_ms"], float) and event["step_ms"] > 0 for event in progress))
+
     def test_rejects_self_declared_reasoning_or_tool_without_executed_receipt(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=29)
