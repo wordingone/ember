@@ -38,7 +38,7 @@ def main() -> int:
         binding = json.loads(binding_bytes.decode("utf-8"))
         result = json.loads(result_bytes.decode("utf-8"))
         required = {"schema_version", "result", "suite", "checkpoint_manifest_sha256", "model_config_sha256", "task_asset_sha256", "evalplus_dataset_md5", "predictions_sha256", "samples_sha256", "task_ids_sha256", "sample_count", "frozen_code_manifest_sha256"}
-        if not isinstance(binding, dict) or set(binding) != required or binding["schema_version"] != "ember-restart-evalplus-samples-binding-v1" or binding["result"] != "PREFLIGHT_ONLY" or not isinstance(binding["sample_count"], int) or isinstance(binding["sample_count"], bool) or binding["sample_count"] <= 0:
+        if not isinstance(binding, dict) or set(binding) != required or binding["schema_version"] != "ember-restart-evalplus-samples-binding-v1" or binding["result"] != "PREFLIGHT_ONLY" or binding["suite"] not in {"humanevalplus_v0.1.10", "mbppplus_v0.2.0"} or not isinstance(binding["sample_count"], int) or isinstance(binding["sample_count"], bool) or binding["sample_count"] <= 0:
             raise ValueError("invalid EvalPlus samples sidecar")
         if not isinstance(result, dict) or not isinstance(result.get("hash"), str) or not isinstance(result.get("eval"), dict) or not isinstance(result.get("pass_at_k"), dict):
             raise ValueError("invalid EvalPlus result artifact")
