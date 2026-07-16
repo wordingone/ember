@@ -1,0 +1,18 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02C",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-restart-benchmark-custody-v1",
+  "benchmark_id": "swe-bench",
+  "covered_families": ["code", "files"],
+  "source_commit": "f7bbbb2ccdf479001d6467c9e34af59e44a840f9",
+  "upstream_url": "https://github.com/SWE-bench/SWE-bench",
+  "license": "MIT",
+  "source_only_audit": {
+    "artifact_sha256": "2a56f54d6b9f2f424e6a45032f5a619580ffd7065de458b046eb988d3257e752",
+    "runner_receipt_sha256": "f37595272cab74d6bef2df3f800ee152e0260c29b403ab5e87f0440df6afbd99",
+    "claim_status": "SOURCE_ONLY_NO_FROZEN_SWEBENCH_TASK_RELEASE"
+  },
+  "admission": "NOT_EXECUTABLE_NO_FROZEN_TASK_RELEASE_OR_OFFLINE_SANDBOX",
+  "target_execution_permitted": false
+}
