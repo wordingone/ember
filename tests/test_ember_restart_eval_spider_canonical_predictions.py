@@ -58,3 +58,18 @@ def test_spider_custody_requires_protocol_identity_for_canonical_scoring(tmp_pat
     manifest.write_text(json.dumps({"schema_version": "ember-restart-benchmark-custody-v1", "result": "PREFLIGHT_ONLY", "benchmark_id": "spider", "benchmark_version": module.SPIDER_VERSION, "gold_sha256": digest(gold), "tables_sha256": digest(tables), "database_tree_sha256": hashlib.sha256(b"db.sqlite\0db").hexdigest(), "evaluator_sha256": digest(source / "evaluation.py"), "source_tree_sha256": module.source_tree_sha256(source)}), encoding="utf-8")
     with pytest.raises(ValueError, match="protocol"):
         module.verify_frozen_custody(manifest, source, gold, tables, database, include_protocol=True)
+
+def test_spider_rejects_well_formed_but_wrong_protocol_authority(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("spider_protocol_wrong_hex", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    source = tmp_path / "spider"; source.mkdir(); (source / "evaluation.py").write_text("# evaluator\n", encoding="utf-8")
+    gold = tmp_path / "gold.sql"; gold.write_text("select 1\tdb\n", encoding="utf-8")
+    tables = tmp_path / "tables.json"; tables.write_text("[]", encoding="utf-8")
+    database = tmp_path / "database"; database.mkdir(); (database / "db.sqlite").write_bytes(b"db")
+    manifest = tmp_path / "custody.json"
+    manifest.write_text(json.dumps({"schema_version": "ember-restart-benchmark-custody-v1", "result": "PREFLIGHT_ONLY", "benchmark_id": "spider", "benchmark_version": module.SPIDER_VERSION, "gold_sha256": digest(gold), "tables_sha256": digest(tables), "database_tree_sha256": module.database_tree_sha256(database), "evaluator_sha256": digest(source / "evaluation.py"), "source_tree_sha256": module.source_tree_sha256(source), "protocol_sha256": "0" * 64}), encoding="utf-8")
+    with pytest.raises(ValueError, match="protocol"):
+        module.verify_frozen_custody(manifest, source, gold, tables, database, include_protocol=True)
