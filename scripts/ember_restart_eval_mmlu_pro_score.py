@@ -11,6 +11,14 @@ from ember_restart.prediction_contract import ContractError, validate_prediction
 
 def sha256(data: bytes) -> str:return hashlib.sha256(data).hexdigest()
 
+def protocol_sha256(manifest: dict, adapter_sha256: str) -> str:
+    license_sha256 = manifest.get("license_sha256")
+    reference_sha256 = manifest.get("references_sha256")
+    version = manifest.get("benchmark_version")
+    if not isinstance(license_sha256, str) or len(license_sha256) != 64 or license_sha256.lower() != license_sha256 or any(c not in "0123456789abcdef" for c in license_sha256) or not isinstance(reference_sha256, str) or len(reference_sha256) != 64 or not isinstance(version, str):
+        raise ValueError("MMLU-Pro custody lacks license, reference, or version identity")
+    return sha256(f"mmlu-pro:{version}:{reference_sha256}:{license_sha256}:{adapter_sha256}".encode())
+
 def expected_answers(data: bytes) -> dict[str, str]:
  try:rows=pq.read_table(pa.BufferReader(data),columns=['question_id','options','answer','answer_index']).to_pylist()
  except pa.ArrowException as error:raise ValueError('frozen MMLU-Pro references must be parquet') from error
@@ -46,6 +54,10 @@ def main()->int:
   manifest_bytes=args.frozen_manifest.read_bytes();reference_bytes=args.references.read_bytes();prediction_bytes=args.predictions.read_bytes();manifest=json.loads(manifest_bytes.decode('utf-8'));references=expected_answers(reference_bytes);envelope,predictions=predicted_answers(prediction_bytes);benchmark=envelope['benchmark']
   fields={'id':'benchmark_id','version':'benchmark_version','split_sha256':'split_sha256','protocol_sha256':'protocol_sha256'}
   if not isinstance(manifest,dict) or manifest.get('result')!='PREFLIGHT_ONLY' or manifest.get('benchmark_id')!='mmlu-pro' or manifest.get('capability')!='reasoning' or manifest.get('references_sha256')!=sha256(reference_bytes) or manifest.get('split_sha256')!=sha256(reference_bytes) or manifest.get('task_count')!=len(references) or any(benchmark.get(field)!=manifest.get(manifest_field) for field,manifest_field in fields.items()):raise ValueError('frozen MMLU-Pro manifest does not bind canonical prediction identity')
+  if isinstance(manifest.get('scoring_adapter_sha256'), str):
+   adapter_sha256=manifest['scoring_adapter_sha256']
+   if len(adapter_sha256)!=64 or adapter_sha256.lower()!=adapter_sha256 or any(c not in '0123456789abcdef' for c in adapter_sha256) or sha256(Path(__file__).read_bytes())!=adapter_sha256:raise ValueError('MMLU-Pro scorer bytes do not match frozen custody')
+   if manifest.get('protocol_sha256')!=protocol_sha256(manifest, adapter_sha256):raise ValueError('MMLU-Pro protocol is not derived from scorer custody')
   if set(references)!=set(predictions):raise ValueError('canonical MMLU-Pro predictions must exactly cover frozen reference ids')
  except (OSError,UnicodeDecodeError,ValueError,json.JSONDecodeError,pa.ArrowException) as error:parser.error(f'invalid MMLU-Pro scorer inputs: {error}')
  atomic_write(args.score_output,{'result':'PREFLIGHT_ONLY','claim_status':'NON_ADMISSIBLE_FROZEN_MMLU_PRO_SCORER','criterion_id':'ember-3b-reasoning-capability-v1','criterion_result':'FAILED','metrics':{'accuracy':sum(predictions[key]==answer for key,answer in references.items())/len(references)},'sample_count':len(references),'checkpoint_manifest_sha256':envelope['checkpoint_manifest_sha256'],'model_config_sha256':envelope['model_config_sha256'],'references_sha256':sha256(reference_bytes),'predictions_sha256':sha256(prediction_bytes),'frozen_manifest_sha256':sha256(manifest_bytes),'upstream':'deterministic frozen MMLU-Pro exact-label scorer'})
