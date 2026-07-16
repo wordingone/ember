@@ -481,6 +481,9 @@ def write_checkpoint_artifacts(
             manifest["lineage"] = lineage
         manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
         logical_serialized_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+        recorded_logical_bytes = sum(int(record["bytes"]) for record in shards) + manifest_path.stat().st_size
+        if logical_serialized_bytes != recorded_logical_bytes:
+            raise ValueError("checkpoint bundle contains unrecorded files")
         incremental_publication_bytes = sum(int(record["incremental_bytes"]) for record in shards) + manifest_path.stat().st_size
         if max_serialized_bytes is not None and incremental_publication_bytes > max_serialized_bytes:
             raise ValueError("serialized checkpoint exceeds the derived byte bound")

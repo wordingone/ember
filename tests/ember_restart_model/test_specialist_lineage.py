@@ -313,6 +313,31 @@ class SpecialistLineageTests(unittest.TestCase):
                 write_checkpoint_artifacts(candidate, optimizer, base / "bad-count", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad})
 
 
+    def test_writer_refuses_unrecorded_staging_files_before_promotion(self) -> None:
+        import checkpoint_artifacts
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+            model = UnifiedDecoder(config, genesis_seed=83)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+            original = checkpoint_artifacts._write_json_atomic
+
+            def write_manifest_then_plant_unrecorded(root: Path, filename: str, payload: object) -> Path:
+                manifest_path = original(root, filename, payload)
+                (root / "unrecorded.bin").write_bytes(b"unaccounted")
+                return manifest_path
+
+            with patch.object(checkpoint_artifacts, "_write_json_atomic", side_effect=write_manifest_then_plant_unrecorded):
+                with self.assertRaisesRegex(ValueError, "unrecorded files"):
+                    write_checkpoint_artifacts(
+                        model, optimizer, base / "candidate", launch_seed=83, rng_state=_rng_state(),
+                        data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                        model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                        expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    )
+            self.assertFalse((base / "candidate").exists())
+            self.assertFalse(list(base.glob(".candidate.*.staging")))
     def test_writer_cleans_only_generated_staging_directory_after_write_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
