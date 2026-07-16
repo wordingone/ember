@@ -17,6 +17,15 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def protocol_sha256(manifest: dict, adapter_sha256: str) -> str:
+    license_sha256 = manifest.get("license_sha256")
+    reference_sha256 = manifest.get("references_sha256")
+    version = manifest.get("benchmark_version")
+    if not isinstance(license_sha256, str) or len(license_sha256) != 64 or license_sha256.lower() != license_sha256 or any(c not in "0123456789abcdef" for c in license_sha256) or not isinstance(reference_sha256, str) or len(reference_sha256) != 64 or not isinstance(version, str):
+        raise ValueError("math custody lacks license, reference, or version identity")
+    return sha256(f"math-500:{version}:{reference_sha256}:{license_sha256}:{adapter_sha256}".encode())
+
+
 def read_rows(data: bytes) -> dict[str, str]:
     try:
         parsed = json.loads(data.decode("utf-8"))
@@ -73,6 +82,12 @@ def main() -> int:
         fields = ("checkpoint_manifest_sha256", "model_config_sha256", "split_sha256", "protocol_sha256")
         if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "math-500" or manifest.get("references_sha256") != sha256(reference_bytes) or any(manifest.get(field) != (envelope[field] if field in envelope else benchmark.get(field)) for field in fields[:2]) or manifest.get("split_sha256") != benchmark.get("split_sha256") or manifest.get("protocol_sha256") != benchmark.get("protocol_sha256") or manifest.get("benchmark_version") != benchmark.get("version"):
             raise ValueError("frozen math manifest does not bind canonical prediction identity")
+        if isinstance(manifest.get("scoring_adapter_sha256"), str):
+            adapter_sha256 = manifest["scoring_adapter_sha256"]
+            if len(adapter_sha256) != 64 or adapter_sha256.lower() != adapter_sha256 or any(c not in "0123456789abcdef" for c in adapter_sha256) or sha256(Path(__file__).read_bytes()) != adapter_sha256:
+                raise ValueError("math scorer bytes do not match frozen custody")
+            if manifest.get("protocol_sha256") != protocol_sha256(manifest, adapter_sha256):
+                raise ValueError("math protocol is not derived from scorer custody")
     except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         parser.error(f"invalid frozen math artifacts: {error}")
     if references.keys() != predicted.keys():
