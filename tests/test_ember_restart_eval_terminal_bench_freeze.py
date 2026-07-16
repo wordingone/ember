@@ -2,6 +2,7 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import json
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -59,3 +60,47 @@ def test_rejects_tag_only_or_network_enabled_task_before_output():
 
         assert completed.returncode != 0
         assert not output.exists()
+
+
+def test_freeze_canonicalizes_equivalent_task_selection_order():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        _write_task(root, image="example.invalid/bounded@sha256:" + "a" * 64)
+        second = root / "another-task"; second.mkdir()
+        (second / "task.toml").write_text("\n".join((
+            'schema_version = "1.1"',
+            "[task]",
+            'name = "terminal-bench/another-task"',
+            "[environment]",
+            'docker_image = "example.invalid/another@sha256:' + "b" * 64 + '"',
+            "allow_internet = false",
+        )), encoding="utf-8")
+        output = root / "frozen.json"
+        completed = subprocess.run([sys.executable, str(SCRIPT), "--task-root", str(root), "--task-id", "bounded-task", "--task-id", "another-task", "--output", str(output)], capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stderr
+        assert [task["task_id"] for task in json.loads(output.read_text(encoding="utf-8"))["tasks"]] == ["another-task", "bounded-task"]
+
+def test_terminal_task_metadata_is_read_once_for_parse_and_digest(monkeypatch):
+    spec = importlib.util.spec_from_file_location("ember_restart_eval_terminal_bench_freeze", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        _write_task(root, image="example.invalid/bounded@sha256:" + "a" * 64)
+        task_path = root / "bounded-task" / "task.toml"
+        expected_sha256 = __import__("hashlib").sha256(task_path.read_bytes()).hexdigest()
+        original_open = Path.open
+        reads = 0
+        def once_open(self, *args, **kwargs):
+            nonlocal reads
+            if self == task_path:
+                reads += 1
+                if reads > 1:
+                    raise AssertionError("task metadata reopened after parsing")
+            return original_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", once_open)
+        record = module._task(root, "bounded-task")
+        assert record["task_toml_sha256"] == expected_sha256
+        assert reads == 1
