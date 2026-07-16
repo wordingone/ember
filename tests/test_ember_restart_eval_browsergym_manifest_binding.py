@@ -20,4 +20,7 @@ def test_scores_only_outcomes_bound_to_frozen_browser_manifest():
         completed = subprocess.run([sys.executable, str(SCRIPT), "--frozen-task-manifest", str(manifest), "--browser-results", str(runs), "--score-output", str(output)], capture_output=True, text=True)
 
         assert completed.returncode == 0, completed.stderr
-        assert json.loads(output.read_text(encoding="utf-8"))["sample_count"] == 1
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        assert payload["sample_count"] == 1
+        assert payload["result"] == "SELFTEST"
+        assert payload["browser_results_sha256"] == __import__("hashlib").sha256(runs.read_bytes()).hexdigest()

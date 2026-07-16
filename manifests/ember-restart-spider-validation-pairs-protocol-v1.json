@@ -1,0 +1,17 @@
+{
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-spider-validation-pairs-protocol-v1",
+    "benchmark_id":  "spider",
+    "benchmark_revision":  "0c350918f3f29ec754f1181c65cdce76cd6c133c",
+    "split_path":  "spider/validation-00000-of-00001.parquet",
+    "capability":  "sql",
+    "result":  "PREFLIGHT_ONLY",
+    "admission":  "NOT_EXECUTABLE_NO_FROZEN_DATABASE_ASSETS",
+    "prohibited_claims":  [
+                              "checkpoint_score",
+                              "capability_admission",
+                              "sufficient_pretraining"
+                          ]
+}
