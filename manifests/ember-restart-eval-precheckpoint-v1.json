@@ -116,7 +116,7 @@
                                     "sql": {"path": "manifests/ember-restart-spider-custody-v1.json", "sha256": "833045ea534e829647e5383b54a4ac647030e4c3d2fd679e048781afa80bc90a"},
                                     "files": {"path": "manifests/ember-restart-swebench-custody-v1.json", "sha256": "e633bb7c4866b8ed21a1571d2283635619d47a0a213338309cb2f1b7705b0af5"},
                                     "browser_ui": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "36101c5211038e181abcac18459b5f0983b823b95613746ed3f100f4547c522c"},
-                                    "image": {"path": "manifests/ember-restart-mmmu-validation-custody-v1.json", "sha256": "067ef461d727352d14dcc87d85495ec2e8db1679f5a04dfc1a7aad10ac780dbe"},
+                                    "image": {"path": "manifests/ember-restart-mmmu-validation-custody-v1.json", "sha256": "127906142bb8ccdaeb3464486766e3b5868c804e0e789373426839c56230d845"},
                                     "audio": {"path": "manifests/ember-restart-audiobench-custody-v1.json", "sha256": "63bd86016e74914281a5c62673e94c4886455a3926e4529834c6c286e9a9981c"},
                                     "structured_tools": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "36101c5211038e181abcac18459b5f0983b823b95613746ed3f100f4547c522c"}
                                 }
