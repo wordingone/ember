@@ -1,8 +1,22 @@
 {
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02C",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "asset_disposition": "PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK",
   "scoring_adapter": {"path": "scripts/ember_restart_eval_terminal_bench.py", "sha256": "38df1baa23a00c4c6b4f90fd79d90fb3e0416b3906cac544fa95429c35cb2194", "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"},
   "benchmark_id": "terminal-bench",
   "benchmark_version": "2.0",
+  "eligibility_contract": {
+    "required_image_form": "<registry>/<name>@sha256:<64 lowercase hex>",
+    "required_allow_internet": false,
+    "observed_cache_audit": {
+      "task_count": 89,
+      "digest_pinned_image_task_count": 0,
+      "network_disabled_task_count": 0,
+      "eligible_task_count": 0,
+      "reason": "all cached task.toml records use mutable image tags and allow_internet=true"
+    }
+  },
   "eligibility": {
     "digest_pinned_image_task_count": 0,
     "eligible_task_count": 0,
