@@ -53,3 +53,11 @@ def test_refuses_librispeech_duplicate_ids_or_blank_transcripts():
         ], text=True, capture_output=True, check=False)
         assert result.returncode != 0
         assert not output.exists()
+
+def test_librispeech_freeze_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+ import importlib.util,pytest
+ spec=importlib.util.spec_from_file_location('librispeech_cleanup',SCRIPT);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ (tmp_path/'README.md').write_text('---\nlicense: cc-by-4.0\n---\n',encoding='utf-8');split=tmp_path/'clean'/'test'/'0000.parquet';split.parent.mkdir(parents=True);pq.write_table(pa.table({'id':['1-2-3'],'text':['WORDS']}),split);output=tmp_path/'frozen'
+ monkeypatch.setattr(sys,'argv',[str(SCRIPT),'--dataset-root',str(tmp_path),'--revision','a'*40,'--protocol-sha256','b'*64,'--output',str(output)]);monkeypatch.setattr(module.os,'replace',lambda *_: (_ for _ in ()).throw(OSError('replace denied')))
+ with pytest.raises(OSError,match='replace denied'):module.main()
+ assert not output.exists() and not list(tmp_path.glob('frozen.*.tmp'))
