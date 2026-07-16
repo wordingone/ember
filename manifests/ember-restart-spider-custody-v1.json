@@ -23,7 +23,7 @@
     "admission":  "NOT_EXECUTABLE_NO_FROZEN_GOLD_AND_DATABASE",
     "source_only_audit":  {
                               "artifact_sha256":  "ac3f513e8e6a2436379b5db85269c86568f81285e7dd9603aa66c2d244895e31",
-                              "runner_receipt_sha256":  "fd3c3af5f5300c4c288a2ef8181c0bc08d40beee5a5d7c1254a79d4ee8fbfd71",
+                              "runner_receipt_sha256":  "476348c1ad82995a3824e55eb19cedee70c782b219ea750dfa5aaee127aeb0f2",
                               "claim_status":  "SOURCE_ONLY_NO_FROZEN_SQL_EVALUATION_ASSETS"
                           },
     "validation_pairs_materialization":  {
