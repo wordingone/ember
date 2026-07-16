@@ -151,3 +151,16 @@ def test_spider_custody_rejects_imported_helper_drift_after_manifest_binding():
         result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-sql-manifest", str(manifest), "--spider-root", str(spider), "--gold", str(gold), "--predictions", str(predictions), "--database-dir", str(database), "--tables", str(tables), "--score-output", str(score)], text=True, capture_output=True, check=False)
         assert result.returncode != 0
         assert not score.exists()
+def test_spider_score_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+    import pytest
+    spec = importlib.util.spec_from_file_location("spider_cleanup", SCRIPT); module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    spider = tmp_path / "spider"; spider.mkdir(); gold = tmp_path / "gold.sql"; tables = tmp_path / "tables.json"; database = tmp_path / "database"; database.mkdir(); predictions = tmp_path / "predictions.sql"; score = tmp_path / "score.json"
+    gold.write_text("select 1\tdb\n", encoding="utf-8"); tables.write_text("[]", encoding="utf-8"); predictions.write_text("select 1\n", encoding="utf-8")
+    (spider / "evaluation.py").write_text("def build_foreign_key_map_from_json(path): return {}\ndef evaluate(gold,pred,db,etype,kmaps): print_scores({'all': {'exact': 1.0}}, etype)\n", encoding="utf-8")
+    manifest = frozen_manifest(tmp_path, spider, gold, tables, database)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--frozen-sql-manifest", str(manifest), "--spider-root", str(spider), "--gold", str(gold), "--predictions", str(predictions), "--database-dir", str(database), "--tables", str(tables), "--score-output", str(score)])
+    monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+    with pytest.raises(OSError, match="replace denied"):
+        module.main()
+    assert not score.exists()
+    assert not list(tmp_path.glob("score.json.*.tmp"))
