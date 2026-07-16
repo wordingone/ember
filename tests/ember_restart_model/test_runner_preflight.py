@@ -594,6 +594,32 @@ class RunnerPreflightTests(unittest.TestCase):
             self.assertEqual(len(quarantines), 1)
             self.assertTrue(quarantines[0].joinpath("counter-failure.json").is_file())
 
+    def test_partial_writer_failure_deletes_candidate_and_preserves_bounded_evidence(self) -> None:
+        """A writer exception cannot strand a partial checkpoint in the resumable namespace."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            previous = parent / "checkpoint-known-good"
+            previous.mkdir()
+            candidate = parent / "checkpoint-partial"
+
+            def partial_writer() -> dict[str, object]:
+                candidate.mkdir()
+                candidate.joinpath("partial-shard.pt").write_bytes(b"partial")
+                raise RuntimeError("writer failed")
+
+            with self.assertRaisesRegex(RuntimeError, "writer failed"):
+                run_vertical_slice.publish_counter_verified_checkpoint(
+                    checkpoint_target=candidate,
+                    write_candidate=partial_writer,
+                    execute_counter=lambda: {"unexpected": True},
+                )
+            self.assertTrue(previous.is_dir())
+            self.assertFalse(candidate.exists())
+            failures = list(parent.glob(".counter-failed-checkpoint-partial-*"))
+            self.assertEqual(len(failures), 1)
+            self.assertTrue(failures[0].joinpath("counter-failure.json").is_file())
+            self.assertFalse(failures[0].joinpath("partial-shard.pt").exists())
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
