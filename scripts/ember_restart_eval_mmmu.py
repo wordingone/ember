@@ -114,7 +114,7 @@ def main() -> int:
         parser.error("MMMU scorer returned an invalid aggregate")
     if sample_count <= 0 or sample_count != len(converted):
         parser.error("MMMU scorer did not cover the frozen prediction set")
-    payload = {"metrics": {"accuracy": accuracy}, "sample_count": sample_count, "criterion_id": "ember-3b-image-capability-v1", "criterion_result": "FAILED", "predictions_sha256": sha256(prediction_bytes), "answers_sha256": sha256(answer_bytes), "frozen_mmmu_manifest_sha256": sha256(manifest_bytes), "upstream": "MMMU exact multiple-choice local scorer bound to canonical predictions"}
+    payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_MMMU_SCORER", "metrics": {"accuracy": accuracy}, "sample_count": sample_count, "criterion_id": "ember-3b-image-capability-v1", "criterion_result": "FAILED", "predictions_sha256": sha256(prediction_bytes), "answers_sha256": sha256(answer_bytes), "frozen_mmmu_manifest_sha256": sha256(manifest_bytes), "upstream": "MMMU exact multiple-choice local scorer bound to canonical predictions"}
     arguments.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.score_output.parent, prefix=arguments.score_output.name + ".", suffix=".tmp", delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
