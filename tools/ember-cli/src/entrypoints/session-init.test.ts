@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // entrypoints/session-init.test.ts — issue #157 Leg 2: buildProductionCallModel must
@@ -12,6 +12,9 @@
 // adapter.test.ts's job).
 
 import { describe, it, expect, mock, afterEach } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildProductionCallModel,
   buildGuardedProductionCallModel,
@@ -51,6 +54,7 @@ describe("buildProductionCallModel — proactive prefill overflow guard (issue #
   const origFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = origFetch;
+    delete process.env["EMBER_MODEL_HTTP_CAPTURE_PATH"];
   });
 
   it("throws PrefillOverflowError and never calls fetch when the estimated prefill overflows n_ctx", async () => {
@@ -169,6 +173,49 @@ describe("buildProductionCallModel — proactive prefill overflow guard (issue #
     expect((thrown as ModelHttpError).status).toBe(400);
   });
 
+
+  it("captures the exact live request bytes and HTTP error body only when an explicit absolute capture path is set", async () => {
+    const captureDir = await mkdtemp(join(tmpdir(), "ember-model-http-capture-"));
+    const capturePath = join(captureDir, "capture.json");
+    process.env["EMBER_MODEL_HTTP_CAPTURE_PATH"] = capturePath;
+    let transmittedBody = "";
+    globalThis.fetch = mock(async (_url, init) => {
+      transmittedBody = String(init?.body ?? "");
+      return {
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        text: async () => '{"error":{"message":"captured-live-contract-rejection"}}',
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const callModel = buildProductionCallModel({ serverUrl: "http://localhost:1", nCtx: 8192 });
+    let thrown: unknown = null;
+    try {
+      await callModel({
+        messages: [{ role: "user" as const, content: "capture this exact request" }],
+        systemPrompt: "capture-test",
+        tools: [],
+        model: "owned-test-model",
+        maxTokens: 8096,
+      });
+    } catch (err) {
+      thrown = err;
+    }
+
+    try {
+      expect(thrown).toBeInstanceOf(ModelHttpError);
+      expect((thrown as Error).message).toContain("captured-live-contract-rejection");
+      const capture = JSON.parse(await readFile(capturePath, "utf8")) as Record<string, unknown>;
+      expect(capture["schema_version"]).toBe("ember-model-http-error-capture-v1");
+      expect(capture["request_body_utf8"]).toBe(transmittedBody);
+      expect(capture["response_status"]).toBe(400);
+      expect(capture["response_body_utf8"]).toBe('{"error":{"message":"captured-live-contract-rejection"}}');
+      expect(capture).not.toHaveProperty("request_headers");
+    } finally {
+      await rm(captureDir, { recursive: true, force: true });
+    }
+  });
   it("ModelHttpError.status reflects a 5xx just as faithfully as a 4xx", async () => {
     globalThis.fetch = mock(async () => {
       return { ok: false, status: 503, statusText: "Service Unavailable" } as unknown as Response;

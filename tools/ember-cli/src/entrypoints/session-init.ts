@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // entrypoints/session-init.ts — session bootstrap and dependency wiring.
@@ -13,6 +13,8 @@ import {
   type CallModelParams,
   type ModelResponse,
 } from "../query/query-loop-support.ts";
+import { writeFile } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { assembleModelRequest } from "../services/api-model-facing.ts";
 import {
   buildOpenAIRequest,
@@ -239,11 +241,13 @@ export function buildProductionCallModel(
       : ctrl.signal;
 
     let response: Response;
+    const requestUrl = `${serverUrl}/v1/chat/completions`;
+    const requestBody = JSON.stringify(reqBody);
     try {
-      response = await fetch(`${serverUrl}/v1/chat/completions`, {
+      response = await fetch(requestUrl, {
         method:  "POST",
         headers,
-        body:    JSON.stringify(reqBody),
+        body:    requestBody,
         signal:  combinedSignal,
       });
     } catch (err) {
@@ -253,10 +257,34 @@ export function buildProductionCallModel(
 
     if (!response.ok) {
       clearTimeout(timeoutId);
+      const responseBody = typeof response.text === "function" ? await response.text() : "";
+      const capturePath = process.env["EMBER_MODEL_HTTP_CAPTURE_PATH"]?.trim();
+      if (capturePath && isAbsolute(capturePath)) {
+        try {
+          await writeFile(
+            capturePath,
+            JSON.stringify({
+              schema_version: "ember-model-http-error-capture-v1",
+              request_url: requestUrl,
+              request_body_utf8: requestBody,
+              response_status: response.status,
+              response_status_text: response.statusText,
+              response_body_utf8: responseBody,
+            }),
+            { encoding: "utf8", flag: "wx", mode: 0o600 },
+          );
+        } catch (captureError) {
+          console.error(
+            `[ember] diagnostic capture failed: ${captureError instanceof Error ? captureError.message : String(captureError)}`,
+          );
+        }
+      } else if (capturePath) {
+        console.error("[ember] diagnostic capture refused: EMBER_MODEL_HTTP_CAPTURE_PATH must be absolute");
+      }
       // issue #197: a typed error carrying the real status, not a bare Error --
       // query-engine.ts's retry loop classifies on `.status` to tell a
       // deterministic 4xx (never retry) from a transient 5xx (retry+backoff).
-      throw new ModelHttpError(response.status, response.statusText);
+      throw new ModelHttpError(response.status, response.statusText, responseBody);
     }
 
     const ctx    = createSseParserContext();
