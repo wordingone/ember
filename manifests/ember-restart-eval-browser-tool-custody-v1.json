@@ -48,8 +48,8 @@
                                                                                         "irrelevance":  "NO_LOCAL_POSSIBLE_ANSWER_ORACLE"
                                                                                     },
                                                             "private_frozen_simple_artifact":  {
-                                                                                                   "artifact_sha256":  "529bd686ba2828dce7104db3b4c25cdb0a6d00640f016ecffad02a574dbdf240",
-                                                                                                   "disk_receipt_sha256":  "0665899feec7b40e9721f879a7891042e1487739a0fb24b9d7904d372687e34d",
+                                                                                                   "artifact_sha256":  "d04fb5ec83ddf7c21a3c1fea6cfb7992dc88bd773e783ed9c47398eb0b7b5ce8",
+                                                                                                   "disk_receipt_sha256":  "3260ce70d7fa0714b62b8323e8d53be709271cd499f84b064a00e3490ada6edf",
                                                                                                    "split_sha256":  "b5397a483dfe48b202c8907622e02276c3a8c33f1009066899cf50c097256aac",
                                                                                                    "protocol_sha256":  "571b4aa3e029a975fdfd512b915fdc85c908063d90fc5e72ac8ef7aa06ce05a4",
                                                                                                    "task_count":  550,
