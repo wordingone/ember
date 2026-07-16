@@ -76,7 +76,7 @@ class SpecialistLineageTests(unittest.TestCase):
         candidate._activate_expert("vision")
         return parent, manifest_path, candidate, optimizer
 
-    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None) -> dict[str, object]:
+    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None, max_serialized_bytes: int | None = None) -> dict[str, object]:
         parent, default_manifest, candidate, optimizer = self._root_and_candidate(base)
         parent_manifest = parent_manifest or default_manifest
         root_manifest = root_manifest or default_manifest
@@ -92,6 +92,7 @@ class SpecialistLineageTests(unittest.TestCase):
                 "trained_expert_ids": trained if trained is not None else ["vision"],
                 "data_verification_receipt": _verification(),
             },
+            max_serialized_bytes=max_serialized_bytes,
         )
 
     def test_first_v4_successor_binds_external_parent_root_exact_history_and_closed_receipt(self) -> None:
@@ -254,6 +255,49 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertEqual(set(receipt["expert_parameter_sha256"]), {"vision", "audio", "reasoning", "tool"})
         self.assertNotEqual(receipt["expert_parameter_sha256"]["vision"], parent["expert_genesis_sha256"]["vision"])
 
+    def test_specialist_hardlink_reuse_charges_zero_incremental_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            receipt = self._write_vision_successor(base)
+            parent = base / "root"
+            candidate = base / "candidate"
+            records = {record["role"]: record for record in receipt["shards"]}
+            for name in ("audio", "reasoning", "tool"):
+                source = parent / f"expert-{name}.pt"
+                reused = candidate / f"expert-{name}.pt"
+                self.assertEqual(source.stat().st_dev, reused.stat().st_dev)
+                self.assertEqual(source.stat().st_ino, reused.stat().st_ino)
+                self.assertGreater(reused.stat().st_nlink, 1)
+                self.assertEqual(records[f"expert_{name}"]["publication_mode"], "hardlink")
+                self.assertEqual(records[f"expert_{name}"]["incremental_bytes"], 0)
+        self.assertLess(receipt["incremental_publication_bytes"], receipt["serialized_bytes"])
+
+    def test_writer_applies_the_cap_to_incremental_publication_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            probe = self._write_vision_successor(base / "probe")
+            cap = int(probe["serialized_bytes"]) - 1
+            linked = self._write_vision_successor(base / "linked", max_serialized_bytes=cap)
+            self.assertLessEqual(linked["incremental_publication_bytes"], cap)
+            self.assertGreater(linked["serialized_bytes"], cap)
+            import checkpoint_artifacts
+            with patch.object(checkpoint_artifacts.os, "link", side_effect=OSError("forced copy fallback")):
+                with self.assertRaisesRegex(ValueError, "serialized checkpoint exceeds"):
+                    self._write_vision_successor(base / "copied", max_serialized_bytes=cap)
+            self.assertFalse((base / "copied" / "candidate").exists())
+    def test_specialist_copy_fallback_charges_full_reused_shard_bytes(self) -> None:
+        import checkpoint_artifacts
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            with patch.object(checkpoint_artifacts.os, "link", side_effect=OSError("forced copy fallback")):
+                receipt = self._write_vision_successor(base)
+            records = {record["role"]: record for record in receipt["shards"]}
+            for name in ("audio", "reasoning", "tool"):
+                record = records[f"expert_{name}"]
+                self.assertEqual(record["publication_mode"], "copy")
+                self.assertEqual(record["incremental_bytes"], record["bytes"])
+        self.assertEqual(receipt["incremental_publication_bytes"], receipt["serialized_bytes"])
     def test_specialist_writer_rejects_noncanonical_semantic_checks_and_boolean_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -269,6 +313,31 @@ class SpecialistLineageTests(unittest.TestCase):
                 write_checkpoint_artifacts(candidate, optimizer, base / "bad-count", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad})
 
 
+    def test_writer_refuses_unrecorded_staging_files_before_promotion(self) -> None:
+        import checkpoint_artifacts
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+            model = UnifiedDecoder(config, genesis_seed=83)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+            original = checkpoint_artifacts._write_json_atomic
+
+            def write_manifest_then_plant_unrecorded(root: Path, filename: str, payload: object) -> Path:
+                manifest_path = original(root, filename, payload)
+                (root / "unrecorded.bin").write_bytes(b"unaccounted")
+                return manifest_path
+
+            with patch.object(checkpoint_artifacts, "_write_json_atomic", side_effect=write_manifest_then_plant_unrecorded):
+                with self.assertRaisesRegex(ValueError, "unrecorded files"):
+                    write_checkpoint_artifacts(
+                        model, optimizer, base / "candidate", launch_seed=83, rng_state=_rng_state(),
+                        data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                        model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                        expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    )
+            self.assertFalse((base / "candidate").exists())
+            self.assertFalse(list(base.glob(".candidate.*.staging")))
     def test_writer_cleans_only_generated_staging_directory_after_write_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

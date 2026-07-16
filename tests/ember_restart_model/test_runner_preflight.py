@@ -192,6 +192,13 @@ class RunnerPreflightTests(unittest.TestCase):
             bound,
             3_839_161_856 * 2 + 1_020_589_568 * 2 + 1024**3,
         )
+    def test_v4_specialist_preflight_reserves_the_full_copy_fallback(self) -> None:
+        active = 1_725_232_640
+        full = run_vertical_slice.checkpoint_serialization_byte_bound(
+            ROOT / "configs" / "ember-restart-3b.json", active_parameters=active,
+        )
+        self.assertEqual(full, 3_839_161_856 * 2 + active * 2 + 1024**3)
+
     def test_semantic_publication_plan_bounds_write_budget_by_interval_and_final_checkpoint(self) -> None:
         plan = run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=40)
         self.assertEqual(plan, {"publication_count": 4, "checkpoint_byte_bound": 10, "projected_write_bytes": 40})
@@ -242,7 +249,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice.torch, "manual_seed"))
             stack.enter_context(patch.object(run_vertical_slice.torch, "get_default_dtype", return_value=torch.float32))
             stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
-            stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path: path))
+            stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path, **_kwargs: path))
             stack.enter_context(patch.object(run_vertical_slice.ManifestBoundTokenStream, "from_receipt", return_value=stream))
             stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", return_value=model))
             stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", return_value=counts))
@@ -314,7 +321,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice.torch, "manual_seed"))
             stack.enter_context(patch.object(run_vertical_slice.torch, "get_default_dtype", return_value=torch.float32))
             stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
-            stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path: path))
+            stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path, **_kwargs: path))
             stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", return_value=model))
             stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", return_value=counts))
             stack.enter_context(patch.object(run_vertical_slice, "build_production_optimizer", return_value=optimizer))
@@ -408,7 +415,14 @@ class RunnerPreflightTests(unittest.TestCase):
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
             with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"))
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), c_relocated_under_disk_budget_runner=False, relocation_custody_root=None)
+    def test_specialist_cli_forwards_explicit_c_relocation_custody(self) -> None:
+        with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts"]):
+                run_vertical_slice.main()
+        self.assertIs(specialist.call_args.kwargs["c_relocated_under_disk_budget_runner"], True)
+        self.assertEqual(specialist.call_args.kwargs["artifact_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))
+        self.assertEqual(specialist.call_args.kwargs["relocation_custody_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts"))
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
