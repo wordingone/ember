@@ -1,5 +1,6 @@
 {
   "asset_disposition": "PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK",
+  "scoring_adapter": {"path": "scripts/ember_restart_eval_terminal_bench.py", "sha256": "38df1baa23a00c4c6b4f90fd79d90fb3e0416b3906cac544fa95429c35cb2194", "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"},
   "benchmark_id": "terminal-bench",
   "benchmark_version": "2.0",
   "eligibility": {
