@@ -1,0 +1,16 @@
+{
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-gsm8k-protocol-v1",
+    "benchmark_id":  "gsm8k",
+    "benchmark_revision":  "740312add88f781978c0658806c59bc2815b9866",
+    "split_path":  "main/test-00000-of-00001.parquet",
+    "capability":  "reasoning",
+    "result":  "PREFLIGHT_ONLY",
+    "prohibited_claims":  [
+                              "checkpoint_score",
+                              "capability_admission",
+                              "sufficient_pretraining"
+                          ]
+}
