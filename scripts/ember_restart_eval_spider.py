@@ -114,7 +114,14 @@ def spider_protocol_sha256(manifest: dict[str, object], expected: dict[str, str]
         gold_identity = tables_identity = database_identity = assets
     else:
         gold_identity = expected["gold_sha256"]; tables_identity = expected["tables_sha256"]; database_identity = expected["database_tree_sha256"]; source_identity = expected["source_tree_sha256"]
-    material = ":".join(["spider", str(manifest.get("benchmark_version", "")), str(gold_identity), str(tables_identity), str(database_identity), evaluator_sha, source_identity, license_sha, str(manifest.get("upstream_tree_git_sha1", "")), str(manifest.get("admission", ""))])
+    adapter = manifest.get("scoring_adapter")
+    adapter_sha = adapter.get("sha256") if isinstance(adapter, dict) else None
+    if not isinstance(adapter, dict) or adapter.get("path") != "scripts/ember_restart_eval_spider.py" or not isinstance(adapter_sha, str) or len(adapter_sha) != 64 or adapter_sha.lower() != adapter_sha:
+        raise ValueError("Spider protocol custody requires scoring adapter identity")
+    adapter_source = (Path(__file__).resolve().parents[1] / adapter["path"]).resolve()
+    if not adapter_source.is_file() or hashlib.sha256(adapter_source.read_bytes()).hexdigest() != adapter_sha:
+        raise ValueError("Spider scoring adapter bytes do not match frozen custody")
+    material = ":".join(["spider", str(manifest.get("benchmark_version", "")), str(gold_identity), str(tables_identity), str(database_identity), evaluator_sha, source_identity, license_sha, str(manifest.get("upstream_tree_git_sha1", "")), str(manifest.get("admission", "")), adapter_sha])
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
@@ -140,7 +147,9 @@ def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, da
         raise ValueError("frozen Spider custody manifest does not bind supplied evaluator assets")
     digest = hashlib.sha256(manifest_bytes).hexdigest()
     protocol = manifest.get("protocol_sha256")
-    if include_protocol and manifest.get("schema_version") == "ember-restart-benchmark-custody-v1":
+    if include_protocol:
+        if manifest.get("schema_version") != "ember-restart-benchmark-custody-v1":
+            raise ValueError("canonical Spider scoring requires the strict custody schema")
         if not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol or any(character not in "0123456789abcdef" for character in protocol):
             raise ValueError("frozen Spider custody manifest requires protocol_sha256 for canonical scoring")
         if protocol != spider_protocol_sha256(manifest, expected):
@@ -177,6 +186,11 @@ def main() -> int:
         if arguments.canonical_predictions is not None:
             prediction_bytes = arguments.canonical_predictions.read_bytes()
             envelope, sql = canonical_sql(prediction_bytes, sha256_file(arguments.gold), protocol_sha256)
+            custody_payload = json.loads(arguments.frozen_sql_manifest.read_text(encoding="utf-8"))
+            for identity in ("checkpoint_manifest_sha256", "model_config_sha256"):
+                expected_identity = custody_payload.get(identity)
+                if expected_identity is not None and envelope.get(identity) != expected_identity:
+                    raise ValueError(f"Spider {identity} is not bound by frozen custody")
         else:
             sql = legacy_sql_lines(arguments.predictions)
     except (OSError, ValueError, json.JSONDecodeError) as error:

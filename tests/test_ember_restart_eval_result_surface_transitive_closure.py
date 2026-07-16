@@ -153,3 +153,25 @@ def test_admission_rejects_symlink_parent_components(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "EXECUTION_AUTHORITIES", authority)
     monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("contract must not run")))
     assert not module._admitted(manifest, registry, b"{}")
+
+def test_admission_resolves_progression_root_paths_and_checkpoint_relative_shards(monkeypatch, tmp_path):
+    module = load_module()
+    checkpoint = tmp_path / "checkpoints"; checkpoint.mkdir(); historical = checkpoint / "shards"; historical.mkdir(parents=True)
+    progression = tmp_path / "progression.json"; checkpoint_manifest = checkpoint / "step.json"; main_index = tmp_path / "indexes" / "main.idx"; main_index.parent.mkdir()
+    progression.write_text(json.dumps({"checkpoint_manifest": {"path": "checkpoints/step.json"}}), encoding="utf-8")
+    checkpoint_manifest.write_text(json.dumps({"shards": [{"path": "shards/historical.bin"}], "main_index": {"path": "indexes/main.idx"}}), encoding="utf-8")
+    (historical / "historical.bin").write_bytes(b"historical"); main_index.write_bytes(b"main")
+    manifest = tmp_path / "manifest.json"; manifest.write_text(json.dumps({"stage": "OWNED_ADMITTED", "evaluations": [{"receipt_path": "progression.json"}]}), encoding="utf-8")
+    registry = tmp_path / "registry.json"; registry_bytes = b"{}"; registry.write_bytes(registry_bytes)
+    authority = tmp_path / "authorities.json"; authority.write_text(json.dumps({"authorities": [{"trusted_verifier_registry_sha256": hashlib.sha256(registry_bytes).hexdigest()}]}), encoding="utf-8")
+    monkeypatch.setattr(module, "EXECUTION_AUTHORITIES", authority)
+
+    def run(command, **_kwargs):
+        snapshot_manifest = Path(command[3]); staged = snapshot_manifest.parent
+        assert (staged / "checkpoints" / "step.json").read_bytes() == checkpoint_manifest.read_bytes()
+        assert (staged / "checkpoints" / "shards" / "historical.bin").read_bytes() == b"historical"
+        assert (staged / "indexes" / "main.idx").read_bytes() == b"main"
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    assert module._admitted(manifest, registry, progression.read_bytes())
