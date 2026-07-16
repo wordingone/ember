@@ -36,3 +36,12 @@ def test_rejects_valid_hex_mmlu_pro_protocol_not_derived_from_scorer_custody(tmp
     completed = subprocess.run([sys.executable, str(SCRIPT), "--frozen-manifest", str(manifest), "--references", str(references), "--predictions", str(predictions), "--score-output", str(score)], capture_output=True, text=True)
     assert completed.returncode != 0
     assert not score.exists()
+
+def test_strict_freeze_manifest_cannot_omit_scorer_identity(tmp_path):
+    root=tmp_path; references=root/'mmlu.parquet'; manifest=root/'manifest.json'; predictions=root/'predictions.json'; score=root/'score.json'
+    pq.write_table(pa.table({'question_id':[1],'question':['q1'],'options':[['a','b']],'answer':['A'],'answer_index':[0]}), references)
+    reference_sha=hashlib.sha256(references.read_bytes()).hexdigest(); version='b189ec765aa7ed75c8acfea42df31fdae71f97be'; protocol='e'*64
+    manifest.write_text(json.dumps({'schema_version':'ember-restart-mmlu-pro-freeze-v1','result':'PREFLIGHT_ONLY','benchmark_id':'mmlu-pro','benchmark_version':version,'capability':'reasoning','license_sha256':'f'*64,'references_sha256':reference_sha,'split_sha256':reference_sha,'protocol_sha256':protocol,'task_count':1}),encoding='utf-8')
+    predictions.write_text(json.dumps({'schema_version':'ember-owned-predictions-v1','claim_status':'NON_ADMISSIBLE_RAW_PREDICTIONS','checkpoint_manifest_sha256':'a'*64,'model_config_sha256':'b'*64,'tokenizer_sha256':'c'*64,'inference_implementation_sha256':'d'*64,'benchmark':{'id':'mmlu-pro','version':version,'capability':'reasoning','split_sha256':reference_sha,'protocol_sha256':protocol},'decoding':{'strategy':'GREEDY_AUTOREGRESSIVE','teacher_forcing':False,'max_new_tokens':1,'temperature':0,'top_p':1,'stop_token_ids':[2]},'rows':[{'id':'1','input_sha256':'0'*64,'generated_token_ids':[2],'stop_reason':'eos','output':{'kind':'text','text':'A'}}]}),encoding='utf-8')
+    completed=subprocess.run([sys.executable,str(SCRIPT),'--frozen-manifest',str(manifest),'--references',str(references),'--predictions',str(predictions),'--score-output',str(score)],capture_output=True,text=True)
+    assert completed.returncode!=0 and not score.exists()
