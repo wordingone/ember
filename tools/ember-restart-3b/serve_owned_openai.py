@@ -215,26 +215,120 @@ def require_live_parent(
         raise RuntimeError("owned server parent process is not alive")
 
 
+def _emit_parent_watchdog_receipt(receipt: dict[str, object]) -> None:
+    payload = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    os.write(2, payload)
+
+
+class _CallableParentProbe:
+    def __init__(self, parent_pid: int, checker: Callable[[int], bool]) -> None:
+        self.parent_pid = parent_pid
+        self.checker = checker
+
+    def alive(self) -> bool:
+        return self.checker(self.parent_pid)
+
+    def close(self) -> None:
+        return None
+
+
+class _WindowsParentProbe:
+    """Hold one process handle so PID reuse cannot retether an orphaned server."""
+
+    def __init__(self, parent_pid: int) -> None:
+        import ctypes
+
+        if parent_pid <= 0:
+            raise RuntimeError("owned server parent process is not alive")
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        open_process.restype = ctypes.c_void_p
+        self._get_exit_code = kernel32.GetExitCodeProcess
+        self._get_exit_code.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+        self._get_exit_code.restype = ctypes.c_int
+        self._close_handle = kernel32.CloseHandle
+        self._close_handle.argtypes = [ctypes.c_void_p]
+        self._close_handle.restype = ctypes.c_int
+        self._ctypes = ctypes
+        self._handle = open_process(0x1000, False, parent_pid)
+        if not self._handle:
+            raise RuntimeError("owned server parent process is not alive")
+
+    def alive(self) -> bool:
+        if not self._handle:
+            return False
+        exit_code = self._ctypes.c_ulong()
+        return bool(self._get_exit_code(self._handle, self._ctypes.byref(exit_code))) and exit_code.value == 259
+
+    def close(self) -> None:
+        if self._handle:
+            self._close_handle(self._handle)
+            self._handle = None
+
+
+def bind_parent_process(parent_pid: int) -> _WindowsParentProbe | _CallableParentProbe:
+    if os.name == "nt":
+        return _WindowsParentProbe(parent_pid)
+    require_live_parent(parent_pid)
+    return _CallableParentProbe(parent_pid, parent_process_alive)
+
+
 def start_parent_watchdog(
     parent_pid: int,
     *,
-    poll_seconds: float = 1.0,
-    checker: Callable[[int], bool] = parent_process_alive,
+    poll_seconds: float = 10.0,
+    misses_before_exit: int = 2,
+    checker: Callable[[int], bool] | None = None,
     exit_process: Callable[[int], None] = os._exit,
+    emit_receipt: Callable[[dict[str, object]], None] = _emit_parent_watchdog_receipt,
 ) -> threading.Thread:
-    require_live_parent(parent_pid, checker=checker)
+    if misses_before_exit < 1:
+        raise ValueError("parent watchdog miss threshold must be positive")
+    probe = bind_parent_process(parent_pid) if checker is None else _CallableParentProbe(parent_pid, checker)
+    try:
+        if not probe.alive():
+            raise RuntimeError("owned server parent process is not alive")
+    except BaseException:
+        probe.close()
+        raise
 
     def watch() -> None:
-        while True:
-            time.sleep(poll_seconds)
-            if not checker(parent_pid):
-                exit_process(0)
+        consecutive_misses = 0
+        try:
+            while True:
+                time.sleep(poll_seconds)
+                try:
+                    alive = probe.alive()
+                except Exception:
+                    alive = False
+                if alive:
+                    consecutive_misses = 0
+                    continue
+                consecutive_misses += 1
+                if consecutive_misses < misses_before_exit:
+                    continue
+                receipt = {
+                    "schema_version": "ember-owned-parent-watchdog-v1",
+                    "event": "PARENT_GONE_EXIT",
+                    "result": "MEASURED",
+                    "parent_pid": parent_pid,
+                    "consecutive_missed_polls": consecutive_misses,
+                    "poll_seconds": poll_seconds,
+                }
+                try:
+                    emit_receipt(receipt)
+                except Exception:
+                    pass
+                finally:
+                    exit_process(0)
                 return
+        finally:
+            probe.close()
 
     thread = threading.Thread(target=watch, name="ember-owned-parent-watchdog", daemon=True)
     thread.start()
     return thread
-
 
 
 def resolve_central_owned_admission(
