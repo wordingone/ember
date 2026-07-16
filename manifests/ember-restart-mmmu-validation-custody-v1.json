@@ -3,7 +3,7 @@
     "workstream_id":  "EMBER-02C",
     "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "schema_version":  "ember-restart-benchmark-custody-v1",
-    "scoring_adapter": {"path": "scripts/ember_restart_eval_mmmu.py", "sha256": "b841e3d4ad381c4a76e8bfb1b97b304cc17f299804a1f8d49ac8720b902bf9bc", "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"},
+    "scoring_adapter": {"path": "scripts/ember_restart_eval_mmmu.py", "sha256": "27071892e8a96cdb4474fadcf62c283022beb72d645fbe484ded20228be42cd2", "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"},
     "benchmark_id":  "MMMU",
     "benchmark_version":  "bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa",
     "upstream_url":  "https://github.com/MMMU-Benchmark/MMMU.git",

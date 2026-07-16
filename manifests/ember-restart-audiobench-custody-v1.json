@@ -9,6 +9,7 @@
     "license":  "MIT",
     "license_sha256":  "54233ca9f039653155e71f92b7cdf484041bee1fdcd90bafac2b5e21e4c916c9",
     "suite":  "ab/sound-id",
+    "protocol_sha256":  "15fe549c61f78cc63b9890fa8129626f810dc5517c19690c8c12435d8d203a1d",
     "procedural_demo":  {
                             "artifact_sha256":  "bd91917edb4ef4258624ea242fc4573364f18c8cae99423966002b6871cdcdf3",
                             "disk_receipt_sha256":  "41a06044333342cc998eefa2ed87bda34ae40647eca4b1bb4200eb8c35bdcb4f",
@@ -20,7 +21,7 @@
     "admission":  "NOT_EXECUTABLE_UNTRAINED_SPECIALIST_NO_CHECKPOINT_BOUND_PREDICTIONS",
     "scoring_adapter":  {
                             "path":  "scripts/ember_restart_eval_audiobench_bound.py",
-                            "sha256":  "4577fb57d8e5a96277a887e5a4194a793cfe1df87e498095f965c1126d5ff984",
+                            "sha256":  "e66a735279ad5ba54211302029328682d11ea90b3b77dfadd73ee896100bd916",
                             "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
                         }
 }

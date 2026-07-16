@@ -41,13 +41,13 @@ def legacy_sql_lines(path: Path) -> list[str]:
     return result
 
 
-def canonical_sql(data: bytes, gold_sha256: str) -> list[str]:
+def canonical_sql(data: bytes, gold_sha256: str, protocol_sha256: str | None = None) -> tuple[dict, list[str]]:
     try:
         envelope = validate_predictions(json.loads(data.decode("utf-8")))
     except (ContractError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("canonical checkpoint predictions are required") from error
     benchmark = envelope["benchmark"]
-    if benchmark.get("id") != "spider" or benchmark.get("version") != SPIDER_VERSION or benchmark.get("capability") != "tool" or benchmark.get("split_sha256") != gold_sha256:
+    if benchmark.get("id") != "spider" or benchmark.get("version") != SPIDER_VERSION or benchmark.get("capability") != "tool" or benchmark.get("split_sha256") != gold_sha256 or (protocol_sha256 is not None and benchmark.get("protocol_sha256") != protocol_sha256):
         raise ValueError("canonical Spider predictions do not bind frozen benchmark identity")
     result = []
     for index, row in enumerate(envelope["rows"]):
@@ -57,7 +57,7 @@ def canonical_sql(data: bytes, gold_sha256: str) -> list[str]:
         result.append(output["sql"])
     if not result:
         raise ValueError("canonical Spider predictions must be non-empty")
-    return result
+    return envelope, result
 
 
 def load_evaluator(root: Path):
@@ -112,7 +112,7 @@ def snapshot_spider_inputs(source: Path, gold: Path, tables: Path, database: Pat
     shutil.copytree(database, staged_database)
     return staged_source, staged_gold, staged_tables, staged_database
 
-def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, database: Path) -> str:
+def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, database: Path, include_protocol: bool = False) -> str:
     try:
         manifest_bytes = path.read_bytes()
         manifest = json.loads(manifest_bytes.decode("utf-8"))
@@ -121,7 +121,8 @@ def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, da
     expected = {"gold_sha256": sha256_file(gold), "tables_sha256": sha256_file(tables), "database_tree_sha256": database_tree_sha256(database), "evaluator_sha256": sha256_file(source / "evaluation.py"), "source_tree_sha256": source_tree_sha256(source)}
     if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "spider" or manifest.get("benchmark_version") != SPIDER_VERSION or any(manifest.get(key) != value for key, value in expected.items()):
         raise ValueError("frozen Spider custody manifest does not bind supplied evaluator assets")
-    return hashlib.sha256(manifest_bytes).hexdigest()
+    digest = hashlib.sha256(manifest_bytes).hexdigest()
+    return (digest, manifest.get("protocol_sha256")) if include_protocol else digest
 
 
 def main() -> int:
@@ -141,13 +142,14 @@ def main() -> int:
     if not arguments.gold.is_file() or not arguments.tables.is_file() or not arguments.database_dir.is_dir():
         parser.error("gold, tables, and database directory are required")
     selected = arguments.canonical_predictions or arguments.predictions
+    envelope = None
     if not selected.is_file():
         parser.error("prediction input must be a file")
     try:
-        custody_sha256 = verify_frozen_custody(arguments.frozen_sql_manifest, arguments.spider_root, arguments.gold, arguments.tables, arguments.database_dir)
+        custody_sha256, protocol_sha256 = verify_frozen_custody(arguments.frozen_sql_manifest, arguments.spider_root, arguments.gold, arguments.tables, arguments.database_dir, include_protocol=True)
         if arguments.canonical_predictions is not None:
             prediction_bytes = arguments.canonical_predictions.read_bytes()
-            sql = canonical_sql(prediction_bytes, sha256_file(arguments.gold))
+            envelope, sql = canonical_sql(prediction_bytes, sha256_file(arguments.gold), protocol_sha256)
         else:
             sql = legacy_sql_lines(arguments.predictions)
     except (OSError, ValueError, json.JSONDecodeError) as error:
@@ -180,7 +182,7 @@ def main() -> int:
         parser.error("pinned Spider scorer did not return finite exact match")
     payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_SPIDER_SCORER", "metrics": {"exact_match": float(exact)}, "sample_count": len(sql), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_sql_manifest_sha256": custody_sha256, "upstream": "pinned local Spider exact-match scorer"}
     if arguments.canonical_predictions is not None:
-        payload["predictions_sha256"] = hashlib.sha256(prediction_bytes).hexdigest()
+        payload.update({"benchmark_id": envelope["benchmark"]["id"], "benchmark_version": envelope["benchmark"]["version"], "split_sha256": envelope["benchmark"]["split_sha256"], "protocol_sha256": envelope["benchmark"]["protocol_sha256"], "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "predictions_sha256": hashlib.sha256(prediction_bytes).hexdigest()})
     else:
         payload["result"] = "SELFTEST"
     arguments.score_output.parent.mkdir(parents=True, exist_ok=True)

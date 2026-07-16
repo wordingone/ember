@@ -29,7 +29,7 @@ def canonical_prediction(answers: Path) -> dict:
             "version": "frozen-v1",
             "capability": "image",
             "split_sha256": digest(answers),
-            "protocol_sha256": "e" * 64,
+            "protocol_sha256": hashlib.sha256(f"MMMU:frozen-v1:{digest(answers)}".encode()).hexdigest(),
         },
         "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1, "temperature": 0, "top_p": 1, "stop_token_ids": [2]},
         "rows": [{"id": "validation_math_1", "input_sha256": "f" * 64, "generated_token_ids": [2], "stop_reason": "eos", "output": {"kind": "text", "text": "A"}}],

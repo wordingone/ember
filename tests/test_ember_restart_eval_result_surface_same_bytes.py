@@ -15,7 +15,7 @@ def test_result_surface_passes_the_same_input_bytes_to_admission_after_path_repl
     specification.loader.exec_module(module)
     source = tmp_path / "source.json"
     output = tmp_path / "output.md"
-    original = json.dumps({"result": "MEASURED", "capability": "text"}).encode("utf-8")
+    original = json.dumps({"result": "MEASURED", "capability": "text", "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64, "benchmark_id": "local-text", "benchmark_version": "1", "split_sha256": "c" * 64, "harness_sha256": "d" * 64, "protocol_sha256": "e" * 64, "predictions_sha256": "f" * 64, "score_artifact_sha256": "0" * 64, "criterion_id": "ember-3b-text-capability-v1", "criterion_result": "PASSED", "metrics": {"accuracy": 1.0}, "verifier_sha256": "1" * 64}).encode("utf-8")
     source.write_bytes(original)
 
     def admitted(_manifest, _registry, input_bytes):
