@@ -127,6 +127,8 @@ describe("owned server supervisor", () => {
     ]);
     expect(command.args).not.toContain("--run-manifest");
     expect(command.args).not.toContain("--trusted-verifier-registry");
+    expect(command.args[2]).toContain("site.getusersitepackages()");
+    expect(command.args[2]).toContain("sys.path.append(str(user_site))");
   });
 
   it("rejects a mutated snapshot file before importing the development server", () => {
