@@ -42,6 +42,9 @@ def _frozen_custody(data):
   raise ValueError('frozen AudioBench custody invalid')
  if custody.get('protocol_sha256') != _protocol_sha256(custody):
   raise ValueError('frozen AudioBench custody invalid')
+ closed_hash = custody.get('closed_run_artifact_sha256')
+ if closed_hash is not None and (not isinstance(closed_hash, str) or len(closed_hash) != 64 or closed_hash.lower() != closed_hash or any(char not in '0123456789abcdef' for char in closed_hash)):
+  raise ValueError('frozen AudioBench closed-run custody invalid')
  return custody
 
 def _closed_run(run):
@@ -80,7 +83,10 @@ def main():
  p=argparse.ArgumentParser();p.add_argument('--canonical-predictions',required=True,type=Path);p.add_argument('--run-artifact',required=True,type=Path);p.add_argument('--frozen-audiobench-manifest',default=Path(__file__).resolve().parents[1]/'manifests'/'ember-restart-audiobench-custody-v1.json',type=Path);p.add_argument('--score-output',required=True,type=Path);a=p.parse_args()
  if a.score_output.exists():p.error('score output must not pre-exist')
  try:
-  prediction_bytes=a.canonical_predictions.read_bytes();run_bytes=a.run_artifact.read_bytes();custody_bytes=a.frozen_audiobench_manifest.read_bytes();custody=_frozen_custody(custody_bytes);envelope=validate_predictions(json.loads(prediction_bytes.decode('utf-8')));run=json.loads(run_bytes.decode('utf-8'));rows,metrics=_closed_run(run)
+  prediction_bytes=a.canonical_predictions.read_bytes();run_bytes=a.run_artifact.read_bytes();custody_bytes=a.frozen_audiobench_manifest.read_bytes();custody=_frozen_custody(custody_bytes)
+  if custody.get('closed_run_artifact_sha256') is not None and hashlib.sha256(run_bytes).hexdigest() != custody['closed_run_artifact_sha256']:
+   raise ValueError('closed run is not bound by frozen AudioBench custody')
+  envelope=validate_predictions(json.loads(prediction_bytes.decode('utf-8')));run=json.loads(run_bytes.decode('utf-8'));rows,metrics=_closed_run(run)
  except (ContractError,OSError,json.JSONDecodeError,ValueError)as exc:p.error(f'closed AudioBench input invalid: {exc}')
  if envelope['benchmark']['capability']!='audio' or envelope['benchmark']['id']!='audiobench' or envelope['benchmark']['version']!=custody['benchmark_version'] or envelope['benchmark']['protocol_sha256']!=_protocol_sha256(custody) or run['suite']!=custody['suite']:p.error('canonical predictions and closed run must bind frozen AudioBench custody')
  by_id={row['mixture_name']:row for row in rows}
