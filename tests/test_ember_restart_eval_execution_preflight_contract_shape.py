@@ -74,3 +74,16 @@ def test_text_preflight_reads_canonical_predictions_and_score_once(tmp_path,monk
  monkeypatch.setattr(sys,"argv",[str(SCRIPT),"--capability","text","--checkpoint-manifest",str(checkpoint),"--benchmark-id","x","--benchmark-version","v1","--split-artifact",str(split),"--harness-artifact",str(harness),"--protocol-artifact",str(protocol),"--raw-predictions",str(predictions),"--result-artifact",str(score),"--output",str(output)])
  assert module.main() is None
  assert reads=={predictions:1,score:1}
+def test_preflight_replace_failure_cleans_real_cli_temporary_output(monkeypatch,tmp_path):
+ checkpoint,split,harness,protocol=(tmp_path/name for name in ('checkpoint','split','harness','protocol'))
+ for path in (checkpoint,split,harness,protocol):path.write_text(path.name)
+ digest=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
+ predictions=tmp_path/'predictions';score=tmp_path/'score';output=tmp_path/'output'
+ predictions.write_text(json.dumps({'schema_version':'ember-owned-predictions-v1','claim_status':'NON_ADMISSIBLE_RAW_PREDICTIONS','checkpoint_manifest_sha256':digest(checkpoint),'model_config_sha256':'a'*64,'tokenizer_sha256':'b'*64,'inference_implementation_sha256':'c'*64,'benchmark':{'id':'x','version':'v1','capability':'text','split_sha256':digest(split),'protocol_sha256':digest(protocol)},'decoding':{'strategy':'GREEDY_AUTOREGRESSIVE','teacher_forcing':False,'max_new_tokens':1,'temperature':0,'top_p':1,'stop_token_ids':[1]},'rows':[{'id':'1','input_sha256':'d'*64,'generated_token_ids':[1],'stop_reason':'eos','output':{'kind':'text','text':'x'}}]}))
+ score.write_text(json.dumps({'metrics':{'accuracy':1.0},'criterion_id':'ember-3b-text-capability-v1','criterion_result':'FAILED','sample_count':1,'predictions_sha256':digest(predictions)}))
+ module=_load_preflight();monkeypatch.setattr(sys,'argv',[str(SCRIPT),'--capability','text','--checkpoint-manifest',str(checkpoint),'--benchmark-id','x','--benchmark-version','v1','--split-artifact',str(split),'--harness-artifact',str(harness),'--protocol-artifact',str(protocol),'--raw-predictions',str(predictions),'--result-artifact',str(score),'--output',str(output)])
+ monkeypatch.setattr(module.os,'replace',lambda *_: (_ for _ in ()).throw(OSError('replace denied')))
+ import pytest
+ with pytest.raises(OSError,match='replace denied'):module.main()
+ assert not output.exists()
+ assert not list(tmp_path.glob('tmp*'))
