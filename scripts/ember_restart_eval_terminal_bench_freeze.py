@@ -17,6 +17,25 @@ from pathlib import Path
 
 
 IMAGE = re.compile(r".+@sha256:([0-9a-f]{64})$")
+CUSTODY = Path(__file__).resolve().parents[1] / 'manifests' / 'ember-restart-terminal-bench-custody-v1.json'
+SCORER = Path(__file__).resolve().with_name('ember_restart_eval_terminal_bench.py')
+
+def _protocol_sha256(identity: dict[str, object]) -> str:
+    material = json.dumps(identity, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    return hashlib.sha256(material).hexdigest()
+
+def _custody_identity() -> dict[str, object]:
+    try:
+        custody = json.loads(CUSTODY.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f'Terminal-Bench custody manifest is invalid: {error}') from error
+    adapter = custody.get('scoring_adapter') if isinstance(custody, dict) else None
+    if not isinstance(custody, dict) or not isinstance(adapter, dict):
+        raise ValueError('Terminal-Bench custody manifest lacks adapter identity')
+    adapter_sha = hashlib.sha256(SCORER.read_bytes()).hexdigest()
+    if custody.get('benchmark_id') != 'terminal-bench' or custody.get('benchmark_version') != '2.0' or not isinstance(custody.get('source_commit'), str) or not isinstance(custody.get('source_tree'), str) or not isinstance(custody.get('license_sha256'), str) or adapter.get('path') != 'scripts/ember_restart_eval_terminal_bench.py' or adapter.get('sha256') != adapter_sha:
+        raise ValueError('Terminal-Bench custody identity does not match current scorer')
+    return {'benchmark_id': 'terminal-bench', 'benchmark_version': '2.0', 'source_commit': custody['source_commit'], 'source_tree': custody['source_tree'], 'license_sha256': custody['license_sha256'], 'scoring_adapter_path': adapter['path'], 'scoring_adapter_sha256': adapter_sha}
 
 
 def _sha256(path: Path) -> str:
@@ -69,7 +88,8 @@ def main() -> int:
         if not arguments.task_root.is_dir() or len(set(arguments.task_id)) != len(arguments.task_id):
             raise ValueError("Terminal-Bench frozen task selection is invalid")
         tasks = [_task(arguments.task_root, task_id) for task_id in sorted(arguments.task_id)]
-        _atomic(arguments.output, {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "result": "PREFLIGHT_ONLY", "benchmark_id": "terminal-bench", "benchmark_version": "2.0", "tasks": tasks})
+        identity = _custody_identity()
+        _atomic(arguments.output, {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "schema_version": "ember-restart-terminal-bench-freeze-v2", "result": "PREFLIGHT_ONLY", **identity, "protocol_sha256": _protocol_sha256(identity), "tasks": tasks})
     except ValueError as error:
         parser.error(str(error))
     return 0

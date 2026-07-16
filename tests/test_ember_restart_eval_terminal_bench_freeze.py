@@ -2,7 +2,7 @@ import pytest
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-import json
+import json,hashlib
 import importlib.util
 import subprocess
 import sys
@@ -110,3 +110,14 @@ def test_cleans_temporary_payload_when_terminal_metadata_publication_fails(monke
   root=Path(temporary);_write_task(root,image='example.invalid/bounded@sha256:'+'a'*64);output=root/'frozen.json';spec=importlib.util.spec_from_file_location('terminal_freeze_publication',SCRIPT);module=importlib.util.module_from_spec(spec);assert spec.loader is not None;spec.loader.exec_module(module);monkeypatch.setattr(sys,'argv',[str(SCRIPT),'--task-root',str(root),'--task-id','bounded-task','--output',str(output)]);monkeypatch.setattr(module.os,'replace',lambda *_:(_ for _ in ()).throw(OSError('replace denied')))
   with pytest.raises(OSError,match='replace denied'):module.main()
   assert not output.exists() and not list(root.glob('tmp*'))
+
+
+def test_freezer_emits_source_and_adapter_derived_protocol_identity():
+    with tempfile.TemporaryDirectory() as temporary:
+        root=Path(temporary);_write_task(root,image='example.invalid/bounded@sha256:'+'a'*64);output=root/'frozen.json';completed=_invoke(root,output)
+        assert completed.returncode==0,completed.stderr
+        frozen=json.loads(output.read_text(encoding='utf-8'));custody=json.loads((Path(__file__).resolve().parents[1]/'manifests'/'ember-restart-terminal-bench-custody-v1.json').read_text(encoding='utf-8'))
+        assert frozen['schema_version']=='ember-restart-terminal-bench-freeze-v2'
+        assert frozen['source_commit']==custody['source_commit'] and frozen['source_tree']==custody['source_tree']
+        assert frozen['scoring_adapter_sha256']==hashlib.sha256((Path(__file__).resolve().parents[1]/'scripts'/'ember_restart_eval_terminal_bench.py').read_bytes()).hexdigest()
+        assert frozen['protocol_sha256']

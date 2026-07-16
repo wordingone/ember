@@ -3,7 +3,11 @@
   "workstream_id": "EMBER-02C",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "asset_disposition": "PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK",
-  "scoring_adapter": {"path": "scripts/ember_restart_eval_terminal_bench.py", "sha256": "38df1baa23a00c4c6b4f90fd79d90fb3e0416b3906cac544fa95429c35cb2194", "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"},
+  "scoring_adapter": {
+    "path": "scripts/ember_restart_eval_terminal_bench.py",
+    "sha256": "22cdc9ed2ecef10c7f16359cbd4c21ef12cc8170eca6663502ef3f49c70c0b7a",
+    "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"
+  },
   "benchmark_id": "terminal-bench",
   "benchmark_version": "2.0",
   "eligibility_contract": {
@@ -29,5 +33,8 @@
   "source_commit": "2fd12b88aafdd04a52c298e3940bcb189f9766d6",
   "source_tree": "ec7c02c7f0b59ce8ed2f7c88d1e70cda7427edfa",
   "target_execution_permitted": false,
-  "upstream_url": "https://github.com/harbor-framework/terminal-bench-2"
+  "upstream_url": "https://github.com/harbor-framework/terminal-bench-2",
+  "scoring_adapter_path": "scripts/ember_restart_eval_terminal_bench.py",
+  "protocol_sha256": "0ae24775aba588817bd37da1e2d0ec85ebb8d6e0e5ff70addbc09c92f087bbac",
+  "strict_protocol_required": true
 }
