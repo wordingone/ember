@@ -10,7 +10,7 @@
     "result":  "PREFLIGHT_ONLY",
     "scoring_adapter": {
         "path": "scripts/ember_restart_eval_gsm8k_score.py",
-        "sha256": "80820c871d49f70a194e7e72dc6f9d1d173152c38f31a445c6cb437e372b52cf",
+        "sha256": "50d1b877d6e647bc821dc6021ba3115f7073547bf5c95c5b61c1bdc0774976c5",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
     "prohibited_claims":  [
