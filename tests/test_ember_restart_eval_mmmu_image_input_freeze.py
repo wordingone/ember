@@ -45,3 +45,11 @@ def test_refuses_mmmu_shard_substitution_against_frozen_file_index(tmp_path):
     result = subprocess.run([sys.executable, str(SCRIPT), "--validation-root", str(root), "--validation-freeze", str(validation_freeze), "--output", str(output)], text=True, capture_output=True, check=False)
     assert result.returncode != 0
     assert not output.exists()
+def test_mmmu_image_freeze_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+ import importlib.util,pytest
+ spec=importlib.util.spec_from_file_location('mmmu_cleanup',SCRIPT);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ root=tmp_path/'validation';shard=root/'Math'/'validation-00000-of-00001.parquet';shard.parent.mkdir(parents=True);pq.write_table(pa.table({'id':['validation_Math_1'],'question':['q'],'options':["['A']"],'image_1':[{'bytes':b'image','path':'image.png'}]}),shard)
+ freeze=tmp_path/'validation-freeze';freeze.write_text(json.dumps({'schema_version':'ember-restart-mmmu-validation-freeze-v1','benchmark_id':'MMMU','upstream_revision':'f'*40,'validation_parquet_file_count':1,'validation_parquet_files':[{'path':'Math/validation-00000-of-00001.parquet','sha256':digest(shard)}],'validation_row_count':1}),encoding='utf-8');output=tmp_path/'image-inputs'
+ monkeypatch.setattr(sys,'argv',[str(SCRIPT),'--validation-root',str(root),'--validation-freeze',str(freeze),'--output',str(output)]);monkeypatch.setattr(module.os,'replace',lambda *_: (_ for _ in ()).throw(OSError('replace denied')))
+ with pytest.raises(OSError,match='replace denied'):module.main()
+ assert not output.exists() and not list(tmp_path.glob('image-inputs.*.tmp'))
