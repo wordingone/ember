@@ -12,6 +12,11 @@ has only two shared-text optimizer steps (2,048 observed tokens). Its
 structural parameter counts are not a substitute for held-out benchmark
 evidence.
 
+The public `VERIFIED_NON_CLAIM_RAW_FORWARD` for
+`ember-step2-raw-forward/1` generated one token decoded as `lev`. This is
+execution-path evidence only: it has no benchmark score, capability, admission,
+or sufficient-pretraining credit.
+
 ## Reporting rule
 
 Any paper-facing table must source a row from the central admitted evaluation

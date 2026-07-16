@@ -11,10 +11,12 @@ It records 3,839,161,856 allocated/unique/trainable/served parameters,
 1,020,589,568 active shared-route parameters, global step 2, and 2,048
 observed shared-text tokens.
 
-This is structural bootstrap-mechanics evidence only. It is not a model
-capability result: no canonical owned prediction, frozen-suite score,
-admission, or sufficient-pretraining finding exists for this input. Image,
-audio, reasoning, and structured-tool specialists are untrained.
+This is structural bootstrap-mechanics evidence only. A
+`VERIFIED_NON_CLAIM_RAW_FORWARD` for `ember-step2-raw-forward/1` generated one
+token decoded as `lev`; it is execution-path evidence, not a frozen-suite
+result. There is no frozen-suite score, admission, or sufficient-pretraining
+finding, and that raw forward has no benchmark score or capability credit.
+Image, audio, reasoning, and structured-tool specialists are untrained.
 
 ## Evaluation coverage disclosure
 

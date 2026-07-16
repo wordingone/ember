@@ -4,10 +4,11 @@
 # Ember Restart Demo Result Boundary
 
 No owned-model capability demo is available from the corrected v3 shared-route
-checkpoint. The current public execution authority intentionally refuses the
-checkpoint-consuming forward path until the exact runtime binding is admitted.
-The checkpoint has no canonical predictions and no score-bearing benchmark
-record.
+checkpoint. The public `VERIFIED_NON_CLAIM_RAW_FORWARD` for
+`ember-step2-raw-forward/1` generated one token decoded as `lev`; it is
+execution-path evidence only, with no benchmark score, capability, admission,
+or sufficient-pretraining credit. The checkpoint has no frozen-suite canonical
+prediction or score-bearing benchmark record.
 
 Any interactive surface must show that refusal and identify borrowed reference
 models as `REFERENCE_ONLY`; it must not substitute them for Ember or display
