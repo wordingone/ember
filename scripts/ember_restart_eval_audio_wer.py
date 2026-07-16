@@ -38,5 +38,8 @@ def main():
  payload={'criterion_id':'ember-3b-audio-capability-v1','criterion_result':'FAILED','metrics':{'word_error_rate':sum(dist(r[k].split(),q[k].split())for k in r)/words},'sample_count':len(r),'references_sha256':reference_sha256,'frozen_audio_manifest_sha256':manifest_sha256,'upstream':'deterministic local word-error-rate scorer'}
  a.score_output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.score_output.parent,delete=False)as h:h.write(json.dumps(payload,sort_keys=True)+'\n');t=Path(h.name)
- os.replace(t,a.score_output)
+ try:
+  os.replace(t,a.score_output)
+ finally:
+  t.unlink(missing_ok=True)
 if __name__=='__main__':main()
