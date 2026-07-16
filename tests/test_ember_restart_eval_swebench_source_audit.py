@@ -77,3 +77,14 @@ def test_source_audit_refuses_dirty_harness_after_commit_binding():
         assert result.returncode != 0
         assert "working tree must be clean" in result.stderr
         assert not output.exists()
+
+def test_source_audit_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+    import importlib.util, pytest
+    spec = importlib.util.spec_from_file_location("swebench_cleanup", SCRIPT); module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    root = tmp_path / "swebench"; commit = make_source(root); output = tmp_path / "audit.json"
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--swebench-root", str(root), "--expected-commit", commit, "--output", str(output)])
+    monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+    with pytest.raises(OSError, match="replace denied"):
+        module.main()
+    assert not output.exists()
+    assert not list(tmp_path.glob("audit.json.*.tmp"))
