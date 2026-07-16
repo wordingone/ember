@@ -35,6 +35,9 @@ def test_scores_canonical_math_answers_against_identity_bound_frozen_references(
         assert payload["claim_status"] == "NON_ADMISSIBLE_FROZEN_MATH_SCORER"
         assert payload["criterion_result"] == "FAILED"
         assert payload["predictions_sha256"] == hashlib.sha256(predictions.read_bytes()).hexdigest()
+        assert payload["benchmark_id"] == "math-500" and payload["benchmark_version"] == "frozen-v1"
+        assert payload["split_sha256"] == "e" * 64 and payload["protocol_sha256"] == "f" * 64
+        assert payload["checkpoint_manifest_sha256"] == "a" * 64 and payload["model_config_sha256"] == "b" * 64
 
 def test_scores_source_shaped_math500_unique_ids():
     with tempfile.TemporaryDirectory() as temporary:
