@@ -63,14 +63,14 @@
         },
         {
             "path": "scripts/ember_restart_eval_evalplus_result.py",
-            "sha256": "28b2de63be633f0abbad0ef9d4d2a69ba8811d268f164a211b23f0dced761940",
+            "sha256": "c7fb9fc0429de5cadda341ae718cb5961ce3a9dbd78930e41cb2bbdfc70e1370",
             "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"
         },
         {
             "path": "scripts/ember_restart_eval_math_exact.py",
-            "sha256": "f26de050e43da660e0677f595bee1811bdac17d5575d12167bd0c8752a275e2b",
+            "sha256": "09591d6a97e9566fcc64453f2a5126cce35cd0fd0fc4cbfa51c18e0f967d4b61",
             "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
         }
     ],
-    "protocol_sha256": "cabf84a06f0558ca5921c8cc70ead7dc58781f53a202c18c91a0de10ea77e6c2"
+    "protocol_sha256": "b21ea8ab970e4e166cb96427db97b8d5dbaa1b8d30f929fc9c3788df380225a3"
 }

@@ -20,3 +20,13 @@ def test_mmlu_pro_freeze_replace_failure_cleans_real_cli_temporary_output(monkey
  monkeypatch.setattr(module.os,'replace',lambda *_: (_ for _ in ()).throw(OSError('replace denied')))
  with pytest.raises(OSError,match='replace denied'):module.main()
  assert not output.exists() and not list(tmp_path.glob('frozen.*.tmp'))
+
+
+def test_freezer_derives_protocol_and_emits_scorer_identity_instead_of_trusting_caller(tmp_path):
+ import hashlib
+ root=tmp_path;(root/'README.md').write_text('---\nlicense: mit\n---\n',encoding='utf-8');split=root/'data'/'test-00000-of-00001.parquet';split.parent.mkdir();pq.write_table(pa.table({'question_id':[1],'question':['q1'],'options':[['a','b']],'answer':['A'],'answer_index':[0]}),split);out=root/'frozen'
+ run=subprocess.run([sys.executable,str(SCRIPT),'--dataset-root',str(root),'--revision','b189ec765aa7ed75c8acfea42df31fdae71f97be','--protocol-sha256','a'*64,'--output',str(out)],capture_output=True,text=True)
+ assert run.returncode==0,run.stderr
+ payload=json.loads(out.read_text(encoding='utf-8'));adapter=hashlib.sha256((SCRIPT.parents[1]/'scripts'/'ember_restart_eval_mmlu_pro_score.py').read_bytes()).hexdigest()
+ assert payload['scoring_adapter_sha256']==adapter
+ assert payload['protocol_sha256']!='a'*64

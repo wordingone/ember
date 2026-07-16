@@ -114,15 +114,15 @@
         },
         "reasoning": {
             "path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
-            "sha256": "e3b28449e918fb50ed0b26f7bd8f09adab30b068be19a0d34fe5a03584942f63"
+            "sha256": "f790f9db1352c7d3ee31ee0c1d69b681ca4d21420e9df59bcde5c9a671f8e72c"
         },
         "code": {
             "path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-            "sha256": "22d889e26e304ba5727cd434fe11379d1c1c950d6983825c7fc8c049913abae9"
+            "sha256": "7a4ce7c30c741e46b67a2d5b9be092c6050029bbad33177e43a70703ce2bb41b"
         },
         "mathematics": {
             "path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-            "sha256": "22d889e26e304ba5727cd434fe11379d1c1c950d6983825c7fc8c049913abae9"
+            "sha256": "7a4ce7c30c741e46b67a2d5b9be092c6050029bbad33177e43a70703ce2bb41b"
         },
         "terminal": {
             "path": "manifests/ember-restart-terminal-bench-custody-v1.json",
@@ -134,15 +134,15 @@
         },
         "files": {
             "path": "manifests/ember-restart-swebench-custody-v1.json",
-            "sha256": "084f8696742b69eee00db0776fd9216c3147b92afc2e825710666fa16f807621"
+            "sha256": "24d8356af0947ad39f9ce2aa2b3d72c6a8c55aa55024f64a17cbde6b5a129aed"
         },
         "browser_ui": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "836d322a15d1e75703f3c587304a78bf2aa9eecc49863d3ac00329ec3bd83b52"
+            "sha256": "38dab015c33b3d548637a1ce849c89f2d264b41a6efb0a0776744c003cd1184f"
         },
         "image": {
             "path": "manifests/ember-restart-mmmu-validation-custody-v1.json",
-            "sha256": "69bd877236794cfc0348dff46bdb06e6b0d9cf697cf243c7326811cccb6d28c5"
+            "sha256": "5dc7ac2681a7e45067f3cdc7f4598d1e0fadeb4ba13dbe699ad084c89958f6f0"
         },
         "audio": {
             "path": "manifests/ember-restart-audiobench-custody-v1.json",
@@ -150,7 +150,7 @@
         },
         "structured_tools": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "836d322a15d1e75703f3c587304a78bf2aa9eecc49863d3ac00329ec3bd83b52"
+            "sha256": "38dab015c33b3d548637a1ce849c89f2d264b41a6efb0a0776744c003cd1184f"
         }
     }
 }

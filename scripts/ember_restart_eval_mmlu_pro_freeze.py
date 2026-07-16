@@ -10,7 +10,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 COMMIT=re.compile(r'[0-9a-f]{40}');SHA256=re.compile(r'[0-9a-f]{64}');SPLIT=Path('data/test-00000-of-00001.parquet')
+SCORER=Path(__file__).resolve().with_name('ember_restart_eval_mmlu_pro_score.py')
 def digest(data:bytes)->str:return hashlib.sha256(data).hexdigest()
+def derived_protocol_sha256(version:str,reference_sha256:str,license_sha256:str,adapter_sha256:str)->str:
+ return digest(f'mmlu-pro:{version}:{reference_sha256}:{license_sha256}:{adapter_sha256}'.encode())
 def has_mit(card:bytes)->bool:
  text=card.decode('utf-8').replace('\r\n','\n')
  if not text.startswith('---\n'):return False
@@ -28,7 +31,8 @@ def main()->int:
   def valid(r):return isinstance(r,dict) and isinstance(r.get('question_id'),int) and isinstance(r.get('question'),str) and bool(r['question']) and isinstance(r.get('options'),list) and bool(r['options']) and all(isinstance(x,str) and x for x in r['options']) and isinstance(r.get('answer'),str) and r['answer'] and isinstance(r.get('answer_index'),int) and 0<=r['answer_index']<len(r['options']) and r['answer']==chr(ord('A')+r['answer_index'])
   if not rows or len(set(ids))!=len(rows) or any(not valid(r) for r in rows):raise ValueError('MMLU-Pro rows require unique ids, nonempty options, and matching answer indexes')
  except (OSError,UnicodeDecodeError,pa.ArrowException,ValueError,yaml.YAMLError) as error:parser.error(str(error))
- payload={'schema_version':'ember-restart-mmlu-pro-freeze-v1','result':'PREFLIGHT_ONLY','claim_status':'FROZEN_MMLU_PRO_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS','benchmark_id':'mmlu-pro','benchmark_version':args.revision,'capability':'reasoning','license':'MIT','license_sha256':digest(card),'references_sha256':digest(split),'split_sha256':digest(split),'protocol_sha256':args.protocol_sha256,'task_count':len(rows)}
+ license_sha256=digest(card);reference_sha256=digest(split);adapter_sha256=digest(SCORER.read_bytes());protocol_sha256=derived_protocol_sha256(args.revision,reference_sha256,license_sha256,adapter_sha256)
+ payload={'schema_version':'ember-restart-mmlu-pro-freeze-v1','result':'PREFLIGHT_ONLY','claim_status':'FROZEN_MMLU_PRO_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS','benchmark_id':'mmlu-pro','benchmark_version':args.revision,'capability':'reasoning','license':'MIT','license_sha256':license_sha256,'references_sha256':reference_sha256,'split_sha256':reference_sha256,'scoring_adapter_path':'scripts/ember_restart_eval_mmlu_pro_score.py','scoring_adapter_sha256':adapter_sha256,'protocol_sha256':protocol_sha256,'task_count':len(rows)}
  args.output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=args.output.parent,prefix=args.output.name+'.',suffix='.tmp',delete=False) as h:h.write(json.dumps(payload,sort_keys=True)+'\n');temporary=Path(h.name)
  try:
