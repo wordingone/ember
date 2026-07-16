@@ -47,3 +47,11 @@ def test_runtime_audit_reports_network_fetch_tool_as_live_dataset_input():
         payload = json.loads(output.read_text(encoding="utf-8"))
         assert payload["live_dataset_fetch"] is True
         assert payload["target_execution_permitted"] is False
+def test_runtime_audit_treats_malformed_image_digest_as_mutable():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "evalplus"; root.mkdir()
+        (root / "Dockerfile").write_text("FROM python@sha256:not-a-sha256\n", encoding="utf-8")
+        output = root.parent / "audit.json"
+        run = subprocess.run([sys.executable, str(SCRIPT), "--evalplus-root", str(root), "--output", str(output)], text=True, capture_output=True, check=False)
+        assert run.returncode == 0, run.stderr
+        assert json.loads(output.read_text(encoding="utf-8"))["mutable_base_image"] is True

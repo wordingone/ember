@@ -7,9 +7,12 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 
+
+DIGESTED_IMAGE = re.compile(r".+@sha256:[0-9a-f]{64}$")
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -30,7 +33,7 @@ def main() -> int:
         if len(from_lines) != 1:
             raise ValueError("Dockerfile must have one base image")
         base = from_lines[0][5:].strip()
-        mutable_base = "@sha256:" not in base
+        mutable_base = DIGESTED_IMAGE.fullmatch(base) is None
         lowered = "\n".join(lines).lower()
         live_dependency = "pip install" in lowered and ("--require-hashes" not in lowered or "pip install --upgrade" in lowered)
         live_dataset = any(marker in lowered for marker in ("get_human_eval_plus", "get_mbpp_plus", "get_evalperf_data", "curl ", "wget ", "git clone ", "http://", "https://"))
