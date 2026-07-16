@@ -58,12 +58,12 @@
     "scoring_adapters":  [
                              {
                                  "path":  "scripts/ember_restart_eval_evalplus_adapter.py",
-                                 "sha256":  "d2eca54900ee1100701671bb028c99e5fba8e6594d6405cf997d75f42e6f9ec2",
+                                 "sha256":  "64e40b316b123fcddc40a316a0d12573fb343ae362e411e66e8d45dd8178c260",
                                  "result_disposition":  "SELFTEST_ONLY_NON_ADMISSIBLE"
                              },
                              {
                                  "path":  "scripts/ember_restart_eval_evalplus_result.py",
-                                 "sha256":  "51428d3b982c2f9d3da6da26fddb395e2e1e4546ed8a48c836509a0778c0b0c6",
+                                 "sha256":  "bd0debb0b4468c10dd6ae488e9e9054bf2923c80dc0060b3ca2cbd331cae777d",
                                  "result_disposition":  "SELFTEST_ONLY_NON_ADMISSIBLE"
                              },
                              {
