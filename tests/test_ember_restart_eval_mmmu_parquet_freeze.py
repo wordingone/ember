@@ -2,11 +2,14 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import pytest
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -79,3 +82,23 @@ def test_freezer_accepts_serialized_open_answer_alternatives():
         result = subprocess.run([sys.executable, str(SCRIPT), "--validation-root", str(root / "parquet"), "--answers", str(answers), "--upstream-revision", "f" * 40, "--disk-receipt", str(answers), "--output", str(output)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
         assert json.loads(output.read_text(encoding="utf-8"))["validation_row_count"] == 1
+
+def test_freezer_cleans_temporary_payload_when_final_mmmu_publication_fails(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        parquet_root = root / "parquet" / "Math"
+        parquet_root.mkdir(parents=True)
+        pq.write_table(pa.table({"id": ["validation_Math_1"], "answer": ["A"], "question_type": ["multiple-choice"]}), parquet_root / "validation-00000-of-00001.parquet")
+        answers = root / "answers.json"
+        answers.write_text(json.dumps({"validation_Math_1": {"question_type": "multiple-choice", "ground_truth": "A"}}), encoding="utf-8")
+        output = root / "receipt.json"
+        spec = importlib.util.spec_from_file_location("mmmu_parquet_publication", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--validation-root", str(root / "parquet"), "--answers", str(answers), "--upstream-revision", "f" * 40, "--disk-receipt", str(answers), "--output", str(output)])
+        monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+        with pytest.raises(OSError, match="replace denied"):
+            module.main()
+        assert not output.exists()
+        assert not list(root.glob("receipt.json.*.tmp"))
