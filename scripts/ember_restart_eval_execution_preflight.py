@@ -31,6 +31,9 @@ def main():
  if not isinstance(metrics,dict) or not metrics or any(isinstance(v,bool)or not isinstance(v,(int,float))or not math.isfinite(v)for v in metrics.values()):p.error('score artifact must contain non-empty finite numeric metrics')
  payload={'result':'PREFLIGHT_ONLY','admission':'NOT_ELIGIBLE','capability':a.capability,'subject_checkpoint_sha256':checkpoint,'benchmark_id':a.benchmark_id,'benchmark_version':a.benchmark_version,'split_sha256':split,'harness_sha256':sha256(a.harness_artifact),'protocol_sha256':protocol,'predictions_sha256':predictions_sha256,'score_artifact_sha256':score_artifact_sha256,'sample_count':count,'metrics':metrics,'criterion_id':expected,'criterion_result':score['criterion_result']}
  a.output.parent.mkdir(parents=True,exist_ok=True)
- with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.output.parent,delete=False)as h:h.write(json.dumps(payload,sort_keys=True)+'\n');tmp=h.name
- os.replace(tmp,a.output)
+ with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.output.parent,delete=False)as h:h.write(json.dumps(payload,sort_keys=True)+'\n');tmp=Path(h.name)
+ try:
+  os.replace(tmp,a.output)
+ finally:
+  tmp.unlink(missing_ok=True)
 if __name__=='__main__':main()
