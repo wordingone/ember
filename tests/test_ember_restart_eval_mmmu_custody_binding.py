@@ -50,6 +50,8 @@ def test_scores_only_canonical_predictions_bound_to_frozen_mmmu_custody():
         assert payload["predictions_sha256"] == digest(predictions)
         assert payload["answers_sha256"] == digest(answers)
         assert payload["frozen_mmmu_manifest_sha256"] == digest(custody)
+        assert payload["result"] == "PREFLIGHT_ONLY"
+        assert payload["claim_status"] == "NON_ADMISSIBLE_FROZEN_MMMU_SCORER"
         assert payload["criterion_result"] == "FAILED"
 
 
