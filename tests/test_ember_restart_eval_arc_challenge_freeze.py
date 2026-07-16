@@ -44,3 +44,17 @@ def test_refuses_arc_challenge_rows_with_invalid_answer_or_choice_labels():
         result = subprocess.run([sys.executable, str(SCRIPT), "--dataset-root", str(root), "--revision", "210d026faf9955653af8916fad021475a3f00453", "--protocol-sha256", "a" * 64, "--output", str(output)], text=True, capture_output=True, check=False)
         assert result.returncode != 0
         assert not output.exists()
+def test_arc_freeze_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+    import importlib.util, pytest
+    spec = importlib.util.spec_from_file_location("arc_cleanup", SCRIPT); module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    (tmp_path / "README.md").write_text("---\nlicense: cc-by-sa-4.0\n---\n", encoding="utf-8")
+    split = tmp_path / "ARC-Challenge" / "test-00000-of-00001.parquet"; split.parent.mkdir()
+    choices = pa.array([{"text": ["one", "two"], "label": ["A", "B"]}])
+    pq.write_table(pa.table({"id": ["a"], "question": ["q1"], "choices": choices, "answerKey": ["A"]}), split)
+    output = tmp_path / "frozen.json"
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--dataset-root", str(tmp_path), "--revision", "a" * 40, "--protocol-sha256", "b" * 64, "--output", str(output)])
+    monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+    with pytest.raises(OSError, match="replace denied"):
+        module.main()
+    assert not output.exists()
+    assert not list(tmp_path.glob("frozen.json.*.tmp"))
