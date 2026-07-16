@@ -2,11 +2,14 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import pytest
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -43,3 +46,22 @@ def test_refuses_spider_validation_pairs_without_unique_nonempty_sql_rows():
         result = subprocess.run([sys.executable, str(SCRIPT), "--dataset-root", str(root), "--revision", "0c350918f3f29ec754f1181c65cdce76cd6c133c", "--protocol-sha256", "a" * 64, "--output", str(output)], text=True, capture_output=True, check=False)
         assert result.returncode != 0
         assert not output.exists()
+
+def test_cleans_temporary_payload_when_final_spider_validation_publication_fails(monkeypatch):
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        (root / "README.md").write_text("---\nlicense: cc-by-sa-4.0\n---\n", encoding="utf-8")
+        split = root / "spider" / "validation-00000-of-00001.parquet"
+        split.parent.mkdir()
+        pq.write_table(pa.table({"db_id": ["a"], "question": ["one"], "query": ["select 1"]}), split)
+        output = root / "frozen.json"
+        spec = importlib.util.spec_from_file_location("spider_validation_publication", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--dataset-root", str(root), "--revision", "0c350918f3f29ec754f1181c65cdce76cd6c133c", "--protocol-sha256", "a" * 64, "--output", str(output)])
+        monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+        with pytest.raises(OSError, match="replace denied"):
+            module.main()
+        assert not output.exists()
+        assert not list(root.glob("frozen.json.*.tmp"))
