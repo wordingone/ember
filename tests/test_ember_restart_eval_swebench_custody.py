@@ -18,6 +18,13 @@ def test_swebench_source_audit_records_no_frozen_task_release_or_eligible_runtim
         "runner_receipt_sha256": "f37595272cab74d6bef2df3f800ee152e0260c29b403ab5e87f0440df6afbd99",
         "claim_status": "SOURCE_ONLY_NO_FROZEN_SWEBENCH_TASK_RELEASE",
     }
-    assert custody["admission"] == "NOT_EXECUTABLE_NO_FROZEN_TASK_RELEASE_OR_OFFLINE_SANDBOX"
+    assert custody["external_lite_release_audit"] == {
+        "dataset_repository": "SWE-bench/SWE-bench_Lite",
+        "upstream_revision": "69611d31007e1c6731db8bd5b5c3f2d33f5bab6e",
+        "artifact_bytes": 1218485,
+        "license_disposition": "UNDECLARED_IN_EXACT_DATASET_CARD",
+        "materialization": "HELD_NO_LICENSE_PROVENANCE",
+    }
+    assert custody["admission"] == "NOT_EXECUTABLE_UNDECLARED_DATASET_LICENSE_AND_NO_OFFLINE_SANDBOX"
     assert custody["covered_families"] == ["code", "files"]
     assert custody["target_execution_permitted"] is False
