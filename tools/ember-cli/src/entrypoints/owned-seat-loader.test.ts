@@ -3,9 +3,12 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, it } from "bun:test";
-import { resolve } from "path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
 
 import {
+  captureDevelopmentResolver,
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
   verifyOwnedEndpointIdentity,
@@ -14,6 +17,89 @@ import {
 const CHECKPOINT = "d".repeat(64);
 
 describe("owned seat loader", () => {
+  it("authenticates the complete runtime closure against Git and snapshots it before execution", () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-bootstrap-test-"));
+    const sourceCommit = "a".repeat(40);
+    const trustedSources = [
+      "configs/ember-restart-3b.json",
+      "scripts/ember_restart/development_cli_seat.py",
+      "scripts/ember_restart/prediction_contract.py",
+      "scripts/ember_restart_eval_checkpoint_consumer.py",
+      "scripts/ember_restart_eval_raw_forward.py",
+      "tokenizer/tokenizer.json",
+      "tools/ember-restart-3b/batch.py",
+      "tools/ember-restart-3b/checkpoint_artifacts.py",
+      "tools/ember-restart-3b/infer.py",
+      "tools/ember-restart-3b/model.py",
+      "tools/ember-restart-3b/parameter_counter.py",
+      "tools/ember-restart-3b/serve_owned_openai.py",
+    ];
+    const runtimeFiles = [
+      ...trustedSources,
+      "parameter-evidence/parameter_counter.py",
+      "parameter-evidence/step2-realization-receipt.json",
+      "parameter-evidence/trusted-verifiers.json",
+    ];
+    try {
+      for (const relativePath of runtimeFiles) {
+        const path = join(root, relativePath);
+        mkdirSync(resolve(path, ".."), { recursive: true });
+        writeFileSync(path, relativePath === "scripts/ember_restart/development_cli_seat.py"
+          ? "# exact resolver\n"
+          : "exact:" + relativePath + "\n");
+      }
+      const files = Object.fromEntries(runtimeFiles.map((relativePath) => {
+        const payload = readFileSync(join(root, relativePath));
+        return [relativePath, {
+          bytes: payload.byteLength,
+          sha256: new Bun.CryptoHasher("sha256").update(payload).digest("hex"),
+        }];
+      }));
+      const index = {
+        schema_version: "ember-owned-runtime-bundle-v1",
+        source_commit: sourceCommit,
+        files,
+      };
+      const indexBytes = new TextEncoder().encode(JSON.stringify(index));
+      writeFileSync(join(root, "runtime-bundle-index.json"), indexBytes);
+      const manifest = {
+        runtime_bundle: {
+          index_path: "runtime-bundle-index.json",
+          sha256: new Bun.CryptoHasher("sha256").update(indexBytes).digest("hex"),
+        },
+      };
+      const manifestPath = join(root, "development.json");
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+      const readGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
+        readFileSync(join(root, relativePath));
+
+      const captured = captureDevelopmentResolver(manifestPath, root, sourceCommit, readGitBlob);
+      writeFileSync(join(root, "scripts", "ember_restart", "development_cli_seat.py"), "# drifted resolver\n");
+      expect(new TextDecoder().decode(readFileSync(captured.resolverPath))).toBe(
+        "# exact resolver\n",
+      );
+      expect(captured.manifestSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(captured.runtimeIndexSha256).toBe(manifest.runtime_bundle.sha256);
+      expect(existsSync(captured.manifestPath)).toBe(true);
+      captured.cleanup();
+      expect(existsSync(captured.resolverPath)).toBe(false);
+      expect(() => captureDevelopmentResolver(manifestPath, root, "b".repeat(40), readGitBlob)).toThrow(
+        "exact compiled cockpit commit",
+      );
+      expect(() => captureDevelopmentResolver(
+        manifestPath,
+        root,
+        sourceCommit,
+        (_repoRoot, _commit, relativePath) =>
+          relativePath === "tools/ember-restart-3b/model.py"
+            ? new TextEncoder().encode("forged\n")
+            : readFileSync(join(root, relativePath)),
+      )).toThrow("embedded Git commit");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it("returns unavailable when the default pointer does not exist", () => {
     let executed = false;
     const identity = loadOwnedModelIdentity(
@@ -118,6 +204,7 @@ describe("owned seat loader", () => {
 
   it("loads a closed development identity through the separate non-claiming resolver", () => {
     let observedArgs: string[] = [];
+    let cleanupCalls = 0;
     const identity = loadOwnedDevelopmentIdentity(
       {
         repoRoot: "C:/repo",
@@ -127,6 +214,15 @@ describe("owned seat loader", () => {
       },
       {
         exists: () => true,
+        resolveBuildCommit: () => "a".repeat(40),
+        captureDevelopmentResolver: () => ({
+          cleanup: () => { cleanupCalls += 1; },
+          manifestPath: resolve("C:/snapshot/development.json"),
+          manifestSha256: "e".repeat(64),
+          resolverPath: resolve("C:/snapshot/development_cli_seat.py"),
+          runtimeIndexPath: resolve("C:/snapshot/runtime-bundle-index.json"),
+          runtimeIndexSha256: "f".repeat(64),
+        }),
         execute: (executable, args) => {
           observedArgs = [executable, ...args];
           return {
@@ -149,7 +245,7 @@ describe("owned seat loader", () => {
               active_parameters: 1_020_589_568,
               launch: {
                 checkpoint_dir: resolve("C:/owned/checkpoint"),
-                development_manifest_path: resolve("C:/development.json"),
+                development_manifest_path: resolve("C:/snapshot/development.json"),
                 mode: "INTERACTIVE",
                 model_config_path: resolve("C:/owned/model-config.json"),
                 server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
@@ -168,18 +264,30 @@ describe("owned seat loader", () => {
     expect(identity?.launch).toEqual({
       authorityKind: "DEVELOPMENT",
       checkpointDir: resolve("C:/owned/checkpoint"),
-      developmentManifestPath: resolve("C:/development.json"),
+      cleanupRuntimeSnapshot: expect.any(Function),
+      developmentManifestSha256: "e".repeat(64),
+      developmentManifestPath: resolve("C:/snapshot/development.json"),
       mode: "INTERACTIVE",
       modelConfigPath: resolve("C:/owned/model-config.json"),
       pythonExecutable: "python-owned",
+      runtimeIndexPath: resolve("C:/snapshot/runtime-bundle-index.json"),
+      runtimeIndexSha256: "f".repeat(64),
       serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
       tokenizerPath: resolve("C:/owned/tokenizer.json"),
     });
     expect(observedArgs).toEqual([
       "python-owned",
-      "C:\\repo\\scripts\\ember_restart\\development_cli_seat.py",
-      "C:\\development.json",
+      "C:\\snapshot\\development_cli_seat.py",
+      "C:\\snapshot\\development.json",
+      "--expected-manifest-sha256",
+      "e".repeat(64),
+      "--expected-runtime-index-sha256",
+      "f".repeat(64),
     ]);
+    expect(cleanupCalls).toBe(0);
+    if (identity?.launch?.authorityKind !== "DEVELOPMENT") throw new Error("missing development launch");
+    identity.launch.cleanupRuntimeSnapshot();
+    expect(cleanupCalls).toBe(1);
   });
 
   it("verifies a live development endpoint without upgrading its claim status", async () => {

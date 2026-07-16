@@ -11,7 +11,7 @@
     "dev": "bun run ./entrypoints/main.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "build": "bun build ./entrypoints/main.ts --compile --outfile ember.exe"
+    "build": "bun run ./build-tools/build-cockpit.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -28,5 +28,8 @@
     "react": "^19.2.7",
     "react-reconciler": "^0.33.0",
     "zod": "^4.4.3"
-  }
+  },
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 }
