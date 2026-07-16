@@ -125,6 +125,36 @@ def semantic_publication_plan(*, steps: int, checkpoint_interval: int, checkpoin
     if projected_write_bytes > write_budget_bytes:
         raise ValueError("semantic publication plan exceeds the declared write budget")
     return {"publication_count": publication_count, "checkpoint_byte_bound": checkpoint_byte_bound, "projected_write_bytes": projected_write_bytes}
+def specialist_publication_plan(
+    *, records: int, checkpoint_interval: int, checkpoint_byte_bound: int,
+    write_budget_bytes: int, initial_global_step: int,
+) -> dict[str, int]:
+    """Bound every specialist publication, including the mandatory final bundle."""
+
+    if (
+        not isinstance(records, int) or records < 1
+        or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1
+        or not isinstance(checkpoint_byte_bound, int) or checkpoint_byte_bound < 1
+        or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1
+        or not isinstance(initial_global_step, int) or initial_global_step < 0
+    ):
+        raise ValueError("specialist publication plan requires positive integer records, interval, bound, budget, and global step")
+    final_global_step = initial_global_step + records
+    periodic = sum(
+        1
+        for step in range(initial_global_step + 1, final_global_step + 1)
+        if step % checkpoint_interval == 0
+    )
+    publication_count = periodic + (0 if final_global_step % checkpoint_interval == 0 else 1)
+    projected_write_bytes = publication_count * checkpoint_byte_bound
+    if projected_write_bytes > write_budget_bytes:
+        raise ValueError("specialist publication plan exceeds the declared write budget")
+    return {
+        "publication_count": publication_count,
+        "checkpoint_byte_bound": checkpoint_byte_bound,
+        "projected_write_bytes": projected_write_bytes,
+    }
+
 def production_artifact_root(
     candidate: Path,
     *,
@@ -265,6 +295,27 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
         raise RuntimeError("production slice requires one record for every declared expert")
     return records, packet, input_receipt
 
+
+def production_resume_checkpoint(
+    candidate: Path,
+    *,
+    c_relocated_under_disk_budget_runner: bool = False,
+    relocation_custody_root: Path | None = None,
+) -> Path:
+    """Accept a published B: bundle or an explicitly runner-custodied C: bundle."""
+
+    resolved = candidate.resolve()
+    if resolved.drive.upper() == "B:" and resolved.is_dir():
+        return resolved
+    if c_relocated_under_disk_budget_runner:
+        resolved = production_artifact_root(
+            resolved,
+            c_relocated_under_disk_budget_runner=True,
+            relocation_custody_root=relocation_custody_root,
+        )
+        if resolved.is_dir():
+            return resolved
+    raise ValueError("resume checkpoint must be a published B: bundle or declared C: custody bundle")
 
 def checkpoint_retention_budget_bytes(config_path: Path) -> int:
     """Load the measured serialized-byte ceiling for published checkpoint bundles."""
@@ -412,12 +463,25 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
         block_wise=bool(hyperparameters["block_wise"]),
     )
 
-def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, records_override: list[dict[str, object]] | None = None, specialist_verification: dict[str, object] | None = None, specialist_lineage: dict[str, object] | None = None, c_relocated_under_disk_budget_runner: bool = False, relocation_custody_root: Path | None = None) -> dict[str, object]:
+def run(
+    *, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None,
+    records_override: list[dict[str, object]] | None = None,
+    specialist_verification: dict[str, object] | None = None,
+    specialist_lineage: dict[str, object] | None = None,
+    checkpoint_interval: int | None = None,
+    write_budget_bytes: int | None = None,
+    c_relocated_under_disk_budget_runner: bool = False,
+    relocation_custody_root: Path | None = None,
+) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
         raise ValueError("launch seed must be a nonnegative integer")
-    artifact_root = production_artifact_root(artifact_root, c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner, relocation_custody_root=relocation_custody_root)
+    artifact_root = production_artifact_root(
+        artifact_root,
+        c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
+        relocation_custody_root=relocation_custody_root,
+    )
     root = Path(__file__).resolve().parents[2]
     config_path = root / "configs" / "ember-restart-3b.json"
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
@@ -428,7 +492,11 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     total_parameters = config.structural_parameter_count()
     active_parameters = total_parameters - (len(config.expert_names) - 1) * config.layers * 12 * config.hidden_size * config.hidden_size
     device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
-    memory_preflight = production_memory_preflight(total_parameters=total_parameters, active_parameters=active_parameters, device_free_bytes=int(device_free_bytes))
+    memory_preflight = production_memory_preflight(
+        total_parameters=total_parameters,
+        active_parameters=active_parameters,
+        device_free_bytes=int(device_free_bytes),
+    )
     if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
         raise RuntimeError("memory preflight and production numerics disagree")
     if records_override is None:
@@ -437,6 +505,8 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     else:
         if not records_override or not isinstance(specialist_verification, dict) or not isinstance(specialist_lineage, dict):
             raise ValueError("specialist production run requires verified routed records and v4 lineage")
+        if checkpoint_interval is None or write_budget_bytes is None:
+            raise ValueError("specialist production run requires an explicit checkpoint interval and write budget")
         records = records_override
         launch_packet = {"input_identity": {"shard_path": "verified-specialist"}}
         input_receipt = specialist_verification
@@ -462,9 +532,11 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
-        resume_checkpoint = resume_checkpoint.resolve()
-        if resume_checkpoint.drive.upper() != "B:" or not resume_checkpoint.is_dir():
-            raise ValueError("resume checkpoint must be a published B: bundle")
+        resume_checkpoint = production_resume_checkpoint(
+            resume_checkpoint,
+            c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
+            relocation_custody_root=relocation_custody_root,
+        )
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
@@ -476,59 +548,75 @@ def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None
             resume_cursor = specialist_resume_cursor(resume_cursor, data_shard_id=data_shard_id)
         checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
     checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=active_parameters)
+    specialist_plan: dict[str, int] | None = None
+    if records_override is not None:
+        specialist_plan = specialist_publication_plan(
+            records=len(records), checkpoint_interval=int(checkpoint_interval),
+            checkpoint_byte_bound=checkpoint_byte_bound, write_budget_bytes=int(write_budget_bytes),
+            initial_global_step=int(resume_cursor["global_step"]),
+        )
     torch.cuda.reset_peak_memory_stats()
+    checkpoint: dict[str, object] | None = None
+    parameter_receipt: dict[str, object] | None = None
+    latest_parent_manifest = Path(specialist_lineage["parent_manifest"]) if specialist_lineage is not None else None
+
+    def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
+        nonlocal checkpoint, parameter_receipt, latest_parent_manifest
+        data_cursor = dict(state["data_cursor"])
+        data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
+        current_lineage: dict[str, object] | None = None
+        if specialist_lineage is not None:
+            if latest_parent_manifest is None:
+                raise RuntimeError("specialist checkpoint publication lost its verified parent manifest")
+            current_lineage = {**specialist_lineage, "parent_manifest": str(latest_parent_manifest)}
+            data_cursor["specialist_verification"] = specialist_verification
+            checkpoint_target = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{global_step}"
+        else:
+            checkpoint_target = checkpoint_root
+
+        def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
+            published = write_checkpoint_artifacts(
+                model, optimizer, checkpoint_target, launch_seed=seed,
+                rng_state=_rng_state(torch.device("cuda")), data_cursor=data_cursor,
+                model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
+                expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
+                specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
+            )
+            verified = _execute_realization_counter(
+                root=root, config_path=config_path,
+                checkpoint_manifest_path=checkpoint_target / "checkpoint-manifest.json",
+                active_expert=str(model.active_expert), expected_counts=counts,
+                parent_manifest=(Path(current_lineage["parent_manifest"]) if current_lineage is not None else None),
+                root_manifest=(Path(current_lineage["root_manifest"]) if current_lineage is not None else None),
+            )
+            return published, verified
+
+        checkpoint, parameter_receipt = _retain_after_success(
+            checkpoint_parent,
+            max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
+            operation=publish_and_verify,
+        )
+        if current_lineage is not None:
+            latest_parent_manifest = checkpoint_target / "checkpoint-manifest.json"
+
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
-        checkpoint_every=len(records), checkpoint_callback=lambda _step, _result: None,
-        initial_global_step=int(resume_cursor["global_step"]), initial_tokens_seen=int(resume_cursor["tokens_seen"]),
-        initial_data_cursor=int(resume_cursor["record_index"]), data_shard_id=data_shard_id, require_complete_coverage=(records_override is None),
+        checkpoint_every=(int(checkpoint_interval) if records_override is not None else len(records)),
+        checkpoint_callback=checkpoint_callback, initial_global_step=int(resume_cursor["global_step"]),
+        initial_tokens_seen=int(resume_cursor["tokens_seen"]), initial_data_cursor=int(resume_cursor["record_index"]),
+        data_shard_id=data_shard_id, require_complete_coverage=(records_override is None),
     )
-    rng_state_after_step = _rng_state(torch.device("cuda"))
-    data_cursor = dict(segment["data_cursor"])
-    data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
-    if records_override is not None:
-        data_cursor["specialist_verification"] = specialist_verification
+    if checkpoint is None or parameter_receipt is None:
+        raise RuntimeError("training segment completed without a durable verified checkpoint")
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
-    checkpoint = _retain_after_success(
-        checkpoint_parent,
-        max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
-        operation=lambda: write_checkpoint_artifacts(
-            model,
-            optimizer,
-            checkpoint_root,
-            launch_seed=seed,
-            rng_state=rng_state_after_step,
-            data_cursor=data_cursor,
-            model_config_sha256=_sha256(config_path),
-            contract_sha256=_sha256(integration_contract_path),
-            expert_genesis_sha256=genesis_hashes,
-            optimizer_contract=optimizer_contract,
-            specialist_lineage=specialist_lineage,
-            max_serialized_bytes=checkpoint_byte_bound,
-        ),
-    )
-    parameter_receipt = _execute_realization_counter(
-        root=root,
-        config_path=config_path,
-        checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
-        active_expert=str(model.active_expert),
-        expected_counts=counts,
-        parent_manifest=(Path(specialist_lineage["parent_manifest"]) if specialist_lineage is not None else None),
-        root_manifest=(Path(specialist_lineage["root_manifest"]) if specialist_lineage is not None else None),
-    )
     return {
-        "losses": segment["losses"],
-        "counts": counts,
-        "memory_preflight": memory_preflight,
-        "launch_seed": seed,
-        "rng_state_before_init_sha256": rng_state_before_init,
-        "expert_genesis_sha256": genesis_hashes,
-        "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
-        "input_identity_receipt": input_receipt,
-        "post_step_checkpoint": checkpoint,
-        "parameter_receipt": parameter_receipt,
+        "losses": segment["losses"], "counts": counts, "memory_preflight": memory_preflight,
+        "launch_seed": seed, "rng_state_before_init_sha256": rng_state_before_init,
+        "expert_genesis_sha256": genesis_hashes, "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
+        "input_identity_receipt": input_receipt, "post_step_checkpoint": checkpoint,
+        "parameter_receipt": parameter_receipt, "publication_plan": specialist_plan,
     }
 
 def specialist_lineage_request(
@@ -560,6 +648,7 @@ def specialist_lineage_request(
 def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
     capability: str, resume_checkpoint: Path | None = None, parent_manifest: Path, root_manifest: Path,
+    checkpoint_interval: int, write_budget_bytes: int,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
 ) -> dict[str, object]:
@@ -576,6 +665,7 @@ def run_specialist(
     return run(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint,
         records_override=records, specialist_verification=verification, specialist_lineage=lineage,
+        checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,
     )
@@ -727,6 +817,8 @@ def main() -> None:
     specialist.add_argument("--resume-checkpoint", type=Path, required=True)
     specialist.add_argument("--parent-manifest", type=Path, required=True)
     specialist.add_argument("--root-manifest", type=Path, required=True)
+    specialist.add_argument("--checkpoint-interval", type=int, required=True)
+    specialist.add_argument("--write-budget-gib", type=int, required=True)
     specialist.add_argument("--c-relocated-under-disk-budget-runner", action="store_true")
     specialist.add_argument("--relocation-custody-root", type=Path)
     semantic = subparsers.add_parser("semantic")
@@ -742,7 +834,7 @@ def main() -> None:
     semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
