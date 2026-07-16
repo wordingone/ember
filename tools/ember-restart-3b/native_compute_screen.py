@@ -117,6 +117,7 @@ _SOURCE_NAMES = (
 )
 _OPERATING_FLOORS_GIB = {"B": 250.0, "C": 150.0}
 _MAX_WRITE_GIB = {"B": 0.1, "C": 0.1}
+_MAX_SCHEDULE_FUTURE_SKEW_MS = 60_000
 
 
 def _is_sha256(value: object) -> bool:
@@ -196,8 +197,11 @@ def _validate_schedule_receipt(path: Path, *, now_ms: int | None = None) -> dict
     if not run["predicted_at_ms"] <= run["predicted_program_completion_ms"] <= run["absolute_deadline_ms"]:
         raise ValueError("emberd schedule prediction timestamps are not ordered")
     observed_now_ms = int(time.time() * 1000) if now_ms is None else now_ms
-    if not isinstance(observed_now_ms, int) or observed_now_ms <= 0:
+    if not isinstance(observed_now_ms, int) or isinstance(observed_now_ms, bool) or observed_now_ms <= 0:
         raise ValueError("schedule validation requires a positive current timestamp")
+    maximum_issued_timestamp_ms = observed_now_ms + _MAX_SCHEDULE_FUTURE_SKEW_MS
+    if payload["generated_at_ms"] > maximum_issued_timestamp_ms or run["predicted_at_ms"] > maximum_issued_timestamp_ms:
+        raise ValueError("emberd schedule exceeds bounded future clock skew")
     if observed_now_ms >= run["absolute_deadline_ms"]:
         raise ValueError("emberd schedule deadline has elapsed")
     prediction_identity = _validated_daemon_identity(run.get("prediction_daemon_identity"), "emberd prediction identity")

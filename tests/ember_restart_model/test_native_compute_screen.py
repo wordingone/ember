@@ -152,6 +152,27 @@ class NativeComputeScreenTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "deadline has elapsed"):
                 _validate_schedule_receipt(path, now_ms=payload["runs"][0]["absolute_deadline_ms"])
 
+    def test_schedule_rejects_prediction_issued_beyond_bounded_future_clock_skew(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "schedule.json"
+            payload = self._valid_schedule_payload()
+            now_ms = payload["runs"][0]["predicted_at_ms"]
+            future_ms = now_ms + 60_001
+            payload["generated_at_ms"] = future_ms
+            payload["runs"][0]["predicted_at_ms"] = future_ms
+            payload["runs"][0]["predicted_program_completion_ms"] = future_ms + 720000
+            payload["runs"][0]["absolute_deadline_ms"] = future_ms + 720001
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "future clock skew"):
+                _validate_schedule_receipt(path, now_ms=now_ms)
+
+    def test_schedule_accepts_a_live_prediction_within_the_issued_window(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "schedule.json"
+            payload = self._valid_schedule_payload()
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            binding = _validate_schedule_receipt(path, now_ms=payload["runs"][0]["predicted_at_ms"])
+            self.assertEqual(binding["absolute_deadline_ms"], payload["runs"][0]["absolute_deadline_ms"])
     def test_disk_preflight_persists_the_canonical_output_bound_dispatch(self) -> None:
         closure = {name: "c" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")}
         dispatch = _dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)
