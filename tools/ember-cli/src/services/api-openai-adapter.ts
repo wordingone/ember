@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // OpenAI adapter — translates between Ember message/tool format and OpenAI-compatible
 // API format. Activated when EMBER_MODEL_URL points to a non-cloud endpoint.
 
@@ -281,8 +285,12 @@ export class ModelHttpError extends Error {
   constructor(
     public readonly status: number,
     statusText: string,
+    public readonly responseBody = "",
   ) {
-    super(`Model server returned HTTP ${status}: ${statusText}`);
+    const boundedBody = responseBody.trim().slice(0, 4096);
+    super(
+      `Model server returned HTTP ${status}: ${statusText}${boundedBody ? `: ${boundedBody}` : ""}`,
+    );
     this.name = "ModelHttpError";
   }
 }
