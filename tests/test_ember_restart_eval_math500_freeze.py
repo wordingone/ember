@@ -2,11 +2,14 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ember_restart_eval_math500_freeze.py"
 
@@ -39,3 +42,20 @@ def test_refuses_math500_rows_missing_answer_or_duplicate_id():
         result = subprocess.run([sys.executable, str(SCRIPT), "--dataset-root", str(root), "--revision", "2cd6fe926f1203a15d19f73c9a329cbe62b806fd", "--protocol-sha256", "a" * 64, "--output", str(output)], text=True, capture_output=True, check=False)
         assert result.returncode != 0
         assert not output.exists()
+
+def test_cleans_temporary_payload_when_final_math500_publication_fails(monkeypatch):
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        (root / "README.md").write_text("---\nlicense: mit\n---\n", encoding="utf-8")
+        (root / "test.jsonl").write_text('{"unique_id":"a","problem":"1+1","answer":"2"}\n', encoding="utf-8")
+        output = root / "frozen.json"
+        spec = importlib.util.spec_from_file_location("math500_freeze_publication", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--dataset-root", str(root), "--revision", "2cd6fe926f1203a15d19f73c9a329cbe62b806fd", "--protocol-sha256", "a" * 64, "--output", str(output)])
+        monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+        with pytest.raises(OSError, match="replace denied"):
+            module.main()
+        assert not output.exists()
+        assert not list(root.glob("frozen.json.*.tmp"))
