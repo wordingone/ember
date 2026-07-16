@@ -290,7 +290,9 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(result["publication_plan"], {"publication_count": 2, "checkpoint_byte_bound": bound, "projected_write_bytes": 2 * bound})
         self.assertEqual(writer.call_count, 2)
         self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
-    def _run_vertical_resume_with_mocks(self, *, specialist: bool) -> tuple[dict[str, object], dict[str, object], MagicMock]:
+    def _run_vertical_resume_with_mocks(
+        self, *, specialist: bool, callback_steps: tuple[int, ...] = (),
+    ) -> tuple[dict[str, object], dict[str, object], MagicMock]:
         model = SimpleNamespace(active_expert="reasoning")
         model.train = lambda: None
         model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
@@ -310,7 +312,15 @@ class RunnerPreflightTests(unittest.TestCase):
 
         def segment(**kwargs: object) -> dict[str, object]:
             segment_kwargs.update(kwargs)
-            return {"losses": [0.1], "data_cursor": {"shard": str(kwargs["data_shard_id"]), "record_index": 1, "global_step": 20, "tokens_seen": 20_480}}
+            published_steps = callback_steps or (20,)
+            result = {"losses": [0.1], "data_cursor": {"shard": str(kwargs["data_shard_id"]), "record_index": 1, "global_step": published_steps[-1], "tokens_seen": 20_480}}
+            for step in published_steps:
+                callback_result = {
+                    **result,
+                    "data_cursor": {**result["data_cursor"], "global_step": step},
+                }
+                kwargs["checkpoint_callback"](step, callback_result)
+            return result
 
         with ExitStack() as stack:
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=True))
@@ -341,6 +351,8 @@ class RunnerPreflightTests(unittest.TestCase):
                 records_override=[{"active_expert": "vision"}] if specialist else None,
                 specialist_verification={"data_manifest_sha256": "a" * 64} if specialist else None,
                 specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest)} if specialist else None,
+                checkpoint_interval=8_192 if specialist else None,
+                write_budget_bytes=100 * 1024**3 if specialist else None,
             )
         return result, segment_kwargs, writer
 
@@ -355,6 +367,35 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertTrue(str(specialist_kwargs["data_shard_id"]).startswith("VERIFIED_SPECIALIST:"))
         self.assertEqual(ordinary_writer.call_args.kwargs["max_serialized_bytes"], bound)
         self.assertEqual(specialist_writer.call_args.kwargs["max_serialized_bytes"], bound)
+    def test_specialist_run_requests_periodic_checkpoint_interval(self) -> None:
+        _result, specialist_kwargs, _writer = self._run_vertical_resume_with_mocks(specialist=True)
+        self.assertEqual(specialist_kwargs["checkpoint_every"], 8_192)
+    def test_specialist_publication_plan_counts_interval_and_mandatory_final_bundle(self) -> None:
+        self.assertEqual(
+            run_vertical_slice.specialist_publication_plan(
+                records=65_536,
+                checkpoint_interval=8_192,
+                checkpoint_byte_bound=10,
+                write_budget_bytes=90,
+                initial_global_step=2,
+            ),
+            {"publication_count": 9, "checkpoint_byte_bound": 10, "projected_write_bytes": 90},
+        )
+
+    def test_specialist_periodic_checkpoints_chain_the_previous_published_manifest(self) -> None:
+        _result, _kwargs, writer = self._run_vertical_resume_with_mocks(
+            specialist=True, callback_steps=(8_192, 16_384),
+        )
+        self.assertEqual(writer.call_count, 2)
+        first, second = writer.call_args_list
+        self.assertEqual(
+            Path(first.kwargs["specialist_lineage"]["parent_manifest"]),
+            Path("B:/vertical-parent/checkpoint-manifest.json"),
+        )
+        self.assertEqual(
+            Path(second.kwargs["specialist_lineage"]["parent_manifest"]),
+            Path(first.args[2]) / "checkpoint-manifest.json",
+        )
     def test_semantic_cli_dispatches_only_manifest_bound_stream_inputs(self) -> None:
         with patch.object(run_vertical_slice, "run_semantic", return_value={"steps": 1}) as semantic:
             with patch.object(
@@ -408,21 +449,38 @@ class RunnerPreflightTests(unittest.TestCase):
                         run_vertical_slice.run_specialist(
                             seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"),
                             tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"),
-                            parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"),
+                            parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3,
                         )
         cuda_runner.assert_not_called()
     def test_specialist_cli_dispatches_one_verified_route(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), c_relocated_under_disk_budget_runner=False, relocation_custody_root=None)
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None)
     def test_specialist_cli_forwards_explicit_c_relocation_custody(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
                 run_vertical_slice.main()
         self.assertIs(specialist.call_args.kwargs["c_relocated_under_disk_budget_runner"], True)
         self.assertEqual(specialist.call_args.kwargs["artifact_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))
         self.assertEqual(specialist.call_args.kwargs["relocation_custody_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts"))
+        self.assertEqual(specialist.call_args.kwargs["checkpoint_interval"], 8_192)
+        self.assertEqual(specialist.call_args.kwargs["write_budget_bytes"], 120 * 1024**3)
+    def test_c_custody_resume_bundle_requires_the_declared_disk_runner_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory)
+            checkpoint = custody / "checkpoint"
+            checkpoint.mkdir()
+            self.assertEqual(
+                run_vertical_slice.production_resume_checkpoint(
+                    checkpoint,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=custody,
+                ),
+                checkpoint.resolve(),
+            )
+            with self.assertRaisesRegex(ValueError, "published B: bundle"):
+                run_vertical_slice.production_resume_checkpoint(checkpoint)
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
