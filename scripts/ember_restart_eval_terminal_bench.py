@@ -15,10 +15,11 @@ from pathlib import Path
 HASH = re.compile(r"[0-9a-f]{64}")
 
 
-def _load(path: Path, label: str):
+def _load(path: Path, label: str) -> tuple[bytes, object]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        data = path.read_bytes()
+        return data, json.loads(data.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError(f"invalid {label}: {error}") from error
 
 
@@ -40,8 +41,8 @@ def main() -> int:
     parser.add_argument("--score-output", required=True, type=Path)
     arguments = parser.parse_args()
     try:
-        frozen = _load(arguments.frozen_task_manifest, "frozen task manifest")
-        results = _load(arguments.harbor_task_results, "Harbor task results")
+        manifest_bytes, frozen = _load(arguments.frozen_task_manifest, "frozen task manifest")
+        result_bytes, results = _load(arguments.harbor_task_results, "Harbor task results")
         tasks = frozen.get("tasks") if isinstance(frozen, dict) else None
         if frozen.get("result") != "PREFLIGHT_ONLY" or frozen.get("benchmark_id") != "terminal-bench" or frozen.get("benchmark_version") != "2.0" or not isinstance(tasks, list) or not tasks:
             raise ValueError("frozen Terminal-Bench manifest is invalid")
@@ -63,7 +64,7 @@ def main() -> int:
             passed += item["status"] == "passed"
         if observed != [task["task_id"] for task in tasks]:
             raise ValueError("Harbor results must preserve exact frozen task order")
-        _atomic(arguments.score_output, {"metrics": {"task_success_rate": passed / len(tasks)}, "sample_count": len(tasks), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_task_manifest_sha256": hashlib.sha256(arguments.frozen_task_manifest.read_bytes()).hexdigest(), "upstream": "digest-bound local Harbor task-outcome records"})
+        _atomic(arguments.score_output, {"result": "SELFTEST", "admission": "NOT_ELIGIBLE", "claim_status": "SELFTEST_ONLY_FIXTURE_HARBOR_OUTCOMES", "metrics": {"task_success_rate": passed / len(tasks)}, "sample_count": len(tasks), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_task_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(), "harbor_task_results_sha256": hashlib.sha256(result_bytes).hexdigest(), "upstream": "fixture-only Harbor task-outcome validator"})
     except ValueError as error:
         parser.error(str(error))
     return 0
