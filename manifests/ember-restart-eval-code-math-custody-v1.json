@@ -68,9 +68,9 @@
                              },
                              {
                                  "path":  "scripts/ember_restart_eval_math_exact.py",
-                                 "sha256":  "94a78cf4b8f9206e78d2c4a89c0a2334db7623b42ee4e0533af56658a758b8b2",
+                                 "sha256":  "f26de050e43da660e0677f595bee1811bdac17d5575d12167bd0c8752a275e2b",
                                  "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
                              }
                          ],
-    "protocol_sha256":  "b6231422a59f45c629b455fd1f9782d7e89c7d62ae87fac734c0097d1ab8a8aa"
+    "protocol_sha256":  "b72a50e54f84d764ab56ac2347e4d6134b930ffc4ca6ca5c1b1309475d4c35a3"
 }
