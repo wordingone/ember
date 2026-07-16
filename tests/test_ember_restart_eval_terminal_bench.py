@@ -29,3 +29,16 @@ def test_rejects_task_outcome_without_a_content_addressed_transcript():
   results.write_text('[{"task_id":"task-a","status":"passed","task_image_sha256":"b"}]',encoding="utf-8")
   run=subprocess.run([sys.executable,str(SCRIPT),"--frozen-task-list",str(tasks),"--harbor-task-results",str(results),"--score-output",str(score)],text=True,capture_output=True,check=False)
   assert run.returncode!=0 and not score.exists()
+
+def test_terminal_bench_score_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+ import importlib.util, pytest
+ spec=importlib.util.spec_from_file_location("terminal_cleanup", SCRIPT);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ tasks=tmp_path/"tasks.json";results=tmp_path/"results.json";score=tmp_path/"score.json"
+ tasks.write_text(json.dumps({"result":"PREFLIGHT_ONLY","benchmark_id":"terminal-bench","benchmark_version":"2.0","tasks":[{"task_id":"task-a","task_toml_sha256":"e"*64,"docker_image_sha256":"b"*64}]}),encoding="utf-8")
+ results.write_text(json.dumps([{"task_id":"task-a","status":"passed","transcript_sha256":"a"*64,"task_image_sha256":"b"*64}]),encoding="utf-8")
+ monkeypatch.setattr(sys,"argv",[str(SCRIPT),"--frozen-task-manifest",str(tasks),"--harbor-task-results",str(results),"--score-output",str(score)])
+ monkeypatch.setattr(module.os,"replace",lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+ with pytest.raises(OSError,match="replace denied"):
+  module.main()
+ assert not score.exists()
+ assert not list(tmp_path.glob("tmp*"))
