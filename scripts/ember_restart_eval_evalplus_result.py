@@ -37,7 +37,7 @@ def main() -> int:
         result_bytes = arguments.eval_result.read_bytes()
         binding = json.loads(binding_bytes.decode("utf-8"))
         result = json.loads(result_bytes.decode("utf-8"))
-        required = {"schema_version", "result", "suite", "checkpoint_manifest_sha256", "model_config_sha256", "task_asset_sha256", "evalplus_dataset_md5", "predictions_sha256", "samples_sha256", "task_ids_sha256", "sample_count", "frozen_code_manifest_sha256"}
+        required = {"schema_version", "result", "suite", "benchmark_id", "benchmark_version", "split_sha256", "protocol_sha256", "checkpoint_manifest_sha256", "model_config_sha256", "task_asset_sha256", "evalplus_dataset_md5", "predictions_sha256", "samples_sha256", "task_ids_sha256", "sample_count", "frozen_code_manifest_sha256"}
         if not isinstance(binding, dict) or set(binding) != required or binding["schema_version"] != "ember-restart-evalplus-samples-binding-v1" or binding["result"] != "PREFLIGHT_ONLY" or binding["suite"] not in {"humanevalplus_v0.1.10", "mbppplus_v0.2.0"} or not isinstance(binding["sample_count"], int) or isinstance(binding["sample_count"], bool) or binding["sample_count"] <= 0:
             raise ValueError("invalid EvalPlus samples sidecar")
         if not isinstance(result, dict) or not isinstance(result.get("hash"), str) or not isinstance(result.get("eval"), dict) or not isinstance(result.get("pass_at_k"), dict):
@@ -61,7 +61,7 @@ def main() -> int:
             raise ValueError("EvalPlus result pass@1 does not reproduce task outcomes")
     except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         parser.error(f"invalid EvalPlus result inputs: {error}")
-    payload = {"result": "SELFTEST", "claim_status": "SELFTEST_ONLY_RESULT_ARTIFACT_VALIDATOR", "criterion_id": "ember-3b-text-capability-v1", "criterion_result": "FAILED", "metrics": metrics, "sample_count": binding["sample_count"], "checkpoint_manifest_sha256": binding["checkpoint_manifest_sha256"], "model_config_sha256": binding["model_config_sha256"], "predictions_sha256": binding["predictions_sha256"], "samples_binding_sha256": sha256(binding_bytes), "evalplus_result_sha256": sha256(result_bytes), "upstream": "EvalPlus result artifact bound to canonical owned samples"}
+    payload = {"result": "SELFTEST", "claim_status": "SELFTEST_ONLY_RESULT_ARTIFACT_VALIDATOR", "criterion_id": "ember-3b-text-capability-v1", "criterion_result": "FAILED", "metrics": metrics, "sample_count": binding["sample_count"], "benchmark_id": binding["benchmark_id"], "benchmark_version": binding["benchmark_version"], "split_sha256": binding["split_sha256"], "protocol_sha256": binding["protocol_sha256"], "checkpoint_manifest_sha256": binding["checkpoint_manifest_sha256"], "model_config_sha256": binding["model_config_sha256"], "predictions_sha256": binding["predictions_sha256"], "samples_binding_sha256": sha256(binding_bytes), "evalplus_result_sha256": sha256(result_bytes), "upstream": "EvalPlus result artifact bound to canonical owned samples"}
     arguments.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.score_output.parent, prefix=arguments.score_output.name + ".", suffix=".tmp", delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
