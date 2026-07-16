@@ -69,7 +69,7 @@ def main() -> int:
             raise ValueError("canonical predictions must exactly cover frozen BFCL tasks")
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ContractError, ValueError) as error:
         parser.error(f"invalid BFCL static scorer inputs: {error}")
-    payload = {"result": "PREFLIGHT_ONLY", "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_tool_call": sum(canonical(actual[key]) == canonical(expected[key]) for key in expected) / len(expected)}, "sample_count": len(expected), "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "predictions_sha256": digest(prediction_bytes), "frozen_task_manifest_sha256": digest(frozen_bytes), "upstream": "frozen static BFCL non-live exact tool-call scorer"}
+    payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_BFCL_STATIC_SCORER", "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_tool_call": sum(canonical(actual[key]) == canonical(expected[key]) for key in expected) / len(expected)}, "sample_count": len(expected), "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "predictions_sha256": digest(prediction_bytes), "frozen_task_manifest_sha256": digest(frozen_bytes), "upstream": "frozen static BFCL non-live exact tool-call scorer"}
     args.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.score_output.parent, delete=False) as handle:
         json.dump(payload, handle, sort_keys=True)

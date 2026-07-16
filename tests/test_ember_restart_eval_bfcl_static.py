@@ -23,6 +23,7 @@ def test_scores_only_exact_frozen_bfcl_static_tool_envelope(tmp_path):
     assert result.returncode == 0, result.stderr
     value = json.loads(output.read_text(encoding="utf-8"))
     assert value["result"] == "PREFLIGHT_ONLY"
+    assert value["claim_status"] == "NON_ADMISSIBLE_FROZEN_BFCL_STATIC_SCORER"
     assert value["criterion_result"] == "FAILED"
     assert value["metrics"] == {"exact_tool_call": 1.0}
     assert value["sample_count"] == 1
@@ -52,4 +53,5 @@ def test_scores_frozen_bfcl_simple_prompt_oracle_schema(tmp_path):
     assert result.returncode == 0, result.stderr
     value = json.loads(output.read_text(encoding="utf-8"))
     assert value["result"] == "PREFLIGHT_ONLY"
+    assert value["claim_status"] == "NON_ADMISSIBLE_FROZEN_BFCL_STATIC_SCORER"
     assert value["metrics"] == {"exact_tool_call": 1.0}
