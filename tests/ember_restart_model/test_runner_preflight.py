@@ -215,7 +215,7 @@ class RunnerPreflightTests(unittest.TestCase):
         segment_kwargs: dict[str, object] = {}
         retention_bounds: list[int] = []
         writer = MagicMock(return_value={"published": True})
-        writer.side_effect = lambda *args, **kwargs: (args[2].mkdir(parents=True, exist_ok=True), kwargs["pre_publish_verifier"](args[2], {}), {"published": True})[-1]
+        writer.side_effect = lambda *args, **kwargs: (kwargs["pre_publish_verifier"](args[2], {}), {"published": True})[-1]
         parent = Path("B:/semantic-parent")
         parent_manifest = parent / "checkpoint-manifest.json"
         real_read_text = Path.read_text
@@ -260,6 +260,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "run_manifest_bound_semantic_segment", side_effect=segment))
             stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=retain))
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
+            stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
             stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True}))
@@ -303,7 +304,7 @@ class RunnerPreflightTests(unittest.TestCase):
         counts = {"unique_parameters": 3_839_161_856, "active_parameters": 1_725_232_640}
         segment_kwargs: dict[str, object] = {}
         writer = MagicMock(return_value={"published": True})
-        writer.side_effect = lambda *args, **kwargs: (args[2].mkdir(parents=True, exist_ok=True), kwargs["pre_publish_verifier"](args[2], {}), {"published": True})[-1]
+        writer.side_effect = lambda *args, **kwargs: (kwargs["pre_publish_verifier"](args[2], {}), {"published": True})[-1]
         parent = Path("B:/vertical-parent")
         parent_manifest = parent / "checkpoint-manifest.json"
         real_read_text = Path.read_text
@@ -344,6 +345,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "run_pretraining_segment", side_effect=segment))
             stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=lambda _parent, *, operation, **_kwargs: operation()))
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
+            stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
             stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True}))
