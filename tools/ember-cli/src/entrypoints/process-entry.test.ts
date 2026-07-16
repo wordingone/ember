@@ -802,6 +802,9 @@ function makeFakeDeps(): LoopDeps {
 
 describe("process-entry — G3: main() with -p routes to headlessRunner before launchRepl", () => {
   it("-p 'hello headless' calls headlessRunner with the prompt, not launchRepl", async () => {
+    const saved = saveEnv(["EMBER_MODEL_NAME"]);
+    const expectedModel = "gate-sentinel-model";
+    process.env["EMBER_MODEL_NAME"] = expectedModel;
     let headlessCalled = false;
     // Use sentinel strings/numbers to avoid TypeScript null-narrowing on closures
     let receivedPrompt = "UNSET";
@@ -834,9 +837,10 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
       },
     });
 
+    restoreEnv(saved);
     expect(headlessCalled).toBe(true);
     expect(receivedPrompt).toBe("hello headless");
-    expect(receivedModel).toBe(process.env["EMBER_MODEL_NAME"]);
+    expect(receivedModel).toBe(`REFERENCE_ONLY: ${expectedModel}`);
     expect(exitCodeReceived).toBe(0);
     // If launchRepl were called it would have thrown or hung; reaching here means it was not.
   });
