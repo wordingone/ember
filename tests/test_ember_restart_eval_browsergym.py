@@ -10,3 +10,16 @@ def test_shapes_exact_frozen_miniwob_outcomes_with_trace_and_environment_hashes(
   tasks.write_text(json.dumps({'result':'PREFLIGHT_ONLY','benchmark_id':'browsergym-miniwob','benchmark_version':'1','tasks':[{'task_id':'click-test','task_sha256':'d'*64,'environment_sha256':'b'*64}]}))
   runs.write_text(json.dumps([{'task_id':'click-test','success':True,'trace_sha256':'a'*64,'environment_sha256':'b'*64}]))
   r=subprocess.run([sys.executable,str(SCRIPT),'--frozen-task-manifest',str(tasks),'--browser-results',str(runs),'--score-output',str(out)],capture_output=True,text=True);assert r.returncode==0,r.stderr;p=json.loads(out.read_text());assert p['result']=='SELFTEST' and p['admission']=='NOT_ELIGIBLE' and p['claim_status']=='SELFTEST_ONLY_FIXTURE_BROWSER_OUTCOMES' and p['metrics']=={'task_success_rate':1.0} and p['sample_count']==1 and p['criterion_result']=='FAILED'
+
+def test_browsergym_score_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+ import importlib.util, pytest
+ spec=importlib.util.spec_from_file_location("browser_cleanup",SCRIPT);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ tasks=tmp_path/"tasks";runs=tmp_path/"runs";score=tmp_path/"score"
+ tasks.write_text(json.dumps({"result":"PREFLIGHT_ONLY","benchmark_id":"browsergym-miniwob","benchmark_version":"1","tasks":[{"task_id":"click-test","task_sha256":"d"*64,"environment_sha256":"b"*64}]}),encoding="utf-8")
+ runs.write_text(json.dumps([{"task_id":"click-test","success":True,"trace_sha256":"a"*64,"environment_sha256":"b"*64}]),encoding="utf-8")
+ monkeypatch.setattr(sys,"argv",[str(SCRIPT),"--frozen-task-manifest",str(tasks),"--browser-results",str(runs),"--score-output",str(score)])
+ monkeypatch.setattr(module.os,"replace",lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+ with pytest.raises(OSError,match="replace denied"):
+  module.main()
+ assert not score.exists()
+ assert not list(tmp_path.glob("tmp*"))
