@@ -11,3 +11,9 @@ def test_scores_checkpoint_transcripts_against_frozen_private_references():
   m.write_text(json.dumps({'result':'PREFLIGHT_ONLY','benchmark_id':'local-audio-wer','benchmark_version':'1','references_sha256':hashlib.sha256(r.read_bytes()).hexdigest()}))
   q=subprocess.run([sys.executable,str(SCRIPT),'--frozen-audio-manifest',str(m),'--references',str(r),'--predictions',str(p),'--score-output',str(s)],capture_output=True,text=True);assert q.returncode==0,q.stderr
   v=json.loads(s.read_text());assert v['metrics']=={'word_error_rate':1/3} and v['sample_count']==2 and v['criterion_result']=='FAILED'
+
+def test_audio_row_parser_consumes_exact_snapshot_bytes():
+ import importlib.util
+ spec=importlib.util.spec_from_file_location("audio_wer",SCRIPT);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ payload=b'{"id":"a","transcript":"one"}\n'
+ assert module.rows_bytes(payload)=={"a":"one"}
