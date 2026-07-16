@@ -8,6 +8,11 @@
     "split_path":  "main/test-00000-of-00001.parquet",
     "capability":  "reasoning",
     "result":  "PREFLIGHT_ONLY",
+    "scoring_adapter": {
+        "path": "scripts/ember_restart_eval_gsm8k_score.py",
+        "sha256": "80820c871d49f70a194e7e72dc6f9d1d173152c38f31a445c6cb437e372b52cf",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "prohibited_claims":  [
                               "checkpoint_score",
                               "capability_admission",
