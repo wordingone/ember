@@ -64,7 +64,10 @@ def main():
  a.score_output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.score_output.parent,delete=False)as handle:
   handle.write(_canonical(payload)+'\n');temporary=handle.name
- os.replace(temporary,a.score_output)
+ try:
+  os.replace(temporary,a.score_output)
+ finally:
+  Path(temporary).unlink(missing_ok=True)
  return 0
 
 if __name__=='__main__':raise SystemExit(main())
