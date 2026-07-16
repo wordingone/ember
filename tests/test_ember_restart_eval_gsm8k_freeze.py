@@ -55,3 +55,10 @@ def test_gsm8k_freeze_replace_failure_cleans_real_cli_temporary_output(monkeypat
         module.main()
     assert not output.exists()
     assert not list(tmp_path.glob("frozen.json.*.tmp"))
+
+def test_refuses_gsm8k_rows_with_empty_final_answer_after_marker():
+    with tempfile.TemporaryDirectory() as temporary:
+        root=Path(temporary);(root/"README.md").write_text("---\nlicense: mit\n---\n",encoding="utf-8");split=root/"main"/"test-00000-of-00001.parquet";split.parent.mkdir();pq.write_table(pa.table({"question":["one"],"answer":["work\n#### "]}),split);output=root/"frozen.json"
+        result=subprocess.run([sys.executable,str(SCRIPT),"--dataset-root",str(root),"--revision","740312add88f781978c0658806c59bc2815b9866","--protocol-sha256","a"*64,"--output",str(output)],text=True,capture_output=True,check=False)
+        assert result.returncode != 0
+        assert not output.exists()
