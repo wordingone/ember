@@ -5,10 +5,12 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import warnings
 import unittest
+from unittest.mock import Mock
 from pathlib import Path
 
 import torch
@@ -23,6 +25,71 @@ from run_vertical_slice import load_optimizer_contract
 
 
 class CheckpointArtifactTests(unittest.TestCase):
+    def test_preexisting_target_is_refused_before_staging_or_verifier(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=11)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "checkpoint-existing"
+            target.mkdir()
+            sentinel = target / "sentinel"
+            sentinel.write_bytes(b"known-good")
+            verifier = Mock()
+            with self.assertRaisesRegex(FileExistsError, "already exists"):
+                write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=11,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    pre_publish_verifier=verifier,
+                )
+            self.assertEqual(sentinel.read_bytes(), b"known-good")
+            self.assertFalse(verifier.called)
+            self.assertEqual(list(Path(directory).glob(".*.staging")), [])
+    def test_counter_verifier_runs_on_staging_before_atomic_promotion(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=12)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "checkpoint-atomic"
+            observations: list[tuple[bool, bool, bool, bool, bool]] = []
+
+            def verify(staging: Path, _receipt: dict[str, object]) -> None:
+                observations.append((staging.is_dir(), target.exists(), (staging / "checkpoint-manifest.json").is_file(), f".{os.getpid()}." in staging.name, (staging / ".writer-lease.json").is_file()))
+                (staging / "parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8")
+
+            receipt = write_checkpoint_artifacts(
+                model, optimizer, target, launch_seed=12,
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                pre_publish_verifier=verify,
+            )
+            self.assertEqual(observations, [(True, False, True, True, True)])
+            self.assertTrue(target.joinpath("parameter-counter-receipt.json").is_file())
+            self.assertFalse(target.joinpath(".writer-lease.json").exists())
+            self.assertEqual(receipt["checkpoint_manifest_sha256"], __import__("hashlib").sha256(target.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest())
+
+    def test_counter_verifier_failure_removes_staging_without_publishing(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=13)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-failed"
+            with self.assertRaisesRegex(RuntimeError, "counter failed"):
+                write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=13,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    pre_publish_verifier=lambda _staging, _receipt: (_ for _ in ()).throw(RuntimeError("counter failed")),
+                )
+            self.assertFalse(target.exists())
+            self.assertEqual(list(parent.glob(".*.staging")), [])
     def test_refuses_checkpoint_receipt_without_optimizer_contract(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=11)
