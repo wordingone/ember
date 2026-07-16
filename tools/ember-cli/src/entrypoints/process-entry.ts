@@ -1004,7 +1004,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       ? opts.getLoopDepsFn()
       : sessionMod.getLoopDeps();
 
-    const headlessOpts: HeadlessReplOptions = { maxTurns: 50 };
+    const headlessOpts: HeadlessReplOptions = {
+      maxTurns: 50,
+      userSpecifiedModel: process.env["EMBER_MODEL_NAME"],
+    };
 
     // as unknown as Tool[]: BUILTIN_TOOLS satisfies the Tool interface at runtime
     const btMod = await import("../tools/builtin-tools.ts");
