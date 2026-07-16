@@ -30,3 +30,9 @@ def test_result_surfaces_disclose_verified_step2_raw_forward_without_score_credi
         assert "lev" in surface
         assert r"\n" not in surface
     assert "no benchmark score" in results
+
+def test_evaluation_results_disclose_frozen_reasoning_scorers_without_score_credit():
+ results=(ROOT/'docs'/'ember-restart-evaluation-results.md').read_text(encoding='utf-8')
+ for required in ('ARC-Challenge','MMLU-Pro','PREFLIGHT_ONLY','NOT_EXECUTABLE_NO_FROZEN_LABELS'):
+  assert required in results
+ assert 'no score is inferred or fabricated' in results
