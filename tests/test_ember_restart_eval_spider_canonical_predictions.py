@@ -28,4 +28,5 @@ def test_spider_requires_canonical_tool_predictions():
         assert result.returncode == 0, result.stderr
         payload = json.loads(score.read_text(encoding="utf-8"))
         assert payload["predictions_sha256"] == digest(predictions)
+        assert payload["result"] == "PREFLIGHT_ONLY"
         assert payload["criterion_result"] == "FAILED"

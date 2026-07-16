@@ -168,7 +168,7 @@ def main() -> int:
             temporary.unlink(missing_ok=True)
     if isinstance(exact, bool) or not isinstance(exact, (int, float)) or not math.isfinite(exact):
         parser.error("pinned Spider scorer did not return finite exact match")
-    payload = {"metrics": {"exact_match": float(exact)}, "sample_count": len(sql), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_sql_manifest_sha256": custody_sha256, "upstream": "pinned local Spider exact-match scorer"}
+    payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_SPIDER_SCORER", "metrics": {"exact_match": float(exact)}, "sample_count": len(sql), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_sql_manifest_sha256": custody_sha256, "upstream": "pinned local Spider exact-match scorer"}
     if arguments.canonical_predictions is not None:
         payload["predictions_sha256"] = hashlib.sha256(prediction_bytes).hexdigest()
     else:
