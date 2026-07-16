@@ -10,6 +10,7 @@ import inspect
 import json
 import os
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -18,6 +19,9 @@ import torch
 
 from model import EXPERT_NAMES, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
+
+
+_STAGING_LEASE = ".writer-lease.json"
 
 
 def _sha256(path: Path) -> str:
@@ -303,7 +307,6 @@ def _specialist_lineage(
     if trained != expected_history:
         raise ValueError("specialist lineage trained experts must be parent history union active expert")
     parent_experts = parent["expert_checkpoint_sha256"]
-    root_experts = root["expert_checkpoint_sha256"]
     parent_parameters = parent.get("expert_parameter_sha256", parent["expert_genesis_sha256"])
     root_parameters = root.get("expert_parameter_sha256", root["expert_genesis_sha256"])
     if candidate_parameter_sha256[active_expert] == parent_parameters[active_expert]:
@@ -402,9 +405,17 @@ def write_checkpoint_artifacts(
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
     published_root.parent.mkdir(parents=True, exist_ok=True)
-    root = published_root.parent / f".{published_root.name}.{uuid.uuid4().hex}.staging"
+    # The PID in the private name lets a later retention pass distinguish an
+    # active writer from crash residue without publishing a mutable lease file
+    # inside the checkpoint bundle.
+    root = published_root.parent / f".{published_root.name}.{os.getpid()}.{uuid.uuid4().hex}.staging"
     root.mkdir()
     try:
+        _write_json_atomic(
+            root,
+            _STAGING_LEASE,
+            {"pid": os.getpid(), "started_at_ns": time.time_ns()},
+        )
         shared_state = {
             name: value.detach().cpu()
             for name, value in model.state_dict().items()
@@ -481,7 +492,11 @@ def write_checkpoint_artifacts(
         if lineage is not None:
             manifest["lineage"] = lineage
         manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
-        logical_serialized_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+        logical_serialized_bytes = sum(
+            path.stat().st_size
+            for path in root.rglob("*")
+            if path.is_file() and path.name != _STAGING_LEASE
+        )
         recorded_logical_bytes = sum(int(record["bytes"]) for record in shards) + manifest_path.stat().st_size
         if logical_serialized_bytes != recorded_logical_bytes:
             raise ValueError("checkpoint bundle contains unrecorded files")
@@ -496,9 +511,14 @@ def write_checkpoint_artifacts(
         }
         if pre_publish_verifier is not None:
             pre_publish_verifier(root, receipt)
-            post_verifier_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+            post_verifier_bytes = sum(
+                path.stat().st_size
+                for path in root.rglob("*")
+                if path.is_file() and path.name != _STAGING_LEASE
+            )
             if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
                 raise ValueError("counter evidence exceeds the derived byte bound")
+        (root / _STAGING_LEASE).unlink(missing_ok=True)
         os.replace(root, published_root)
         return receipt
     except Exception:

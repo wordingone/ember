@@ -61,6 +61,51 @@ class RunnerStorageTests(unittest.TestCase):
             evidence = list((parent / ".checkpoint-quarantine").glob("*.json"))
             self.assertEqual(len(evidence), 1)
             self.assertEqual(json.loads(evidence[0].read_text(encoding="utf-8"))["result"], "UNSELECTABLE")
+    def test_receiptless_final_orphan_is_reclaimed_before_new_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            orphan = parent / "checkpoint-next"
+            orphan.mkdir()
+            (orphan / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            observed: list[bool] = []
+            run_vertical_slice._retain_after_success(parent, max_count=1, receipt_aware=True, operation=lambda: observed.append(orphan.exists()))
+            self.assertEqual(observed, [False])
+            self.assertFalse(orphan.exists())
+
+    def test_live_pid_staging_is_never_reclaimed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            staging = parent / f".checkpoint-active.{os.getpid()}.abc.staging"
+            staging.mkdir()
+            (staging / "bulk.bin").write_bytes(b"active")
+            run_vertical_slice._retain_after_success(parent, max_count=1, receipt_aware=True, operation=lambda: "ok")
+            self.assertTrue(staging.exists())
+
+    def test_stale_staging_is_reclaimed_to_bounded_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            staging = parent / ".checkpoint-dead.999999.abc.staging"
+            staging.mkdir()
+            (staging / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            (staging / "bulk.bin").write_bytes(b"bulk")
+            run_vertical_slice._retain_after_success(parent, max_count=1, receipt_aware=True, operation=lambda: "ok")
+            self.assertFalse(staging.exists())
+            evidence = list((parent / ".checkpoint-quarantine").glob("*.json"))
+            self.assertTrue(any("staging" in path.name for path in evidence))
+            self.assertLessEqual(len(evidence), 32)
+            self.assertLessEqual(sum(path.stat().st_size for path in evidence), 1024 * 1024)
+
+    def test_quarantine_evidence_is_bounded_across_many_orphans(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            for index in range(40):
+                orphan = parent / f"checkpoint-orphan-{index:02d}"
+                orphan.mkdir()
+                (orphan / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            run_vertical_slice._enforce_retention(parent, max_count=1, receipt_aware=True)
+            evidence = list((parent / ".checkpoint-quarantine").glob("*.json"))
+            self.assertLessEqual(len(evidence), 32)
+            self.assertLessEqual(sum(path.stat().st_size for path in evidence), 1024 * 1024)
     def test_production_artifact_root_requires_b_unless_c_relocation_is_explicitly_runner_bound(self) -> None:
         with self.assertRaisesRegex(ValueError, "B:"):
             run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))

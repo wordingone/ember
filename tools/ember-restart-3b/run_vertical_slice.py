@@ -17,9 +17,7 @@ from typing import Any, Callable
 
 import tokenizers
 import torch
-import torch.nn.functional as F
 
-from batch import decode_owned_batch
 from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -192,6 +190,81 @@ def _receipt_valid_for_retention(bundle: Path) -> bool:
         return False
     return True
 
+_WRITER_LEASE = ".writer-lease.json"
+_MAX_QUARANTINE_FILES = 32
+_MAX_QUARANTINE_BYTES = 1024 * 1024
+
+
+def _pid_is_alive(pid: object) -> bool:
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return False
+    if os.name == "nt":
+        # ``os.kill(pid, 0)`` is not a harmless existence probe on Windows.
+        # Query the process object without signalling it instead.
+        import ctypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _staging_writer_pid(path: Path) -> int | None:
+    if not path.name.startswith(".") or not path.name.endswith(".staging"):
+        return None
+    parts = path.name.rsplit(".", 3)
+    if len(parts) != 4 or parts[-1] != "staging":
+        return None
+    try:
+        pid = int(parts[-3])
+    except ValueError:
+        return None
+    return pid if pid > 0 else None
+
+
+def _writer_is_active(root: Path) -> bool:
+    staging_pid = _staging_writer_pid(root)
+    if staging_pid is not None:
+        return _pid_is_alive(staging_pid)
+    try:
+        lease, _ = _json_snapshot(root / _WRITER_LEASE, label="writer lease")
+    except (OSError, ValueError):
+        return False
+    return _pid_is_alive(lease.get("pid"))
+
+
+def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:
+    evidence_dir = parent / ".checkpoint-quarantine"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence_path = evidence_dir / f"{name}.json"
+    _atomic_json(evidence_path, payload)
+    files = sorted(
+        (path for path in evidence_dir.glob("*.json") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+    )
+    while len(files) > _MAX_QUARANTINE_FILES or sum(path.stat().st_size for path in files) > _MAX_QUARANTINE_BYTES:
+        victim = next((path for path in files if path != evidence_path), None)
+        if victim is None:
+            break
+        victim.unlink()
+        files.remove(victim)
+    return evidence_path
+
+
 def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
     """Remove an unselectable checkpoint while preserving only bounded evidence."""
 
@@ -203,9 +276,6 @@ def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
     except OSError as error:
         manifest_sha256 = None
         reason = f"{reason}; manifest_hash_error={type(error).__name__}"
-    evidence_dir = bundle.parent / ".checkpoint-quarantine"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    evidence_path = evidence_dir / f"{bundle.name}.json"
     evidence = {
         "schema_version": "ember-checkpoint-quarantine-v1",
         "result": "UNSELECTABLE",
@@ -214,13 +284,46 @@ def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
         "manifest_sha256": manifest_sha256,
         "bulk_candidate_cleanup": "deleted",
     }
-    _atomic_json(evidence_path, evidence)
+    _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
     try:
         shutil.rmtree(bundle)
     except Exception:
         evidence["bulk_candidate_cleanup"] = "failed"
-        _atomic_json(evidence_path, evidence)
+        _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
         raise
+
+
+def _reclaim_stale_staging(parent: Path) -> None:
+    for staging in list(parent.glob(".*.staging")):
+        if not staging.is_dir() or _writer_is_active(staging):
+            continue
+        manifest = staging / "checkpoint-manifest.json"
+        try:
+            manifest_sha256 = _sha256(manifest) if manifest.is_file() else None
+        except OSError:
+            manifest_sha256 = None
+        evidence_name = f"staging-{hashlib.sha256(staging.name.encode()).hexdigest()[:16]}"
+        _write_bounded_quarantine_evidence(parent, evidence_name, {
+            "schema_version": "ember-staging-failure-v1",
+            "result": "UNSELECTABLE",
+            "source_bundle": staging.name,
+            "manifest_sha256": manifest_sha256,
+            "bulk_candidate_cleanup": "deleted",
+        })
+        shutil.rmtree(staging)
+
+
+def _reclaim_unverified_orphans(parent: Path) -> None:
+    for candidate in list(parent.iterdir()):
+        if not candidate.is_dir() or not candidate.name.startswith("checkpoint-") or _writer_is_active(candidate):
+            continue
+        try:
+            require_counter_success_receipt(candidate)
+        except (OSError, ValueError, TypeError) as error:
+            _quarantine_unverified_bundle(
+                candidate,
+                reason=f"counter receipt invalid: {type(error).__name__}: {error}",
+            )
 def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serialized_bytes: int | None = None, receipt_aware: bool = False) -> None:
     """Prune only older successful bundles; never delete the final known-good bundle."""
     if max_count is None and max_serialized_bytes is None:
@@ -230,11 +333,15 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
     if max_serialized_bytes is not None and max_serialized_bytes < 1:
         raise ValueError("checkpoint retention serialized-byte budget must be positive")
     parent.mkdir(parents=True, exist_ok=True)
+    if receipt_aware:
+        _reclaim_stale_staging(parent)
     candidates = [path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-")]
     bundles: list[Path] = []
     for candidate in candidates:
         if not receipt_aware:
             bundles.append(candidate)
+            continue
+        if _writer_is_active(candidate):
             continue
         try:
             require_counter_success_receipt(candidate)
@@ -262,6 +369,10 @@ def _retain_after_success(
 
     if max_count is None and max_serialized_bytes is None:
         raise ValueError("successful checkpoint retention requires a bound")
+    parent.mkdir(parents=True, exist_ok=True)
+    if receipt_aware:
+        _reclaim_stale_staging(parent)
+        _reclaim_unverified_orphans(parent)
     result = operation()
     _enforce_retention(parent, max_count=max_count, max_serialized_bytes=max_serialized_bytes, receipt_aware=receipt_aware)
     return result
