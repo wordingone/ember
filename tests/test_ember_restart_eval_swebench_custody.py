@@ -15,7 +15,7 @@ def test_swebench_source_audit_records_no_frozen_task_release_or_eligible_runtim
     assert custody["source_commit"] == "f7bbbb2ccdf479001d6467c9e34af59e44a840f9"
     assert custody["source_only_audit"] == {
         "artifact_sha256": "2a56f54d6b9f2f424e6a45032f5a619580ffd7065de458b046eb988d3257e752",
-        "runner_receipt_sha256": "f37595272cab74d6bef2df3f800ee152e0260c29b403ab5e87f0440df6afbd99",
+        "runner_receipt_sha256": "4483c6e296bfd66034330406b72fef671d5ed1765277390b69c95afd82ab268c",
         "claim_status": "SOURCE_ONLY_NO_FROZEN_SWEBENCH_TASK_RELEASE",
     }
     assert custody["external_lite_release_audit"] == {
