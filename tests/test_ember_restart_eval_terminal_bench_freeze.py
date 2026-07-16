@@ -1,3 +1,4 @@
+import pytest
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
@@ -104,3 +105,8 @@ def test_terminal_task_metadata_is_read_once_for_parse_and_digest(monkeypatch):
         record = module._task(root, "bounded-task")
         assert record["task_toml_sha256"] == expected_sha256
         assert reads == 1
+def test_cleans_temporary_payload_when_terminal_metadata_publication_fails(monkeypatch):
+ with tempfile.TemporaryDirectory() as temporary:
+  root=Path(temporary);_write_task(root,image='example.invalid/bounded@sha256:'+'a'*64);output=root/'frozen.json';spec=importlib.util.spec_from_file_location('terminal_freeze_publication',SCRIPT);module=importlib.util.module_from_spec(spec);assert spec.loader is not None;spec.loader.exec_module(module);monkeypatch.setattr(sys,'argv',[str(SCRIPT),'--task-root',str(root),'--task-id','bounded-task','--output',str(output)]);monkeypatch.setattr(module.os,'replace',lambda *_:(_ for _ in ()).throw(OSError('replace denied')))
+  with pytest.raises(OSError,match='replace denied'):module.main()
+  assert not output.exists() and not list(root.glob('tmp*'))
