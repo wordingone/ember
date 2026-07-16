@@ -38,3 +38,17 @@ def test_scores_only_harbor_outcome_bound_to_frozen_manifest():
         completed = subprocess.run([sys.executable, str(SCRIPT), "--frozen-task-manifest", str(frozen), "--harbor-task-results", str(results), "--score-output", str(output)], capture_output=True, text=True)
 
         assert completed.returncode == 0, completed.stderr
+
+
+def test_terminal_fixture_receipt_is_selftest_and_binds_result_bytes():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        frozen, results, output = root / "frozen.json", root / "results.json", root / "score.json"
+        frozen.write_bytes(b'{"result":"PREFLIGHT_ONLY","benchmark_id":"terminal-bench","benchmark_version":"2.0","tasks":[{"task_id":"bounded-task","task_toml_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","docker_image_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}')
+        results.write_bytes(b'[{"task_id":"bounded-task","status":"passed","transcript_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","task_image_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]')
+        completed = subprocess.run([sys.executable, str(SCRIPT), "--frozen-task-manifest", str(frozen), "--harbor-task-results", str(results), "--score-output", str(output)], capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stderr
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        import hashlib
+        assert payload["result"] == "SELFTEST"
+        assert payload["harbor_task_results_sha256"] == hashlib.sha256(results.read_bytes()).hexdigest()
