@@ -35,8 +35,12 @@ def evalplus_protocol_sha256(manifest: dict[str, object], suite: str, adapters: 
     license_sha = manifest.get("license_sha256")
     if not isinstance(asset_sha, str) or not SHA256_RE.fullmatch(asset_sha) or not isinstance(license_sha, str) or not SHA256_RE.fullmatch(license_sha):
         raise ValueError("EvalPlus custody lacks task/license identity for protocol")
+    source_commit = manifest.get("source_commit")
+    source_tree = manifest.get("source_tree")
+    if not isinstance(source_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", source_commit) or not isinstance(source_tree, str) or not re.fullmatch(r"[0-9a-f]{40}", source_tree):
+        raise ValueError("EvalPlus custody lacks upstream source commit/tree identity")
     adapter_identity = "|".join(f"{entry['path']}:{entry['sha256']}" for entry in sorted(adapters, key=lambda item: item["path"]))
-    material = f"evalplus:{manifest.get('benchmark_id')}:{suite}:{asset_sha}:{license_sha}:{adapter_identity}"
+    material = f"evalplus:{manifest.get('benchmark_id')}:{suite}:{asset_sha}:{license_sha}:{source_commit}:{source_tree}:{adapter_identity}"
     return sha256(material.encode("utf-8"))
 
 

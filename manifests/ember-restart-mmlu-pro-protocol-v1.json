@@ -1,21 +1,27 @@
 {
-    "goal_id":  "EMBER-02",
-    "workstream_id":  "EMBER-02C",
-    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-    "schema_version":  "ember-restart-mmlu-pro-protocol-v1",
-    "benchmark_id":  "mmlu-pro",
-    "benchmark_revision":  "b189ec765aa7ed75c8acfea42df31fdae71f97be",
-    "split_path":  "data/test-00000-of-00001.parquet",
-    "capability":  "reasoning",
-    "result":  "PREFLIGHT_ONLY",
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02C",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version": "ember-restart-mmlu-pro-protocol-v1",
+    "benchmark_id": "mmlu-pro",
+    "benchmark_revision": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+    "split_path": "data/test-00000-of-00001.parquet",
+    "capability": "reasoning",
+    "result": "PREFLIGHT_ONLY",
     "scoring_adapter": {
         "path": "scripts/ember_restart_eval_mmlu_pro_score.py",
-        "sha256": "f1c30dfb53f22cb687374ab20f4a170178891de91cd48373aba638274477653d",
+        "sha256": "c6d19c0e6734279b188a4179a39835a50683a267040ec2c37f6f0dbd54da1062",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
-    "prohibited_claims":  [
-                              "checkpoint_score",
-                              "capability_admission",
-                              "sufficient_pretraining"
-                          ]
+    "prohibited_claims": [
+        "checkpoint_score",
+        "capability_admission",
+        "sufficient_pretraining"
+    ],
+    "benchmark_version": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+    "references_sha256": "0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
+    "strict_protocol_required": true,
+    "scoring_adapter_sha256": "c6d19c0e6734279b188a4179a39835a50683a267040ec2c37f6f0dbd54da1062",
+    "protocol_derivation": "mmlu-pro:{benchmark_version}:{references_sha256}:{license_sha256}:{scoring_adapter_sha256}",
+    "protocol_status": "NOT_EXECUTABLE_LICENSE_CARD_HASH_MISSING"
 }

@@ -50,8 +50,8 @@ def test_scores_only_canonical_predictions_bound_to_frozen_mmmu_custody():
         assert payload["predictions_sha256"] == digest(predictions)
         assert payload["answers_sha256"] == digest(answers)
         assert payload["frozen_mmmu_manifest_sha256"] == digest(custody)
-        assert payload["result"] == "PREFLIGHT_ONLY"
-        assert payload["claim_status"] == "NON_ADMISSIBLE_FROZEN_MMMU_SCORER"
+        assert payload["result"] == "SELFTEST"
+        assert payload["claim_status"] == "SELFTEST_ONLY_LEGACY_MMMU_CUSTODY"
         assert payload["criterion_result"] == "FAILED"
 
 
@@ -118,11 +118,11 @@ def test_mmmu_executes_manifest_selected_scorer_not_mutable_default(tmp_path):
     selected = scorer_dir / "alternate.py"
     selected.write_text("import argparse; p=argparse.ArgumentParser(); p.add_argument('--output_path'); p.add_argument('--answer_path'); p.parse_args(); print({'Overall': {'num': 1, 'acc': 0.75}})\n", encoding="utf-8")
     (scorer_dir / "main_eval_only.py").write_text("raise SystemExit('default scorer must not execute')\n", encoding="utf-8")
-    scorer_sha = digest(selected); license_sha = "e" * 64
-    protocol_sha = hashlib.sha256(f"MMMU:frozen-v1:{answer_sha}:{scorer_sha}:{license_sha}".encode()).hexdigest()
+    scorer_sha = digest(selected); license_sha = "e" * 64; upstream_tree = "f" * 40
+    adapter_sha = digest(SCRIPT); protocol_sha = hashlib.sha256(f"MMMU:frozen-v1:{answer_sha}:{scorer_sha}:{license_sha}:{upstream_tree}:{adapter_sha}:".encode()).hexdigest()
     prediction = canonical_prediction(answers); prediction["benchmark"]["protocol_sha256"] = protocol_sha
     predictions.write_text(json.dumps(prediction), encoding="utf-8")
-    custody.write_text(json.dumps({"schema_version": "ember-restart-benchmark-custody-v1", "benchmark_id": "MMMU", "benchmark_version": "frozen-v1", "split": {"name": "validation", "answer_dictionary_sha256": answer_sha}, "license_sha256": license_sha, "scorer": {"path": "mmmu/alternate.py", "sha256": scorer_sha}, "protocol_sha256": protocol_sha}), encoding="utf-8")
+    custody.write_text(json.dumps({"schema_version": "ember-restart-benchmark-custody-v1", "benchmark_id": "MMMU", "benchmark_version": "frozen-v1", "upstream_tree_git_sha1": upstream_tree, "split": {"name": "validation", "answer_dictionary_sha256": answer_sha}, "license_sha256": license_sha, "scoring_adapter": {"path": "scripts/ember_restart_eval_mmmu.py", "sha256": adapter_sha, "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"}, "scorer": {"path": "mmmu/alternate.py", "sha256": scorer_sha}, "protocol_sha256": protocol_sha}), encoding="utf-8")
     result = subprocess.run([sys.executable, str(SCRIPT), "--mmmu-root", str(root), "--answers", str(answers), "--canonical-predictions", str(predictions), "--frozen-mmmu-manifest", str(custody), "--score-output", str(score)], text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stderr
     assert json.loads(score.read_text(encoding="utf-8"))["metrics"]["accuracy"] == 0.75

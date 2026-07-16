@@ -175,3 +175,32 @@ def test_admission_resolves_progression_root_paths_and_checkpoint_relative_shard
 
     monkeypatch.setattr(module.subprocess, "run", run)
     assert module._admitted(manifest, registry, progression.read_bytes())
+
+def test_admission_snapshots_declared_package_relative_and_dynamic_registry_assets(monkeypatch, tmp_path):
+    module = load_module()
+    receipt, _nested, manifest, registry, authority = setup_admission(tmp_path, b"{}")
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "__init__.py").write_text("from .helper import VALUE\n", encoding="utf-8")
+    (package / "helper.py").write_text("VALUE = 'original'\n", encoding="utf-8")
+    (package / "dynamic.py").write_text("DYNAMIC = True\n", encoding="utf-8")
+    verifier = tmp_path / "verifier.py"
+    verifier.write_text("import importlib\nimportlib.import_module('pkg.dynamic')\n", encoding="utf-8")
+    declared = []
+    for path in (package / "__init__.py", package / "helper.py", package / "dynamic.py"):
+        declared.append({"path": path.relative_to(tmp_path).as_posix(), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+    registry.write_text(json.dumps({"schema_version": "ember-trusted-verifiers-v1", "verifiers": [{"path": verifier.name, "sha256": hashlib.sha256(verifier.read_bytes()).hexdigest(), "files": declared, "evidence_classes": ["evaluation"], "criterion_ids": ["ember-3b-text-capability-v1"]}]}), encoding="utf-8")
+    authority.write_text(json.dumps({"authorities": [{"trusted_verifier_registry_sha256": hashlib.sha256(registry.read_bytes()).hexdigest()}]}), encoding="utf-8")
+    monkeypatch.setattr(module, "EXECUTION_AUTHORITIES", authority)
+
+    def run(command, **_kwargs):
+        snapshot_registry = Path(command[-1])
+        snapshot_root = snapshot_registry.parent
+        for entry in declared:
+            staged = snapshot_root / entry["path"]
+            assert staged.is_file()
+            assert hashlib.sha256(staged.read_bytes()).hexdigest() == entry["sha256"]
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    assert module._admitted(manifest, registry, receipt.read_bytes())
