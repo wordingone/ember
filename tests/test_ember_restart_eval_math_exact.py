@@ -65,3 +65,14 @@ def test_math_score_replace_failure_cleans_real_cli_temporary_output(monkeypatch
         module.main()
     assert not score.exists()
     assert not list(tmp_path.glob("tmp*"))
+
+
+def test_rejects_valid_hex_math_protocol_not_derived_from_scorer_custody(tmp_path):
+    references = tmp_path / "references.jsonl"; predictions = tmp_path / "predictions.json"; manifest = tmp_path / "manifest.json"; score = tmp_path / "score.json"
+    references.write_text('{"id":"m1","answer":"42"}\n', encoding="utf-8")
+    reference_sha = hashlib.sha256(references.read_bytes()).hexdigest(); adapter_sha = hashlib.sha256(SCRIPT.read_bytes()).hexdigest(); license_sha = "f" * 64
+    manifest.write_text(json.dumps({"schema_version": "ember-restart-math500-freeze-v1", "result": "PREFLIGHT_ONLY", "benchmark_id": "math-500", "benchmark_version": "frozen-v1", "license_sha256": license_sha, "scoring_adapter_sha256": adapter_sha, "references_sha256": reference_sha, "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64, "split_sha256": "e" * 64, "protocol_sha256": "0" * 64}), encoding="utf-8")
+    predictions.write_text(json.dumps({"schema_version":"ember-owned-predictions-v1","claim_status":"NON_ADMISSIBLE_RAW_PREDICTIONS","checkpoint_manifest_sha256":"a"*64,"model_config_sha256":"b"*64,"tokenizer_sha256":"c"*64,"inference_implementation_sha256":"d"*64,"benchmark":{"id":"math-500","version":"frozen-v1","capability":"reasoning","split_sha256":"e"*64,"protocol_sha256":"0"*64},"decoding":{"strategy":"GREEDY_AUTOREGRESSIVE","teacher_forcing":False,"max_new_tokens":1,"temperature":0,"top_p":1,"stop_token_ids":[2]},"rows":[{"id":"m1","input_sha256":"0"*64,"generated_token_ids":[2],"stop_reason":"eos","output":{"kind":"text","text":"42"}}]}), encoding="utf-8")
+    result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-math-manifest", str(manifest), "--references", str(references), "--predictions", str(predictions), "--score-output", str(score)], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert not score.exists()
