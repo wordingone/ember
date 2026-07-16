@@ -39,9 +39,9 @@ def _task(root: Path, task_id: str) -> dict[str, str]:
         raise ValueError("Terminal-Bench task id is invalid")
     path = root / task_id / "task.toml"
     try:
-        with path.open("rb") as handle:
-            task = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as error:
+        task_bytes = path.read_bytes()
+        task = tomllib.loads(task_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise ValueError(f"invalid Terminal-Bench task metadata: {error}") from error
     declared = task.get("task") if isinstance(task, dict) else None
     environment = task.get("environment") if isinstance(task, dict) else None
@@ -53,7 +53,7 @@ def _task(root: Path, task_id: str) -> dict[str, str]:
         raise ValueError("Terminal-Bench task image must be content-addressed by sha256")
     if environment.get("allow_internet") is not False:
         raise ValueError("Terminal-Bench task must disable network access for owned evaluation")
-    return {"task_id": task_id, "task_toml_sha256": _sha256(path), "docker_image_sha256": match.group(1)}
+    return {"task_id": task_id, "task_toml_sha256": hashlib.sha256(task_bytes).hexdigest(), "docker_image_sha256": match.group(1)}
 
 
 def main() -> int:
@@ -65,7 +65,7 @@ def main() -> int:
     try:
         if not arguments.task_root.is_dir() or len(set(arguments.task_id)) != len(arguments.task_id):
             raise ValueError("Terminal-Bench frozen task selection is invalid")
-        tasks = [_task(arguments.task_root, task_id) for task_id in arguments.task_id]
+        tasks = [_task(arguments.task_root, task_id) for task_id in sorted(arguments.task_id)]
         _atomic(arguments.output, {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "result": "PREFLIGHT_ONLY", "benchmark_id": "terminal-bench", "benchmark_version": "2.0", "tasks": tasks})
     except ValueError as error:
         parser.error(str(error))
