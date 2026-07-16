@@ -1,20 +1,33 @@
 {
-  "goal_id": "EMBER-02",
-  "workstream_id": "EMBER-02C",
-  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "schema_version": "ember-restart-benchmark-custody-v1",
-  "benchmark_id": "MMMU",
-  "benchmark_version": "bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa",
-  "upstream_url": "https://github.com/MMMU-Benchmark/MMMU.git",
-  "upstream_tree_git_sha1": "07da47c733711a68dcbdfa3e258b7ae3e2e68974",
-  "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-  "split": {
-    "name": "validation",
-    "answer_dictionary_sha256": "76080f5597b8f4d29abba8551489c4b82e4a285b9d62b946fd67a1952e95502c",
-    "total_items": 900,
-    "eligible_multiple_choice_items": 847,
-    "eligible_id_set_sha256": "7a8800c96f0a6003b004d4bc3dfc089b8d6d5aa56a5f85e8c4719fbadd63ecc6"
-  },
-  "target_training_access": "FORBIDDEN",
-  "admission": "NOT_EXECUTABLE_NO_OWNED_CHECKPOINT"
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-benchmark-custody-v1",
+    "benchmark_id":  "MMMU",
+    "benchmark_version":  "bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa",
+    "upstream_url":  "https://github.com/MMMU-Benchmark/MMMU.git",
+    "upstream_tree_git_sha1":  "07da47c733711a68dcbdfa3e258b7ae3e2e68974",
+    "license_sha256":  "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "split":  {
+                  "name":  "validation",
+                  "answer_dictionary_sha256":  "76080f5597b8f4d29abba8551489c4b82e4a285b9d62b946fd67a1952e95502c",
+                  "total_items":  900,
+                  "eligible_multiple_choice_items":  847,
+                  "eligible_id_set_sha256":  "7a8800c96f0a6003b004d4bc3dfc089b8d6d5aa56a5f85e8c4719fbadd63ecc6"
+              },
+    "target_training_access":  "FORBIDDEN",
+    "admission":  "NOT_EXECUTABLE_UNTRAINED_SPECIALIST_NO_CHECKPOINT_BOUND_PREDICTIONS",
+    "validation_parquet_materialization":  {
+                                               "upstream_revision":  "f87afafe4afe71650b99ef5236d7b5bb3f6345c7",
+                                               "artifact_sha256":  "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
+                                               "runner_receipt_sha256":  "0302a0db75c07830ca0265c096379b0f5dd994e6c11c2699194d685f76bf4bfb",
+                                               "claim_status":  "FROZEN_SOURCE_COMPATIBILITY_ONLY"
+                                           },
+    "image_input_materialization":  {
+                                        "validation_freeze_sha256":  "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
+                                        "artifact_sha256":  "719619b79f85e56d42552d2935de3bf43e9bd5dee9529f037a7e32dc228d0ebd",
+                                        "runner_receipt_sha256":  "10bbc5f517ebe7831ddb2d0bfc8acadbc13f5d525e92ddb813b97400f88c1b97",
+                                        "row_count":  900,
+                                        "claim_status":  "FROZEN_MMMU_IMAGE_INPUTS_NO_CHECKPOINT_BOUND_PREDICTIONS"
+                                    }
 }
