@@ -805,6 +805,7 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
     let headlessCalled = false;
     // Use sentinel strings/numbers to avoid TypeScript null-narrowing on closures
     let receivedPrompt = "UNSET";
+    let receivedModel: string | undefined;
     let exitCodeReceived = -1;
 
     await main({
@@ -820,11 +821,12 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
         prompt: string,
         _io: StructuredIO,
         _tools: Tool[],
-        _options: HeadlessReplOptions,
+        options: HeadlessReplOptions,
         _deps: Partial<LoopDeps>,
       ) => {
         headlessCalled = true;
         receivedPrompt = prompt;
+        receivedModel = options.userSpecifiedModel;
         return { events: [], exitCode: 0 };
       },
       exitFn: (code: number): void => {
@@ -834,6 +836,7 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
 
     expect(headlessCalled).toBe(true);
     expect(receivedPrompt).toBe("hello headless");
+    expect(receivedModel).toBe(process.env["EMBER_MODEL_NAME"]);
     expect(exitCodeReceived).toBe(0);
     // If launchRepl were called it would have thrown or hung; reaching here means it was not.
   });
