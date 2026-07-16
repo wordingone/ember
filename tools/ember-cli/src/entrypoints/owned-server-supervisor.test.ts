@@ -4,7 +4,9 @@
 
 import { describe, expect, it } from "bun:test";
 import { createServer } from "node:net";
-import { resolve } from "node:path";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import {
@@ -90,6 +92,10 @@ describe("owned server supervisor", () => {
       modelName: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
       launch: {
         authorityKind: "DEVELOPMENT",
+        cleanupRuntimeSnapshot: () => {},
+        developmentManifestSha256: "e".repeat(64),
+        runtimeIndexPath: "C:\\owned\\runtime-bundle-index.json",
+        runtimeIndexSha256: "f".repeat(64),
         checkpointDir: "C:\\owned\\checkpoint",
         developmentManifestPath: "C:\\owned\\development.json",
         mode: "INTERACTIVE",
@@ -101,11 +107,18 @@ describe("owned server supervisor", () => {
     };
     const command = buildOwnedServerCommand(development, "cuda");
     expect(command.args).toEqual([
+      "-I",
+      "-c",
+      expect.any(String),
+      "C:\\owned\\runtime-bundle-index.json",
+      "f".repeat(64),
       "C:\\repo\\tools\\ember-restart-3b\\serve_owned_openai.py",
       "--checkpoint", "C:\\owned\\checkpoint",
       "--tokenizer", "C:\\owned\\tokenizer.json",
       "--config", "C:\\owned\\model-config.json",
       "--development-manifest", "C:\\owned\\development.json",
+      "--expected-development-manifest-sha256", "e".repeat(64),
+      "--expected-runtime-index-sha256", "f".repeat(64),
       "--host", "127.0.0.1",
       "--port", "8083",
       "--device", "cuda",
@@ -114,6 +127,60 @@ describe("owned server supervisor", () => {
     ]);
     expect(command.args).not.toContain("--run-manifest");
     expect(command.args).not.toContain("--trusted-verifier-registry");
+  });
+
+  it("rejects a mutated snapshot file before importing the development server", () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-preimport-test-"));
+    try {
+      const serverPath = join(root, "server.py");
+      const payloadPath = join(root, "module.py");
+      writeFileSync(serverPath, "raise SystemExit('SERVER_RAN')\n");
+      writeFileSync(payloadPath, "exact = True\n");
+      const payload = new TextEncoder().encode("exact = True\n");
+      const index = {
+        files: {
+          "module.py": {
+            bytes: payload.byteLength,
+            sha256: new Bun.CryptoHasher("sha256").update(payload).digest("hex"),
+          },
+        },
+      };
+      const indexBytes = new TextEncoder().encode(JSON.stringify(index));
+      const indexPath = join(root, "runtime-bundle-index.json");
+      writeFileSync(indexPath, indexBytes);
+      const development: OwnedModelIdentity = {
+        ...identity(),
+        seat: "OWNED_DEVELOPMENT",
+        claimStatus: "NON_ADMISSIBLE",
+        tokensSeen: 2048,
+        allocatedParameters: 3_839_161_856,
+        activeParameters: 1_020_589_568,
+        modelName: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+        launch: {
+          authorityKind: "DEVELOPMENT",
+          cleanupRuntimeSnapshot: () => {},
+          developmentManifestSha256: "e".repeat(64),
+          runtimeIndexPath: indexPath,
+          runtimeIndexSha256: new Bun.CryptoHasher("sha256").update(indexBytes).digest("hex"),
+          checkpointDir: "missing-checkpoint",
+          developmentManifestPath: "missing-development.json",
+          mode: "INTERACTIVE",
+          modelConfigPath: "missing-model-config.json",
+          pythonExecutable: process.env.PYTHON ?? "python",
+          serverPath,
+          tokenizerPath: "missing-tokenizer.json",
+        },
+      };
+      writeFileSync(payloadPath, "mutated = True\n");
+      const command = buildOwnedServerCommand(development, "cpu");
+      const result = Bun.spawnSync([command.executable, ...command.args]);
+      const stderr = new TextDecoder().decode(result.stderr);
+      expect(result.exitCode).toBe(1);
+      expect(stderr).toContain("runtime bundle file changed before development server import");
+      expect(stderr).not.toContain("SERVER_RAN");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it("passes the constructed development argv through the real Python receiver", () => {
@@ -131,6 +198,10 @@ describe("owned server supervisor", () => {
       modelName: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
       launch: {
         authorityKind: "DEVELOPMENT",
+        cleanupRuntimeSnapshot: () => {},
+        developmentManifestSha256: "e".repeat(64),
+        runtimeIndexPath: "C:\\owned\\runtime-bundle-index.json",
+        runtimeIndexSha256: "f".repeat(64),
         checkpointDir: "missing-checkpoint",
         developmentManifestPath: "missing-development.json",
         mode: "INTERACTIVE",
@@ -142,7 +213,9 @@ describe("owned server supervisor", () => {
     };
 
     const command = buildOwnedServerCommand(development, "cpu");
-    const result = Bun.spawnSync([command.executable, ...command.args]);
+    const receiverOffset = command.args.indexOf(serverPath);
+    expect(receiverOffset).toBeGreaterThan(0);
+    const result = Bun.spawnSync([command.executable, ...command.args.slice(receiverOffset)]);
     const stderr = new TextDecoder().decode(result.stderr);
 
     expect(result.exitCode).toBe(1);
