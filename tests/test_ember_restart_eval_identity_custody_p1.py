@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Focused regressions for Kai's four identity/custody P1s (mail 18639)."""
+"""Focused regressions for identity and custody invariants."""
 import hashlib
 import importlib.util
 import json
@@ -132,10 +132,10 @@ def test_spider_canonical_path_does_not_bypass_protocol_for_legacy_schema(tmp_pa
 
 def test_mmmu_rejects_checkpoint_identity_drift_when_frozen_manifest_declares_it(tmp_path):
     module = _load("scripts/ember_restart_eval_mmmu.py", "p1_mmmu_identity")
-    manifest = {"schema_version": "ember-restart-benchmark-custody-v1", "benchmark_id": "MMMU", "benchmark_version": "v1", "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64, "split": {"name": "validation", "answer_dictionary_sha256": "c" * 64}, "license_sha256": "d" * 64, "scorer": {"path": "score.py", "sha256": "e" * 64}, "protocol_sha256": "f" * 64}
+    manifest = {"schema_version": "ember-restart-benchmark-custody-v1", "benchmark_id": "MMMU", "benchmark_version": "v1", "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64, "split": {"name": "validation", "answer_dictionary_sha256": "c" * 64}, "license_sha256": "d" * 64, "scorer": {"path": "score.py", "sha256": "e" * 64}, "upstream_tree_git_sha1": "f" * 40, "scoring_adapter": {"path": "scripts/ember_restart_eval_mmmu.py", "sha256": hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()}, "protocol_sha256": "f" * 64}
     root = tmp_path / "root"; root.mkdir(); (root / "score.py").write_text("", encoding="utf-8")
     manifest["scorer"]["sha256"] = hashlib.sha256((root / "score.py").read_bytes()).hexdigest()
-    manifest["protocol_sha256"] = module.sha256(f"MMMU:v1:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:{manifest['scorer']['sha256']}:{manifest['license_sha256']}".encode())
+    manifest["protocol_sha256"] = module.sha256(f"MMMU:v1:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:{manifest['scorer']['sha256']}:{manifest['license_sha256']}:{manifest['upstream_tree_git_sha1']}:{manifest['scoring_adapter']['sha256']}:".encode())
     module.verify_frozen_scorer(manifest, root)
     with pytest.raises(ValueError, match="checkpoint"):
         module.validate_manifest_identity(manifest, {"checkpoint_manifest_sha256": "z" * 64, "model_config_sha256": "b" * 64})

@@ -12,6 +12,8 @@ from ember_restart.prediction_contract import ContractError, validate_prediction
 def sha256(data: bytes) -> str:return hashlib.sha256(data).hexdigest()
 
 def protocol_sha256(manifest: dict, adapter_sha256: str) -> str:
+    if not isinstance(adapter_sha256, str) or len(adapter_sha256) != 64 or adapter_sha256.lower() != adapter_sha256 or any(c not in "0123456789abcdef" for c in adapter_sha256):
+        raise ValueError("MMLU-Pro scorer identity must be a lowercase SHA-256")
     license_sha256 = manifest.get("license_sha256")
     reference_sha256 = manifest.get("references_sha256")
     version = manifest.get("benchmark_version")
@@ -54,9 +56,11 @@ def main()->int:
   manifest_bytes=args.frozen_manifest.read_bytes();reference_bytes=args.references.read_bytes();prediction_bytes=args.predictions.read_bytes();manifest=json.loads(manifest_bytes.decode('utf-8'));references=expected_answers(reference_bytes);envelope,predictions=predicted_answers(prediction_bytes);benchmark=envelope['benchmark']
   fields={'id':'benchmark_id','version':'benchmark_version','split_sha256':'split_sha256','protocol_sha256':'protocol_sha256'}
   if not isinstance(manifest,dict) or manifest.get('result')!='PREFLIGHT_ONLY' or manifest.get('benchmark_id')!='mmlu-pro' or manifest.get('capability')!='reasoning' or manifest.get('references_sha256')!=sha256(reference_bytes) or manifest.get('split_sha256')!=sha256(reference_bytes) or manifest.get('task_count')!=len(references) or any(benchmark.get(field)!=manifest.get(manifest_field) for field,manifest_field in fields.items()):raise ValueError('frozen MMLU-Pro manifest does not bind canonical prediction identity')
-  if isinstance(manifest.get('scoring_adapter_sha256'), str):
-   adapter_sha256=manifest['scoring_adapter_sha256']
-   if len(adapter_sha256)!=64 or adapter_sha256.lower()!=adapter_sha256 or any(c not in '0123456789abcdef' for c in adapter_sha256) or sha256(Path(__file__).read_bytes())!=adapter_sha256:raise ValueError('MMLU-Pro scorer bytes do not match frozen custody')
+  strict_manifest=manifest.get('schema_version')=='ember-restart-mmlu-pro-freeze-v1' or 'scoring_adapter_sha256' in manifest
+  if strict_manifest:
+   adapter_sha256=manifest.get('scoring_adapter_sha256')
+   if not isinstance(adapter_sha256,str) or len(adapter_sha256)!=64 or adapter_sha256.lower()!=adapter_sha256 or any(c not in '0123456789abcdef' for c in adapter_sha256) or sha256(Path(__file__).read_bytes())!=adapter_sha256:raise ValueError('MMLU-Pro strict custody requires exact scorer identity')
+   if manifest.get('scoring_adapter_path')!='scripts/ember_restart_eval_mmlu_pro_score.py':raise ValueError('MMLU-Pro scorer path is not the pinned adapter')
    if manifest.get('protocol_sha256')!=protocol_sha256(manifest, adapter_sha256):raise ValueError('MMLU-Pro protocol is not derived from scorer custody')
   if set(references)!=set(predictions):raise ValueError('canonical MMLU-Pro predictions must exactly cover frozen reference ids')
  except (OSError,UnicodeDecodeError,ValueError,json.JSONDecodeError,pa.ArrowException) as error:parser.error(f'invalid MMLU-Pro scorer inputs: {error}')

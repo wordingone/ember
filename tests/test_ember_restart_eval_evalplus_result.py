@@ -92,3 +92,16 @@ def test_refuses_valid_hex_protocol_not_derived_from_custody_tuple(tmp_path):
     binding = {"frozen_code_manifest_sha256": digest(custody), "suite": "humanevalplus_v0.1.10", "task_asset_sha256": manifest["frozen_task_assets"]["humanevalplus_v0.1.10"]["sha256"], "protocol_sha256": "0" * 64}
     with pytest.raises(ValueError, match="protocol"):
         module._load_frozen_code_manifest(custody, binding, binding["suite"])
+
+def test_evalplus_protocol_binds_upstream_source_commit_and_tree():
+    import copy
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("evalplus_source_identity", SCRIPT)
+    module = importlib.util.module_from_spec(spec); assert spec.loader is not None; spec.loader.exec_module(module)
+    manifest = json.loads(CODE_MANIFEST.read_text(encoding="utf-8"))
+    suite = "humanevalplus_v0.1.10"
+    original = module.evalplus_protocol_sha256(manifest, suite, manifest["scoring_adapters"])
+    for field in ("source_commit", "source_tree"):
+        mutated = copy.deepcopy(manifest)
+        mutated[field] = "0" * 40
+        assert module.evalplus_protocol_sha256(mutated, suite, mutated["scoring_adapters"]) != original

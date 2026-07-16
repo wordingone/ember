@@ -99,6 +99,22 @@ def _pinned_registry_snapshot(registry):
                 raise ValueError(f"verifiers[{index}]: malformed entry")
             relative, source = _registry_path(entry.get("path"), registry.parent, f"verifiers[{index}]")
             copy_source(relative, source)
+            declared = entry.get("files", [])
+            if not isinstance(declared, list):
+                raise ValueError(f"verifiers[{index}].files: expected list")
+            declared_paths = set()
+            for file_index, asset in enumerate(declared):
+                if not isinstance(asset, dict) or set(asset) != {"path", "sha256"}:
+                    raise ValueError(f"verifiers[{index}].files[{file_index}]: malformed declared asset")
+                asset_relative, asset_source = _registry_path(asset.get("path"), registry.parent, f"verifiers[{index}].files[{file_index}]")
+                normalized_asset = asset_relative.as_posix()
+                if normalized_asset in declared_paths:
+                    raise ValueError(f"verifiers[{index}].files: duplicate path")
+                declared_paths.add(normalized_asset)
+                expected_sha = asset.get("sha256")
+                if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha) or _sha256(asset_source.read_bytes()) != expected_sha:
+                    raise ValueError(f"verifiers[{index}].files[{file_index}]: content hash mismatch")
+                copy_source(asset_relative, asset_source)
         return snapshot, registry_root
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
         if registry_root is not None:
