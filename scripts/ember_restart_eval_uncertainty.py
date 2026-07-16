@@ -13,6 +13,10 @@ def main()->int:
  n=len(rows);correct=sum(x['correct']for x in rows);acc=correct/n;z=1.959963984540054;den=1+z*z/n;center=(acc+z*z/(2*n))/den;half=z*math.sqrt(acc*(1-acc)/n+z*z/(4*n*n))/den
  payload={'result':'SELFTEST','admission':'NOT_ELIGIBLE','sample_count':n,'metrics':{'accuracy':acc},'uncertainty':{'method':'wilson_95','lower':max(0.,center-half),'upper':min(1.,center+half)}}
  a.output.parent.mkdir(parents=True,exist_ok=True)
- with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.output.parent,delete=False)as h:json.dump(payload,h,sort_keys=True);h.write('\n');t=h.name
- os.replace(t,a.output);return 0
+ with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.output.parent,delete=False)as h:json.dump(payload,h,sort_keys=True);h.write('\n');t=Path(h.name)
+ try:
+  os.replace(t,a.output)
+ finally:
+  t.unlink(missing_ok=True)
+ return 0
 if __name__=='__main__':raise SystemExit(main())
