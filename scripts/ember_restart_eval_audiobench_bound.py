@@ -60,7 +60,7 @@ def main():
   output=row['output'];runrow=by_id[row['id']]
   if output.get('kind')!='transcript' or hashlib.sha256(output['text'].encode()).hexdigest()!=runrow['transcript_sha256']:
    p.error('canonical transcript does not bind closed mixture evidence')
- payload={'criterion_id':'ember-3b-audio-capability-v1','criterion_result':'FAILED','metrics':metrics,'sample_count':len(rows),'predictions_sha256':hashlib.sha256(prediction_bytes).hexdigest(),'run_artifact_sha256':hashlib.sha256(run_bytes).hexdigest(),'upstream':'closed AudioBench rows bound to canonical predictions'}
+ payload={'result':'PREFLIGHT_ONLY','claim_status':'NON_ADMISSIBLE_CLOSED_AUDIOBENCH_SCORER','criterion_id':'ember-3b-audio-capability-v1','criterion_result':'FAILED','metrics':metrics,'sample_count':len(rows),'predictions_sha256':hashlib.sha256(prediction_bytes).hexdigest(),'run_artifact_sha256':hashlib.sha256(run_bytes).hexdigest(),'upstream':'closed AudioBench rows bound to canonical predictions'}
  a.score_output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.score_output.parent,delete=False)as handle:
   handle.write(_canonical(payload)+'\n');temporary=handle.name
