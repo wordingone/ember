@@ -33,6 +33,8 @@ criterion until a conforming checkpoint prediction envelope is produced. HellaSw
 is explicitly held at `NOT_EXECUTABLE_NO_FROZEN_LABELS`; its frozen test split
 withholds labels, so no score is inferred or fabricated.
 
+MATH-500, MMLU-Pro, and static BFCL strict freeze manifests now derive protocol identity from exact scorer bytes plus frozen split/reference and license/version identity; valid-hex caller substitutions are rejected. These remain preflight-only and do not create checkpoint-bound scores.
+
 ## Frozen-matrix coverage and current limits
 
 Every requested family is tracked below. A frozen source, scorer self-test, or
