@@ -75,3 +75,16 @@ def test_refuses_mmmu_image_input_receipt_mismatch_before_scorer(tmp_path):
     assert result.returncode != 0
     assert "image input" in result.stderr
     assert not score.exists()
+
+def test_scores_mmmu_when_declared_image_inputs_match_canonical_rows(tmp_path):
+    root = tmp_path; mmmu = root / "mmmu-root" / "mmmu"; mmmu.mkdir(parents=True)
+    answers = root / "answers.json"; predictions = root / "predictions.json"; custody = root / "custody.json"; image_inputs = root / "image-inputs.json"; score = root / "score.json"
+    answers.write_text(json.dumps({"validation_math_1": {"question_type": "multiple-choice", "ground_truth": "A"}}), encoding="utf-8")
+    prediction = canonical_prediction(answers); prediction["rows"][0]["input_sha256"] = "0" * 64
+    predictions.write_text(json.dumps(prediction), encoding="utf-8")
+    image_inputs.write_text(json.dumps({"schema_version": "ember-restart-mmmu-image-input-freeze-v1", "result": "PREFLIGHT_ONLY", "benchmark_id": "MMMU", "row_count": 1, "rows": [{"id": "validation_math_1", "image_sha256s": ["a" * 64], "input_sha256": "0" * 64}]}), encoding="utf-8")
+    custody.write_text(json.dumps({"benchmark_id": "MMMU", "benchmark_version": "frozen-v1", "split": {"name": "validation", "answer_dictionary_sha256": digest(answers)}, "image_input_materialization": {"artifact_sha256": digest(image_inputs)}}), encoding="utf-8")
+    (mmmu / "main_eval_only.py").write_text("import argparse; p=argparse.ArgumentParser(); p.add_argument('--output_path'); p.add_argument('--answer_path'); p.parse_args(); print({'Overall': {'num': 1, 'acc': 1.0}})\n", encoding="utf-8")
+    result = subprocess.run([sys.executable, str(SCRIPT), "--mmmu-root", str(root / "mmmu-root"), "--answers", str(answers), "--canonical-predictions", str(predictions), "--frozen-mmmu-manifest", str(custody), "--frozen-image-inputs", str(image_inputs), "--score-output", str(score)], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(score.read_text(encoding="utf-8"))["sample_count"] == 1
