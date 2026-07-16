@@ -31,5 +31,10 @@
                                              "artifact_sha256":  "6fa91248385896a6e74dff55a01fdc8df9fc7854bd007bd092a75c663631c6de",
                                              "runner_receipt_sha256":  "76e04b0d5a79e928f8344514fd1a31f3e9ec1dc836abc429b7d7321157a403c5",
                                              "claim_status":  "FROZEN_SPIDER_VALIDATION_PAIRS_NO_DATABASE_EXECUTION"
-                                         }
+                                         },
+    "scoring_adapter":  {
+                            "path":  "scripts/ember_restart_eval_spider.py",
+                            "sha256":  "8d70e57db47f518e25d16b196a7cfb4a68ea34c47b85d1855f516a8bc7bff022",
+                            "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+                        }
 }
