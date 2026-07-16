@@ -32,6 +32,26 @@ canonical-envelope scorers. Their outputs remain `PREFLIGHT_ONLY` with a failed
 criterion until a conforming checkpoint prediction envelope is produced. HellaSwag
 is explicitly held at `NOT_EXECUTABLE_NO_FROZEN_LABELS`; its frozen test split
 withholds labels, so no score is inferred or fabricated.
+
+## Frozen-matrix coverage and current limits
+
+Every requested family is tracked below. A frozen source, scorer self-test, or
+preflight record is not a checkpoint-bound score.
+
+| Family | Frozen evaluation boundary | Current result state |
+| --- | --- | --- |
+| Text / reasoning | ARC-Challenge, MMLU-Pro, GSM8K, and MATH-500 byte-bound task custody and deterministic scoring | No canonical checkpoint predictions or score |
+| Code | HumanEval+ and MBPP+ frozen tasks with EvalPlus adapter self-tests | No pinned code-sandbox runtime or checkpoint predictions |
+| Terminal | Terminal-Bench 2 source pin | `PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK`: no digest-pinned, network-disabled task image is eligible |
+| SQL | Spider source/split custody and deterministic scorer pin | No frozen gold/database execution artifact or checkpoint predictions |
+| Files | SWE-bench source custody | No frozen repository execution environment or checkpoint predictions |
+| Browser/UI | BrowserGym/MiniWoB source pin | No local pinned BrowserGym runtime or frozen MiniWoB task bundle |
+| Image | MMMU validation custody and scorer pin | No checkpoint-bound multimodal predictions |
+| Audio | AudioBench custody and bound scorer pin | No checkpoint-bound audio predictions |
+| Structured tools | BFCL static task custody and preflight scorer | No pinned live tool harness or checkpoint predictions |
+
+These visible failure and preflight states are intentionally non-admissible and
+must not be summarized as native capability coverage.
 ## Required result record
 
 Before adding any result, preserve the checkpoint manifest hash, evaluator
