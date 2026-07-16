@@ -83,6 +83,7 @@ def test_spider_scores_only_assets_bound_by_frozen_custody_manifest():
             "tables_sha256": sha(tables),
             "database_tree_sha256": hashlib.sha256(b"fixture.sqlite\0" + database_file.read_bytes()).hexdigest(),
             "evaluator_sha256": sha(evaluator),
+            "source_tree_sha256": hashlib.sha256(b"evaluation.py\0" + evaluator.read_bytes()).hexdigest(),
         }), encoding="utf-8")
 
         completed = subprocess.run(
