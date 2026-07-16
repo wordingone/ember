@@ -7,8 +7,7 @@
 
 - Framework source: `ServiceNow/BrowserGym`
 - Source commit: `9e779f087de9a65668b6974d11f9ce9816026e96`
-- Source materialization: disk-budget receipt with C cap `0.50 GiB`, B cap
-  `0.01 GiB`, exit `0`, and checkout equal to the commit above.
+- Current custody: no local pinned BrowserGym runtime or frozen MiniWoB task set is available; this protocol is pre-execution only. Any future materialization must use `disk_budget_runner.py` with explicit C/B caps and a completed receipt.
 
 ## Initial admissible surface
 
