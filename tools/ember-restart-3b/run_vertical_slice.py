@@ -309,20 +309,23 @@ _COUNTER_COUNT_FIELDS = (
 )
 
 
-def _atomic_json(path: Path, payload: dict[str, object]) -> None:
-    """Publish a small custody record only after its complete bytes are durable."""
+def _atomic_bytes(path: Path, payload: bytes) -> None:
+    """Publish small custody evidence only after complete bytes are durable."""
 
     temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
-    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     try:
         with temporary.open("xb") as handle:
-            handle.write(encoded)
+            handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
     finally:
         if temporary.exists():
             temporary.unlink()
+
+
+def _atomic_json(path: Path, payload: dict[str, object]) -> None:
+    _atomic_bytes(path, (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
 
 
 def _json_snapshot(path: Path, *, label: str) -> tuple[dict[str, object], str]:
@@ -340,11 +343,7 @@ def _is_sha256(value: object) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
-def require_counter_success_receipt(
-    checkpoint_root: Path,
-    *,
-    receipt_path: Path | None = None,
-) -> dict[str, object]:
+def require_counter_success_receipt(checkpoint_root: Path, *, receipt_path: Path | None = None) -> dict[str, object]:
     """Make resumability contingent on the exact successful realization counter output."""
 
     checkpoint_root = checkpoint_root.resolve()
@@ -352,14 +351,10 @@ def require_counter_success_receipt(
     receipt_source = (receipt_path if receipt_path is not None else checkpoint_root / _COUNTER_SUCCESS_RECEIPT).resolve()
     receipt, _receipt_sha256 = _json_snapshot(receipt_source, label="counter-success receipt")
     expected = {
-        "schema_version": "ember-sparse-realization-receipt-v1",
-        "verification_boundary": "VERIFIED_MEASURED",
-        "result": "MEASURED",
-        "subject_checkpoint_sha256": manifest_sha256,
-        "model_config_sha256": manifest.get("model_config_sha256"),
-        "architecture_revision": manifest.get("architecture_revision"),
-        "active_expert_ids": manifest.get("active_expert_ids"),
-        "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
+        "schema_version": "ember-sparse-realization-receipt-v1", "verification_boundary": "VERIFIED_MEASURED",
+        "result": "MEASURED", "subject_checkpoint_sha256": manifest_sha256,
+        "model_config_sha256": manifest.get("model_config_sha256"), "architecture_revision": manifest.get("architecture_revision"),
+        "active_expert_ids": manifest.get("active_expert_ids"), "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
     }
     if any(receipt.get(field) != value for field, value in expected.items()):
         raise ValueError("counter-success receipt does not bind this checkpoint realization")
@@ -372,53 +367,43 @@ def require_counter_success_receipt(
 
 
 def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseException) -> Path | None:
-    """Move a failed candidate out of the selectable namespace, retaining failure evidence first."""
+    """Delete bulk candidate bytes while retaining only bounded manifest/failure evidence."""
 
     if not checkpoint_target.exists():
         return None
+    evidence = checkpoint_target.parent / f".counter-failed-{checkpoint_target.name}-{uuid.uuid4().hex}"
+    evidence.mkdir()
     manifest_path = checkpoint_target / "checkpoint-manifest.json"
-    manifest_sha256 = _sha256(manifest_path) if manifest_path.is_file() else None
-    _atomic_json(
-        checkpoint_target / _COUNTER_FAILURE_RECEIPT,
-        {
-            "schema_version": "ember-counter-failure-v1",
-            "result": "COUNTER_FAILED",
-            "checkpoint_manifest_sha256": manifest_sha256,
-            "error_type": type(error).__name__,
-            "error": str(error),
-        },
-    )
-    quarantined = checkpoint_target.parent / f".counter-failed-{checkpoint_target.name}-{uuid.uuid4().hex}"
+    manifest_sha256: str | None = None
+    if manifest_path.is_file():
+        manifest_bytes = manifest_path.read_bytes()
+        manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+        _atomic_bytes(evidence / "checkpoint-manifest.json", manifest_bytes)
+    _atomic_json(evidence / _COUNTER_FAILURE_RECEIPT, {
+        "schema_version": "ember-counter-failure-v1", "result": "COUNTER_FAILED",
+        "checkpoint_manifest_sha256": manifest_sha256, "error_type": type(error).__name__,
+        "error": str(error), "bulk_candidate_cleanup": "deleted",
+    })
+    shutil.rmtree(checkpoint_target)
+    if checkpoint_target.exists():
+        raise RuntimeError("counter-failed checkpoint could not be removed from the selectable namespace")
+    return evidence
+
+
+def publish_counter_verified_checkpoint(*, checkpoint_target: Path, write_candidate: Callable[[], dict[str, object]], execute_counter: Callable[[], dict[str, object]]) -> tuple[dict[str, object], dict[str, object]]:
+    """Cover candidate creation through realization verification in one fail-closed transaction."""
+
+    target_existed = checkpoint_target.exists()
     try:
-        os.replace(checkpoint_target, quarantined)
-    except OSError:
-        # A receipt-less candidate is rejected by require_counter_success_receipt even if an
-        # external file lock prevents relocation. Prefer deletion over a selectable partial bundle.
-        shutil.rmtree(checkpoint_target, ignore_errors=True)
-        if checkpoint_target.exists():
-            raise RuntimeError("counter-failed checkpoint could not be removed from the selectable namespace")
-        return None
-    return quarantined
-
-
-def publish_counter_verified_checkpoint(
-    *,
-    checkpoint_target: Path,
-    write_candidate: Callable[[], dict[str, object]],
-    execute_counter: Callable[[], dict[str, object]],
-) -> tuple[dict[str, object], dict[str, object]]:
-    """Publish, realize, and mark one checkpoint as a single fail-closed transaction."""
-
-    published = write_candidate()
-    try:
+        published = write_candidate()
         counter_receipt = execute_counter()
         _atomic_json(checkpoint_target / _COUNTER_SUCCESS_RECEIPT, counter_receipt)
         require_counter_success_receipt(checkpoint_target)
     except BaseException as error:
-        _quarantine_counter_failed_checkpoint(checkpoint_target, error)
+        if not target_existed:
+            _quarantine_counter_failed_checkpoint(checkpoint_target, error)
         raise
     return published, counter_receipt
-
 
 def production_resume_checkpoint(
     candidate: Path,
