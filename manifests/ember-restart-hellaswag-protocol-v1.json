@@ -1,0 +1,16 @@
+{
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02C",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-restart-hellaswag-protocol-v1",
+    "benchmark_id":  "hellaswag",
+    "benchmark_revision":  "218ec52e09a7e7462a5400043bb9a69a41d06b76",
+    "split_path":  "data/test-00000-of-00001.parquet",
+    "capability":  "reasoning",
+    "result":  "PREFLIGHT_ONLY",
+    "prohibited_claims":  [
+                              "checkpoint_score",
+                              "capability_admission",
+                              "sufficient_pretraining"
+                          ]
+}

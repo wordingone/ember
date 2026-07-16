@@ -1,0 +1,16 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02C",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-restart-librispeech-clean-test-protocol-v1",
+  "benchmark_id": "librispeech-clean-test",
+  "benchmark_revision": "71cacbfb7e2354c4226d01e70d77d5fca3d04ba1",
+  "split_path": "clean/test/0000.parquet",
+  "capability": "audio",
+  "result": "PREFLIGHT_ONLY",
+  "prohibited_claims": [
+    "checkpoint_score",
+    "capability_admission",
+    "sufficient_pretraining"
+  ]
+}

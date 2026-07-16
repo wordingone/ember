@@ -86,7 +86,7 @@ def main() -> int:
     if references.keys() != predictions.keys():
         parser.error("predictions must exactly cover the frozen reference ids")
     correct = sum(references[key] == predictions[key] for key in references)
-    payload = {"criterion_id": "ember-3b-text-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_match": correct / len(references)}, "sample_count": len(references), "references_sha256": references_sha256, "predictions_sha256": predictions_sha256, "frozen_text_manifest_sha256": manifest_sha256, "upstream": "deterministic local frozen-answer scorer"}
+    payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_TEXT_SCORER", "criterion_id": "ember-3b-text-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_match": correct / len(references)}, "sample_count": len(references), "references_sha256": references_sha256, "predictions_sha256": predictions_sha256, "frozen_text_manifest_sha256": manifest_sha256, "upstream": "deterministic local frozen-answer scorer"}
     arguments.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.score_output.parent, delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
