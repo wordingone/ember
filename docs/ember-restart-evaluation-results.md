@@ -26,6 +26,12 @@ sufficient-pretraining credit. No frozen-suite canonical prediction envelope or
 score has been emitted. Historical v2 snapshots remain bootstrap/raw-forward
 evidence only and are not corrected-rung capability evidence.
 
+Frozen external reasoning protocols are ready but have no checkpoint-bound predictions:
+ARC-Challenge and MMLU-Pro each have byte-bound parquet custody and deterministic
+canonical-envelope scorers. Their outputs remain `PREFLIGHT_ONLY` with a failed
+criterion until a conforming checkpoint prediction envelope is produced. HellaSwag
+is explicitly held at `NOT_EXECUTABLE_NO_FROZEN_LABELS`; its frozen test split
+withholds labels, so no score is inferred or fabricated.
 ## Required result record
 
 Before adding any result, preserve the checkpoint manifest hash, evaluator
