@@ -108,3 +108,21 @@ def test_mmmu_rejects_unpinned_scorer_source_even_when_answer_protocol_matches(t
     assert completed.returncode != 0
     assert "scorer" in completed.stderr or "protocol" in completed.stderr
     assert not score.exists()
+
+
+def test_mmmu_executes_manifest_selected_scorer_not_mutable_default(tmp_path):
+    root = tmp_path / "mmmu-root"; scorer_dir = root / "mmmu"; scorer_dir.mkdir(parents=True)
+    answers = tmp_path / "answers.json"; predictions = tmp_path / "predictions.json"; custody = tmp_path / "custody.json"; score = tmp_path / "score.json"
+    answers.write_text(json.dumps({"validation_math_1": {"question_type": "multiple-choice", "ground_truth": "A"}}), encoding="utf-8")
+    answer_sha = digest(answers)
+    selected = scorer_dir / "alternate.py"
+    selected.write_text("import argparse; p=argparse.ArgumentParser(); p.add_argument('--output_path'); p.add_argument('--answer_path'); p.parse_args(); print({'Overall': {'num': 1, 'acc': 0.75}})\n", encoding="utf-8")
+    (scorer_dir / "main_eval_only.py").write_text("raise SystemExit('default scorer must not execute')\n", encoding="utf-8")
+    scorer_sha = digest(selected); license_sha = "e" * 64
+    protocol_sha = hashlib.sha256(f"MMMU:frozen-v1:{answer_sha}:{scorer_sha}:{license_sha}".encode()).hexdigest()
+    prediction = canonical_prediction(answers); prediction["benchmark"]["protocol_sha256"] = protocol_sha
+    predictions.write_text(json.dumps(prediction), encoding="utf-8")
+    custody.write_text(json.dumps({"schema_version": "ember-restart-benchmark-custody-v1", "benchmark_id": "MMMU", "benchmark_version": "frozen-v1", "split": {"name": "validation", "answer_dictionary_sha256": answer_sha}, "license_sha256": license_sha, "scorer": {"path": "mmmu/alternate.py", "sha256": scorer_sha}, "protocol_sha256": protocol_sha}), encoding="utf-8")
+    result = subprocess.run([sys.executable, str(SCRIPT), "--mmmu-root", str(root), "--answers", str(answers), "--canonical-predictions", str(predictions), "--frozen-mmmu-manifest", str(custody), "--score-output", str(score)], text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(score.read_text(encoding="utf-8"))["metrics"]["accuracy"] == 0.75
