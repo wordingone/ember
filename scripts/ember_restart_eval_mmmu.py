@@ -45,6 +45,7 @@ def main() -> int:
     parser.add_argument("--answers", required=True, type=Path)
     parser.add_argument("--canonical-predictions", required=True, type=Path)
     parser.add_argument("--frozen-mmmu-manifest", required=True, type=Path)
+    parser.add_argument("--frozen-image-inputs", type=Path)
     parser.add_argument("--score-output", required=True, type=Path)
     parser.add_argument("--timeout-seconds", type=int, default=120)
     arguments = parser.parse_args()
@@ -65,6 +66,23 @@ def main() -> int:
         split = manifest.get("split") if isinstance(manifest, dict) else None
         if not isinstance(split, dict) or manifest.get("benchmark_id") != "MMMU" or manifest.get("benchmark_version") != benchmark.get("version") or split.get("name") != "validation" or split.get("answer_dictionary_sha256") != sha256(answer_bytes) or benchmark.get("split_sha256") != sha256(answer_bytes):
             raise ValueError("frozen MMMU custody does not bind canonical predictions")
+        image_materialization = manifest.get("image_input_materialization")
+        if image_materialization is not None:
+            if not isinstance(image_materialization, dict) or arguments.frozen_image_inputs is None:
+                raise ValueError("frozen MMMU image input receipt is required")
+            image_bytes = arguments.frozen_image_inputs.read_bytes()
+            image_receipt = json.loads(image_bytes.decode("utf-8"))
+            image_rows = image_receipt.get("rows") if isinstance(image_receipt, dict) else None
+            if image_materialization.get("artifact_sha256") != sha256(image_bytes) or image_receipt.get("schema_version") != "ember-restart-mmmu-image-input-freeze-v1" or image_receipt.get("result") != "PREFLIGHT_ONLY" or image_receipt.get("benchmark_id") != "MMMU" or not isinstance(image_rows, list) or image_receipt.get("row_count") != len(image_rows):
+                raise ValueError("invalid frozen MMMU image input receipt")
+            expected_inputs = {}
+            for row in image_rows:
+                if not isinstance(row, dict) or set(row) != {"id", "image_sha256s", "input_sha256"} or not isinstance(row.get("id"), str) or not row["id"] or not isinstance(row.get("image_sha256s"), list) or not row["image_sha256s"] or not all(isinstance(value, str) and len(value) == 64 for value in row["image_sha256s"]) or not isinstance(row.get("input_sha256"), str) or len(row["input_sha256"]) != 64 or row["id"] in expected_inputs:
+                    raise ValueError("invalid frozen MMMU image input receipt")
+                expected_inputs[row["id"]] = row["input_sha256"]
+            observed_inputs = {row["id"]: row["input_sha256"] for row in envelope["rows"]}
+            if observed_inputs != expected_inputs:
+                raise ValueError("canonical MMMU predictions do not bind frozen image inputs")
     except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         parser.error(f"invalid MMMU evaluator inputs: {error}")
     if answers.keys() != converted.keys():
