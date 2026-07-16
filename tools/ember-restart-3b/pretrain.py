@@ -10,6 +10,7 @@ import hashlib
 import json
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
 from semantic_stream import ManifestBoundTokenStream
 
 CheckpointCallback = Callable[[int, dict[str, Any]], None]
+ProgressCallback = Callable[[dict[str, object]], None]
 VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
 VERIFIER_PUBLIC_PATH = "tools/ember-restart-3b/verify_capability_record.py"
 
@@ -69,6 +71,7 @@ def run_pretraining_segment(
     device: torch.device,
     checkpoint_every: int,
     checkpoint_callback: CheckpointCallback,
+    progress_callback: ProgressCallback | None = None,
     initial_global_step: int = 0,
     initial_tokens_seen: int = 0,
     initial_data_cursor: int = 0,
@@ -94,7 +97,9 @@ def run_pretraining_segment(
     tokens_seen = initial_tokens_seen
     data_cursor = initial_data_cursor
     remaining_records = records[initial_data_cursor:]
+    final_global_step = initial_global_step + len(remaining_records)
     for local_step, record in enumerate(remaining_records, start=1):
+        step_started = time.perf_counter()
         batch = decode_owned_batch(record, config, device=device)
         active_expert = batch["active_expert"]
         capabilities = _verified_capabilities(record, active_expert=active_expert)
@@ -123,6 +128,13 @@ def run_pretraining_segment(
             "data_cursor": cursor, "modality_examples": dict(modality_examples),
             "expert_examples": dict(expert_examples), "active_expert": active_expert,
         }
+        if progress_callback is not None:
+            progress_callback({
+                "step": global_step,
+                "total_steps": final_global_step,
+                "loss": losses[-1],
+                "step_ms": float((time.perf_counter() - step_started) * 1000.0),
+            })
         if global_step % checkpoint_every == 0 or local_step == len(remaining_records):
             checkpoint_callback(global_step, result)
     if require_complete_coverage:
