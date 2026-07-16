@@ -31,7 +31,7 @@ def test_converts_central_json_list_predictions_to_private_spider_sql_lines():
         database_file.write_bytes(b"sqlite-fixture")
         sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
         manifest = root / "frozen-sql.json"
-        manifest.write_text(json.dumps({"result": "PREFLIGHT_ONLY", "benchmark_id": "spider", "benchmark_version": "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c", "gold_sha256": sha(gold), "tables_sha256": sha(tables), "database_tree_sha256": hashlib.sha256(b"fixture.sqlite\0" + database_file.read_bytes()).hexdigest(), "evaluator_sha256": sha(evaluator)}), encoding="utf-8")
+        manifest.write_text(json.dumps({"result": "PREFLIGHT_ONLY", "benchmark_id": "spider", "benchmark_version": "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c", "gold_sha256": sha(gold), "tables_sha256": sha(tables), "database_tree_sha256": hashlib.sha256(b"fixture.sqlite\0" + database_file.read_bytes()).hexdigest(), "evaluator_sha256": sha(evaluator), "source_tree_sha256": hashlib.sha256(b"evaluation.py\0" + evaluator.read_bytes()).hexdigest()}), encoding="utf-8")
         result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-sql-manifest", str(manifest), "--spider-root", str(spider), "--gold", str(gold), "--predictions", str(predictions), "--database-dir", str(database), "--tables", str(tables), "--score-output", str(score)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
         assert json.loads(score.read_text(encoding="utf-8"))["sample_count"] == 1
