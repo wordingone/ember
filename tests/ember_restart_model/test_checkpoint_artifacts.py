@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import warnings
@@ -52,10 +53,10 @@ class CheckpointArtifactTests(unittest.TestCase):
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "checkpoint-atomic"
-            observations: list[tuple[bool, bool, bool]] = []
+            observations: list[tuple[bool, bool, bool, bool, bool]] = []
 
             def verify(staging: Path, _receipt: dict[str, object]) -> None:
-                observations.append((staging.is_dir(), target.exists(), (staging / "checkpoint-manifest.json").is_file()))
+                observations.append((staging.is_dir(), target.exists(), (staging / "checkpoint-manifest.json").is_file(), f".{os.getpid()}." in staging.name, (staging / ".writer-lease.json").is_file()))
                 (staging / "parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8")
 
             receipt = write_checkpoint_artifacts(
@@ -66,8 +67,9 @@ class CheckpointArtifactTests(unittest.TestCase):
                 expert_genesis_sha256=model.expert_bank_genesis_hashes(),
                 pre_publish_verifier=verify,
             )
-            self.assertEqual(observations, [(True, False, True)])
+            self.assertEqual(observations, [(True, False, True, True, True)])
             self.assertTrue(target.joinpath("parameter-counter-receipt.json").is_file())
+            self.assertFalse(target.joinpath(".writer-lease.json").exists())
             self.assertEqual(receipt["checkpoint_manifest_sha256"], __import__("hashlib").sha256(target.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest())
 
     def test_counter_verifier_failure_removes_staging_without_publishing(self) -> None:
