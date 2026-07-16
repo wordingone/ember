@@ -4,7 +4,12 @@
     "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "schema_version":  "ember-restart-eval/v1",
     "manifest_kind":  "precheckpoint_template",
-    "execution_status":  "STRUCTURAL_INPUT_AVAILABLE_EXECUTION_AUTHORITY_REFUSES",
+    "execution_status":  "STRUCTURAL_INPUT_AVAILABLE_VERIFIED_NON_CLAIM_RAW_FORWARD",
+    "verified_raw_forward":  {
+                                 "result":  "VERIFIED_NON_CLAIM_RAW_FORWARD",
+                                 "receipt_path":  "manifests/ember-restart-eval-first-shared-raw-forward-v1.json",
+                                 "receipt_sha256":  "be57f521903967fbca4315684c7b37223380b22d3cd8d254e7e5ee83e4c1722d"
+                             },
     "target":  {
                    "kind":  "v3_shared_route_structural_checkpoint",
                    "checkpoint_sha256":  "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",

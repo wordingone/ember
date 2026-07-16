@@ -10,7 +10,8 @@ MANIFEST = Path(__file__).resolve().parents[1] / "manifests" / "ember-restart-ev
 
 def test_precheckpoint_manifest_names_current_v3_structural_input_without_capability_claim():
     value = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert value["execution_status"] == "STRUCTURAL_INPUT_AVAILABLE_EXECUTION_AUTHORITY_REFUSES"
+    assert value["execution_status"] == "STRUCTURAL_INPUT_AVAILABLE_VERIFIED_NON_CLAIM_RAW_FORWARD"
+    assert value["verified_raw_forward"] == {"result": "VERIFIED_NON_CLAIM_RAW_FORWARD", "receipt_path": "manifests/ember-restart-eval-first-shared-raw-forward-v1.json", "receipt_sha256": "be57f521903967fbca4315684c7b37223380b22d3cd8d254e7e5ee83e4c1722d"}
     target = value["target"]
     assert target["kind"] == "v3_shared_route_structural_checkpoint"
     assert target["checkpoint_sha256"] == "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b"
