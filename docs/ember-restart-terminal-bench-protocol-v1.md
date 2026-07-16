@@ -53,3 +53,12 @@ The Terminal-Bench score is admissible only when all of the following exist:
 - Borrowed model output in target prompts, tools, routing, filtering, or
   labels.
 - A Terminal-Bench preparation or oracle pass represented as target capability.
+
+## Current cache eligibility audit
+
+The disk-budgeted source cache contains 89 task metadata records. The exact
+preflight audit found 0 digest-pinned image references, 0 tasks with
+`allow_internet = false`, and therefore 0 eligible offline tasks. Every cached
+record uses a mutable image tag and enables network access. The custody manifest
+records this as `PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK`; no
+Terminal-Bench task outcome is a target capability score.
