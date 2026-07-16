@@ -17,3 +17,10 @@ def test_public_mmlu_pro_protocol_connects_strict_freezer_and_custody_authority(
  assert protocol['benchmark_version']==protocol['benchmark_revision']
  assert protocol['scoring_adapter']['sha256']==adapter
  assert protocol['references_sha256']==json.loads(MANIFEST.read_text(encoding='utf-8'))['materialization']['split_sha256']
+
+
+def test_public_mmlu_pro_protocol_content_addresses_its_custody_manifest():
+ protocol=json.loads((MANIFEST.parent/'ember-restart-mmlu-pro-protocol-v1.json').read_text(encoding='utf-8'))
+ custody_bytes=MANIFEST.read_bytes()
+ assert protocol['custody_manifest_path']=='manifests/ember-restart-mmlu-pro-custody-v1.json'
+ assert protocol['custody_manifest_sha256']==hashlib.sha256(custody_bytes).hexdigest()
