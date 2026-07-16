@@ -11,8 +11,10 @@ import json
 import os
 import sys
 import subprocess
+import tempfile
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
