@@ -25,9 +25,10 @@ def read_rows(data: bytes) -> dict[str, str]:
         values = [json.loads(line) for line in data.decode("utf-8").splitlines() if line.strip()]
     rows = {}
     for value in values:
-        if not isinstance(value, dict) or not isinstance(value.get("id"), str) or not value["id"] or not isinstance(value.get("answer"), str) or value["id"] in rows:
+        identifier = value.get("unique_id") if isinstance(value, dict) and isinstance(value.get("unique_id"), str) and value["unique_id"] else value.get("id") if isinstance(value, dict) else None
+        if not isinstance(value, dict) or not isinstance(identifier, str) or not identifier or (isinstance(value.get("id"), str) and isinstance(value.get("unique_id"), str) and value["id"] != value["unique_id"]) or not isinstance(value.get("answer"), str) or identifier in rows:
             raise ValueError("each math reference needs a unique id and answer")
-        rows[value["id"]] = value["answer"]
+        rows[identifier] = value["answer"]
     if not rows:
         raise ValueError("math references must be non-empty")
     return rows
