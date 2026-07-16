@@ -31,6 +31,12 @@ from semantic_stream import ManifestBoundTokenStream
 _SEQUENCE_LENGTH = 1024
 _REQUIRED_BATCHES = (1, 2)
 _MEMORY_GATE_BATCHES = (4, 8)
+_COMPUTE_DTYPE = "torch.bfloat16"
+_RTX_4090_BF16_DENSE_PEAK_FLOPS = 165e12
+_RTX_4090_BF16_DENSE_PEAK_FLOPS_PROVENANCE = (
+    "NVIDIA_GEFORCE_RTX_4090_BF16_TENSOR_CORE_DENSE_165_TFLOPS"
+)
+_MAX_POWER_SAMPLE_GAP_MULTIPLIER = 1.5
 
 
 def screen_plan(*, total_vram_bytes: int) -> dict[str, object]:
@@ -362,15 +368,24 @@ def _power_sample() -> dict[str, object]:
     """Read one GPU-board power sample from the driver, never from self-reported model state."""
 
     completed = subprocess.run(
-        ["nvidia-smi", "--query-gpu=power.draw,power.limit,driver_version,name", "--format=csv,noheader,nounits"],
+        ["nvidia-smi", "--query-gpu=uuid,index,memory.used,power.draw,power.limit,driver_version,name", "--format=csv,noheader,nounits"],
         text=True, capture_output=True, check=False, timeout=5,
     )
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or "nvidia-smi power query failed")
     fields = [field.strip() for field in completed.stdout.strip().split(",")]
-    if len(fields) != 4:
+    if len(fields) != 7:
         raise RuntimeError("nvidia-smi power query emitted an invalid row")
-    return {"monotonic_s": time.monotonic(), "watts": float(fields[0]), "power_limit_w": float(fields[1]), "driver_version": fields[2], "gpu_name": fields[3]}
+    return {
+        "monotonic_s": time.monotonic(),
+        "gpu_uuid": fields[0],
+        "gpu_index": int(fields[1]),
+        "memory_used_mib": float(fields[2]),
+        "watts": float(fields[3]),
+        "power_limit_w": float(fields[4]),
+        "driver_version": fields[5],
+        "gpu_name": fields[6],
+    }
 
 
 class _PowerSampler:
@@ -381,10 +396,13 @@ class _PowerSampler:
         self.samples: list[dict[str, object]] = []
         self.missing_sample_count = 0
         self.errors: list[str] = []
+        self.started_monotonic_s: float | None = None
+        self.stopped_monotonic_s: float | None = None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
     def start(self) -> None:
+        self.started_monotonic_s = time.monotonic()
         self._thread.start()
 
     def stop(self) -> None:
@@ -393,6 +411,7 @@ class _PowerSampler:
         if self._thread.is_alive():
             self.missing_sample_count += 1
             self.errors.append("power sampler did not stop")
+        self.stopped_monotonic_s = time.monotonic()
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -404,7 +423,17 @@ class _PowerSampler:
             self._stop.wait(self.cadence_s)
 
 
-def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_processed: int, active_parameters: int, target_vector_sha256: str, checkpoint_manifest_sha256: str, total_parameters: int | None = None, peak_flops: float | None = None) -> dict[str, object]:
+def _power_efficiency(
+    *,
+    trace: dict[str, object],
+    wall_s: float,
+    tokens_processed: int,
+    active_parameters: int,
+    total_parameters: int,
+    allocator_peak_vram_bytes: int,
+    target_vector_sha256: str,
+    checkpoint_manifest_sha256: str,
+) -> dict[str, object]:
     """Derive board-energy quantities from raw same-run driver samples, or mark credit unavailable."""
 
     if not isinstance(wall_s, (int, float)) or wall_s <= 0:
@@ -414,9 +443,23 @@ def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_process
     samples = trace.get("samples")
     missing = trace.get("missing_sample_count")
     cadence = trace.get("sampling_cadence_s")
+    started = trace.get("started_monotonic_s")
+    stopped = trace.get("stopped_monotonic_s")
     if not isinstance(samples, list) or not isinstance(missing, int) or missing < 0 or not isinstance(cadence, (int, float)) or cadence <= 0:
         raise ValueError("power trace has an invalid closed shape")
-    expected_samples = max(1, math.ceil(float(wall_s) / float(cadence)))
+    if not isinstance(total_parameters, int) or total_parameters <= 0 or not isinstance(active_parameters, int) or active_parameters <= 0 or active_parameters > total_parameters:
+        raise ValueError("power efficiency requires exact positive active and total parameter counts")
+    if not isinstance(allocator_peak_vram_bytes, int) or allocator_peak_vram_bytes <= 0:
+        raise ValueError("power efficiency requires a positive allocator peak VRAM measurement")
+    anchors_valid = (
+        isinstance(started, (int, float))
+        and isinstance(stopped, (int, float))
+        and math.isfinite(float(started))
+        and math.isfinite(float(stopped))
+        and float(stopped) > float(started)
+    )
+    trace_window_s = float(stopped) - float(started) if anchors_valid else None
+    expected_samples = max(1, math.ceil(trace_window_s / float(cadence))) if trace_window_s is not None else max(1, math.ceil(float(wall_s) / float(cadence)))
     valid: list[dict[str, object]] = []
     for sample in samples:
         if not isinstance(sample, dict):
@@ -424,12 +467,17 @@ def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_process
         watts = sample.get("watts")
         limit = sample.get("power_limit_w")
         timestamp = sample.get("monotonic_s")
+        memory_used_mib = sample.get("memory_used_mib")
+        gpu_index = sample.get("gpu_index")
         if (
             not isinstance(watts, (int, float)) or not math.isfinite(float(watts)) or watts <= 0
             or not isinstance(limit, (int, float)) or not math.isfinite(float(limit)) or limit <= 0
             or not isinstance(timestamp, (int, float)) or not math.isfinite(float(timestamp))
+            or not isinstance(memory_used_mib, (int, float)) or not math.isfinite(float(memory_used_mib)) or memory_used_mib <= 0
+            or not isinstance(gpu_index, int) or isinstance(gpu_index, bool) or gpu_index < 0
             or not isinstance(sample.get("driver_version"), str) or not sample["driver_version"].strip()
             or not isinstance(sample.get("gpu_name"), str) or not sample["gpu_name"].strip()
+            or not isinstance(sample.get("gpu_uuid"), str) or not sample["gpu_uuid"].strip()
         ):
             continue
         valid.append(sample)
@@ -440,11 +488,22 @@ def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_process
         "sampling_cadence_s": float(cadence),
         "missing_sample_count": missing,
         "coverage_ratio": coverage_ratio,
+        "started_monotonic_s": float(started) if isinstance(started, (int, float)) else None,
+        "stopped_monotonic_s": float(stopped) if isinstance(stopped, (int, float)) else None,
+        "trace_window_s": trace_window_s,
+        "maximum_sample_gap_s": None,
         "wall_s": float(wall_s),
         "tokens_processed": int(tokens_processed),
         "tokens": int(tokens_processed),
         "active_flops": int(active_parameters) * 6 * int(tokens_processed),
-        "active_param_pct": (int(active_parameters) / int(total_parameters)) if isinstance(total_parameters, int) and total_parameters > 0 else None,
+        "active_param_pct": int(active_parameters) / int(total_parameters),
+        "compute_dtype": _COMPUTE_DTYPE,
+        "peak_flops": _RTX_4090_BF16_DENSE_PEAK_FLOPS,
+        "peak_flops_provenance": _RTX_4090_BF16_DENSE_PEAK_FLOPS_PROVENANCE,
+        "allocator_peak_vram_bytes": allocator_peak_vram_bytes,
+        "peak_vram_bytes": allocator_peak_vram_bytes,
+        "driver_peak_vram_bytes": None,
+        "peak_vram_confirmed": False,
         "target_vector_sha256": target_vector_sha256,
         "checkpoint_manifest_sha256": checkpoint_manifest_sha256,
         "evaluation_receipt_sha256": None,
@@ -459,21 +518,42 @@ def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_process
         "tok_j": None,
         "mfu": None,
     }
-    if len(valid) != len(samples) or missing != 0 or coverage_ratio < 0.90:
+    if len(valid) != len(samples) or missing != 0 or coverage_ratio < 0.90 or not anchors_valid or trace_window_s is None or trace_window_s < float(wall_s):
         return {"result": "UNAVAILABLE", **base}
-    identities = {(sample["driver_version"], sample["gpu_name"], float(sample["power_limit_w"])) for sample in valid}
+    identities = {
+        (
+            sample["driver_version"],
+            sample["gpu_name"],
+            sample["gpu_uuid"],
+            int(sample["gpu_index"]),
+            float(sample["power_limit_w"]),
+        )
+        for sample in valid
+    }
     timestamps = [float(sample["monotonic_s"]) for sample in valid]
-    if len(identities) != 1 or timestamps != sorted(timestamps):
+    temporal_gaps = [
+        timestamps[0] - float(started),
+        *(later - earlier for earlier, later in zip(timestamps, timestamps[1:])),
+        float(stopped) - timestamps[-1],
+    ] if timestamps else []
+    maximum_sample_gap_s = max(temporal_gaps) if temporal_gaps else math.inf
+    base["maximum_sample_gap_s"] = maximum_sample_gap_s
+    if (
+        len(identities) != 1
+        or timestamps != sorted(set(timestamps))
+        or any(gap < 0 for gap in temporal_gaps)
+        or maximum_sample_gap_s > float(cadence) * _MAX_POWER_SAMPLE_GAP_MULTIPLIER
+    ):
         return {"result": "UNAVAILABLE", **base}
     watts = [float(sample["watts"]) for sample in valid]
     mean = sum(watts) / len(watts)
     joules = mean * float(wall_s)
     active_flops = int(base["active_flops"])
-    mfu = None
-    if peak_flops is not None:
-        if not isinstance(peak_flops, (int, float)) or not math.isfinite(float(peak_flops)) or peak_flops <= 0:
-            raise ValueError("pinned peak FLOPS must be positive")
-        mfu = active_flops / (float(peak_flops) * float(wall_s))
+    mfu = active_flops / (_RTX_4090_BF16_DENSE_PEAK_FLOPS * float(wall_s))
+    driver_peak_vram_bytes = int(max(float(sample["memory_used_mib"]) for sample in valid) * 1024**2)
+    if driver_peak_vram_bytes < allocator_peak_vram_bytes:
+        base["driver_peak_vram_bytes"] = driver_peak_vram_bytes
+        return {"result": "UNAVAILABLE", **base}
     base.update({
         "result": "MEASURED",
         "gpu_joules": joules,
@@ -485,9 +565,13 @@ def _power_efficiency(*, trace: dict[str, object], wall_s: float, tokens_process
         "tok_per_gpu_joule": int(tokens_processed) / joules,
         "tok_j": int(tokens_processed) / joules,
         "mfu": mfu,
+        "driver_peak_vram_bytes": driver_peak_vram_bytes,
+        "peak_vram_confirmed": True,
         "gpu_power_limit_w": float(valid[-1]["power_limit_w"]),
         "gpu_driver_version": valid[-1]["driver_version"],
         "gpu_name": valid[-1]["gpu_name"],
+        "gpu_uuid": valid[-1]["gpu_uuid"],
+        "gpu_index": int(valid[-1]["gpu_index"]),
         "first_target_crossing_step": None,
     })
     return base
@@ -572,11 +656,28 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         torch.cuda.empty_cache()
     sampler.stop()
     wall_s = time.perf_counter() - screen_started
-    power_trace = {"schema_version": "ember-gpu-board-power-trace-v1", "sampling_cadence_s": sampler.cadence_s, "missing_sample_count": sampler.missing_sample_count, "errors": sampler.errors, "samples": sampler.samples}
+    power_trace = {
+        "schema_version": "ember-gpu-board-power-trace-v1",
+        "sampling_cadence_s": sampler.cadence_s,
+        "started_monotonic_s": sampler.started_monotonic_s,
+        "stopped_monotonic_s": sampler.stopped_monotonic_s,
+        "missing_sample_count": sampler.missing_sample_count,
+        "errors": sampler.errors,
+        "samples": sampler.samples,
+    }
     power_trace_path = output.with_name(output.stem + ".power-trace.json")
     _atomic_json(power_trace_path, power_trace)
     target_vector_sha256 = hashlib.sha256(json.dumps({"sequence_length": _SEQUENCE_LENGTH, "required_batches": list(_REQUIRED_BATCHES)}, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-    efficiency = _power_efficiency(trace=power_trace, wall_s=wall_s, tokens_processed=sum(_SEQUENCE_LENGTH * batch for batch in _REQUIRED_BATCHES), active_parameters=int(counts["active_parameters"]) if counts else 0, total_parameters=int(counts["unique_parameters"]) if counts else None, target_vector_sha256=target_vector_sha256, checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest))
+    efficiency = _power_efficiency(
+        trace=power_trace,
+        wall_s=wall_s,
+        tokens_processed=sum(_SEQUENCE_LENGTH * batch for batch in _REQUIRED_BATCHES),
+        active_parameters=int(counts["active_parameters"]) if counts else 0,
+        total_parameters=int(counts["unique_parameters"]) if counts else 0,
+        allocator_peak_vram_bytes=max(int(step["peak_reserved_bytes"]) for step in steps),
+        target_vector_sha256=target_vector_sha256,
+        checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest),
+    )
     if _source_closure(root) != source_closure_before:
         raise RuntimeError("native screen source closure changed before receipt publication")
     result = screen_receipt(
