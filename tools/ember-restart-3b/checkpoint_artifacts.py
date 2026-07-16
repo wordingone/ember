@@ -28,12 +28,23 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _record(path: Path, root: Path, *, role: str) -> dict[str, Any]:
+def _record(
+    path: Path,
+    root: Path,
+    *,
+    role: str,
+    publication_mode: str = "written",
+) -> dict[str, Any]:
+    if publication_mode not in {"written", "hardlink", "copy"}:
+        raise ValueError("unknown checkpoint publication mode")
+    logical_bytes = path.stat().st_size
     return {
         "path": path.relative_to(root).as_posix(),
         "role": role,
         "sha256": _sha256(path),
-        "bytes": path.stat().st_size,
+        "bytes": logical_bytes,
+        "publication_mode": publication_mode,
+        "incremental_bytes": 0 if publication_mode == "hardlink" else logical_bytes,
     }
 
 
@@ -330,14 +341,27 @@ def _specialist_lineage(
             "data_verification_receipt_sha256": _canonical_sha256(verification),
         },
     }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
-def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> Path:
+def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> tuple[Path, str]:
+    publication_mode = "copy"
     try:
         os.link(source, target)
+        source_stat = source.stat()
+        target_stat = target.stat()
+        if (
+            source_stat.st_dev == target_stat.st_dev
+            and source_stat.st_ino == target_stat.st_ino
+            and target_stat.st_nlink > 1
+        ):
+            publication_mode = "hardlink"
+        else:
+            target.unlink(missing_ok=True)
+            shutil.copyfile(source, target)
     except OSError:
+        target.unlink(missing_ok=True)
         shutil.copyfile(source, target)
     if _sha256(target) != expected_sha256:
         raise ValueError("parent expert shard hash mismatch during inactive-bank reuse")
-    return target
+    return target, publication_mode
 
 def write_checkpoint_artifacts(
     model: UnifiedDecoder,
@@ -400,8 +424,13 @@ def write_checkpoint_artifacts(
                 for key, value in model.state_dict().items()
                 if f".experts.{name}." in key
             }
+            publication_mode = "written"
             if specialist_lineage is not None and name != model.active_expert:
-                path = _link_or_copy_verified(preflight_parent_root / f"expert-{name}.pt", root / f"expert-{name}.pt", preflight_parent_shards[name])
+                path, publication_mode = _link_or_copy_verified(
+                    preflight_parent_root / f"expert-{name}.pt",
+                    root / f"expert-{name}.pt",
+                    preflight_parent_shards[name],
+                )
             else:
                 path = _write_atomic(
                     root,
@@ -410,7 +439,7 @@ def write_checkpoint_artifacts(
                         {"expert": selected, "model": selected_state}, handle
                     ),
                 )
-            record = _record(path, root, role=f"expert_{name}")
+            record = _record(path, root, role=f"expert_{name}", publication_mode=publication_mode)
             shards.append(record)
             expert_checkpoint_sha256[name] = record["sha256"]
 
@@ -451,10 +480,16 @@ def write_checkpoint_artifacts(
         if lineage is not None:
             manifest["lineage"] = lineage
         manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
-        actual_serialized_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
-        if max_serialized_bytes is not None and actual_serialized_bytes > max_serialized_bytes:
+        logical_serialized_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+        incremental_publication_bytes = sum(int(record["incremental_bytes"]) for record in shards) + manifest_path.stat().st_size
+        if max_serialized_bytes is not None and incremental_publication_bytes > max_serialized_bytes:
             raise ValueError("serialized checkpoint exceeds the derived byte bound")
-        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path), "serialized_bytes": actual_serialized_bytes}
+        receipt = {
+            **manifest,
+            "checkpoint_manifest_sha256": _sha256(manifest_path),
+            "serialized_bytes": logical_serialized_bytes,
+            "incremental_publication_bytes": incremental_publication_bytes,
+        }
         os.replace(root, published_root)
         return receipt
     except Exception:
