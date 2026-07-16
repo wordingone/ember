@@ -41,6 +41,20 @@ def has_cc_by_sa_license(card_bytes: bytes) -> bool:
     return all(isinstance(value, str) for value in values) and "cc-by-sa-4.0" in values
 
 
+
+def derived_protocol_sha256(revision: str, split_sha256: str, license_sha256: str) -> str:
+    adapter = Path(__file__).with_name("ember_restart_eval_spider.py")
+    adapter_sha256 = digest(adapter.read_bytes())
+    identity = {
+        "benchmark_id": "spider",
+        "benchmark_version": revision,
+        "split_sha256": split_sha256,
+        "license_sha256": license_sha256,
+        "scoring_adapter": {"path": "scripts/ember_restart_eval_spider.py", "sha256": adapter_sha256},
+        "admission": "NOT_EXECUTABLE_NO_FROZEN_DATABASE_ASSETS",
+    }
+    return digest(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-root", required=True, type=Path)
@@ -57,6 +71,11 @@ def main() -> int:
         split_bytes = (arguments.dataset_root / SPLIT).read_bytes()
         if not has_cc_by_sa_license(card_bytes):
             raise ValueError("Spider card must declare CC-BY-SA-4.0")
+        split_sha256 = digest(split_bytes)
+        license_sha256 = digest(card_bytes)
+        expected_protocol_sha256 = derived_protocol_sha256(arguments.revision, split_sha256, license_sha256)
+        if arguments.protocol_sha256 != expected_protocol_sha256:
+            raise ValueError("protocol hash is not derived from frozen Spider split/license/scorer custody")
         table = pq.read_table(pa.BufferReader(split_bytes), columns=["db_id", "question", "query"])
         rows = table.to_pylist()
         identifiers = [(row.get("db_id"), row.get("question"), row.get("query")) for row in rows]
@@ -73,10 +92,11 @@ def main() -> int:
         "benchmark_version": arguments.revision,
         "capability": "sql",
         "license": "CC-BY-SA-4.0",
-        "license_sha256": digest(card_bytes),
-        "references_sha256": digest(split_bytes),
-        "split_sha256": digest(split_bytes),
-        "protocol_sha256": arguments.protocol_sha256,
+        "license_sha256": license_sha256,
+        "references_sha256": split_sha256,
+        "split_sha256": split_sha256,
+        "scoring_adapter": {"path": "scripts/ember_restart_eval_spider.py", "sha256": digest(Path(__file__).with_name("ember_restart_eval_spider.py").read_bytes())},
+        "protocol_sha256": expected_protocol_sha256,
         "task_count": len(rows),
         "missing_execution_assets": ["gold_sql", "tables_json", "database_directory"],
     }
