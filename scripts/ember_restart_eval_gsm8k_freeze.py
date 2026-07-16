@@ -33,5 +33,9 @@ def main()->int:
  payload={"schema_version":"ember-restart-gsm8k-freeze-v1","result":"PREFLIGHT_ONLY","claim_status":"FROZEN_GSM8K_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS","benchmark_id":"gsm8k","benchmark_version":args.revision,"capability":"reasoning","license":"MIT","license_sha256":digest(card),"references_sha256":digest(split),"split_sha256":digest(split),"protocol_sha256":args.protocol_sha256,"task_count":len(rows)}
  args.output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile("w",encoding="utf-8",dir=args.output.parent,prefix=args.output.name+".",suffix=".tmp",delete=False) as handle:handle.write(json.dumps(payload,sort_keys=True)+"\n"); temporary=Path(handle.name)
- os.replace(temporary,args.output);return 0
+ try:
+  os.replace(temporary,args.output)
+ finally:
+  temporary.unlink(missing_ok=True)
+ return 0
 if __name__=="__main__":raise SystemExit(main())
