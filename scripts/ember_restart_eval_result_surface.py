@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Render only a receipt that central admission has independently admitted."""
-import argparse, hashlib, json, os, subprocess, sys, tempfile
+import argparse, hashlib, json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 EXECUTION_AUTHORITIES = Path(__file__).resolve().parents[1] / "manifests" / "ember-restart-execution-authorities-v1.json"
@@ -41,8 +41,7 @@ def _admitted(manifest, registry, input_bytes):
  if manifest is None or registry is None:
   return False
  registry_snapshot = None
- manifest_snapshot = None
- receipt_snapshot = None
+ closure_root = None
  try:
   registry_snapshot = _pinned_registry_snapshot(registry)
   if registry_snapshot is None:
@@ -52,36 +51,79 @@ def _admitted(manifest, registry, input_bytes):
   if not isinstance(payload, dict) or payload.get("stage") != "OWNED_ADMITTED":
    return False
   root = manifest.resolve().parent
+  root_real = root.resolve()
+  closure_root = Path(tempfile.mkdtemp(prefix=".admission-closure-", dir=root))
   wanted = _sha256(input_bytes)
   matched = False
-  for entry in payload.get("evaluations", []):
-   if not isinstance(entry, dict) or not isinstance(entry.get("receipt_path"), str):
-    continue
-   candidate = root / entry["receipt_path"]
-   if not candidate.is_file() or _sha256(candidate.read_bytes()) != wanted:
-    continue
-   with tempfile.NamedTemporaryFile("wb", dir=root, suffix=".json", delete=False) as handle:
-    handle.write(input_bytes)
-    receipt_snapshot = Path(handle.name)
-   entry["receipt_path"] = receipt_snapshot.name
-   matched = True
-   break
+  staged = set()
+
+  def stage_path(value, field):
+   nonlocal matched
+   if not isinstance(value, str) or not value.strip():
+    raise ValueError(f"{field}: path required")
+   relative = Path(value)
+   if relative.is_absolute() or relative.drive:
+    raise ValueError(f"{field}: path escapes artifact root")
+   source = (root / relative).resolve()
+   try:
+    source.relative_to(root_real)
+   except ValueError as exc:
+    raise ValueError(f"{field}: path escapes artifact root") from exc
+   if source.is_symlink() or not source.exists():
+    raise ValueError(f"{field}: unsafe or missing path")
+   normalized = relative.as_posix()
+   if normalized in staged:
+    return normalized
+   destination = closure_root / Path(normalized)
+   destination.parent.mkdir(parents=True, exist_ok=True)
+   if destination.exists():
+    raise ValueError(f"{field}: duplicate staged path")
+   if source.is_file():
+    source_bytes = source.read_bytes()
+    destination.write_bytes(source_bytes)
+    if field.endswith("receipt_path") and _sha256(source_bytes) == wanted:
+     matched = True
+   elif source.is_dir():
+    for child in source.rglob("*"):
+     if child.is_symlink():
+      raise ValueError(f"{field}: unsafe symlink")
+     child_relative = child.relative_to(source)
+     child_destination = destination / child_relative
+     if child.is_dir():
+      child_destination.mkdir(parents=True, exist_ok=True)
+     elif child.is_file():
+      child_destination.parent.mkdir(parents=True, exist_ok=True)
+      child_destination.write_bytes(child.read_bytes())
+   else:
+    raise ValueError(f"{field}: unsupported path")
+   staged.add(normalized)
+   return normalized
+
+  def walk(value, field="manifest"):
+   if isinstance(value, dict):
+    for key, child in value.items():
+     child_field = f"{field}.{key}"
+     if isinstance(child, str) and (key == "path" or key.endswith("_path") or key.endswith("_dir")):
+      value[key] = stage_path(child, child_field)
+     else:
+      walk(child, child_field)
+   elif isinstance(value, list):
+    for index, child in enumerate(value):
+     walk(child, f"{field}[{index}]")
+
+  walk(payload)
   if not matched:
    return False
-  snapshot_payload = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
-  with tempfile.NamedTemporaryFile("wb", dir=root, suffix=".json", delete=False) as handle:
-   handle.write(snapshot_payload)
-   manifest_snapshot = Path(handle.name)
+  manifest_snapshot = closure_root / "admission.json"
+  manifest_snapshot.write_bytes(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
   contract = Path(__file__).parent / "ember_restart" / "contract.py"
   checked = subprocess.run([sys.executable, str(contract), "validate", str(manifest_snapshot), "--trusted-verifier-registry", str(registry_snapshot)], capture_output=True, text=True, timeout=120, check=False)
   return checked.returncode == 0
- except (OSError, UnicodeError, json.JSONDecodeError, subprocess.SubprocessError):
+ except (OSError, UnicodeError, json.JSONDecodeError, ValueError, subprocess.SubprocessError):
   return False
  finally:
-  if manifest_snapshot is not None:
-   manifest_snapshot.unlink(missing_ok=True)
-  if receipt_snapshot is not None:
-   receipt_snapshot.unlink(missing_ok=True)
+  if closure_root is not None:
+   shutil.rmtree(closure_root, ignore_errors=True)
   if registry_snapshot is not None:
    registry_snapshot.unlink(missing_ok=True)
 def main():
