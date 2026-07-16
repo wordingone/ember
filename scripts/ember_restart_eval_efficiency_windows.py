@@ -6,7 +6,9 @@
 import argparse,json,math
 from pathlib import Path
 def main()->int:
- p=argparse.ArgumentParser();p.add_argument("--windows",required=True,type=Path);p.add_argument("--output",required=True,type=Path);a=p.parse_args();windows=json.loads(a.windows.read_text(encoding="utf-8"))
+ p=argparse.ArgumentParser();p.add_argument("--windows",required=True,type=Path);p.add_argument("--output",required=True,type=Path);a=p.parse_args();
+ if a.output.exists():p.error("output must not pre-exist")
+ windows=json.loads(a.windows.read_text(encoding="utf-8"))
  if not isinstance(windows,list) or not windows:p.error("windows must be non-empty")
  rates=[];peaks=[]
  for window in windows:
