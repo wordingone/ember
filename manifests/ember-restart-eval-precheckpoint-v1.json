@@ -110,8 +110,8 @@
     "frozen_family_artifacts":  {
                                     "text": {"path": "manifests/ember-restart-gsm8k-custody-v1.json", "sha256": "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6"},
                                     "reasoning": {"path": "manifests/ember-restart-mmlu-pro-custody-v1.json", "sha256": "e3b28449e918fb50ed0b26f7bd8f09adab30b068be19a0d34fe5a03584942f63"},
-                                    "code": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "a8492153e17b8bd6853c2014b525dcd4d986a7acc928b189bfc41b7d149f90b6"},
-                                    "mathematics": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "a8492153e17b8bd6853c2014b525dcd4d986a7acc928b189bfc41b7d149f90b6"},
+                                    "code": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "3bc1c43871a602f8a1aab8815a89ead9883a09141848adf3ef4db4d82f87660c"},
+                                    "mathematics": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "3bc1c43871a602f8a1aab8815a89ead9883a09141848adf3ef4db4d82f87660c"},
                                     "terminal": {"path": "manifests/ember-restart-terminal-bench-custody-v1.json", "sha256": "cd8562e4c4fc4b4f0e07065bf9a76e086f55ddfa36dbdd344ea0cdd645eb04d6"},
                                     "sql": {"path": "manifests/ember-restart-spider-custody-v1.json", "sha256": "833045ea534e829647e5383b54a4ac647030e4c3d2fd679e048781afa80bc90a"},
                                     "files": {"path": "manifests/ember-restart-swebench-custody-v1.json", "sha256": "e633bb7c4866b8ed21a1571d2283635619d47a0a213338309cb2f1b7705b0af5"},
