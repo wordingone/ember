@@ -112,7 +112,7 @@
                                     "reasoning": {"path": "manifests/ember-restart-mmlu-pro-custody-v1.json", "sha256": "e3b28449e918fb50ed0b26f7bd8f09adab30b068be19a0d34fe5a03584942f63"},
                                     "code": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "a8492153e17b8bd6853c2014b525dcd4d986a7acc928b189bfc41b7d149f90b6"},
                                     "mathematics": {"path": "manifests/ember-restart-eval-code-math-custody-v1.json", "sha256": "a8492153e17b8bd6853c2014b525dcd4d986a7acc928b189bfc41b7d149f90b6"},
-                                    "terminal": {"path": "manifests/ember-restart-terminal-bench-custody-v1.json", "sha256": "f28406ffefd05c69328d32d0218b704bf458906f3a4010e89c76d4ea21c6cdd3"},
+                                    "terminal": {"path": "manifests/ember-restart-terminal-bench-custody-v1.json", "sha256": "cd8562e4c4fc4b4f0e07065bf9a76e086f55ddfa36dbdd344ea0cdd645eb04d6"},
                                     "sql": {"path": "manifests/ember-restart-spider-custody-v1.json", "sha256": "833045ea534e829647e5383b54a4ac647030e4c3d2fd679e048781afa80bc90a"},
                                     "files": {"path": "manifests/ember-restart-swebench-custody-v1.json", "sha256": "e633bb7c4866b8ed21a1571d2283635619d47a0a213338309cb2f1b7705b0af5"},
                                     "browser_ui": {"path": "manifests/ember-restart-eval-browser-tool-custody-v1.json", "sha256": "36101c5211038e181abcac18459b5f0983b823b95613746ed3f100f4547c522c"},
