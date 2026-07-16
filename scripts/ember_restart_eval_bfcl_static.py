@@ -21,6 +21,14 @@ def canonical(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def protocol_sha256(frozen: dict[str, object]) -> str:
+    identity = dict(frozen)
+    identity.pop("protocol_sha256", None)
+    custody_sha = digest(canonical(identity).encode("utf-8"))
+    scorer_sha = digest(Path(__file__).read_bytes())
+    return digest(f"bfcl-static:{frozen.get('benchmark_id')}:{frozen.get('benchmark_version')}:{frozen.get('split_sha256')}:{custody_sha}:{scorer_sha}".encode("utf-8"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--frozen-task-manifest", required=True, type=Path)
@@ -41,6 +49,8 @@ def main() -> int:
         simple = frozen.get("benchmark_id") == "bfcl-static-simple"
         if (simple and (set(frozen) != simple_required or frozen.get("schema_version") != "ember-restart-bfcl-simple-frozen-v1" or frozen.get("task_count") != len(frozen["tasks"]) or not isinstance(frozen.get("source_files"), list))) or (not simple and (set(frozen) != legacy_required or frozen.get("benchmark_id") != "bfcl-static-non-live")):
             raise ValueError("invalid frozen BFCL static manifest")
+        if simple and frozen.get("protocol_sha256") != protocol_sha256(frozen):
+            raise ValueError("BFCL simple protocol is not derived from task custody and scorer bytes")
         benchmark = envelope["benchmark"]
         if any(benchmark.get(key) != frozen[field] for key, field in (("id", "benchmark_id"), ("version", "benchmark_version"), ("capability", "capability"), ("split_sha256", "split_sha256"), ("protocol_sha256", "protocol_sha256"))):
             raise ValueError("canonical predictions do not bind frozen BFCL identity")
