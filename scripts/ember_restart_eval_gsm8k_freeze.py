@@ -28,7 +28,7 @@ def main()->int:
   card=(args.dataset_root/"README.md").read_bytes(); split=(args.dataset_root/SPLIT).read_bytes()
   if not has_mit(card):raise ValueError("GSM8K card must declare MIT license")
   rows=pq.read_table(pa.BufferReader(split),columns=["question","answer"]).to_pylist(); questions=[row.get("question") if isinstance(row,dict) else None for row in rows]
-  if not rows or len(set(questions))!=len(rows) or any(not isinstance(row,dict) or not isinstance(row.get("question"),str) or not row["question"] or not isinstance(row.get("answer"),str) or "####" not in row["answer"] for row in rows):raise ValueError("GSM8K rows require unique questions and final answer markers")
+  if not rows or len(set(questions))!=len(rows) or any(not isinstance(row,dict) or not isinstance(row.get("question"),str) or not row["question"] or not isinstance(row.get("answer"),str) or "####" not in row["answer"] or not row["answer"].rsplit("####",1)[1].strip() for row in rows):raise ValueError("GSM8K rows require unique questions and final answer markers")
  except (OSError,UnicodeDecodeError,pa.ArrowException,ValueError,yaml.YAMLError) as error:parser.error(str(error))
  payload={"schema_version":"ember-restart-gsm8k-freeze-v1","result":"PREFLIGHT_ONLY","claim_status":"FROZEN_GSM8K_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS","benchmark_id":"gsm8k","benchmark_version":args.revision,"capability":"reasoning","license":"MIT","license_sha256":digest(card),"references_sha256":digest(split),"split_sha256":digest(split),"protocol_sha256":args.protocol_sha256,"task_count":len(rows)}
  args.output.parent.mkdir(parents=True,exist_ok=True)
