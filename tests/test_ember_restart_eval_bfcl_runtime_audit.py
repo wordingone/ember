@@ -82,3 +82,13 @@ def test_bfcl_runtime_audit_reports_urllib_network_call_without_literal_url():
         payload = json.loads(output.read_text(encoding="utf-8"))
         assert payload["live_network_tool_source"] is True
         assert payload["target_execution_permitted"] is False
+def test_bfcl_runtime_audit_replace_failure_cleans_real_cli_temporary_output(monkeypatch, tmp_path):
+    import importlib.util, pytest
+    spec = importlib.util.spec_from_file_location("bfcl_cleanup", SCRIPT); module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    root = tmp_path / "bfcl"; commit = make_source(root); output = tmp_path / "audit.json"
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--bfcl-root", str(root), "--expected-commit", commit, "--output", str(output)])
+    monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace denied")))
+    with pytest.raises(OSError, match="replace denied"):
+        module.main()
+    assert not output.exists()
+    assert not list(tmp_path.glob("audit.json.*.tmp"))
