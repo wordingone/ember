@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import inspect
 import os
 import torch
 import sys
@@ -27,6 +28,7 @@ from serve_owned_openai import (
     DevelopmentIdentity,
     OwnedIdentity,
     create_loopback_server,
+    bind_parent_process,
     require_live_parent,
     LoadedOwnedRuntime,
     resolve_central_owned_admission,
@@ -238,19 +240,88 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "mode"):
             resolve_runtime_inputs("UNKNOWN", None)
         require_live_parent(os.getpid())
+        bound_parent = bind_parent_process(os.getpid())
+        self.assertTrue(bound_parent.alive())
+        bound_parent.close()
+        self.assertFalse(bound_parent.alive())
         with self.assertRaisesRegex(RuntimeError, "parent process"):
             require_live_parent(12345, checker=lambda _pid: False)
-        checks = iter((True, False))
+        checks = iter((True, False, True, False, False))
         exits: list[int] = []
+        receipts: list[dict[str, object]] = []
         watchdog = start_parent_watchdog(
             12345,
             poll_seconds=0.001,
             checker=lambda _pid: next(checks),
             exit_process=exits.append,
+            emit_receipt=receipts.append,
         )
         watchdog.join(timeout=1)
         self.assertFalse(watchdog.is_alive())
         self.assertEqual(exits, [0])
+        self.assertEqual(receipts, [{
+            "schema_version": "ember-owned-parent-watchdog-v1",
+            "event": "PARENT_GONE_EXIT",
+            "result": "MEASURED",
+            "parent_pid": 12345,
+            "consecutive_missed_polls": 2,
+            "poll_seconds": 0.001,
+        }])
+
+    def test_parent_watchdog_binds_one_parent_probe_and_receipts_before_exit(self) -> None:
+        class Probe:
+            def __init__(self) -> None:
+                self.states = iter((True, False, False))
+                self.closed = False
+
+            def alive(self) -> bool:
+                return next(self.states)
+
+            def close(self) -> None:
+                self.closed = True
+
+        probe = Probe()
+        events: list[object] = []
+        with patch("serve_owned_openai.bind_parent_process", return_value=probe) as bind:
+            watchdog = start_parent_watchdog(
+                12345,
+                poll_seconds=0.001,
+                emit_receipt=lambda receipt: events.append(("receipt", receipt)),
+                exit_process=lambda code: events.append(("exit", code)),
+            )
+        watchdog.join(timeout=1)
+        self.assertFalse(watchdog.is_alive())
+        bind.assert_called_once_with(12345)
+        self.assertTrue(probe.closed)
+        self.assertEqual([event[0] for event in events], ["receipt", "exit"])
+
+    def test_parent_watchdog_probe_and_receipt_errors_still_exit(self) -> None:
+        checks = iter((True, RuntimeError("probe failed"), RuntimeError("probe failed")))
+        exits: list[int] = []
+
+        def checker(_pid: int) -> bool:
+            result = next(checks)
+            if isinstance(result, BaseException):
+                raise result
+            return result
+
+        def broken_receipt(_receipt: dict[str, object]) -> None:
+            raise OSError("stderr unavailable")
+
+        watchdog = start_parent_watchdog(
+            12345,
+            poll_seconds=0.001,
+            checker=checker,
+            emit_receipt=broken_receipt,
+            exit_process=exits.append,
+        )
+        watchdog.join(timeout=1)
+        self.assertFalse(watchdog.is_alive())
+        self.assertEqual(exits, [0])
+    def test_parent_watchdog_default_grace_is_two_ten_second_misses(self) -> None:
+        signature = inspect.signature(start_parent_watchdog)
+        self.assertEqual(signature.parameters["poll_seconds"].default, 10.0)
+        self.assertEqual(signature.parameters["misses_before_exit"].default, 2)
 
 
 
