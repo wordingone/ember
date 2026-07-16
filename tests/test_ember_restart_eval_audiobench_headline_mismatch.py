@@ -13,7 +13,7 @@ def _sha(path):
 def _predictions(root,text='hello'):
  checkpoint=root/'checkpoint';split=root/'split';protocol=root/'protocol'
  for path in(checkpoint,split,protocol):path.write_text(path.name)
- payload={'schema_version':'ember-owned-predictions-v1','claim_status':'NON_ADMISSIBLE_RAW_PREDICTIONS','checkpoint_manifest_sha256':_sha(checkpoint),'model_config_sha256':'a'*64,'tokenizer_sha256':'b'*64,'inference_implementation_sha256':'c'*64,'benchmark':{'id':'audiobench','version':'0fc7fef2709c00ac1e2eb2b372ec4c56362bb8c6','capability':'audio','split_sha256':_sha(split),'protocol_sha256':"15fe549c61f78cc63b9890fa8129626f810dc5517c19690c8c12435d8d203a1d"},'decoding':{'strategy':'GREEDY_AUTOREGRESSIVE','teacher_forcing':False,'max_new_tokens':1,'temperature':0,'top_p':1,'stop_token_ids':[1]},'rows':[{'id':'m','input_sha256':'d'*64,'generated_token_ids':[1],'stop_reason':'eos','output':{'kind':'transcript','text':text}}]}
+ payload={'schema_version':'ember-owned-predictions-v1','claim_status':'NON_ADMISSIBLE_RAW_PREDICTIONS','checkpoint_manifest_sha256':_sha(checkpoint),'model_config_sha256':'a'*64,'tokenizer_sha256':'b'*64,'inference_implementation_sha256':'c'*64,'benchmark':{'id':'audiobench','version':'0fc7fef2709c00ac1e2eb2b372ec4c56362bb8c6','capability':'audio','split_sha256':_sha(split),'protocol_sha256':"3128577f5dcccc84b03dd7259d4411b31971e51162a73457fd2b534c14dc1e33"},'decoding':{'strategy':'GREEDY_AUTOREGRESSIVE','teacher_forcing':False,'max_new_tokens':1,'temperature':0,'top_p':1,'stop_token_ids':[1]},'rows':[{'id':'m','input_sha256':'d'*64,'generated_token_ids':[1],'stop_reason':'eos','output':{'kind':'transcript','text':text}}]}
  path=root/'predictions.json';path.write_text(json.dumps(payload));return path
 
 def _run(root,pred,payload):

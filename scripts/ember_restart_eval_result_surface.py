@@ -70,8 +70,7 @@ def _pinned_registry_snapshot(registry):
     try:
         registry_bytes = registry.read_bytes()
         authority = json.loads(EXECUTION_AUTHORITIES.read_bytes().decode("utf-8"))
-        expected = {entry.get("trusted_verifier_registry_sha256") for entry in authority.get("authorities", []) if isinstance(entry, dict)}
-        if _sha256(registry_bytes) not in expected:
+        if not _registry_is_pinned(registry):
             return None
         payload = json.loads(registry_bytes.decode("utf-8"))
         entries = payload.get("verifiers") if isinstance(payload, dict) else None
@@ -117,6 +116,11 @@ def _admitted(manifest, registry, input_bytes):
     registry_snapshot_root = None
     closure_root = None
     try:
+        # Caller-selected registry bytes must first match the external
+        # execution-authority anchor; an internally consistent substitute is
+        # not admission authority.
+        if not _registry_is_pinned(registry):
+            return False
         pinned = _pinned_registry_snapshot(registry)
         if pinned is None:
             return False
@@ -139,14 +143,16 @@ def _admitted(manifest, registry, input_bytes):
                 return
             walk(value, field, document_base)
 
-        def stage_path(value, field, document_base):
+        def stage_path(value, field, document_base, key):
             nonlocal matched
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{field}: path required")
             relative = Path(value)
             if relative.is_absolute() or relative.drive:
                 raise ValueError(f"{field}: path escapes artifact root")
-            candidate = root / document_base / relative
+            root_relative = key in {"manifest_path", "checkpoint_manifest_path", "main_index_path"} or re.search(r"(?:^|\.)(?:checkpoint_manifest|main_index)\.path$", field) is not None
+            base = Path(".") if root_relative else document_base
+            candidate = root / base / relative
             _reject_symlink_components(candidate, root)
             source = candidate.resolve()
             try:
@@ -190,7 +196,7 @@ def _admitted(manifest, registry, input_bytes):
                 for key, child in value.items():
                     child_field = f"{field}.{key}"
                     if isinstance(child, str) and key != "identity_path" and (key == "path" or key.endswith("_path") or key.endswith("_dir")):
-                        stage_path(child, child_field, document_base)
+                        stage_path(child, child_field, document_base, key)
                     else:
                         walk(child, child_field, document_base)
             elif isinstance(value, list):
@@ -244,6 +250,7 @@ def main():
         handle.write(f"# Ember evaluation result\n\nStatus: {label}\n\nCapability: {result.get('capability', 'unknown')}\n")
         if measured:
             handle.write(f"\nreceipt_sha256: {_sha256(input_bytes)}\n")
+            handle.write(f"receipt_json: {json.dumps(result, sort_keys=True, separators=(',', ':'))}\n")
             for key in IDENTITY_FIELDS:
                 handle.write(f"{key}: {json.dumps(result[key], sort_keys=True, separators=(',', ':'))}\n")
         temporary = Path(handle.name)
