@@ -72,7 +72,7 @@
                              },
                              {
                                  "path":  "scripts/ember_restart_eval_bfcl_static.py",
-                                 "sha256":  "b1c2379fd22a82541ac2d275753fc6cdb412fedf9addd25f04a72fd53bbf13f2",
+                                 "sha256":  "7523bc1471d08bcee1bbdb8cadbbc2d935cf1da421baba5e833351cb42414e87",
                                  "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
                              }
                          ]

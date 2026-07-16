@@ -20,6 +20,14 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def protocol_sha256(payload: dict[str, object]) -> str:
+    identity = dict(payload)
+    identity.pop("protocol_sha256", None)
+    custody_sha = digest(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    scorer_sha = digest((Path(__file__).parent / "ember_restart_eval_bfcl_static.py").read_bytes())
+    return digest(f"bfcl-static:{payload.get('benchmark_id')}:{payload.get('benchmark_version')}:{payload.get('split_sha256')}:{custody_sha}:{scorer_sha}".encode("utf-8"))
+
+
 def rows(data: bytes) -> list[dict]:
     parsed = [json.loads(line) for line in data.decode("utf-8").splitlines() if line.strip()]
     if not parsed or any(not isinstance(item, dict) for item in parsed):
@@ -59,7 +67,8 @@ def main() -> int:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         parser.error(f"invalid BFCL simple source: {error}")
     tree = digest(b"".join(f"{item['category']}\0{item['role']}\0{item['bytes']}\0{item['sha256']}\n".encode("utf-8") for item in files))
-    payload = {"schema_version": "ember-restart-bfcl-simple-frozen-v1", "result": "PREFLIGHT_ONLY", "benchmark_id": "bfcl-static-simple", "benchmark_version": SOURCE_COMMIT, "capability": "tool", "split_sha256": tree, "protocol_sha256": args.protocol_sha256, "source_files": files, "task_count": len(tasks), "tasks": tasks}
+    payload = {"schema_version": "ember-restart-bfcl-simple-frozen-v1", "result": "PREFLIGHT_ONLY", "benchmark_id": "bfcl-static-simple", "benchmark_version": SOURCE_COMMIT, "capability": "tool", "split_sha256": tree, "protocol_sha256": "0" * 64, "source_files": files, "task_count": len(tasks), "tasks": tasks}
+    payload["protocol_sha256"] = protocol_sha256(payload)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.output.parent, delete=False) as handle:
         json.dump(payload, handle, sort_keys=True)
