@@ -1,0 +1,11 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02C
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+import json
+from pathlib import Path
+MANIFEST=Path(__file__).resolve().parents[1]/"manifests"/"ember-restart-mmlu-pro-custody-v1.json"
+def test_mmlu_pro_custody_preserves_current_raw_split_as_separate_from_inherited_pin():
+ value=json.loads(MANIFEST.read_text(encoding="utf-8"))
+ assert value['materialization']=={'upstream_revision':'b189ec765aa7ed75c8acfea42df31fdae71f97be','artifact_sha256':'3577c66990ac2d1cc396d49c6d6b4d3c0b24e160915885b0f9e3b3d0f0577514','runner_receipt_sha256':'0b34ba0415efdad6b07d05379a742ca8204183233998df3394f2cac8139416c5','split_sha256':'0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8','claim_status':'FROZEN_MMLU_PRO_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS'}
+ assert value['inherited_template_compatibility']=='HASH_MISMATCH_SEPARATE_NONEXECUTABLE_CUSTODY'
+ assert value['target_execution_permitted'] is False
