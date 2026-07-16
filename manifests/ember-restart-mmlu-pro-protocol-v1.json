@@ -10,7 +10,7 @@
     "result":  "PREFLIGHT_ONLY",
     "scoring_adapter": {
         "path": "scripts/ember_restart_eval_mmlu_pro_score.py",
-        "sha256": "3cc5e2edf7e84978c22449b48fa94cd2bedefdc1d9676f511176047eff63f211",
+        "sha256": "f1c30dfb53f22cb687374ab20f4a170178891de91cd48373aba638274477653d",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
     "prohibited_claims":  [
