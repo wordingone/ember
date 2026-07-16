@@ -25,6 +25,7 @@ def frozen_manifest(root, spider, gold, tables, database):
         "tables_sha256": sha(tables),
         "database_tree_sha256": hashlib.sha256(b"fixture.sqlite\0" + database_file.read_bytes()).hexdigest(),
         "evaluator_sha256": sha(spider / "evaluation.py"),
+        "source_tree_sha256": hashlib.sha256(b"".join(path.relative_to(spider).as_posix().encode("utf-8") + b"\0" + path.read_bytes() for path in sorted(spider.rglob("*")) if path.is_file() and "__pycache__" not in path.parts)).hexdigest(),
     }), encoding="utf-8")
     return manifest
 
@@ -138,3 +139,15 @@ def test_custody_manifest_is_read_once_for_validation_and_receipt_hash(monkeypat
         monkeypatch.setattr(Path, "read_text", once)
         assert module.verify_frozen_custody(manifest, spider, gold, tables, database) == hashlib.sha256(original_read_bytes(manifest)).hexdigest()
         assert reads == 1
+
+def test_spider_custody_rejects_imported_helper_drift_after_manifest_binding():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary); spider = root / "spider"; spider.mkdir(); gold = root / "gold.sql"; tables = root / "tables.json"; database = root / "database"; database.mkdir(); predictions = root / "predictions.sql"; score = root / "score.json"
+        gold.write_text("select 1\tdb\n", encoding="utf-8"); tables.write_text("[]", encoding="utf-8"); predictions.write_text("select 1\n", encoding="utf-8")
+        (spider / "helper.py").write_text("EXACT = 1.0\n", encoding="utf-8")
+        (spider / "evaluation.py").write_text("from helper import EXACT\ndef build_foreign_key_map_from_json(path): return {}\ndef evaluate(gold,pred,db,etype,kmaps): print_scores({'all':{'exact':EXACT}},etype)\n", encoding="utf-8")
+        manifest = frozen_manifest(root, spider, gold, tables, database)
+        (spider / "helper.py").write_text("EXACT = 0.0\n", encoding="utf-8")
+        result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-sql-manifest", str(manifest), "--spider-root", str(spider), "--gold", str(gold), "--predictions", str(predictions), "--database-dir", str(database), "--tables", str(tables), "--score-output", str(score)], text=True, capture_output=True, check=False)
+        assert result.returncode != 0
+        assert not score.exists()
