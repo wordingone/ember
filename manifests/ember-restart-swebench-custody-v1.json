@@ -24,5 +24,10 @@
                                         "artifact_bytes":  1218485,
                                         "license_disposition":  "UNDECLARED_IN_EXACT_DATASET_CARD",
                                         "materialization":  "HELD_NO_LICENSE_PROVENANCE"
-                                    }
+                                    },
+    "source_audit_adapter":  {
+                                 "path":  "scripts/ember_restart_eval_swebench_source_audit.py",
+                                 "sha256":  "27dae57558d6fff9b07812e354e80e5f8e37194c77f518562aca373bb06c61f8",
+                                 "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+                             }
 }
