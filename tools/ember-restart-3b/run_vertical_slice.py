@@ -125,12 +125,28 @@ def semantic_publication_plan(*, steps: int, checkpoint_interval: int, checkpoin
     if projected_write_bytes > write_budget_bytes:
         raise ValueError("semantic publication plan exceeds the declared write budget")
     return {"publication_count": publication_count, "checkpoint_byte_bound": checkpoint_byte_bound, "projected_write_bytes": projected_write_bytes}
-def production_artifact_root(candidate: Path) -> Path:
-    """Require B: for production bundles; manifests themselves stay portable."""
+def production_artifact_root(
+    candidate: Path,
+    *,
+    c_relocated_under_disk_budget_runner: bool = False,
+    relocation_custody_root: Path | None = None,
+) -> Path:
+    """Accept B: custody, or an explicit C: child of the disk-runner custody root."""
 
+    if type(c_relocated_under_disk_budget_runner) is not bool:
+        raise ValueError("C relocation custody flag must be boolean")
     resolved = candidate.resolve()
+    if c_relocated_under_disk_budget_runner:
+        if not isinstance(relocation_custody_root, Path):
+            raise ValueError("runner-bound C relocation requires an explicit custody root")
+        custody = relocation_custody_root.resolve()
+        if custody.drive.upper() != "C:" or resolved.drive.upper() != "C:" or not resolved.is_relative_to(custody):
+            raise ValueError("runner-bound C relocation requires a C: custody root containing the artifact root")
+        return resolved
+    if relocation_custody_root is not None:
+        raise ValueError("relocation custody root requires runner-bound C relocation")
     if resolved.drive.upper() != "B:":
-        raise ValueError("production artifact root must be an explicit B: path")
+        raise ValueError("production artifact root must be an explicit B: path unless runner-bound C relocation is declared")
     return resolved
 
 
@@ -396,12 +412,12 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
         block_wise=bool(hyperparameters["block_wise"]),
     )
 
-def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, records_override: list[dict[str, object]] | None = None, specialist_verification: dict[str, object] | None = None, specialist_lineage: dict[str, object] | None = None) -> dict[str, object]:
+def run(*, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, records_override: list[dict[str, object]] | None = None, specialist_verification: dict[str, object] | None = None, specialist_lineage: dict[str, object] | None = None, c_relocated_under_disk_budget_runner: bool = False, relocation_custody_root: Path | None = None) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
         raise ValueError("launch seed must be a nonnegative integer")
-    artifact_root = production_artifact_root(artifact_root)
+    artifact_root = production_artifact_root(artifact_root, c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner, relocation_custody_root=relocation_custody_root)
     root = Path(__file__).resolve().parents[2]
     config_path = root / "configs" / "ember-restart-3b.json"
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
@@ -544,6 +560,8 @@ def specialist_lineage_request(
 def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
     capability: str, resume_checkpoint: Path | None = None, parent_manifest: Path, root_manifest: Path,
+    c_relocated_under_disk_budget_runner: bool = False,
+    relocation_custody_root: Path | None = None,
 ) -> dict[str, object]:
     """Run one verifier-bound specialist family through the canonical v4 lineage path."""
 
@@ -558,6 +576,8 @@ def run_specialist(
     return run(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint,
         records_override=records, specialist_verification=verification, specialist_lineage=lineage,
+        c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
+        relocation_custody_root=relocation_custody_root,
     )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
@@ -707,6 +727,8 @@ def main() -> None:
     specialist.add_argument("--resume-checkpoint", type=Path, required=True)
     specialist.add_argument("--parent-manifest", type=Path, required=True)
     specialist.add_argument("--root-manifest", type=Path, required=True)
+    specialist.add_argument("--c-relocated-under-disk-budget-runner", action="store_true")
+    specialist.add_argument("--relocation-custody-root", type=Path)
     semantic = subparsers.add_parser("semantic")
     semantic.add_argument("--seed", type=int, required=True)
     semantic.add_argument("--artifact-root", type=Path, required=True)
@@ -720,7 +742,7 @@ def main() -> None:
     semantic.add_argument("--resume-checkpoint", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,

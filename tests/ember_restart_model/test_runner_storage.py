@@ -49,12 +49,26 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertTrue(newest.exists())
             self.assertEqual(run_vertical_slice._bundle_serialized_bytes(newest), 7)
 
-    def test_production_artifact_root_requires_an_explicit_b_drive_path(self) -> None:
+    def test_production_artifact_root_requires_b_unless_c_relocation_is_explicitly_runner_bound(self) -> None:
         with self.assertRaisesRegex(ValueError, "B:"):
-            run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-checkpoint"))
+            run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))
+        with self.assertRaisesRegex(ValueError, "runner-bound"):
+            run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"), c_relocated_under_disk_budget_runner=False)
         accepted = run_vertical_slice.production_artifact_root(Path("B:/ember-checkpoint"))
         self.assertEqual(accepted.drive.upper(), "B:")
-
+        custody = Path("C:/tmp/ember-restart-niko-3b/production-artifacts")
+        with self.assertRaisesRegex(ValueError, "custody root"):
+            run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"), c_relocated_under_disk_budget_runner=True)
+        relocated = run_vertical_slice.production_artifact_root(
+            Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"),
+            c_relocated_under_disk_budget_runner=True,
+            relocation_custody_root=custody,
+        )
+        self.assertEqual(relocated.drive.upper(), "C:")
+        with self.assertRaisesRegex(ValueError, "C:"):
+            run_vertical_slice.production_artifact_root(Path("B:/ember-checkpoint"), c_relocated_under_disk_budget_runner=True, relocation_custody_root=custody)
+        with self.assertRaisesRegex(ValueError, "custody root"):
+            run_vertical_slice.production_artifact_root(Path("C:/tmp/outside"), c_relocated_under_disk_budget_runner=True, relocation_custody_root=custody)
 
 if __name__ == "__main__":
     unittest.main()
