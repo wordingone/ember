@@ -17,3 +17,12 @@ def test_audio_row_parser_consumes_exact_snapshot_bytes():
  spec=importlib.util.spec_from_file_location("audio_wer",SCRIPT);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
  payload=b'{"id":"a","transcript":"one"}\n'
  assert module.rows_bytes(payload)=={"a":"one"}
+def test_audio_score_replace_failure_cleans_temporary_output(monkeypatch, tmp_path):
+ import importlib.util, sys
+ spec=importlib.util.spec_from_file_location("audio_wer_cleanup",SCRIPT);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+ references=tmp_path/"references";predictions=tmp_path/"predictions";manifest=tmp_path/"manifest";output=tmp_path/"score"
+ references.write_text('{"id":"a","transcript":"one"}\n');predictions.write_text('{"id":"a","transcript":"one"}\n');manifest.write_text(json.dumps({"result":"PREFLIGHT_ONLY","benchmark_id":"local-audio-wer","benchmark_version":"1","references_sha256":hashlib.sha256(references.read_bytes()).hexdigest()}))
+ monkeypatch.setattr(module.os,"replace",lambda *_: (_ for _ in ()).throw(OSError("replace failed")))
+ monkeypatch.setattr(sys,"argv",[str(SCRIPT),"--frozen-audio-manifest",str(manifest),"--references",str(references),"--predictions",str(predictions),"--score-output",str(output)])
+ with __import__("pytest").raises(OSError): module.main()
+ assert not list(tmp_path.glob("tmp*"))
