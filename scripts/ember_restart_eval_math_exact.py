@@ -82,7 +82,10 @@ def main() -> int:
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.score_output.parent, delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
         temporary = Path(handle.name)
-    os.replace(temporary, args.score_output)
+    try:
+        os.replace(temporary, args.score_output)
+    finally:
+        temporary.unlink(missing_ok=True)
     return 0
 
 
