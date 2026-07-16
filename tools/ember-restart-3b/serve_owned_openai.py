@@ -38,6 +38,8 @@ from ember_restart_eval_raw_forward import (  # noqa: E402
     validate_state_map,
 )
 RuntimeMode = Literal["INTERACTIVE", "FROZEN_EVAL"]
+_MAX_REQUEST_TOKENS = 8096
+_MAX_RUNTIME_GENERATION_TOKENS = 1024
 
 
 @dataclass(frozen=True)
@@ -368,10 +370,11 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, m
                 self._write(400, _error("messages must be a nonempty array of objects"))
                 return
             max_tokens = request.get("max_tokens", 64)
-            if not isinstance(max_tokens, int) or not 0 < max_tokens <= 1024:
-                self._write(400, _error("max_tokens must be an integer in [1, 1024]"))
+            if not isinstance(max_tokens, int) or not 0 < max_tokens <= _MAX_REQUEST_TOKENS:
+                self._write(400, _error(f"max_tokens must be an integer in [1, {_MAX_REQUEST_TOKENS}]"))
                 return
-            text, finish_reason = runtime.chat(messages, frozen_row_id=frozen_row_id, max_tokens=max_tokens)
+            effective_max_tokens = min(max_tokens, _MAX_RUNTIME_GENERATION_TOKENS)
+            text, finish_reason = runtime.chat(messages, frozen_row_id=frozen_row_id, max_tokens=effective_max_tokens)
             completion = {
                 "id": "chatcmpl-owned-" + runtime.identity.checkpoint_sha256[:12],
                 "object": "chat.completion",

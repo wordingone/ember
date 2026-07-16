@@ -51,9 +51,11 @@ class _Runtime:
             server_source_sha256="d" * 64,
         )
         self.calls: list[tuple[str, list[dict[str, object]]]] = []
+        self.max_tokens_seen: list[int] = []
 
     def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str, max_tokens: int) -> tuple[str, str]:
         self.calls.append((frozen_row_id, messages))
+        self.max_tokens_seen.append(max_tokens)
         return ("owned answer", "stop")
 
 
@@ -124,7 +126,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             self.assertEqual(identity["tokens_seen"], 2048)
             request = urllib.request.Request(
                 base + "/v1/chat/completions",
-                data=json.dumps({"model": runtime.identity.model_name, "messages": [{"role": "user", "content": "hello"}], "stream": True}).encode("utf-8"),
+                data=json.dumps({"model": runtime.identity.model_name, "messages": [{"role": "user", "content": "hello"}], "stream": True, "max_tokens": 8096}).encode("utf-8"),
                 headers={"Content-Type": "application/json"}, method="POST",
             )
             with urllib.request.urlopen(request, timeout=2) as response:
@@ -135,6 +137,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             self.assertEqual(chunk["object"], "chat.completion.chunk")
             self.assertEqual(chunk["choices"], [{"index": 0, "delta": {"role": "assistant", "content": "owned answer"}, "finish_reason": "stop"}])
             self.assertEqual(lines[1], "data: [DONE]")
+            self.assertEqual(runtime.max_tokens_seen, [1024])
         finally:
             server.shutdown(); server.server_close(); thread.join(timeout=2)
     def test_models_identity_and_chat_share_exact_owned_runtime(self) -> None:
