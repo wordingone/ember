@@ -31,7 +31,10 @@ def _atomic(path: Path, payload: dict[str, object]) -> None:
         json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
         handle.write("\n")
         temporary = Path(handle.name)
-    os.replace(temporary, path)
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _task(root: Path, task_id: str) -> dict[str, str]:
