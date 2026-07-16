@@ -14,3 +14,11 @@ def test_terminal_bench_custody_records_the_fail_closed_image_and_network_bounda
  assert contract['required_allow_internet'] is False
  assert contract['observed_cache_audit']=={'task_count':89,'digest_pinned_image_task_count':0,'network_disabled_task_count':0,'eligible_task_count':0,'reason':'all cached task.toml records use mutable image tags and allow_internet=true'}
  assert v['goal_id']=='EMBER-02' and v['workstream_id']=='EMBER-02C'
+
+def test_terminal_bench_public_custody_exposes_derived_protocol_identity():
+ v=json.loads((ROOT/'manifests'/'ember-restart-terminal-bench-custody-v1.json').read_text())
+ assert v['strict_protocol_required'] is True
+ assert v['scoring_adapter_path']=='scripts/ember_restart_eval_terminal_bench.py'
+ identity={k:v[k] for k in ('benchmark_id','benchmark_version','source_commit','source_tree','license_sha256','scoring_adapter_path')}
+ identity['scoring_adapter_sha256']=v['scoring_adapter']['sha256']
+ assert hashlib.sha256(json.dumps(identity,sort_keys=True,separators=(',',':')).encode()).hexdigest()==v['protocol_sha256']

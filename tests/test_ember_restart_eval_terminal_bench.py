@@ -42,3 +42,12 @@ def test_terminal_bench_score_replace_failure_cleans_real_cli_temporary_output(m
   module.main()
  assert not score.exists()
  assert not list(tmp_path.glob("tmp*"))
+
+
+def test_strict_terminal_manifest_cannot_omit_derived_protocol_identity():
+ with tempfile.TemporaryDirectory() as tmp:
+  root=Path(tmp);tasks=root/'tasks.json';results=root/'results.json';score=root/'score.json'
+  tasks.write_text(json.dumps({'schema_version':'ember-restart-terminal-bench-freeze-v2','result':'PREFLIGHT_ONLY','benchmark_id':'terminal-bench','benchmark_version':'2.0','source_commit':'a'*40,'source_tree':'b'*40,'license_sha256':'c'*64,'tasks':[{'task_id':'task-a','task_toml_sha256':'e'*64,'docker_image_sha256':'b'*64}]}),encoding='utf-8')
+  results.write_text(json.dumps([{'task_id':'task-a','status':'passed','transcript_sha256':'a'*64,'task_image_sha256':'b'*64}]),encoding='utf-8')
+  run=subprocess.run([sys.executable,str(SCRIPT),'--frozen-task-manifest',str(tasks),'--harbor-task-results',str(results),'--score-output',str(score)],text=True,capture_output=True,check=False)
+  assert run.returncode!=0 and not score.exists()
