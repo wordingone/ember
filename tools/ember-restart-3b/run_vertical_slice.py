@@ -11,14 +11,13 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
 import tokenizers
 import torch
-import torch.nn.functional as F
 
-from batch import decode_owned_batch
 from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -184,7 +183,148 @@ def _bundle_serialized_bytes(bundle: Path) -> int:
     """Measure exactly the bytes currently published beneath one bundle root."""
     return sum(path.stat().st_size for path in bundle.rglob("*") if path.is_file())
 
-def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serialized_bytes: int | None = None) -> None:
+def _receipt_valid_for_retention(bundle: Path) -> bool:
+    try:
+        require_counter_success_receipt(bundle)
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
+
+_WRITER_LEASE = ".writer-lease.json"
+_MAX_QUARANTINE_FILES = 32
+_MAX_QUARANTINE_BYTES = 1024 * 1024
+
+
+def _pid_is_alive(pid: object) -> bool:
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return False
+    if os.name == "nt":
+        # ``os.kill(pid, 0)`` is not a harmless existence probe on Windows.
+        # Query the process object without signalling it instead.
+        import ctypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _staging_writer_pid(path: Path) -> int | None:
+    if not path.name.startswith(".") or not path.name.endswith(".staging"):
+        return None
+    parts = path.name.rsplit(".", 3)
+    if len(parts) != 4 or parts[-1] != "staging":
+        return None
+    try:
+        pid = int(parts[-3])
+    except ValueError:
+        return None
+    return pid if pid > 0 else None
+
+
+def _writer_is_active(root: Path) -> bool:
+    staging_pid = _staging_writer_pid(root)
+    if staging_pid is not None:
+        return _pid_is_alive(staging_pid)
+    try:
+        lease, _ = _json_snapshot(root / _WRITER_LEASE, label="writer lease")
+    except (OSError, ValueError):
+        return False
+    return _pid_is_alive(lease.get("pid"))
+
+
+def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:
+    evidence_dir = parent / ".checkpoint-quarantine"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence_path = evidence_dir / f"{name}.json"
+    _atomic_json(evidence_path, payload)
+    files = sorted(
+        (path for path in evidence_dir.glob("*.json") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+    )
+    while len(files) > _MAX_QUARANTINE_FILES or sum(path.stat().st_size for path in files) > _MAX_QUARANTINE_BYTES:
+        victim = next((path for path in files if path != evidence_path), None)
+        if victim is None:
+            break
+        victim.unlink()
+        files.remove(victim)
+    return evidence_path
+
+
+def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
+    """Remove an unselectable checkpoint while preserving only bounded evidence."""
+
+    if not bundle.is_dir() or not bundle.name.startswith("checkpoint-"):
+        raise ValueError("retention quarantine requires a checkpoint-* directory")
+    manifest = bundle / "checkpoint-manifest.json"
+    try:
+        manifest_sha256 = _sha256(manifest) if manifest.is_file() else None
+    except OSError as error:
+        manifest_sha256 = None
+        reason = f"{reason}; manifest_hash_error={type(error).__name__}"
+    evidence = {
+        "schema_version": "ember-checkpoint-quarantine-v1",
+        "result": "UNSELECTABLE",
+        "source_bundle": bundle.name,
+        "reason": reason[:512],
+        "manifest_sha256": manifest_sha256,
+        "bulk_candidate_cleanup": "deleted",
+    }
+    _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
+    try:
+        shutil.rmtree(bundle)
+    except Exception:
+        evidence["bulk_candidate_cleanup"] = "failed"
+        _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
+        raise
+
+
+def _reclaim_stale_staging(parent: Path) -> None:
+    for staging in list(parent.glob(".*.staging")):
+        if not staging.is_dir() or _writer_is_active(staging):
+            continue
+        manifest = staging / "checkpoint-manifest.json"
+        try:
+            manifest_sha256 = _sha256(manifest) if manifest.is_file() else None
+        except OSError:
+            manifest_sha256 = None
+        evidence_name = f"staging-{hashlib.sha256(staging.name.encode()).hexdigest()[:16]}"
+        _write_bounded_quarantine_evidence(parent, evidence_name, {
+            "schema_version": "ember-staging-failure-v1",
+            "result": "UNSELECTABLE",
+            "source_bundle": staging.name,
+            "manifest_sha256": manifest_sha256,
+            "bulk_candidate_cleanup": "deleted",
+        })
+        shutil.rmtree(staging)
+
+
+def _reclaim_unverified_orphans(parent: Path) -> None:
+    for candidate in list(parent.iterdir()):
+        if not candidate.is_dir() or not candidate.name.startswith("checkpoint-") or _writer_is_active(candidate):
+            continue
+        try:
+            require_counter_success_receipt(candidate)
+        except (OSError, ValueError, TypeError) as error:
+            _quarantine_unverified_bundle(
+                candidate,
+                reason=f"counter receipt invalid: {type(error).__name__}: {error}",
+            )
+def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serialized_bytes: int | None = None, receipt_aware: bool = False) -> None:
     """Prune only older successful bundles; never delete the final known-good bundle."""
     if max_count is None and max_serialized_bytes is None:
         raise ValueError("checkpoint retention requires a count or serialized-byte budget")
@@ -193,10 +333,23 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
     if max_serialized_bytes is not None and max_serialized_bytes < 1:
         raise ValueError("checkpoint retention serialized-byte budget must be positive")
     parent.mkdir(parents=True, exist_ok=True)
-    bundles = sorted(
-        (path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-")),
-        key=lambda path: (path.stat().st_mtime_ns, path.name),
-    )
+    if receipt_aware:
+        _reclaim_stale_staging(parent)
+    candidates = [path for path in parent.iterdir() if path.is_dir() and path.name.startswith("checkpoint-")]
+    bundles: list[Path] = []
+    for candidate in candidates:
+        if not receipt_aware:
+            bundles.append(candidate)
+            continue
+        if _writer_is_active(candidate):
+            continue
+        try:
+            require_counter_success_receipt(candidate)
+        except (OSError, ValueError, TypeError) as error:
+            _quarantine_unverified_bundle(candidate, reason=f"counter receipt invalid: {type(error).__name__}: {error}")
+        else:
+            bundles.append(candidate)
+    bundles.sort(key=lambda path: (path.stat().st_mtime_ns, path.name))
     if max_count is not None:
         while len(bundles) > max_count:
             shutil.rmtree(bundles.pop(0))
@@ -210,14 +363,18 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
 
 
 def _retain_after_success(
-    parent: Path, *, operation: Callable[[], Any], max_count: int | None = None, max_serialized_bytes: int | None = None
+    parent: Path, *, operation: Callable[[], Any], max_count: int | None = None, max_serialized_bytes: int | None = None, receipt_aware: bool = False
 ) -> Any:
     """Publish first, then prune only successful older bundles."""
 
     if max_count is None and max_serialized_bytes is None:
         raise ValueError("successful checkpoint retention requires a bound")
+    parent.mkdir(parents=True, exist_ok=True)
+    if receipt_aware:
+        _reclaim_stale_staging(parent)
+        _reclaim_unverified_orphans(parent)
     result = operation()
-    _enforce_retention(parent, max_count=max_count, max_serialized_bytes=max_serialized_bytes)
+    _enforce_retention(parent, max_count=max_count, max_serialized_bytes=max_serialized_bytes, receipt_aware=receipt_aware)
     return result
 
 
@@ -296,26 +453,138 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
     return records, packet, input_receipt
 
 
+_COUNTER_SUCCESS_RECEIPT = "parameter-counter-receipt.json"
+_COUNTER_FAILURE_RECEIPT = "counter-failure.json"
+_COUNTER_COUNT_FIELDS = (
+    "allocated_parameters",
+    "unique_parameters",
+    "trainable_parameters",
+    "served_parameters",
+    "active_parameters",
+    "episode_trainable_parameters",
+)
+
+
+def _atomic_bytes(path: Path, payload: bytes) -> None:
+    """Publish small custody evidence only after complete bytes are durable."""
+
+    temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _atomic_json(path: Path, payload: dict[str, object]) -> None:
+    _atomic_bytes(path, (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+
+
+def _json_snapshot(path: Path, *, label: str) -> tuple[dict[str, object], str]:
+    try:
+        payload = path.read_bytes()
+        parsed = json.loads(payload)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is not valid JSON") from error
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    return parsed, hashlib.sha256(payload).hexdigest()
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def require_counter_success_receipt(checkpoint_root: Path, *, receipt_path: Path | None = None) -> dict[str, object]:
+    """Make resumability contingent on the exact successful realization counter output."""
+
+    checkpoint_root = checkpoint_root.resolve()
+    manifest, manifest_sha256 = _json_snapshot(checkpoint_root / "checkpoint-manifest.json", label="checkpoint manifest")
+    receipt_source = (receipt_path if receipt_path is not None else checkpoint_root / _COUNTER_SUCCESS_RECEIPT).resolve()
+    receipt, _receipt_sha256 = _json_snapshot(receipt_source, label="counter-success receipt")
+    expected = {
+        "schema_version": "ember-sparse-realization-receipt-v1", "verification_boundary": "VERIFIED_MEASURED",
+        "result": "MEASURED", "subject_checkpoint_sha256": manifest_sha256,
+        "model_config_sha256": manifest.get("model_config_sha256"), "architecture_revision": manifest.get("architecture_revision"),
+        "active_expert_ids": manifest.get("active_expert_ids"), "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
+    }
+    if any(receipt.get(field) != value for field, value in expected.items()):
+        raise ValueError("counter-success receipt does not bind this checkpoint realization")
+    architecture = manifest.get("architecture")
+    if not isinstance(architecture, dict) or any(receipt.get(field) != architecture.get(field) for field in _COUNTER_COUNT_FIELDS):
+        raise ValueError("counter-success receipt does not reproduce checkpoint capacity")
+    if not _is_sha256(receipt.get("counter_sha256")):
+        raise ValueError("counter-success receipt has an invalid counter source hash")
+    return receipt
+
+
+def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseException) -> Path | None:
+    """Delete bulk candidate bytes while retaining only bounded manifest/failure evidence."""
+
+    if not checkpoint_target.exists():
+        return None
+    evidence = checkpoint_target.parent / f".counter-failed-{checkpoint_target.name}-{uuid.uuid4().hex}"
+    evidence.mkdir()
+    manifest_path = checkpoint_target / "checkpoint-manifest.json"
+    manifest_sha256: str | None = None
+    if manifest_path.is_file():
+        manifest_bytes = manifest_path.read_bytes()
+        manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+        _atomic_bytes(evidence / "checkpoint-manifest.json", manifest_bytes)
+    _atomic_json(evidence / _COUNTER_FAILURE_RECEIPT, {
+        "schema_version": "ember-counter-failure-v1", "result": "COUNTER_FAILED",
+        "checkpoint_manifest_sha256": manifest_sha256, "error_type": type(error).__name__,
+        "error": str(error), "bulk_candidate_cleanup": "deleted",
+    })
+    shutil.rmtree(checkpoint_target)
+    if checkpoint_target.exists():
+        raise RuntimeError("counter-failed checkpoint could not be removed from the selectable namespace")
+    return evidence
+
+
+def publish_counter_verified_checkpoint(*, checkpoint_target: Path, write_candidate: Callable[[], dict[str, object]], execute_counter: Callable[[], dict[str, object]]) -> tuple[dict[str, object], dict[str, object]]:
+    """Cover candidate creation through realization verification in one fail-closed transaction."""
+
+    target_existed = checkpoint_target.exists()
+    if target_existed:
+        raise FileExistsError(f"published checkpoint bundle already exists: {checkpoint_target}")
+    try:
+        published = write_candidate()
+        counter_receipt = execute_counter()
+        _atomic_json(checkpoint_target / _COUNTER_SUCCESS_RECEIPT, counter_receipt)
+        require_counter_success_receipt(checkpoint_target)
+    except BaseException as error:
+        if not target_existed:
+            _quarantine_counter_failed_checkpoint(checkpoint_target, error)
+        raise
+    return published, counter_receipt
+
 def production_resume_checkpoint(
     candidate: Path,
     *,
+    counter_success_receipt: Path | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
 ) -> Path:
-    """Accept a published B: bundle or an explicitly runner-custodied C: bundle."""
+    """Accept only a published, counter-verified B: or runner-custodied C: bundle."""
 
     resolved = candidate.resolve()
-    if resolved.drive.upper() == "B:" and resolved.is_dir():
-        return resolved
-    if c_relocated_under_disk_budget_runner:
+    accepted = resolved.drive.upper() == "B:" and resolved.is_dir()
+    if not accepted and c_relocated_under_disk_budget_runner:
         resolved = production_artifact_root(
             resolved,
             c_relocated_under_disk_budget_runner=True,
             relocation_custody_root=relocation_custody_root,
         )
-        if resolved.is_dir():
-            return resolved
-    raise ValueError("resume checkpoint must be a published B: bundle or declared C: custody bundle")
+        accepted = resolved.is_dir()
+    if not accepted:
+        raise ValueError("resume checkpoint must be a published B: bundle or declared C: custody bundle")
+    require_counter_success_receipt(resolved, receipt_path=counter_success_receipt)
+    return resolved
 
 def checkpoint_retention_budget_bytes(config_path: Path) -> int:
     """Load the measured serialized-byte ceiling for published checkpoint bundles."""
@@ -464,7 +733,7 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
     )
 
 def run(
-    *, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None,
+    *, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
     records_override: list[dict[str, object]] | None = None,
     specialist_verification: dict[str, object] | None = None,
     specialist_lineage: dict[str, object] | None = None,
@@ -534,6 +803,7 @@ def run(
     if resume_checkpoint is not None:
         resume_checkpoint = production_resume_checkpoint(
             resume_checkpoint,
+            counter_success_receipt=resume_counter_receipt,
             c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
             relocation_custody_root=relocation_custody_root,
         )
@@ -574,6 +844,20 @@ def run(
         else:
             checkpoint_target = checkpoint_root
 
+        verified_holder: dict[str, object] = {}
+
+        def verify_staging(staging_root: Path, manifest_receipt: dict[str, object]) -> None:
+            verified = _execute_realization_counter(
+                root=root, config_path=config_path,
+                checkpoint_manifest_path=staging_root / "checkpoint-manifest.json",
+                active_expert=str(model.active_expert), expected_counts=counts,
+                parent_manifest=(Path(current_lineage["parent_manifest"]) if current_lineage is not None else None),
+                root_manifest=(Path(current_lineage["root_manifest"]) if current_lineage is not None else None),
+            )
+            _atomic_json(staging_root / _COUNTER_SUCCESS_RECEIPT, verified)
+            require_counter_success_receipt(staging_root)
+            verified_holder["receipt"] = verified
+
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
             published = write_checkpoint_artifacts(
                 model, optimizer, checkpoint_target, launch_seed=seed,
@@ -581,19 +865,14 @@ def run(
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
+                pre_publish_verifier=verify_staging,
             )
-            verified = _execute_realization_counter(
-                root=root, config_path=config_path,
-                checkpoint_manifest_path=checkpoint_target / "checkpoint-manifest.json",
-                active_expert=str(model.active_expert), expected_counts=counts,
-                parent_manifest=(Path(current_lineage["parent_manifest"]) if current_lineage is not None else None),
-                root_manifest=(Path(current_lineage["root_manifest"]) if current_lineage is not None else None),
-            )
-            return published, verified
+            return published, verified_holder["receipt"]
 
         checkpoint, parameter_receipt = _retain_after_success(
             checkpoint_parent,
             max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
+            receipt_aware=True,
             operation=publish_and_verify,
         )
         if current_lineage is not None:
@@ -647,7 +926,7 @@ def specialist_lineage_request(
 
 def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
-    capability: str, resume_checkpoint: Path | None = None, parent_manifest: Path, root_manifest: Path,
+    capability: str, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None, parent_manifest: Path, root_manifest: Path,
     checkpoint_interval: int, write_budget_bytes: int,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
@@ -663,7 +942,7 @@ def run_specialist(
         parent_manifest=parent_manifest, root_manifest=root_manifest,
     )
     return run(
-        seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint,
+        seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
         records_override=records, specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
@@ -671,7 +950,7 @@ def run_specialist(
     )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
-    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
+    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -720,9 +999,10 @@ def run_semantic(
     initial_global_step = 0
     initial_tokens_seen = 0
     if resume_checkpoint is not None:
-        resume_checkpoint = resume_checkpoint.resolve()
-        if resume_checkpoint.drive.upper() != "B:" or not resume_checkpoint.is_dir():
-            raise ValueError("resume checkpoint must be a published B: bundle")
+        resume_checkpoint = production_resume_checkpoint(
+            resume_checkpoint,
+            counter_success_receipt=resume_counter_receipt,
+        )
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
@@ -736,26 +1016,38 @@ def run_semantic(
     publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, checkpoint_byte_bound=checkpoint_byte_bound, write_budget_bytes=write_budget_bytes, initial_global_step=initial_global_step)
     torch.cuda.reset_peak_memory_stats()
     checkpoint: dict[str, object] | None = None
+    parameter_receipt: dict[str, object] | None = None
 
     def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
-        nonlocal checkpoint
+        nonlocal checkpoint, parameter_receipt
         checkpoint_root = checkpoint_parent / f"checkpoint-semantic-seed-{seed}-step-{global_step}"
-        checkpoint = _retain_after_success(
+        verified_holder: dict[str, object] = {}
+
+        def verify_staging(staging_root: Path, manifest_receipt: dict[str, object]) -> None:
+            verified = _execute_realization_counter(
+                root=root, config_path=config_path,
+                checkpoint_manifest_path=staging_root / "checkpoint-manifest.json",
+                active_expert="shared", expected_counts=counts,
+            )
+            _atomic_json(staging_root / _COUNTER_SUCCESS_RECEIPT, verified)
+            require_counter_success_receipt(staging_root)
+            verified_holder["receipt"] = verified
+
+        def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
+            published = write_checkpoint_artifacts(
+                model, optimizer, checkpoint_root, launch_seed=seed,
+                rng_state=_rng_state(torch.device("cuda")), data_cursor=dict(state["data_cursor"]),
+                model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
+                expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
+                max_serialized_bytes=checkpoint_byte_bound, pre_publish_verifier=verify_staging,
+            )
+            return published, verified_holder["receipt"]
+
+        checkpoint, parameter_receipt = _retain_after_success(
             checkpoint_parent,
             max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
-            operation=lambda: write_checkpoint_artifacts(
-                model,
-                optimizer,
-                checkpoint_root,
-                launch_seed=seed,
-                rng_state=_rng_state(torch.device("cuda")),
-                data_cursor=dict(state["data_cursor"]),
-                model_config_sha256=_sha256(config_path),
-                contract_sha256=_sha256(integration_contract_path),
-                expert_genesis_sha256=genesis_hashes,
-                optimizer_contract=optimizer_contract,
-            max_serialized_bytes=checkpoint_byte_bound,
-            ),
+            receipt_aware=True,
+            operation=publish_and_verify,
         )
 
     segment = run_manifest_bound_semantic_segment(
@@ -772,17 +1064,9 @@ def run_semantic(
         initial_global_step=initial_global_step,
         initial_tokens_seen=initial_tokens_seen,
     )
-    if checkpoint is None:
-        raise RuntimeError("semantic runner did not publish its required post-step checkpoint")
+    if checkpoint is None or parameter_receipt is None:
+        raise RuntimeError("semantic runner did not publish its required counter-verified checkpoint")
     counts = measure_parameter_counts(model)
-    checkpoint_root = checkpoint_parent / f"checkpoint-semantic-seed-{seed}-step-{segment['global_step']}"
-    parameter_receipt = _execute_realization_counter(
-        root=root,
-        config_path=config_path,
-        checkpoint_manifest_path=checkpoint_root / "checkpoint-manifest.json",
-        active_expert="shared",
-        expected_counts=counts,
-    )
     return {
         "segment": segment,
         "counts": counts,
@@ -808,6 +1092,7 @@ def main() -> None:
     vertical.add_argument("--seed", type=int, required=True)
     vertical.add_argument("--artifact-root", type=Path, required=True)
     vertical.add_argument("--resume-checkpoint", type=Path)
+    vertical.add_argument("--resume-counter-receipt", type=Path)
     specialist = subparsers.add_parser("specialist")
     specialist.add_argument("--seed", type=int, required=True)
     specialist.add_argument("--artifact-root", type=Path, required=True)
@@ -815,6 +1100,7 @@ def main() -> None:
     specialist.add_argument("--tokenizer", type=Path, required=True)
     specialist.add_argument("--capability", choices=("image", "audio", "reasoning", "tool"), required=True)
     specialist.add_argument("--resume-checkpoint", type=Path, required=True)
+    specialist.add_argument("--resume-counter-receipt", type=Path, required=True)
     specialist.add_argument("--parent-manifest", type=Path, required=True)
     specialist.add_argument("--root-manifest", type=Path, required=True)
     specialist.add_argument("--checkpoint-interval", type=int, required=True)
@@ -832,9 +1118,10 @@ def main() -> None:
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
     semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
+    semantic.add_argument("--resume-counter-receipt", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
@@ -847,9 +1134,10 @@ def main() -> None:
             checkpoint_interval=args.checkpoint_interval,
             write_budget_bytes=args.write_budget_gib * 1024**3,
             resume_checkpoint=args.resume_checkpoint,
+            resume_counter_receipt=args.resume_counter_receipt,
         )
     else:
-        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint)
+        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt)
     print(json.dumps(result, sort_keys=True))
 if __name__ == "__main__":
     main()

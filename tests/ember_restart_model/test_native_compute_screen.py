@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +19,8 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 from native_compute_screen import (
     _assert_source_closure_stable,
     _dispatch_binding,
+    _power_efficiency,
+    _power_sample,
     _validate_disk_preflight,
     _validate_schedule_receipt,
     disk_preflight_receipt,
@@ -48,6 +51,49 @@ class NativeComputeScreenTests(unittest.TestCase):
                 "prediction_daemon_identity": identity,
             }],
         }
+    def test_same_run_power_trace_derives_board_energy_and_tok_per_joule(self) -> None:
+        trace = {"sampling_cadence_s": 1.0, "started_monotonic_s": 0.0, "stopped_monotonic_s": 2.0, "missing_sample_count": 0, "errors": [], "samples": [{"monotonic_s": 0.5, "watts": 100.0, "power_limit_w": 250.0, "memory_used_mib": 12000.0, "driver_version": "1", "gpu_name": "GPU", "gpu_uuid": "GPU-abc", "gpu_index": 0}, {"monotonic_s": 1.5, "watts": 120.0, "power_limit_w": 250.0, "memory_used_mib": 13000.0, "driver_version": "1", "gpu_name": "GPU", "gpu_uuid": "GPU-abc", "gpu_index": 0}]}
+        receipt = _power_efficiency(trace=trace, wall_s=2.0, tokens_processed=3072, active_parameters=1_020_589_568, total_parameters=3_839_161_856, allocator_peak_vram_bytes=13_000_000_000, target_vector_sha256="a" * 64, checkpoint_manifest_sha256="b" * 64)
+        self.assertEqual(receipt["result"], "MEASURED")
+        self.assertEqual(receipt["energy_scope"], "GPU_BOARD_ONLY")
+        self.assertEqual(receipt["gpu_joules"], 220.0)
+        self.assertGreater(receipt["tok_per_gpu_joule"], 0)
+        self.assertEqual(receipt["gpu_uuid"], "GPU-abc")
+        self.assertEqual(receipt["gpu_index"], 0)
+        self.assertEqual(receipt["compute_dtype"], "torch.bfloat16")
+        self.assertEqual(receipt["peak_flops"], 165e12)
+        self.assertEqual(receipt["allocator_peak_vram_bytes"], 13_000_000_000)
+        self.assertEqual(receipt["driver_peak_vram_bytes"], 13000 * 1024**2)
+        self.assertGreater(receipt["mfu"], 0)
+        self.assertIn("RTX_4090", receipt["peak_flops_provenance"])
+
+    def test_power_measurement_below_coverage_floor_withholds_credit(self) -> None:
+        trace = {"sampling_cadence_s": 1.0, "started_monotonic_s": 0.0, "stopped_monotonic_s": 2.0, "missing_sample_count": 0, "errors": [], "samples": [{"monotonic_s": 1.0, "watts": 100.0, "power_limit_w": 250.0, "memory_used_mib": 1.0, "driver_version": "1", "gpu_name": "GPU", "gpu_uuid": "GPU-abc", "gpu_index": 0}]}
+        receipt = _power_efficiency(trace=trace, wall_s=2.0, tokens_processed=3072, active_parameters=1_020_589_568, total_parameters=3_839_161_856, allocator_peak_vram_bytes=1, target_vector_sha256="a" * 64, checkpoint_manifest_sha256="b" * 64)
+        self.assertEqual(receipt["result"], "UNAVAILABLE")
+        self.assertLess(receipt["coverage_ratio"], 0.9)
+    def test_missing_same_run_power_samples_withholds_energy_credit(self) -> None:
+        receipt = _power_efficiency(trace={"sampling_cadence_s": 1.0, "started_monotonic_s": 0.0, "stopped_monotonic_s": 2.0, "missing_sample_count": 1, "errors": ["missing"], "samples": []}, wall_s=2.0, tokens_processed=3072, active_parameters=1, total_parameters=2, allocator_peak_vram_bytes=1, target_vector_sha256="a" * 64, checkpoint_manifest_sha256="b" * 64)
+        self.assertEqual(receipt["result"], "UNAVAILABLE")
+        self.assertEqual(receipt["energy_scope"], "GPU_BOARD_ONLY")
+    def test_temporal_gap_or_missing_trace_anchors_withholds_credit(self) -> None:
+        common = {"watts": 100.0, "power_limit_w": 250.0, "memory_used_mib": 1.0, "driver_version": "1", "gpu_name": "GPU", "gpu_uuid": "GPU-abc", "gpu_index": 0}
+        for trace in (
+            {"sampling_cadence_s": 1.0, "missing_sample_count": 0, "errors": [], "samples": [{**common, "monotonic_s": 0.1}, {**common, "monotonic_s": 1.9}]},
+            {"sampling_cadence_s": 1.0, "started_monotonic_s": 0.0, "stopped_monotonic_s": 4.0, "missing_sample_count": 0, "errors": [], "samples": [{**common, "monotonic_s": 0.1}, {**common, "monotonic_s": 3.9}]},
+        ):
+            receipt = _power_efficiency(trace=trace, wall_s=2.0, tokens_processed=10, active_parameters=2, total_parameters=4, allocator_peak_vram_bytes=1, target_vector_sha256="a" * 64, checkpoint_manifest_sha256="b" * 64)
+            self.assertEqual(receipt["result"], "UNAVAILABLE")
+
+    def test_driver_sample_binds_uuid_index_and_memory(self) -> None:
+        completed = mock.Mock(returncode=0, stdout="GPU-abc, 0, 1234, 100, 250, 560.1, RTX 4090\n", stderr="")
+        with mock.patch("native_compute_screen.subprocess.run", return_value=completed) as run:
+            sample = _power_sample()
+        query = run.call_args.args[0]
+        self.assertIn("uuid,index,memory.used", query[1])
+        self.assertEqual(sample["gpu_uuid"], "GPU-abc")
+        self.assertEqual(sample["gpu_index"], 0)
+        self.assertEqual(sample["memory_used_mib"], 1234.0)
     def test_plan_requires_the_two_full_step_arms_and_bounds_probe_arms(self) -> None:
         plan = screen_plan(total_vram_bytes=24 * 1024**3)
 
