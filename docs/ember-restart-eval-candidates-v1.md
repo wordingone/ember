@@ -29,7 +29,7 @@ exclusions still apply; it cannot substitute for the missing native families.
 
 ## Admission and execution
 
-1. Niko supplies the owned checkpoint's immutable lineage manifest.
+1. Vera selects an immutable completed owned checkpoint manifest and anchors its declared shards before evaluation.
 2. Vera resolves each candidate's final task/split and protocol hashes, then
    records a resource budget before materialization.
 3. Each materialization and run is invoked through `disk_budget_runner.py`
