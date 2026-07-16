@@ -118,11 +118,11 @@
                                                   },
                                     "code":  {
                                                  "path":  "manifests/ember-restart-eval-code-math-custody-v1.json",
-                                                 "sha256":  "90a29f1bf86f489f244eaa3ea220dc3caed354276ad3ddc607cd92f810e3729c"
+                                                 "sha256":  "5bc5bcff925c3cb8d9fb046ae4c6f39faf78a5d5540d089c234bf120b4762695"
                                              },
                                     "mathematics":  {
                                                         "path":  "manifests/ember-restart-eval-code-math-custody-v1.json",
-                                                        "sha256":  "90a29f1bf86f489f244eaa3ea220dc3caed354276ad3ddc607cd92f810e3729c"
+                                                        "sha256":  "5bc5bcff925c3cb8d9fb046ae4c6f39faf78a5d5540d089c234bf120b4762695"
                                                     },
                                     "terminal":  {
                                                      "path":  "manifests/ember-restart-terminal-bench-custody-v1.json",
@@ -130,7 +130,7 @@
                                                  },
                                     "sql":  {
                                                 "path":  "manifests/ember-restart-spider-custody-v1.json",
-                                                "sha256":  "b6671168a42ea4ac351e779d134a0c0374c800ff3c91282bdd1bcc4741c25c21"
+                                                "sha256":  "5269e72cf865f8a0a866a96f6b4e8329c2db7f4d781c2f80198044cf643c4872"
                                             },
                                     "files":  {
                                                   "path":  "manifests/ember-restart-swebench-custody-v1.json",
@@ -142,7 +142,7 @@
                                                    },
                                     "image":  {
                                                   "path":  "manifests/ember-restart-mmmu-validation-custody-v1.json",
-                                                  "sha256":  "09d1c9586049a3bf323c2118573979e0898cd6f4eb2a22b4615b32b97f6321f0"
+                                                  "sha256":  "b6ca1db369351f4736d77a6c9d5bf305422c5579425e4943936c44548b3f0ac7"
                                               },
                                     "audio":  {
                                                   "path":  "manifests/ember-restart-audiobench-custody-v1.json",

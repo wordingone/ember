@@ -28,6 +28,18 @@ def finite(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def evalplus_protocol_sha256(manifest: dict[str, object], suite: str, adapters: list[dict[str, object]]) -> str:
+    asset = manifest.get("frozen_task_assets")
+    asset_entry = asset.get(suite) if isinstance(asset, dict) else None
+    asset_sha = asset_entry.get("sha256") if isinstance(asset_entry, dict) else None
+    license_sha = manifest.get("license_sha256")
+    if not isinstance(asset_sha, str) or not SHA256_RE.fullmatch(asset_sha) or not isinstance(license_sha, str) or not SHA256_RE.fullmatch(license_sha):
+        raise ValueError("EvalPlus custody lacks task/license identity for protocol")
+    adapter_identity = "|".join(f"{entry['path']}:{entry['sha256']}" for entry in sorted(adapters, key=lambda item: item["path"]))
+    material = f"evalplus:{manifest.get('benchmark_id')}:{suite}:{asset_sha}:{license_sha}:{adapter_identity}"
+    return sha256(material.encode("utf-8"))
+
+
 def _load_frozen_code_manifest(path: Path, binding: dict[str, object], suite: str) -> tuple[bytes, dict[str, object]]:
     manifest_bytes = path.read_bytes()
     if sha256(manifest_bytes) != binding.get("frozen_code_manifest_sha256"):
@@ -40,8 +52,6 @@ def _load_frozen_code_manifest(path: Path, binding: dict[str, object], suite: st
     if not isinstance(asset, dict) or asset.get("sha256") != binding.get("task_asset_sha256"):
         raise ValueError("EvalPlus frozen code manifest does not bind task asset")
     protocol = manifest.get("protocol_sha256")
-    if not isinstance(protocol, str) or not SHA256_RE.fullmatch(protocol) or binding.get("protocol_sha256") != protocol:
-        raise ValueError("EvalPlus protocol is not bound by frozen code custody")
     adapters = manifest.get("scoring_adapters")
     if not isinstance(adapters, list) or not adapters:
         raise ValueError("EvalPlus frozen code manifest lacks scoring adapter custody")
@@ -60,6 +70,8 @@ def _load_frozen_code_manifest(path: Path, binding: dict[str, object], suite: st
         seen.add(relative.as_posix())
     if not required_paths.issubset(seen):
         raise ValueError("EvalPlus frozen code manifest lacks required adapter identities")
+    if not isinstance(protocol, str) or not SHA256_RE.fullmatch(protocol) or protocol != evalplus_protocol_sha256(manifest, suite, adapters) or binding.get("protocol_sha256") != protocol:
+        raise ValueError("EvalPlus protocol is not derived from frozen code custody")
     return manifest_bytes, manifest
 
 

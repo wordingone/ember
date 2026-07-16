@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Render only a receipt that central admission has independently admitted."""
-import argparse, hashlib, json, os, shutil, subprocess, sys, tempfile
+import argparse, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 EXECUTION_AUTHORITIES = Path(__file__).resolve().parents[1] / "manifests" / "ember-restart-execution-authorities-v1.json"
@@ -23,15 +23,38 @@ def _registry_is_pinned(registry):
         return False
 
 
+def _reject_symlink_components(candidate, root):
+    root = Path(root)
+    relative = Path(candidate).relative_to(root)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("unsafe symlink")
+
+
+def _python_imports(source):
+    try:
+        text = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return []
+    modules = []
+    for match in re.finditer(r"^\s*(?:from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)|import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*))", text, re.MULTILINE):
+        module = match.group(1) or match.group(2)
+        if module:
+            modules.append(module.replace(".", "/") + ".py")
+    return modules
+
+
 def _registry_path(value, root, field):
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field}: path required")
     relative = Path(value)
     if relative.is_absolute() or relative.drive:
         raise ValueError(f"{field}: path escapes registry root")
+    root = Path(root)
     candidate = root / relative
-    if candidate.is_symlink():
-        raise ValueError(f"{field}: unsafe symlink")
+    _reject_symlink_components(candidate, root)
     source = candidate.resolve()
     try:
         source.relative_to(root.resolve())
@@ -57,20 +80,33 @@ def _pinned_registry_snapshot(registry):
         registry_root = Path(tempfile.mkdtemp(prefix=".trusted-registry-", dir=registry.parent))
         snapshot = registry_root / registry.name
         snapshot.write_bytes(registry_bytes)
-        for index, entry in enumerate(entries):
-            if not isinstance(entry, dict):
-                return None
-            relative, source = _registry_path(entry.get("path"), registry.parent, f"verifiers[{index}]")
+        copied = set()
+
+        def copy_source(relative, source):
+            normalized = relative.as_posix()
+            if normalized in copied:
+                return
+            copied.add(normalized)
             destination = registry_root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(source.read_bytes())
+            for imported in _python_imports(source):
+                helper = source.parent / Path(imported)
+                if helper.is_file():
+                    copy_source(helper.relative_to(registry.parent), helper)
+
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                raise ValueError(f"verifiers[{index}]: malformed entry")
+            relative, source = _registry_path(entry.get("path"), registry.parent, f"verifiers[{index}]")
+            copy_source(relative, source)
         return snapshot, registry_root
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
         if registry_root is not None:
             try:
                 shutil.rmtree(registry_root)
-            except OSError:
-                pass
+            except OSError as cleanup:
+                raise RuntimeError(f"trusted registry cleanup failed: {cleanup}")
         return None
 
 
@@ -96,23 +132,22 @@ def _admitted(manifest, registry, input_bytes):
         matched = False
         staged = set()
 
-        def scan_json(data, field):
+        def scan_json(data, field, document_base):
             try:
                 value = json.loads(data.decode("utf-8"))
             except (UnicodeError, json.JSONDecodeError):
                 return
-            walk(value, field)
+            walk(value, field, document_base)
 
-        def stage_path(value, field):
+        def stage_path(value, field, document_base):
             nonlocal matched
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{field}: path required")
             relative = Path(value)
             if relative.is_absolute() or relative.drive:
                 raise ValueError(f"{field}: path escapes artifact root")
-            candidate = root / relative
-            if candidate.is_symlink():
-                raise ValueError(f"{field}: unsafe symlink")
+            candidate = root / document_base / relative
+            _reject_symlink_components(candidate, root)
             source = candidate.resolve()
             try:
                 source.relative_to(root_real)
@@ -120,7 +155,7 @@ def _admitted(manifest, registry, input_bytes):
                 raise ValueError(f"{field}: path escapes artifact root") from exc
             if not source.exists():
                 raise ValueError(f"{field}: unsafe or missing path")
-            normalized = relative.as_posix()
+            normalized = source.relative_to(root_real).as_posix()
             if normalized in staged:
                 return normalized
             destination = closure_root / Path(normalized)
@@ -132,11 +167,10 @@ def _admitted(manifest, registry, input_bytes):
                 if field.endswith("receipt_path") and _sha256(source_bytes) == wanted:
                     matched = True
                 if source.suffix.lower() == ".json":
-                    scan_json(source_bytes, field)
+                    scan_json(source_bytes, field, source.parent.relative_to(root_real))
             elif source.is_dir():
                 for child in source.rglob("*"):
-                    if child.is_symlink():
-                        raise ValueError(f"{field}: unsafe symlink")
+                    _reject_symlink_components(child, root)
                     child_relative = child.relative_to(source)
                     child_destination = destination / child_relative
                     if child.is_dir():
@@ -146,22 +180,22 @@ def _admitted(manifest, registry, input_bytes):
                         child_bytes = child.read_bytes()
                         child_destination.write_bytes(child_bytes)
                         if child.suffix.lower() == ".json":
-                            scan_json(child_bytes, f"{field}/{child_relative.as_posix()}")
+                            scan_json(child_bytes, f"{field}/{child_relative.as_posix()}", child.parent.relative_to(root_real))
             else:
                 raise ValueError(f"{field}: unsupported path")
             return normalized
 
-        def walk(value, field="manifest"):
+        def walk(value, field="manifest", document_base=Path(".")):
             if isinstance(value, dict):
                 for key, child in value.items():
                     child_field = f"{field}.{key}"
-                    if isinstance(child, str) and (key == "path" or key.endswith("_path") or key.endswith("_dir")):
-                        stage_path(child, child_field)
+                    if isinstance(child, str) and key != "identity_path" and (key == "path" or key.endswith("_path") or key.endswith("_dir")):
+                        stage_path(child, child_field, document_base)
                     else:
-                        walk(child, child_field)
+                        walk(child, child_field, document_base)
             elif isinstance(value, list):
                 for index, child in enumerate(value):
-                    walk(child, f"{field}[{index}]")
+                    walk(child, f"{field}[{index}]", document_base)
 
         walk(payload)
         if not matched:
