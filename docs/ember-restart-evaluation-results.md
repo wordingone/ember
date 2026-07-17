@@ -36,6 +36,12 @@ license-card artifact, and its derived protocol; it remains preflight-only.
 
 MATH-500, MMLU-Pro, and static BFCL strict freeze manifests now derive protocol identity from exact scorer bytes plus frozen split/reference and license/version identity; valid-hex caller substitutions are rejected. These remain preflight-only and do not create checkpoint-bound scores.
 
+The benchmark-custody successor also fails closed on four identity boundaries:
+the trusted-verifier registry must match the externally pinned authority bytes;
+claim rendering preserves checkpoint and benchmark identity; AudioBench closed
+runs must match its frozen custody; and EvalPlus, Spider, and MMMU reject altered
+checkpoint, configuration, or protocol identities. These are integrity repairs,
+not capability measurements, and no claim-bearing result is implied.
 ## Frozen-matrix coverage and current limits
 
 Every requested family is tracked below. A frozen source, scorer self-test, or
