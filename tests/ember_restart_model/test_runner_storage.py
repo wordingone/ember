@@ -521,6 +521,36 @@ class RunnerStorageTests(unittest.TestCase):
             events = [json.loads(line) for line in (parent / ".checkpoint-custody-deletion-ledger.jsonl").read_text(encoding="utf-8").splitlines()]
             self.assertEqual([event["event"] for event in events], ["PREPARED"])
 
+    def test_retention_recovers_matching_prepared_evidence_without_duplicate_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                victim = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "OLD"})
+                pointer, size, digest, _ = run_vertical_slice._quarantine_evidence_identity(parent, victim)
+                ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+                prepared = {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": pointer, "bytes": size, "sha256": digest, "reason": "bounded evidence retention"}
+                ledger.write_text(json.dumps(prepared, sort_keys=True) + "\n", encoding="utf-8")
+                run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+            events = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([event["event"] for event in events], ["PREPARED", "COMMITTED"])
+            self.assertFalse(victim.exists())
+            self.assertEqual(run_vertical_slice._custody_reconciliation(parent)["deleted_bytes"], size)
+
+    def test_retention_refuses_mutated_prepared_evidence_without_new_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                victim = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "OLD"})
+                pointer, size, digest, _ = run_vertical_slice._quarantine_evidence_identity(parent, victim)
+                ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+                prepared = {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": pointer, "bytes": size, "sha256": digest, "reason": "bounded evidence retention"}
+                ledger.write_text(json.dumps(prepared, sort_keys=True) + "\n", encoding="utf-8")
+                victim.write_bytes(b"mutated")
+                with self.assertRaisesRegex(RuntimeError, "prepared evidence identity"):
+                    run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+            self.assertTrue(victim.exists())
+            self.assertEqual([json.loads(line)["event"] for line in ledger.read_text(encoding="utf-8").splitlines()], ["PREPARED"])
+
     def test_evidence_deletion_prepared_failure_preserves_and_reconciles(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
