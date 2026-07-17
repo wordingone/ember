@@ -111,7 +111,7 @@ def checkpoint_serialization_byte_bound(config_path: Path, *, active_parameters:
 
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     serialization = payload.get("checkpoints", {}).get("serialization")
-    required = {"model_parameter_bytes", "optimizer_state_bytes_per_active_parameter", "format_overhead_bytes"}
+    required = {"model_parameter_bytes", "optimizer_state_bytes_per_active_parameter", "format_overhead_bytes", "host_commit_reserve_gib"}
     if not isinstance(serialization, dict) or set(serialization) != required:
         raise ValueError("checkpoint serialization contract has an invalid shape")
     if any(type(serialization[field]) is not int or serialization[field] < 1 for field in required):
@@ -130,6 +130,17 @@ def checkpoint_serialization_byte_bound(config_path: Path, *, active_parameters:
         + selected_active_parameters * serialization["optimizer_state_bytes_per_active_parameter"]
         + serialization["format_overhead_bytes"]
     )
+
+
+def checkpoint_host_commit_reserve_bytes(config_path: Path) -> int:
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    serialization = payload.get("checkpoints", {}).get("serialization")
+    if not isinstance(serialization, dict):
+        raise ValueError("checkpoint serialization contract has an invalid shape")
+    reserve_gib = serialization.get("host_commit_reserve_gib")
+    if type(reserve_gib) is not int or reserve_gib < 1:
+        raise ValueError("checkpoint host commit reserve must be a positive integer GiB value")
+    return reserve_gib * 1024**3
 
 
 def semantic_publication_plan(*, steps: int, checkpoint_interval: int, checkpoint_byte_bound: int, write_budget_bytes: int, initial_global_step: int = 0) -> dict[str, int]:
@@ -913,6 +924,7 @@ def run(
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
+                host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
                 pre_publish_verifier=verify_staging,
             )
             return published, verified_holder["receipt"]
@@ -1119,7 +1131,9 @@ def run_semantic(
                 rng_state=_rng_state(torch.device("cuda")), data_cursor=dict(state["data_cursor"]),
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
-                max_serialized_bytes=checkpoint_byte_bound, pre_publish_verifier=verify_staging,
+                max_serialized_bytes=checkpoint_byte_bound,
+                host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
+                pre_publish_verifier=verify_staging,
             )
             return published, verified_holder["receipt"]
 

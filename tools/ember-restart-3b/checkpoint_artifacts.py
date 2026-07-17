@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import inspect
 import json
@@ -22,6 +23,8 @@ from parameter_counter import measure_parameter_counts
 
 
 _STAGING_LEASE = ".writer-lease.json"
+_FAILURE_EVIDENCE_LIMIT = 64 * 1024
+_STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
 
 
 def _sha256(path: Path) -> str:
@@ -30,6 +33,133 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _select_detached_state(
+    state: Mapping[str, torch.Tensor],
+    predicate: Callable[[str], bool],
+) -> dict[str, torch.Tensor]:
+    """Select storage-sharing detached views; never clone the model to host memory."""
+
+    return {name: value.detach() for name, value in state.items() if predicate(name)}
+
+
+def _tensor_bytes(value: object) -> int:
+    if isinstance(value, torch.Tensor):
+        return int(value.numel() * value.element_size())
+    if isinstance(value, Mapping):
+        return max((_tensor_bytes(item) for item in value.values()), default=0)
+    if isinstance(value, (list, tuple)):
+        return max((_tensor_bytes(item) for item in value), default=0)
+    return 0
+
+
+def checkpoint_streaming_peak_bytes(
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+) -> int:
+    """Bound one-storage-at-a-time serialization plus a fixed runtime buffer."""
+
+    largest = max(
+        _tensor_bytes(model.state_dict()),
+        _tensor_bytes(optimizer.state_dict()),
+    )
+    return largest + _STREAMING_OVERHEAD_BYTES
+
+
+def available_host_commit_bytes() -> int:
+    """Return Windows system commit headroom (commit limit minus committed pages)."""
+
+    if os.name != "nt":
+        raise RuntimeError("host commit probe currently requires Windows")
+
+    class PerformanceInformation(ctypes.Structure):
+        _fields_ = [
+            ("cb", ctypes.c_ulong),
+            ("CommitTotal", ctypes.c_size_t),
+            ("CommitLimit", ctypes.c_size_t),
+            ("CommitPeak", ctypes.c_size_t),
+            ("PhysicalTotal", ctypes.c_size_t),
+            ("PhysicalAvailable", ctypes.c_size_t),
+            ("SystemCache", ctypes.c_size_t),
+            ("KernelTotal", ctypes.c_size_t),
+            ("KernelPaged", ctypes.c_size_t),
+            ("KernelNonpaged", ctypes.c_size_t),
+            ("PageSize", ctypes.c_size_t),
+            ("HandleCount", ctypes.c_ulong),
+            ("ProcessCount", ctypes.c_ulong),
+            ("ThreadCount", ctypes.c_ulong),
+        ]
+
+    info = PerformanceInformation()
+    info.cb = ctypes.sizeof(info)
+    if not ctypes.windll.psapi.GetPerformanceInfo(ctypes.byref(info), info.cb):
+        raise RuntimeError("Windows host commit probe failed")
+    return max(0, int(info.CommitLimit - info.CommitTotal) * int(info.PageSize))
+
+
+def checkpoint_commit_preflight(
+    *,
+    available_commit_bytes: int,
+    streaming_peak_bytes: int,
+    reserve_bytes: int,
+) -> dict[str, int | str]:
+    if any(type(value) is not int or value < 0 for value in (available_commit_bytes, streaming_peak_bytes, reserve_bytes)):
+        raise ValueError("checkpoint host commit values must be nonnegative integers")
+    required = streaming_peak_bytes + reserve_bytes
+    if available_commit_bytes < required:
+        raise RuntimeError(
+            "checkpoint host commit reserve is insufficient: "
+            f"available={available_commit_bytes}, required={required}, "
+            f"streaming_peak={streaming_peak_bytes}, reserve={reserve_bytes}"
+        )
+    return {
+        "status": "PASS",
+        "available_commit_bytes": available_commit_bytes,
+        "streaming_peak_bytes": streaming_peak_bytes,
+        "reserve_bytes": reserve_bytes,
+        "required_commit_bytes": required,
+    }
+
+
+def _retain_write_failure_evidence(
+    published_root: Path,
+    staging_root: Path,
+    error: BaseException,
+) -> Path:
+    manifest_path = staging_root / "checkpoint-manifest.json"
+    manifest_sha256 = _sha256(manifest_path) if manifest_path.is_file() else None
+    shards: list[dict[str, object]] = []
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for record in manifest.get("shards", []):
+                if isinstance(record, dict):
+                    shards.append({
+                        field: record.get(field)
+                        for field in ("path", "role", "sha256", "bytes", "publication_mode", "incremental_bytes")
+                    })
+        except (OSError, ValueError, TypeError):
+            shards = []
+    payload = {
+        "schema_version": "ember-checkpoint-write-failure-v1",
+        "target": published_root.name,
+        "error_type": type(error).__name__,
+        "error_message": str(error)[:4096],
+        "checkpoint_manifest_sha256": manifest_sha256,
+        "shards": shards,
+    }
+    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    if len(encoded) >= _FAILURE_EVIDENCE_LIMIT:
+        raise RuntimeError("checkpoint failure evidence exceeds its bounded retention limit")
+    digest = hashlib.sha256(encoded).hexdigest()
+    quarantine = published_root.parent / ".checkpoint-quarantine"
+    quarantine.mkdir(exist_ok=True)
+    return _write_atomic(
+        quarantine,
+        f"checkpoint-write-failed-{digest}.json",
+        lambda handle: handle.write(encoded),
+    )
 
 
 def _record(
@@ -380,6 +510,7 @@ def write_checkpoint_artifacts(
     optimizer_contract: Mapping[str, Any] | None = None,
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
+    host_commit_reserve_bytes: int | None = None,
     pre_publish_verifier: Callable[[Path, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
@@ -405,6 +536,13 @@ def write_checkpoint_artifacts(
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
     published_root.parent.mkdir(parents=True, exist_ok=True)
+    host_commit_plan: dict[str, int | str] | None = None
+    if host_commit_reserve_bytes is not None:
+        host_commit_plan = checkpoint_commit_preflight(
+            available_commit_bytes=available_host_commit_bytes(),
+            streaming_peak_bytes=checkpoint_streaming_peak_bytes(model, optimizer),
+            reserve_bytes=host_commit_reserve_bytes,
+        )
     # The PID in the private name lets a later retention pass distinguish an
     # active writer from crash residue without publishing a mutable lease file
     # inside the checkpoint bundle.
@@ -416,11 +554,8 @@ def write_checkpoint_artifacts(
             _STAGING_LEASE,
             {"pid": os.getpid(), "started_at_ns": time.time_ns()},
         )
-        shared_state = {
-            name: value.detach().cpu()
-            for name, value in model.state_dict().items()
-            if ".experts." not in name
-        }
+        model_state = model.state_dict()
+        shared_state = _select_detached_state(model_state, lambda name: ".experts." not in name)
         shared = _write_atomic(
             root,
             "shared.pt",
@@ -431,11 +566,6 @@ def write_checkpoint_artifacts(
         shards.append(_record(replay, root, role="replay_state"))
         expert_checkpoint_sha256: dict[str, str] = {}
         for name in EXPERT_NAMES:
-            state = {
-                key: value.detach().cpu()
-                for key, value in model.state_dict().items()
-                if f".experts.{name}." in key
-            }
             publication_mode = "written"
             if specialist_lineage is not None and name != model.active_expert:
                 path, publication_mode = _link_or_copy_verified(
@@ -444,6 +574,10 @@ def write_checkpoint_artifacts(
                     preflight_parent_shards[name],
                 )
             else:
+                state = _select_detached_state(
+                    model_state,
+                    lambda key, selected=name: f".experts.{selected}." in key,
+                )
                 path = _write_atomic(
                     root,
                     f"expert-{name}.pt",
@@ -491,6 +625,8 @@ def write_checkpoint_artifacts(
         }
         if lineage is not None:
             manifest["lineage"] = lineage
+        if host_commit_plan is not None:
+            manifest["host_commit_preflight"] = host_commit_plan
         manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
         logical_serialized_bytes = sum(
             path.stat().st_size
@@ -521,9 +657,19 @@ def write_checkpoint_artifacts(
         (root / _STAGING_LEASE).unlink(missing_ok=True)
         os.replace(root, published_root)
         return receipt
-    except Exception:
+    except Exception as error:
+        evidence_error: Exception | None = None
+        if root.exists():
+            try:
+                _retain_write_failure_evidence(published_root, root, error)
+            except Exception as retention_error:
+                evidence_error = retention_error
         if root.exists():
             shutil.rmtree(root)
+        if evidence_error is not None:
+            raise RuntimeError(
+                f"checkpoint write failed and bounded evidence retention also failed: {evidence_error}"
+            ) from error
         raise
 
 
