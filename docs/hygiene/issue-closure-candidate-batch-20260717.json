@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-issue-closure-candidate-batch-v1",
   "generated_at": "2026-07-17T16:48:00Z",
-  "public_master_sha256": "f919b116066106fc91a7d86feff39eecc70e14d0",
+  "public_master_git_oid": "f919b116066106fc91a7d86feff39eecc70e14d0",
   "batch_limit": 10,
   "review_only": true,
   "closures_performed": 0,
