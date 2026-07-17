@@ -645,5 +645,91 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertEqual(json.loads(repeated_a.read_text(encoding="utf-8"))["result"], "A")
             run_vertical_slice._custody_reconciliation(parent)
 
+
+    def test_evidence_retention_crash_matrix_reconciles_once_without_duplicate_prepare(self) -> None:
+        """Every durable boundary is recoverable and never repeats a pointer PREPARED row."""
+
+        def ledger_events(parent: Path) -> list[dict[str, object]]:
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            if not ledger.exists():
+                return []
+            return [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+
+        for boundary in ("prepare", "unlink", "commit", "return"):
+            with self.subTest(boundary=boundary), tempfile.TemporaryDirectory() as directory:
+                parent = Path(directory)
+                with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                    victim = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "OLD"})
+                    if boundary == "prepare":
+                        real_unlink = Path.unlink
+
+                        def crash_before_unlink(path: Path, *args: object, **kwargs: object) -> None:
+                            if path == victim:
+                                raise OSError("injected crash after PREPARED")
+                            real_unlink(path, *args, **kwargs)
+
+                        with unittest.mock.patch.object(Path, "unlink", crash_before_unlink):
+                            with self.assertRaisesRegex(RuntimeError, "did not commit"):
+                                run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+                    elif boundary == "unlink":
+                        real_unlink = Path.unlink
+
+                        def crash_after_unlink(path: Path, *args: object, **kwargs: object) -> None:
+                            if path == victim:
+                                real_unlink(path, *args, **kwargs)
+                                raise OSError("injected crash after unlink")
+                            real_unlink(path, *args, **kwargs)
+
+                        with unittest.mock.patch.object(Path, "unlink", crash_after_unlink):
+                            with self.assertRaisesRegex(RuntimeError, "did not commit"):
+                                run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+                    elif boundary == "commit":
+                        real_fsync = run_vertical_slice.os.fsync
+                        calls = 0
+
+                        def crash_after_commit_append(descriptor: int) -> None:
+                            nonlocal calls
+                            calls += 1
+                            if calls == 3:
+                                raise OSError("injected crash after COMMITTED append")
+                            real_fsync(descriptor)
+
+                        with unittest.mock.patch.object(run_vertical_slice.os, "fsync", crash_after_commit_append):
+                            with self.assertRaises(OSError):
+                                run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+                    else:
+                        run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+
+                    if boundary != "return":
+                        run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+
+                first = run_vertical_slice._custody_reconciliation(parent)
+                second = run_vertical_slice._custody_reconciliation(parent)
+                self.assertEqual(second, first)
+                prepared = [event for event in ledger_events(parent) if event.get("event") == "PREPARED"]
+                pointers = [event["pointer"] for event in prepared]
+                self.assertEqual(len(pointers), len(set(pointers)))
+                self.assertFalse(victim.exists())
+
+
+    def test_duplicate_prepared_pointer_is_fail_closed_and_preserves_raw_evidence(self) -> None:
+        """A corrupt duplicate PREPARED row cannot authorize any deletion."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            evidence = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "OLD"})
+            payload = evidence.read_bytes()
+            row = {
+                "schema_version": "ember-checkpoint-custody-deletion-v2",
+                "event": "PREPARED",
+                "pointer": evidence.relative_to(parent).as_posix(),
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "reason": "bounded evidence retention",
+            }
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_text("\n".join(json.dumps(row, sort_keys=True, separators=(",", ":")) for _ in range(2)) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "duplicate|transition"):
+                run_vertical_slice._custody_reconciliation(parent)
+            self.assertEqual(evidence.read_bytes(), payload)
 if __name__ == "__main__":
     unittest.main()
