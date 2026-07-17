@@ -122,7 +122,7 @@ class RunnerStorageTests(unittest.TestCase):
             quarantine.mkdir(parents=True)
             (live / "shared.pt").write_bytes(b"live")
             (quarantine / "shared.pt").write_bytes(b"quarantine")
-            pointer = ".checkpoint-quarantine/deleted-evidence.json"
+            pointer = ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json"
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
             ledger.write_text(
                 json.dumps(
@@ -143,7 +143,7 @@ class RunnerStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
-            ledger.write_text(json.dumps({"schema_version": "ember-checkpoint-custody-deletion-v1", "event": "COMMITTED", "pointer": ".checkpoint-quarantine/missing.json", "bytes": 17, "sha256": "a" * 64, "reason": "test"}, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            ledger.write_text(json.dumps({"schema_version": "ember-checkpoint-custody-deletion-v1", "event": "COMMITTED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 17, "sha256": "a" * 64, "reason": "test"}, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "COMMITTED|transition|legacy"):
                 run_vertical_slice._custody_reconciliation(parent)
 
@@ -151,7 +151,7 @@ class RunnerStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
-            base = {"schema_version": "ember-checkpoint-custody-deletion-v2", "pointer": ".checkpoint-quarantine/missing.json", "bytes": 17, "sha256": "a" * 64, "reason": "test"}
+            base = {"schema_version": "ember-checkpoint-custody-deletion-v2", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 17, "sha256": "a" * 64, "reason": "test"}
             events = [{**base, "event": "PREPARED"}, {**base, "event": "COMMITTED"}, {**base, "event": "COMMITTED"}]
             ledger.write_text("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "duplicate|transition"):
@@ -161,7 +161,7 @@ class RunnerStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
-            pointer = ".checkpoint-quarantine/missing.json"
+            pointer = ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json"
             identity = {"pointer": pointer, "bytes": 17, "sha256": "a" * 64, "reason": "test"}
             cases = (
                 (
@@ -188,7 +188,7 @@ class RunnerStorageTests(unittest.TestCase):
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
             base = {
                 "schema_version": "ember-checkpoint-custody-deletion-v2",
-                "pointer": ".checkpoint-quarantine/missing.json",
+                "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json",
                 "bytes": 17,
                 "sha256": "a" * 64,
             }
@@ -196,6 +196,61 @@ class RunnerStorageTests(unittest.TestCase):
             ledger.write_text("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "identity|reason"):
                 run_vertical_slice._custody_reconciliation(parent)
+
+    def test_custody_reconciliation_rejects_windows_pointer_alias_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            base = {
+                "schema_version": "ember-checkpoint-custody-deletion-v2",
+                "bytes": 17,
+                "sha256": "a" * 64,
+                "reason": "test",
+            }
+            pairs = []
+            for pointer in (".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", ".checkpoint-quarantine\\evidence-" + "a" * 64 + ".json"):
+                pairs.extend(({**base, "event": "PREPARED", "pointer": pointer}, {**base, "event": "COMMITTED", "pointer": pointer}))
+            ledger.write_text("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in pairs) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "pointer|duplicate|canonical"):
+                run_vertical_slice._custody_reconciliation(parent)
+
+    def test_custody_reconciliation_rejects_noncanonical_or_case_alias_pointers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            base = {
+                "schema_version": "ember-checkpoint-custody-deletion-v2",
+                "event": "PREPARED",
+                "bytes": 17,
+                "sha256": "a" * 64,
+                "reason": "test",
+            }
+            for pointer in (
+                ".checkpoint-quarantine\\evidence-" + "a" * 64 + ".json",
+                ".checkpoint-quarantine/./missing.json",
+                "./.checkpoint-quarantine/missing.json",
+                ".checkpoint-quarantine/../missing.json",
+                "C:/checkpoint-quarantine/missing.json",
+                ".checkpoint-QUARANTINE/missing.json",
+                ".checkpoint-quarantine/MISSING.json",
+                ".checkpoint-quarantine/c:foo",
+                ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json.",
+                ".checkpoint-quarantine/con-" + "a" * 64 + ".json",
+                ".checkpoint-quarantine/unicode-é-" + "a" * 64 + ".json",
+                ".checkpoint-quarantine/nested/evidence-" + "a" * 64 + ".json",
+            ):
+                with self.subTest(pointer=pointer):
+                    ledger.write_text(json.dumps({**base, "pointer": pointer}, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+                    with self.assertRaisesRegex(RuntimeError, "pointer|canonical|safe"):
+                        run_vertical_slice._custody_reconciliation(parent)
+
+    def test_generated_evidence_pointers_use_closed_portable_grammar(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            for name in ("same-name", "Con", "unsafe name/with:punctuation"):
+                evidence = run_vertical_slice._write_bounded_quarantine_evidence(parent, name, {"result": name})
+                pointer = evidence.relative_to(parent).as_posix()
+                self.assertEqual(run_vertical_slice._canonical_custody_deletion_pointer(pointer), pointer)
 
     def test_missing_prepared_evidence_pointer_is_never_recreated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -432,7 +487,7 @@ class RunnerStorageTests(unittest.TestCase):
             quarantine = parent / ".checkpoint-quarantine"
             quarantine.mkdir()
             for index in range(33):
-                (quarantine / f"old-{index:02d}.json").write_bytes(f"old-{index}".encode("ascii"))
+                (quarantine / f"old-{index:02d}-{'a' * 64}.json").write_bytes(f"old-{index}".encode("ascii"))
             real_unlink = Path.unlink
             def fail_old(path: Path, *args: object, **kwargs: object) -> None:
                 if path.name.startswith("old-"):
@@ -454,14 +509,14 @@ class RunnerStorageTests(unittest.TestCase):
             parent = Path(directory)
             quarantine = parent / ".checkpoint-quarantine"
             quarantine.mkdir()
-            pointer = ".checkpoint-quarantine/crashed.json"
+            pointer = ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json"
             payload = b"crashed-evidence"
             digest = __import__("hashlib").sha256(payload).hexdigest()
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
             ledger.write_text(json.dumps({"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": pointer, "bytes": len(payload), "sha256": digest, "reason": "crash replay"}) + "\n", encoding="utf-8")
-            (quarantine / "crashed.json").write_bytes(payload)
+            (quarantine / ("evidence-" + "b" * 64 + ".json")).write_bytes(payload)
             self.assertEqual(run_vertical_slice._custody_reconciliation(parent)["deleted_bytes"], 0)
-            (quarantine / "crashed.json").unlink()
+            (quarantine / ("evidence-" + "b" * 64 + ".json")).unlink()
             first = run_vertical_slice._custody_reconciliation(parent)
             second = run_vertical_slice._custody_reconciliation(parent)
             self.assertEqual(first["deleted_bytes"], len(payload))
