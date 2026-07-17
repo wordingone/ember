@@ -145,8 +145,8 @@ pub enum EmberdError {
         available_free_bytes: u64,
     },
     DispatchHostCommitReserve {
-        free_commit_at_dispatch_bytes: u64,
-        observed_free_commit_bytes: u64,
+        required_available_maximum_commit_bytes: u64,
+        observed_available_maximum_commit_bytes: u64,
         reserve_bytes: u64,
         maximum_job_memory_bytes: u64,
         simulated_peak_commit_bytes: u64,
@@ -189,6 +189,18 @@ pub enum JobState {
     Stopped,
     Exited,
     Failed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HostCommitCapacity {
+    pub physical_ram_bytes: u64,
+    pub pagefile_maximum_bytes: u64,
+    pub pagefile_configuration_source: String,
+    pub pagefile_configuration_sha256: String,
+    pub commit_total_bytes: u64,
+    pub current_commit_limit_bytes: u64,
+    pub maximum_commit_capacity_bytes: u64,
+    pub available_maximum_commit_bytes: u64,
 }
 
 impl JobState {
@@ -323,7 +335,7 @@ pub struct DispatchManifest {
     pub custody_root: PathBuf,
     pub storage_reserves: Vec<DispatchStorageReserve>,
     pub minimum_free_vram_bytes: u64,
-    pub free_commit_at_dispatch_bytes: u64,
+    pub required_available_maximum_commit_bytes: u64,
     pub maximum_job_memory_bytes: u64,
     pub simulated_peak_commit_bytes: u64,
     pub preflight_receipt: PathBuf,
@@ -968,7 +980,7 @@ impl Daemon {
             observed_at_ms,
             free_space,
             free_vram,
-            available_host_commit_bytes,
+            probe_host_commit_capacity,
         )
     }
 
@@ -983,7 +995,7 @@ impl Daemon {
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
-        H: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
     {
         let manifest_path = fs::canonicalize(manifest_path).map_err(|error| {
             EmberdError::InvalidDispatchManifest {
@@ -997,7 +1009,7 @@ impl Daemon {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
-        if manifest.schema_version != "emberd-dispatch-manifest-v1"
+        if manifest.schema_version != "emberd-dispatch-manifest-v2"
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
@@ -1010,12 +1022,12 @@ impl Daemon {
             || manifest.bindings.is_empty()
             || manifest.storage_reserves.is_empty()
             || manifest.minimum_free_vram_bytes == 0
-            || manifest.free_commit_at_dispatch_bytes == 0
+            || manifest.required_available_maximum_commit_bytes == 0
             || manifest.maximum_job_memory_bytes == 0
             || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberdError::InvalidDispatchManifest {
-                detail: "dispatch manifest requires the closed v1 schema, identities, window, bindings, and reserves".into(),
+                detail: "dispatch manifest requires the closed v2 schema, identities, window, bindings, and reserves".into(),
             });
         }
         if observed_at_ms < manifest.not_before_ms {
@@ -1046,12 +1058,14 @@ impl Daemon {
             return Err(EmberdError::ReceiptAlreadyExists { path: receipt_path });
         }
 
-        let observed_free_commit_bytes = free_host_commit()?;
+        let host_commit = free_host_commit()?;
+        let observed_available_maximum_commit_bytes = host_commit.available_maximum_commit_bytes;
         let derived_maximum = manifest
-            .free_commit_at_dispatch_bytes
+            .required_available_maximum_commit_bytes
             .checked_sub(DISPATCH_HOST_COMMIT_RESERVE_BYTES);
         if derived_maximum != Some(manifest.maximum_job_memory_bytes)
-            || observed_free_commit_bytes < manifest.free_commit_at_dispatch_bytes
+            || observed_available_maximum_commit_bytes
+                < manifest.required_available_maximum_commit_bytes
             || manifest.simulated_peak_commit_bytes > manifest.maximum_job_memory_bytes
         {
             let refusal = json!({
@@ -1062,8 +1076,16 @@ impl Daemon {
                 "observed_at_ms": observed_at_ms,
                 "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
                 "host_commit": {
-                    "free_commit_at_dispatch_bytes": manifest.free_commit_at_dispatch_bytes,
-                    "observed_free_commit_bytes": observed_free_commit_bytes,
+                    "basis": "maximum_configured_capacity",
+                    "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
+                    "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
+                    "physical_ram_bytes": host_commit.physical_ram_bytes,
+                    "pagefile_maximum_bytes": host_commit.pagefile_maximum_bytes,
+                    "pagefile_configuration_source": host_commit.pagefile_configuration_source,
+                    "pagefile_configuration_sha256": host_commit.pagefile_configuration_sha256,
+                    "commit_total_bytes": host_commit.commit_total_bytes,
+                    "current_commit_limit_bytes": host_commit.current_commit_limit_bytes,
+                    "maximum_commit_capacity_bytes": host_commit.maximum_commit_capacity_bytes,
                     "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
                     "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
                     "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
@@ -1071,8 +1093,9 @@ impl Daemon {
             });
             atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
             return Err(EmberdError::DispatchHostCommitReserve {
-                free_commit_at_dispatch_bytes: manifest.free_commit_at_dispatch_bytes,
-                observed_free_commit_bytes,
+                required_available_maximum_commit_bytes: manifest
+                    .required_available_maximum_commit_bytes,
+                observed_available_maximum_commit_bytes,
                 reserve_bytes: DISPATCH_HOST_COMMIT_RESERVE_BYTES,
                 maximum_job_memory_bytes: manifest.maximum_job_memory_bytes,
                 simulated_peak_commit_bytes: manifest.simulated_peak_commit_bytes,
@@ -1203,8 +1226,16 @@ impl Daemon {
             },
             "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
             "host_commit": {
-                "free_commit_at_dispatch_bytes": manifest.free_commit_at_dispatch_bytes,
-                "observed_free_commit_bytes": observed_free_commit_bytes,
+                "basis": "maximum_configured_capacity",
+                "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
+                "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
+                "physical_ram_bytes": host_commit.physical_ram_bytes,
+                "pagefile_maximum_bytes": host_commit.pagefile_maximum_bytes,
+                "pagefile_configuration_source": host_commit.pagefile_configuration_source,
+                "pagefile_configuration_sha256": host_commit.pagefile_configuration_sha256,
+                "commit_total_bytes": host_commit.commit_total_bytes,
+                "current_commit_limit_bytes": host_commit.current_commit_limit_bytes,
+                "maximum_commit_capacity_bytes": host_commit.maximum_commit_capacity_bytes,
                 "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
                 "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
                 "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
@@ -2653,7 +2684,7 @@ fn available_free_bytes(_root: &Path) -> Result<u64> {
 }
 
 #[cfg(windows)]
-fn available_host_commit_bytes() -> Result<u64> {
+pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
     use windows_sys::Win32::System::ProcessStatus::{GetPerformanceInfo, PERFORMANCE_INFORMATION};
 
     let mut info: PERFORMANCE_INFORMATION = unsafe { std::mem::zeroed() };
@@ -2661,16 +2692,150 @@ fn available_host_commit_bytes() -> Result<u64> {
     if unsafe { GetPerformanceInfo(&mut info, info.cb) } == 0 {
         return Err(std::io::Error::last_os_error().into());
     }
-    let free_pages = info.CommitLimit.saturating_sub(info.CommitTotal) as u64;
-    free_pages.checked_mul(info.PageSize as u64).ok_or_else(|| {
-        EmberdError::InvalidDispatchManifest {
-            detail: "Windows host commit probe overflowed bytes".into(),
-        }
+    let page_size = info.PageSize as u64;
+    let pages_to_bytes = |pages: usize, label: &str| {
+        (pages as u64)
+            .checked_mul(page_size)
+            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                detail: format!("Windows host commit probe overflowed {label}"),
+            })
+    };
+    let physical_ram_bytes = pages_to_bytes(info.PhysicalTotal, "physical RAM bytes")?;
+    let commit_total_bytes = pages_to_bytes(info.CommitTotal, "committed bytes")?;
+    let current_commit_limit_bytes =
+        pages_to_bytes(info.CommitLimit, "current commit limit bytes")?;
+    let (pagefile_maximum_bytes, pagefile_configuration_sha256) =
+        configured_pagefile_maximum_bytes()?;
+    let maximum_commit_capacity_bytes = physical_ram_bytes
+        .checked_add(pagefile_maximum_bytes)
+        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            detail: "Windows maximum commit capacity overflowed bytes".into(),
+        })?;
+    if maximum_commit_capacity_bytes < current_commit_limit_bytes {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "configured pagefile maximum is below the live Windows commit limit".into(),
+        });
+    }
+    if maximum_commit_capacity_bytes < commit_total_bytes {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "live committed bytes exceed configured maximum commit capacity".into(),
+        });
+    }
+    Ok(HostCommitCapacity {
+        physical_ram_bytes,
+        pagefile_maximum_bytes,
+        pagefile_configuration_source:
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
+                .into(),
+        pagefile_configuration_sha256,
+        commit_total_bytes,
+        current_commit_limit_bytes,
+        maximum_commit_capacity_bytes,
+        available_maximum_commit_bytes: maximum_commit_capacity_bytes - commit_total_bytes,
     })
 }
 
+#[cfg(windows)]
+fn configured_pagefile_maximum_bytes() -> Result<(u64, String)> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_MULTI_SZ,
+    };
+
+    let wide = |value: &str| {
+        value
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>()
+    };
+    let subkey = wide(r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management");
+    let name = wide("PagingFiles");
+    let mut bytes = 0u32;
+    let first = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            subkey.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_MULTI_SZ,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut bytes,
+        )
+    };
+    if first != ERROR_SUCCESS || bytes < 4 || bytes % 2 != 0 {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: format!("fixed pagefile maximum registry size probe failed: {first}"),
+        });
+    }
+    let mut buffer = vec![0u16; bytes as usize / 2];
+    let second = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            subkey.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_MULTI_SZ,
+            std::ptr::null_mut(),
+            buffer.as_mut_ptr().cast(),
+            &mut bytes,
+        )
+    };
+    if second != ERROR_SUCCESS {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: format!("fixed pagefile maximum registry read failed: {second}"),
+        });
+    }
+    buffer.truncate(bytes as usize / 2);
+    let raw_bytes =
+        unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), buffer.len() * 2) };
+    let configuration_sha256 = hash_bytes(raw_bytes);
+    let entries = buffer
+        .split(|unit| *unit == 0)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            let text =
+                String::from_utf16(entry).map_err(|_| EmberdError::InvalidDispatchManifest {
+                    detail: "fixed pagefile maximum registry value is not UTF-16".into(),
+                })?;
+            Ok(text)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok((
+        pagefile_maximum_bytes_from_entries(&entries)?,
+        configuration_sha256,
+    ))
+}
+
+fn pagefile_maximum_bytes_from_entries(entries: &[String]) -> Result<u64> {
+    let mut total_mib = 0u64;
+    for text in entries {
+        let maximum_mib = text
+            .split_whitespace()
+            .next_back()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                detail: "pagefile setting is not a fixed positive maximum".into(),
+            })?;
+        total_mib = total_mib.checked_add(maximum_mib).ok_or_else(|| {
+            EmberdError::InvalidDispatchManifest {
+                detail: "pagefile maximum overflowed MiB".into(),
+            }
+        })?;
+    }
+    if total_mib == 0 {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "no fixed pagefile maximum is configured".into(),
+        });
+    }
+    total_mib
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            detail: "pagefile maximum overflowed bytes".into(),
+        })
+}
+
 #[cfg(not(windows))]
-fn available_host_commit_bytes() -> Result<u64> {
+pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
     Err(EmberdError::InvalidDispatchManifest {
         detail: "native host commit probing is currently Windows-only".into(),
     })
@@ -3995,5 +4160,29 @@ mod dispatch_binding_snapshot_tests {
         let error = read_verified_json_snapshot(&registry, &initially_bound).unwrap_err();
         assert!(matches!(error, EmberdError::DispatchBindingMismatch { .. }));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn fixed_pagefile_maxima_are_parsed_and_system_managed_values_fail_closed() {
+        let fixed = vec![r"C:\pagefile.sys 16384 32768".to_string()];
+        assert_eq!(
+            pagefile_maximum_bytes_from_entries(&fixed).unwrap(),
+            32 * 1024 * 1024 * 1024
+        );
+        let multiple = vec![
+            r"C:\pagefile.sys 1024 4096".to_string(),
+            r"D:\pagefile.sys 2048 8192".to_string(),
+        ];
+        assert_eq!(
+            pagefile_maximum_bytes_from_entries(&multiple).unwrap(),
+            12 * 1024 * 1024 * 1024
+        );
+        for invalid in [
+            vec![r"C:\pagefile.sys 0 0".to_string()],
+            vec![r"C:\pagefile.sys malformed".to_string()],
+            Vec::new(),
+        ] {
+            assert!(pagefile_maximum_bytes_from_entries(&invalid).is_err());
+        }
     }
 }
