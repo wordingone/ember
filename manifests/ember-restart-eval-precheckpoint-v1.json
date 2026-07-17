@@ -115,7 +115,7 @@
     "frozen_family_artifacts": {
         "text": {
             "path": "manifests/ember-restart-gsm8k-custody-v1.json",
-            "sha256": "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6"
+            "sha256": "804e16306f95ee1e55222f0220caf2e2e3a3ef7493125900d3a16607d26cefeb"
         },
         "reasoning": {
             "path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
