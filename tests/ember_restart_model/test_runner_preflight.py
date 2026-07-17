@@ -99,10 +99,7 @@ class RunnerPreflightTests(unittest.TestCase):
             frozen.pre_tokenizer = pre_tokenizers.Whitespace()
             frozen.save(str(tokenizer))
             config = root / "config.json"
-            config.write_text(
-                json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}),
-                encoding="utf-8",
-            )
+            config.write_bytes((ROOT / "configs" / "ember-restart-3b.json").read_bytes())
             manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)["reasoning"]
             poison = root / "ambient-poison"
             poison.mkdir()
@@ -132,7 +129,7 @@ class RunnerPreflightTests(unittest.TestCase):
             frozen.pre_tokenizer = pre_tokenizers.Whitespace()
             frozen.save(str(tokenizer))
             config = root / "config.json"
-            config.write_text(json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}), encoding="utf-8")
+            config.write_bytes((ROOT / "configs" / "ember-restart-3b.json").read_bytes())
             manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)["reasoning"]
             records_out, verification = run_vertical_slice.load_verified_specialist_records(root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
         self.assertGreaterEqual(len(records_out), 4_096)
@@ -155,17 +152,45 @@ class RunnerPreflightTests(unittest.TestCase):
             records_path = root / "records.json"
             source_path = root / "source.json"
             manifest_path = root / "manifest.json"
+            config_path = root / "configs" / "ember-restart-3b.json"
+            config_path.parent.mkdir()
+            config_path.write_bytes((ROOT / "configs" / "ember-restart-3b.json").read_bytes())
             records_path.write_text(json.dumps({"records": [{"active_expert": "reasoning"}]}), encoding="utf-8")
             source_path.write_text("{}", encoding="utf-8")
             sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
             manifest_path.write_text(json.dumps({"records_artifact": {"path": "records.json", "sha256": sha(records_path)}, "source_manifest": {"path": "source.json", "sha256": sha(source_path)}}), encoding="utf-8")
-            verification = {"result": "VERIFIED", "capability": "reasoning", "generator_replay_verified": True, "data_manifest_sha256": sha(manifest_path), "source_manifest_sha256": sha(source_path), "records_artifact_sha256": sha(records_path)}
+            from semantic_contract import semantic_model_contract_sha256
+            verification = {"result": "VERIFIED", "capability": "reasoning", "generator_replay_verified": True, "admission": "ADMISSIBLE_SEMANTIC_CONTRACT", "semantic_model_contract_sha256": semantic_model_contract_sha256(json.loads(config_path.read_bytes())), "data_manifest_sha256": sha(manifest_path), "source_manifest_sha256": sha(source_path), "records_artifact_sha256": sha(records_path)}
             def verified_then_mutated(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
                 records_path.write_text(json.dumps({"records": [{"active_expert": "reasoning", "mutated": True}]}), encoding="utf-8")
                 return subprocess.CompletedProcess([], 0, json.dumps(verification), "")
             with patch.object(run_vertical_slice.subprocess, "run", side_effect=verified_then_mutated):
                 with self.assertRaisesRegex(RuntimeError, "changed after verification"):
                     run_vertical_slice.load_verified_specialist_records(root=root, data_manifest=manifest_path, tokenizer_path=root / "tokenizer.json", capability="reasoning")
+
+    def test_specialist_loader_rejects_verified_data_for_a_different_runtime_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "configs" / "ember-restart-3b.json"
+            config_path.parent.mkdir()
+            config_path.write_bytes((ROOT / "configs" / "ember-restart-3b.json").read_bytes())
+            manifest = root / "manifest.json"
+            manifest.write_text("{}", encoding="utf-8")
+            verification = {
+                "result": "VERIFIED",
+                "capability": "image",
+                "generator_replay_verified": True,
+                "admission": "ADMISSIBLE_SEMANTIC_CONTRACT",
+                "semantic_model_contract_sha256": "0" * 64,
+            }
+            with patch.object(run_vertical_slice.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(verification), "")):
+                with self.assertRaisesRegex(RuntimeError, "does not match the runtime model contract"):
+                    run_vertical_slice.load_verified_specialist_records(
+                        root=root,
+                        data_manifest=manifest,
+                        tokenizer_path=root / "tokenizer.json",
+                        capability="image",
+                    )
     def test_production_optimizer_uses_declared_paged_8bit_adamw_state(self) -> None:
         calls: dict[str, object] = {}
 
