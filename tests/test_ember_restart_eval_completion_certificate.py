@@ -69,3 +69,13 @@ def test_rejects_public_certificate_custody_hash_substitution():
         certificate.write_text(json.dumps(value), encoding="utf-8")
         result = subprocess.run([sys.executable, str(SCRIPT), "validate", str(certificate), "--output", str(output), "--root", str(root)], capture_output=True, text=True)
     assert result.returncode != 0 and not output.exists()
+
+
+def test_public_certificate_binds_comparator_command_bytes():
+    root = Path(__file__).resolve().parents[1]
+    value = json.loads((root / "manifests" / "ember-restart-eval-completion-certificate-v1.json").read_text(encoding="utf-8"))
+    assert all(row.get("command_path") for row in value["comparators"])
+    for row in value["comparators"]:
+        path = root / row["command_path"]
+        assert path.is_file()
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == row["command_sha256"]
