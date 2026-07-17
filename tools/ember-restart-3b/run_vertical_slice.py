@@ -8,12 +8,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 
 import tokenizers
@@ -355,6 +356,44 @@ def _custody_serialized_bytes(parent: Path) -> int:
     return sum(int(row["bytes"]) for row in _custody_file_rows(parent))
 
 
+def _canonical_custody_deletion_pointer(raw_pointer: object) -> str:
+    """Return the sole portable ledger spelling for quarantine evidence paths."""
+
+    if not isinstance(raw_pointer, str) or not raw_pointer:
+        raise ValueError("custody deletion ledger lacks a canonical pointer")
+    if "\\" in raw_pointer or raw_pointer != raw_pointer.casefold():
+        raise ValueError("custody deletion ledger pointer is not canonical POSIX form")
+    path = PurePosixPath(raw_pointer)
+    parts = path.parts
+    canonical = "/".join(parts)
+    if (
+        path.is_absolute()
+        or raw_pointer != canonical
+        or len(parts) != 2
+        or parts[0] != ".checkpoint-quarantine"
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
+        raise ValueError("custody deletion ledger lacks a safe canonical quarantine pointer")
+    leaf = parts[1]
+    stem = leaf.split("-", 1)[0]
+    if not _EVIDENCE_FILENAME_RE.fullmatch(leaf) or stem in _WINDOWS_RESERVED_STEMS:
+        raise ValueError("custody deletion ledger pointer is not a portable evidence filename")
+    return canonical
+
+
+def _portable_evidence_stem(name: str) -> str:
+    if not isinstance(name, str) or not name:
+        raise ValueError("quarantine evidence name must be a nonempty string")
+    stem = re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-") or "evidence"
+    if stem.split("-", 1)[0] in _WINDOWS_RESERVED_STEMS:
+        stem = f"evidence-{stem}"
+    return stem
+
+
+def _custody_deletion_path(parent: Path, pointer: str) -> Path:
+    return parent.joinpath(*PurePosixPath(pointer).parts)
+
+
 def _custody_reconciliation(parent: Path) -> dict[str, object]:
     """Reconcile custody bytes with an ordered, fail-closed deletion ledger."""
 
@@ -380,11 +419,13 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
                 raise RuntimeError("custody deletion ledger has an invalid schema")
             schema = event.get("schema_version")
             kind = event.get("event")
-            pointer = event.get("pointer")
+            raw_pointer = event.get("pointer")
             if schema not in {_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA}:
                 raise RuntimeError("custody deletion ledger has an invalid schema")
-            if not isinstance(pointer, str) or not pointer or Path(pointer).is_absolute() or ".." in Path(pointer).parts:
-                raise RuntimeError("custody deletion ledger lacks a safe pointer")
+            try:
+                pointer = _canonical_custody_deletion_pointer(raw_pointer)
+            except ValueError as error:
+                raise RuntimeError(str(error)) from error
             if type(event.get("bytes")) is not int or event["bytes"] < 0 or not _is_sha256(event.get("sha256")):
                 raise RuntimeError("custody deletion ledger has invalid byte evidence")
             if not isinstance(event.get("reason"), str) or not event["reason"]:
@@ -420,7 +461,7 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
             prior["state"] = "COMMITTED"
     deleted_bytes = 0
     for pointer, record in transitions.items():
-        deleted_path = parent / pointer
+        deleted_path = _custody_deletion_path(parent, pointer)
         if deleted_path.exists():
             if record["state"] == "COMMITTED":
                 raise RuntimeError("custody deletion ledger claims deletion while bytes still exist")
@@ -428,7 +469,7 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
         # PREPARED+missing is an interruption-safe inferred deletion; count once.
         deleted_bytes += int(record["bytes"])
     for pointer, record in legacy_deleted.items():
-        if (parent / pointer).exists():
+        if _custody_deletion_path(parent, pointer).exists():
             raise RuntimeError("legacy custody deletion claims deletion while bytes still exist")
         deleted_bytes += int(record["bytes"])
     physical_bytes = sum(int(row["bytes"]) for row in rows)
@@ -457,6 +498,8 @@ _MAX_QUARANTINE_BYTES = 1024 * 1024
 _CUSTODY_LEDGER = ".checkpoint-custody-deletion-ledger.jsonl"
 _LEGACY_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
 _CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
+_EVIDENCE_FILENAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{64}(?:-g[1-9][0-9]*)?\.json")
+_WINDOWS_RESERVED_STEMS = {"aux", "clock$", "con", "nul", "prn", *(f"com{index}" for index in range(1, 10)), *(f"lpt{index}" for index in range(1, 10))}
 
 
 def _pid_is_alive(pid: object) -> bool:
@@ -516,24 +559,27 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
     evidence_dir.mkdir(parents=True, exist_ok=True)
     payload_bytes = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     digest = hashlib.sha256(payload_bytes).hexdigest()
+    evidence_stem = _portable_evidence_stem(name)
     ledger = parent / _CUSTODY_LEDGER
 
     def ledger_events(pointer_path: Path) -> set[str]:
         if not ledger.exists():
             return set()
-        pointer = pointer_path.relative_to(parent).as_posix()
-        events: set[str] = set()
         try:
+            pointer = _canonical_custody_deletion_pointer(pointer_path.relative_to(parent).as_posix())
+            events: set[str] = set()
             for line in ledger.read_bytes().splitlines():
                 event = json.loads(line)
-                if event.get("pointer") == pointer:
+                if not isinstance(event, dict):
+                    raise ValueError("custody deletion ledger has an invalid schema")
+                if _canonical_custody_deletion_pointer(event.get("pointer")) == pointer:
                     events.add(str(event.get("event")))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
             raise RuntimeError("custody deletion ledger could not be inspected") from error
         return events
 
     terminal_events = {"PREPARED", "COMMITTED", "DELETED"}
-    base_path = evidence_dir / f"{name}-{digest}.json"
+    base_path = evidence_dir / f"{evidence_stem}-{digest}.json"
     evidence_path = base_path
     base_events = ledger_events(base_path)
     if base_path.exists():
@@ -544,7 +590,7 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
     elif base_events & terminal_events:
         generation = 1
         while True:
-            candidate = evidence_dir / f"{name}-{digest}-g{generation}.json"
+            candidate = evidence_dir / f"{evidence_stem}-{digest}-g{generation}.json"
             candidate_events = ledger_events(candidate)
             if candidate.exists():
                 if candidate_events & terminal_events:
