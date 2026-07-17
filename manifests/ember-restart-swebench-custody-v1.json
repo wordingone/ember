@@ -30,6 +30,11 @@
                                         "license_disposition":  "UNDECLARED_IN_EXACT_DATASET_CARD",
                                         "materialization":  "HELD_NO_LICENSE_PROVENANCE"
                                     },
+    "fixture_adapter":  {
+        "path":  "scripts/ember_restart_eval_files_fixture.py",
+        "sha256":  "3d01ae159045730d3c4a070f7e8dafc9138c2bb07b914c8681cdea8f657cfd72",
+        "result_disposition":  "SELFTEST_ONLY_NON_ADMISSIBLE"
+    },
     "source_audit_adapter":  {
                                  "path":  "scripts/ember_restart_eval_swebench_source_audit.py",
                                  "sha256":  "af219c28e54e2fea4cecefeee21e7a2019c49479ea4c19f3f5a73b76af3e8abc",

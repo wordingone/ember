@@ -15,3 +15,11 @@ def test_sql_and_files_custody_pin_only_their_actual_nonadmissible_components():
     assert swe["source_audit_adapter"] == {"path": "scripts/ember_restart_eval_swebench_source_audit.py", "sha256": hashlib.sha256((ROOT / "scripts" / "ember_restart_eval_swebench_source_audit.py").read_bytes()).hexdigest(), "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"}
     assert spider["admission"] == "NOT_EXECUTABLE_NO_FROZEN_GOLD_AND_DATABASE"
     assert swe["admission"] == "NOT_EXECUTABLE_UNDECLARED_DATASET_LICENSE_AND_NO_OFFLINE_SANDBOX"
+
+
+def test_files_fixture_adapter_is_bound_as_selftest_only():
+    custody = json.loads((ROOT / "manifests" / "ember-restart-swebench-custody-v1.json").read_text(encoding="utf-8"))
+    adapter = custody["fixture_adapter"]
+    path = ROOT / adapter["path"]
+    assert adapter["result_disposition"] == "SELFTEST_ONLY_NON_ADMISSIBLE"
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == adapter["sha256"]
