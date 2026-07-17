@@ -421,6 +421,21 @@ def _custody_deletion_path(parent: Path, pointer: str) -> Path:
     return parent.joinpath(*PurePosixPath(pointer).parts)
 
 
+def _custody_ledger_lock_is_stale(lock_dir: Path, owner: Path) -> bool:
+    """Recover only a dead or unattested writer lock after a bounded grace interval."""
+
+    try:
+        payload = json.loads(owner.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        payload = None
+    if isinstance(payload, dict) and "pid" in payload:
+        return not _pid_is_alive(payload.get("pid"))
+    try:
+        age_seconds = max(0.0, time.time() - lock_dir.stat().st_mtime)
+    except OSError:
+        return False
+    return age_seconds >= _LEDGER_LOCK_OWNER_GRACE_SECONDS
+
 @contextlib.contextmanager
 def _custody_ledger_write_lock(parent: Path) -> object:
     """Serialize a ledger snapshot/replacement across threads and live processes."""
@@ -438,13 +453,7 @@ def _custody_ledger_write_lock(parent: Path) -> object:
             try:
                 lock_dir.mkdir()
             except FileExistsError:
-                stale = False
-                try:
-                    payload = json.loads(owner.read_text(encoding="utf-8"))
-                    stale = not _pid_is_alive(payload.get("pid"))
-                except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
-                    stale = False
-                if stale:
+                if _custody_ledger_lock_is_stale(lock_dir, owner):
                     try:
                         owner.unlink(missing_ok=True)
                         lock_dir.rmdir()
@@ -603,6 +612,7 @@ _LEGACY_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
 _CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
 _LEDGER_THREAD_LOCKS: dict[str, threading.Lock] = {}
 _LEDGER_THREAD_LOCKS_GUARD = threading.Lock()
+_LEDGER_LOCK_OWNER_GRACE_SECONDS = 1.0
 _EVIDENCE_FILENAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{64}(?:-g[1-9][0-9]*)?\.json")
 _WINDOWS_RESERVED_STEMS = {"aux", "clock$", "con", "nul", "prn", *(f"com{index}" for index in range(1, 10)), *(f"lpt{index}" for index in range(1, 10))}
 
