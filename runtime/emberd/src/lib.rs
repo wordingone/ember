@@ -1032,6 +1032,7 @@ impl Daemon {
                     .into(),
             });
         }
+        validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
 
         const CACHE_KEYS: [&str; 7] = [
             "TEMP",
@@ -2292,6 +2293,13 @@ fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
 fn verify_dispatch_file(path: &Path, sha256: &str) -> Result<PathBuf> {
     validate_hash(sha256).map_err(|_| EmberdError::InvalidDispatchManifest {
         detail: format!(
@@ -2382,6 +2390,146 @@ fn validate_absolute_dispatch_args(
                     ),
                 });
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_resume_registry_binding_closure(
+    args: &[String],
+    bindings: &[(PathBuf, String, DispatchBindingKind)],
+) -> Result<()> {
+    let mut registry_argument: Option<&str> = None;
+    let mut index = 0usize;
+    while index < args.len() {
+        let raw = &args[index];
+        let candidate = if raw == "--resume-realization-registry" {
+            index += 1;
+            args.get(index).map(String::as_str).ok_or_else(|| {
+                EmberdError::InvalidDispatchManifest {
+                    detail: "resume realization registry flag lacks its path".into(),
+                }
+            })?
+        } else if let Some(value) = raw.strip_prefix("--resume-realization-registry=") {
+            value
+        } else {
+            index += 1;
+            continue;
+        };
+        if registry_argument.replace(candidate).is_some() {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "resume realization registry argument is duplicated".into(),
+            });
+        }
+        index += 1;
+    }
+    let Some(raw_registry) = registry_argument else {
+        return Ok(());
+    };
+    let registry = fs::canonicalize(raw_registry)?;
+    if !bindings
+        .iter()
+        .any(|(path, _, kind)| *path == registry && *kind == DispatchBindingKind::Manifest)
+    {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "resume realization registry is not an exact manifest binding".into(),
+        });
+    }
+    let root = registry
+        .parent()
+        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            detail: "resume realization registry lacks a parent directory".into(),
+        })?;
+    let payload: Value = serde_json::from_slice(&fs::read(&registry)?)?;
+    let object = payload
+        .as_object()
+        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            detail: "resume realization registry must be a JSON object".into(),
+        })?;
+    let expected_keys = [
+        "schema_version",
+        "verifiers",
+        "realization_receipts",
+        "model_configs",
+    ];
+    if object.len() != expected_keys.len()
+        || expected_keys.iter().any(|key| !object.contains_key(*key))
+        || object.get("schema_version").and_then(Value::as_str)
+            != Some("ember-trusted-verifiers-v2")
+    {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "resume realization registry schema is not closed v2".into(),
+        });
+    }
+    for (field, kind) in [
+        ("verifiers", DispatchBindingKind::Verifier),
+        ("realization_receipts", DispatchBindingKind::Manifest),
+        ("model_configs", DispatchBindingKind::Config),
+    ] {
+        let records = object.get(field).and_then(Value::as_array).ok_or_else(|| {
+            EmberdError::InvalidDispatchManifest {
+                detail: format!("resume realization registry {field} is not an array"),
+            }
+        })?;
+        if records.len() != 1 {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: format!(
+                    "resume realization registry {field} must contain exactly one file"
+                ),
+            });
+        }
+        let entry = records[0]
+            .as_object()
+            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                detail: format!("resume realization registry {field} entry is not an object"),
+            })?;
+        let expected_entry_keys: &[&str] = match field {
+            "verifiers" => &["path", "sha256", "evidence_classes", "criterion_ids"],
+            "realization_receipts" => &[
+                "path",
+                "sha256",
+                "subject_checkpoint_sha256",
+                "model_config_sha256",
+                "counter_sha256",
+                "active_expert",
+            ],
+            "model_configs" => &["path", "sha256", "semantic_sha256"],
+            _ => unreachable!(),
+        };
+        if entry.len() != expected_entry_keys.len()
+            || expected_entry_keys
+                .iter()
+                .any(|key| !entry.contains_key(*key))
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: format!("resume realization registry {field} entry schema is not closed"),
+            });
+        }
+        let relative = entry
+            .get("path")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty() && !Path::new(value).is_absolute())
+            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                detail: format!("resume realization registry {field} path is invalid"),
+            })?;
+        let declared_sha256 = entry
+            .get("sha256")
+            .and_then(Value::as_str)
+            .filter(|value| is_sha256(value))
+            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                detail: format!("resume realization registry {field} sha256 is invalid"),
+            })?;
+        let nested = fs::canonicalize(root.join(relative))?;
+        if !nested.starts_with(root)
+            || !bindings.iter().any(|(path, sha256, binding_kind)| {
+                *path == nested && *binding_kind == kind && sha256 == declared_sha256
+            })
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: format!(
+                    "resume realization registry {field} file is not hash-bound with its required kind"
+                ),
+            });
         }
     }
     Ok(())
