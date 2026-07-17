@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import ctypes
+import errno
 import hashlib
 import inspect
 import json
@@ -181,6 +182,8 @@ def _retain_write_failure_evidence(
     published_root: Path,
     staging_root: Path,
     error: BaseException,
+    *,
+    quarantine_candidate: str | None = None,
 ) -> Path:
     manifest_path = staging_root / "checkpoint-manifest.json"
     manifest_sha256 = _sha256(manifest_path) if manifest_path.is_file() else None
@@ -199,6 +202,7 @@ def _retain_write_failure_evidence(
     payload = {
         "schema_version": "ember-checkpoint-write-failure-v1",
         "target": published_root.name,
+        "quarantine_candidate": quarantine_candidate,
         "error_type": type(error).__name__,
         "error_message": str(error)[:4096],
         "checkpoint_manifest_sha256": manifest_sha256,
@@ -257,6 +261,35 @@ def _write_atomic(root: Path, filename: str, writer: Callable[[Any], None]) -> P
 def _write_json_atomic(root: Path, filename: str, payload: Mapping[str, Any]) -> Path:
     encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     return _write_atomic(root, filename, lambda handle: handle.write(encoded))
+
+
+def _atomic_publish_no_replace(source: Path, target: Path) -> None:
+    """Atomically rename a directory without replacing a late target."""
+
+    source = source.resolve(strict=True)
+    target = target.resolve()
+    if target.exists():
+        raise FileExistsError(errno.EEXIST, "checkpoint publication target already exists", str(target))
+    if os.name == "nt":
+        # Python's Windows os.rename maps to MoveFileEx without REPLACE_EXISTING.
+        os.rename(source, target)
+        return
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise RuntimeError("Linux checkpoint publication requires renameat2(RENAME_NOREPLACE)")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]  # type: ignore[attr-defined]
+    renameat2.restype = ctypes.c_int  # type: ignore[attr-defined]
+    at_fdcwd = -100
+    rename_noreplace = 1
+    result = renameat2(
+        at_fdcwd, os.fsencode(source), at_fdcwd, os.fsencode(target), rename_noreplace,
+    )
+    if result != 0:
+        error_number = ctypes.get_errno()
+        if error_number in (errno.EEXIST, errno.ENOTEMPTY):
+            raise FileExistsError(error_number, "checkpoint publication target appeared", str(target))
+        raise OSError(error_number, os.strerror(error_number), str(target))
 
 
 def _sha256_value(value: str, *, name: str) -> str:
@@ -627,14 +660,28 @@ def admit_quarantined_checkpoint(
     receipt = _checkpoint_candidate_receipt(candidate)
     try:
         verifier(candidate, receipt)
+        try:
+            final_receipt = _checkpoint_candidate_receipt(candidate)
+        except Exception as error:
+            raise ValueError("checkpoint candidate changed after verifier validation") from error
+        if final_receipt != receipt:
+            raise ValueError("checkpoint candidate changed after verifier validation")
         post_verifier_bytes = sum(path.stat().st_size for path in candidate.rglob("*") if path.is_file())
         if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
             raise ValueError("counter evidence exceeds the derived byte bound")
+        if published_root.exists():
+            raise FileExistsError(f"published checkpoint bundle appeared during admission: {published_root}")
     except Exception as error:
         _retain_write_failure_evidence(published_root, candidate, error)
         raise
-    os.replace(candidate, published_root)
-    return receipt
+    try:
+        _atomic_publish_no_replace(candidate, published_root)
+    except OSError as error:
+        if isinstance(error, FileExistsError) or error.errno in (errno.EEXIST, errno.ENOTEMPTY) or published_root.exists():
+            _retain_write_failure_evidence(published_root, candidate, error)
+            raise FileExistsError(f"published checkpoint bundle appeared during admission: {published_root}") from error
+        raise
+    return final_receipt
 
 def write_checkpoint_artifacts(
     model: UnifiedDecoder,
@@ -799,24 +846,31 @@ def write_checkpoint_artifacts(
             candidate = quarantine / f"candidate-{published_root.name}-{receipt['checkpoint_manifest_sha256'][:16]}"
             if candidate.exists():
                 raise FileExistsError(f"quarantined checkpoint candidate already exists: {candidate}")
-            os.replace(root, candidate)
+            _atomic_publish_no_replace(root, candidate)
             return admit_quarantined_checkpoint(
                 candidate,
                 published_root,
                 verifier=pre_publish_verifier,
                 max_serialized_bytes=max_serialized_bytes,
             )
-        os.replace(root, published_root)
+        _atomic_publish_no_replace(root, published_root)
         return receipt
     except Exception as error:
         evidence_error: Exception | None = None
         if root.exists():
             try:
-                _retain_write_failure_evidence(published_root, root, error)
+                quarantine = published_root.parent / ".checkpoint-quarantine"
+                quarantine.mkdir(parents=True, exist_ok=True)
+                candidate = quarantine / f"candidate-write-failed-{root.name}-{uuid.uuid4().hex[:16]}"
+                _atomic_publish_no_replace(root, candidate)
+                _retain_write_failure_evidence(
+                    published_root,
+                    candidate,
+                    error,
+                    quarantine_candidate=candidate.name,
+                )
             except Exception as retention_error:
                 evidence_error = retention_error
-        if root.exists():
-            shutil.rmtree(root)
         if evidence_error is not None:
             raise RuntimeError(
                 f"checkpoint write failed and bounded evidence retention also failed: {evidence_error}"

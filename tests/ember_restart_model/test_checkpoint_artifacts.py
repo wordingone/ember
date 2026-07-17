@@ -20,6 +20,8 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
+import checkpoint_artifacts
+
 from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
@@ -251,6 +253,245 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertEqual(receipt["host_commit_preflight"]["available_commit_bytes"], 1024**3)
             self.assertEqual(receipt["host_commit_preflight"]["reserve_bytes"], 128 * 1024**2)
 
+    def test_staging_failure_preserves_raw_bytes_in_durable_quarantine(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=13)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-staging-failed"
+            arguments = {
+                "launch_seed": 13,
+                "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                "model_config_sha256": "c" * 64,
+                "contract_sha256": "d" * 64,
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+                "test_only_allow_unverified": True,
+            }
+            real_write_json = checkpoint_artifacts._write_json_atomic
+            def fail_manifest(root: Path, filename: str, payload: dict[str, object]) -> Path:
+                if filename == "checkpoint-manifest.json":
+                    raise RuntimeError("manifest write failed")
+                return real_write_json(root, filename, payload)
+            with patch("checkpoint_artifacts._write_json_atomic", side_effect=fail_manifest):
+                with self.assertRaisesRegex(RuntimeError, "manifest write failed"):
+                    write_checkpoint_artifacts(model, optimizer, target, **arguments)
+            self.assertFalse(target.exists())
+            self.assertEqual(list(parent.glob(".*.staging")), [])
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(candidates), 1)
+            self.assertTrue(candidates[0].joinpath("shared.pt").is_file())
+            self.assertTrue(candidates[0].joinpath("replay-state.pt").is_file())
+            self.assertTrue(any(path.name.startswith("checkpoint-write-failed-") for path in (parent / ".checkpoint-quarantine").glob("*.json")))
+
+    def test_verifier_mutation_of_existing_shard_is_rejected_before_promotion(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=21)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-shard-mutated"
+            arguments = {
+                "launch_seed": 21,
+                "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                "model_config_sha256": "c" * 64,
+                "contract_sha256": "d" * 64,
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+            }
+            def mutate(candidate: Path, _receipt: dict[str, object]) -> None:
+                candidate.joinpath("expert-vision.pt").write_bytes(b"tampered")
+            with self.assertRaisesRegex(ValueError, "changed after verifier"):
+                write_checkpoint_artifacts(model, optimizer, target, pre_publish_verifier=mutate, **arguments)
+            self.assertFalse(target.exists())
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(candidates), 1)
+            self.assertEqual((candidates[0] / "expert-vision.pt").read_bytes(), b"tampered")
+
+    def test_verifier_manifest_mutation_is_rejected_before_promotion(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=22)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-manifest-mutated"
+            arguments = {
+                "launch_seed": 22,
+                "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                "model_config_sha256": "c" * 64,
+                "contract_sha256": "d" * 64,
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+            }
+            def mutate(candidate: Path, _receipt: dict[str, object]) -> None:
+                manifest_path = candidate / "checkpoint-manifest.json"
+                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+                payload["late_mutation"] = True
+                manifest_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "changed after verifier"):
+                write_checkpoint_artifacts(model, optimizer, target, pre_publish_verifier=mutate, **arguments)
+            self.assertFalse(target.exists())
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(candidates), 1)
+
+    def test_atomic_publish_no_replace_moves_directory_and_preserves_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            source = parent / "source"
+            target = parent / "target"
+            source.mkdir()
+            source.joinpath("shared.pt").write_bytes(b"owned-bytes")
+            checkpoint_artifacts._atomic_publish_no_replace(source, target)
+            self.assertFalse(source.exists())
+            self.assertEqual(target.joinpath("shared.pt").read_bytes(), b"owned-bytes")
+
+    def test_atomic_publish_no_replace_rejects_existing_empty_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            source = parent / "source"
+            target = parent / "target"
+            source.mkdir()
+            source.joinpath("shared.pt").write_bytes(b"owned-bytes")
+            target.mkdir()
+            with self.assertRaises(FileExistsError):
+                checkpoint_artifacts._atomic_publish_no_replace(source, target)
+            self.assertEqual(source.joinpath("shared.pt").read_bytes(), b"owned-bytes")
+            self.assertEqual(list(target.iterdir()), [])
+
+    def test_empty_late_target_at_rename_boundary_is_not_replaced(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=24)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-empty-late-target"
+            arguments = {
+                "launch_seed": 24,
+                "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                "model_config_sha256": "c" * 64,
+                "contract_sha256": "d" * 64,
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+            }
+            real_publish = checkpoint_artifacts._atomic_publish_no_replace
+
+            def appear_at_boundary(source: Path, destination: Path) -> None:
+                if destination == target:
+                    destination.mkdir()
+                    raise FileExistsError(17, "target appeared", str(destination))
+                real_publish(source, destination)
+            with patch("checkpoint_artifacts._atomic_publish_no_replace", side_effect=appear_at_boundary):
+                with self.assertRaisesRegex(FileExistsError, "appeared during admission"):
+                    write_checkpoint_artifacts(model, optimizer, target, pre_publish_verifier=lambda _candidate, _receipt: None, **arguments)
+            self.assertTrue(target.is_dir())
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(candidates), 1)
+            self.assertTrue(candidates[0].joinpath("checkpoint-manifest.json").is_file())
+
+    def test_deterministic_quarantine_candidate_collision_preserves_existing_bytes(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=26)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-deterministic-collision"
+            arguments = {
+                "launch_seed": 26,
+                "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                "model_config_sha256": "c" * 64,
+                "contract_sha256": "d" * 64,
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+            }
+            real_publish = checkpoint_artifacts._atomic_publish_no_replace
+
+            def collide(source: Path, destination: Path) -> None:
+                if destination.name.startswith("candidate-") and not destination.name.startswith("candidate-write-failed-"):
+                    destination.mkdir()
+                    destination.joinpath("existing-sentinel").write_bytes(b"preserved")
+                real_publish(source, destination)
+
+            with patch("checkpoint_artifacts._atomic_publish_no_replace", side_effect=collide):
+                with self.assertRaises(FileExistsError):
+                    write_checkpoint_artifacts(
+                        model,
+                        optimizer,
+                        target,
+                        pre_publish_verifier=lambda _candidate, _receipt: None,
+                        **arguments,
+                    )
+            quarantine = parent / ".checkpoint-quarantine"
+            existing = [path for path in quarantine.iterdir() if path.is_dir() and path.name.startswith("candidate-checkpoint-deterministic-collision-")]
+            self.assertEqual(len(existing), 1)
+            self.assertEqual(existing[0].joinpath("existing-sentinel").read_bytes(), b"preserved")
+            failures = [path for path in quarantine.iterdir() if path.is_dir() and path.name.startswith("candidate-write-failed-")]
+            self.assertEqual(len(failures), 1)
+            self.assertTrue(failures[0].joinpath("checkpoint-manifest.json").is_file())
+
+    def test_unverified_writer_uses_no_replace_for_empty_late_target(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=25)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-unverified-empty-late-target"
+            arguments = {
+                "launch_seed": 25,
+                "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                "model_config_sha256": "c" * 64,
+                "contract_sha256": "d" * 64,
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+            }
+
+            real_publish = checkpoint_artifacts._atomic_publish_no_replace
+
+            def appear_at_boundary(source: Path, destination: Path) -> None:
+                if destination == target:
+                    destination.mkdir()
+                    raise FileExistsError(17, "target appeared", str(destination))
+                real_publish(source, destination)
+
+            with patch("checkpoint_artifacts._atomic_publish_no_replace", side_effect=appear_at_boundary):
+                with self.assertRaises(FileExistsError):
+                    write_checkpoint_artifacts(
+                        model,
+                        optimizer,
+                        target,
+                        test_only_allow_unverified=True,
+                        **arguments,
+                    )
+            self.assertTrue(target.is_dir())
+            self.assertEqual(list(target.iterdir()), [])
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-write-failed-")]
+            self.assertEqual(len(candidates), 1)
+            self.assertTrue(candidates[0].joinpath("checkpoint-manifest.json").is_file())
+
+    def test_late_published_target_is_never_overwritten(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=23)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-late-target"
+            arguments = {
+                "launch_seed": 23,
+                "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                "model_config_sha256": "c" * 64,
+                "contract_sha256": "d" * 64,
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+            }
+            def create_target(_candidate: Path, _receipt: dict[str, object]) -> None:
+                target.mkdir()
+                target.joinpath("sentinel").write_bytes(b"late-owner")
+            with self.assertRaisesRegex(FileExistsError, "appeared during admission"):
+                write_checkpoint_artifacts(model, optimizer, target, pre_publish_verifier=create_target, **arguments)
+            self.assertEqual(target.joinpath("sentinel").read_bytes(), b"late-owner")
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(candidates), 1)
+
     def test_counter_failure_preserves_full_candidate_for_rejudging_without_retraining(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=13)
@@ -258,6 +499,12 @@ class CheckpointArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             target = parent / "checkpoint-failed"
+            observed_target_states: list[bool] = []
+
+            def counter_verifier(_candidate: Path, _receipt: dict[str, object]) -> None:
+                observed_target_states.append(target.exists())
+                raise RuntimeError("counter failed")
+
             with self.assertRaisesRegex(RuntimeError, "counter failed"):
                 write_checkpoint_artifacts(
                     model, optimizer, target, launch_seed=13,
@@ -265,8 +512,9 @@ class CheckpointArtifactTests(unittest.TestCase):
                     data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
                     model_config_sha256="c" * 64, contract_sha256="d" * 64,
                     expert_genesis_sha256=model.expert_bank_genesis_hashes(),
-                    pre_publish_verifier=lambda _staging, _receipt: (_ for _ in ()).throw(RuntimeError("counter failed")),
+                    pre_publish_verifier=counter_verifier,
                 )
+            self.assertEqual(observed_target_states, [False])
             self.assertFalse(target.exists())
             self.assertEqual(list(parent.glob(".*.staging")), [])
             candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir()]

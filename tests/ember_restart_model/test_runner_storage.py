@@ -16,10 +16,35 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
+import checkpoint_artifacts
 import run_vertical_slice
 
 
 class RunnerStorageTests(unittest.TestCase):
+    def test_quarantine_collision_preserves_existing_and_source_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            source = parent / "checkpoint-source"
+            source.mkdir()
+            source.joinpath("shared.pt").write_bytes(b"source-bytes")
+            quarantine = parent / ".checkpoint-quarantine"
+            quarantine.mkdir()
+            real_publish = checkpoint_artifacts._atomic_publish_no_replace
+            seen_targets: list[Path] = []
+
+            def collide(candidate: Path, destination: Path) -> None:
+                seen_targets.append(destination)
+                destination.mkdir()
+                destination.joinpath("existing-sentinel").write_bytes(b"preserved")
+                real_publish(candidate, destination)
+
+            with unittest.mock.patch("run_vertical_slice._atomic_publish_no_replace", side_effect=collide, create=True):
+                with self.assertRaises(FileExistsError):
+                    run_vertical_slice._move_bundle_to_quarantine(source, prefix="candidate")
+            self.assertEqual(source.joinpath("shared.pt").read_bytes(), b"source-bytes")
+            self.assertEqual(len(seen_targets), 1)
+            self.assertEqual(seen_targets[0].joinpath("existing-sentinel").read_bytes(), b"preserved")
+
     def test_retention_prunes_only_after_successful_publication(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
@@ -36,6 +61,45 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertFalse(oldest.exists())
             self.assertTrue(middle.exists())
             self.assertTrue(newest.exists())
+            retained = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(retained), 1)
+            self.assertIn("oldest", retained[0].name)
+    def test_retention_byte_cap_charges_quarantined_bundle_after_move(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            old = parent / "checkpoint-old"
+            newest = parent / "checkpoint-new"
+            old.mkdir()
+            newest.mkdir()
+            old.joinpath("state.bin").write_bytes(b"old!!")
+            newest.joinpath("state.bin").write_bytes(b"newest!")
+            now = time.time_ns()
+            os.utime(old, ns=(now - 2_000_000_000, now - 2_000_000_000))
+            os.utime(newest, ns=(now - 1_000_000_000, now - 1_000_000_000))
+            with self.assertRaisesRegex(RuntimeError, "custody"):
+                run_vertical_slice._enforce_retention(parent, max_serialized_bytes=8)
+            self.assertFalse(old.exists())
+            self.assertTrue(newest.exists())
+            retained = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(retained), 1)
+            self.assertEqual((retained[0] / "state.bin").read_bytes(), b"old!!")
+            self.assertGreaterEqual(run_vertical_slice._custody_serialized_bytes(parent), 12)
+
+    def test_custody_charge_uses_zero_increment_for_external_hardlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            anchor = parent / "anchor.pt"
+            anchor.write_bytes(b"anchor-bytes")
+            bundle = parent / "checkpoint-hardlink"
+            bundle.mkdir()
+            os.link(anchor, bundle / "expert-vision.pt")
+            manifest = {
+                "shards": [{"path": "expert-vision.pt", "bytes": len(b"anchor-bytes"), "publication_mode": "hardlink", "incremental_bytes": 0}],
+            }
+            manifest_path = bundle / "checkpoint-manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertEqual(run_vertical_slice._custody_serialized_bytes(parent), manifest_path.stat().st_size)
+
     def test_retention_prunes_measured_bytes_but_keeps_a_known_good_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
@@ -45,10 +109,14 @@ class RunnerStorageTests(unittest.TestCase):
             (newest / "state.bin").write_bytes(b"newest!")
             now = time.time_ns(); os.utime(old, ns=(now - 1_000_000_000, now - 1_000_000_000))
             self.assertTrue(hasattr(run_vertical_slice, "_bundle_serialized_bytes"))
-            run_vertical_slice._enforce_retention(parent, max_serialized_bytes=8)
+            with self.assertRaisesRegex(RuntimeError, "custody"):
+                run_vertical_slice._enforce_retention(parent, max_serialized_bytes=8)
             self.assertFalse(old.exists())
             self.assertTrue(newest.exists())
             self.assertEqual(run_vertical_slice._bundle_serialized_bytes(newest), 7)
+            retained = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(retained), 1)
+            self.assertEqual((retained[0] / "state.bin").read_bytes(), b"old!!")
 
     def test_receipt_aware_retention_ignores_unverified_orphans(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -58,6 +126,9 @@ class RunnerStorageTests(unittest.TestCase):
             (orphan / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
             run_vertical_slice._enforce_retention(parent, max_count=1, receipt_aware=True)
             self.assertFalse(orphan.exists())
+            retained = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(retained), 1)
+            self.assertEqual((retained[0] / "checkpoint-manifest.json").read_text(encoding="utf-8"), "{}")
             evidence = list((parent / ".checkpoint-quarantine").glob("*.json"))
             self.assertEqual(len(evidence), 1)
             self.assertEqual(json.loads(evidence[0].read_text(encoding="utf-8"))["result"], "UNSELECTABLE")
@@ -71,6 +142,8 @@ class RunnerStorageTests(unittest.TestCase):
             run_vertical_slice._retain_after_success(parent, max_count=1, receipt_aware=True, operation=lambda: observed.append(orphan.exists()))
             self.assertEqual(observed, [False])
             self.assertFalse(orphan.exists())
+            retained = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(retained), 1)
 
     def test_live_pid_staging_is_never_reclaimed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -90,6 +163,9 @@ class RunnerStorageTests(unittest.TestCase):
             (staging / "bulk.bin").write_bytes(b"bulk")
             run_vertical_slice._retain_after_success(parent, max_count=1, receipt_aware=True, operation=lambda: "ok")
             self.assertFalse(staging.exists())
+            retained = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(retained), 1)
+            self.assertEqual((retained[0] / "bulk.bin").read_bytes(), b"bulk")
             evidence = list((parent / ".checkpoint-quarantine").glob("*.json"))
             self.assertTrue(any("staging" in path.name for path in evidence))
             self.assertLessEqual(len(evidence), 32)
@@ -126,6 +202,18 @@ class RunnerStorageTests(unittest.TestCase):
             run_vertical_slice.production_artifact_root(Path("B:/ember-checkpoint"), c_relocated_under_disk_budget_runner=True, relocation_custody_root=custody)
         with self.assertRaisesRegex(ValueError, "custody root"):
             run_vertical_slice.production_artifact_root(Path("C:/tmp/outside"), c_relocated_under_disk_budget_runner=True, relocation_custody_root=custody)
+
+    def test_quarantine_candidates_are_never_valid_production_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            candidate = custody / ".checkpoint-quarantine" / "candidate-checkpoint-failed"
+            candidate.mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, "quarantine"):
+                run_vertical_slice.production_artifact_root(
+                    candidate,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=custody,
+                )
 
 if __name__ == "__main__":
     unittest.main()

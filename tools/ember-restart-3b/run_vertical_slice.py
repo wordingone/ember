@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 import uuid
@@ -19,7 +18,7 @@ from typing import Any, Callable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, write_checkpoint_artifacts
+from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from parameter_counter import measure_parameter_counts
@@ -262,6 +261,8 @@ def production_artifact_root(
     if type(c_relocated_under_disk_budget_runner) is not bool:
         raise ValueError("C relocation custody flag must be boolean")
     resolved = candidate.resolve()
+    if ".checkpoint-quarantine" in resolved.parts:
+        raise ValueError("checkpoint quarantine is never a selectable production artifact root")
     if c_relocated_under_disk_budget_runner:
         if not isinstance(relocation_custody_root, Path):
             raise ValueError("runner-bound C relocation requires an explicit custody root")
@@ -279,6 +280,48 @@ def production_artifact_root(
 def _bundle_serialized_bytes(bundle: Path) -> int:
     """Measure exactly the bytes currently published beneath one bundle root."""
     return sum(path.stat().st_size for path in bundle.rglob("*") if path.is_file())
+
+def _file_identity(path: Path) -> tuple[int, int] | str:
+    stat = path.stat()
+    inode = int(getattr(stat, "st_ino", 0))
+    if inode:
+        return (int(getattr(stat, "st_dev", 0)), inode)
+    return str(path.resolve())
+
+def _custody_serialized_bytes(parent: Path) -> int:
+    """Charge all custody bytes, honoring receipt-declared zero-cost hardlinks."""
+
+    zero_increment_hardlinks: set[tuple[int, int] | str] = set()
+    for manifest_path in parent.rglob("checkpoint-manifest.json"):
+        try:
+            payload = json.loads(manifest_path.read_bytes())
+            records = payload.get("shards", []) if isinstance(payload, dict) else []
+            for record in records:
+                if not isinstance(record, dict):
+                    continue
+                if record.get("publication_mode") != "hardlink" or record.get("incremental_bytes") != 0:
+                    continue
+                relative = record.get("path")
+                if isinstance(relative, str):
+                    shard = manifest_path.parent / relative
+                    if shard.is_file():
+                        zero_increment_hardlinks.add(_file_identity(shard))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+    seen: set[tuple[int, int] | str] = set()
+    total = 0
+    for path in parent.rglob("*"):
+        try:
+            if not path.is_file():
+                continue
+            identity = _file_identity(path)
+            if identity in zero_increment_hardlinks or identity in seen:
+                continue
+            seen.add(identity)
+            total += path.stat().st_size
+        except OSError as error:
+            raise RuntimeError(f"custody byte accounting could not inspect {path}") from error
+    return total
 
 def _receipt_valid_for_retention(bundle: Path) -> bool:
     try:
@@ -362,8 +405,21 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
     return evidence_path
 
 
+def _move_bundle_to_quarantine(bundle: Path, *, prefix: str = "candidate") -> Path:
+    """Atomically preserve serialized bytes in the nonselectable quarantine namespace."""
+
+    source = bundle.resolve(strict=True)
+    if not source.is_dir():
+        raise ValueError("checkpoint quarantine source must be a directory")
+    quarantine = source.parent / ".checkpoint-quarantine"
+    quarantine.mkdir(parents=True, exist_ok=True)
+    candidate = quarantine / f"{prefix}-{source.name}-{uuid.uuid4().hex[:16]}"
+    _atomic_publish_no_replace(source, candidate)
+    return candidate
+
+
 def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
-    """Remove an unselectable checkpoint while preserving only bounded evidence."""
+    """Preserve an unselectable checkpoint for rejudging; only bounded JSON is prunable."""
 
     if not bundle.is_dir() or not bundle.name.startswith("checkpoint-"):
         raise ValueError("retention quarantine requires a checkpoint-* directory")
@@ -373,21 +429,17 @@ def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
     except OSError as error:
         manifest_sha256 = None
         reason = f"{reason}; manifest_hash_error={type(error).__name__}"
+    candidate = _move_bundle_to_quarantine(bundle)
     evidence = {
         "schema_version": "ember-checkpoint-quarantine-v1",
         "result": "UNSELECTABLE",
         "source_bundle": bundle.name,
+        "quarantine_candidate": candidate.name,
         "reason": reason[:512],
         "manifest_sha256": manifest_sha256,
-        "bulk_candidate_cleanup": "deleted",
+        "bulk_candidate_cleanup": "moved_to_quarantine",
     }
-    _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
-    try:
-        shutil.rmtree(bundle)
-    except Exception:
-        evidence["bulk_candidate_cleanup"] = "failed"
-        _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
-        raise
+    _write_bounded_quarantine_evidence(candidate.parent.parent, bundle.name, evidence)
 
 
 def _reclaim_stale_staging(parent: Path) -> None:
@@ -400,14 +452,15 @@ def _reclaim_stale_staging(parent: Path) -> None:
         except OSError:
             manifest_sha256 = None
         evidence_name = f"staging-{hashlib.sha256(staging.name.encode()).hexdigest()[:16]}"
+        candidate = _move_bundle_to_quarantine(staging, prefix="candidate")
         _write_bounded_quarantine_evidence(parent, evidence_name, {
             "schema_version": "ember-staging-failure-v1",
             "result": "UNSELECTABLE",
             "source_bundle": staging.name,
+            "quarantine_candidate": candidate.name,
             "manifest_sha256": manifest_sha256,
-            "bulk_candidate_cleanup": "deleted",
+            "bulk_candidate_cleanup": "moved_to_quarantine",
         })
-        shutil.rmtree(staging)
 
 
 def _reclaim_unverified_orphans(parent: Path) -> None:
@@ -449,14 +502,14 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
     bundles.sort(key=lambda path: (path.stat().st_mtime_ns, path.name))
     if max_count is not None:
         while len(bundles) > max_count:
-            shutil.rmtree(bundles.pop(0))
+            _move_bundle_to_quarantine(bundles.pop(0))
     if max_serialized_bytes is not None:
-        total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+        total = _custody_serialized_bytes(parent)
         while total > max_serialized_bytes and len(bundles) > 1:
-            shutil.rmtree(bundles.pop(0))
-            total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+            _move_bundle_to_quarantine(bundles.pop(0))
+            total = _custody_serialized_bytes(parent)
         if total > max_serialized_bytes:
-            raise RuntimeError("published checkpoint exceeds serialized-byte retention budget while preserving the final known-good bundle")
+            raise RuntimeError("checkpoint custody exceeds serialized-byte retention budget; quarantined bytes remain charged")
 
 
 def _retain_after_success(
@@ -633,7 +686,7 @@ def require_counter_success_receipt(checkpoint_root: Path, *, receipt_path: Path
 
 
 def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseException) -> Path | None:
-    """Delete bulk candidate bytes while retaining bounded manifest/failure evidence."""
+    """Preserve a counter-failed candidate as durable, nonselectable raw bytes."""
 
     if not checkpoint_target.exists():
         return None
@@ -644,40 +697,23 @@ def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseEx
             manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     except OSError:
         manifest_sha256 = None
+    candidate = _move_bundle_to_quarantine(checkpoint_target, prefix="candidate")
     evidence = _write_bounded_quarantine_evidence(
-        checkpoint_target.parent,
-        f"counter-failed-{checkpoint_target.name}",
+        candidate.parent.parent,
+        f"counter-failed-{checkpoint_target.name}-{candidate.name.rsplit('-', 1)[-1]}",
         {
             "schema_version": "ember-counter-failure-v1",
             "result": "COUNTER_FAILED",
             "source_bundle": checkpoint_target.name,
+            "quarantine_candidate": candidate.name,
             "checkpoint_manifest_sha256": manifest_sha256,
             "error_type": type(error).__name__,
             "error": str(error)[:512],
-            "bulk_candidate_cleanup": "deleted",
+            "bulk_candidate_cleanup": "moved_to_quarantine",
         },
     )
-    shutil.rmtree(checkpoint_target)
-    if checkpoint_target.exists():
-        raise RuntimeError("counter-failed checkpoint could not be removed from the selectable namespace")
     return evidence
 
-def publish_counter_verified_checkpoint(*, checkpoint_target: Path, write_candidate: Callable[[], dict[str, object]], execute_counter: Callable[[], dict[str, object]]) -> tuple[dict[str, object], dict[str, object]]:
-    """Cover candidate creation through realization verification in one fail-closed transaction."""
-
-    target_existed = checkpoint_target.exists()
-    if target_existed:
-        raise FileExistsError(f"published checkpoint bundle already exists: {checkpoint_target}")
-    try:
-        published = write_candidate()
-        counter_receipt = execute_counter()
-        _atomic_json(checkpoint_target / _COUNTER_SUCCESS_RECEIPT, counter_receipt)
-        require_counter_success_receipt(checkpoint_target)
-    except BaseException as error:
-        if not target_existed:
-            _quarantine_counter_failed_checkpoint(checkpoint_target, error)
-        raise
-    return published, counter_receipt
 
 def authorize_production_resume_checkpoint(
     candidate: Path,
