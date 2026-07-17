@@ -19,7 +19,7 @@
     "benchmark_version": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
     "references_sha256": "0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
     "scoring_adapter_path": "scripts/ember_restart_eval_mmlu_pro_score.py",
-    "scoring_adapter_sha256": "c6d19c0e6734279b188a4179a39835a50683a267040ec2c37f6f0dbd54da1062",
+    "scoring_adapter_sha256": "3c8b91f03745800d16662a99b807315aaa0af07cbfa58a50b3d2f514e132ec9b",
     "strict_protocol_required": true,
     "license_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
     "license_card_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
