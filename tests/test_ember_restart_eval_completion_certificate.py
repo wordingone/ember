@@ -32,3 +32,16 @@ def test_public_certificate_enumerates_current_matrix_and_validates():
     value = json.loads(certificate.read_text(encoding="utf-8"))
     assert value["checkpoint_manifest_sha256"] == "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b"
     assert {row["family"] for row in value["benchmarks"]} == {"text", "image", "audio", "reasoning", "code", "mathematics", "sql", "files", "browser_ui", "terminal", "structured_tools"}
+
+
+def test_rejects_public_certificate_command_hash_substitution():
+    root = Path(__file__).resolve().parents[1]
+    source = root / "manifests" / "ember-restart-eval-completion-certificate-v1.json"
+    value = json.loads(source.read_text(encoding="utf-8"))
+    value["benchmarks"][0]["command_sha256"] = "0" * 64
+    with tempfile.TemporaryDirectory() as temporary:
+        certificate = Path(temporary) / source.name
+        output = Path(temporary) / "validated"
+        certificate.write_text(json.dumps(value), encoding="utf-8")
+        result = subprocess.run([sys.executable, str(SCRIPT), "validate", str(certificate), "--output", str(output), "--root", str(root)], capture_output=True, text=True)
+    assert result.returncode != 0 and not output.exists()
