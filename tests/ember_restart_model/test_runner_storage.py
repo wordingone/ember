@@ -1076,5 +1076,20 @@ class RunnerStorageTests(unittest.TestCase):
         self.assertTrue(expected.startswith("Global\\ember-checkpoint-custody-"))
         self.assertEqual(expected, run_vertical_slice._windows_custody_ledger_mutex_name_from_identity(identity))
         self.assertNotEqual(expected, run_vertical_slice._windows_custody_ledger_mutex_name_from_identity((1234, 0x11111111, 0x22222223)))
+    def test_windows_handle_identity_keeps_unicode_distinct_roots_separate(self) -> None:
+        """No Unicode/casefold path normalization can collapse distinct directory file IDs."""
+        strasse = run_vertical_slice._windows_custody_ledger_mutex_name_from_identity((7, 1, 1))
+        sharp_s = run_vertical_slice._windows_custody_ledger_mutex_name_from_identity((7, 1, 2))
+        self.assertNotEqual(strasse, sharp_s)
+        self.assertEqual(strasse, run_vertical_slice._windows_custody_ledger_mutex_name_from_identity((7, 1, 1)))
+    @unittest.skipUnless(os.name == "nt", "native Windows mutex contract")
+    def test_windows_mutex_namespace_failure_is_fail_closed(self) -> None:
+        """A denied native mutex API cannot fall back to Local or filesystem ownership."""
+        with tempfile.TemporaryDirectory() as directory:
+            with unittest.mock.patch.object(run_vertical_slice.ctypes, "WinDLL", side_effect=OSError("Global denied")):
+                with self.assertRaisesRegex(OSError, "Global denied"):
+                    with run_vertical_slice._custody_ledger_write_lock(Path(directory)):
+                        self.fail("fail-closed lock unexpectedly entered")
+            self.assertFalse((Path(directory) / ".checkpoint-custody-deletion-ledger.lock").exists())
 if __name__ == "__main__":
     unittest.main()
