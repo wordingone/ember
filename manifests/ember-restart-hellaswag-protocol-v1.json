@@ -12,5 +12,10 @@
                               "checkpoint_score",
                               "capability_admission",
                               "sufficient_pretraining"
-                          ]
+                          ],
+    "scoring_adapter":  {
+                            "path":  "scripts/ember_restart_eval_hellaswag_score.py",
+                            "sha256":  "adfc0f78261be7446792e196d82956aff8938f306dee9f59b0a9d27e53f3ba51",
+                            "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+                        }
 }
