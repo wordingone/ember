@@ -20,17 +20,15 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import load_checkpoint_artifacts,  _write_checkpoint_artifacts_test_only as _write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
+from checkpoint_fixture import write_checkpoint_artifacts
 
 
-def write_checkpoint_artifacts(*args, **kwargs):
-    """Make this module's synthetic checkpoint publications explicitly non-production."""
-    kwargs.setdefault("test_only_allow_unverified", True)
-    return _write_checkpoint_artifacts(*args, **kwargs)
 
 
-from parameter_counter import _CheckpointMetadataUnpickler, _StorageRef, _TensorTypeSentinel, _rebuild_tensor, _rebuild_tensor_from_type, execute_counter, main
+
+from parameter_counter import REALIZATION_RECEIPT_FIELDS, _CheckpointMetadataUnpickler, _StorageRef, _TensorTypeSentinel, _rebuild_tensor, _rebuild_tensor_from_type, execute_counter, main, validate_realization_receipt
 
 
 class CounterCliTests(unittest.TestCase):
@@ -108,7 +106,7 @@ class CounterCliTests(unittest.TestCase):
             self.assertEqual(measured["verification_boundary"], "VERIFIED_MEASURED")
             self.assertEqual(measured["subject_checkpoint_sha256"], hashlib.sha256((root / "checkpoint" / "checkpoint-manifest.json").read_bytes()).hexdigest())
             self.assertEqual(measured["expert_parameter_sha256"], measured["expert_genesis_sha256"])
-            self.assertEqual(set(measured), {"schema_version", "verification_boundary", "result", "model_config_sha256", "subject_checkpoint_sha256", "architecture_revision", "counter_sha256", "allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters", "active_expert_ids", "expert_genesis_sha256", "expert_parameter_sha256"})
+            self.assertEqual(set(measured), REALIZATION_RECEIPT_FIELDS)
             (root / "checkpoint" / "expert-tool.pt").write_bytes(b"corrupt")
             rejected = subprocess.run(command, check=False, capture_output=True, text=True)
         self.assertNotEqual(rejected.returncode, 0)
@@ -281,5 +279,26 @@ class CounterCliTests(unittest.TestCase):
     def test_safe_metadata_unpickler_rejects_arbitrary_global(self) -> None:
         with self.assertRaisesRegex(ValueError, "disallowed global"):
             _CheckpointMetadataUnpickler(io.BytesIO()).find_class("subprocess", "Popen")
+    def test_realization_receipt_schema_is_closed_at_producer_and_admission(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=73)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps({"architecture_revision": "ember-sparse-3b-v2", "model": {"hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64, "tied_embeddings": True, "image_projection": {"input_shape": [48, 48, 3], "output_size": 32}, "audio_projection": {"frame_samples": 640, "output_size": 32}, "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]}}}), encoding="utf-8")
+            write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=73, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)}, data_cursor={"shard": "schema", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            manifest = json.loads((root / "checkpoint" / "checkpoint-manifest.json").read_text(encoding="utf-8"))
+            measured = execute_counter(model_config=config_path, checkpoint_manifest=root / "checkpoint" / "checkpoint-manifest.json", active_expert="shared")
+            self.assertEqual(set(measured), REALIZATION_RECEIPT_FIELDS)
+            validate_realization_receipt(measured)
+            with self.assertRaisesRegex(ValueError, "closed schema"):
+                validate_realization_receipt({key: value for key, value in measured.items() if key != "expert_parameter_sha256"})
+            forged = dict(measured)
+            forged["unexpected"] = True
+            with self.assertRaisesRegex(ValueError, "closed schema"):
+                validate_realization_receipt(forged)
+
 if __name__ == "__main__":
     unittest.main()

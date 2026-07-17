@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import checkpoint_artifacts
 
-from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, _write_checkpoint_artifacts_test_only, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
+from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
@@ -38,6 +38,8 @@ def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> di
         "architecture_revision": manifest_receipt["architecture_revision"],
         "counter_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest(),
         "active_expert_ids": manifest_receipt["active_expert_ids"],
+        "expert_genesis_sha256": manifest_receipt["expert_genesis_sha256"],
+        "expert_parameter_sha256": manifest_receipt["expert_parameter_sha256"],
     }
     for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
         payload[field] = architecture[field]
@@ -46,8 +48,8 @@ def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> di
 
 
 def write_checkpoint_artifacts(*args, **kwargs):
-    if "test_only_allow_unverified" in kwargs:
-        return _write_checkpoint_artifacts_test_only(*args, **kwargs)
+    kwargs.pop("test_only_allow_unverified", None)
+    kwargs.setdefault("pre_publish_verifier", _counter_receipt)
     return _write_checkpoint_artifacts_public(*args, **kwargs)
 
 
@@ -153,7 +155,7 @@ class CheckpointArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "checkpoint-unverified"
             with self.assertRaisesRegex(ValueError, "pre-publish verifier is required"):
-                write_checkpoint_artifacts(
+                _write_checkpoint_artifacts_public(
                     model, optimizer, target, launch_seed=14,
                     rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
                     data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
@@ -507,7 +509,7 @@ class CheckpointArtifactTests(unittest.TestCase):
                     )
             self.assertTrue(target.is_dir())
             self.assertEqual(list(target.iterdir()), [])
-            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-write-failed-")]
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
             self.assertEqual(len(candidates), 1)
             self.assertTrue(candidates[0].joinpath("checkpoint-manifest.json").is_file())
 
@@ -713,5 +715,61 @@ class CheckpointArtifactTests(unittest.TestCase):
         for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
             self.assertEqual(architecture[field], expected[field])
         self.assertEqual(architecture["shared_text_ffn"], "always_active_SwiGLU_4H")
+    def test_admission_preserves_dangling_published_root_symlink(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=91)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-dangling"
+            referent = parent / "referent"
+            def verifier(candidate: Path, receipt: dict[str, object]) -> dict[str, object]:
+                try:
+                    target.symlink_to(referent, target_is_directory=True)
+                except (OSError, NotImplementedError):
+                    self.skipTest("directory symlink creation unavailable")
+                return _counter_receipt(candidate, receipt)
+            with self.assertRaises(FileExistsError):
+                write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=91,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    pre_publish_verifier=verifier,
+                )
+            self.assertTrue(target.is_symlink())
+            self.assertFalse(referent.exists())
+            self.assertFalse(target.is_dir())
+
+    def test_declared_shard_symlink_to_external_bytes_is_rejected(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=92)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-external"
+            outside = parent / "outside.pt"
+            outside.write_bytes(b"external")
+            def verifier(candidate: Path, receipt: dict[str, object]) -> dict[str, object]:
+                shard = candidate / "expert-vision.pt"
+                shard.unlink()
+                try:
+                    shard.symlink_to(outside)
+                except (OSError, NotImplementedError):
+                    self.skipTest("file symlink creation unavailable")
+                return _counter_receipt(candidate, receipt)
+            with self.assertRaisesRegex(ValueError, "symlink or reparse"):
+                write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=92,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    pre_publish_verifier=verifier,
+                )
+            self.assertEqual(outside.read_bytes(), b"external")
+            self.assertFalse(target.exists())
+
 if __name__ == "__main__":
     unittest.main()

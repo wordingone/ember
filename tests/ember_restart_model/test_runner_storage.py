@@ -292,5 +292,114 @@ class RunnerStorageTests(unittest.TestCase):
                     relocation_custody_root=custody,
                 )
 
+    def test_custody_accounting_rejects_symlink_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            outside = parent / "outside.bin"
+            outside.write_bytes(b"outside")
+            bundle = parent / "checkpoint-escape"
+            bundle.mkdir()
+            link = bundle / "shared.pt"
+            try:
+                link.symlink_to(outside)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlink creation unavailable")
+            with self.assertRaisesRegex(RuntimeError, "symlink or reparse"):
+                run_vertical_slice._custody_serialized_bytes(parent)
+
+    def test_evidence_deletion_prepared_failure_preserves_and_reconciles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            quarantine = parent / ".checkpoint-quarantine"
+            quarantine.mkdir()
+            for index in range(33):
+                (quarantine / f"old-{index:02d}.json").write_bytes(f"old-{index}".encode("ascii"))
+            real_unlink = Path.unlink
+            def fail_old(path: Path, *args: object, **kwargs: object) -> None:
+                if path.name.startswith("old-"):
+                    raise OSError("injected unlink failure")
+                real_unlink(path, *args, **kwargs)
+            with unittest.mock.patch.object(Path, "unlink", new=fail_old):
+                with self.assertRaisesRegex(RuntimeError, "did not commit"):
+                    run_vertical_slice._write_bounded_quarantine_evidence(parent, "new", {"result": "UNSELECTABLE"})
+            self.assertEqual(len(list(quarantine.glob("old-*.json"))), 33)
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            events = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([event["event"] for event in events], ["PREPARED"])
+            reconciliation = run_vertical_slice._custody_reconciliation(parent)
+            self.assertEqual(reconciliation["deleted_bytes"], 0)
+            self.assertEqual(reconciliation["reconciled_bytes"], run_vertical_slice._custody_serialized_bytes(parent))
+
+    def test_prepared_unlink_crash_replays_once_without_false_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            quarantine = parent / ".checkpoint-quarantine"
+            quarantine.mkdir()
+            pointer = ".checkpoint-quarantine/crashed.json"
+            payload = b"crashed-evidence"
+            digest = __import__("hashlib").sha256(payload).hexdigest()
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_text(json.dumps({"schema_version": "ember-checkpoint-custody-deletion-v1", "event": "PREPARED", "pointer": pointer, "bytes": len(payload), "sha256": digest}) + "\n", encoding="utf-8")
+            (quarantine / "crashed.json").write_bytes(payload)
+            self.assertEqual(run_vertical_slice._custody_reconciliation(parent)["deleted_bytes"], 0)
+            (quarantine / "crashed.json").unlink()
+            first = run_vertical_slice._custody_reconciliation(parent)
+            second = run_vertical_slice._custody_reconciliation(parent)
+            self.assertEqual(first["deleted_bytes"], len(payload))
+            self.assertEqual(second["deleted_bytes"], len(payload))
+
+    def test_repeated_evidence_name_never_overwrites_prior_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            first = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "FIRST"})
+            second = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "SECOND"})
+            self.assertNotEqual(first, second)
+            self.assertEqual(json.loads(first.read_text(encoding="utf-8"))["result"], "FIRST")
+            self.assertEqual(json.loads(second.read_text(encoding="utf-8"))["result"], "SECOND")
+            self.assertEqual(len(list((parent / ".checkpoint-quarantine").glob("same-name*.json"))), 2)
+
+    def test_pruned_evidence_name_is_never_reused_after_committed_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                first = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "FIRST"})
+                first_size = first.stat().st_size
+                run_vertical_slice._write_bounded_quarantine_evidence(parent, "other-name", {"result": "OTHER"})
+                third = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "THIRD"})
+            self.assertNotEqual(first, third)
+            self.assertEqual(json.loads(third.read_text(encoding="utf-8"))["result"], "THIRD")
+            reconciliation = run_vertical_slice._custody_reconciliation(parent)
+            self.assertGreaterEqual(reconciliation["deleted_bytes"], first_size)
+
+    def test_prune_then_recreate_identical_payload_uses_new_generation_and_reconciles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                evidence_a = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "A"})
+                first_size = evidence_a.stat().st_size
+                run_vertical_slice._write_bounded_quarantine_evidence(parent, "other-name", {"result": "B"})
+                self.assertFalse(evidence_a.exists())
+                recreated_a = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "A"})
+            self.assertNotEqual(recreated_a, evidence_a)
+            self.assertTrue(recreated_a.name.endswith("-g1.json"))
+            self.assertEqual(json.loads(recreated_a.read_text(encoding="utf-8"))["result"], "A")
+            reconciliation = run_vertical_slice._custody_reconciliation(parent)
+            self.assertGreaterEqual(reconciliation["deleted_bytes"], first_size)
+            self.assertEqual(reconciliation["physical_bytes"], run_vertical_slice._custody_serialized_bytes(parent))
+
+    def test_existing_content_addressed_evidence_is_never_returned_after_prune(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 2):
+                evidence_a = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "A"})
+                evidence_b = run_vertical_slice._write_bounded_quarantine_evidence(parent, "other-name", {"result": "B"})
+            os.utime(evidence_b, ns=(evidence_a.stat().st_mtime_ns + 1, evidence_a.stat().st_mtime_ns + 1))
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                repeated_a = run_vertical_slice._write_bounded_quarantine_evidence(parent, "same-name", {"result": "A"})
+            self.assertEqual(repeated_a, evidence_a)
+            self.assertTrue(repeated_a.exists())
+            self.assertEqual(json.loads(repeated_a.read_text(encoding="utf-8"))["result"], "A")
+            run_vertical_slice._custody_reconciliation(parent)
+
 if __name__ == "__main__":
     unittest.main()

@@ -17,6 +17,15 @@ from typing import Any, Mapping
 
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
+REALIZATION_RECEIPT_FIELDS = frozenset(
+    {
+        "schema_version", "verification_boundary", "result", "model_config_sha256",
+        "subject_checkpoint_sha256", "architecture_revision", "counter_sha256",
+        "allocated_parameters", "unique_parameters", "trainable_parameters",
+        "served_parameters", "active_parameters", "episode_trainable_parameters",
+        "active_expert_ids", "expert_genesis_sha256", "expert_parameter_sha256",
+    }
+)
 SPECIALIST_VERIFICATION_FIELDS = frozenset(
     {
         "schema_version",
@@ -37,6 +46,37 @@ SPECIALIST_VERIFICATION_FIELDS = frozenset(
         "runtime_semantic_model_contract_sha256",
     }
 )
+
+
+def validate_realization_receipt(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate the one closed receipt schema emitted by the counter."""
+    if not isinstance(receipt, Mapping) or set(receipt) != REALIZATION_RECEIPT_FIELDS:
+        raise ValueError("realization receipt has an invalid closed schema")
+    if receipt["schema_version"] != "ember-sparse-realization-receipt-v1":
+        raise ValueError("realization receipt has an unsupported schema")
+    if receipt["verification_boundary"] != "VERIFIED_MEASURED" or receipt["result"] != "MEASURED":
+        raise ValueError("realization receipt is not measured evidence")
+    if receipt["architecture_revision"] != ARCHITECTURE_REVISION:
+        raise ValueError("realization receipt architecture revision drifted")
+    for field in ("model_config_sha256", "subject_checkpoint_sha256", "counter_sha256"):
+        value = receipt[field]
+        if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
+            raise ValueError(f"realization receipt has an invalid {field}")
+    for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
+        value = receipt[field]
+        if type(value) is not int or value < 0:
+            raise ValueError(f"realization receipt has an invalid {field}")
+    active = receipt["active_expert_ids"]
+    if not isinstance(active, list) or len(active) != 1 or active[0] not in {"shared", *EXPERT_NAMES}:
+        raise ValueError("realization receipt has an invalid active expert route")
+    for field in ("expert_genesis_sha256", "expert_parameter_sha256"):
+        mapping = receipt[field]
+        if not isinstance(mapping, Mapping) or set(mapping) != set(EXPERT_NAMES):
+            raise ValueError(f"realization receipt has an invalid {field} map")
+        for expert, digest in mapping.items():
+            if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+                raise ValueError(f"realization receipt has an invalid {field} for {expert}")
+    return dict(receipt)
 
 
 def _sha256(path: Path) -> str:
@@ -445,7 +485,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
     _counter_bytes, counter_sha256 = _read_bytes_snapshot(Path(__file__), label="counter source")
     if manifest.get("model_config_sha256") != config_sha256:
         raise ValueError("checkpoint model-config hash mismatch")
-    return {
+    return validate_realization_receipt({
         "schema_version": "ember-sparse-realization-receipt-v1",
         "verification_boundary": "VERIFIED_MEASURED",
         "result": "MEASURED",
@@ -457,7 +497,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         "active_expert_ids": [active_expert],
         "expert_genesis_sha256": dict(manifest["expert_genesis_sha256"]),
         "expert_parameter_sha256": dict(manifest.get("expert_parameter_sha256", manifest["expert_genesis_sha256"])),
-    }
+    })
 
 
 def measure_parameter_counts(model: Any) -> dict[str, Any]:

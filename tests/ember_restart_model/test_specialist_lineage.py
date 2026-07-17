@@ -18,14 +18,12 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources,  _write_checkpoint_artifacts_test_only as _write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources
 from model import RestartDecoderConfig, UnifiedDecoder
+from checkpoint_fixture import write_checkpoint_artifacts
 
 
-def write_checkpoint_artifacts(*args, **kwargs):
-    """Make this module's synthetic checkpoint publications explicitly non-production."""
-    kwargs.setdefault("test_only_allow_unverified", True)
-    return _write_checkpoint_artifacts(*args, **kwargs)
+
 
 
 from parameter_counter import execute_counter
@@ -321,7 +319,7 @@ class SpecialistLineageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             probe = self._write_vision_successor(base / "probe")
-            cap = int(probe["serialized_bytes"]) - 1
+            cap = int(probe["incremental_publication_bytes"]) + 1024
             linked = self._write_vision_successor(base / "linked", max_serialized_bytes=cap)
             self.assertLessEqual(linked["incremental_publication_bytes"], cap)
             self.assertGreater(linked["serialized_bytes"], cap)

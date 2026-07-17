@@ -674,6 +674,8 @@ class RunnerPreflightTests(unittest.TestCase):
                 "model_config_sha256": "a" * 64,
                 "architecture_revision": "ember-sparse-3b-v2",
                 "active_expert_ids": ["vision"],
+                "expert_genesis_sha256": {name: "b" * 64 for name in ("vision", "audio", "reasoning", "tool")},
+                "expert_parameter_sha256": {name: "c" * 64 for name in ("vision", "audio", "reasoning", "tool")},
                 "architecture": {
                     "allocated_parameters": 3_839_161_856,
                     "unique_parameters": 3_839_161_856,
@@ -696,6 +698,8 @@ class RunnerPreflightTests(unittest.TestCase):
                     "architecture_revision": manifest["architecture_revision"],
                     "active_expert_ids": manifest["active_expert_ids"],
                     "counter_sha256": run_vertical_slice._sha256(ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py"),
+                    "expert_genesis_sha256": manifest["expert_genesis_sha256"],
+                    "expert_parameter_sha256": manifest["expert_parameter_sha256"],
                     **manifest["architecture"],
                 }),
                 encoding="utf-8",
