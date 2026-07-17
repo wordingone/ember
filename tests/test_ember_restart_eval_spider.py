@@ -18,7 +18,7 @@ def frozen_manifest(root, spider, gold, tables, database):
     sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
     manifest = root / "frozen-sql.json"
     manifest.write_text(json.dumps({
-        "schema_version": "ember-restart-benchmark-custody-v1",
+        "schema_version": "ember-restart-benchmark-custody-v1", "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b", "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
         "result": "PREFLIGHT_ONLY",
         "benchmark_id": "spider",
         "benchmark_version": "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c",
@@ -109,7 +109,7 @@ def test_canonical_spider_evaluator_cannot_swap_gold_after_custody_check():
         manifest = frozen_manifest(root, spider, gold, tables, database)
         predictions.write_text(json.dumps({
             "schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS",
-            "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64,
+            "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b", "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
             "tokenizer_sha256": "c" * 64, "inference_implementation_sha256": "d" * 64,
             "benchmark": {"id": "spider", "version": "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c", "capability": "tool", "split_sha256": hashlib.sha256(gold.read_bytes()).hexdigest(), "protocol_sha256": json.loads(manifest.read_text(encoding="utf-8"))["protocol_sha256"]},
             "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1, "temperature": 0, "top_p": 1, "stop_token_ids": [2]},
