@@ -21,3 +21,6 @@ are available for future canonical predictions, but their current outputs are
 preflight-only and never rendered as owned capability. For the exact structural
 input and future admitted results, link to
 [`ember-restart-evaluation-results.md`](ember-restart-evaluation-results.md).
+
+
+The demo's matrix boundary is recorded in [ember-restart-eval-completion-certificate-v1.json](../manifests/ember-restart-eval-completion-certificate-v1.json); all listed records remain non-claiming until canonical predictions and admission exist.
