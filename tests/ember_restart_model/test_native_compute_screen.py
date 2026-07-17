@@ -23,6 +23,7 @@ from native_compute_screen import (
     _power_sample,
     _validate_disk_preflight,
     _validate_schedule_receipt,
+    _load_screen_authority,
     disk_preflight_receipt,
     screen_plan,
     screen_receipt,
@@ -253,6 +254,60 @@ class NativeComputeScreenTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "runtime identity|hash|source closure"):
             screen_receipt(model_config_sha256="a" * 64, optimizer_contract_sha256="b" * 64, tokenizer_sha256="c" * 64, checkpoint_manifest_sha256="d" * 64, source_sha256="e" * 64, total_vram_bytes=24 * 1024**3, custody=custody, batch_measurements=[{"batch_size": 1, "elapsed_seconds": 1.0, "peak_allocated_bytes": 10, "peak_reserved_bytes": 11}, {"batch_size": 2, "elapsed_seconds": 1.0, "peak_allocated_bytes": 12, "peak_reserved_bytes": 13}])
+
+    def test_receipt_rejects_every_malformed_top_level_identity_hash(self) -> None:
+        custody = {
+            "hardware_runtime": {"gpu_name": "gpu", "compute_capability": "8.9", "torch_version": "x", "cuda_version": "x", "cudnn_version": "x", "optimizer_implementation": "x", "optimizer_version": "x"},
+            "source_closure_sha256": {name: "f" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")},
+            "emberd_schedule_receipt_sha256": "a" * 64,
+            "disk_budget_receipt_sha256": "b" * 64,
+        }
+        identities = {
+            "model_config_sha256": "a" * 64,
+            "optimizer_contract_sha256": "b" * 64,
+            "tokenizer_sha256": "c" * 64,
+            "checkpoint_manifest_sha256": "d" * 64,
+            "source_sha256": "e" * 64,
+        }
+        for field in identities:
+            malformed = dict(identities)
+            malformed[field] = "F" * 64
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "identity hashes"):
+                screen_receipt(
+                    **malformed,
+                    total_vram_bytes=24 * 1024**3,
+                    custody=custody,
+                    batch_measurements=[{"batch_size": 1, "elapsed_seconds": 1.0, "peak_allocated_bytes": 10, "peak_reserved_bytes": 11}, {"batch_size": 2, "elapsed_seconds": 1.0, "peak_allocated_bytes": 12, "peak_reserved_bytes": 13}],
+                )
+
+    def test_screen_authority_parses_and_hashes_each_exact_snapshot_once(self) -> None:
+        config_payload = json.loads((ROOT / "configs" / "ember-restart-3b.json").read_text(encoding="utf-8"))
+        manifest_payload = {"schema_version": "ember-sparse-checkpoint-v3"}
+        with mock.patch(
+            "native_compute_screen._read_json_receipt",
+            side_effect=[(config_payload, "a" * 64), (manifest_payload, "b" * 64)],
+        ) as read_snapshot:
+            authority = _load_screen_authority(
+                config_path=Path("config.json"),
+                reference_checkpoint_manifest=Path("checkpoint-manifest.json"),
+            )
+        self.assertEqual(read_snapshot.call_count, 2)
+        self.assertEqual(authority["model_config_sha256"], "a" * 64)
+        self.assertEqual(authority["checkpoint_manifest_sha256"], "b" * 64)
+        self.assertEqual(authority["optimizer_contract"]["placement"], "cuda_non_paged")
+        self.assertTrue(authority["config"].production)
+
+    def test_screen_authority_rejects_a_non_checkpoint_reference_snapshot(self) -> None:
+        config_payload = json.loads((ROOT / "configs" / "ember-restart-3b.json").read_text(encoding="utf-8"))
+        with mock.patch(
+            "native_compute_screen._read_json_receipt",
+            side_effect=[(config_payload, "a" * 64), ({"schema_version": "other"}, "b" * 64)],
+        ):
+            with self.assertRaisesRegex(ValueError, "reference checkpoint manifest"):
+                _load_screen_authority(
+                    config_path=Path("config.json"),
+                    reference_checkpoint_manifest=Path("checkpoint-manifest.json"),
+                )
     def test_receipt_rejects_an_empty_runtime_identity_with_valid_other_custody(self) -> None:
         custody = {
             "hardware_runtime": {"gpu_name": "", "compute_capability": "8.9", "torch_version": "x", "cuda_version": "x", "cudnn_version": "x", "optimizer_implementation": "x", "optimizer_version": "x"},
