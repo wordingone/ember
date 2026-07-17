@@ -56,14 +56,52 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertTrue(oldest.exists())
             self.assertTrue(middle.exists())
             newest = parent / "checkpoint-newest"
-            result = run_vertical_slice._retain_after_success(parent, max_count=2, operation=lambda: (newest.mkdir(), "published")[1])
-            self.assertEqual(result, "published")
-            self.assertFalse(oldest.exists())
+            with self.assertRaisesRegex(RuntimeError, "selectable checkpoint count"):
+                run_vertical_slice._retain_after_success(parent, max_count=2, operation=lambda: (newest.mkdir(), "published")[1])
+            self.assertTrue(oldest.exists())
             self.assertTrue(middle.exists())
             self.assertTrue(newest.exists())
-            retained = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
-            self.assertEqual(len(retained), 1)
-            self.assertIn("oldest", retained[0].name)
+            self.assertFalse((parent / ".checkpoint-quarantine").exists())
+    def test_max_count_never_claims_capacity_from_quarantine_move(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            old = parent / "checkpoint-old"
+            newest = parent / "checkpoint-new"
+            old.mkdir()
+            newest.mkdir()
+            (old / "state.bin").write_bytes(b"old")
+            (newest / "state.bin").write_bytes(b"new")
+            with self.assertRaisesRegex(RuntimeError, "selectable checkpoint count"):
+                run_vertical_slice._enforce_retention(parent, max_count=1)
+            self.assertTrue(old.exists())
+            self.assertTrue(newest.exists())
+
+    def test_custody_reconciliation_covers_live_quarantine_and_deleted_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            live = parent / "checkpoint-live"
+            quarantine = parent / ".checkpoint-quarantine" / "candidate-old"
+            live.mkdir()
+            quarantine.mkdir(parents=True)
+            (live / "shared.pt").write_bytes(b"live")
+            (quarantine / "shared.pt").write_bytes(b"quarantine")
+            pointer = ".checkpoint-quarantine/deleted-evidence.json"
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_text(
+                json.dumps(
+                    {"schema_version": "ember-checkpoint-custody-deletion-v1", "event": "DELETED", "pointer": pointer, "bytes": 17, "sha256": "a" * 64, "reason": "test"},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ) + "\n",
+                encoding="utf-8",
+            )
+            reconciliation = run_vertical_slice._custody_reconciliation(parent)
+            self.assertEqual(reconciliation["schema_version"], "ember-checkpoint-custody-reconciliation-v1")
+            self.assertEqual(reconciliation["live_bytes"], 4)
+            self.assertEqual(reconciliation["quarantine_bytes"], 10)
+            self.assertEqual(reconciliation["deleted_bytes"], 17)
+            self.assertEqual(reconciliation["reconciled_bytes"], reconciliation["physical_bytes"] + 17)
+
     def test_retention_byte_cap_charges_quarantined_bundle_after_move(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
@@ -98,7 +136,46 @@ class RunnerStorageTests(unittest.TestCase):
             }
             manifest_path = bundle / "checkpoint-manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            self.assertEqual(run_vertical_slice._custody_serialized_bytes(parent), manifest_path.stat().st_size)
+            self.assertEqual(
+                run_vertical_slice._custody_serialized_bytes(parent),
+                anchor.stat().st_size + manifest_path.stat().st_size,
+            )
+
+    def test_zero_increment_receipt_cannot_zero_original_or_unique_inode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            first = parent / "checkpoint-a"
+            second = parent / "checkpoint-b"
+            forged = parent / "checkpoint-forged"
+            first.mkdir()
+            second.mkdir()
+            forged.mkdir()
+            original = first / "expert-vision.pt"
+            original.write_bytes(b"original-shard")
+            os.link(original, second / "expert-vision.pt")
+            forged_shard = forged / "expert-tool.pt"
+            forged_shard.write_bytes(b"forged-single")
+            for bundle, shard in ((first, "expert-vision.pt"), (second, "expert-vision.pt"), (forged, "expert-tool.pt")):
+                (bundle / "checkpoint-manifest.json").write_text(
+                    json.dumps(
+                        {"shards": [{"path": shard, "bytes": (bundle / shard).stat().st_size, "publication_mode": "hardlink", "incremental_bytes": 0}]}
+                    ),
+                    encoding="utf-8",
+                )
+            unique_ids: set[tuple[int, int] | str] = set()
+            expected = 0
+            for path in parent.rglob("*"):
+                if not path.is_file():
+                    continue
+                identity = run_vertical_slice._file_identity(path)
+                if identity in unique_ids:
+                    continue
+                unique_ids.add(identity)
+                expected += path.stat().st_size
+            measured = run_vertical_slice._custody_serialized_bytes(parent)
+            self.assertEqual(measured, expected)
+            self.assertGreaterEqual(measured, original.stat().st_size + forged_shard.stat().st_size)
+
 
     def test_retention_prunes_measured_bytes_but_keeps_a_known_good_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
