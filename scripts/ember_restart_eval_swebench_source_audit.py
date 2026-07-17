@@ -21,6 +21,20 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def swebench_protocol_sha256(source_commit: str, harness_sha256: str, license_sha256: str) -> str:
+    """Derive a stable source-only protocol identity from exact custody bytes."""
+    identity = {
+        "benchmark_id": "swe-bench",
+        "benchmark_version": source_commit,
+        "source_commit": source_commit,
+        "harness_sha256": harness_sha256,
+        "license_sha256": license_sha256,
+        "task_release": "ABSENT",
+        "claim_status": "SOURCE_ONLY_NO_FROZEN_SWEBENCH_TASK_RELEASE",
+        "admission": "NOT_EXECUTABLE_UNDECLARED_DATASET_LICENSE_AND_NO_OFFLINE_SANDBOX",
+    }
+    canonical = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--swebench-root", type=Path, required=True)
@@ -54,8 +68,11 @@ def main() -> int:
         "benchmark_id": "swe-bench",
         "capability_families": ["code", "files"],
         "source_commit": arguments.expected_commit,
+        "benchmark_version": arguments.expected_commit,
         "harness_sha256": digest(arguments.swebench_root / "swebench/harness/run_evaluation.py"),
         "license_sha256": digest(arguments.swebench_root / "LICENSE"),
+        "protocol_sha256": swebench_protocol_sha256(arguments.expected_commit, digest(arguments.swebench_root / "swebench/harness/run_evaluation.py"), digest(arguments.swebench_root / "LICENSE")),
+        "protocol_derivation": "sha256(canonical benchmark/source/harness/license/task-release/admission identity)",
         "missing_task_release_paths": sorted(TASK_RELEASE_PATHS),
     }
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
