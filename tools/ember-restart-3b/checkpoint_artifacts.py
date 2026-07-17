@@ -409,7 +409,7 @@ def _specialist_lineage(
 
     if active_expert not in EXPERT_NAMES:
         raise ValueError("specialist lineage requires one specialist active expert")
-    required = {"parent_manifest", "root_manifest", "trained_expert_ids", "data_verification_receipt"}
+    required = {"parent_manifest", "root_manifest", "trained_expert_ids", "data_verification_receipt", "execution_slice"}
     if not isinstance(lineage, Mapping) or set(lineage) != required:
         raise ValueError("specialist lineage has an invalid shape")
     parent_source, root_source = lineage["parent_manifest"], lineage["root_manifest"]
@@ -464,6 +464,21 @@ def _specialist_lineage(
         _sha256_value(verification.get(field), name=f"specialist verification {field}")
     if type(verification.get("record_count")) is not int or verification["record_count"] <= 0 or type(verification.get("token_count")) is not int or verification["token_count"] <= 0:
         raise ValueError("specialist lineage verification has no training evidence")
+    execution_slice = lineage["execution_slice"]
+    slice_fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
+    if not isinstance(execution_slice, Mapping) or set(execution_slice) != slice_fields:
+        raise ValueError("specialist lineage execution slice has an invalid shape")
+    if execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1":
+        raise ValueError("specialist lineage execution slice has an unsupported schema")
+    if type(execution_slice.get("start_record")) is not int or execution_slice["start_record"] < 0:
+        raise ValueError("specialist lineage execution slice has an invalid start record")
+    for field in ("record_count", "token_count"):
+        if type(execution_slice.get(field)) is not int or execution_slice[field] <= 0:
+            raise ValueError(f"specialist lineage execution slice has an invalid {field}")
+    if execution_slice["start_record"] + execution_slice["record_count"] > verification["record_count"]:
+        raise ValueError("specialist lineage execution slice exceeds the verified corpus")
+    for field in ("records_sha256", "tokens_sha256"):
+        _sha256_value(execution_slice.get(field), name=f"specialist execution slice {field}")
     return ({
         "parent_checkpoint_sha256": parent_sha256,
         "root_genesis_checkpoint_sha256": root_sha256,
@@ -472,6 +487,8 @@ def _specialist_lineage(
             "active_expert": active_expert,
             "data_verification_receipt": dict(verification),
             "data_verification_receipt_sha256": _canonical_sha256(verification),
+            "execution_slice": dict(execution_slice),
+            "execution_slice_sha256": _canonical_sha256(execution_slice),
         },
     }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
 def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> tuple[Path, str]:

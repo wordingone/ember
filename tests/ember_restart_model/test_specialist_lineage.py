@@ -45,6 +45,17 @@ def _verification(capability: str = "image") -> dict[str, object]:
     }
 
 
+def _execution_slice(*, start_record: int = 0, record_count: int = 2) -> dict[str, object]:
+    return {
+        "schema_version": "ember-specialist-execution-slice-v1",
+        "start_record": start_record,
+        "record_count": record_count,
+        "token_count": record_count * 16,
+        "records_sha256": "1" * 64,
+        "tokens_sha256": "2" * 64,
+    }
+
+
 def _write_root(model: UnifiedDecoder, optimizer: torch.optim.Optimizer, root: Path) -> dict[str, object]:
     model._activate_expert("shared")
     return write_checkpoint_artifacts(
@@ -91,6 +102,7 @@ class SpecialistLineageTests(unittest.TestCase):
                 "root_manifest": root_manifest,
                 "trained_expert_ids": trained if trained is not None else ["vision"],
                 "data_verification_receipt": _verification(),
+                "execution_slice": _execution_slice(),
             },
             max_serialized_bytes=max_serialized_bytes,
         )
@@ -108,6 +120,7 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertEqual(receipt["lineage"]["trained_expert_ids"], ["vision"])
         self.assertEqual(receipt["lineage"]["episode"]["active_expert"], "vision")
         self.assertEqual(receipt["lineage"]["episode"]["data_verification_receipt"], _verification())
+        self.assertEqual(receipt["lineage"]["episode"]["execution_slice"], _execution_slice())
         self.assertNotIn("parent_manifest", json.dumps(receipt))
         self.assertNotIn("root_manifest", json.dumps(receipt))
         self.assertEqual(parent["active_expert_ids"], ["shared"])
@@ -145,7 +158,7 @@ class SpecialistLineageTests(unittest.TestCase):
                     expert_genesis_sha256=root["expert_genesis_sha256"],
                     specialist_lineage={
                         "parent_manifest": step2_manifest, "root_manifest": root_manifest,
-                        "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(),
+                        "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(), "execution_slice": _execution_slice(),
                     },
                 )
     def test_first_successor_requires_parent_and_root_to_be_the_same_genesis_bundle(self) -> None:
@@ -227,11 +240,11 @@ class SpecialistLineageTests(unittest.TestCase):
             base = Path(directory)
             parent, parent_manifest, candidate, optimizer = self._root_and_candidate(base)
             with self.assertRaisesRegex(ValueError, "active expert parameter content"):
-                write_checkpoint_artifacts(candidate, optimizer, base / "same", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification()})
+                write_checkpoint_artifacts(candidate, optimizer, base / "same", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(), "execution_slice": _execution_slice()})
             next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
             next(parameter for name, parameter in candidate.named_parameters() if ".experts.audio." in name).data.add_(1)
             with self.assertRaisesRegex(ValueError, "inactive expert.*parent"):
-                write_checkpoint_artifacts(candidate, optimizer, base / "drift", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification()})
+                write_checkpoint_artifacts(candidate, optimizer, base / "drift", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(), "execution_slice": _execution_slice()})
 
     def test_specialist_writer_rejects_wrong_history_or_capability_mapping(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -242,7 +255,7 @@ class SpecialistLineageTests(unittest.TestCase):
             parent, parent_manifest, candidate, optimizer = self._root_and_candidate(base)
             next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
             with self.assertRaisesRegex(ValueError, "capability"):
-                write_checkpoint_artifacts(candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification("audio")})
+                write_checkpoint_artifacts(candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification("audio"), "execution_slice": _execution_slice()})
 
 
 
@@ -251,7 +264,7 @@ class SpecialistLineageTests(unittest.TestCase):
             base = Path(directory)
             parent, parent_manifest, candidate, optimizer = self._root_and_candidate(base)
             next(parameter for name, parameter in candidate.named_parameters() if ".experts.vision." in name).data.add_(1)
-            receipt = write_checkpoint_artifacts(candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification()})
+            receipt = write_checkpoint_artifacts(candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(), "execution_slice": _execution_slice()})
         self.assertEqual(set(receipt["expert_parameter_sha256"]), {"vision", "audio", "reasoning", "tool"})
         self.assertNotEqual(receipt["expert_parameter_sha256"]["vision"], parent["expert_genesis_sha256"]["vision"])
 
@@ -306,11 +319,11 @@ class SpecialistLineageTests(unittest.TestCase):
             bad = _verification()
             bad["semantic_checks"] = ["locally_derived"]
             with self.assertRaisesRegex(ValueError, "semantic checks"):
-                write_checkpoint_artifacts(candidate, optimizer, base / "bad-checks", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad})
+                write_checkpoint_artifacts(candidate, optimizer, base / "bad-checks", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad, "execution_slice": _execution_slice()})
             bad = _verification()
             bad["record_count"] = True
             with self.assertRaisesRegex(ValueError, "training evidence"):
-                write_checkpoint_artifacts(candidate, optimizer, base / "bad-count", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad})
+                write_checkpoint_artifacts(candidate, optimizer, base / "bad-count", launch_seed=999, rng_state=_rng_state(), data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 2, "tokens_seen": 32}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=parent["expert_genesis_sha256"], specialist_lineage={"parent_manifest": parent_manifest, "root_manifest": parent_manifest, "trained_expert_ids": ["vision"], "data_verification_receipt": bad, "execution_slice": _execution_slice()})
 
 
     def test_writer_refuses_unrecorded_staging_files_before_promotion(self) -> None:
@@ -370,7 +383,7 @@ class SpecialistLineageTests(unittest.TestCase):
             load_checkpoint_artifacts(model, optimizer, base / "candidate", {**first, "checkpoint_manifest_sha256": hashlib.sha256(first_manifest_path.read_bytes()).hexdigest()})
             model._activate_expert("audio")
             next(parameter for name, parameter in model.named_parameters() if ".experts.audio." in name).data.add_(1)
-            second = write_checkpoint_artifacts(model, optimizer, base / "second", launch_seed=1001, rng_state=_rng_state(), data_cursor={"shard": "verified-audio", "record_index": 3, "global_step": 3, "tokens_seen": 48}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256={"vision": "0" * 64, "audio": "0" * 64, "reasoning": "0" * 64, "tool": "0" * 64}, specialist_lineage={"parent_manifest": first_manifest_path, "root_manifest": root_manifest_path, "trained_expert_ids": ["vision", "audio"], "data_verification_receipt": _verification("audio")})
+            second = write_checkpoint_artifacts(model, optimizer, base / "second", launch_seed=1001, rng_state=_rng_state(), data_cursor={"shard": "verified-audio", "record_index": 3, "global_step": 3, "tokens_seen": 48}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256={"vision": "0" * 64, "audio": "0" * 64, "reasoning": "0" * 64, "tool": "0" * 64}, specialist_lineage={"parent_manifest": first_manifest_path, "root_manifest": root_manifest_path, "trained_expert_ids": ["vision", "audio"], "data_verification_receipt": _verification("audio"), "execution_slice": _execution_slice(start_record=2)})
         self.assertEqual(second["lineage"]["root_genesis_checkpoint_sha256"], root_sha256)
         self.assertEqual(second["lineage"]["trained_expert_ids"], ["vision", "audio"])
         self.assertEqual(second["expert_checkpoint_sha256"]["vision"], first["expert_checkpoint_sha256"]["vision"])

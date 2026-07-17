@@ -30,6 +30,38 @@ from verify_capability_record import expected_receipt
 
 
 class RunnerPreflightTests(unittest.TestCase):
+    def test_specialist_execution_slice_binds_exact_contiguous_records_and_tokens(self) -> None:
+        records = [
+            {"active_expert": "vision", "token_ids": [1, 2], "row_id": "zero"},
+            {"active_expert": "vision", "token_ids": [3, 4, 5], "row_id": "one"},
+            {"active_expert": "vision", "token_ids": [6], "row_id": "two"},
+        ]
+        selected, receipt = run_vertical_slice.bind_specialist_execution_slice(
+            records, start_record=1, max_records=1,
+        )
+        self.assertEqual(selected, [records[1]])
+        self.assertEqual(
+            receipt,
+            {
+                "schema_version": "ember-specialist-execution-slice-v1",
+                "start_record": 1,
+                "record_count": 1,
+                "token_count": 3,
+                "records_sha256": hashlib.sha256(
+                    json.dumps([records[1]], sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest(),
+                "tokens_sha256": hashlib.sha256(
+                    json.dumps([[3, 4, 5]], separators=(",", ":")).encode("utf-8")
+                ).hexdigest(),
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "start record"):
+            run_vertical_slice.bind_specialist_execution_slice(records, start_record=3, max_records=1)
+        with self.assertRaisesRegex(ValueError, "max records"):
+            run_vertical_slice.bind_specialist_execution_slice(records, start_record=0, max_records=0)
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            run_vertical_slice.bind_specialist_execution_slice(records, start_record=2, max_records=2)
+
     def test_training_telemetry_is_bounded_path_free_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             channel = Path(directory) / "ember-telemetry.jsonl"
@@ -348,11 +380,11 @@ class RunnerPreflightTests(unittest.TestCase):
         def segment(**kwargs: object) -> dict[str, object]:
             segment_kwargs.update(kwargs)
             published_steps = callback_steps or (20,)
-            result = {"losses": [0.1], "data_cursor": {"shard": str(kwargs["data_shard_id"]), "record_index": 1, "global_step": published_steps[-1], "tokens_seen": 20_480}}
-            for step in published_steps:
+            result = {"losses": [0.1], "data_cursor": {"shard": str(kwargs["data_shard_id"]), "record_index": len(published_steps), "global_step": published_steps[-1], "tokens_seen": 20_480}}
+            for record_index, step in enumerate(published_steps, start=1):
                 callback_result = {
                     **result,
-                    "data_cursor": {**result["data_cursor"], "global_step": step},
+                    "data_cursor": {**result["data_cursor"], "record_index": record_index, "global_step": step},
                 }
                 kwargs["checkpoint_callback"](step, callback_result)
             return result
@@ -386,9 +418,9 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="h" * 64))
             result = run_vertical_slice.run(
                 seed=84, artifact_root=Path("B:/vertical-artifacts"), resume_checkpoint=parent,
-                records_override=[{"active_expert": "vision"}] if specialist else None,
+                records_override=([{"active_expert": "vision", "token_ids": [index + 1]} for index in range(len(callback_steps or (20,)))] if specialist else None),
                 specialist_verification={"data_manifest_sha256": "a" * 64} if specialist else None,
-                specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest)} if specialist else None,
+                specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest), "execution_slice": {"start_record": 0, "records_sha256": "1" * 64}} if specialist else None,
                 checkpoint_interval=8_192 if specialist else None,
                 write_budget_bytes=100 * 1024**3 if specialist else None,
             )
@@ -434,6 +466,10 @@ class RunnerPreflightTests(unittest.TestCase):
             Path(second.kwargs["specialist_lineage"]["parent_manifest"]),
             Path(first.args[2]) / "checkpoint-manifest.json",
         )
+        self.assertEqual(first.kwargs["specialist_lineage"]["execution_slice"]["start_record"], 0)
+        self.assertEqual(first.kwargs["specialist_lineage"]["execution_slice"]["record_count"], 1)
+        self.assertEqual(second.kwargs["specialist_lineage"]["execution_slice"]["start_record"], 1)
+        self.assertEqual(second.kwargs["specialist_lineage"]["execution_slice"]["record_count"], 1)
     def test_semantic_cli_dispatches_only_manifest_bound_stream_inputs(self) -> None:
         with patch.object(run_vertical_slice, "run_semantic", return_value={"steps": 1}) as semantic:
             with patch.object(
@@ -461,7 +497,12 @@ class RunnerPreflightTests(unittest.TestCase):
         )
 
     def test_specialist_lineage_request_binds_parent_to_exact_resume_bundle(self) -> None:
-        verification = {"result": "VERIFIED", "capability": "image"}
+        verification = {"result": "VERIFIED", "capability": "image", "record_count": 20}
+        execution_slice = {
+            "schema_version": "ember-specialist-execution-slice-v1", "start_record": 0,
+            "record_count": 20, "token_count": 40, "records_sha256": "a" * 64,
+            "tokens_sha256": "b" * 64,
+        }
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory) / "parent"
             parent.mkdir()
@@ -470,18 +511,19 @@ class RunnerPreflightTests(unittest.TestCase):
             with patch.object(run_vertical_slice, "preflight_specialist_lineage_sources") as preflight:
                 lineage = run_vertical_slice.specialist_lineage_request(
                     capability="image", verification=verification, resume_checkpoint=parent,
-                    parent_manifest=manifest, root_manifest=manifest,
+                    parent_manifest=manifest, root_manifest=manifest, execution_slice=execution_slice,
                 )
                 self.assertEqual(lineage["trained_expert_ids"], ["vision"])
+                self.assertEqual(lineage["execution_slice"], execution_slice)
                 preflight.assert_called_once_with(parent_manifest=manifest.resolve(), root_manifest=manifest.resolve())
                 with self.assertRaisesRegex(ValueError, "exact resumed"):
                     run_vertical_slice.specialist_lineage_request(
                         capability="image", verification=verification, resume_checkpoint=Path(directory) / "other",
-                        parent_manifest=manifest, root_manifest=manifest,
+                        parent_manifest=manifest, root_manifest=manifest, execution_slice=execution_slice,
                     )
     def test_specialist_dispatch_does_not_enter_cuda_runner_when_lineage_preflight_fails(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image"}
-        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([], verification)):
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "token_ids": [1]}], verification)):
             with patch.object(run_vertical_slice, "specialist_lineage_request", side_effect=ValueError("parent shard hash mismatch")):
                 with patch.object(run_vertical_slice, "run") as cuda_runner:
                     with self.assertRaisesRegex(ValueError, "hash mismatch"):
@@ -493,8 +535,8 @@ class RunnerPreflightTests(unittest.TestCase):
         cuda_runner.assert_not_called()
     def test_specialist_forwards_counter_success_receipt_to_cuda_runner(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image"}
-        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision"}], verification)):
-            with patch.object(run_vertical_slice, "specialist_lineage_request", return_value={"parent_manifest": "parent", "root_manifest": "root"}):
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "token_ids": [1]}], verification)):
+            with patch.object(run_vertical_slice, "specialist_lineage_request", side_effect=lambda **kwargs: {"parent_manifest": "parent", "root_manifest": "root", "execution_slice": kwargs["execution_slice"]}):
                 with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as cuda_runner:
                     run_vertical_slice.run_specialist(
                         seed=84,
@@ -508,16 +550,20 @@ class RunnerPreflightTests(unittest.TestCase):
                         root_manifest=Path("B:/root/checkpoint-manifest.json"),
                         checkpoint_interval=8_192,
                         write_budget_bytes=120 * 1024**3,
+                        start_record=0,
+                        max_records=1,
                     )
         self.assertEqual(cuda_runner.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
+        self.assertEqual(cuda_runner.call_args.kwargs["records_override"], [{"active_expert": "vision", "token_ids": [1]}])
+        self.assertIn("execution_slice", cuda_runner.call_args.kwargs["specialist_lineage"])
     def test_specialist_cli_dispatches_one_verified_route(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--start-record", "7", "--max-records", "20", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None, telemetry_path=Path("state/ember-telemetry.jsonl"), telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00")
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), start_record=7, max_records=20, checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None, telemetry_path=Path("state/ember-telemetry.jsonl"), telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00")
     def test_specialist_cli_forwards_explicit_c_relocation_custody(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--max-records", "20", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
                 run_vertical_slice.main()
         self.assertIs(specialist.call_args.kwargs["c_relocated_under_disk_budget_runner"], True)
         self.assertEqual(specialist.call_args.kwargs["artifact_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))
@@ -525,6 +571,8 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(specialist.call_args.kwargs["checkpoint_interval"], 8_192)
         self.assertEqual(specialist.call_args.kwargs["write_budget_bytes"], 120 * 1024**3)
         self.assertEqual(specialist.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
+        self.assertEqual(specialist.call_args.kwargs["start_record"], 0)
+        self.assertEqual(specialist.call_args.kwargs["max_records"], 20)
     def test_c_custody_resume_bundle_requires_the_declared_disk_runner_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             custody = Path(directory)
