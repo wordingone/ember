@@ -234,6 +234,9 @@ class RunnerPreflightTests(unittest.TestCase):
             )
         self.assertFalse(result["optimizer_state_reused"])
         self.assertEqual(result["parent_optimizer_contract"]["implementation"], "torch.optim.adamw.AdamW")
+
+        self.assertEqual(result["target_optimizer_contract"]["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(result["target_optimizer_contract"]["placement"], "cuda_non_paged")
     def test_nonpaged_optimizer_rejects_placement_drift(self) -> None:
         contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         contract["placement"] = "host_paged"
