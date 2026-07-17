@@ -15,5 +15,12 @@
                             "runner_receipt_sha256":  "a12c8f72324eb0dbd6d426d90fb2261eb9cd2ed983fde9866a1476b9762f2aff",
                             "split_sha256":  "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
                             "claim_status":  "FROZEN_GSM8K_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS"
-                        }
+                        },
+    "benchmark_version":  "740312add88f781978c0658806c59bc2815b9866",
+    "license_sha256":  "a17e882503578c9e324560630e31017617714ee025c87cf4fea6fd916895f3c1",
+    "references_sha256":  "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
+    "split_sha256":  "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
+    "protocol_sha256":  "6060a263a17ff3cc21374e88293e6d12d62e06bc9a653ecd25b632c455f9d727",
+    "scoring_adapter_path":  "scripts/ember_restart_eval_gsm8k_score.py",
+    "scoring_adapter_sha256":  "87253ca41b0833b3f401701ff0d907472c9bfb2324161ce283c265a740b8e481"
 }
