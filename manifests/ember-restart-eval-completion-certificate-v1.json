@@ -143,13 +143,15 @@
       "class": "open_3b",
       "identity": "Qwen/Qwen2.5-3B@3aab1f1954e9cc14eb9509a215f9e5ca08227a9b",
       "command_sha256": "16c1151827e69a4b4380a22424d70a917cff8534396ea631abf456dad6f0f62a",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_comparator_preflight.py"
     },
     {
       "class": "open_27b_or_31b",
       "identity": "google/gemma-3-27b-it@005ad3404e59d6023443cb575daa05336842228a",
       "command_sha256": "16c1151827e69a4b4380a22424d70a917cff8534396ea631abf456dad6f0f62a",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_comparator_preflight.py"
     }
   ],
   "resource_receipts": [
