@@ -936,6 +936,18 @@ class RunnerStorageTests(unittest.TestCase):
             _, recorded = run_vertical_slice._custody_ledger_snapshot(parent)
             self.assertEqual({row["pointer"] for row in recorded if isinstance(row, dict)}, {event["pointer"] for event in events})
 
+    def test_atomic_ledger_reclaims_crashed_owner_before_owner_attestation(self) -> None:
+        """A process dying after mkdir but before owner.json cannot strand the ledger."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            lock_dir = parent / ".checkpoint-custody-deletion-ledger.lock"
+            creator = "import os, pathlib; pathlib.Path(os.environ['LEDGER_LOCK']).mkdir()"
+            environment = os.environ.copy()
+            environment["LEDGER_LOCK"] = str(lock_dir)
+            self.assertEqual(subprocess.run([sys.executable, "-c", creator], env=environment, check=False).returncode, 0)
+            with unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_OWNER_GRACE_SECONDS", 0.0):
+                run_vertical_slice._append_custody_ledger_transition(parent, {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json", "bytes": 1, "sha256": "b" * 64, "reason": "unattested crashed owner test"})
+            self.assertFalse(lock_dir.exists())
     def test_custody_ledger_lock_namespace_is_not_custody_evidence(self) -> None:
         """The ephemeral cross-process lock is excluded from durable custody accounting."""
         with tempfile.TemporaryDirectory() as directory:
