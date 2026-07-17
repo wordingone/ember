@@ -139,7 +139,7 @@
         },
         "files": {
             "path": "manifests/ember-restart-swebench-custody-v1.json",
-            "sha256": "365db73ceec985cfe5aad59687a7ef9d1288b4d3a8edb6d1c9b8964071c5a092"
+            "sha256": "199aeac2c262478d2935fe9ed29931c09d37d91a72a23a774fa0e34283fa2c54"
         },
         "browser_ui": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",

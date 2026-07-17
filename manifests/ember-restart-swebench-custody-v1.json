@@ -32,7 +32,7 @@
                                     },
     "fixture_adapter":  {
         "path":  "scripts/ember_restart_eval_files_fixture.py",
-        "sha256":  "3d01ae159045730d3c4a070f7e8dafc9138c2bb07b914c8681cdea8f657cfd72",
+        "sha256":  "726803e00ce4f86b0b30fd4945d640c1717446f139ea2b999a3f762d52af210f",
         "result_disposition":  "SELFTEST_ONLY_NON_ADMISSIBLE"
     },
     "source_audit_adapter":  {

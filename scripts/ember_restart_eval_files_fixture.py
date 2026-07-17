@@ -29,7 +29,7 @@ def validate_tasks(value: object, schema: str) -> list[dict]:
     tasks = []
     seen = set()
     for task in value["tasks"]:
-        if not isinstance(task, dict) or set(task) != {"task_id", "patch_sha256", "changed_files"} or not isinstance(task["task_id"], str) or not task["task_id"] or task["task_id"] in seen or not HASH.fullmatch(task["patch_sha256"]) or not isinstance(task["changed_files"], list) or not task["changed_files"] or any(not isinstance(path, str) or not path or path.startswith(("/", chr(92))) or ".." in Path(path).parts for path in task["changed_files"]) or len(set(task["changed_files"])) != len(task["changed_files"]):
+        if not isinstance(task, dict) or set(task) != {"task_id", "patch_sha256", "changed_files"} or not isinstance(task["task_id"], str) or not task["task_id"] or task["task_id"] in seen or not HASH.fullmatch(task["patch_sha256"]) or not isinstance(task["changed_files"], list) or not task["changed_files"] or any(not isinstance(path, str) or not path or path.startswith(("/", chr(92))) or Path(path).drive or ".." in Path(path).parts for path in task["changed_files"]) or len(set(task["changed_files"])) != len(task["changed_files"]):
             raise ValueError("invalid files task binding")
         seen.add(task["task_id"])
         tasks.append(task)
