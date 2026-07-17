@@ -7,10 +7,14 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 
 from ember_restart.prediction_contract import ContractError, validate_predictions
+
+HASH = re.compile(r"[0-9a-f]{64}")
+STRICT_SCHEMA = "ember-restart-bfcl-simple-frozen-v2"
 
 
 def digest(data: bytes) -> str:
@@ -44,16 +48,24 @@ def main() -> int:
         envelope = validate_predictions(json.loads(prediction_bytes.decode("utf-8")))
         legacy_required = {"result", "benchmark_id", "benchmark_version", "capability", "split_sha256", "protocol_sha256", "tasks"}
         simple_required = legacy_required | {"schema_version", "source_files", "task_count"}
+        strict_identity = {"checkpoint_manifest_sha256", "model_config_sha256"}
         if not isinstance(frozen, dict) or frozen.get("result") != "PREFLIGHT_ONLY" or frozen.get("capability") != "tool" or not isinstance(frozen.get("tasks"), list) or not frozen["tasks"]:
             raise ValueError("invalid frozen BFCL static manifest")
         simple = frozen.get("benchmark_id") == "bfcl-static-simple"
-        if (simple and (set(frozen) != simple_required or frozen.get("schema_version") != "ember-restart-bfcl-simple-frozen-v1" or frozen.get("task_count") != len(frozen["tasks"]) or not isinstance(frozen.get("source_files"), list))) or (not simple and (set(frozen) != legacy_required or frozen.get("benchmark_id") != "bfcl-static-non-live")):
+        strict = frozen.get("schema_version") == STRICT_SCHEMA or bool(strict_identity & set(frozen))
+        allowed_simple = simple_required | strict_identity if strict else simple_required
+        allowed_legacy = legacy_required | strict_identity if strict else legacy_required
+        if (simple and (set(frozen) != allowed_simple or frozen.get("schema_version") not in ("ember-restart-bfcl-simple-frozen-v1", STRICT_SCHEMA) or frozen.get("task_count") != len(frozen["tasks"]) or not isinstance(frozen.get("source_files"), list))) or (not simple and (set(frozen) != allowed_legacy or frozen.get("benchmark_id") != "bfcl-static-non-live")):
             raise ValueError("invalid frozen BFCL static manifest")
+        if strict and any(not isinstance(frozen.get(key), str) or not HASH.fullmatch(frozen[key]) for key in strict_identity):
+            raise ValueError("strict BFCL custody requires checkpoint/config identities")
         if simple and frozen.get("protocol_sha256") != protocol_sha256(frozen):
             raise ValueError("BFCL simple protocol is not derived from task custody and scorer bytes")
         benchmark = envelope["benchmark"]
         if any(benchmark.get(key) != frozen[field] for key, field in (("id", "benchmark_id"), ("version", "benchmark_version"), ("capability", "capability"), ("split_sha256", "split_sha256"), ("protocol_sha256", "protocol_sha256"))):
             raise ValueError("canonical predictions do not bind frozen BFCL identity")
+        if strict and any(envelope.get(key) != frozen[key] for key in strict_identity):
+            raise ValueError("canonical predictions do not bind frozen BFCL checkpoint/config identity")
         expected = {}
         for task in frozen["tasks"]:
             if not isinstance(task, dict) or not isinstance(task.get("id"), str) or not task["id"] or task["id"] in expected:

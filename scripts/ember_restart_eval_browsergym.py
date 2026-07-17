@@ -16,6 +16,7 @@ BROWSERGYM_SOURCE_COMMIT = "9e779f087de9a65668b6974d11f9ce9816026e96"
 BROWSERGYM_SOURCE_TREE = "d33e398c18d04d5da742b1c1ec11c4aab8bc010b"
 BROWSERGYM_LICENSE_SHA256 = "b192c58991e8ff585cc574615d40e74185404d4b96c1109d423071ab1367344b"
 BROWSERGYM_SCHEMA = "ember-restart-browsergym-miniwob-frozen-v1"
+BROWSERGYM_STRICT_SCHEMA = "ember-restart-browsergym-miniwob-frozen-v2"
 
 
 def read_json_bytes(path: Path) -> tuple[bytes, object]:
@@ -37,6 +38,8 @@ def protocol_sha256(frozen: dict) -> str:
         "license_sha256": frozen["license_sha256"],
         "tasks": frozen["tasks"],
     }
+    if frozen["schema_version"] == BROWSERGYM_STRICT_SCHEMA:
+        identity.update({"checkpoint_manifest_sha256": frozen["checkpoint_manifest_sha256"], "model_config_sha256": frozen["model_config_sha256"]})
     return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
@@ -53,10 +56,15 @@ def main() -> int:
         result_bytes, runs = read_json_bytes(args.browser_results)
         tasks = frozen.get("tasks") if isinstance(frozen, dict) else None
         required = {"schema_version", "result", "benchmark_id", "benchmark_version", "source_commit", "source_tree", "license_sha256", "protocol_sha256", "tasks"}
-        if not isinstance(frozen, dict) or set(frozen) != required or frozen.get("schema_version") != BROWSERGYM_SCHEMA or frozen.get("result") != "PREFLIGHT_ONLY" or frozen.get("benchmark_id") != "browsergym-miniwob" or frozen.get("benchmark_version") != "1" or frozen.get("source_commit") != BROWSERGYM_SOURCE_COMMIT or frozen.get("source_tree") != BROWSERGYM_SOURCE_TREE or frozen.get("license_sha256") != BROWSERGYM_LICENSE_SHA256 or not isinstance(tasks, list) or not tasks:
+        strict = isinstance(frozen, dict) and frozen.get("schema_version") == BROWSERGYM_STRICT_SCHEMA
+        if strict:
+            required |= {"checkpoint_manifest_sha256", "model_config_sha256"}
+        if not isinstance(frozen, dict) or set(frozen) != required or frozen.get("schema_version") not in (BROWSERGYM_SCHEMA, BROWSERGYM_STRICT_SCHEMA) or frozen.get("result") != "PREFLIGHT_ONLY" or frozen.get("benchmark_id") != "browsergym-miniwob" or frozen.get("benchmark_version") != "1" or frozen.get("source_commit") != BROWSERGYM_SOURCE_COMMIT or frozen.get("source_tree") != BROWSERGYM_SOURCE_TREE or frozen.get("license_sha256") != BROWSERGYM_LICENSE_SHA256 or not isinstance(tasks, list) or not tasks:
             raise ValueError("invalid frozen BrowserGym manifest")
+        if strict and any(not isinstance(frozen.get(key), str) or not HASH.fullmatch(frozen[key]) for key in ("checkpoint_manifest_sha256", "model_config_sha256")):
+            raise ValueError("strict BrowserGym manifest requires checkpoint/config identities")
         if frozen.get("protocol_sha256") != protocol_sha256(frozen):
-            raise ValueError("BrowserGym protocol is not derived from pinned source/license/task custody")
+            raise ValueError("BrowserGym protocol is not derived from pinned source/license/task/checkpoint custody")
         expected = {}
         for task in tasks:
             if not isinstance(task, dict) or set(task) != {"task_id", "task_sha256", "environment_sha256"} or not isinstance(task["task_id"], str) or not HASH.fullmatch(task["task_sha256"]) or not HASH.fullmatch(task["environment_sha256"]) or task["task_id"] in expected:
@@ -86,9 +94,12 @@ def main() -> int:
         "browser_results_sha256": hashlib.sha256(result_bytes).hexdigest(),
         "upstream": "fixture-only BrowserGym MiniWoB outcome validator",
     }
+    if frozen["schema_version"] == BROWSERGYM_STRICT_SCHEMA:
+        payload.update({key: frozen[key] for key in ("checkpoint_manifest_sha256", "model_config_sha256")})
     args.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.score_output.parent, delete=False) as handle:
         json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
         temporary = handle.name
     try:
         os.replace(temporary, args.score_output)

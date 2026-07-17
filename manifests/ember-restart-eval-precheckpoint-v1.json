@@ -138,7 +138,7 @@
         },
         "browser_ui": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "00245ecec71fdbdff99d2e49b48273afbf199ad7d825733dee31f9a1e0875fd6"
+            "sha256": "893a62251df4da809babc23e31929d0bbcbd675a453720de5da384207c48eb3e"
         },
         "image": {
             "path": "manifests/ember-restart-mmmu-validation-custody-v1.json",
@@ -150,7 +150,7 @@
         },
         "structured_tools": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "00245ecec71fdbdff99d2e49b48273afbf199ad7d825733dee31f9a1e0875fd6"
+            "sha256": "893a62251df4da809babc23e31929d0bbcbd675a453720de5da384207c48eb3e"
         }
     }
 }
