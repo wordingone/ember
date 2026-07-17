@@ -685,6 +685,7 @@ def authorize_production_resume_checkpoint(
     counter_success_receipt: Path | None = None,
     realization_registry: Path | None = None,
     optimizer_transition_registry: Path | None = None,
+    optimizer_transition_registry_sha256: str | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
 ) -> tuple[Path, dict[str, object]]:
@@ -705,6 +706,16 @@ def authorize_production_resume_checkpoint(
     if sum(value is not None for value in authorities) > 1:
         raise ValueError("resume authority inputs are mutually exclusive")
     if optimizer_transition_registry is not None:
+        if optimizer_transition_registry_sha256 is None:
+            raise ValueError("optimizer transition requires an expected registry SHA-256")
+        if (
+            len(optimizer_transition_registry_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in optimizer_transition_registry_sha256)
+        ):
+            raise ValueError("expected optimizer transition registry SHA-256 is invalid")
+        actual_registry_sha256 = _sha256(optimizer_transition_registry.resolve())
+        if actual_registry_sha256 != optimizer_transition_registry_sha256:
+            raise ValueError("optimizer transition registry SHA-256 mismatch")
         current_model_config = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
         transition = validate_optimizer_transition_registry(
             optimizer_transition_registry.resolve(),
@@ -723,6 +734,10 @@ def authorize_production_resume_checkpoint(
             "model_state_reused": True,
             "optimizer_state_reused": False,
         }
+        if authority["transition_registry_sha256"] != optimizer_transition_registry_sha256:
+            raise ValueError("optimizer transition validator registry SHA-256 mismatch")
+    elif optimizer_transition_registry_sha256 is not None:
+        raise ValueError("expected optimizer transition registry SHA-256 requires its registry path")
     elif realization_registry is not None:
         current_model_config = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
         receipt = validate_step2_realization_registry_bundle(
@@ -760,6 +775,7 @@ def production_resume_checkpoint(
     counter_success_receipt: Path | None = None,
     realization_registry: Path | None = None,
     optimizer_transition_registry: Path | None = None,
+    optimizer_transition_registry_sha256: str | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
 ) -> Path:
@@ -770,6 +786,7 @@ def production_resume_checkpoint(
         counter_success_receipt=counter_success_receipt,
         realization_registry=realization_registry,
         optimizer_transition_registry=optimizer_transition_registry,
+        optimizer_transition_registry_sha256=optimizer_transition_registry_sha256,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,
     )
@@ -945,6 +962,7 @@ def run(
     *, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
     resume_realization_registry: Path | None = None,
     resume_optimizer_transition_registry: Path | None = None,
+    resume_optimizer_transition_registry_sha256: str | None = None,
     records_override: list[dict[str, object]] | None = None,
     specialist_verification: dict[str, object] | None = None,
     specialist_lineage: dict[str, object] | None = None,
@@ -1025,6 +1043,7 @@ def run(
             counter_success_receipt=resume_counter_receipt,
             realization_registry=resume_realization_registry,
             optimizer_transition_registry=resume_optimizer_transition_registry,
+            optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
             c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
             relocation_custody_root=relocation_custody_root,
         )
@@ -1232,6 +1251,7 @@ def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
     capability: str, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
     resume_realization_registry: Path | None = None, resume_optimizer_transition_registry: Path | None = None,
+    resume_optimizer_transition_registry_sha256: str | None = None,
     parent_manifest: Path, root_manifest: Path,
     checkpoint_interval: int, write_budget_bytes: int,
     start_record: int = 0, max_records: int | None = None,
@@ -1259,6 +1279,7 @@ def run_specialist(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
         resume_realization_registry=resume_realization_registry,
         resume_optimizer_transition_registry=resume_optimizer_transition_registry,
+        resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
         records_override=selected_records, specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
@@ -1272,6 +1293,7 @@ def run_semantic(
     steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
     resume_counter_receipt: Path | None = None, resume_realization_registry: Path | None = None,
     resume_optimizer_transition_registry: Path | None = None,
+    resume_optimizer_transition_registry_sha256: str | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -1307,6 +1329,7 @@ def run_semantic(
             counter_success_receipt=resume_counter_receipt,
             realization_registry=resume_realization_registry,
             optimizer_transition_registry=resume_optimizer_transition_registry,
+            optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
         )
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -1428,6 +1451,7 @@ def main() -> None:
     vertical_resume.add_argument("--resume-counter-receipt", type=Path)
     vertical_resume.add_argument("--resume-realization-registry", type=Path)
     vertical_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
+    vertical.add_argument("--resume-optimizer-transition-registry-sha256")
     specialist = subparsers.add_parser("specialist")
     specialist.add_argument("--seed", type=int, required=True)
     specialist.add_argument("--artifact-root", type=Path, required=True)
@@ -1439,6 +1463,7 @@ def main() -> None:
     specialist_resume.add_argument("--resume-counter-receipt", type=Path)
     specialist_resume.add_argument("--resume-realization-registry", type=Path)
     specialist_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
+    specialist.add_argument("--resume-optimizer-transition-registry-sha256")
     specialist.add_argument("--parent-manifest", type=Path, required=True)
     specialist.add_argument("--root-manifest", type=Path, required=True)
     specialist.add_argument("--start-record", type=int, default=0)
@@ -1465,9 +1490,10 @@ def main() -> None:
     semantic_resume.add_argument("--resume-counter-receipt", type=Path)
     semantic_resume.add_argument("--resume-realization-registry", type=Path)
     semantic_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
+    semantic.add_argument("--resume-optimizer-transition-registry-sha256")
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
@@ -1483,9 +1509,10 @@ def main() -> None:
             resume_counter_receipt=args.resume_counter_receipt,
             resume_realization_registry=args.resume_realization_registry,
             resume_optimizer_transition_registry=args.resume_optimizer_transition_registry,
+            resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256,
         )
     else:
-        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry)
+        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
     print(json.dumps(result, sort_keys=True))
 if __name__ == "__main__":
     main()
