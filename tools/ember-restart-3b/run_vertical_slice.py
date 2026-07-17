@@ -501,6 +501,9 @@ def load_verified_specialist_records(
         raise RuntimeError("specialist data verifier did not produce the required verified receipt")
     if verification.get("generator_replay_verified") is not True:
         raise RuntimeError("specialist data verifier did not prove canonical generator replay")
+    semantic_hash = verification.get("semantic_model_contract_sha256")
+    if verification.get("admission") != "ADMISSIBLE_SEMANTIC_CONTRACT" or not isinstance(semantic_hash, str) or len(semantic_hash) != 64 or semantic_hash.lower() != semantic_hash:
+        raise RuntimeError("specialist data verifier did not bind an admissible semantic model contract")
     if verification.get("data_manifest_sha256") != hashlib.sha256(manifest_bytes).hexdigest():
         raise RuntimeError("verified specialist data manifest changed after verification")
 

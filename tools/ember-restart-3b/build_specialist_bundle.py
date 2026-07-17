@@ -16,6 +16,7 @@ from tokenizers import Tokenizer
 from build_owned_audio_frames import build_records as build_audio_records
 from build_owned_reasoning_tool_trajectories import build_records as build_trajectory_records
 from build_owned_vision_scenes import build_records as build_vision_records
+from semantic_contract import semantic_model_contract_sha256, SCHEMA_VERSION
 
 
 CAPABILITIES = ("image", "audio", "reasoning", "tool")
@@ -59,8 +60,7 @@ def _relative(repo_root: Path, path: Path) -> str:
         raise ValueError("bundle paths must remain within repo_root") from error
 
 
-def _config_markers(model_config_path: Path) -> tuple[int, int]:
-    payload = json.loads(model_config_path.read_text(encoding="utf-8"))
+def _config_markers(payload: dict[str, Any]) -> tuple[int, int]:
     model = payload.get("model") if isinstance(payload, dict) else None
     if not isinstance(model, dict) or model.get("vocab_size") != 32_000:
         raise ValueError("model config must declare the authorized 32k vocabulary")
@@ -69,6 +69,10 @@ def _config_markers(model_config_path: Path) -> tuple[int, int]:
     if not isinstance(image, dict) or image.get("input_shape") != [48, 48, 3] or not isinstance(audio, dict) or audio.get("frame_samples") != 640:
         raise ValueError("model config must declare authorized raw modality shapes")
     return 31_998, 31_999
+
+
+def _model_contract_ref(repo_root: Path, model_config_path: Path, config_payload: dict[str, Any]) -> dict[str, str]:
+    return {"schema_version": SCHEMA_VERSION, "path": _relative(repo_root, model_config_path), "semantic_sha256": semantic_model_contract_sha256(config_payload)}
 
 
 def _records(tokenizer: Tokenizer, capability: str, *, count: int, image_marker: int, audio_marker: int) -> list[dict[str, object]]:
@@ -94,9 +98,16 @@ def emit_bundle(*, repo_root: Path, output_root: Path, tokenizer_path: Path, mod
     if repo_root not in tokenizer_path.parents or repo_root not in model_config_path.parents:
         raise ValueError("tokenizer and model config must reside below repo_root")
     tokenizer = Tokenizer.from_file(str(tokenizer_path))
-    image_marker, audio_marker = _config_markers(model_config_path)
+    config_bytes = model_config_path.read_bytes()
+    try:
+        config_payload = json.loads(config_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("model config is not valid JSON") from error
+    if not isinstance(config_payload, dict):
+        raise ValueError("model config must be an object")
+    image_marker, audio_marker = _config_markers(config_payload)
     tokenizer_hash = _sha256(tokenizer_path)
-    config_ref = {"path": _relative(repo_root, model_config_path), "sha256": _sha256(model_config_path)}
+    model_contract_ref = _model_contract_ref(repo_root, model_config_path, config_payload)
     emitted: dict[str, Path] = {}
     for capability in CAPABILITIES:
         records = _records(tokenizer, capability, count=count, image_marker=image_marker, audio_marker=audio_marker)
@@ -125,9 +136,8 @@ def emit_bundle(*, repo_root: Path, output_root: Path, tokenizer_path: Path, mod
             "record_count": len(records), "token_count": sum(len(record["token_ids"]) for record in records),
             "source_manifest": {"path": _relative(repo_root, source_path), "sha256": source_hash},
             "records_artifact": {"path": _relative(repo_root, records_path), "sha256": records_hash},
+            "model_contract": model_contract_ref,
         }
-        if capability in {"image", "audio"}:
-            manifest["model_config"] = config_ref
         _write_json(manifest_path, manifest)
         emitted[capability] = manifest_path
     return emitted
