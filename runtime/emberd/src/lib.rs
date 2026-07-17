@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::{RwLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+pub mod host_resource_governor;
 pub mod rpc;
 
 pub type Result<T> = std::result::Result<T, EmberdError>;
