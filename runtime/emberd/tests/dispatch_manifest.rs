@@ -248,6 +248,87 @@ fn dispatch_manifest_requires_typed_config_and_manifest_bindings() {
 }
 
 #[test]
+fn historical_resume_registry_requires_every_nested_authority_file_binding() {
+    let root = sandbox("resume-registry-closure");
+    let manifest = write_manifest(&root, "dispatch-resume-registry", 10_000);
+    let registry_root = root.join("registry");
+    fs::create_dir_all(&registry_root).unwrap();
+    let counter = registry_root.join("parameter_counter.py");
+    let receipt = registry_root.join("step2-realization-receipt.json");
+    let historical_config = registry_root.join("model-config.json");
+    fs::write(&counter, b"# exact counter bytes\n").unwrap();
+    fs::write(&receipt, b"{\"result\":\"MEASURED\"}").unwrap();
+    fs::write(&historical_config, b"{\"model\":\"historical\"}").unwrap();
+    let registry = registry_root.join("trusted-verifiers.json");
+    fs::write(
+        &registry,
+        serde_json::to_vec(&json!({
+            "schema_version": "ember-trusted-verifiers-v2",
+            "verifiers": [{"path": "parameter_counter.py", "sha256": sha256(&counter), "evidence_classes": ["parameter_realization"], "criterion_ids": ["ember-sparse-step2-realization-v1"]}],
+            "realization_receipts": [{"path": "step2-realization-receipt.json", "sha256": sha256(&receipt), "subject_checkpoint_sha256": "b".repeat(64), "model_config_sha256": "5".repeat(64), "counter_sha256": sha256(&counter), "active_expert": "shared"}],
+            "model_configs": [{"path": "model-config.json", "sha256": sha256(&historical_config), "semantic_sha256": "4".repeat(64)}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["args"]
+        .as_array_mut()
+        .unwrap()
+        .extend([json!("--resume-realization-registry"), json!(registry)]);
+    payload["bindings"].as_array_mut().unwrap().push(json!({
+        "kind": "manifest", "path": registry, "sha256": sha256(&registry)
+    }));
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(2048)),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["bindings"].as_array_mut().unwrap().extend([
+        json!({"kind": "verifier", "path": counter, "sha256": sha256(&counter)}),
+        json!({"kind": "manifest", "path": receipt, "sha256": sha256(&receipt)}),
+        json!({"kind": "config", "path": historical_config, "sha256": sha256(&historical_config)}),
+    ]);
+    let mut registry_payload: Value =
+        serde_json::from_slice(&fs::read(&registry).unwrap()).unwrap();
+    registry_payload["verifiers"][0]["unreviewed_authority"] = json!(true);
+    fs::write(&registry, serde_json::to_vec(&registry_payload).unwrap()).unwrap();
+    let registry_binding = payload["bindings"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|binding| binding["path"] == json!(registry))
+        .unwrap();
+    registry_binding["sha256"] = json!(sha256(&registry));
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(2048)),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    registry_payload["verifiers"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("unreviewed_authority");
+    fs::write(&registry, serde_json::to_vec(&registry_payload).unwrap()).unwrap();
+    let registry_binding = payload["bindings"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|binding| binding["path"] == json!(registry))
+        .unwrap();
+    registry_binding["sha256"] = json!(sha256(&registry));
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(0), || Ok(2048)),
+        Err(EmberdError::DispatchStorageReserve { .. })
+    ));
+    assert_eq!(daemon.job_state("dispatch-resume-registry").unwrap(), None);
+}
+
+#[test]
 fn dispatch_manifest_rejects_cache_and_equals_path_escapes() {
     for name in ["cache-escape", "arg-escape"] {
         let root = sandbox(name);
