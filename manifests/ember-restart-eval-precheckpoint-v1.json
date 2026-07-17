@@ -135,7 +135,7 @@
         },
         "sql": {
             "path": "manifests/ember-restart-spider-custody-v1.json",
-            "sha256": "3146be3c20c8f5791494225d7623a2d1819358c36082f0905667edd4259fc95c"
+            "sha256": "791d8308cfaa6adbf705bdc426a0bbd2f16195f36a08f455535efa4a1e61e4de"
         },
         "files": {
             "path": "manifests/ember-restart-swebench-custody-v1.json",
