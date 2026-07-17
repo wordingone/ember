@@ -8,8 +8,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -784,7 +786,7 @@ class RunnerStorageTests(unittest.TestCase):
             with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
                 victim = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "old"})
                 ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
-                real_replace = run_vertical_slice.os.replace
+                real_replace = run_vertical_slice._atomic_replace_durable
                 replaced = False
 
                 def crash_after_replace(source: object, target: object) -> None:
@@ -794,7 +796,7 @@ class RunnerStorageTests(unittest.TestCase):
                         replaced = True
                         raise OSError("injected crash after atomic ledger replace")
 
-                with unittest.mock.patch.object(run_vertical_slice.os, "replace", crash_after_replace):
+                with unittest.mock.patch.object(run_vertical_slice, "_atomic_replace_durable", crash_after_replace):
                     with self.assertRaisesRegex(OSError, "atomic ledger replace"):
                         run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "new"})
                 self.assertTrue(victim.exists())
@@ -804,5 +806,185 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertEqual([row["event"] for row in events if row["pointer"] == pointer], ["PREPARED", "COMMITTED"])
             first = run_vertical_slice._custody_reconciliation(parent)
             self.assertEqual(run_vertical_slice._custody_reconciliation(parent), first)
+
+    def test_atomic_ledger_transition_serializes_distinct_concurrent_writers(self) -> None:
+        """Concurrent transitions retain both rows rather than last-writer-wins replacement."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            events = [
+                {
+                    "schema_version": "ember-checkpoint-custody-deletion-v2",
+                    "event": "PREPARED",
+                    "pointer": f".checkpoint-quarantine/evidence-{letter * 64}.json",
+                    "bytes": 1,
+                    "sha256": letter * 64,
+                    "reason": "concurrent test",
+                }
+                for letter in ("a", "b")
+            ]
+            real_atomic = run_vertical_slice._atomic_bytes
+            gate = threading.Event()
+            entered = 0
+            entered_lock = threading.Lock()
+            errors: list[BaseException] = []
+
+            def delayed_atomic(path: Path, payload: bytes) -> None:
+                nonlocal entered
+                with entered_lock:
+                    entered += 1
+                    if entered == 2:
+                        gate.set()
+                gate.wait(timeout=0.1)
+                real_atomic(path, payload)
+
+            def writer(event: dict[str, object]) -> None:
+                try:
+                    run_vertical_slice._append_custody_ledger_transition(parent, event)
+                except BaseException as error:
+                    errors.append(error)
+
+            with unittest.mock.patch.object(run_vertical_slice, "_atomic_bytes", delayed_atomic):
+                threads = [threading.Thread(target=writer, args=(event,)) for event in events]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join(timeout=2)
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+            self.assertEqual(errors, [])
+            _, recorded = run_vertical_slice._custody_ledger_snapshot(parent)
+            self.assertEqual({row["pointer"] for row in recorded if isinstance(row, dict)}, {event["pointer"] for event in events})
+
+    def test_atomic_bytes_fsyncs_parent_directory_after_replace_when_supported(self) -> None:
+        """The replacement metadata is durably flushed through the containing directory on POSIX."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "ledger.jsonl"
+            real_fsync = run_vertical_slice.os.fsync
+            calls: list[int] = []
+
+            def recording_fsync(descriptor: int) -> None:
+                calls.append(descriptor)
+                if descriptor != 913:
+                    real_fsync(descriptor)
+
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), \
+                 unittest.mock.patch.object(run_vertical_slice.os, "open", return_value=913) as open_directory, \
+                 unittest.mock.patch.object(run_vertical_slice.os, "close") as close_directory, \
+                 unittest.mock.patch.object(run_vertical_slice.os, "fsync", recording_fsync):
+                run_vertical_slice._atomic_bytes(target, b"ledger\n")
+            open_directory.assert_called_once_with(str(target.parent), os.O_RDONLY)
+            close_directory.assert_called_once_with(913)
+            self.assertIn(913, calls)
+    def test_atomic_ledger_transition_serializes_distinct_process_writers(self) -> None:
+        """Independent Python processes retain both ledger rows under the rooted lock."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ready = parent / "ready"
+            release = parent / "release"
+            module_root = ROOT / "tools" / "ember-restart-3b"
+            worker = (
+                "import json, os, pathlib, sys, time\n"
+                f"sys.path.insert(0, {str(module_root)!r})\n"
+                "import run_vertical_slice as runner\n"
+                "parent = pathlib.Path(os.environ['LEDGER_PARENT'])\n"
+                "ready = pathlib.Path(os.environ['LEDGER_READY'])\n"
+                "release = pathlib.Path(os.environ['LEDGER_RELEASE'])\n"
+                "event = json.loads(os.environ['LEDGER_EVENT'])\n"
+                "real = runner._atomic_bytes\n"
+                "def delayed(path, payload):\n"
+                "    ready.mkdir(exist_ok=True)\n"
+                "    (ready / str(os.getpid())).write_text('ready')\n"
+                "    while not release.exists(): time.sleep(0.005)\n"
+                "    real(path, payload)\n"
+                "runner._atomic_bytes = delayed\n"
+                "runner._append_custody_ledger_transition(parent, event)\n"
+            )
+            events = [
+                {
+                    "schema_version": "ember-checkpoint-custody-deletion-v2",
+                    "event": "PREPARED",
+                    "pointer": f".checkpoint-quarantine/evidence-{letter * 64}.json",
+                    "bytes": 1,
+                    "sha256": letter * 64,
+                    "reason": "process writer test",
+                }
+                for letter in ("a", "b")
+            ]
+            processes: list[subprocess.Popen[str]] = []
+            try:
+                for event in events:
+                    environment = os.environ.copy()
+                    environment.update({"LEDGER_PARENT": str(parent), "LEDGER_READY": str(ready), "LEDGER_RELEASE": str(release), "LEDGER_EVENT": json.dumps(event)})
+                    processes.append(subprocess.Popen([sys.executable, "-c", worker], env=environment, text=True))
+                first_deadline = time.monotonic() + 5.0
+                while (not ready.exists() or not list(ready.glob("*"))) and time.monotonic() < first_deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists() and list(ready.glob("*")), "first worker did not reach the serialized write boundary")
+                overlap_deadline = time.monotonic() + 0.5
+                while len(list(ready.glob("*"))) < 2 and time.monotonic() < overlap_deadline:
+                    time.sleep(0.01)
+                ready_workers = list(ready.glob("*"))
+                self.assertEqual(len(ready_workers), 1, "the second process reached the snapshot/write boundary before the rooted lock")
+                release.write_text("go", encoding="utf-8")
+                for process in processes:
+                    self.assertEqual(process.wait(timeout=10), 0)
+            finally:
+                release.touch(exist_ok=True)
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=5)
+            _, recorded = run_vertical_slice._custody_ledger_snapshot(parent)
+            self.assertEqual({row["pointer"] for row in recorded if isinstance(row, dict)}, {event["pointer"] for event in events})
+
+    def test_custody_ledger_lock_namespace_is_not_custody_evidence(self) -> None:
+        """The ephemeral cross-process lock is excluded from durable custody accounting."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            lock = parent / ".checkpoint-custody-deletion-ledger.lock"
+            lock.mkdir()
+            (lock / "owner.json").write_text("{\\\"pid\\\":1}\\n", encoding="utf-8")
+            self.assertEqual(run_vertical_slice._custody_serialized_bytes(parent), 0)
+    def test_atomic_ledger_reclaims_crashed_process_owner(self) -> None:
+        """A dead process owner cannot permanently strand the rooted ledger lock."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            lock_dir = parent / ".checkpoint-custody-deletion-ledger.lock"
+            creator = (
+                "import json, os, pathlib\n"
+                "lock = pathlib.Path(os.environ['LEDGER_LOCK'])\n"
+                "lock.mkdir()\n"
+                "(lock / 'owner.json').write_text(json.dumps({'pid': os.getpid()}) + '\\n')\n"
+            )
+            environment = os.environ.copy()
+            environment["LEDGER_LOCK"] = str(lock_dir)
+            self.assertEqual(subprocess.run([sys.executable, "-c", creator], env=environment, check=False).returncode, 0)
+            run_vertical_slice._append_custody_ledger_transition(parent, {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 1, "sha256": "a" * 64, "reason": "crashed owner test"})
+            self.assertFalse(lock_dir.exists())
+
+    def test_atomic_bytes_refuses_to_claim_a_windows_replace_failure(self) -> None:
+        """A write-through failure leaves no target or temporary custody claim behind."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "ledger.jsonl"
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "nt"), \
+                    unittest.mock.patch.object(run_vertical_slice, "_windows_atomic_replace", side_effect=OSError("write-through failure")):
+                with self.assertRaisesRegex(OSError, "write-through failure"):
+                    run_vertical_slice._atomic_bytes(target, b"ledger\\n")
+            self.assertFalse(target.exists())
+            self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+    def test_windows_atomic_replace_requests_write_through_and_propagates_failure(self) -> None:
+        """Windows ledger replacement requests write-through and refuses an API failure."""
+        calls: list[tuple[object, object, int]] = []
+
+        class Kernel32:
+            def MoveFileExW(self, source: object, target: object, flags: int) -> int:
+                calls.append((source, target, flags))
+                return 0
+
+        with unittest.mock.patch.object(run_vertical_slice.ctypes, "WinDLL", return_value=Kernel32()), \
+                unittest.mock.patch.object(run_vertical_slice.ctypes, "get_last_error", return_value=5), \
+                unittest.mock.patch.object(run_vertical_slice.ctypes, "WinError", side_effect=OSError("write-through failed")):
+            with self.assertRaisesRegex(OSError, "write-through failed"):
+                run_vertical_slice._windows_atomic_replace(Path("source.tmp"), Path("target.json"))
+        self.assertEqual(calls[0][2], 0x00000001 | 0x00000008)
 if __name__ == "__main__":
     unittest.main()

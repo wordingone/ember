@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import ctypes
 import hashlib
 import json
 import os
@@ -12,6 +14,8 @@ import re
 import stat
 import subprocess
 import sys
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -337,12 +341,14 @@ def _custody_file_rows(parent: Path) -> list[dict[str, object]]:
                 raise RuntimeError(f"custody accounting encountered a symlink or reparse point: {path}")
             if not path.is_file():
                 continue
+            relative = path.relative_to(parent)
+            top = relative.parts[0] if relative.parts else ""
+            if top == _CUSTODY_LEDGER_LOCK:
+                continue
             identity = _file_identity(path)
             if identity in seen:
                 continue
             seen.add(identity)
-            relative = path.relative_to(parent)
-            top = relative.parts[0] if relative.parts else ""
             bucket = "quarantine" if top == ".checkpoint-quarantine" else "live" if top.startswith("checkpoint-") else "evidence" if top == _CUSTODY_LEDGER else "other"
             rows.append({"path": relative.as_posix(), "bucket": bucket, "bytes": path.stat().st_size})
         except OSError as error:
@@ -415,6 +421,58 @@ def _custody_deletion_path(parent: Path, pointer: str) -> Path:
     return parent.joinpath(*PurePosixPath(pointer).parts)
 
 
+@contextlib.contextmanager
+def _custody_ledger_write_lock(parent: Path) -> object:
+    """Serialize a ledger snapshot/replacement across threads and live processes."""
+
+    parent = parent.resolve()
+    key = str(parent).casefold() if os.name == "nt" else str(parent)
+    with _LEDGER_THREAD_LOCKS_GUARD:
+        thread_lock = _LEDGER_THREAD_LOCKS.setdefault(key, threading.Lock())
+    thread_lock.acquire()
+    lock_dir = parent / _CUSTODY_LEDGER_LOCK
+    owner = lock_dir / "owner.json"
+    deadline = time.monotonic() + 30.0
+    try:
+        while True:
+            try:
+                lock_dir.mkdir()
+            except FileExistsError:
+                stale = False
+                try:
+                    payload = json.loads(owner.read_text(encoding="utf-8"))
+                    stale = not _pid_is_alive(payload.get("pid"))
+                except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
+                    stale = False
+                if stale:
+                    try:
+                        owner.unlink(missing_ok=True)
+                        lock_dir.rmdir()
+                    except OSError:
+                        pass
+                    continue
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("timed out waiting for the custody ledger writer lock")
+                time.sleep(0.01)
+                continue
+            try:
+                owner.write_text(json.dumps({"pid": os.getpid()}, sort_keys=True) + "\n", encoding="utf-8")
+            except BaseException:
+                try:
+                    lock_dir.rmdir()
+                except OSError:
+                    pass
+                raise
+            break
+        yield
+    finally:
+        try:
+            owner.unlink(missing_ok=True)
+            lock_dir.rmdir()
+        except OSError:
+            pass
+        thread_lock.release()
+
 def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
     """Read one complete newline-framed ledger snapshot, rejecting torn tails."""
 
@@ -440,9 +498,10 @@ def _append_custody_ledger_transition(parent: Path, event: dict[str, object]) ->
     """Durably replace the complete framed ledger; never append to a live tail."""
 
     parent = parent.resolve()
-    prior, _ = _custody_ledger_snapshot(parent)
     framed = (json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    _atomic_bytes(parent / _CUSTODY_LEDGER, prior + framed)
+    with _custody_ledger_write_lock(parent):
+        prior, _ = _custody_ledger_snapshot(parent)
+        _atomic_bytes(parent / _CUSTODY_LEDGER, prior + framed)
 
 def _custody_reconciliation(parent: Path) -> dict[str, object]:
     """Reconcile custody bytes with an ordered, fail-closed deletion ledger."""
@@ -539,8 +598,11 @@ _WRITER_LEASE = ".writer-lease.json"
 _MAX_QUARANTINE_FILES = 32
 _MAX_QUARANTINE_BYTES = 1024 * 1024
 _CUSTODY_LEDGER = ".checkpoint-custody-deletion-ledger.jsonl"
+_CUSTODY_LEDGER_LOCK = ".checkpoint-custody-deletion-ledger.lock"
 _LEGACY_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
 _CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
+_LEDGER_THREAD_LOCKS: dict[str, threading.Lock] = {}
+_LEDGER_THREAD_LOCKS_GUARD = threading.Lock()
 _EVIDENCE_FILENAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{64}(?:-g[1-9][0-9]*)?\.json")
 _WINDOWS_RESERVED_STEMS = {"aux", "clock$", "con", "nul", "prn", *(f"com{index}" for index in range(1, 10)), *(f"lpt{index}" for index in range(1, 10))}
 
@@ -987,6 +1049,30 @@ _COUNTER_COUNT_FIELDS = (
 )
 
 
+def _windows_atomic_replace(source: Path, target: Path) -> None:
+    """Replace a Windows directory entry only when the kernel accepts write-through durability."""
+
+    movefile_replace_existing = 0x00000001
+    movefile_write_through = 0x00000008
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    if not kernel32.MoveFileExW(str(source), str(target), movefile_replace_existing | movefile_write_through):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _atomic_replace_durable(source: Path, target: Path) -> None:
+    """Atomically replace one small file and durably persist its containing metadata."""
+
+    if os.name == "nt":
+        _windows_atomic_replace(source, target)
+        return
+    os.replace(source, target)
+    descriptor = os.open(str(target.parent), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _atomic_bytes(path: Path, payload: bytes) -> None:
     """Publish small custody evidence only after complete bytes are durable."""
 
@@ -996,11 +1082,10 @@ def _atomic_bytes(path: Path, payload: bytes) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        _atomic_replace_durable(temporary, path)
     finally:
         if temporary.exists():
             temporary.unlink()
-
 
 def _atomic_json(path: Path, payload: dict[str, object]) -> None:
     _atomic_bytes(path, (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
