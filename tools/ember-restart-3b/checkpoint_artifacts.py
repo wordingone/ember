@@ -24,6 +24,7 @@ from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_
 
 
 _STAGING_LEASE = ".writer-lease.json"
+_ALLOWED_CANDIDATE_METADATA = {"parameter-counter-receipt.json"}
 _FAILURE_EVIDENCE_LIMIT = 64 * 1024
 _STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
 
@@ -267,12 +268,15 @@ def _atomic_publish_no_replace(source: Path, target: Path) -> None:
     """Atomically rename a directory without replacing a late target."""
 
     source = source.resolve(strict=True)
-    target = target.resolve()
-    if target.exists():
-        raise FileExistsError(errno.EEXIST, "checkpoint publication target already exists", str(target))
+    target_parent = target.parent.resolve(strict=True)
+    target_entry = target_parent / target.name
+    # Preserve the lexical leaf: resolve() on a dangling symlink would follow
+    # it and could redirect publication to an absent referent.
+    if os.path.lexists(str(target_entry)):
+        raise FileExistsError(errno.EEXIST, "checkpoint publication target already exists", str(target_entry))
     if os.name == "nt":
         # Python's Windows os.rename maps to MoveFileEx without REPLACE_EXISTING.
-        os.rename(source, target)
+        os.rename(source, target_entry)
         return
     libc = ctypes.CDLL(None, use_errno=True)
     renameat2 = getattr(libc, "renameat2", None)
@@ -283,13 +287,13 @@ def _atomic_publish_no_replace(source: Path, target: Path) -> None:
     at_fdcwd = -100
     rename_noreplace = 1
     result = renameat2(
-        at_fdcwd, os.fsencode(source), at_fdcwd, os.fsencode(target), rename_noreplace,
+        at_fdcwd, os.fsencode(source), at_fdcwd, os.fsencode(target_entry), rename_noreplace,
     )
     if result != 0:
         error_number = ctypes.get_errno()
         if error_number in (errno.EEXIST, errno.ENOTEMPTY):
-            raise FileExistsError(error_number, "checkpoint publication target appeared", str(target))
-        raise OSError(error_number, os.strerror(error_number), str(target))
+            raise FileExistsError(error_number, "checkpoint publication target appeared", str(target_entry))
+        raise OSError(error_number, os.strerror(error_number), str(target_entry))
 
 
 def _sha256_value(value: str, *, name: str) -> str:
@@ -619,6 +623,37 @@ def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> 
     return target, publication_mode
 
 
+def _validate_counter_receipt(candidate: Path, manifest_receipt: Mapping[str, Any], returned: Any) -> dict[str, Any]:
+    if not isinstance(returned, Mapping):
+        raise ValueError("post-run judge must return a validated counter receipt")
+    expected = {
+        "schema_version": "ember-sparse-realization-receipt-v1",
+        "verification_boundary": "VERIFIED_MEASURED",
+        "result": "MEASURED",
+        "subject_checkpoint_sha256": manifest_receipt.get("checkpoint_manifest_sha256"),
+        "model_config_sha256": manifest_receipt.get("model_config_sha256"),
+        "architecture_revision": manifest_receipt.get("architecture_revision"),
+        "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
+        "active_expert_ids": manifest_receipt.get("active_expert_ids"),
+    }
+    architecture = manifest_receipt.get("architecture")
+    if not isinstance(architecture, Mapping):
+        raise ValueError("checkpoint manifest lacks measured architecture for counter validation")
+    for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
+        expected[field] = architecture.get(field)
+    if any(returned.get(field) != value for field, value in expected.items()):
+        raise ValueError("post-run counter receipt does not bind subject, source, or measured counts")
+    receipt_path = candidate / "parameter-counter-receipt.json"
+    try:
+        receipt_bytes = receipt_path.read_bytes()
+        receipt_payload = json.loads(receipt_bytes)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("post-run judge did not persist a valid counter receipt") from error
+    if not isinstance(receipt_payload, dict) or receipt_payload != dict(returned):
+        raise ValueError("post-run counter receipt file does not match the judge result")
+    return dict(returned)
+
+
 def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     manifest_path = candidate / "checkpoint-manifest.json"
     try:
@@ -630,10 +665,28 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     manifest_sha256 = _sha256(manifest_path)
     receipt = {**manifest, "checkpoint_manifest_sha256": manifest_sha256}
     records = _validated_records(candidate, receipt)
-    serialized_bytes = sum(int(record["bytes"]) for record in records.values()) + manifest_path.stat().st_size
-    incremental_bytes = sum(int(record["incremental_bytes"]) for record in records.values()) + manifest_path.stat().st_size
+    declared_files = {"checkpoint-manifest.json", *records}
+    actual_files: set[str] = set()
+    for path in candidate.rglob("*"):
+        relative = path.relative_to(candidate).as_posix()
+        if path.is_dir():
+            raise ValueError("checkpoint candidate filesystem closure contains an unexpected directory")
+        if path.is_file():
+            actual_files.add(relative)
+    unexpected = actual_files - declared_files - _ALLOWED_CANDIDATE_METADATA
+    missing = declared_files - actual_files
+    if unexpected or missing:
+        raise ValueError("checkpoint candidate filesystem closure is not exact")
+    metadata = {}
+    for name in sorted(actual_files & _ALLOWED_CANDIDATE_METADATA):
+        path = candidate / name
+        metadata[name] = {"sha256": _sha256(path), "bytes": path.stat().st_size}
+    metadata_bytes = sum(int(item["bytes"]) for item in metadata.values())
+    serialized_bytes = sum(int(record["bytes"]) for record in records.values()) + manifest_path.stat().st_size + metadata_bytes
+    incremental_bytes = sum(int(record["incremental_bytes"]) for record in records.values()) + manifest_path.stat().st_size + metadata_bytes
     return {
         **receipt,
+        "metadata": metadata,
         "serialized_bytes": serialized_bytes,
         "incremental_publication_bytes": incremental_bytes,
     }
@@ -643,7 +696,7 @@ def admit_quarantined_checkpoint(
     candidate: Path,
     published_root: Path,
     *,
-    verifier: Callable[[Path, dict[str, Any]], None],
+    verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]],
     max_serialized_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Judge durable raw bytes and atomically make only a passing candidate selectable."""
@@ -659,14 +712,18 @@ def admit_quarantined_checkpoint(
         raise ValueError("quarantined checkpoint candidate retains a writer lease")
     receipt = _checkpoint_candidate_receipt(candidate)
     try:
-        verifier(candidate, receipt)
+        returned_counter_receipt = verifier(candidate, receipt)
         try:
             final_receipt = _checkpoint_candidate_receipt(candidate)
         except Exception as error:
             raise ValueError("checkpoint candidate changed after verifier validation") from error
-        if final_receipt != receipt:
+        volatile = {"metadata", "serialized_bytes", "incremental_publication_bytes"}
+        initial_stable = {key: value for key, value in receipt.items() if key not in volatile}
+        final_stable = {key: value for key, value in final_receipt.items() if key not in volatile}
+        if final_stable != initial_stable:
             raise ValueError("checkpoint candidate changed after verifier validation")
-        post_verifier_bytes = sum(path.stat().st_size for path in candidate.rglob("*") if path.is_file())
+        _validate_counter_receipt(candidate, final_receipt, returned_counter_receipt)
+        post_verifier_bytes = int(final_receipt["serialized_bytes"])
         if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
             raise ValueError("counter evidence exceeds the derived byte bound")
         if published_root.exists():
@@ -683,7 +740,7 @@ def admit_quarantined_checkpoint(
         raise
     return final_receipt
 
-def write_checkpoint_artifacts(
+def _write_checkpoint_artifacts_impl(
     model: UnifiedDecoder,
     optimizer: torch.optim.Optimizer,
     root: Path,
@@ -698,7 +755,7 @@ def write_checkpoint_artifacts(
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
-    pre_publish_verifier: Callable[[Path, dict[str, Any]], None] | None = None,
+    pre_publish_verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]] | None = None,
     test_only_allow_unverified: bool = False,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
@@ -876,6 +933,45 @@ def write_checkpoint_artifacts(
                 f"checkpoint write failed and bounded evidence retention also failed: {evidence_error}"
             ) from error
         raise
+
+def write_checkpoint_artifacts(
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    root: Path,
+    *,
+    launch_seed: int,
+    rng_state: Mapping[str, torch.Tensor],
+    data_cursor: Mapping[str, Any],
+    model_config_sha256: str,
+    contract_sha256: str,
+    expert_genesis_sha256: Mapping[str, str],
+    optimizer_contract: Mapping[str, Any] | None = None,
+    specialist_lineage: Mapping[str, Any] | None = None,
+    max_serialized_bytes: int | None = None,
+    host_commit_reserve_bytes: int | None = None,
+    pre_publish_verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return _write_checkpoint_artifacts_impl(
+        model,
+        optimizer,
+        root,
+        launch_seed=launch_seed,
+        rng_state=rng_state,
+        data_cursor=data_cursor,
+        model_config_sha256=model_config_sha256,
+        contract_sha256=contract_sha256,
+        expert_genesis_sha256=expert_genesis_sha256,
+        optimizer_contract=optimizer_contract,
+        specialist_lineage=specialist_lineage,
+        max_serialized_bytes=max_serialized_bytes,
+        host_commit_reserve_bytes=host_commit_reserve_bytes,
+        pre_publish_verifier=pre_publish_verifier,
+    )
+
+
+def _write_checkpoint_artifacts_test_only(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    kwargs["test_only_allow_unverified"] = True
+    return _write_checkpoint_artifacts_impl(*args, **kwargs)
 
 
 def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict[str, Any]]:

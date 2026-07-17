@@ -22,10 +22,34 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import checkpoint_artifacts
 
-from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts
+from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, _write_checkpoint_artifacts_test_only, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
+
+def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> dict[str, object]:
+    architecture = manifest_receipt["architecture"]
+    payload = {
+        "schema_version": "ember-sparse-realization-receipt-v1",
+        "verification_boundary": "VERIFIED_MEASURED",
+        "result": "MEASURED",
+        "subject_checkpoint_sha256": manifest_receipt["checkpoint_manifest_sha256"],
+        "model_config_sha256": manifest_receipt["model_config_sha256"],
+        "architecture_revision": manifest_receipt["architecture_revision"],
+        "counter_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest(),
+        "active_expert_ids": manifest_receipt["active_expert_ids"],
+    }
+    for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
+        payload[field] = architecture[field]
+    (candidate / "parameter-counter-receipt.json").write_text(json.dumps(payload, sort_keys=True) + chr(10), encoding="utf-8")
+    return payload
+
+
+def write_checkpoint_artifacts(*args, **kwargs):
+    if "test_only_allow_unverified" in kwargs:
+        return _write_checkpoint_artifacts_test_only(*args, **kwargs)
+    return _write_checkpoint_artifacts_public(*args, **kwargs)
+
 
 
 class CheckpointArtifactTests(unittest.TestCase):
@@ -99,27 +123,28 @@ class CheckpointArtifactTests(unittest.TestCase):
                 offenders.append(path.relative_to(ROOT).as_posix())
         self.assertEqual(offenders, [])
 
-    def test_test_only_verifier_opt_out_is_closed_and_boolean(self) -> None:
+    def test_test_only_verifier_opt_out_is_private(self) -> None:
+        import inspect
+        self.assertNotIn("test_only_allow_unverified", inspect.signature(_write_checkpoint_artifacts_public).parameters)
+
+    def test_noop_counter_callback_is_not_an_admission_verdict(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
-        model = UnifiedDecoder(config, genesis_seed=14)
+        model = UnifiedDecoder(config, genesis_seed=15)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
-        arguments = {
-            "launch_seed": 14,
-            "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
-            "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
-            "model_config_sha256": "c" * 64,
-            "contract_sha256": "d" * 64,
-            "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
-        }
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            with self.assertRaisesRegex(ValueError, "must be a boolean"):
-                write_checkpoint_artifacts(model, optimizer, root / "non-bool", test_only_allow_unverified=1, **arguments)
-            with self.assertRaisesRegex(ValueError, "cannot accompany"):
+            parent = Path(directory)
+            target = parent / "checkpoint-noop-verifier"
+            with self.assertRaisesRegex(ValueError, "counter receipt"):
                 write_checkpoint_artifacts(
-                    model, optimizer, root / "ambiguous", test_only_allow_unverified=True,
-                    pre_publish_verifier=lambda _root, _receipt: None, **arguments,
+                    model, optimizer, target, launch_seed=15,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    pre_publish_verifier=lambda _candidate, _receipt: None,
                 )
+            self.assertFalse(target.exists())
+            self.assertTrue(any(path.is_dir() for path in (parent / ".checkpoint-quarantine").iterdir()))
 
     def test_checkpoint_publication_requires_realization_verifier_by_default(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
@@ -232,9 +257,9 @@ class CheckpointArtifactTests(unittest.TestCase):
             target = Path(directory) / "checkpoint-atomic"
             observations: list[tuple[bool, bool, bool, bool, bool]] = []
 
-            def verify(candidate: Path, _receipt: dict[str, object]) -> None:
+            def verify(candidate: Path, _receipt: dict[str, object]) -> dict[str, object]:
                 observations.append((candidate.is_dir(), target.exists(), (candidate / "checkpoint-manifest.json").is_file(), candidate.parent.name == ".checkpoint-quarantine", (candidate / ".writer-lease.json").is_file()))
-                (candidate / "parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8")
+                return _counter_receipt(candidate, _receipt)
 
             with patch("checkpoint_artifacts.available_host_commit_bytes", return_value=1024**3):
                 receipt = write_checkpoint_artifacts(
@@ -346,6 +371,24 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertFalse(source.exists())
             self.assertEqual(target.joinpath("shared.pt").read_bytes(), b"owned-bytes")
 
+    def test_atomic_publish_no_replace_rejects_dangling_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            source = parent / "source"
+            target = parent / "target"
+            referent = parent / "absent-referent"
+            source.mkdir()
+            source.joinpath("shared.pt").write_bytes(b"owned-bytes")
+            try:
+                target.symlink_to(referent, target_is_directory=True)
+            except OSError:
+                self.skipTest("symlink creation is unavailable on this host")
+            with self.assertRaises(FileExistsError):
+                checkpoint_artifacts._atomic_publish_no_replace(source, target)
+            self.assertTrue(source.joinpath("shared.pt").is_file())
+            self.assertTrue(target.is_symlink())
+            self.assertFalse(referent.exists())
+
     def test_atomic_publish_no_replace_rejects_existing_empty_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
@@ -383,7 +426,7 @@ class CheckpointArtifactTests(unittest.TestCase):
                 real_publish(source, destination)
             with patch("checkpoint_artifacts._atomic_publish_no_replace", side_effect=appear_at_boundary):
                 with self.assertRaisesRegex(FileExistsError, "appeared during admission"):
-                    write_checkpoint_artifacts(model, optimizer, target, pre_publish_verifier=lambda _candidate, _receipt: None, **arguments)
+                    write_checkpoint_artifacts(model, optimizer, target, pre_publish_verifier=lambda candidate, receipt: _counter_receipt(candidate, receipt), **arguments)
             self.assertTrue(target.is_dir())
             candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
             self.assertEqual(len(candidates), 1)
@@ -418,7 +461,7 @@ class CheckpointArtifactTests(unittest.TestCase):
                         model,
                         optimizer,
                         target,
-                        pre_publish_verifier=lambda _candidate, _receipt: None,
+                        pre_publish_verifier=lambda candidate, receipt: _counter_receipt(candidate, receipt),
                         **arguments,
                     )
             quarantine = parent / ".checkpoint-quarantine"
@@ -483,9 +526,10 @@ class CheckpointArtifactTests(unittest.TestCase):
                 "contract_sha256": "d" * 64,
                 "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
             }
-            def create_target(_candidate: Path, _receipt: dict[str, object]) -> None:
+            def create_target(_candidate: Path, _receipt: dict[str, object]) -> dict[str, object]:
                 target.mkdir()
                 target.joinpath("sentinel").write_bytes(b"late-owner")
+                return _counter_receipt(_candidate, _receipt)
             with self.assertRaisesRegex(FileExistsError, "appeared during admission"):
                 write_checkpoint_artifacts(model, optimizer, target, pre_publish_verifier=create_target, **arguments)
             self.assertEqual(target.joinpath("sentinel").read_bytes(), b"late-owner")
@@ -545,7 +589,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             admitted = admit_quarantined_checkpoint(
                 candidate,
                 target,
-                verifier=lambda root, _receipt: root.joinpath("parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8"),
+                verifier=lambda root, receipt: _counter_receipt(root, receipt),
             )
             self.assertTrue(target.is_dir())
             self.assertFalse(candidate.exists())

@@ -288,40 +288,78 @@ def _file_identity(path: Path) -> tuple[int, int] | str:
         return (int(getattr(stat, "st_dev", 0)), inode)
     return str(path.resolve())
 
-def _custody_serialized_bytes(parent: Path) -> int:
-    """Charge all custody bytes, honoring receipt-declared zero-cost hardlinks."""
+def _custody_file_rows(parent: Path) -> list[dict[str, object]]:
+    """Snapshot every physical custody file once and classify its root bucket."""
 
-    zero_increment_hardlinks: set[tuple[int, int] | str] = set()
-    for manifest_path in parent.rglob("checkpoint-manifest.json"):
-        try:
-            payload = json.loads(manifest_path.read_bytes())
-            records = payload.get("shards", []) if isinstance(payload, dict) else []
-            for record in records:
-                if not isinstance(record, dict):
-                    continue
-                if record.get("publication_mode") != "hardlink" or record.get("incremental_bytes") != 0:
-                    continue
-                relative = record.get("path")
-                if isinstance(relative, str):
-                    shard = manifest_path.parent / relative
-                    if shard.is_file():
-                        zero_increment_hardlinks.add(_file_identity(shard))
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            continue
+    parent = parent.resolve()
     seen: set[tuple[int, int] | str] = set()
-    total = 0
+    rows: list[dict[str, object]] = []
     for path in parent.rglob("*"):
         try:
             if not path.is_file():
                 continue
             identity = _file_identity(path)
-            if identity in zero_increment_hardlinks or identity in seen:
+            if identity in seen:
                 continue
             seen.add(identity)
-            total += path.stat().st_size
+            relative = path.relative_to(parent)
+            top = relative.parts[0] if relative.parts else ""
+            bucket = "quarantine" if top == ".checkpoint-quarantine" else "live" if top.startswith("checkpoint-") else "evidence" if top == _CUSTODY_LEDGER else "other"
+            rows.append({"path": relative.as_posix(), "bucket": bucket, "bytes": path.stat().st_size})
         except OSError as error:
             raise RuntimeError(f"custody byte accounting could not inspect {path}") from error
-    return total
+    return rows
+
+
+def _custody_serialized_bytes(parent: Path) -> int:
+    """Charge all custody bytes with a unique-inode walk."""
+
+    return sum(int(row["bytes"]) for row in _custody_file_rows(parent))
+
+
+def _custody_reconciliation(parent: Path) -> dict[str, object]:
+    """Reconcile live, quarantine, evidence, and evidence-qualified deletions."""
+
+    parent = parent.resolve()
+    rows = _custody_file_rows(parent)
+    totals = {"live": 0, "quarantine": 0, "evidence": 0, "other": 0}
+    for row in rows:
+        totals[str(row["bucket"])] += int(row["bytes"])
+    deleted_bytes = 0
+    ledger = parent / _CUSTODY_LEDGER
+    if ledger.exists():
+        try:
+            lines = ledger.read_bytes().splitlines()
+        except OSError as error:
+            raise RuntimeError("custody deletion ledger could not be read") from error
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except (UnicodeError, json.JSONDecodeError) as error:
+                raise RuntimeError("custody deletion ledger is malformed") from error
+            if not isinstance(event, dict) or event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA or event.get("event") != "DELETED":
+                raise RuntimeError("custody deletion ledger has an invalid schema")
+            pointer = event.get("pointer")
+            if not isinstance(pointer, str) or not pointer:
+                raise RuntimeError("custody deletion ledger lacks a pointer")
+            deleted_path = parent / pointer
+            if deleted_path.exists():
+                raise RuntimeError("custody deletion ledger points at bytes that still exist")
+            if type(event.get("bytes")) is not int or event["bytes"] < 0 or not _is_sha256(event.get("sha256")):
+                raise RuntimeError("custody deletion ledger has invalid byte evidence")
+            deleted_bytes += event["bytes"]
+    physical_bytes = sum(int(row["bytes"]) for row in rows)
+    return {
+        "schema_version": "ember-checkpoint-custody-reconciliation-v1",
+        "live_bytes": totals["live"],
+        "quarantine_bytes": totals["quarantine"],
+        "evidence_bytes": totals["evidence"],
+        "other_bytes": totals["other"],
+        "physical_bytes": physical_bytes,
+        "deleted_bytes": deleted_bytes,
+        "reconciled_bytes": physical_bytes + deleted_bytes,
+        "file_count": len(rows),
+    }
 
 def _receipt_valid_for_retention(bundle: Path) -> bool:
     try:
@@ -333,6 +371,8 @@ def _receipt_valid_for_retention(bundle: Path) -> bool:
 _WRITER_LEASE = ".writer-lease.json"
 _MAX_QUARANTINE_FILES = 32
 _MAX_QUARANTINE_BYTES = 1024 * 1024
+_CUSTODY_LEDGER = ".checkpoint-custody-deletion-ledger.jsonl"
+_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
 
 
 def _pid_is_alive(pid: object) -> bool:
@@ -400,6 +440,19 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
         victim = next((path for path in files if path != evidence_path), None)
         if victim is None:
             break
+        ledger = parent / _CUSTODY_LEDGER
+        deletion = {
+            "schema_version": _CUSTODY_LEDGER_SCHEMA,
+            "event": "DELETED",
+            "pointer": victim.relative_to(parent).as_posix(),
+            "bytes": victim.stat().st_size,
+            "sha256": _sha256(victim),
+            "reason": "bounded evidence retention",
+        }
+        with ledger.open("ab") as handle:
+            handle.write((json.dumps(deletion, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+            handle.flush()
+            os.fsync(handle.fileno())
         victim.unlink()
         files.remove(victim)
     return evidence_path
@@ -500,14 +553,13 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
         else:
             bundles.append(candidate)
     bundles.sort(key=lambda path: (path.stat().st_mtime_ns, path.name))
-    if max_count is not None:
-        while len(bundles) > max_count:
-            _move_bundle_to_quarantine(bundles.pop(0))
+    if max_count is not None and len(bundles) > max_count:
+        raise RuntimeError("selectable checkpoint count cannot be reduced without evidence-qualified deletion")
     if max_serialized_bytes is not None:
-        total = _custody_serialized_bytes(parent)
+        total = int(_custody_reconciliation(parent)["reconciled_bytes"])
         while total > max_serialized_bytes and len(bundles) > 1:
             _move_bundle_to_quarantine(bundles.pop(0))
-            total = _custody_serialized_bytes(parent)
+            total = int(_custody_reconciliation(parent)["reconciled_bytes"])
         if total > max_serialized_bytes:
             raise RuntimeError("checkpoint custody exceeds serialized-byte retention budget; quarantined bytes remain charged")
 
@@ -1175,6 +1227,7 @@ def run(
             _atomic_json(staging_root / _COUNTER_SUCCESS_RECEIPT, verified)
             require_counter_success_receipt(staging_root)
             verified_holder["receipt"] = verified
+            return verified
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
             published = write_checkpoint_artifacts(
@@ -1423,6 +1476,7 @@ def run_semantic(
             _atomic_json(staging_root / _COUNTER_SUCCESS_RECEIPT, verified)
             require_counter_success_receipt(staging_root)
             verified_holder["receipt"] = verified
+            return verified
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
             data_cursor = dict(state["data_cursor"])

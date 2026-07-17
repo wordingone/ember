@@ -17,7 +17,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts as _write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts,  _write_checkpoint_artifacts_test_only as _write_checkpoint_artifacts
 from pretrain import run_pretraining_segment
 from verify_capability_record import expected_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
