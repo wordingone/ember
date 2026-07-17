@@ -114,7 +114,7 @@
         },
         "reasoning": {
             "path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
-            "sha256": "f790f9db1352c7d3ee31ee0c1d69b681ca4d21420e9df59bcde5c9a671f8e72c"
+            "sha256": "287863224d79852d7b6bbc367c8c8b1f04de39b7e481ca634ad53a8f9add1d5a"
         },
         "code": {
             "path": "manifests/ember-restart-eval-code-math-custody-v1.json",
