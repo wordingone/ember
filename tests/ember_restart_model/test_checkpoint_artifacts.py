@@ -10,7 +10,7 @@ import sys
 import tempfile
 import warnings
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 import torch
@@ -18,13 +18,40 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _validate_runtime_optimizer_realization, load_checkpoint_artifacts, write_checkpoint_artifacts
+from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, checkpoint_commit_preflight, load_checkpoint_artifacts, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
 
 
 class CheckpointArtifactTests(unittest.TestCase):
+    def test_commit_preflight_requires_streaming_peak_plus_reserve(self) -> None:
+        plan = checkpoint_commit_preflight(
+            available_commit_bytes=10_000,
+            streaming_peak_bytes=4_000,
+            reserve_bytes=6_000,
+        )
+        self.assertEqual(plan["required_commit_bytes"], 10_000)
+        with self.assertRaisesRegex(RuntimeError, "host commit reserve"):
+            checkpoint_commit_preflight(
+                available_commit_bytes=9_999,
+                streaming_peak_bytes=4_000,
+                reserve_bytes=6_000,
+            )
+
+    def test_serialization_state_views_reuse_tensor_storage_without_cpu_clones(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=10)
+        source = model.state_dict()
+        shared = _select_detached_state(source, lambda name: ".experts." not in name)
+        vision = _select_detached_state(source, lambda name: ".experts.vision." in name)
+        self.assertTrue(shared)
+        self.assertTrue(vision)
+        for selected in (shared, vision):
+            for name, tensor in selected.items():
+                self.assertEqual(tensor.device, source[name].device)
+                self.assertEqual(tensor.data_ptr(), source[name].data_ptr())
+
     def test_preexisting_target_is_refused_before_staging_or_verifier(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=11)
@@ -59,18 +86,22 @@ class CheckpointArtifactTests(unittest.TestCase):
                 observations.append((staging.is_dir(), target.exists(), (staging / "checkpoint-manifest.json").is_file(), f".{os.getpid()}." in staging.name, (staging / ".writer-lease.json").is_file()))
                 (staging / "parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8")
 
-            receipt = write_checkpoint_artifacts(
-                model, optimizer, target, launch_seed=12,
-                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
-                data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
-                model_config_sha256="c" * 64, contract_sha256="d" * 64,
-                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
-                pre_publish_verifier=verify,
-            )
+            with patch("checkpoint_artifacts.available_host_commit_bytes", return_value=1024**3):
+                receipt = write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=12,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    host_commit_reserve_bytes=128 * 1024**2,
+                    pre_publish_verifier=verify,
+                )
             self.assertEqual(observations, [(True, False, True, True, True)])
             self.assertTrue(target.joinpath("parameter-counter-receipt.json").is_file())
             self.assertFalse(target.joinpath(".writer-lease.json").exists())
             self.assertEqual(receipt["checkpoint_manifest_sha256"], __import__("hashlib").sha256(target.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest())
+            self.assertEqual(receipt["host_commit_preflight"]["available_commit_bytes"], 1024**3)
+            self.assertEqual(receipt["host_commit_preflight"]["reserve_bytes"], 128 * 1024**2)
 
     def test_counter_verifier_failure_removes_staging_without_publishing(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
@@ -90,6 +121,18 @@ class CheckpointArtifactTests(unittest.TestCase):
                 )
             self.assertFalse(target.exists())
             self.assertEqual(list(parent.glob(".*.staging")), [])
+            evidence = list((parent / ".checkpoint-quarantine").glob("checkpoint-write-failed-*.json"))
+            self.assertEqual(len(evidence), 1)
+            payload = __import__("json").loads(evidence[0].read_text(encoding="utf-8"))
+            self.assertEqual(payload["error_type"], "RuntimeError")
+            self.assertEqual(payload["error_message"], "counter failed")
+            self.assertEqual(payload["target"], "checkpoint-failed")
+            self.assertRegex(payload["checkpoint_manifest_sha256"], r"^[0-9a-f]{64}$")
+            self.assertLess(evidence[0].stat().st_size, 64 * 1024)
+            self.assertEqual(
+                evidence[0].stem.removeprefix("checkpoint-write-failed-"),
+                __import__("hashlib").sha256(evidence[0].read_bytes()).hexdigest(),
+            )
     def test_refuses_checkpoint_receipt_without_optimizer_contract(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=11)

@@ -148,7 +148,8 @@
                         "serialization":  {
                                             "model_parameter_bytes":  2,
                                             "optimizer_state_bytes_per_active_parameter":  2,
-                                            "format_overhead_bytes":  1073741824
+                                            "format_overhead_bytes":  1073741824,
+                                            "host_commit_reserve_gib":  8
                                         },
                         "required_state":  [
                                                "model",
