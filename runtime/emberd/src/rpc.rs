@@ -72,6 +72,11 @@ struct StartJobParams {
 }
 
 #[derive(Debug, Deserialize)]
+struct DispatchManifestParams {
+    manifest: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
 struct ExportReceiptParams {
     job_id: String,
     path: PathBuf,
@@ -224,6 +229,26 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
             }
             match daemon.start_job(spec) {
                 Ok(handle) => (success(id, json!({"pid": handle.pid})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "dispatch_manifest" => {
+            let params: DispatchManifestParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.dispatch_manifest(&params.manifest) {
+                Ok(outcome) => (
+                    success(
+                        id,
+                        json!({
+                            "pid": outcome.handle.pid,
+                            "preflight_receipt_path": outcome.receipt.path,
+                            "preflight_receipt_sha256": outcome.receipt.sha256,
+                        }),
+                    ),
+                    false,
+                ),
                 Err(error) => (operation_error(id, error), false),
             }
         }

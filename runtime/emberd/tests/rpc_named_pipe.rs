@@ -103,11 +103,122 @@ fn wait_for_exit(server: &mut ServerGuard) {
     }
 }
 
+fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
+    let custody = root.join("custody");
+    fs::create_dir_all(&custody).unwrap();
+    let mut env = BTreeMap::new();
+    env.insert("EMBERD_RPC_FIXTURE_CHILD".to_string(), "1".to_string());
+    for key in [
+        "TEMP",
+        "TMP",
+        "TORCH_HOME",
+        "TRITON_CACHE_DIR",
+        "CUDA_CACHE_PATH",
+        "HF_HOME",
+        "XDG_CACHE_HOME",
+    ] {
+        let path = custody.join(key.to_ascii_lowercase());
+        fs::create_dir_all(&path).unwrap();
+        env.insert(key.to_string(), path.to_string_lossy().into_owned());
+    }
+    let config = root.join("config.json");
+    fs::write(&config, b"{\"dispatch\":\"bound\"}").unwrap();
+    let data_manifest = root.join("data-manifest.json");
+    fs::write(&data_manifest, b"{\"records\":4096}").unwrap();
+    let program = std::env::current_exe().unwrap();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let manifest = root.join("dispatch.json");
+    fs::write(
+        &manifest,
+        serde_json::to_vec(&json!({
+            "schema_version": "emberd-dispatch-manifest-v1",
+            "job_id": job_id,
+            "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
+            "not_before_ms": now - 1_000,
+            "expires_at_ms": now + 60_000,
+            "resource_lease": "gpu-dispatch-cli",
+            "program": {"path": program, "sha256": sha256(&program)},
+            "args": ["--exact", "fixture_rpc_child_process", "--nocapture"],
+            "env": env,
+            "bindings": [
+                {"kind": "config", "path": config, "sha256": sha256(&config)},
+                {"kind": "manifest", "path": data_manifest, "sha256": sha256(&data_manifest)}
+            ],
+            "custody_root": custody,
+            "storage_reserves": [{"root": root, "minimum_free_bytes": 1}],
+            "minimum_free_vram_bytes": 1,
+            "maximum_job_memory_bytes": 1_073_741_824u64,
+            "preflight_receipt": root.join("custody").join("preflight.json")
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    manifest
+}
+
 #[test]
 fn fixture_rpc_child_process() {
     if std::env::var("EMBERD_RPC_FIXTURE_CHILD").as_deref() == Ok("1") {
         thread::sleep(Duration::from_secs(30));
     }
+}
+
+#[test]
+fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
+    let root = sandbox("dispatch-cli");
+    let db = root.join("emberd.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\emberd-dispatch-cli-test-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "dispatch-cli-job");
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 100, "ping", json!({}))["status"], "ok");
+
+    let output = Command::new(&binary)
+        .args([
+            "dispatch",
+            "--pipe",
+            &pipe,
+            "--manifest",
+            &manifest.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "dispatch CLI failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(result["pid"].as_u64().unwrap() > 0);
+    let receipt = PathBuf::from(result["preflight_receipt_path"].as_str().unwrap());
+    assert_eq!(sha256(&receipt), result["preflight_receipt_sha256"]);
+    assert_eq!(
+        rpc(
+            &pipe,
+            101,
+            "job_state",
+            json!({"job_id": "dispatch-cli-job"})
+        )["state"],
+        "running"
+    );
+    rpc(
+        &pipe,
+        102,
+        "stop_job",
+        json!({"job_id": "dispatch-cli-job"}),
+    );
+    rpc(&pipe, 103, "shutdown", json!({}));
+    wait_for_exit(&mut server);
 }
 
 #[test]
