@@ -58,3 +58,19 @@ def test_arc_freeze_replace_failure_cleans_real_cli_temporary_output(monkeypatch
         module.main()
     assert not output.exists()
     assert not list(tmp_path.glob("frozen.json.*.tmp"))
+
+def test_arc_protocol_identity_is_not_caller_attested():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        (root / "README.md").write_text("---\nlicense: cc-by-sa-4.0\n---\n", encoding="utf-8")
+        split = root / "ARC-Challenge" / "test-00000-of-00001.parquet"
+        split.parent.mkdir()
+        choices = pa.array([{"text": ["one", "two"], "label": ["A", "B"]}])
+        pq.write_table(pa.table({"id": ["a"], "question": ["q1"], "choices": choices, "answerKey": ["A"]}), split)
+        protocols = []
+        for supplied in ("a" * 64, "b" * 64):
+            output = root / ("freeze-" + supplied[0] + ".json")
+            result = subprocess.run([sys.executable, str(SCRIPT), "--dataset-root", str(root), "--revision", "210d026faf9955653af8916fad021475a3f00453", "--protocol-sha256", supplied, "--output", str(output)], text=True, capture_output=True, check=False)
+            assert result.returncode == 0, result.stderr
+            protocols.append(json.loads(output.read_text(encoding="utf-8"))["protocol_sha256"])
+        assert protocols[0] == protocols[1]
