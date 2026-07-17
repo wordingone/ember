@@ -688,6 +688,11 @@ def _rng_state_hash(device: torch.device) -> dict[str, str]:
         for name, state in _rng_state(device).items()
     }
 
+def _counter_expected_counts(model: UnifiedDecoder) -> dict[str, object]:
+    """Capture counter expectations at publication, after the routed expert is selected."""
+    return measure_parameter_counts(model)
+
+
 def _execute_realization_counter(
     *,
     root: Path,
@@ -893,7 +898,7 @@ def run(
             verified = _execute_realization_counter(
                 root=root, config_path=config_path,
                 checkpoint_manifest_path=staging_root / "checkpoint-manifest.json",
-                active_expert=str(model.active_expert), expected_counts=counts,
+                active_expert=str(model.active_expert), expected_counts=_counter_expected_counts(model),
                 parent_manifest=(Path(current_lineage["parent_manifest"]) if current_lineage is not None else None),
                 root_manifest=(Path(current_lineage["root_manifest"]) if current_lineage is not None else None),
             )

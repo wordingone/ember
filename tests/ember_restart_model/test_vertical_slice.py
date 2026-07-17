@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 import batch
 from batch import decode_owned_batch, run_one_batch
 from parameter_counter import measure_parameter_counts
+from run_vertical_slice import _counter_expected_counts
 from model import RestartDecoderConfig, UnifiedDecoder
 
 
@@ -110,6 +111,12 @@ class VerticalSliceTests(unittest.TestCase):
         self.assertLess(counts["active_parameters"], counts["unique_parameters"])
         self.assertEqual(counts["active_expert_ids"], ["reasoning"])
 
+    def test_counter_expectations_follow_the_routed_expert_at_publication(self) -> None:
+        model = UnifiedDecoder(self.config)
+        model._activate_expert("vision")
+        counts = _counter_expected_counts(model)
+        self.assertEqual(counts["active_expert_ids"], ["vision"])
+        self.assertEqual(counts["active_parameters"], model.count_unique_trainable_parameters())
     def test_one_real_small_domain_batch_updates_only_selected_expert(self) -> None:
         result = run_one_batch(self._record("vision"), self.config, device=torch.device("cpu"))
         self.assertTrue(torch.isfinite(torch.tensor(result["loss"])))
