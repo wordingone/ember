@@ -415,6 +415,35 @@ def _custody_deletion_path(parent: Path, pointer: str) -> Path:
     return parent.joinpath(*PurePosixPath(pointer).parts)
 
 
+def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
+    """Read one complete newline-framed ledger snapshot, rejecting torn tails."""
+
+    ledger = parent / _CUSTODY_LEDGER
+    if not ledger.exists():
+        return b"", []
+    try:
+        payload = ledger.read_bytes()
+    except OSError as error:
+        raise RuntimeError("custody deletion ledger could not be read") from error
+    if payload and not payload.endswith(b"\n"):
+        raise RuntimeError("custody deletion ledger has an unterminated or torn tail")
+    events: list[object] = []
+    for line in payload.splitlines():
+        try:
+            events.append(json.loads(line))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("custody deletion ledger is malformed") from error
+    return payload, events
+
+
+def _append_custody_ledger_transition(parent: Path, event: dict[str, object]) -> None:
+    """Durably replace the complete framed ledger; never append to a live tail."""
+
+    parent = parent.resolve()
+    prior, _ = _custody_ledger_snapshot(parent)
+    framed = (json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    _atomic_bytes(parent / _CUSTODY_LEDGER, prior + framed)
+
 def _custody_reconciliation(parent: Path) -> dict[str, object]:
     """Reconcile custody bytes with an ordered, fail-closed deletion ledger."""
 
@@ -427,15 +456,8 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
     transitions: dict[str, dict[str, object]] = {}
     legacy_deleted: dict[str, dict[str, object]] = {}
     if ledger.exists():
-        try:
-            lines = ledger.read_bytes().splitlines()
-        except OSError as error:
-            raise RuntimeError("custody deletion ledger could not be read") from error
-        for line in lines:
-            try:
-                event = json.loads(line)
-            except (UnicodeError, json.JSONDecodeError) as error:
-                raise RuntimeError("custody deletion ledger is malformed") from error
+        _, events = _custody_ledger_snapshot(parent)
+        for event in events:
             if not isinstance(event, dict):
                 raise RuntimeError("custody deletion ledger has an invalid schema")
             schema = event.get("schema_version")
@@ -583,10 +605,7 @@ def _recover_missing_prepared_evidence(parent: Path) -> None:
     if not ledger.exists():
         return
     _custody_reconciliation(parent)
-    try:
-        events = [json.loads(line) for line in ledger.read_bytes().splitlines()]
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise RuntimeError("custody deletion ledger could not be read for recovery") from error
+    _, events = _custody_ledger_snapshot(parent)
     terminal: dict[str, dict[str, object]] = {}
     for event in events:
         if event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA:
@@ -608,10 +627,7 @@ def _recover_missing_prepared_evidence(parent: Path) -> None:
                 "sha256": event["sha256"],
                 "reason": event["reason"],
             }
-            with ledger.open("ab") as handle:
-                handle.write((json.dumps(committed, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
-                handle.flush()
-                os.fsync(handle.fileno())
+            _append_custody_ledger_transition(parent, committed)
         except OSError as error:
             raise RuntimeError("prepared evidence could not be inspected for recovery") from error
 
@@ -629,8 +645,7 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
             return False
         prepared = False
         try:
-            for line in ledger.read_bytes().splitlines():
-                event = json.loads(line)
+            for event in _custody_ledger_snapshot(parent)[1]:
                 if not isinstance(event, dict):
                     raise ValueError("custody deletion ledger has an invalid schema")
                 if _canonical_custody_deletion_pointer(event.get("pointer")) != deletion["pointer"]:
@@ -652,8 +667,7 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
         try:
             pointer = _canonical_custody_deletion_pointer(pointer_path.relative_to(parent).as_posix())
             events: set[str] = set()
-            for line in ledger.read_bytes().splitlines():
-                event = json.loads(line)
+            for event in _custody_ledger_snapshot(parent)[1]:
                 if not isinstance(event, dict):
                     raise ValueError("custody deletion ledger has an invalid schema")
                 if _canonical_custody_deletion_pointer(event.get("pointer")) == pointer:
@@ -731,10 +745,7 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
         recovering_prepared = matching_prepared_exists(deletion)
         if not recovering_prepared:
             prepared = {**deletion, "event": "PREPARED"}
-            with ledger.open("ab") as handle:
-                handle.write((json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
-                handle.flush()
-                os.fsync(handle.fileno())
+            _append_custody_ledger_transition(parent, prepared)
         try:
             if _quarantine_evidence_identity(parent, victim) != (pointer, byte_count, digest, identity):
                 raise RuntimeError("bounded evidence victim changed before unlink; bytes preserved")
@@ -744,10 +755,7 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
         except (OSError, ValueError) as error:
             raise RuntimeError("bounded evidence deletion did not commit; bytes preserved") from error
         committed = {**deletion, "event": "COMMITTED"}
-        with ledger.open("ab") as handle:
-            handle.write((json.dumps(committed, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
-            handle.flush()
-            os.fsync(handle.fileno())
+        _append_custody_ledger_transition(parent, committed)
         files.remove(victim)
     return evidence_path
 

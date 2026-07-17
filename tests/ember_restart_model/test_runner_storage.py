@@ -745,5 +745,64 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertEqual(ledger.read_bytes(), ledger_before)
             with self.assertRaisesRegex(RuntimeError, "duplicate|transition"):
                 run_vertical_slice._custody_reconciliation(parent)
+
+    def test_torn_or_unterminated_ledger_tails_are_refused_without_append(self) -> None:
+        """A legacy torn tail is fail-closed; a new transition never splices bytes onto it."""
+
+        def event(kind: str) -> dict[str, object]:
+            payload = b'{"result":"old"}\n'
+            return {
+                "schema_version": "ember-checkpoint-custody-deletion-v2",
+                "event": kind,
+                "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json",
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "reason": "bounded evidence retention",
+            }
+
+        for kind in ("PREPARED", "COMMITTED"):
+            for tail in ("truncated", "unterminated"):
+                with self.subTest(kind=kind, tail=tail), tempfile.TemporaryDirectory() as directory:
+                    parent = Path(directory)
+                    ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+                    rows = [] if kind == "PREPARED" else [event("PREPARED")]
+                    encoded = b"".join(
+                        (json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+                        for row in rows
+                    )
+                    final = json.dumps(event(kind), sort_keys=True, separators=(",", ":")).encode("utf-8")
+                    ledger.write_bytes(encoded + (final[: len(final) // 2] if tail == "truncated" else final))
+                    before = ledger.read_bytes()
+                    with self.assertRaisesRegex(RuntimeError, "ledger|malformed|terminated"):
+                        run_vertical_slice._write_bounded_quarantine_evidence(parent, "new", {"result": "new"})
+                    self.assertEqual(ledger.read_bytes(), before)
+
+    def test_atomic_ledger_replace_crash_converges_without_duplicate_transition(self) -> None:
+        """A crash after atomic replacement leaves a complete PREPARED record that resumes once."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                victim = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "old"})
+                ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+                real_replace = run_vertical_slice.os.replace
+                replaced = False
+
+                def crash_after_replace(source: object, target: object) -> None:
+                    nonlocal replaced
+                    real_replace(source, target)
+                    if Path(target) == ledger and not replaced:
+                        replaced = True
+                        raise OSError("injected crash after atomic ledger replace")
+
+                with unittest.mock.patch.object(run_vertical_slice.os, "replace", crash_after_replace):
+                    with self.assertRaisesRegex(OSError, "atomic ledger replace"):
+                        run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "new"})
+                self.assertTrue(victim.exists())
+                run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "new"})
+            events = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+            pointer = victim.relative_to(parent).as_posix()
+            self.assertEqual([row["event"] for row in events if row["pointer"] == pointer], ["PREPARED", "COMMITTED"])
+            first = run_vertical_slice._custody_reconciliation(parent)
+            self.assertEqual(run_vertical_slice._custody_reconciliation(parent), first)
 if __name__ == "__main__":
     unittest.main()
