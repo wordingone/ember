@@ -15,9 +15,28 @@ import zipfile
 from pathlib import Path
 from typing import Any, Mapping
 
-
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
+SPECIALIST_VERIFICATION_FIELDS = frozenset(
+    {
+        "schema_version",
+        "result",
+        "capability",
+        "data_manifest_sha256",
+        "tokenizer_sha256",
+        "verifier_sha256",
+        "data_class",
+        "record_count",
+        "token_count",
+        "source_manifest_sha256",
+        "records_artifact_sha256",
+        "semantic_checks",
+        "generator_replay_verified",
+        "admission",
+        "semantic_model_contract_sha256",
+        "runtime_semantic_model_contract_sha256",
+    }
+)
 
 
 def _sha256(path: Path) -> str:
@@ -366,18 +385,21 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
             raise ValueError("external parent has invalid trained expert history")
         expected_history = [*parent_history, *([] if active_expert in parent_history else [active_expert])]
         episode = lineage.get("episode")
-        receipt_fields = {"schema_version", "result", "capability", "data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "data_class", "record_count", "token_count", "source_manifest_sha256", "records_artifact_sha256", "semantic_checks", "generator_replay_verified"}
         capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
         episode_fields = {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256", "execution_slice", "execution_slice_sha256"}
         if (not isinstance(episode, Mapping) or set(episode) != episode_fields
                 or episode.get("active_expert") != active_expert or not isinstance(episode.get("data_verification_receipt"), Mapping)):
             raise ValueError("specialist v4 lineage lacks a closed active episode")
         verification = episode["data_verification_receipt"]
-        if (set(verification) != receipt_fields or verification.get("schema_version") != "ember-training-data-verification-v1"
+        if (set(verification) != SPECIALIST_VERIFICATION_FIELDS or verification.get("schema_version") != "ember-training-data-verification-v1"
                 or verification.get("result") != "VERIFIED" or verification.get("data_class") != "SEMANTIC_PRETRAINING"
                 or verification.get("generator_replay_verified") is not True
+                or verification.get("admission") != "ADMISSIBLE_SEMANTIC_CONTRACT"
+                or verification.get("semantic_model_contract_sha256") != verification.get("runtime_semantic_model_contract_sha256")
                 or capability_experts.get(verification.get("capability")) != active_expert):
             raise ValueError("specialist v4 lineage has an invalid data verification receipt")
+        for field in ("semantic_model_contract_sha256", "runtime_semantic_model_contract_sha256"):
+            _sha256_value(verification.get(field), label=f"specialist verification {field}")
         canonical = hashlib.sha256(json.dumps(dict(verification), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         if episode.get("data_verification_receipt_sha256") != canonical:
             raise ValueError("specialist v4 lineage data verification receipt hash does not match")
