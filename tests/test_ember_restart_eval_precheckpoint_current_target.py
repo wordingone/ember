@@ -68,3 +68,11 @@ def test_precheckpoint_manifest_pins_required_comparators_without_authorizing_ex
             "execution_status": "PREFLIGHT_ONLY_GATED_LICENSE_AND_NO_FROZEN_PROTOCOL",
         },
     ]
+
+
+def test_precheckpoint_comparator_policy_binds_executable_preflight_adapter():
+    value = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    adapter = value["comparator_policy"]["preflight_adapter"]
+    path = MANIFEST.parents[1] / adapter["path"]
+    assert adapter["result_disposition"] == "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == adapter["sha256"]
