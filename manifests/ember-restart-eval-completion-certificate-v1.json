@@ -95,9 +95,9 @@
       "benchmark_version": "f7bbbb2ccdf479001d6467c9e34af59e44a840f9",
       "split_sha256": "2a56f54d6b9f2f424e6a45032f5a619580ffd7065de458b046eb988d3257e752",
       "protocol_sha256": "713f49f4382bead975b4e8e19674142ced799bb14396f8191614b7c81c6b0e2e",
-      "command_sha256": "af219c28e54e2fea4cecefeee21e7a2019c49479ea4c19f3f5a73b76af3e8abc",
+      "command_sha256": "3d01ae159045730d3c4a070f7e8dafc9138c2bb07b914c8681cdea8f657cfd72",
       "result": "PREFLIGHT_ONLY",
-      "command_path": "scripts/ember_restart_eval_swebench_source_audit.py",
+      "command_path": "scripts/ember_restart_eval_files_fixture.py",
       "custody_path": "manifests/ember-restart-swebench-custody-v1.json",
       "custody_sha256": "365db73ceec985cfe5aad59687a7ef9d1288b4d3a8edb6d1c9b8964071c5a092"
     },
