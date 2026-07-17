@@ -53,6 +53,13 @@ preflight record is not a checkpoint-bound score.
 | Audio | AudioBench custody and bound scorer pin | No checkpoint-bound audio predictions; no closed-run artifact hash is materialized, so caller-selected runs are rejected |
 | Structured tools | BFCL static task custody and preflight scorer | No pinned live tool harness or checkpoint predictions |
 
+Terminal-Bench's cache audit is fail-closed: its 89 observed task records have
+no digest-pinned image and no network-disabled task, so no task is eligible for
+execution. The next independent CPU-only adapter is the frozen BFCL static
+simple-task scorer; it remains `PREFLIGHT_ONLY` and non-admissible until a
+canonical checkpoint prediction envelope is available, with live tool/network
+execution explicitly out of scope.
+
 These visible failure and preflight states are intentionally non-admissible and
 must not be summarized as native capability coverage.
 ## Required result record
