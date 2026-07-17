@@ -21,6 +21,7 @@ def test_browser_and_structured_tool_protocols_refuse_execution_without_local_ru
         "license_sha256": "b192c58991e8ff585cc574615d40e74185404d4b96c1109d423071ab1367344b",
         "asset_disposition": "NO_LOCAL_PINNED_BROWSERGYM_RUNTIME_OR_FROZEN_MINIWOB_TASKS",
         "target_execution_permitted": False,
+        "source_audit": {"path": "scripts/ember_restart_eval_browsergym_source_audit.py", "sha256": "d281c6884318815fc83a26a3aae250b7788e26c57f470a6bdf003d0fdd7bd7d5", "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"},
     }
     assert custody["structured_tools"] == {
         "benchmark_id": "bfcl",
