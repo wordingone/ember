@@ -851,6 +851,25 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(result["data_cursor"]["global_step"], 2)
         load.assert_called_once_with(model, checkpoint, receipt)
 
+    def test_planted_complete_published_but_unverified_bundle_is_not_resumable(self) -> None:
+        """A complete-looking bundle without counter-success evidence is unselectable."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory)
+            checkpoint = custody / "checkpoint-complete-looking"
+            checkpoint.mkdir()
+            (checkpoint / "checkpoint-manifest.json").write_text(
+                json.dumps({"schema_version": "ember-sparse-checkpoint-v3", "shards": []}),
+                encoding="utf-8",
+            )
+            for name in ("shared.pt", "replay-state.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"):
+                (checkpoint / name).write_bytes(b"complete-looking checkpoint bytes")
+            with self.assertRaisesRegex(ValueError, "counter-success receipt"):
+                run_vertical_slice.production_resume_checkpoint(
+                    checkpoint,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=custody,
+                )
     def test_counter_failure_quarantines_new_candidate_and_preserves_prior_bundle(self) -> None:
         """A counter failure cannot leave the just-published bundle selectable."""
 
