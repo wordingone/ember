@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 import sys
 import tempfile
 import warnings
@@ -18,13 +20,73 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, checkpoint_commit_preflight, load_checkpoint_artifacts, write_checkpoint_artifacts
+from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, checkpoint_commit_preflight, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
 
 
 class CheckpointArtifactTests(unittest.TestCase):
+    def test_model_only_transition_streams_model_shards_and_discards_optimizer_payload(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        source = UnifiedDecoder(config, genesis_seed=11)
+        source._activate_expert("shared")
+        target = UnifiedDecoder(config, genesis_seed=12)
+        source_state = source.state_dict()
+        old_contract = {
+            "name": "paged_8bit_adamw",
+            "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+            "hyperparameters": {"learning_rate": 1e-5, "weight_decay": 0.01, "percentile_clipping": 100, "block_wise": True},
+            "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+        }
+        old_realization = {
+            "implementation": old_contract["implementation"],
+            "implementation_source_sha256": "a" * 64,
+            "state_format": old_contract["state_format"],
+            "optimizer_contract_sha256": hashlib.sha256(json.dumps(old_contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            torch.save({
+                "model": _select_detached_state(source_state, lambda name: ".experts." not in name),
+                "optimizer": {"state": {0: {"step": torch.tensor(2), "state1": torch.ones(4)}}, "param_groups": [{"params": [0]}]},
+                "optimizer_contract": old_contract,
+                "optimizer_realization": old_realization,
+            }, root / "shared.pt")
+            cuda_rng_state = torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8)
+            torch.save({"rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": cuda_rng_state}, "data_cursor": {"global_step": 2, "record_index": 2, "tokens_seen": 2048}}, root / "replay-state.pt")
+            expert_hashes = {}
+            for name in ("vision", "audio", "reasoning", "tool"):
+                path = root / f"expert-{name}.pt"
+                torch.save({"expert": name, "model": _select_detached_state(source_state, lambda key, selected=name: f".experts.{selected}." in key)}, path)
+                expert_hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            shard_paths = ["shared.pt", "replay-state.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"]
+            shards = [{"path": name, "bytes": (root / name).stat().st_size, "sha256": hashlib.sha256((root / name).read_bytes()).hexdigest()} for name in shard_paths]
+            manifest = {
+                "schema_version": "ember-sparse-checkpoint-v3",
+                "optimizer_contract": old_contract,
+                "optimizer_realization": old_realization,
+                "expert_checkpoint_sha256": expert_hashes,
+                "expert_genesis_sha256": source.expert_bank_genesis_hashes(),
+                "active_expert_ids": ["shared"],
+                "data_cursor": {"global_step": 2, "record_index": 2, "tokens_seen": 2048},
+                "shards": shards,
+            }
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+            real_torch_load = torch.load
+            load_calls = []
+            def recorded_load(*args, **kwargs):
+                load_calls.append((Path(args[0]).name, dict(kwargs)))
+                return real_torch_load(*args, **kwargs)
+            with patch("checkpoint_artifacts.torch.load", side_effect=recorded_load):
+                loaded = load_checkpoint_model_only_transition(target, root, {**manifest, "checkpoint_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest()})
+        self.assertEqual(loaded["data_cursor"]["global_step"], 2)
+        self.assertEqual([name for name, _ in load_calls], ["replay-state.pt", "shared.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"])
+        self.assertTrue(all(kwargs.get("mmap") is True for _, kwargs in load_calls))
+        for key, tensor in source.state_dict().items():
+            self.assertTrue(torch.equal(tensor, target.state_dict()[key]), key)
+
     def test_test_only_verifier_opt_out_cannot_leak_into_production_call_sites(self) -> None:
         tools_root = ROOT / "tools"
         offenders = []
@@ -211,17 +273,29 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertRegex(receipt["optimizer_realization"]["optimizer_contract_sha256"], r"^[0-9a-f]{64}$")
 
 
-    def test_paged_8bit_realization_reads_live_args_not_receipt_fields(self) -> None:
+    def test_device_resident_8bit_realization_reads_live_args_not_receipt_fields(self) -> None:
         with warnings.catch_warnings():
 
             warnings.simplefilter("ignore", DeprecationWarning)
 
             import bitsandbytes as bnb
         model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=11)
-        optimizer = bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
         contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         realization = _optimizer_realization(optimizer, contract)
-        self.assertEqual(realization["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+        self.assertEqual(realization["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(realization["placement"], "cuda_non_paged")
+        self.assertEqual(realization["state_format"], "bitsandbytes-device-resident-8bit-adamw-state-dict-v1")
+
+    def test_device_resident_contract_rejects_adamw8bit_forced_into_paged_mode(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            import bitsandbytes as bnb
+        model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=11)
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True, is_paged=True)
+        contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        with self.assertRaisesRegex(ValueError, "not device-resident"):
+            _optimizer_realization(optimizer, contract)
     def test_writes_and_restores_shared_semantic_checkpoint(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=17)
