@@ -25,6 +25,7 @@ from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segmen
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
 from semantic_contract import semantic_model_contract_sha256
+from step2_realization_registry import validate_step2_realization_registry_bundle
 from train import run_launch
 
 
@@ -677,14 +678,15 @@ def publish_counter_verified_checkpoint(*, checkpoint_target: Path, write_candid
         raise
     return published, counter_receipt
 
-def production_resume_checkpoint(
+def authorize_production_resume_checkpoint(
     candidate: Path,
     *,
     counter_success_receipt: Path | None = None,
+    realization_registry: Path | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
-) -> Path:
-    """Accept only a published, counter-verified B: or runner-custodied C: bundle."""
+) -> tuple[Path, dict[str, object]]:
+    """Authorize a resume and disclose the exact verifier trust path used."""
 
     resolved = candidate.resolve()
     accepted = resolved.drive.upper() == "B:" and resolved.is_dir()
@@ -697,7 +699,56 @@ def production_resume_checkpoint(
         accepted = resolved.is_dir()
     if not accepted:
         raise ValueError("resume checkpoint must be a published B: bundle or declared C: custody bundle")
-    require_counter_success_receipt(resolved, receipt_path=counter_success_receipt)
+    if counter_success_receipt is not None and realization_registry is not None:
+        raise ValueError("counter-success receipt and realization registry are mutually exclusive")
+    if realization_registry is not None:
+        current_model_config = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
+        receipt = validate_step2_realization_registry_bundle(
+            realization_registry.resolve(),
+            (resolved / "checkpoint-manifest.json").resolve(),
+            current_model_config,
+        )
+        authority = {
+            "schema_version": "ember-resume-authority-v1",
+            "mode": "TRUSTED_HISTORICAL_REALIZATION_REGISTRY",
+            "checkpoint_manifest_sha256": _sha256(resolved / "checkpoint-manifest.json"),
+            "registry_sha256": _sha256(realization_registry.resolve()),
+            "counter_sha256": receipt["counter_sha256"],
+            "receipt_sha256": receipt["receipt_sha256"],
+            "historical_model_config_sha256": receipt["historical_model_config_sha256"],
+            "current_model_config_sha256": receipt["current_model_config_sha256"],
+            "semantic_model_contract_sha256": receipt["semantic_model_contract_sha256"],
+        }
+    else:
+        receipt = require_counter_success_receipt(resolved, receipt_path=counter_success_receipt)
+        receipt_source = (counter_success_receipt if counter_success_receipt is not None else resolved / _COUNTER_SUCCESS_RECEIPT).resolve()
+        authority = {
+            "schema_version": "ember-resume-authority-v1",
+            "mode": "CURRENT_COUNTER_SUCCESS_RECEIPT",
+            "checkpoint_manifest_sha256": _sha256(resolved / "checkpoint-manifest.json"),
+            "counter_sha256": receipt["counter_sha256"],
+            "receipt_sha256": _sha256(receipt_source),
+        }
+    return resolved, authority
+
+
+def production_resume_checkpoint(
+    candidate: Path,
+    *,
+    counter_success_receipt: Path | None = None,
+    realization_registry: Path | None = None,
+    c_relocated_under_disk_budget_runner: bool = False,
+    relocation_custody_root: Path | None = None,
+) -> Path:
+    """Backward-compatible path-only wrapper around disclosed resume authority."""
+
+    resolved, _authority = authorize_production_resume_checkpoint(
+        candidate,
+        counter_success_receipt=counter_success_receipt,
+        realization_registry=realization_registry,
+        c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
+        relocation_custody_root=relocation_custody_root,
+    )
     return resolved
 
 def checkpoint_retention_budget_bytes(config_path: Path) -> int:
@@ -853,6 +904,7 @@ def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dic
 
 def run(
     *, seed: int, artifact_root: Path, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
+    resume_realization_registry: Path | None = None,
     records_override: list[dict[str, object]] | None = None,
     specialist_verification: dict[str, object] | None = None,
     specialist_lineage: dict[str, object] | None = None,
@@ -926,6 +978,15 @@ def run(
         episode_expert = verified_specialist_episode_expert(records, specialist_verification)
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
+    resume_authority: dict[str, object] | None = None
+    if resume_checkpoint is not None:
+        resume_checkpoint, resume_authority = authorize_production_resume_checkpoint(
+            resume_checkpoint,
+            counter_success_receipt=resume_counter_receipt,
+            realization_registry=resume_realization_registry,
+            c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
+            relocation_custody_root=relocation_custody_root,
+        )
 
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -947,12 +1008,6 @@ def run(
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
-        resume_checkpoint = production_resume_checkpoint(
-            resume_checkpoint,
-            counter_success_receipt=resume_counter_receipt,
-            c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
-            relocation_custody_root=relocation_custody_root,
-        )
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
@@ -981,6 +1036,8 @@ def run(
         nonlocal checkpoint, parameter_receipt, latest_parent_manifest, published_specialist_records
         data_cursor = dict(state["data_cursor"])
         data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
+        if resume_authority is not None:
+            data_cursor["resume_authority"] = resume_authority
         current_lineage: dict[str, object] | None = None
         if specialist_lineage is not None:
             if latest_parent_manifest is None:
@@ -1083,6 +1140,7 @@ def run(
         "expert_genesis_sha256": genesis_hashes, "peak_memory_bytes": int(torch.cuda.max_memory_allocated()),
         "input_identity_receipt": input_receipt, "post_step_checkpoint": checkpoint,
         "parameter_receipt": parameter_receipt, "publication_plan": specialist_plan,
+        "resume_authority": resume_authority,
     }
 
 def specialist_lineage_request(
@@ -1131,7 +1189,8 @@ def verified_specialist_episode_expert(
 
 def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
-    capability: str, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None, parent_manifest: Path, root_manifest: Path,
+    capability: str, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
+    resume_realization_registry: Path | None = None, parent_manifest: Path, root_manifest: Path,
     checkpoint_interval: int, write_budget_bytes: int,
     start_record: int = 0, max_records: int | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
@@ -1156,6 +1215,7 @@ def run_specialist(
     )
     return run(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
+        resume_realization_registry=resume_realization_registry,
         records_override=selected_records, specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
@@ -1166,7 +1226,8 @@ def run_specialist(
     )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
-    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None,
+    steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
+    resume_counter_receipt: Path | None = None, resume_realization_registry: Path | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -1195,6 +1256,13 @@ def run_semantic(
     if memory_preflight["parameter_dtype"] != load_memory_contract(config_path)["parameter_dtype"]:
         raise RuntimeError("memory preflight and production numerics disagree")
     checkpoint_parent = artifact_root / "checkpoints"
+    resume_authority: dict[str, object] | None = None
+    if resume_checkpoint is not None:
+        resume_checkpoint, resume_authority = authorize_production_resume_checkpoint(
+            resume_checkpoint,
+            counter_success_receipt=resume_counter_receipt,
+            realization_registry=resume_realization_registry,
+        )
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     rng_state_before_init = _rng_state_hash(torch.device("cuda"))
@@ -1215,10 +1283,6 @@ def run_semantic(
     initial_global_step = 0
     initial_tokens_seen = 0
     if resume_checkpoint is not None:
-        resume_checkpoint = production_resume_checkpoint(
-            resume_checkpoint,
-            counter_success_receipt=resume_counter_receipt,
-        )
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
@@ -1250,9 +1314,12 @@ def run_semantic(
             verified_holder["receipt"] = verified
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
+            data_cursor = dict(state["data_cursor"])
+            if resume_authority is not None:
+                data_cursor["resume_authority"] = resume_authority
             published = write_checkpoint_artifacts(
                 model, optimizer, checkpoint_root, launch_seed=seed,
-                rng_state=_rng_state(torch.device("cuda")), data_cursor=dict(state["data_cursor"]),
+                rng_state=_rng_state(torch.device("cuda")), data_cursor=data_cursor,
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 max_serialized_bytes=checkpoint_byte_bound,
@@ -1298,6 +1365,7 @@ def run_semantic(
         "publication_plan": publication_plan,
         "stream_receipt_sha256": stream.receipt_sha256,
         "tokenizer_sha256": stream.tokenizer_sha256,
+        "resume_authority": resume_authority,
     }
 
 
@@ -1310,7 +1378,9 @@ def main() -> None:
     vertical.add_argument("--seed", type=int, required=True)
     vertical.add_argument("--artifact-root", type=Path, required=True)
     vertical.add_argument("--resume-checkpoint", type=Path)
-    vertical.add_argument("--resume-counter-receipt", type=Path)
+    vertical_resume = vertical.add_mutually_exclusive_group()
+    vertical_resume.add_argument("--resume-counter-receipt", type=Path)
+    vertical_resume.add_argument("--resume-realization-registry", type=Path)
     specialist = subparsers.add_parser("specialist")
     specialist.add_argument("--seed", type=int, required=True)
     specialist.add_argument("--artifact-root", type=Path, required=True)
@@ -1318,7 +1388,9 @@ def main() -> None:
     specialist.add_argument("--tokenizer", type=Path, required=True)
     specialist.add_argument("--capability", choices=("image", "audio", "reasoning", "tool"), required=True)
     specialist.add_argument("--resume-checkpoint", type=Path, required=True)
-    specialist.add_argument("--resume-counter-receipt", type=Path, required=True)
+    specialist_resume = specialist.add_mutually_exclusive_group(required=True)
+    specialist_resume.add_argument("--resume-counter-receipt", type=Path)
+    specialist_resume.add_argument("--resume-realization-registry", type=Path)
     specialist.add_argument("--parent-manifest", type=Path, required=True)
     specialist.add_argument("--root-manifest", type=Path, required=True)
     specialist.add_argument("--start-record", type=int, default=0)
@@ -1341,10 +1413,12 @@ def main() -> None:
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
     semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
-    semantic.add_argument("--resume-counter-receipt", type=Path)
+    semantic_resume = semantic.add_mutually_exclusive_group()
+    semantic_resume.add_argument("--resume-counter-receipt", type=Path)
+    semantic_resume.add_argument("--resume-realization-registry", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
@@ -1358,9 +1432,10 @@ def main() -> None:
             write_budget_bytes=args.write_budget_gib * 1024**3,
             resume_checkpoint=args.resume_checkpoint,
             resume_counter_receipt=args.resume_counter_receipt,
+            resume_realization_registry=args.resume_realization_registry,
         )
     else:
-        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt)
+        result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry)
     print(json.dumps(result, sort_keys=True))
 if __name__ == "__main__":
     main()
