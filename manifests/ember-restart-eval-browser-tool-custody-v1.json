@@ -67,12 +67,12 @@
     "scoring_adapters": [
         {
             "path": "scripts/ember_restart_eval_browsergym.py",
-            "sha256": "cd7e484aaab1e1a412b6bbf556c03b0af3bb6ff5c8cc2049c8802089e86b86c3",
+            "sha256": "0f4ac3aaeb2a0db6471fe685a77431e5b86f5edeccdcd34f1051e8d97bdd2e7b",
             "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"
         },
         {
             "path": "scripts/ember_restart_eval_bfcl_static.py",
-            "sha256": "192506b377499b397bd76b2cca55f92ae02b5f0dccdbe3d2f413a4bf21489fec",
+            "sha256": "7cf52bc73f95fe8aa1cd8b8aecb058c608a742ff0c7f73c3da1698ab19be7864",
             "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
         }
     ]
