@@ -28,9 +28,11 @@ The full AudioBench aggregate therefore is excluded as a scoring authority.
 Only objective metrics such as WER, BLEU, and exact string match are candidate
 components. Before use, each component needs a separately materialized and
 licensed audio split, raw-audio preprocessing hash, reference transcript or
-answer hash, scorer source hash, target input/protocol hash, and a
-disk-budget receipt. The target must be an admitted owned checkpoint and the
-same local objective scorer must run for every comparator.
+answer hash, scorer source hash, target input/protocol hash, a content-addressed
+closed-run artifact hash, and a disk-budget receipt. Until that closed-run hash
+exists, the bound scorer rejects caller-selected run artifacts and emits no score.
+The target must be an admitted owned checkpoint and the same local objective
+scorer must run for every comparator.
 
 ## Failure meaning
 
