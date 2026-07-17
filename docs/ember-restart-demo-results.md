@@ -16,5 +16,8 @@ fixture/selftest outputs as owned capability. Frozen benchmark families that
 lack eligible pinned local assets or runtimes remain unavailable in the demo,
 including Terminal-Bench, BrowserGym MiniWoB, BFCL, and SWE-bench Lite. BrowserGym source is custody-bound, but there is no local runtime or frozen MiniWoB task set.
 
-For the exact structural input and future admitted results, link to
+Deterministic ARC-Challenge, GSM8K, HellaSwag, MMLU-Pro, and MATH-500 scorers
+are available for future canonical predictions, but their current outputs are
+preflight-only and never rendered as owned capability. For the exact structural
+input and future admitted results, link to
 [`ember-restart-evaluation-results.md`](ember-restart-evaluation-results.md).
