@@ -10,7 +10,7 @@
     "result":  "PREFLIGHT_ONLY",
     "scoring_adapter": {
         "path": "scripts/ember_restart_eval_arc_challenge.py",
-        "sha256": "d2b5879296cf402a549cf63251f18a838cbb1993e4d472a14c86d5e35436abb9",
+        "sha256": "3026626752a240b53d8f925eeac1df591ffc845810ad9a3b5661f9a0f0229f39",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
     "prohibited_claims":  [
