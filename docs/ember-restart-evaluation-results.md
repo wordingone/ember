@@ -48,7 +48,7 @@ preflight record is not a checkpoint-bound score.
 | Terminal | Terminal-Bench 2 source pin plus freezer-only v2 manifest | `PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK`: 89 cached metadata records, 0 digest-pinned images, 0 network-disabled tasks, 0 eligible tasks; handwritten legacy manifests are rejected |
 | SQL | Spider source/split custody and deterministic scorer pin | No frozen gold/database execution artifact or checkpoint predictions |
 | Files | SWE-bench source custody plus deterministic patch/changed-file fixture adapter | `SELFTEST_ONLY`; drive-qualified changed-file paths are rejected; no frozen repository execution environment or checkpoint predictions |
-| Browser/UI | BrowserGym/MiniWoB source pin | No local pinned BrowserGym runtime or frozen MiniWoB task bundle |
+| Browser/UI | BrowserGym/MiniWoB source pin plus source audit | Source audit is PREFLIGHT_ONLY; no local pinned BrowserGym runtime or frozen MiniWoB task bundle |
 | Image | MMMU validation custody and scorer pin | No checkpoint-bound multimodal predictions |
 | Audio | AudioBench custody and bound scorer pin | No checkpoint-bound audio predictions; no closed-run artifact hash is materialized, so caller-selected runs are rejected |
 | Structured tools | BFCL static task custody and preflight scorer | No pinned live tool harness or checkpoint predictions |

@@ -7,7 +7,7 @@
 
 - Framework source: `ServiceNow/BrowserGym`
 - Source commit: `9e779f087de9a65668b6974d11f9ce9816026e96`
-- Current custody: no local pinned BrowserGym runtime or frozen MiniWoB task set is available; this protocol is pre-execution only. Any future materialization must use `disk_budget_runner.py` with explicit C/B caps and a completed receipt.
+- Current custody: no local pinned BrowserGym runtime or frozen MiniWoB task set is available; this protocol is pre-execution only. Any future materialization must use `disk_budget_runner.py` with explicit C/B caps and a completed receipt. The read-only source audit `scripts/ember_restart_eval_browsergym_source_audit.py` verifies the pinned commit/tree/license and emits `PREFLIGHT_ONLY` with `target_execution_permitted: false`; it does not create a runtime or task bundle.
 
 ## Initial admissible surface
 
