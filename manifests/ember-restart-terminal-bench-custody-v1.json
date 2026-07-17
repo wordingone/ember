@@ -8,6 +8,12 @@
     "sha256": "9324fc506109ec0a8eb2c282a99c3c9c79365a77cb263ca75fa989b9cc12de31",
     "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"
   },
+  "cache_audit": {
+    "path": "scripts/ember_restart_eval_terminal_bench_cache_audit.py",
+    "sha256": "7461e8897a89a84e398940cbae6eba36cb0cdc8ecb5af5177d71823f26bdcc7a",
+    "task_manifest_sha256": "3a0c0127df1aab9c05c60c5bc08d1c7f2ab701e913614ec5b41082fd81c1e694",
+    "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+  },
   "benchmark_id": "terminal-bench",
   "benchmark_version": "2.0",
   "eligibility_contract": {
@@ -18,6 +24,7 @@
       "digest_pinned_image_task_count": 0,
       "network_disabled_task_count": 0,
       "eligible_task_count": 0,
+      "task_manifest_sha256": "3a0c0127df1aab9c05c60c5bc08d1c7f2ab701e913614ec5b41082fd81c1e694",
       "reason": "all cached task.toml records use mutable image tags and allow_internet=true"
     }
   },
