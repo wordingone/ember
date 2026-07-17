@@ -61,8 +61,13 @@ def _validate(value: object, certificate_bytes: bytes, root: Path) -> dict:
     if {benchmark["family"] for benchmark in value["benchmarks"]} != FAMILIES or len(value["benchmarks"]) != len(FAMILIES):
         raise ValueError("certificate must enumerate every required evaluation family exactly once")
     for comparator in value["comparators"]:
-        if not isinstance(comparator, dict) or set(comparator) != {"class", "identity", "command_sha256", "result"} or comparator.get("class") not in {"open_3b", "open_27b_or_31b"} or not isinstance(comparator.get("identity"), str) or not comparator["identity"] or not SHA.fullmatch(comparator.get("command_sha256", "")) or comparator.get("result") not in {"PREFLIGHT_ONLY", "NOT_EXECUTABLE", "NON_CLAIM_RAW_FORWARD"}:
+        if not isinstance(comparator, dict) or not {"class", "identity", "command_sha256", "result"}.issubset(comparator) or set(comparator) - {"class", "identity", "command_sha256", "result", "command_path"} or comparator.get("class") not in {"open_3b", "open_27b_or_31b"} or not isinstance(comparator.get("identity"), str) or not comparator["identity"] or not SHA.fullmatch(comparator.get("command_sha256", "")) or comparator.get("result") not in {"PREFLIGHT_ONLY", "NOT_EXECUTABLE", "NON_CLAIM_RAW_FORWARD"}:
             raise ValueError("certificate comparator record is invalid")
+        if "command_path" in comparator:
+            command_path = _safe_relative(comparator["command_path"])
+            path = root / command_path
+            if not path.is_file() or _digest(path) != comparator["command_sha256"]:
+                raise ValueError("certificate comparator hash does not match command_path")
     for receipt in value["resource_receipts"]:
         if not isinstance(receipt, dict) or set(receipt) != {"kind", "receipt_sha256"} or not isinstance(receipt.get("kind"), str) or not receipt["kind"] or not SHA.fullmatch(receipt.get("receipt_sha256", "")):
             raise ValueError("certificate resource receipt record is invalid")
