@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Freeze ARC-Challenge test bytes without making a capability claim."""
+"""Freeze ARC-Challenge test bytes without accepting caller-attested protocol identity."""
 from __future__ import annotations
 
 import argparse
@@ -20,10 +20,15 @@ import yaml
 COMMIT = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 SPLIT = Path("ARC-Challenge/test-00000-of-00001.parquet")
+SCORER_PATH = "scripts/ember_restart_eval_arc_challenge.py"
 
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def derived_protocol_sha256(revision: str, reference_sha256: str, license_sha256: str, adapter_sha256: str) -> str:
+    return digest(f"arc-challenge:{revision}:{reference_sha256}:{license_sha256}:{adapter_sha256}".encode("utf-8"))
 
 
 def has_cc_by_sa_license(card_bytes: bytes) -> bool:
@@ -55,13 +60,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-root", required=True, type=Path)
     parser.add_argument("--revision", required=True)
-    parser.add_argument("--protocol-sha256", required=True)
+    # Compatibility option retained for old packets, but never trusted or used.
+    parser.add_argument("--protocol-sha256", required=False, help=argparse.SUPPRESS)
     parser.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args()
     if arguments.output.exists():
         parser.error("output must not pre-exist")
-    if not COMMIT.fullmatch(arguments.revision) or not SHA256.fullmatch(arguments.protocol_sha256):
-        parser.error("revision and protocol hash must be lowercase content identifiers")
+    if not COMMIT.fullmatch(arguments.revision):
+        parser.error("revision must be a lowercase source commit")
     try:
         card_bytes = (arguments.dataset_root / "README.md").read_bytes()
         split_bytes = (arguments.dataset_root / SPLIT).read_bytes()
@@ -71,12 +77,32 @@ def main() -> int:
         identifiers = [row.get("id") if isinstance(row, dict) else None for row in rows]
         if not rows or len(set(identifiers)) != len(rows) or any(not valid_row(row) for row in rows):
             raise ValueError("ARC rows require unique ids, nonempty choices, and matching answer keys")
+        license_sha256 = digest(card_bytes)
+        reference_sha256 = digest(split_bytes)
+        adapter_sha256 = digest(Path(__file__).resolve().with_name("ember_restart_eval_arc_challenge.py").read_bytes())
+        protocol_sha256 = derived_protocol_sha256(arguments.revision, reference_sha256, license_sha256, adapter_sha256)
     except (OSError, UnicodeDecodeError, pa.ArrowException, ValueError, yaml.YAMLError) as error:
         parser.error(str(error))
-    payload = {"schema_version": "ember-restart-arc-challenge-freeze-v1", "result": "PREFLIGHT_ONLY", "claim_status": "FROZEN_ARC_CHALLENGE_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS", "benchmark_id": "arc-challenge", "benchmark_version": arguments.revision, "capability": "reasoning", "license": "CC-BY-SA-4.0", "license_sha256": digest(card_bytes), "references_sha256": digest(split_bytes), "split_sha256": digest(split_bytes), "protocol_sha256": arguments.protocol_sha256, "task_count": len(rows)}
+    payload = {
+        "schema_version": "ember-restart-arc-challenge-freeze-v2",
+        "result": "PREFLIGHT_ONLY",
+        "claim_status": "FROZEN_ARC_CHALLENGE_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS",
+        "benchmark_id": "arc-challenge",
+        "benchmark_version": arguments.revision,
+        "capability": "reasoning",
+        "license": "CC-BY-SA-4.0",
+        "license_sha256": license_sha256,
+        "references_sha256": reference_sha256,
+        "split_sha256": reference_sha256,
+        "protocol_sha256": protocol_sha256,
+        "scoring_adapter_path": SCORER_PATH,
+        "scoring_adapter_sha256": adapter_sha256,
+        "task_count": len(rows),
+    }
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.output.parent, prefix=arguments.output.name + ".", suffix=".tmp", delete=False) as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
         temporary = Path(handle.name)
     try:
         os.replace(temporary, arguments.output)
