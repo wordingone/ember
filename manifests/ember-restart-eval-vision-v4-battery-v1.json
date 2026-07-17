@@ -2,59 +2,59 @@
   "battery_id": "vision-v4-postrun",
   "benchmarks": [
     {
-      "execution_status": "BLOCKED_MMLU_PRO_LICENSE_CARD_HASH",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "MMLU-Pro",
       "protocol_manifest": "manifests/ember-restart-mmlu-pro-protocol-v1.json"
     },
     {
-      "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "GSM8K",
       "protocol_manifest": "manifests/ember-restart-gsm8k-protocol-v1.json"
     },
     {
-      "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "MATH-500",
       "protocol_manifest": "manifests/ember-restart-eval-code-math-custody-v1.json"
     },
     {
-      "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "ARC-Challenge",
       "protocol_manifest": "manifests/ember-restart-arc-challenge-protocol-v1.json"
     },
     {
-      "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "HumanEval+",
       "protocol_manifest": "manifests/ember-restart-eval-code-math-custody-v1.json"
     },
     {
-      "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "MBPP",
       "protocol_manifest": "manifests/ember-restart-eval-code-math-custody-v1.json"
     },
     {
-      "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "HellaSwag",
       "protocol_manifest": "manifests/ember-restart-hellaswag-protocol-v1.json"
     },
     {
       "eligible_multiple_choice_items": 847,
-      "execution_status": "BLOCKED_MMMU_CANONICAL_LOADER_PREDICTION_BINDING",
+      "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
       "name": "MMMU validation native-image scorer",
       "protocol_manifest": "manifests/ember-restart-mmmu-validation-custody-v1.json",
       "total_records": 900
     }
   ],
+  "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
   "claim_boundary": "NO_CAPABILITY_ADMISSION_OR_SUFFICIENT_PRETRAINING_CREDIT",
-  "content_sha256": "dbf495edc74c5ccba75f2a490df07914e5525510ddae807b95fc477d4a0952be",
-  "evaluator_commit": "99728f324c9257386ee5ab09696a339e36e14f4e",
+  "content_sha256": "94099acc950d5302fecdeee477f24780e0ee1e487c98a97391e57ddd204e87f4",
+  "evaluator_commit": "e80b48416e4adedfd54c8f624c0cfab5d7a9abe6",
   "goal_id": "EMBER-02",
+  "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
   "mutation_policy": "FROZEN_NO_ADDITIONS_OR_RENAMES_AFTER_LAUNCH",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "receipt_status": "FROZEN_PRELAUNCH",
   "runnability_blockers": [
-    "MMLU-Pro license-card hash",
-    "owned checkpoint binding",
-    "MMMU canonical loader/prediction binding"
+    "no checkpoint-bound predictions"
   ],
   "schema_version": "ember-restart-vision-v4-eval-battery-v1",
   "workstream_id": "EMBER-02C"
