@@ -15,7 +15,7 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_gsm8k_score.py",
       "custody_path": "manifests/ember-restart-gsm8k-custody-v1.json",
-      "custody_sha256": "804e16306f95ee1e55222f0220caf2e2e3a3ef7493125900d3a16607d26cefeb"
+      "custody_sha256": "e4383c6ea69a89252c98a39f59ba9d29e4fa33fe51bbe7110689de5ef502fd3b"
     },
     {
       "family": "image",
@@ -95,11 +95,11 @@
       "benchmark_version": "f7bbbb2ccdf479001d6467c9e34af59e44a840f9",
       "split_sha256": "2a56f54d6b9f2f424e6a45032f5a619580ffd7065de458b046eb988d3257e752",
       "protocol_sha256": "713f49f4382bead975b4e8e19674142ced799bb14396f8191614b7c81c6b0e2e",
-      "command_sha256": "726803e00ce4f86b0b30fd4945d640c1717446f139ea2b999a3f762d52af210f",
+      "command_sha256": "3b28082cf6c53b8a19c56dcd62364304816ff754f1729371e5dd8ea753f216db",
       "result": "SELFTEST_ONLY",
       "command_path": "scripts/ember_restart_eval_files_fixture.py",
       "custody_path": "manifests/ember-restart-swebench-custody-v1.json",
-      "custody_sha256": "199aeac2c262478d2935fe9ed29931c09d37d91a72a23a774fa0e34283fa2c54"
+      "custody_sha256": "d0abd029be55ec84fe69114b445034167c2fa012c29b08202f9cf6c067edb52f"
     },
     {
       "family": "browser_ui",
@@ -117,13 +117,13 @@
       "family": "terminal",
       "benchmark_id": "terminal-bench",
       "benchmark_version": "2.0",
-      "split_sha256": "408e9df6798394a0ae76a26f32e2f09e3308c2a452f41d6c99271f97f38c4cac",
+      "split_sha256": "de472cfd064c3b4dfcd6fc424673ef1f0a5df83db9ec67dacff042f33ebb578c",
       "protocol_sha256": "4e80e1f56d57ad83b9e51509b06d40f62348218570642b35b9bd6d52be458160",
       "command_sha256": "9324fc506109ec0a8eb2c282a99c3c9c79365a77cb263ca75fa989b9cc12de31",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_terminal_bench.py",
       "custody_path": "manifests/ember-restart-terminal-bench-custody-v1.json",
-      "custody_sha256": "408e9df6798394a0ae76a26f32e2f09e3308c2a452f41d6c99271f97f38c4cac"
+      "custody_sha256": "de472cfd064c3b4dfcd6fc424673ef1f0a5df83db9ec67dacff042f33ebb578c"
     },
     {
       "family": "structured_tools",
