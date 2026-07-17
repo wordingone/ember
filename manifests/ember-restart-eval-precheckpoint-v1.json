@@ -115,7 +115,7 @@
     "frozen_family_artifacts": {
         "text": {
             "path": "manifests/ember-restart-gsm8k-custody-v1.json",
-            "sha256": "804e16306f95ee1e55222f0220caf2e2e3a3ef7493125900d3a16607d26cefeb"
+            "sha256": "e4383c6ea69a89252c98a39f59ba9d29e4fa33fe51bbe7110689de5ef502fd3b"
         },
         "reasoning": {
             "path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
@@ -131,7 +131,7 @@
         },
         "terminal": {
             "path": "manifests/ember-restart-terminal-bench-custody-v1.json",
-            "sha256": "408e9df6798394a0ae76a26f32e2f09e3308c2a452f41d6c99271f97f38c4cac"
+            "sha256": "de472cfd064c3b4dfcd6fc424673ef1f0a5df83db9ec67dacff042f33ebb578c"
         },
         "sql": {
             "path": "manifests/ember-restart-spider-custody-v1.json",
@@ -139,7 +139,7 @@
         },
         "files": {
             "path": "manifests/ember-restart-swebench-custody-v1.json",
-            "sha256": "199aeac2c262478d2935fe9ed29931c09d37d91a72a23a774fa0e34283fa2c54"
+            "sha256": "d0abd029be55ec84fe69114b445034167c2fa012c29b08202f9cf6c067edb52f"
         },
         "browser_ui": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
