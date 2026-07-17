@@ -1,26 +1,31 @@
 {
-    "goal_id":  "EMBER-02",
-    "workstream_id":  "EMBER-02C",
-    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-    "schema_version":  "ember-restart-benchmark-custody-v1",
-    "benchmark_id":  "gsm8k",
-    "upstream_url":  "https://huggingface.co/datasets/openai/gsm8k",
-    "license":  "MIT",
-    "target_execution_permitted":  false,
-    "target_training_access":  "FORBIDDEN",
-    "inherited_template_compatibility":  "HASH_MISMATCH_SEPARATE_NONEXECUTABLE_CUSTODY",
-    "materialization":  {
-                            "upstream_revision":  "740312add88f781978c0658806c59bc2815b9866",
-                            "artifact_sha256":  "6eb8577c00d48aebc4f55bfbe76de49880b29f1adbd599c0bfd127a02f4a1019",
-                            "runner_receipt_sha256":  "a12c8f72324eb0dbd6d426d90fb2261eb9cd2ed983fde9866a1476b9762f2aff",
-                            "split_sha256":  "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
-                            "claim_status":  "FROZEN_GSM8K_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS"
-                        },
-    "benchmark_version":  "740312add88f781978c0658806c59bc2815b9866",
-    "license_sha256":  "a17e882503578c9e324560630e31017617714ee025c87cf4fea6fd916895f3c1",
-    "references_sha256":  "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
-    "split_sha256":  "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
-    "protocol_sha256":  "6060a263a17ff3cc21374e88293e6d12d62e06bc9a653ecd25b632c455f9d727",
-    "scoring_adapter_path":  "scripts/ember_restart_eval_gsm8k_score.py",
-    "scoring_adapter_sha256":  "87253ca41b0833b3f401701ff0d907472c9bfb2324161ce283c265a740b8e481"
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02C",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version": "ember-restart-benchmark-custody-v1",
+    "benchmark_id": "gsm8k",
+    "upstream_url": "https://huggingface.co/datasets/openai/gsm8k",
+    "license": "MIT",
+    "target_execution_permitted": false,
+    "target_training_access": "FORBIDDEN",
+    "inherited_template_compatibility": "HASH_MISMATCH_SEPARATE_NONEXECUTABLE_CUSTODY",
+    "materialization": {
+        "upstream_revision": "740312add88f781978c0658806c59bc2815b9866",
+        "artifact_sha256": "6eb8577c00d48aebc4f55bfbe76de49880b29f1adbd599c0bfd127a02f4a1019",
+        "runner_receipt_sha256": "a12c8f72324eb0dbd6d426d90fb2261eb9cd2ed983fde9866a1476b9762f2aff",
+        "split_sha256": "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
+        "claim_status": "FROZEN_GSM8K_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS"
+    },
+    "benchmark_version": "740312add88f781978c0658806c59bc2815b9866",
+    "license_sha256": "a17e882503578c9e324560630e31017617714ee025c87cf4fea6fd916895f3c1",
+    "references_sha256": "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
+    "split_sha256": "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
+    "protocol_sha256": "e441e6171dfc8dccf28f2ea7170b0f849905b0b0d2bcd14045026ece88fb31d4",
+    "scoring_adapter_path": "scripts/ember_restart_eval_gsm8k_score.py",
+    "scoring_adapter_sha256": "87253ca41b0833b3f401701ff0d907472c9bfb2324161ce283c265a740b8e481",
+    "runtime_audit": {
+        "path": "scripts/ember_restart_eval_gsm8k_runtime_audit.py",
+        "sha256": "3451856bb20573ebdafcb0d2b2c7806705177508b7166efbdf5e8f025738fa17",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    }
 }
