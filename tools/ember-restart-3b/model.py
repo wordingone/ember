@@ -112,6 +112,14 @@ class RestartDecoderConfig:
         )
         with contract_path.open(encoding="utf-8") as handle:
             contract = json.load(handle)
+        return cls.from_contract_payload(contract)
+
+    @classmethod
+    def from_contract_payload(cls, contract: Mapping[str, Any]) -> "RestartDecoderConfig":
+        """Validate an already snapshotted production contract payload."""
+
+        if not isinstance(contract, Mapping):
+            raise ValueError("production contract must be a JSON object")
         if contract.get("architecture_revision") != "ember-sparse-3b-v2":
             raise ValueError("production contract must declare ember-sparse-3b-v2")
         model = contract["model"]
