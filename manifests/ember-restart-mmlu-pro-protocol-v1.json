@@ -23,7 +23,10 @@
     "strict_protocol_required": true,
     "scoring_adapter_sha256": "c6d19c0e6734279b188a4179a39835a50683a267040ec2c37f6f0dbd54da1062",
     "protocol_derivation": "mmlu-pro:{benchmark_version}:{references_sha256}:{license_sha256}:{scoring_adapter_sha256}",
-    "protocol_status": "NOT_EXECUTABLE_LICENSE_CARD_HASH_MISSING",
+    "protocol_status": "FROZEN_LICENSE_CARD_BOUND",
     "custody_manifest_path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
-    "custody_manifest_sha256": "f790f9db1352c7d3ee31ee0c1d69b681ca4d21420e9df59bcde5c9a671f8e72c"
+    "custody_manifest_sha256": "287863224d79852d7b6bbc367c8c8b1f04de39b7e481ca634ad53a8f9add1d5a",
+    "license_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
+    "license_card_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
+    "protocol_sha256": "a6b74d5427d3051a383f1568f3d111aeb0e9950f543f65ea7c8a8330dafc3949"
 }
