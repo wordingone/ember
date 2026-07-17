@@ -131,7 +131,7 @@
         },
         "terminal": {
             "path": "manifests/ember-restart-terminal-bench-custody-v1.json",
-            "sha256": "4995eb9978980f0ce0701bdc4ba30a1c02f8738876e04a301e4f23c9e38e8b1f"
+            "sha256": "408e9df6798394a0ae76a26f32e2f09e3308c2a452f41d6c99271f97f38c4cac"
         },
         "sql": {
             "path": "manifests/ember-restart-spider-custody-v1.json",
