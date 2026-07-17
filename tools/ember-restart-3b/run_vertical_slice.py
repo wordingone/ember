@@ -545,28 +545,34 @@ def require_counter_success_receipt(checkpoint_root: Path, *, receipt_path: Path
 
 
 def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseException) -> Path | None:
-    """Delete bulk candidate bytes while retaining only bounded manifest/failure evidence."""
+    """Delete bulk candidate bytes while retaining bounded manifest/failure evidence."""
 
     if not checkpoint_target.exists():
         return None
-    evidence = checkpoint_target.parent / f".counter-failed-{checkpoint_target.name}-{uuid.uuid4().hex}"
-    evidence.mkdir()
     manifest_path = checkpoint_target / "checkpoint-manifest.json"
     manifest_sha256: str | None = None
-    if manifest_path.is_file():
-        manifest_bytes = manifest_path.read_bytes()
-        manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
-        _atomic_bytes(evidence / "checkpoint-manifest.json", manifest_bytes)
-    _atomic_json(evidence / _COUNTER_FAILURE_RECEIPT, {
-        "schema_version": "ember-counter-failure-v1", "result": "COUNTER_FAILED",
-        "checkpoint_manifest_sha256": manifest_sha256, "error_type": type(error).__name__,
-        "error": str(error), "bulk_candidate_cleanup": "deleted",
-    })
+    try:
+        if manifest_path.is_file():
+            manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    except OSError:
+        manifest_sha256 = None
+    evidence = _write_bounded_quarantine_evidence(
+        checkpoint_target.parent,
+        f"counter-failed-{checkpoint_target.name}",
+        {
+            "schema_version": "ember-counter-failure-v1",
+            "result": "COUNTER_FAILED",
+            "source_bundle": checkpoint_target.name,
+            "checkpoint_manifest_sha256": manifest_sha256,
+            "error_type": type(error).__name__,
+            "error": str(error)[:512],
+            "bulk_candidate_cleanup": "deleted",
+        },
+    )
     shutil.rmtree(checkpoint_target)
     if checkpoint_target.exists():
         raise RuntimeError("counter-failed checkpoint could not be removed from the selectable namespace")
     return evidence
-
 
 def publish_counter_verified_checkpoint(*, checkpoint_target: Path, write_candidate: Callable[[], dict[str, object]], execute_counter: Callable[[], dict[str, object]]) -> tuple[dict[str, object], dict[str, object]]:
     """Cover candidate creation through realization verification in one fail-closed transaction."""
