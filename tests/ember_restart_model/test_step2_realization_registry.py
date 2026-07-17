@@ -16,12 +16,85 @@ import sys
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from step2_realization_registry import (
+    validate_step2_realization_registry_bundle,
     validate_step2_realization_receipt,
     write_step2_realization_registry,
 )
 
 
 class Step2RealizationRegistryTests(unittest.TestCase):
+    def test_runtime_bundle_binds_the_exact_checkpoint_manifest_and_realization(self) -> None:
+        """A portable historical verifier is usable only for its exact checkpoint bytes."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkpoint = root / "checkpoint"
+            checkpoint.mkdir()
+            current_config = ROOT / "configs" / "ember-restart-3b.json"
+            historical_config = root / "historical-config.json"
+            historical_payload = json.loads(current_config.read_bytes())
+            historical_payload["training"]["gpu"]["gpu_hours_cap"] = 999
+            historical_config.write_text(json.dumps(historical_payload, sort_keys=True), encoding="utf-8")
+            historical_config_sha256 = hashlib.sha256(historical_config.read_bytes()).hexdigest()
+            counts = {
+                "allocated_parameters": 3_839_161_856,
+                "unique_parameters": 3_839_161_856,
+                "trainable_parameters": 3_839_161_856,
+                "served_parameters": 3_839_161_856,
+                "active_parameters": 1_020_589_568,
+                "episode_trainable_parameters": 1_020_589_568,
+            }
+            genesis = {name: hashlib.sha256(name.encode("utf-8")).hexdigest() for name in ("vision", "audio", "reasoning", "tool")}
+            manifest = {
+                "schema_version": "ember-sparse-checkpoint-v3",
+                "model_config_sha256": historical_config_sha256,
+                "architecture_revision": "ember-sparse-3b-v2",
+                "active_expert_ids": ["shared"],
+                "architecture": dict(counts),
+                "expert_genesis_sha256": genesis,
+                "expert_parameter_sha256": genesis,
+            }
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+            subject = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            source_counter = root / "source-counter.py"
+            source_counter.write_text("# reviewed historical counter bytes\n", encoding="utf-8")
+            counter_sha256 = hashlib.sha256(source_counter.read_bytes()).hexdigest()
+            source_receipt = root / "source-receipt.json"
+            source_receipt.write_text(json.dumps({
+                "schema_version": "ember-sparse-realization-receipt-v1",
+                "verification_boundary": "VERIFIED_MEASURED",
+                "result": "MEASURED",
+                "subject_checkpoint_sha256": subject,
+                "model_config_sha256": manifest["model_config_sha256"],
+                "counter_sha256": counter_sha256,
+                "architecture_revision": manifest["architecture_revision"],
+                "active_expert_ids": manifest["active_expert_ids"],
+                **counts,
+                "expert_genesis_sha256": genesis,
+                "expert_parameter_sha256": genesis,
+            }, sort_keys=True), encoding="utf-8")
+            registry = write_step2_realization_registry(
+                root / "registry", receipt_path=source_receipt, counter_path=source_counter,
+                model_config_path=historical_config,
+            )
+
+            admitted = validate_step2_realization_registry_bundle(registry, manifest_path, current_config)
+            self.assertEqual(admitted["subject_checkpoint_sha256"], subject)
+            self.assertNotEqual(admitted["historical_model_config_sha256"], admitted["current_model_config_sha256"])
+            self.assertEqual(admitted["semantic_model_contract_sha256"], "4b5361b523d7c06057f4008a89da359a4b0367dce04e3ab642a1f1a0b85557fb")
+            registry_payload = json.loads(registry.read_bytes())
+            registry_payload["verifiers"][0]["unreviewed_authority"] = True
+            registry.write_text(json.dumps(registry_payload, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "entries must be closed"):
+                validate_step2_realization_registry_bundle(registry, manifest_path, current_config)
+            del registry_payload["verifiers"][0]["unreviewed_authority"]
+            registry.write_text(json.dumps(registry_payload, sort_keys=True), encoding="utf-8")
+            manifest["expert_parameter_sha256"]["vision"] = "f" * 64
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "receipt binding|checkpoint manifest"):
+                validate_step2_realization_registry_bundle(registry, manifest_path, current_config)
+
     def test_writer_builds_a_portable_exact_counter_and_receipt_bundle(self) -> None:
         """Runtime trust starts from one self-contained, content-addressed bundle."""
         with tempfile.TemporaryDirectory() as temporary:

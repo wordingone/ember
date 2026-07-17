@@ -348,7 +348,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
             stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
-            stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True}))
+            stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 7, "global_step": 31, "tokens_seen": 31 * 1024}}))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
             stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
@@ -448,7 +448,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
             stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
-            stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True}))
+            stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}}))
             stack.enter_context(patch.object(run_vertical_slice, "load_authorized_records", return_value=([{"active_expert": "shared"}], {"input_identity": {"shard_path": "TOKEN-SHARDS-V0:prior"}}, {"receipt": "bound"})))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
@@ -548,6 +548,7 @@ class RunnerPreflightTests(unittest.TestCase):
             write_budget_bytes=24 * 1024**3,
             resume_checkpoint=None,
             resume_counter_receipt=None,
+            resume_realization_registry=None,
         )
 
     def test_specialist_lineage_request_binds_parent_to_exact_resume_bundle(self) -> None:
@@ -614,7 +615,7 @@ class RunnerPreflightTests(unittest.TestCase):
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
             with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--start-record", "7", "--max-records", "20", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), start_record=7, max_records=20, checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None, telemetry_path=Path("state/ember-telemetry.jsonl"), telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00")
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), resume_realization_registry=None, parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), start_record=7, max_records=20, checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None, telemetry_path=Path("state/ember-telemetry.jsonl"), telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00")
     def test_specialist_cli_forwards_explicit_c_relocation_custody(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
             with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--max-records", "20", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
@@ -627,6 +628,14 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(specialist.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
         self.assertEqual(specialist.call_args.kwargs["start_record"], 0)
         self.assertEqual(specialist.call_args.kwargs["max_records"], 20)
+
+    def test_specialist_cli_accepts_exactly_one_historical_registry(self) -> None:
+        with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/custody/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-realization-registry", "B:/registry/trusted-verifiers.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/parent/checkpoint-manifest.json", "--max-records", "20", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/custody", "--checkpoint-interval", "20", "--write-budget-gib", "24", "--telemetry-path", "C:/custody/telemetry.jsonl", "--telemetry-run-id", "vision-smoke", "--model-chat-restore-not-before", "2026-07-18T01:00:00-07:00"]):
+                run_vertical_slice.main()
+        self.assertIsNone(specialist.call_args.kwargs["resume_counter_receipt"])
+        self.assertEqual(specialist.call_args.kwargs["resume_realization_registry"], Path("B:/registry/trusted-verifiers.json"))
+
     def test_c_custody_resume_bundle_requires_the_declared_disk_runner_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             custody = Path(directory)
@@ -702,6 +711,47 @@ class RunnerPreflightTests(unittest.TestCase):
                     checkpoint,
                     c_relocated_under_disk_budget_runner=True,
                     relocation_custody_root=checkpoint.parent,
+                )
+
+    def test_historical_resume_uses_one_exact_registry_instead_of_current_counter(self) -> None:
+        """The portable historical counter bundle is an explicit, mutually exclusive path."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory)
+            checkpoint = custody / "checkpoint"
+            checkpoint.mkdir()
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            manifest_path.write_text("{}", encoding="utf-8")
+            registry = custody / "registry" / "trusted-verifiers.json"
+            registry.parent.mkdir()
+            registry.write_text("{}", encoding="utf-8")
+            registry_sha256 = hashlib.sha256(registry.read_bytes()).hexdigest()
+            semantic_sha256 = "s" * 64
+            with patch.object(run_vertical_slice, "validate_step2_realization_registry_bundle", return_value={"result": "MEASURED", "counter_sha256": "c" * 64, "receipt_sha256": "r" * 64, "historical_model_config_sha256": "h" * 64, "current_model_config_sha256": "n" * 64, "semantic_model_contract_sha256": semantic_sha256}) as validate:
+                admitted, authority = run_vertical_slice.authorize_production_resume_checkpoint(
+                    checkpoint,
+                    realization_registry=registry,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=custody,
+                )
+            self.assertEqual(admitted, checkpoint.resolve())
+            self.assertEqual(authority["mode"], "TRUSTED_HISTORICAL_REALIZATION_REGISTRY")
+            self.assertEqual(authority["registry_sha256"], registry_sha256)
+            self.assertEqual(authority["counter_sha256"], "c" * 64)
+            self.assertEqual(authority["receipt_sha256"], "r" * 64)
+            self.assertEqual(authority["semantic_model_contract_sha256"], semantic_sha256)
+            validate.assert_called_once_with(
+                registry.resolve(),
+                manifest_path.resolve(),
+                ROOT / "configs" / "ember-restart-3b.json",
+            )
+            with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+                run_vertical_slice.production_resume_checkpoint(
+                    checkpoint,
+                    counter_success_receipt=checkpoint / "parameter-counter-receipt.json",
+                    realization_registry=registry,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=custody,
                 )
 
     def test_counter_failure_quarantines_new_candidate_and_preserves_prior_bundle(self) -> None:
