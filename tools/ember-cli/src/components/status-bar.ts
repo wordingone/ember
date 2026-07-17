@@ -1,4 +1,7 @@
 // status-bar — persistent status bar at the bottom of the TUI.
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Shows permission mode, interrupt hint, task panel toggle, effort callouts,
 // coordinator agent status, and live task list (TaskListV2).
 //
@@ -15,6 +18,8 @@ import { Box, Text } from "../ink/components.ts";
 import { useInput } from "../ink/hooks.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 import { modeGlyph as cognitiveGlyph } from "../cognitive-mode.ts";
+import { telemetryMemoKey } from "../services/telemetry-label.ts";
+import type { TelemetryState } from "../services/telemetry-watch.ts";
 
 // ---------------------------------------------------------------------------
 // Public constants (preserve exactly)
@@ -361,6 +366,8 @@ export interface StatusLineProps {
   permissionMode: PermissionModeState;
   interrupt: InterruptHandler;
   taskPanel: TaskPanelState;
+  /** Live owned-training state. Required so the Repl cannot silently detach the render seam. */
+  telemetry: TelemetryState;
   coordinator?: CoordinatorAgentState;
   effort?: EffortCalloutState;
   /** Current cognitive mode; absent → defaults to "observe". Never blank, never crash. */
@@ -379,6 +386,7 @@ export function StatusLine({
   permissionMode,
   interrupt,
   taskPanel,
+  telemetry,
   coordinator,
   effort,
   cognitiveMode,
@@ -394,6 +402,7 @@ export function StatusLine({
 
   const text = statusBarText(permissionMode.mode, taskPanel.visible);
   const modeIndicator = renderModeIndicator(cognitiveMode ?? "observe", false);
+  const telemetryLabel = telemetryMemoKey(telemetry);
 
   return React.createElement(
     // #561 P0-A: StatusLine is fixed bottom chrome, never a flex-shrink target — see the same
@@ -415,6 +424,9 @@ export function StatusLine({
       : null,
     taskPanel.visible
       ? React.createElement(TaskListV2, { key: "tasks", tasks: taskPanel.tasks })
+      : null,
+    telemetryLabel != null
+      ? React.createElement(Text, { key: "telemetry", color: "cyan", dimColor: true }, telemetryLabel)
       : null,
     React.createElement(
       Box,
