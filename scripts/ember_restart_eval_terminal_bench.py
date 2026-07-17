@@ -72,7 +72,9 @@ def main() -> int:
         tasks = frozen.get("tasks") if isinstance(frozen, dict) else None
         if frozen.get("result") != "PREFLIGHT_ONLY" or frozen.get("benchmark_id") != "terminal-bench" or frozen.get("benchmark_version") != "2.0" or not isinstance(tasks, list) or not tasks:
             raise ValueError("frozen Terminal-Bench manifest is invalid")
-        strict_identity = _strict_identity(frozen) if frozen.get("schema_version") == "ember-restart-terminal-bench-freeze-v2" else None
+        if frozen.get("schema_version") != "ember-restart-terminal-bench-freeze-v2":
+            raise ValueError("Terminal-Bench manifest must be freezer-produced v2")
+        strict_identity = _strict_identity(frozen)
         expected = {}
         for task in tasks:
             if not isinstance(task, dict) or set(task) != {"task_id", "task_toml_sha256", "docker_image_sha256"} or not isinstance(task["task_id"], str) or not HASH.fullmatch(task["task_toml_sha256"]) or not HASH.fullmatch(task["docker_image_sha256"]) or task["task_id"] in expected:
