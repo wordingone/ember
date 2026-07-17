@@ -109,7 +109,12 @@ def _pinned_registry_snapshot(registry, *, registry_bytes=None):
         for index, entry in enumerate(entries):
             if not isinstance(entry, dict):
                 raise ValueError(f"verifiers[{index}]: malformed entry")
+            verifier_sha = entry.get("sha256")
+            if not isinstance(verifier_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", verifier_sha):
+                raise ValueError(f"verifiers[{index}]: missing verifier hash")
             relative, source = _registry_path(entry.get("path"), registry.parent, f"verifiers[{index}]")
+            if _sha256(source.read_bytes()) != verifier_sha:
+                raise ValueError(f"verifiers[{index}]: verifier content hash mismatch")
             copy_source(relative, source)
             declared = entry.get("files", [])
             if not isinstance(declared, list):
