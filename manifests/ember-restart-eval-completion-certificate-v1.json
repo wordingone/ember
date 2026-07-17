@@ -34,12 +34,12 @@
       "benchmark_id": "audiobench",
       "benchmark_version": "0fc7fef2709c00ac1e2eb2b372ec4c56362bb8c6",
       "split_sha256": "bd91917edb4ef4258624ea242fc4573364f18c8cae99423966002b6871cdcdf3",
-      "protocol_sha256": "3128577f5dcccc84b03dd7259d4411b31971e51162a73457fd2b534c14dc1e33",
-      "command_sha256": "a02993ea7293d0a5ba55e3000db2bbcbfd90c7d808f5a270906b9ffb15457000",
+      "protocol_sha256": "d4db367699931e610459368c9a8aedf16281795b138b09f64351d9ab4c3b7082",
+      "command_sha256": "ede6bff445309066803292abf25ba820b07ad4503132c8d390887d3f4def649f",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_audiobench_bound.py",
       "custody_path": "manifests/ember-restart-audiobench-custody-v1.json",
-      "custody_sha256": "7821df4b026d0141fc62a9fd44b34f6505eeb1d4c86d31484c1e53caba85d101"
+      "custody_sha256": "b2676eef7c4744a0e9b258b6d5bdf5cf211b02229b883f62748525fae8feb5e4"
     },
     {
       "family": "reasoning",
