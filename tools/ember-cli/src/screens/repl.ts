@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl.ts — interactive REPL screen.
 // Full-screen conversation loop: virtual transcript, spinner, prompt input,
 // and status bar. Drives the QueryEngine via dynamic import of session-init
@@ -72,6 +75,7 @@ import {
   startTelemetryWatch,
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
+import { telemetryMemoKey }              from "../services/telemetry-label.ts";
 import {
   getActivityFeedState,
   startActivityFeed,
@@ -348,26 +352,6 @@ export function toggleTaskPanel(current: boolean): boolean {
 // Internal: telemetry memo key (mirrors status-bar formatTelemetryLabel)
 // Prevents unnecessary re-renders when telemetry hasn't changed meaningfully.
 // ---------------------------------------------------------------------------
-
-function _telemetryMemoKey(state: TelemetryState): string | null {
-  const { lastGovernor, activeRun } = state;
-  if (!lastGovernor && !activeRun) return null;
-  const parts: string[] = [];
-  if (lastGovernor) {
-    parts.push(
-      `VRAM ${lastGovernor.vramUsedGib.toFixed(1)}/${lastGovernor.vramTotalGib.toFixed(1)}`,
-    );
-  }
-  if (activeRun) {
-    const stepStr = activeRun.totalSteps != null
-      ? `${activeRun.step}/${activeRun.totalSteps}`
-      : String(activeRun.step);
-    let runPart = `train r=${activeRun.runId} step ${stepStr}`;
-    if (activeRun.loss != null) runPart += ` loss ${activeRun.loss.toFixed(2)}`;
-    parts.push(runPart);
-  }
-  return `⚡ ${parts.join(" · ")}`;
-}
 
 // ---------------------------------------------------------------------------
 // renderMsgDispatch — routes a SessionMessage to the correct renderer
@@ -685,7 +669,7 @@ export function ReplScreen({
   useInterval(() => {
     const next = getState();
     setTelemetry((prev) =>
-      _telemetryMemoKey(prev) === _telemetryMemoKey(next) ? prev : { ...next },
+      telemetryMemoKey(prev) === telemetryMemoKey(next) ? prev : { ...next },
     );
   }, 500);
 
