@@ -18,9 +18,12 @@ def _sha256(data):
 def _registry_is_pinned_bytes(registry_bytes):
     try:
         authority = json.loads(EXECUTION_AUTHORITIES.read_bytes().decode("utf-8"))
-        expected = {entry.get("trusted_verifier_registry_sha256") for entry in authority.get("authorities", []) if isinstance(entry, dict)}
+        authorities = authority.get("authorities") if isinstance(authority, dict) else None
+        if not isinstance(authorities, list):
+            return False
+        expected = {entry.get("trusted_verifier_registry_sha256") for entry in authorities if isinstance(entry, dict) and isinstance(entry.get("trusted_verifier_registry_sha256"), str)}
         return _sha256(registry_bytes) in expected
-    except (OSError, UnicodeError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, AttributeError):
         return False
 
 
