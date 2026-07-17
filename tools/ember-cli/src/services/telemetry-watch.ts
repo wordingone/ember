@@ -12,6 +12,7 @@
 // The watcher is steerable: consumers call startTelemetryWatch() and hold the
 // returned handle.stop() to tear it down cleanly.
 
+import { createHash } from "node:crypto";
 import { readFile, stat } from "fs/promises";
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,7 @@ export interface TelemetryEvent {
 
 /** VRAM / governor snapshot extracted from governor-kind events. */
 export interface GovernorSnapshot {
+  runId?: string;
   vramUsedGib: number;
   vramTotalGib: number;
   fractionApplied: number;
@@ -95,11 +97,19 @@ let _state: TelemetryState = { recentEvents: [] };
 let _byteOffset = 0;
 let _lineBuffer = "";
 let _fileIdentity: string | undefined;
+let _prefixDigest: string | undefined;
 let _intervalHandle: ReturnType<typeof setInterval> | null = null;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+function validVram(free: unknown, total: unknown): { free: number; total: number } | undefined {
+  if (typeof free !== "number" || !Number.isFinite(free)) return undefined;
+  if (typeof total !== "number" || !Number.isFinite(total)) return undefined;
+  if (free < 0 || total <= 0 || free > total) return undefined;
+  return { free, total };
+}
 
 function pushEvent(event: TelemetryEvent): void {
   _state.recentEvents.push(event);
@@ -120,8 +130,8 @@ function processLine(line: string, clock: () => number): void {
 
   const ev = parsed as Record<string, unknown>;
 
-  const ts =
-    typeof ev["ts"] === "string" ? ev["ts"] : new Date(clock()).toISOString();
+  const ts = typeof ev["ts"] === "string" ? ev["ts"] : undefined;
+  if (!ts || !Number.isFinite(Date.parse(ts))) return;
   const kind = typeof ev["kind"] === "string" ? ev["kind"] : "unknown";
   const source = typeof ev["source"] === "string" ? ev["source"] : "";
   const payload =
@@ -133,19 +143,21 @@ function processLine(line: string, clock: () => number): void {
   pushEvent(event);
 
   if (kind === "governor") {
-    const free =
-      typeof payload["free_gib"] === "number" ? payload["free_gib"] : 0;
-    const total =
-      typeof payload["total_gib"] === "number" ? payload["total_gib"] : 0;
-    const fraction =
-      typeof payload["vram_fraction_applied"] === "number"
-        ? payload["vram_fraction_applied"]
-        : 0;
-    _state.lastGovernor = {
-      vramUsedGib: total - free,
-      vramTotalGib: total,
-      fractionApplied: fraction,
-    };
+    const free = payload["free_gib"];
+    const total = payload["total_gib"];
+    const fraction = typeof payload["vram_fraction_applied"] === "number" && Number.isFinite(payload["vram_fraction_applied"])
+      ? payload["vram_fraction_applied"]
+      : 0;
+    const runId = typeof payload["run_id"] === "string" && payload["run_id"].length > 0 ? payload["run_id"] : undefined;
+    const vram = validVram(free, total);
+    if (vram) {
+      _state.lastGovernor = {
+        ...(runId ? { runId } : {}),
+        vramUsedGib: vram.total - vram.free,
+        vramTotalGib: vram.total,
+        fractionApplied: fraction,
+      };
+    }
   } else if (kind === "train_step") {
     const runId =
       typeof payload["run_id"] === "string" ? payload["run_id"] : "";
@@ -162,11 +174,14 @@ function processLine(line: string, clock: () => number): void {
     _state.activeRun = { runId, step, totalSteps, loss, stepMs, lastTs: ts };
     const free = typeof payload["free_gib"] === "number" ? payload["free_gib"] : undefined;
     const total = typeof payload["total_gib"] === "number" ? payload["total_gib"] : undefined;
-    if (free != null && total != null) {
+    const vram = validVram(free, total);
+    if (vram) {
+      const governorRunId = typeof payload["run_id"] === "string" && payload["run_id"].length > 0 ? payload["run_id"] : undefined;
       _state.lastGovernor = {
-        vramUsedGib: total - free,
-        vramTotalGib: total,
-        fractionApplied: typeof payload["vram_fraction_applied"] === "number"
+        ...(governorRunId ? { runId: governorRunId } : {}),
+        vramUsedGib: vram.total - vram.free,
+        vramTotalGib: vram.total,
+        fractionApplied: typeof payload["vram_fraction_applied"] === "number" && Number.isFinite(payload["vram_fraction_applied"])
           ? payload["vram_fraction_applied"]
           : 0,
       };
@@ -209,10 +224,15 @@ function resetForNewChannelFile(): void {
   _state = { recentEvents: [], channelStatus: "ONLINE" };
   _byteOffset = 0;
   _lineBuffer = "";
+  _prefixDigest = undefined;
 }
 
 function fileIdentity(info: { dev: number; ino: number; birthtimeMs: number }): string {
   return `${info.dev}:${info.ino}:${info.birthtimeMs}`;
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 async function pollOnce(path: string, clock: () => number): Promise<void> {
@@ -230,16 +250,20 @@ async function pollOnce(path: string, clock: () => number): Promise<void> {
 
   const rotated = _fileIdentity !== undefined && identity !== _fileIdentity;
   const truncated = buf.length < _byteOffset;
-  if (rotated || truncated) resetForNewChannelFile();
+  const rewritten = _byteOffset > 0 && _prefixDigest !== undefined &&
+    buf.length >= _byteOffset && sha256(buf.subarray(0, _byteOffset)) !== _prefixDigest;
+  if (rotated || truncated || rewritten) resetForNewChannelFile();
   _fileIdentity = identity;
   _state = { ..._state, channelStatus: "ONLINE" };
 
   if (buf.length === 0) {
+    _prefixDigest = sha256(buf);
     checkActiveRunExpiry(clock);
     return;
   }
 
   if (buf.length <= _byteOffset) {
+    _prefixDigest = sha256(buf.subarray(0, _byteOffset));
     checkActiveRunExpiry(clock);
     return;
   }
@@ -259,6 +283,7 @@ async function pollOnce(path: string, clock: () => number): Promise<void> {
     if (trimmed) processLine(trimmed, clock);
   }
 
+  _prefixDigest = sha256(buf.subarray(0, _byteOffset));
   checkActiveRunExpiry(clock);
 }
 
@@ -308,6 +333,7 @@ export function startTelemetryWatch(
   _byteOffset = 0;
   _lineBuffer = "";
   _fileIdentity = undefined;
+  _prefixDigest = undefined;
 
   _intervalHandle = setInterval(() => {
     pollOnce(path, clock);
