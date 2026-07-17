@@ -1,4 +1,7 @@
 // activity-flood-render-integrity.test.ts — issue #561 AC-1 (the flood + resize acceptance test,
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // promoted from a throwaway diagnostic into a permanent regression test). Reproduces the
 // operator's live complaint verbatim: a flood of activity events (receipt-landing lines from a
 // fixture-path watcher) pushed the input box and status line into the scrollback, and a corrupted
@@ -76,6 +79,7 @@ function buildScreen(rows: number, messages: SessionMessage[]): React.ReactEleme
       permissionMode: { mode: "bypass", cycle: () => {} },
       interrupt: { interrupt: () => {} },
       taskPanel: { visible: false, toggle: () => {}, tasks: [] },
+      telemetry: { recentEvents: [] },
       modelMetrics: { contextTokens: 0, maxContextTokens: 32000, vramUsedGb: 19.2, vramTotalGb: 24.0, tokensPerSec: 0 },
     }),
   );

@@ -1452,6 +1452,7 @@ export function ReplScreen({
       permissionMode: permModeState,
       interrupt:      interruptHandler,
       taskPanel:      taskPanelState,
+      telemetry,
       modelMetrics:   modelMetrics ?? undefined,
       effort:         retryStatus,
       degraded:       degradedBanner,
