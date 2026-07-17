@@ -8,6 +8,15 @@
   "split_path": "clean/test/0000.parquet",
   "capability": "audio",
   "result": "PREFLIGHT_ONLY",
+  "references_sha256": "7113aa4c3cf963fb54697145719a7725f984c8836d1c494a554cbb9f1a017df0",
+  "split_sha256": "7113aa4c3cf963fb54697145719a7725f984c8836d1c494a554cbb9f1a017df0",
+  "license_sha256": "549fb1bc160952bec75d51d188632d80ac10ceec8519588fa85687565a7c6af0",
+  "protocol_sha256": "7a95fb6b01eacd341e5b2420be8f819e13e56dd89ef07807b4997b6f335bee40",
+  "scoring_adapter": {
+    "path": "scripts/ember_restart_eval_audio_wer.py",
+    "sha256": "3635d536d64cc48c9c51a0913745aa4cf5abd62f397e52e52e5f8b5e1e31d63c",
+    "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+  },
   "prohibited_claims": [
     "checkpoint_score",
     "capability_admission",

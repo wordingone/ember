@@ -6,6 +6,13 @@
   "benchmark_id": "librispeech-clean-test",
   "upstream_url": "https://huggingface.co/datasets/openslr/librispeech_asr",
   "license": "CC-BY-4.0",
+  "license_sha256": "549fb1bc160952bec75d51d188632d80ac10ceec8519588fa85687565a7c6af0",
+  "protocol_sha256": "7a95fb6b01eacd341e5b2420be8f819e13e56dd89ef07807b4997b6f335bee40",
+  "runtime_audit": {
+    "path": "scripts/ember_restart_eval_librispeech_runtime_audit.py",
+    "sha256": "43977607930cfcd3b736e12c36fc79799692d04e7db75705e6e1bdefee979f4e",
+    "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+  },
   "target_execution_permitted": false,
   "target_training_access": "FORBIDDEN",
   "materialization": {

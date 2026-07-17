@@ -8,6 +8,10 @@
     "split_path":  "data/test-00000-of-00001.parquet",
     "capability":  "reasoning",
     "result":  "PREFLIGHT_ONLY",
+    "references_sha256":  "e572fd5579bd1768b1985f47234f8bbe29247aca200a778b635bffc637714a41",
+    "split_sha256":  "e572fd5579bd1768b1985f47234f8bbe29247aca200a778b635bffc637714a41",
+    "license_sha256":  "cfe6e26e7e936a447a12f7eee50f2bffb0355c3b97459496d8c7296f65c5b353",
+    "protocol_sha256":  "080c9827674719cf4a0c5731866109a9ecb0db81f70f12b54523a3ef740f50fc",
     "prohibited_claims":  [
                               "checkpoint_score",
                               "capability_admission",
