@@ -1,71 +1,140 @@
 {
-  "schema_version": "ember-branch-deletion-proposal-v1",
-  "generated_at": "2026-07-17T17:04:44Z",
-  "public_master_git_oid": "f919b116066106fc91a7d86feff39eecc70e14d0",
-  "baseline": {
-    "open_issues": 242,
-    "remote_branches": 237,
-    "open_pull_requests": 14,
-    "root_markdown_files": 8
-  },
-  "result": "NO_SAFE_CANDIDATE_IN_SCREENED_SAMPLE",
-  "candidate_count": 0,
-  "screened_branch_count": 3,
-  "screening_scope": "Bounded first-pass near-miss screen; zero deletion proposals are authorized from this sample. Remaining refs require a later exhaustive owner-reviewed census.",
-  "screened_examples": [
-    {
-      "branch": "feat/576-tailpoll-cap-instrumentation",
-      "head_oid": "ec127731c7d5262fb196cc845e0946fd28a26811",
-      "merged_pr": 578,
-      "merged_at": "2026-07-09T17:23:06Z",
-      "reachability": {"status": "diverged", "ahead": 1, "behind": 538},
-      "disposition": "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
-    },
-    {
-      "branch": "docs/acceptance-250-goal-fix-verified",
-      "head_oid": "d3f720437a134de6cae06b8814ddf3b8701b2d94",
-      "merged_pr": 284,
-      "merged_at": "2026-07-06T20:38:46Z",
-      "reachability": {"status": "diverged", "ahead": 1, "behind": 699},
-      "disposition": "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
-    },
-    {
-      "branch": "chore/custody-land-8",
-      "head_oid": "e2bd7130056b6a5e79aa370828603b506e32e07a",
-      "merged_pr": 418,
-      "merged_at": "2026-07-08T06:47:15Z",
-      "reachability": {"status": "diverged", "ahead": 1, "behind": 627},
-      "disposition": "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
-    }
-  ],
-  "open_pr_head_refs_excluded": [
-    {"number": 754, "branch": "fix/748-parent-edges", "head_oid": "5f71cbdc1357dcf3541a39aac1bcac590d455494"},
-    {"number": 799, "branch": "fix/cbase-clause-d-dryrun", "head_oid": "e1b18eb22d090a9af8dd7191b8d7e7ad5f4945f2"},
-    {"number": 806, "branch": "fix/cockpit-ux-240-243-242", "head_oid": "981dfef8eb9b721510c42e64fe63ec53c8be04c2"},
-    {"number": 809, "branch": "feat/ember-01c-identity-contract", "head_oid": "f7eafdd9bdfb373e4c77d9c4f52180f58bd0c024"},
-    {"number": 810, "branch": "feat/ember-01b-custody-benchmark-census", "head_oid": "feda8c59878a9fc175488b9beec7c56cbb018448"},
-    {"number": 821, "branch": "feat/ember-restart-vera-spider-adapter", "head_oid": "81a49c2b7c0a36e2c61a06429304ea6d0a67fa21"},
-    {"number": 846, "branch": "feat/ember-restart-vera-benchmark-matrix", "head_oid": "af90cccd36cb0c7cd8d21f98d066c78380d0b24c"},
-    {"number": 862, "branch": "feat/ember-restart-vera-benchmark-matrix-queue6", "head_oid": "68e67fa68a6bf7529d1c2f2165f736a556c2f860"},
-    {"number": 878, "branch": "feat/ember-restart-vera-benchmark-matrix-next", "head_oid": "b0a412f1a2072d8711d55f5d8b6873bc8243d1cf"},
-    {"number": 911, "branch": "fix/chunked-specialist-verifier-replay", "head_oid": "b43b1b68bca82d75518929d0784acf397368775e"},
-    {"number": 913, "branch": "feat/ember-counter-publication-repair-successor", "head_oid": "69435720ed7468deef72386628874019bbcc1d21"},
-    {"number": 915, "branch": "feat/ember-restart-vera-benchmark-matrix-p1", "head_oid": "fbf28c8f1bcfdd5da31851f574dde88cf5bc4d73"},
-    {"number": 919, "branch": "fix/postrun-checkpoint-admission", "head_oid": "574d54fd114ff36ed1c923258cd47983e84fcb56"},
-    {"number": 920, "branch": "docs/continuous-custodian-c3", "head_oid": "0e83f071f73ae0c6b752d47cee8912b3e6fe812f"}
-  ],
-  "deletion_rules": [
-    "not default or protected",
-    "no open pull request targets or originates from the branch",
-    "exact head OID recorded",
-    "head is reachable from current public master",
-    "no release, checkpoint, receipt, deployment, or external reference requires the ref",
-    "short-lived branches and active proof-window refs remain retained unless owner evidence proves otherwise"
-  ],
-  "reconstruction_command_template": "git push origin <head_oid>:refs/heads/<branch>",
-  "authority": {
-    "maintainer_approval_required": "The maintainer approves a reachable, merged, unreferenced deletion manifest before remote mutation.",
-    "operator_authority": "The operator is required for never-merged unique work or an explicit exception; age alone never authorizes deletion."
-  },
-  "remote_mutation": "NONE"
+    "schema_version":  "ember-branch-deletion-proposal-v1",
+    "generated_at":  "2026-07-17T17:04:44Z",
+    "public_master_git_oid":  "f919b116066106fc91a7d86feff39eecc70e14d0",
+    "baseline":  {
+                     "open_issues":  242,
+                     "remote_branches":  237,
+                     "open_pull_requests":  14,
+                     "root_markdown_files":  8
+                 },
+    "result":  "NO_SAFE_CANDIDATE_IN_SCREENED_SAMPLE",
+    "candidate_count":  0,
+    "screened_branch_count":  3,
+    "screening_scope":  "Bounded first-pass near-miss screen; zero deletion proposals are authorized from this sample. Remaining refs require a later exhaustive owner-reviewed census.",
+    "screened_examples":  [
+                              {
+                                  "branch":  "feat/576-tailpoll-cap-instrumentation",
+                                  "head_oid":  "ec127731c7d5262fb196cc845e0946fd28a26811",
+                                  "merged_pr":  578,
+                                  "merged_at":  "2026-07-09T17:23:06Z",
+                                  "reachability":  {
+                                                       "status":  "diverged",
+                                                       "ahead":  1,
+                                                       "behind":  538
+                                                   },
+                                  "disposition":  "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
+                              },
+                              {
+                                  "branch":  "docs/acceptance-250-goal-fix-verified",
+                                  "head_oid":  "d3f720437a134de6cae06b8814ddf3b8701b2d94",
+                                  "merged_pr":  284,
+                                  "merged_at":  "2026-07-06T20:38:46Z",
+                                  "reachability":  {
+                                                       "status":  "diverged",
+                                                       "ahead":  1,
+                                                       "behind":  699
+                                                   },
+                                  "disposition":  "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
+                              },
+                              {
+                                  "branch":  "chore/custody-land-8",
+                                  "head_oid":  "e2bd7130056b6a5e79aa370828603b506e32e07a",
+                                  "merged_pr":  418,
+                                  "merged_at":  "2026-07-08T06:47:15Z",
+                                  "reachability":  {
+                                                       "status":  "diverged",
+                                                       "ahead":  1,
+                                                       "behind":  627
+                                                   },
+                                  "disposition":  "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
+                              }
+                          ],
+    "open_pr_head_refs_excluded":  [
+                                       {
+                                           "number":  754,
+                                           "branch":  "fix/748-parent-edges",
+                                           "head_oid":  "5f71cbdc1357dcf3541a39aac1bcac590d455494"
+                                       },
+                                       {
+                                           "number":  799,
+                                           "branch":  "fix/cbase-clause-d-dryrun",
+                                           "head_oid":  "e1b18eb22d090a9af8dd7191b8d7e7ad5f4945f2"
+                                       },
+                                       {
+                                           "number":  806,
+                                           "branch":  "fix/cockpit-ux-240-243-242",
+                                           "head_oid":  "981dfef8eb9b721510c42e64fe63ec53c8be04c2"
+                                       },
+                                       {
+                                           "number":  809,
+                                           "branch":  "feat/ember-01c-identity-contract",
+                                           "head_oid":  "f7eafdd9bdfb373e4c77d9c4f52180f58bd0c024"
+                                       },
+                                       {
+                                           "number":  810,
+                                           "branch":  "feat/ember-01b-custody-benchmark-census",
+                                           "head_oid":  "feda8c59878a9fc175488b9beec7c56cbb018448"
+                                       },
+                                       {
+                                           "number":  821,
+                                           "branch":  "feat/ember-restart-vera-spider-adapter",
+                                           "head_oid":  "81a49c2b7c0a36e2c61a06429304ea6d0a67fa21"
+                                       },
+                                       {
+                                           "number":  846,
+                                           "branch":  "feat/ember-restart-vera-benchmark-matrix",
+                                           "head_oid":  "af90cccd36cb0c7cd8d21f98d066c78380d0b24c"
+                                       },
+                                       {
+                                           "number":  862,
+                                           "branch":  "feat/ember-restart-vera-benchmark-matrix-queue6",
+                                           "head_oid":  "68e67fa68a6bf7529d1c2f2165f736a556c2f860"
+                                       },
+                                       {
+                                           "number":  878,
+                                           "branch":  "feat/ember-restart-vera-benchmark-matrix-next",
+                                           "head_oid":  "b0a412f1a2072d8711d55f5d8b6873bc8243d1cf"
+                                       },
+                                       {
+                                           "number":  911,
+                                           "branch":  "fix/chunked-specialist-verifier-replay",
+                                           "head_oid":  "b43b1b68bca82d75518929d0784acf397368775e"
+                                       },
+                                       {
+                                           "number":  913,
+                                           "branch":  "feat/ember-counter-publication-repair-successor",
+                                           "head_oid":  "69435720ed7468deef72386628874019bbcc1d21"
+                                       },
+                                       {
+                                           "number":  915,
+                                           "branch":  "feat/ember-restart-vera-benchmark-matrix-p1",
+                                           "head_oid":  "fbf28c8f1bcfdd5da31851f574dde88cf5bc4d73"
+                                       },
+                                       {
+                                           "number":  919,
+                                           "branch":  "fix/postrun-checkpoint-admission",
+                                           "head_oid":  "574d54fd114ff36ed1c923258cd47983e84fcb56"
+                                       },
+                                       {
+                                           "number":  920,
+                                           "branch":  "docs/continuous-custodian-c3",
+                                           "head_oid":  "SELF_REFERENTIAL_UNBOUND",
+                                           "snapshot_head_oid":  "0e83f071f73ae0c6b752d47cee8912b3e6fe812f"
+                                       }
+                                   ],
+    "deletion_rules":  [
+                           "not default or protected",
+                           "no open pull request targets or originates from the branch",
+                           "exact head OID recorded",
+                           "head is reachable from current public master",
+                           "no release, checkpoint, receipt, deployment, or external reference requires the ref",
+                           "short-lived branches and active proof-window refs remain retained unless owner evidence proves otherwise"
+                       ],
+    "reconstruction_command_template":  "git push origin \u003chead_oid\u003e:refs/heads/\u003cbranch\u003e",
+    "authority":  {
+                      "maintainer_approval_required":  "The maintainer approves a reachable, merged, unreferenced deletion manifest before remote mutation.",
+                      "operator_authority":  "The operator is required for never-merged unique work or an explicit exception; age alone never authorizes deletion."
+                  },
+    "remote_mutation":  "NONE"
 }
