@@ -82,7 +82,7 @@ class Step2RealizationRegistryTests(unittest.TestCase):
             admitted = validate_step2_realization_registry_bundle(registry, manifest_path, current_config)
             self.assertEqual(admitted["subject_checkpoint_sha256"], subject)
             self.assertNotEqual(admitted["historical_model_config_sha256"], admitted["current_model_config_sha256"])
-            self.assertEqual(admitted["semantic_model_contract_sha256"], "fe059942555f4aeb7207a281eebf0654587c1583333a772dba465152e1bf94c8")
+            self.assertEqual(admitted["semantic_model_contract_sha256"], "600d48aff743bd3521cb05a7ce81fbbc23e6f5f7ad28af6781704ea6eb3b3155")
             registry_payload = json.loads(registry.read_bytes())
             registry_payload["verifiers"][0]["unreviewed_authority"] = True
             registry.write_text(json.dumps(registry_payload, sort_keys=True), encoding="utf-8")

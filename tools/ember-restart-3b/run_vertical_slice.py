@@ -837,11 +837,12 @@ def load_optimizer_contract(config_path: Path) -> dict[str, object]:
         contract = json.loads(config_path.read_text(encoding="utf-8"))["training"]["optimizer"]
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
         raise ValueError("production contract must declare a structured optimizer") from error
-    if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"}:
+    if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "placement", "hyperparameters", "state_format"}:
         raise ValueError("production optimizer contract has an invalid shape")
     expected = {
         "name": "device_resident_8bit_adamw",
         "implementation": "bitsandbytes.optim.AdamW8bit",
+        "placement": "cuda_non_paged",
         "state_format": "bitsandbytes-device-resident-8bit-adamw-state-dict-v1",
     }
     if any(contract.get(field) != value for field, value in expected.items()):
@@ -925,8 +926,8 @@ def _execute_realization_counter(
 def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dict[str, object]) -> torch.optim.Optimizer:
     """Build exactly the structured device-resident AdamW8bit declared by config."""
 
-    if optimizer_contract.get("implementation") != "bitsandbytes.optim.AdamW8bit":
-        raise ValueError("production optimizer implementation must be device-resident AdamW8bit")
+    if optimizer_contract.get("implementation") != "bitsandbytes.optim.AdamW8bit" or optimizer_contract.get("placement") != "cuda_non_paged":
+        raise ValueError("production optimizer must declare cuda_non_paged device-resident AdamW8bit")
     hyperparameters = optimizer_contract.get("hyperparameters")
     if not isinstance(hyperparameters, dict):
         raise ValueError("production optimizer contract lacks hyperparameters")

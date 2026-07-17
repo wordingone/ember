@@ -284,6 +284,7 @@ class CheckpointArtifactTests(unittest.TestCase):
         contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         realization = _optimizer_realization(optimizer, contract)
         self.assertEqual(realization["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(realization["placement"], "cuda_non_paged")
         self.assertEqual(realization["state_format"], "bitsandbytes-device-resident-8bit-adamw-state-dict-v1")
 
     def test_device_resident_contract_rejects_adamw8bit_forced_into_paged_mode(self) -> None:

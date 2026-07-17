@@ -210,6 +210,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(optimizer, "optimizer")
         self.assertEqual(contract["name"], "device_resident_8bit_adamw")
         self.assertEqual(contract["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(contract["placement"], "cuda_non_paged")
         self.assertEqual(contract["state_format"], "bitsandbytes-device-resident-8bit-adamw-state-dict-v1")
         self.assertEqual(contract["hyperparameters"]["learning_rate"], 1e-5)
         self.assertEqual(calls["parameters"], ["parameter"])
@@ -226,6 +227,12 @@ class RunnerPreflightTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "device-resident AdamW8bit"):
             run_vertical_slice.build_production_optimizer(SimpleNamespace(parameters=lambda: []), optimizer_contract=previous)
+
+    def test_production_optimizer_rejects_declared_placement_drift(self) -> None:
+        contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        contract["placement"] = "host_paged"
+        with self.assertRaisesRegex(ValueError, "cuda_non_paged"):
+            run_vertical_slice.build_production_optimizer(SimpleNamespace(parameters=lambda: []), optimizer_contract=contract)
     def test_contract_retention_limit_is_used_as_the_runner_limit(self) -> None:
         contract = ROOT / "configs" / "ember-restart-3b.json"
         self.assertTrue(hasattr(run_vertical_slice, "checkpoint_retention_budget_bytes"))

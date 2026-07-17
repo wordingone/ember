@@ -110,6 +110,7 @@
                      "optimizer":  {
                                        "name":  "device_resident_8bit_adamw",
                                        "implementation":  "bitsandbytes.optim.AdamW8bit",
+                                       "placement":  "cuda_non_paged",
                                        "hyperparameters":  {
                                                                    "learning_rate":  1e-05,
                                                                    "weight_decay":  0.01,
