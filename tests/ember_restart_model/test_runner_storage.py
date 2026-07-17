@@ -706,9 +706,15 @@ class RunnerStorageTests(unittest.TestCase):
                 first = run_vertical_slice._custody_reconciliation(parent)
                 second = run_vertical_slice._custody_reconciliation(parent)
                 self.assertEqual(second, first)
-                prepared = [event for event in ledger_events(parent) if event.get("event") == "PREPARED"]
+                events = ledger_events(parent)
+                prepared = [event for event in events if event.get("event") == "PREPARED"]
                 pointers = [event["pointer"] for event in prepared]
                 self.assertEqual(len(pointers), len(set(pointers)))
+                victim_pointer = victim.relative_to(parent).as_posix()
+                self.assertEqual(
+                    [event["event"] for event in events if event.get("pointer") == victim_pointer],
+                    ["PREPARED", "COMMITTED"],
+                )
                 self.assertFalse(victim.exists())
 
 
@@ -716,7 +722,10 @@ class RunnerStorageTests(unittest.TestCase):
         """A corrupt duplicate PREPARED row cannot authorize any deletion."""
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
-            evidence = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "OLD"})
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 2):
+                evidence = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "OLD"})
+                replacement = run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+            os.utime(evidence, ns=(replacement.stat().st_mtime_ns - 1, replacement.stat().st_mtime_ns - 1))
             payload = evidence.read_bytes()
             row = {
                 "schema_version": "ember-checkpoint-custody-deletion-v2",
@@ -728,8 +737,13 @@ class RunnerStorageTests(unittest.TestCase):
             }
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
             ledger.write_text("\n".join(json.dumps(row, sort_keys=True, separators=(",", ":")) for _ in range(2)) + "\n", encoding="utf-8")
+            ledger_before = ledger.read_bytes()
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 2):
+                with self.assertRaisesRegex(RuntimeError, "duplicate|transition"):
+                    run_vertical_slice._write_bounded_quarantine_evidence(parent, "third", {"result": "THIRD"})
+            self.assertEqual(evidence.read_bytes(), payload)
+            self.assertEqual(ledger.read_bytes(), ledger_before)
             with self.assertRaisesRegex(RuntimeError, "duplicate|transition"):
                 run_vertical_slice._custody_reconciliation(parent)
-            self.assertEqual(evidence.read_bytes(), payload)
 if __name__ == "__main__":
     unittest.main()

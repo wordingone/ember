@@ -575,9 +575,50 @@ def _writer_is_active(root: Path) -> bool:
     return _pid_is_alive(lease.get("pid"))
 
 
+def _recover_missing_prepared_evidence(parent: Path) -> None:
+    """Finish only verified PREPARED deletions whose direct evidence bytes are absent."""
+
+    parent = parent.resolve()
+    ledger = parent / _CUSTODY_LEDGER
+    if not ledger.exists():
+        return
+    _custody_reconciliation(parent)
+    try:
+        events = [json.loads(line) for line in ledger.read_bytes().splitlines()]
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("custody deletion ledger could not be read for recovery") from error
+    terminal: dict[str, dict[str, object]] = {}
+    for event in events:
+        if event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA:
+            continue
+        pointer = _canonical_custody_deletion_pointer(event.get("pointer"))
+        terminal[pointer] = event
+    for pointer, event in terminal.items():
+        if event.get("event") != "PREPARED":
+            continue
+        target = _custody_deletion_path(parent, pointer)
+        try:
+            target.stat()
+        except FileNotFoundError:
+            committed = {
+                "schema_version": _CUSTODY_LEDGER_SCHEMA,
+                "event": "COMMITTED",
+                "pointer": pointer,
+                "bytes": event["bytes"],
+                "sha256": event["sha256"],
+                "reason": event["reason"],
+            }
+            with ledger.open("ab") as handle:
+                handle.write((json.dumps(committed, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError as error:
+            raise RuntimeError("prepared evidence could not be inspected for recovery") from error
+
 def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:
     evidence_dir = parent / ".checkpoint-quarantine"
     evidence_dir.mkdir(parents=True, exist_ok=True)
+    _recover_missing_prepared_evidence(parent)
     payload_bytes = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     digest = hashlib.sha256(payload_bytes).hexdigest()
     evidence_stem = _portable_evidence_stem(name)
