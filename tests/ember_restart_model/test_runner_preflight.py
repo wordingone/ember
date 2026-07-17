@@ -614,9 +614,10 @@ class RunnerPreflightTests(unittest.TestCase):
                 )
             self.assertTrue(previous.is_dir())
             self.assertFalse(candidate.exists())
-            quarantines = list(parent.glob(".counter-failed-checkpoint-candidate-*"))
-            self.assertEqual(len(quarantines), 1)
-            self.assertTrue(quarantines[0].joinpath("counter-failure.json").is_file())
+            evidence = parent / ".checkpoint-quarantine" / "counter-failed-checkpoint-candidate.json"
+            self.assertTrue(evidence.is_file())
+            self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["result"], "COUNTER_FAILED")
+            self.assertEqual(list(parent.glob(".counter-failed-checkpoint-candidate-*")), [])
 
     def test_preexisting_target_is_refused_before_writer_and_bytes_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -659,10 +660,11 @@ class RunnerPreflightTests(unittest.TestCase):
                 )
             self.assertTrue(previous.is_dir())
             self.assertFalse(candidate.exists())
-            failures = list(parent.glob(".counter-failed-checkpoint-partial-*"))
-            self.assertEqual(len(failures), 1)
-            self.assertTrue(failures[0].joinpath("counter-failure.json").is_file())
-            self.assertFalse(failures[0].joinpath("partial-shard.pt").exists())
+            evidence = parent / ".checkpoint-quarantine" / "counter-failed-checkpoint-partial.json"
+            self.assertTrue(evidence.is_file())
+            self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["result"], "COUNTER_FAILED")
+            self.assertEqual(list(parent.glob(".counter-failed-checkpoint-partial-*")), [])
+            self.assertFalse(candidate.exists())
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
