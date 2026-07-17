@@ -1,3 +1,4 @@
+import hashlib
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
@@ -39,6 +40,29 @@ def test_rejects_public_certificate_command_hash_substitution():
     source = root / "manifests" / "ember-restart-eval-completion-certificate-v1.json"
     value = json.loads(source.read_text(encoding="utf-8"))
     value["benchmarks"][0]["command_sha256"] = "0" * 64
+    with tempfile.TemporaryDirectory() as temporary:
+        certificate = Path(temporary) / source.name
+        output = Path(temporary) / "validated"
+        certificate.write_text(json.dumps(value), encoding="utf-8")
+        result = subprocess.run([sys.executable, str(SCRIPT), "validate", str(certificate), "--output", str(output), "--root", str(root)], capture_output=True, text=True)
+    assert result.returncode != 0 and not output.exists()
+
+
+def test_public_certificate_binds_custody_manifest_bytes():
+    root = Path(__file__).resolve().parents[1]
+    value = json.loads((root / "manifests" / "ember-restart-eval-completion-certificate-v1.json").read_text(encoding="utf-8"))
+    assert all(row.get("custody_path") and row.get("custody_sha256") for row in value["benchmarks"])
+    for row in value["benchmarks"]:
+        path = root / row["custody_path"]
+        assert path.is_file()
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == row["custody_sha256"]
+
+
+def test_rejects_public_certificate_custody_hash_substitution():
+    root = Path(__file__).resolve().parents[1]
+    source = root / "manifests" / "ember-restart-eval-completion-certificate-v1.json"
+    value = json.loads(source.read_text(encoding="utf-8"))
+    value["benchmarks"][0]["custody_sha256"] = "0" * 64
     with tempfile.TemporaryDirectory() as temporary:
         certificate = Path(temporary) / source.name
         output = Path(temporary) / "validated"

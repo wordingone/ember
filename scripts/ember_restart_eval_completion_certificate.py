@@ -15,7 +15,7 @@ SHA = re.compile(r"[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 FAMILIES = frozenset(("text", "image", "audio", "reasoning", "code", "mathematics", "sql", "files", "browser_ui", "terminal", "structured_tools"))
 BENCHMARK_FIELDS = frozenset(("family", "benchmark_id", "benchmark_version", "split_sha256", "protocol_sha256", "command_sha256", "result"))
-OPTIONAL_BENCHMARK_FIELDS = frozenset(("command_path",))
+OPTIONAL_BENCHMARK_FIELDS = frozenset(("command_path", "custody_path", "custody_sha256"))
 
 
 def _digest(path: Path) -> str:
@@ -43,6 +43,13 @@ def _validate_benchmark(row: object, root: Path) -> None:
         path = root / command_path
         if not path.is_file() or _digest(path) != row["command_sha256"]:
             raise ValueError("certificate command hash does not match command_path")
+    if ("custody_path" in row) != ("custody_sha256" in row):
+        raise ValueError("custody_path and custody_sha256 must be supplied together")
+    if "custody_path" in row:
+        custody_path = _safe_relative(row["custody_path"])
+        path = root / custody_path
+        if not path.is_file() or _digest(path) != row["custody_sha256"]:
+            raise ValueError("certificate custody hash does not match custody_path")
 
 
 def _validate(value: object, certificate_bytes: bytes, root: Path) -> dict:
