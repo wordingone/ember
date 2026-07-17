@@ -4,6 +4,7 @@
 import copy
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -50,3 +51,31 @@ def test_frozen_custody_rejects_non_object_json():
         assert "frozen AudioBench custody" in str(exc)
     else:
         raise AssertionError("non-object custody must fail closed")
+
+def test_cli_fails_closed_when_frozen_custody_is_deleted(tmp_path):
+    """A scorer cannot fall back to an unpinned closed run when custody is absent."""
+    predictions = tmp_path / "predictions.json"
+    run = tmp_path / "run.json"
+    output = tmp_path / "score.json"
+    missing_custody = tmp_path / "deleted-custody.json"
+    predictions.write_text("{}", encoding="utf-8")
+    run.write_text("{}", encoding="utf-8")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--canonical-predictions",
+            str(predictions),
+            "--run-artifact",
+            str(run),
+            "--frozen-audiobench-manifest",
+            str(missing_custody),
+            "--score-output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert not output.exists()
