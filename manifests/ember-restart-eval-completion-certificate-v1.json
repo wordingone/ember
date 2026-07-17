@@ -117,13 +117,13 @@
       "family": "terminal",
       "benchmark_id": "terminal-bench",
       "benchmark_version": "2.0",
-      "split_sha256": "4995eb9978980f0ce0701bdc4ba30a1c02f8738876e04a301e4f23c9e38e8b1f",
-      "protocol_sha256": "0ae24775aba588817bd37da1e2d0ec85ebb8d6e0e5ff70addbc09c92f087bbac",
-      "command_sha256": "22cdc9ed2ecef10c7f16359cbd4c21ef12cc8170eca6663502ef3f49c70c0b7a",
+      "split_sha256": "408e9df6798394a0ae76a26f32e2f09e3308c2a452f41d6c99271f97f38c4cac",
+      "protocol_sha256": "4e80e1f56d57ad83b9e51509b06d40f62348218570642b35b9bd6d52be458160",
+      "command_sha256": "9324fc506109ec0a8eb2c282a99c3c9c79365a77cb263ca75fa989b9cc12de31",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_terminal_bench.py",
       "custody_path": "manifests/ember-restart-terminal-bench-custody-v1.json",
-      "custody_sha256": "4995eb9978980f0ce0701bdc4ba30a1c02f8738876e04a301e4f23c9e38e8b1f"
+      "custody_sha256": "408e9df6798394a0ae76a26f32e2f09e3308c2a452f41d6c99271f97f38c4cac"
     },
     {
       "family": "structured_tools",

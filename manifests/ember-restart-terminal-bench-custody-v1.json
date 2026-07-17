@@ -5,7 +5,7 @@
   "asset_disposition": "PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK",
   "scoring_adapter": {
     "path": "scripts/ember_restart_eval_terminal_bench.py",
-    "sha256": "22cdc9ed2ecef10c7f16359cbd4c21ef12cc8170eca6663502ef3f49c70c0b7a",
+    "sha256": "9324fc506109ec0a8eb2c282a99c3c9c79365a77cb263ca75fa989b9cc12de31",
     "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"
   },
   "benchmark_id": "terminal-bench",
@@ -35,6 +35,6 @@
   "target_execution_permitted": false,
   "upstream_url": "https://github.com/harbor-framework/terminal-bench-2",
   "scoring_adapter_path": "scripts/ember_restart_eval_terminal_bench.py",
-  "protocol_sha256": "0ae24775aba588817bd37da1e2d0ec85ebb8d6e0e5ff70addbc09c92f087bbac",
+  "protocol_sha256": "4e80e1f56d57ad83b9e51509b06d40f62348218570642b35b9bd6d52be458160",
   "strict_protocol_required": true
 }
