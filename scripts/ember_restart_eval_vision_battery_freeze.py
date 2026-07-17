@@ -12,8 +12,8 @@ import tempfile
 from pathlib import Path
 
 SHA1 = re.compile(r"[0-9a-f]{40}")
-TARGET_CHECKPOINT = "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b"
-TARGET_CONFIG = "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
+BASELINE_CHECKPOINT = "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b"
+BASELINE_CONFIG = "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
 
 
 BATTERY = [
@@ -68,6 +68,17 @@ def digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def validate_postrun_candidate(candidate: object) -> None:
+    if not isinstance(candidate, dict):
+        raise ValueError("post-run candidate binding must be an object")
+    checkpoint = candidate.get("checkpoint_manifest_sha256")
+    config = candidate.get("model_config_sha256")
+    receipt = candidate.get("receipt_sha256")
+    if not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in (checkpoint, config, receipt)):
+        raise ValueError("post-run candidate binding requires content-addressed identities")
+    if checkpoint == BASELINE_CHECKPOINT or config == BASELINE_CONFIG:
+        raise ValueError("post-run candidate cannot reuse the pre-run candidate identity")
+
 def build_receipt(evaluator_commit: str) -> dict[str, object]:
     payload = {
         "goal_id": "EMBER-02",
@@ -77,8 +88,14 @@ def build_receipt(evaluator_commit: str) -> dict[str, object]:
         "receipt_status": "FROZEN_PRELAUNCH",
         "battery_id": "vision-v4-postrun",
         "evaluator_commit": evaluator_commit,
-        "checkpoint_manifest_sha256": TARGET_CHECKPOINT,
-        "model_config_sha256": TARGET_CONFIG,
+        "baseline_checkpoint_manifest_sha256": BASELINE_CHECKPOINT,
+        "baseline_model_config_sha256": BASELINE_CONFIG,
+        "postrun_binding": {
+            "status": "UNRESOLVED_AWAITING_EMITTED_CHECKPOINT",
+            "receipt_sha256": None,
+            "checkpoint_manifest_sha256": None,
+            "model_config_sha256": None,
+        },
         "mutation_policy": "FROZEN_NO_ADDITIONS_OR_RENAMES_AFTER_LAUNCH",
         "benchmarks": BATTERY,
         "runnability_blockers": BLOCKERS,
