@@ -6,6 +6,13 @@
     "benchmark_id":  "hellaswag",
     "upstream_url":  "https://huggingface.co/datasets/Rowan/hellaswag",
     "license":  "MIT",
+    "license_sha256":  "cfe6e26e7e936a447a12f7eee50f2bffb0355c3b97459496d8c7296f65c5b353",
+    "protocol_sha256":  "080c9827674719cf4a0c5731866109a9ecb0db81f70f12b54523a3ef740f50fc",
+    "runtime_audit":  {
+        "path":  "scripts/ember_restart_eval_hellaswag_runtime_audit.py",
+        "sha256":  "2ed994d59a11afefa9cb7477ee82aa4009a2d39d09cf886dbbb882545c606bc1",
+        "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "admission":  "NOT_EXECUTABLE_NO_FROZEN_LABELS",
     "target_execution_permitted":  false,
     "target_training_access":  "FORBIDDEN",

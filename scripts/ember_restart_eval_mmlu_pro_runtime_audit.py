@@ -124,6 +124,9 @@ def audit(
         or scorer_sha != custody.get("scoring_adapter_sha256")
     ):
         raise ValueError("MMLU-Pro scorer bytes do not match frozen custody")
+    expected_protocol = digest(f"mmlu-pro:{version}:{split_sha}:{custody.get('license_sha256')}:{scorer_sha}".encode("utf-8"))
+    if protocol.get("protocol_sha256") != expected_protocol:
+        raise ValueError("MMLU-Pro protocol is not derived from exact scorer/split/license custody")
     return {
         "schema_version": "ember-restart-mmlu-pro-runtime-audit-v1",
         "result": "PREFLIGHT_ONLY",

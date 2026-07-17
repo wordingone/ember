@@ -6,6 +6,13 @@
     "benchmark_id":  "arc-challenge",
     "upstream_url":  "https://huggingface.co/datasets/allenai/ai2_arc",
     "license":  "CC-BY-SA-4.0",
+    "license_sha256":  "4a293e352253d771604725c978adcea71ee6504e89ed40e1cb0024ecafa9b37",
+    "protocol_sha256":  "9075c68a868e936f5f785badf79a7891a91740e896362d072b4872e40726c626",
+    "runtime_audit":  {
+        "path":  "scripts/ember_restart_eval_arc_challenge_runtime_audit.py",
+        "sha256":  "3725ea6b84a7e915ffe9e986ee499c7075f909699bdef28e00911730ca1c5c1d",
+        "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "target_execution_permitted":  false,
     "target_training_access":  "FORBIDDEN",
     "inherited_template_compatibility":  "HASH_MISMATCH_SEPARATE_NONEXECUTABLE_CUSTODY",

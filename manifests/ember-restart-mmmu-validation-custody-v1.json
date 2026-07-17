@@ -21,6 +21,12 @@
         "eligible_id_set_sha256": "7a8800c96f0a6003b004d4bc3dfc089b8d6d5aa56a5f85e8c4719fbadd63ecc6"
     },
     "target_training_access": "FORBIDDEN",
+    "target_execution_permitted": false,
+    "runtime_audit": {
+        "path": "scripts/ember_restart_eval_mmmu_runtime_audit.py",
+        "sha256": "f8c4f6dd12b3e0855c282bd20219c30f524849095bffc2dfc33ea499050391b0",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "admission": "NOT_EXECUTABLE_UNTRAINED_SPECIALIST_NO_CHECKPOINT_BOUND_PREDICTIONS",
     "validation_parquet_materialization": {
         "upstream_revision": "f87afafe4afe71650b99ef5236d7b5bb3f6345c7",
