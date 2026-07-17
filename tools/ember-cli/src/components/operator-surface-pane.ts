@@ -125,20 +125,23 @@ function validTrainStep(event: TelemetryEvent, nowMs: number = Date.now()): Oper
   return { runId, step, totalSteps, loss, throughput, vramUsedGib, gpuUtilizationPct, ts: event.ts };
 }
 
-function selectedRunId(telemetry: TelemetryState, nowMs: number): string | undefined {
-  const activeId = telemetry.activeRun?.runId;
-  if (typeof activeId === "string" && activeId.length > 0) {
-    const hasValidatedActiveEvidence = telemetry.recentEvents.some((event) => {
-      const point = validTrainStep(event, nowMs);
-      return point?.runId === activeId;
-    });
-    if (hasValidatedActiveEvidence) return activeId;
+interface SelectedRunEvidence {
+  runId: string;
+  latestTs: number;
+}
+
+function selectedRunEvidence(telemetry: TelemetryState, nowMs: number): SelectedRunEvidence | undefined {
+  const latestByRun = new Map<string, number>();
+  for (const event of telemetry.recentEvents) {
+    const point = validTrainStep(event, nowMs);
+    if (!point) continue;
+    const timestamp = Date.parse(point.ts);
+    const previous = latestByRun.get(point.runId);
+    if (previous === undefined || timestamp > previous) latestByRun.set(point.runId, timestamp);
   }
-  for (let index = telemetry.recentEvents.length - 1; index >= 0; index -= 1) {
-    const point = validTrainStep(telemetry.recentEvents[index]!, nowMs);
-    if (point) return point.runId;
-  }
-  return undefined;
+  return [...latestByRun.entries()]
+    .sort(([leftId, leftTs], [rightId, rightTs]) => rightTs - leftTs || (leftId < rightId ? -1 : leftId > rightId ? 1 : 0))
+    .map(([runId, latestTs]) => ({ runId, latestTs }))[0];
 }
 
 const PLOT_GLYPHS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
@@ -240,7 +243,8 @@ function familyLines(title: string, samples: OperatorMetricPoint[], unbound: str
 /** Build bounded graphs only from valid, provenance-selected events belonging to one run. */
 export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth: number = 80, nowMs: number = Date.now()): OperatorSurfaceGraphs {
   const maxPoints = Math.max(2, Math.floor(plotWidth) - 8);
-  const runId = selectedRunId(telemetry, nowMs);
+  const selection = selectedRunEvidence(telemetry, nowMs);
+  const runId = selection?.runId;
   const points = runId
     ? telemetry.recentEvents
         .map((event) => validTrainStep(event, nowMs))
@@ -264,8 +268,9 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   const throughput = valueSamples(points, (point) => point.throughput);
   const modelGrowth = eventMetricSamples(telemetry, runId, "model_growth", "value", nowMs);
   const capability = eventMetricSamples(telemetry, runId, "capability_score", "score", nowMs);
+  const latestTrainTs = selection?.latestTs;
   const decorate = (lines: string[]): string[] =>
-    channelIsOffline(telemetry, runId) ? decorateHistory(lines, "OFFLINE/HISTORICAL") : lines;
+    channelIsOffline(telemetry, runId, latestTrainTs) ? decorateHistory(lines, "OFFLINE/HISTORICAL") : lines;
   const lossLines = decorate(loss);
   const resourceLines = decorate([
     "RESOURCE EFFICIENCY",
@@ -289,9 +294,13 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   };
 }
 
-function channelIsOffline(telemetry: TelemetryState, selectedRunId?: string): boolean {
+function channelIsOffline(telemetry: TelemetryState, selectedRunId?: string, latestTrainTs?: number): boolean {
   const extended = telemetry as TelemetryState & { channelStatus?: string };
-  return extended.channelStatus === "OFFLINE" || (selectedRunId !== undefined && telemetry.runStatus?.runId === selectedRunId && telemetry.runStatus.phase === "OFFLINE");
+  if (extended.channelStatus === "OFFLINE") return true;
+  if (selectedRunId === undefined || latestTrainTs === undefined) return false;
+  if (telemetry.runStatus?.runId !== selectedRunId || telemetry.runStatus.phase !== "OFFLINE") return false;
+  const statusTs = Date.parse(telemetry.runStatus.lastTs);
+  return Number.isFinite(statusTs) && statusTs >= latestTrainTs;
 }
 
 function decorateHistory(lines: string[], marker: "OFFLINE/HISTORICAL" | "STALE/HISTORICAL"): string[] {
@@ -301,8 +310,10 @@ function decorateHistory(lines: string[], marker: "OFFLINE/HISTORICAL" | "STALE/
 }
 /** Derive status only from the same validated train-step evidence used by graphs. */
 export function getOperatorRunStatus(telemetry: TelemetryState, nowMs: number = Date.now(), selectedRun?: string): OperatorRunStatus {
-  const runId = selectedRun ?? selectedRunId(telemetry, nowMs);
-  if (channelIsOffline(telemetry, runId)) return "OFFLINE";
+  const evidence = selectedRunEvidence(telemetry, nowMs);
+  const runId = selectedRun ?? evidence?.runId;
+  const latestTrainTs = evidence && runId === evidence.runId ? evidence.latestTs : undefined;
+  if (channelIsOffline(telemetry, runId, latestTrainTs)) return "OFFLINE";
   if (!runId) return "IDLE";
   const eventTimes = telemetry.recentEvents
     .map((event) => validTrainStep(event, nowMs))
@@ -312,6 +323,14 @@ export function getOperatorRunStatus(telemetry: TelemetryState, nowMs: number = 
   if (eventTimes.length === 0) return "IDLE";
   const latest = Math.max(...eventTimes);
   return nowMs - latest <= ACTIVE_RUN_TTL_MS ? "RUNNING" : "STALE";
+}
+function newestPointByTimestamp(points: OperatorSeriesPoint[]): OperatorSeriesPoint | undefined {
+  return points.reduce<OperatorSeriesPoint | undefined>((newest, point) => {
+    if (!newest) return point;
+    const pointTs = Date.parse(point.ts);
+    const newestTs = Date.parse(newest.ts);
+    return pointTs > newestTs || (pointTs === newestTs && point.step > newest.step) ? point : newest;
+  }, undefined);
 }
 export function buildOperatorSurfaceSnapshot({
   telemetry,
@@ -323,7 +342,7 @@ export function buildOperatorSurfaceSnapshot({
 }: OperatorSurfaceInput): OperatorSurfaceSnapshot {
   const rawGraphs = buildOperatorSurfaceGraphs(telemetry, plotWidth, nowMs);
   const status = getOperatorRunStatus(telemetry, nowMs, rawGraphs.runId);
-  const latestPoint = rawGraphs.points.length > 0 ? rawGraphs.points[rawGraphs.points.length - 1] : undefined;
+  const latestPoint = newestPointByTimestamp(rawGraphs.points);
   const metrics: string[] = [];
 
   if (latestPoint && status === "RUNNING") {
