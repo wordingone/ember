@@ -108,15 +108,16 @@
     "training":  {
                      "gradient_checkpointing":  true,
                      "optimizer":  {
-                                       "name":  "paged_8bit_adamw",
-                                       "implementation":  "bitsandbytes.optim.PagedAdamW8bit",
+                                       "name":  "device_resident_8bit_adamw",
+                                       "implementation":  "bitsandbytes.optim.AdamW8bit",
+                                       "placement":  "cuda_non_paged",
                                        "hyperparameters":  {
                                                                    "learning_rate":  1e-05,
                                                                    "weight_decay":  0.01,
                                                                    "percentile_clipping":  100,
                                                                    "block_wise":  true
                                                                },
-                                       "state_format":  "bitsandbytes-paged-8bit-adamw-state-dict-v1"
+                                       "state_format":  "bitsandbytes-device-resident-8bit-adamw-state-dict-v1"
                                    },
                      "expert_activation":  "exactly_one_declared_expert_per_episode_or_batch",
                      "gpu":  {

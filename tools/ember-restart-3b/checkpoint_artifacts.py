@@ -226,7 +226,7 @@ def _default_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
 
 def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
     required = {"name", "implementation", "hyperparameters", "state_format"}
-    if not isinstance(contract, Mapping) or set(contract) != required:
+    if not isinstance(contract, Mapping) or set(contract) not in (required, required | {"placement"}):
         raise ValueError("checkpoint optimizer contract has an invalid shape")
     if not isinstance(contract["name"], str) or not contract["name"]:
         raise ValueError("checkpoint optimizer contract name is invalid")
@@ -236,7 +236,12 @@ def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("checkpoint optimizer contract hyperparameters are invalid")
     if not isinstance(contract["state_format"], str) or not contract["state_format"]:
         raise ValueError("checkpoint optimizer contract state format is invalid")
-    return {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
+    if "placement" in contract and contract["placement"] != "cuda_non_paged":
+        raise ValueError("checkpoint optimizer contract placement is invalid")
+    validated = {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
+    if "placement" in contract:
+        validated["placement"] = contract["placement"]
+    return validated
 
 
 def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
@@ -244,26 +249,29 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
 
     cls = type(optimizer)
     runtime_implementation = f"{cls.__module__}.{cls.__qualname__}"
-    if runtime_implementation == "bitsandbytes.optim.adamw.PagedAdamW8bit":
+    if runtime_implementation == "bitsandbytes.optim.adamw.AdamW8bit":
         if not optimizer.param_groups or not hasattr(optimizer, "args"):
-            raise ValueError("runtime PagedAdamW8bit lacks required state")
+            raise ValueError("runtime AdamW8bit lacks required state")
         group = optimizer.param_groups[0]
         args = optimizer.args
         required_group = ("lr", "weight_decay")
         required_args = ("percentile_clipping", "block_wise", "optim_bits")
         if any(field not in group for field in required_group) or any(not hasattr(args, field) for field in required_args):
-            raise ValueError("runtime PagedAdamW8bit lacks required hyperparameters")
+            raise ValueError("runtime AdamW8bit lacks required hyperparameters")
         if int(args.optim_bits) != 8:
-            raise ValueError("runtime PagedAdamW8bit does not use 8-bit optimizer state")
-        implementation = "bitsandbytes.optim.PagedAdamW8bit"
-        name = "paged_8bit_adamw"
+            raise ValueError("runtime AdamW8bit does not use 8-bit optimizer state")
+        if bool(getattr(optimizer, "is_paged", True)):
+            raise ValueError("runtime AdamW8bit is not device-resident")
+        implementation = "bitsandbytes.optim.AdamW8bit"
+        name = "device_resident_8bit_adamw"
         hyperparameters = {
             "learning_rate": float(group["lr"]),
             "weight_decay": float(group["weight_decay"]),
             "percentile_clipping": int(args.percentile_clipping),
             "block_wise": bool(args.block_wise),
         }
-        state_format = "bitsandbytes-paged-8bit-adamw-state-dict-v1"
+        state_format = "bitsandbytes-device-resident-8bit-adamw-state-dict-v1"
+        placement = "cuda_non_paged"
     else:
         implementation = runtime_implementation
         name = cls.__name__
@@ -276,6 +284,7 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
         "implementation": implementation,
         "hyperparameters": hyperparameters,
         "state_format": state_format,
+        **({"placement": placement} if runtime_implementation == "bitsandbytes.optim.adamw.AdamW8bit" else {}),
     }
 
 
@@ -291,6 +300,7 @@ def _optimizer_realization(optimizer: torch.optim.Optimizer, contract: Mapping[s
         "implementation_source_sha256": _sha256(Path(source)),
         "state_format": runtime_contract["state_format"],
         "optimizer_contract_sha256": _canonical_sha256(runtime_contract),
+        **({"placement": runtime_contract["placement"]} if "placement" in runtime_contract else {}),
     }
 
 
@@ -307,9 +317,11 @@ def _validate_runtime_optimizer_realization(
 
 def _validate_optimizer_realization(contract: Mapping[str, Any], realization: Any) -> dict[str, str]:
     required = {"implementation", "implementation_source_sha256", "state_format", "optimizer_contract_sha256"}
+    if "placement" in contract:
+        required.add("placement")
     if not isinstance(realization, Mapping) or set(realization) != required:
         raise ValueError("checkpoint optimizer realization has an invalid shape")
-    if realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"]:
+    if realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"] or ("placement" in contract and realization.get("placement") != contract["placement"]):
         raise ValueError("checkpoint optimizer realization drifts from its contract")
     for field in ("implementation_source_sha256", "optimizer_contract_sha256"):
         _sha256_value(str(realization.get(field, "")), name=f"optimizer realization {field}")
@@ -803,4 +815,79 @@ def load_checkpoint_artifacts(
     torch.set_rng_state(replay_payload["rng_state"]["cpu"])
     if torch.cuda.is_available():
             torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
+    return {"data_cursor": dict(replay_payload["data_cursor"])}
+
+
+def load_checkpoint_model_only_transition(
+    model: UnifiedDecoder,
+    root: Path,
+    receipt: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Stream a verified historical checkpoint without reusing optimizer state.
+
+    The historical shared shard physically contains model and optimizer state.
+    It is loaded once, its model tensors are applied, and its optimizer payload
+    is discarded without calling ``Optimizer.load_state_dict``. Expert shards
+    are then loaded and released one at a time so host demand is bounded by the
+    largest single shard rather than the whole checkpoint bundle.
+    """
+
+    if receipt.get("schema_version") != "ember-sparse-checkpoint-v3":
+        raise ValueError("model-only optimizer transition requires a v3 source checkpoint")
+    optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
+    expected_optimizer = {
+        "name": "paged_8bit_adamw",
+        "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+        "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+    }
+    if any(optimizer_contract.get(field) != value for field, value in expected_optimizer.items()):
+        raise ValueError("model-only transition source optimizer is not canonical paged AdamW8bit")
+    optimizer_realization = _validate_optimizer_realization(optimizer_contract, receipt.get("optimizer_realization"))
+    expected = receipt.get("expert_checkpoint_sha256")
+    genesis = receipt.get("expert_genesis_sha256")
+    active = receipt.get("active_expert_ids")
+    if not isinstance(expected, dict) or set(expected) != set(EXPERT_NAMES):
+        raise ValueError("checkpoint receipt lacks the four expert hashes")
+    if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES):
+        raise ValueError("checkpoint receipt lacks the four expert genesis hashes")
+    if not isinstance(active, list) or len(active) != 1 or active[0] not in {*EXPERT_NAMES, "shared"}:
+        raise ValueError("checkpoint receipt lacks exactly one declared active expert")
+    records = _validated_records(root, receipt)
+    expected_state = model.state_dict()
+
+    replay_payload = torch.load(root / "replay-state.pt", map_location="cpu", weights_only=False, mmap=True)
+    if (not isinstance(replay_payload, dict) or not isinstance(replay_payload.get("rng_state"), dict) or set(replay_payload["rng_state"]) != {"cpu", "cuda"} or replay_payload.get("data_cursor") != receipt.get("data_cursor")):
+        raise ValueError("checkpoint replay state is incomplete or cursor-mismatched")
+    for name, state in replay_payload["rng_state"].items():
+        if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
+            raise ValueError(f"checkpoint replay RNG state is invalid: {name}")
+
+    shared_payload = torch.load(root / "shared.pt", map_location="cpu", weights_only=False, mmap=True)
+    if not isinstance(shared_payload, dict) or not isinstance(shared_payload.get("optimizer"), dict):
+        raise ValueError("shared checkpoint does not contain optimizer state")
+    if shared_payload.get("optimizer_contract") != optimizer_contract or shared_payload.get("optimizer_realization") != optimizer_realization:
+        raise ValueError("shared checkpoint optimizer realization does not match manifest")
+    shared_expected = {key: value for key, value in expected_state.items() if ".experts." not in key}
+    shared_state = _validate_model_state(shared_expected, shared_payload.get("model"), label="shared")
+    model.load_state_dict(shared_state, strict=False)
+    del shared_state
+    del shared_payload
+
+    for name in EXPERT_NAMES:
+        relative = f"expert-{name}.pt"
+        payload = torch.load(root / relative, map_location="cpu", weights_only=False, mmap=True)
+        if not isinstance(payload, dict) or payload.get("expert") != name:
+            raise ValueError(f"checkpoint expert payload does not identify {name}")
+        if records[relative]["sha256"] != expected[name]:
+            raise ValueError(f"checkpoint expert receipt does not bind {name}")
+        expert_expected = {key: value for key, value in expected_state.items() if f".experts.{name}." in key}
+        expert_state = _validate_model_state(expert_expected, payload.get("model"), label=f"expert {name}")
+        model.load_state_dict(expert_state, strict=False)
+        del expert_state
+        del payload
+
+    model._activate_expert(active[0])
+    torch.set_rng_state(replay_payload["rng_state"]["cpu"])
+    if torch.cuda.is_available():
+        torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
     return {"data_cursor": dict(replay_payload["data_cursor"])}

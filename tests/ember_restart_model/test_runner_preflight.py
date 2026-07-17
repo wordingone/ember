@@ -191,7 +191,7 @@ class RunnerPreflightTests(unittest.TestCase):
                         tokenizer_path=root / "tokenizer.json",
                         capability="image",
                     )
-    def test_production_optimizer_uses_declared_paged_8bit_adamw_state(self) -> None:
+    def test_production_optimizer_uses_declared_device_resident_8bit_adamw_state(self) -> None:
         calls: dict[str, object] = {}
 
         class Subject:
@@ -203,16 +203,36 @@ class RunnerPreflightTests(unittest.TestCase):
             calls.update(kwargs)
             return "optimizer"
 
-        fake = SimpleNamespace(optim=SimpleNamespace(PagedAdamW8bit=make_adamw))
+        fake = SimpleNamespace(optim=SimpleNamespace(AdamW8bit=make_adamw))
         with patch.dict(sys.modules, {"bitsandbytes": fake}):
             contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
             optimizer = run_vertical_slice.build_production_optimizer(Subject(), optimizer_contract=contract)
         self.assertEqual(optimizer, "optimizer")
-        self.assertEqual(contract["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+        self.assertEqual(contract["name"], "device_resident_8bit_adamw")
+        self.assertEqual(contract["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(contract["placement"], "cuda_non_paged")
+        self.assertEqual(contract["state_format"], "bitsandbytes-device-resident-8bit-adamw-state-dict-v1")
         self.assertEqual(contract["hyperparameters"]["learning_rate"], 1e-5)
         self.assertEqual(calls["parameters"], ["parameter"])
         self.assertEqual(calls["percentile_clipping"], 100)
         self.assertEqual(calls["lr"], 1e-5)
+
+    def test_production_optimizer_rejects_the_previous_paged_contract(self) -> None:
+        contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        previous = {
+            **contract,
+            "name": "paged_8bit_adamw",
+            "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+            "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+        }
+        with self.assertRaisesRegex(ValueError, "device-resident AdamW8bit"):
+            run_vertical_slice.build_production_optimizer(SimpleNamespace(parameters=lambda: []), optimizer_contract=previous)
+
+    def test_production_optimizer_rejects_declared_placement_drift(self) -> None:
+        contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        contract["placement"] = "host_paged"
+        with self.assertRaisesRegex(ValueError, "cuda_non_paged"):
+            run_vertical_slice.build_production_optimizer(SimpleNamespace(parameters=lambda: []), optimizer_contract=contract)
     def test_contract_retention_limit_is_used_as_the_runner_limit(self) -> None:
         contract = ROOT / "configs" / "ember-restart-3b.json"
         self.assertTrue(hasattr(run_vertical_slice, "checkpoint_retention_budget_bytes"))
@@ -549,6 +569,8 @@ class RunnerPreflightTests(unittest.TestCase):
             resume_checkpoint=None,
             resume_counter_receipt=None,
             resume_realization_registry=None,
+            resume_optimizer_transition_registry=None,
+            resume_optimizer_transition_registry_sha256=None,
         )
 
     def test_specialist_lineage_request_binds_parent_to_exact_resume_bundle(self) -> None:
@@ -615,7 +637,7 @@ class RunnerPreflightTests(unittest.TestCase):
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
             with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--start-record", "7", "--max-records", "20", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), resume_realization_registry=None, parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), start_record=7, max_records=20, checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None, telemetry_path=Path("state/ember-telemetry.jsonl"), telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00")
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), resume_realization_registry=None, resume_optimizer_transition_registry=None, resume_optimizer_transition_registry_sha256=None, parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), start_record=7, max_records=20, checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None, telemetry_path=Path("state/ember-telemetry.jsonl"), telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00")
     def test_specialist_cli_forwards_explicit_c_relocation_custody(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
             with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--max-records", "20", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
@@ -635,6 +657,14 @@ class RunnerPreflightTests(unittest.TestCase):
                 run_vertical_slice.main()
         self.assertIsNone(specialist.call_args.kwargs["resume_counter_receipt"])
         self.assertEqual(specialist.call_args.kwargs["resume_realization_registry"], Path("B:/registry/trusted-verifiers.json"))
+
+    def test_specialist_cli_forwards_expected_transition_registry_sha256(self) -> None:
+        expected_sha256 = "7" * 64
+        with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/custody/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-optimizer-transition-registry", "C:/transition/trusted-transitions.json", "--resume-optimizer-transition-registry-sha256", expected_sha256, "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/parent/checkpoint-manifest.json", "--max-records", "20", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/custody", "--checkpoint-interval", "20", "--write-budget-gib", "24", "--telemetry-path", "C:/custody/telemetry.jsonl", "--telemetry-run-id", "vision-smoke", "--model-chat-restore-not-before", "2026-07-18T01:00:00-07:00"]):
+                run_vertical_slice.main()
+        self.assertEqual(specialist.call_args.kwargs["resume_optimizer_transition_registry"], Path("C:/transition/trusted-transitions.json"))
+        self.assertEqual(specialist.call_args.kwargs["resume_optimizer_transition_registry_sha256"], expected_sha256)
 
     def test_c_custody_resume_bundle_requires_the_declared_disk_runner_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -753,6 +783,73 @@ class RunnerPreflightTests(unittest.TestCase):
                     c_relocated_under_disk_budget_runner=True,
                     relocation_custody_root=custody,
                 )
+
+    def test_optimizer_transition_is_a_distinct_model_only_resume_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory)
+            checkpoint = custody / "checkpoint"
+            checkpoint.mkdir()
+            (checkpoint / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            registry = custody / "transition" / "trusted-transitions.json"
+            registry.parent.mkdir()
+            registry.write_text("{}", encoding="utf-8")
+            admitted_transition = {
+                "receipt_sha256": "r" * 64,
+                "registry_sha256": hashlib.sha256(registry.read_bytes()).hexdigest(),
+                "source": {"checkpoint_manifest_sha256": "m" * 64, "semantic_model_contract_sha256": "s" * 64},
+                "target": {"model_config_sha256": "c" * 64, "semantic_model_contract_sha256": "t" * 64},
+            }
+            expected_registry_sha256 = hashlib.sha256(registry.read_bytes()).hexdigest()
+            with patch.object(run_vertical_slice, "validate_optimizer_transition_registry", return_value=admitted_transition) as validate:
+                with self.assertRaisesRegex(ValueError, "expected registry SHA-256"):
+                    run_vertical_slice.authorize_production_resume_checkpoint(
+                        checkpoint,
+                        optimizer_transition_registry=registry,
+                        c_relocated_under_disk_budget_runner=True,
+                        relocation_custody_root=custody,
+                    )
+                with self.assertRaisesRegex(ValueError, "registry SHA-256 mismatch"):
+                    run_vertical_slice.authorize_production_resume_checkpoint(
+                        checkpoint,
+                        optimizer_transition_registry=registry,
+                        optimizer_transition_registry_sha256="0" * 64,
+                        c_relocated_under_disk_budget_runner=True,
+                        relocation_custody_root=custody,
+                    )
+                admitted, authority = run_vertical_slice.authorize_production_resume_checkpoint(
+                    checkpoint,
+                    optimizer_transition_registry=registry,
+                    optimizer_transition_registry_sha256=expected_registry_sha256,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=custody,
+                )
+            self.assertEqual(admitted, checkpoint.resolve())
+            self.assertEqual(authority["mode"], "MODEL_ONLY_OPTIMIZER_CONTRACT_TRANSITION")
+            self.assertFalse(authority["optimizer_state_reused"])
+            validate.assert_called_once_with(
+                registry.resolve(),
+                checkpoint_root=checkpoint.resolve(),
+                current_target_config_path=ROOT / "configs" / "ember-restart-3b.json",
+            )
+            with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+                run_vertical_slice.authorize_production_resume_checkpoint(
+                    checkpoint,
+                    realization_registry=registry,
+                    optimizer_transition_registry=registry,
+                    c_relocated_under_disk_budget_runner=True,
+                    relocation_custody_root=custody,
+                )
+
+    def test_model_only_transition_never_loads_parent_optimizer_state(self) -> None:
+        model = object()
+        optimizer = object()
+        checkpoint = Path("checkpoint")
+        receipt = {"checkpoint_manifest_sha256": "a" * 64}
+        authority = {"mode": "MODEL_ONLY_OPTIMIZER_CONTRACT_TRANSITION"}
+        with patch.object(run_vertical_slice, "load_checkpoint_model_only_transition", return_value={"data_cursor": {"global_step": 2}}) as load:
+            result = run_vertical_slice.restore_authorized_checkpoint(model, optimizer, checkpoint, receipt, authority)
+        self.assertEqual(result["data_cursor"]["global_step"], 2)
+        load.assert_called_once_with(model, checkpoint, receipt)
 
     def test_counter_failure_quarantines_new_candidate_and_preserves_prior_bundle(self) -> None:
         """A counter failure cannot leave the just-published bundle selectable."""

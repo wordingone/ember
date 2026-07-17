@@ -69,6 +69,16 @@ class SemanticContractTests(unittest.TestCase):
         changed_input["training"]["expected_input_artifact_id"] = "different-owned-input"
         self.assertNotEqual(semantic_model_contract_sha256(changed_input), baseline)
 
+    def test_optimizer_placement_changes_semantic_hash(self) -> None:
+        config = self._config()
+        baseline = semantic_model_contract_sha256(config)
+        changed = copy.deepcopy(config)
+        changed["training"]["optimizer"] = {
+            "implementation": "AdamW8bit",
+            "state_format": "bnb_device_resident_8bit",
+        }
+        self.assertNotEqual(semantic_model_contract_sha256(changed), baseline)
+
     def test_producer_reference_binds_same_contract_for_all_families(self) -> None:
         from build_specialist_bundle import _model_contract_ref
         config_path = ROOT / "configs" / "ember-restart-3b.json"
