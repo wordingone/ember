@@ -1,4 +1,7 @@
 // welcome-top-anchor.test.ts — #561/#565: banner extraction (issue #561 P0-A item 3) turned the
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // welcome/board panel from a `messages[0]` transcript entry into an always-mounted, top-locked
 // region, structurally separate from the scrolling transcript below it (see screens/repl.ts's
 // render tree). This file used to mount a synthetic composition where the welcome panel WAS
@@ -67,6 +70,7 @@ function buildScreen(messages: SessionMessage[]) {
       permissionMode: { mode: "bypass", cycle: () => {} },
       interrupt: { interrupt: () => {} },
       taskPanel: { visible: false, toggle: () => {}, tasks: [] },
+      telemetry: { recentEvents: [] },
       modelMetrics: { contextTokens: 0, maxContextTokens: 32000, vramUsedGb: 19.2, vramTotalGb: 24.0, tokensPerSec: 0 },
     }),
   );

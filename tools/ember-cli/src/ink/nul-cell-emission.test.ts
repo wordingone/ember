@@ -1,5 +1,8 @@
 // nul-cell-emission.test.ts -- issue #343 investigation.
 //
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // The issue reports raw 0x00 (NUL) bytes as cell padding, and one padding run under a
 // [1m[2m[7m style stack (a solid inverse/grey bar), at ~190x85 -- captured via a real pty
 // (node-pty/ConPTY on Windows). This suite proves, via the SAME production render path every
@@ -65,6 +68,7 @@ function buildRealTree(cols: number, rows: number, tick: number): React.ReactEle
       permissionMode: { mode: "bypass", cycle: () => {} },
       interrupt: { interrupt: () => {} },
       taskPanel: { visible: false, toggle: () => {}, tasks: [] },
+      telemetry: { recentEvents: [] },
     }),
   );
 }
