@@ -14,6 +14,8 @@ ember-cli body, and a general local AI laboratory. The target is an owned
 30-35B sparse unified text-image-audio decoder with native reasoning and
 structured tool use, created and operated on one 24 GiB GPU.
 
+For a fresh context, start with [docs/START-HERE.md](docs/START-HERE.md).
+
 ## Current truth
 
 No current checkpoint is an admissible Ember model.
