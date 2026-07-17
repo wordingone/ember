@@ -24,6 +24,7 @@ from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
+from semantic_contract import semantic_model_contract_sha256
 from train import run_launch
 
 
@@ -504,6 +505,16 @@ def load_verified_specialist_records(
     semantic_hash = verification.get("semantic_model_contract_sha256")
     if verification.get("admission") != "ADMISSIBLE_SEMANTIC_CONTRACT" or not isinstance(semantic_hash, str) or len(semantic_hash) != 64 or semantic_hash.lower() != semantic_hash:
         raise RuntimeError("specialist data verifier did not bind an admissible semantic model contract")
+    runtime_config_path = root / "configs" / "ember-restart-3b.json"
+    try:
+        runtime_semantic_hash = semantic_model_contract_sha256(
+            json.loads(runtime_config_path.read_bytes())
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        raise RuntimeError("runtime model config cannot establish its semantic contract") from error
+    if semantic_hash != runtime_semantic_hash:
+        raise RuntimeError("specialist data semantic contract does not match the runtime model contract")
+    verification["runtime_semantic_model_contract_sha256"] = runtime_semantic_hash
     if verification.get("data_manifest_sha256") != hashlib.sha256(manifest_bytes).hexdigest():
         raise RuntimeError("verified specialist data manifest changed after verification")
 
