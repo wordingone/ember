@@ -22,12 +22,12 @@
       "benchmark_id": "MMMU",
       "benchmark_version": "bc168a9119d986d7cdf1e07b1eeb96ed3e8f92fa",
       "split_sha256": "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
-      "protocol_sha256": "74cd101e3cabd774d876252e6f26a8e1462564bbba849b3ca9c7f5e76c63dc4a",
-      "command_sha256": "1c4d3dad210bfd259394d134a2ed9006c361f9d9c92ec0408d93340b8c091bd3",
+      "protocol_sha256": "a7104e5cdf093e40a948cba23283128924a32e9e3d73bd02af376c09afac7996",
+      "command_sha256": "f00bd6f7d71f6b30bcce7b19ae186f3dffa304eeb2a5fed47f1b9cde2b6c48d9",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_mmmu.py",
       "custody_path": "manifests/ember-restart-mmmu-validation-custody-v1.json",
-      "custody_sha256": "b59d1e934f89131a1a8f34fe004ebc58b8b6ca7a0b78e328260261cc4ae86570"
+      "custody_sha256": "764b512ccda37af831b889e66a2ca55c1682b28018707b81a256cab7fb08d184"
     },
     {
       "family": "audio",
@@ -82,12 +82,12 @@
       "benchmark_id": "spider",
       "benchmark_version": "b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c",
       "split_sha256": "c3e2a46303899a2d4afe3f6a3a62e59f8d589f241b3cbfb52356479b1f054888",
-      "protocol_sha256": "f938dc3308c63e5f125222b6ca6b3b8a2665d5e494040b11bc27701ae4bbad1e",
-      "command_sha256": "79add87ff61e2e895e01242a1335a08f0b4083d85045b3773c4baccfed05e7ee",
+      "protocol_sha256": "53e67b6310a27fb7a671385535f368c43a994c72408ba5aa9b6b6b0c948f7008",
+      "command_sha256": "22b44ed9da2781bffdd2c98ae42b5d1c664a6ec0e82d6c2aecb50de6b3ce6ac0",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_spider.py",
       "custody_path": "manifests/ember-restart-spider-custody-v1.json",
-      "custody_sha256": "791d8308cfaa6adbf705bdc426a0bbd2f16195f36a08f455535efa4a1e61e4de"
+      "custody_sha256": "ddab5f5863470750b4991f9c15e6ab05bf31a04cac905337f63f2c3f9c7a62c8"
     },
     {
       "family": "files",

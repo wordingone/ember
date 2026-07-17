@@ -49,7 +49,7 @@ def test_result_surface_rejects_substituted_registry_even_with_consistent_snapsh
     snapshot_root.mkdir()
     snapshot = snapshot_root / "registry.json"
     snapshot.write_bytes(substituted.read_bytes())
-    monkeypatch.setattr(module, "_pinned_registry_snapshot", lambda _path: (snapshot, snapshot_root))
+    monkeypatch.setattr(module, "_pinned_registry_snapshot", lambda _path, **_kwargs: (snapshot, snapshot_root))
     monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "", ""))
     assert not module._admitted(admission, substituted, receipt_bytes)
 

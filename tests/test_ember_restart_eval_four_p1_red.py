@@ -109,6 +109,23 @@ def test_result_surface_rejects_an_internally_consistent_registry_without_the_pi
     module.main()
     assert "NOT CLAIM-BEARING" in output.read_text(encoding="utf-8")
 
+def test_registry_anchor_rejects_a_structurally_substituted_authority_document(tmp_path, monkeypatch):
+    """The pinned registry hash and the snapshotted bytes must be one read."""
+    module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_authority_shape")
+    registry = tmp_path / "trusted-verifiers.json"
+    registry.write_bytes(b'{"schema_version":"ember-trusted-verifiers-v1","verifiers":[]}')
+    authority = tmp_path / "authorities.json"
+    authority.write_text(json.dumps({"authorities": [{"trusted_verifier_registry_sha256": _sha(registry)}]}), encoding="utf-8")
+    monkeypatch.setattr(module, "EXECUTION_AUTHORITIES", authority)
+    admission = tmp_path / "admission.json"
+    receipt = tmp_path / "receipt.json"
+    receipt.write_bytes(b"{}")
+    admission.write_text(json.dumps({"stage": "OWNED_ADMITTED", "evaluations": [{"receipt_path": receipt.name}]}), encoding="utf-8")
+    monkeypatch.setattr(module, "_pinned_registry_snapshot", lambda path, *, registry_bytes: (path, None))
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "", ""))
+    assert module._admitted(admission, registry, receipt.read_bytes()) is True
+
+
 
 def test_claim_renderer_serializes_every_identity_field_so_admitted_receipts_cannot_collide(tmp_path, monkeypatch):
     module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_surface_identity")
@@ -134,7 +151,7 @@ def test_claim_renderer_serializes_every_identity_field_so_admitted_receipts_can
         source = tmp_path / f"receipt-{marker}.json"
         source.write_text(json.dumps({**base, "checkpoint_manifest_sha256": marker * 64}), encoding="utf-8")
         output = tmp_path / f"surface-{marker}.md"
-        monkeypatch.setattr(sys, "argv", [str(module.__file__), "--input", str(source), "--output", str(output)])
+        monkeypatch.setattr(sys, "argv", [str(module.__file__), "--input", str(source), "--admission-manifest", str(tmp_path / "admission.json"), "--trusted-verifier-registry", str(tmp_path / "registry.json"), "--output", str(output)])
         module.main()
         rendered.append(output.read_text(encoding="utf-8"))
     assert rendered[0] != rendered[1]
@@ -142,6 +159,24 @@ def test_claim_renderer_serializes_every_identity_field_so_admitted_receipts_can
     assert '"checkpoint_manifest_sha256":"99999999' in rendered[1]
     for field in module.IDENTITY_FIELDS:
         assert f"{field}:" in rendered[0]
+
+def test_claim_renderer_rejects_present_but_unbound_identity_values(tmp_path, monkeypatch):
+    module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_surface_null_identity")
+    monkeypatch.setattr(module, "_admitted", lambda *args: True)
+    source = tmp_path / "receipt.json"
+    source.write_text(json.dumps({
+        "result": "MEASURED", "capability": "text",
+        "checkpoint_manifest_sha256": None, "model_config_sha256": "b" * 64,
+        "benchmark_id": "local-text", "benchmark_version": "1", "split_sha256": "c" * 64,
+        "harness_sha256": "d" * 64, "protocol_sha256": "e" * 64,
+        "predictions_sha256": "f" * 64, "score_artifact_sha256": "1" * 64,
+        "criterion_id": "ember-3b-text-capability-v1", "criterion_result": "PASSED",
+        "metrics": {"accuracy": 1.0}, "verifier_sha256": "2" * 64,
+    }), encoding="utf-8")
+    output = tmp_path / "surface.md"
+    monkeypatch.setattr(sys, "argv", [str(module.__file__), "--input", str(source), "--output", str(output)])
+    module.main()
+    assert "NOT CLAIM-BEARING" in output.read_text(encoding="utf-8")
 
 
 def test_audiobench_rejects_a_valid_foreign_closed_run_even_when_predictions_are_well_formed(tmp_path):
@@ -193,6 +228,7 @@ def test_evalplus_spider_and_mmmu_reject_checkpoint_or_protocol_identity_drift()
     evalplus = _load("scripts/ember_restart_eval_evalplus_result.py", "four_p1_evalplus")
     manifest = json.loads((ROOT / "manifests" / "ember-restart-eval-code-math-custody-v1.json").read_text(encoding="utf-8"))
     manifest["checkpoint_manifest_sha256"] = "a" * 64
+
     manifest["model_config_sha256"] = "b" * 64
     with pytest.raises(ValueError, match="checkpoint/config"):
         evalplus.evalplus_protocol_sha256({key: value for key, value in manifest.items() if key not in {"checkpoint_manifest_sha256", "model_config_sha256"}}, "humanevalplus_v0.1.10", manifest["scoring_adapters"])
@@ -204,3 +240,36 @@ def test_evalplus_spider_and_mmmu_reject_checkpoint_or_protocol_identity_drift()
     mmmu = _load("scripts/ember_restart_eval_mmmu.py", "four_p1_mmmu")
     with pytest.raises(ValueError, match="checkpoint"):
         mmmu.validate_manifest_identity({"schema_version": "ember-restart-benchmark-custody-v1", "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64}, {"checkpoint_manifest_sha256": "9" * 64, "model_config_sha256": "b" * 64})
+
+def test_spider_canonical_helper_binds_checkpoint_and_config_before_sql_conversion():
+    module = _load("scripts/ember_restart_eval_spider.py", "four_p1_spider_helper_identity")
+    envelope = {
+        "schema_version": "ember-owned-predictions-v1",
+        "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS",
+        "checkpoint_manifest_sha256": "a" * 64,
+        "model_config_sha256": "b" * 64,
+        "tokenizer_sha256": "c" * 64,
+        "inference_implementation_sha256": "d" * 64,
+        "benchmark": {"id": "spider", "version": module.SPIDER_VERSION, "capability": "tool", "split_sha256": "e" * 64, "protocol_sha256": "f" * 64},
+        "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1, "temperature": 0, "top_p": 1, "stop_token_ids": [2]},
+        "rows": [{"id": "0", "input_sha256": "0" * 64, "generated_token_ids": [2], "stop_reason": "eos", "output": {"kind": "sql", "sql": "select 1"}}],
+    }
+    with pytest.raises(ValueError, match="checkpoint|config"):
+        module.canonical_sql(json.dumps(envelope).encode("utf-8"), "e" * 64, "f" * 64, "9" * 64, "8" * 64)
+
+
+def test_mmmu_canonical_helper_binds_checkpoint_and_config_before_conversion():
+    module = _load("scripts/ember_restart_eval_mmmu.py", "four_p1_mmmu_helper_identity")
+    envelope = {
+        "schema_version": "ember-owned-predictions-v1",
+        "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS",
+        "checkpoint_manifest_sha256": "a" * 64,
+        "model_config_sha256": "b" * 64,
+        "tokenizer_sha256": "c" * 64,
+        "inference_implementation_sha256": "d" * 64,
+        "benchmark": {"id": "MMMU", "version": "v1", "capability": "image", "split_sha256": "e" * 64, "protocol_sha256": "f" * 64},
+        "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1, "temperature": 0, "top_p": 1, "stop_token_ids": [2]},
+        "rows": [{"id": "q1", "input_sha256": "0" * 64, "generated_token_ids": [2], "stop_reason": "eos", "output": {"kind": "text", "text": "A"}}],
+    }
+    with pytest.raises(ValueError, match="checkpoint|config"):
+        module.canonical_predictions(json.dumps(envelope).encode("utf-8"), "9" * 64, "8" * 64)

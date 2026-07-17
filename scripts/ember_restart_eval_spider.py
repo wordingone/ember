@@ -41,7 +41,7 @@ def legacy_sql_lines(path: Path) -> list[str]:
     return result
 
 
-def canonical_sql(data: bytes, gold_sha256: str, protocol_sha256: str | None = None) -> tuple[dict, list[str]]:
+def canonical_sql(data: bytes, gold_sha256: str, protocol_sha256: str | None = None, checkpoint_manifest_sha256: str | None = None, model_config_sha256: str | None = None) -> tuple[dict, list[str]]:
     try:
         envelope = validate_predictions(json.loads(data.decode("utf-8")))
     except (ContractError, UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -49,6 +49,9 @@ def canonical_sql(data: bytes, gold_sha256: str, protocol_sha256: str | None = N
     benchmark = envelope["benchmark"]
     if benchmark.get("id") != "spider" or benchmark.get("version") != SPIDER_VERSION or benchmark.get("capability") != "tool" or benchmark.get("split_sha256") != gold_sha256 or (protocol_sha256 is not None and benchmark.get("protocol_sha256") != protocol_sha256):
         raise ValueError("canonical Spider predictions do not bind frozen benchmark identity")
+    for identity, expected in (("checkpoint_manifest_sha256", checkpoint_manifest_sha256), ("model_config_sha256", model_config_sha256)):
+        if expected is not None and envelope.get(identity) != expected:
+            raise ValueError(f"Spider canonical predictions do not bind frozen {identity}")
     result = []
     for index, row in enumerate(envelope["rows"]):
         output = row.get("output")
@@ -202,8 +205,8 @@ def main() -> int:
             custody_sha256, protocol_sha256 = custody_result, None
         if arguments.canonical_predictions is not None:
             prediction_bytes = arguments.canonical_predictions.read_bytes()
-            envelope, sql = canonical_sql(prediction_bytes, sha256_file(arguments.gold), protocol_sha256)
             custody_payload = json.loads(arguments.frozen_sql_manifest.read_text(encoding="utf-8"))
+            envelope, sql = canonical_sql(prediction_bytes, sha256_file(arguments.gold), protocol_sha256, custody_payload.get("checkpoint_manifest_sha256"), custody_payload.get("model_config_sha256"))
             for identity in ("checkpoint_manifest_sha256", "model_config_sha256"):
                 expected_identity = custody_payload.get(identity)
                 if expected_identity is not None and envelope.get(identity) != expected_identity:

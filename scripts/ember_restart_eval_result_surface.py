@@ -3,23 +3,31 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Render only a receipt that central admission has independently admitted."""
-import argparse, hashlib, json, os, re, shutil, subprocess, sys, tempfile
+import argparse, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 EXECUTION_AUTHORITIES = Path(__file__).resolve().parents[1] / "manifests" / "ember-restart-execution-authorities-v1.json"
 IDENTITY_FIELDS = ("checkpoint_manifest_sha256", "model_config_sha256", "benchmark_id", "benchmark_version", "split_sha256", "harness_sha256", "protocol_sha256", "predictions_sha256", "score_artifact_sha256", "criterion_id", "criterion_result", "metrics", "verifier_sha256")
+IDENTITY_SHA_FIELDS = ("checkpoint_manifest_sha256", "model_config_sha256", "split_sha256", "harness_sha256", "protocol_sha256", "predictions_sha256", "score_artifact_sha256", "verifier_sha256")
 
 
 def _sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def _registry_is_pinned(registry):
+def _registry_is_pinned_bytes(registry_bytes):
     try:
         authority = json.loads(EXECUTION_AUTHORITIES.read_bytes().decode("utf-8"))
         expected = {entry.get("trusted_verifier_registry_sha256") for entry in authority.get("authorities", []) if isinstance(entry, dict)}
-        return _sha256(registry.read_bytes()) in expected
+        return _sha256(registry_bytes) in expected
     except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+
+
+def _registry_is_pinned(registry):
+    try:
+        return _registry_is_pinned_bytes(registry.read_bytes())
+    except OSError:
         return False
 
 
@@ -65,12 +73,13 @@ def _registry_path(value, root, field):
     return relative, source
 
 
-def _pinned_registry_snapshot(registry):
+def _pinned_registry_snapshot(registry, *, registry_bytes=None):
     registry_root = None
     try:
-        registry_bytes = registry.read_bytes()
+        if registry_bytes is None:
+            registry_bytes = registry.read_bytes()
         authority = json.loads(EXECUTION_AUTHORITIES.read_bytes().decode("utf-8"))
-        if not _registry_is_pinned(registry):
+        if not _registry_is_pinned_bytes(registry_bytes):
             return None
         payload = json.loads(registry_bytes.decode("utf-8"))
         entries = payload.get("verifiers") if isinstance(payload, dict) else None
@@ -135,9 +144,10 @@ def _admitted(manifest, registry, input_bytes):
         # Caller-selected registry bytes must first match the external
         # execution-authority anchor; an internally consistent substitute is
         # not admission authority.
-        if not _registry_is_pinned(registry):
+        registry_bytes = registry.read_bytes()
+        if not _registry_is_pinned_bytes(registry_bytes):
             return False
-        pinned = _pinned_registry_snapshot(registry)
+        pinned = _pinned_registry_snapshot(registry, registry_bytes=registry_bytes)
         if pinned is None:
             return False
         registry_snapshot, registry_snapshot_root = pinned
@@ -242,6 +252,17 @@ def _admitted(manifest, registry, input_bytes):
             raise RuntimeError("; ".join(cleanup_errors))
 
 
+def _claim_identity_complete(result):
+    if any(not isinstance(result.get(field), str) or not re.fullmatch(r"[0-9a-f]{64}", result[field]) for field in IDENTITY_SHA_FIELDS):
+        return False
+    if not isinstance(result.get("benchmark_id"), str) or not result["benchmark_id"].strip() or not isinstance(result.get("benchmark_version"), str) or not result["benchmark_version"].strip():
+        return False
+    if not isinstance(result.get("criterion_id"), str) or not result["criterion_id"].strip() or result.get("criterion_result") != "PASSED":
+        return False
+    metrics = result.get("metrics")
+    return isinstance(metrics, dict) and bool(metrics) and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in metrics.values())
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, type=Path)
@@ -258,8 +279,7 @@ def main():
         parser.error("input must be JSON")
     if not isinstance(result, dict):
         parser.error("input must be an object")
-    measured = result.get("result") == "MEASURED" and _admitted(args.admission_manifest, args.trusted_verifier_registry, input_bytes)
-    measured = measured and all(key in result for key in IDENTITY_FIELDS)
+    measured = result.get("result") == "MEASURED" and _claim_identity_complete(result) and _admitted(args.admission_manifest, args.trusted_verifier_registry, input_bytes)
     label = "MEASURED CAPABILITY" if measured else "NOT CLAIM-BEARING"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.output.parent, delete=False) as handle:
