@@ -27,15 +27,13 @@ score has been emitted. Historical v2 snapshots remain bootstrap/raw-forward
 evidence only and are not corrected-rung capability evidence.
 
 Frozen external reasoning protocols are ready but have no checkpoint-bound predictions:
-ARC-Challenge and MMLU-Pro each have byte-bound parquet custody and deterministic
+ARC-Challenge, GSM8K, MMLU-Pro, and MATH-500 have byte-bound references and
 canonical-envelope scorers. Their outputs remain `PREFLIGHT_ONLY` with a failed
 criterion until a conforming checkpoint prediction envelope is produced. HellaSwag
-is explicitly held at `NOT_EXECUTABLE_NO_FROZEN_LABELS`; its frozen test split
-withholds labels, so no score is inferred or fabricated.
-The public MMLU-Pro descriptor additionally requires the exact scorer-adapter
-bytes and a protocol derived from version, frozen references, license-card bytes,
-and adapter identity; it remains `NOT_EXECUTABLE_LICENSE_CARD_HASH_MISSING` until
-that exact license-card artifact is custody-bound.
+now has a deterministic exact-label scorer, but its owned frozen test split
+withholds labels and remains `NOT_EXECUTABLE_NO_FROZEN_LABELS`; no score is inferred
+or fabricated. MMLU-Pro strict custody is bound to exact scorer bytes, the pinned
+license-card artifact, and its derived protocol; it remains preflight-only.
 
 MATH-500, MMLU-Pro, and static BFCL strict freeze manifests now derive protocol identity from exact scorer bytes plus frozen split/reference and license/version identity; valid-hex caller substitutions are rejected. These remain preflight-only and do not create checkpoint-bound scores.
 
@@ -46,7 +44,7 @@ preflight record is not a checkpoint-bound score.
 
 | Family | Frozen evaluation boundary | Current result state |
 | --- | --- | --- |
-| Text / reasoning | ARC-Challenge, MMLU-Pro, GSM8K, and MATH-500 byte-bound task custody and deterministic scoring | No canonical checkpoint predictions or score |
+| Text / reasoning | ARC-Challenge, MMLU-Pro, GSM8K, HellaSwag, and MATH-500 byte-bound task custody and deterministic scoring | No canonical checkpoint predictions or score |
 | Code | HumanEval+ and MBPP+ frozen tasks with EvalPlus adapter self-tests | No pinned code-sandbox runtime or checkpoint predictions |
 | Terminal | Terminal-Bench 2 source pin | `PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK`: no digest-pinned, network-disabled task image is eligible |
 | SQL | Spider source/split custody and deterministic scorer pin | No frozen gold/database execution artifact or checkpoint predictions |
