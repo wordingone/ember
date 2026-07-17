@@ -30,5 +30,9 @@ result.
 
 The public frozen-evaluation matrix includes explicit non-execution records
 for Terminal-Bench, browser/UI, structured tools, and files, plus
-non-admissible protocol/scorer paths for the other requested families. BrowserGym fixture outcomes are `SELFTEST_ONLY_FIXTURE_BROWSER_OUTCOMES`; BFCL runtime is `RUNTIME_HELD_UNPINNED_DEPENDENCY_AND_LIVE_TOOL_NETWORK`. The
+non-admissible protocol/scorer paths for the other requested families. ARC-Challenge,
+GSM8K, MMLU-Pro, HellaSwag, and MATH-500 scorers preserve exact checkpoint/config
+identity when strict manifests are used, but no canonical checkpoint predictions
+exist. BrowserGym fixture outcomes are `SELFTEST_ONLY_FIXTURE_BROWSER_OUTCOMES`;
+BFCL runtime is `RUNTIME_HELD_UNPINNED_DEPENDENCY_AND_LIVE_TOOL_NETWORK`. The
 result surface is [`ember-restart-evaluation-results.md`](ember-restart-evaluation-results.md).
