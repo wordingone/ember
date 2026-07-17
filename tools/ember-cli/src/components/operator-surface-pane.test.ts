@@ -108,6 +108,19 @@ describe("OperatorSurfacePane", () => {
     expect(graphs.points.every((point) => point.runId === "new-run")).toBe(true);
   });
 
+  test("selects the newest validated run timestamp independent of arrival order or stale activeRun", () => {
+    const now = Date.parse("2026-07-17T17:31:00.000Z");
+    const newest = train("new-run", 4, "2026-07-17T17:30:59.000Z", 1, { step_ms: 500 });
+    const delayed = train("old-run", 99, "2026-07-17T17:30:00.000Z", 9, { step_ms: 1000 });
+    for (const recentEvents of [[newest, delayed], [delayed, newest]]) {
+      const graphs = buildOperatorSurfaceGraphs(telemetry({
+        recentEvents,
+        activeRun: { runId: "old-run", step: 99, loss: 9, stepMs: 1000, lastTs: delayed.ts },
+      }), 80, now);
+      expect(graphs.runId).toBe("new-run");
+      expect(graphs.points.every((point) => point.runId === "new-run")).toBe(true);
+    }
+  });
   test("does not fabricate empty/one-point trends and labels missing families", () => {
     expect(buildOperatorSurfaceGraphs(telemetry()).loss).toContain("INSUFFICIENT REAL HISTORY");
     expect(buildOperatorSurfaceGraphs(telemetry()).modelGrowth).toEqual(["MODEL GROWTH: SOURCE UNBOUND"]);
@@ -137,9 +150,33 @@ describe("OperatorSurfacePane", () => {
       train("run-b", 8, "2026-07-17T17:30:59.000Z", 1),
       train("run-a", 3, "2026-07-17T17:30:00.000Z", 2),
     ] });
-    expect(getOperatorRunStatus(telemetryState, now)).toBe("STALE");
+    expect(getOperatorRunStatus(telemetryState, now)).toBe("RUNNING");
   });
 
+  test("does not let an older selected-run OFFLINE status override newer train evidence", () => {
+    const now = Date.parse("2026-07-17T17:31:00.000Z");
+    const trainEvent = train("run-a", 1, "2026-07-17T17:30:59.000Z", 2, { step_ms: 500 });
+    const oldOffline = { runId: "run-a", phase: "OFFLINE", modelChat: "OFFLINE", lastTs: "2026-07-17T17:30:00.000Z" } as const;
+    const currentOffline = { ...oldOffline, lastTs: trainEvent.ts };
+    expect(getOperatorRunStatus(telemetry({ recentEvents: [trainEvent], runStatus: oldOffline }), now)).toBe("RUNNING");
+    expect(getOperatorRunStatus(telemetry({ recentEvents: [trainEvent], runStatus: currentOffline }), now)).toBe("OFFLINE");
+  });
+
+  test("derives scalar metrics from the newest timestamp, not the highest step", () => {
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry({ recentEvents: [
+        train("run-a", 100, "2026-07-17T17:30:00.000Z", 9, { step_ms: 1000 }),
+        train("run-a", 10, "2026-07-17T17:30:59.000Z", 1, { step_ms: 500 }),
+      ] }),
+      activityLines: [],
+      nowMs: Date.parse("2026-07-17T17:31:00.000Z"),
+    });
+    expect(snapshot.metrics).toContain("loss 1.00");
+    expect(snapshot.metrics).toContain("step 10");
+    expect(snapshot.metrics).toContain("throughput 120.0 step/min");
+    expect(snapshot.metrics).not.toContain("loss 9.00");
+    expect(snapshot.metrics).not.toContain("step 100");
+  });
   test("does not apply retained OFFLINE run status to a different selected run", () => {
     const now = Date.parse("2026-07-17T17:30:03.000Z");
     const snapshot = buildOperatorSurfaceSnapshot({
