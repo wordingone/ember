@@ -28,6 +28,7 @@ export interface OperatorSurfaceInput {
   sourceIdentity?: OperatorSourceIdentity;
   nowMs?: number;
   maxAgentLines?: number;
+  plotWidth?: number;
 }
 
 export type OperatorRunStatus = "RUNNING" | "STALE" | "IDLE" | "OFFLINE";
@@ -35,10 +36,17 @@ export type OperatorRunStatus = "RUNNING" | "STALE" | "IDLE" | "OFFLINE";
 export interface OperatorSeriesPoint {
   runId: string;
   step: number;
-  loss: number;
-  throughput: number;
-  vramUsedGib: number;
+  loss?: number;
+  throughput?: number;
+  vramUsedGib?: number;
+  gpuUtilizationPct?: number;
   ts: string;
+}
+
+interface OperatorMetricPoint {
+  step: number;
+  ts: string;
+  value: number;
 }
 
 export interface OperatorSurfaceGraphs {
@@ -46,7 +54,12 @@ export interface OperatorSurfaceGraphs {
   points: OperatorSeriesPoint[];
   loss: string[];
   resource: string[];
+  modelGrowth: string[];
+  capability: string[];
+  training: string[];
   checkpoints: Array<{ step: number; label: "checkpoint" }>;
+  modelGrowthPoints: Array<{ step: number; ts: string; value: number }>;
+  capabilityPoints: Array<{ step: number; ts: string; value: number }>;
 }
 
 export interface OperatorSurfaceSnapshot {
@@ -88,81 +101,188 @@ function eventTime(event: TelemetryEvent): number {
   return Number.isFinite(time) ? time : NaN;
 }
 
-function validTrainStep(event: TelemetryEvent): OperatorSeriesPoint | undefined {
+function validTrainStep(event: TelemetryEvent, nowMs: number = Date.now()): OperatorSeriesPoint | undefined {
   if (event.kind !== "train_step") return undefined;
   const runId = eventRunId(event);
   const step = event.payload["step"];
-  const loss = event.payload["loss"];
+  const timestamp = eventTime(event);
+  if (!runId || !finiteNumber(step) || !finiteNumber(timestamp) || timestamp > nowMs) return undefined;
+  const lossValue = event.payload["loss"];
+  const loss = finiteNumber(lossValue) ? lossValue : undefined;
   const stepMs = event.payload["step_ms"];
   const free = event.payload["free_gib"];
   const total = event.payload["total_gib"];
-  if (!runId || !finiteNumber(step) || !finiteNumber(loss) || !finiteNumber(stepMs) || stepMs <= 0 || !finiteNumber(eventTime(event))) return undefined;
-  if (!finiteNumber(free) || !finiteNumber(total) || free < 0 || total <= 0 || free > total) return undefined;
-  return {
-    runId,
-    step,
-    loss,
-    throughput: 60_000 / stepMs,
-    vramUsedGib: total - free,
-    ts: event.ts,
-  };
+  const throughput = finiteNumber(stepMs) && stepMs > 0 ? 60_000 / stepMs : undefined;
+  const vramUsedGib = finiteNumber(free) && finiteNumber(total) && free >= 0 && total > 0 && free <= total
+    ? total - free
+    : undefined;
+  const gpuValue = event.payload["gpu_utilization_pct"];
+  const gpuUtilizationPct = finiteNumber(gpuValue) && gpuValue >= 0 && gpuValue <= 100 ? gpuValue : undefined;
+  if (loss === undefined && throughput === undefined && vramUsedGib === undefined && gpuUtilizationPct === undefined) return undefined;
+  return { runId, step, loss, throughput, vramUsedGib, gpuUtilizationPct, ts: event.ts };
 }
 
-function selectedRunId(telemetry: TelemetryState): string | undefined {
+function selectedRunId(telemetry: TelemetryState, nowMs: number): string | undefined {
   const activeId = telemetry.activeRun?.runId;
-  if (typeof activeId === "string" && activeId.length > 0) return activeId;
+  if (typeof activeId === "string" && activeId.length > 0) {
+    const hasValidatedActiveEvidence = telemetry.recentEvents.some((event) => {
+      const point = validTrainStep(event, nowMs);
+      return point?.runId === activeId;
+    });
+    if (hasValidatedActiveEvidence) return activeId;
+  }
   for (let index = telemetry.recentEvents.length - 1; index >= 0; index -= 1) {
-    const point = validTrainStep(telemetry.recentEvents[index]!);
+    const point = validTrainStep(telemetry.recentEvents[index]!, nowMs);
     if (point) return point.runId;
   }
   return undefined;
 }
 
-function graphLines(title: string, points: OperatorSeriesPoint[], value: (point: OperatorSeriesPoint) => number): string[] {
-  const samples = points.map(value).filter(finiteNumber);
-  if (samples.length < 2) {
-    return [`${title}: insufficient real history (${samples.length} point${samples.length === 1 ? "" : "s"})`];
-  }
-  const min = Math.min(...samples);
-  const max = Math.max(...samples);
-  return [
-    `${title} [${min.toFixed(2)}..${max.toFixed(2)}]`,
-    `steps ${points.map((point) => point.step).join(" ")}`,
-    `${title.toLowerCase()} ${samples.map((sample) => sample.toFixed(2)).join(" ")}`,
-  ];
+const PLOT_GLYPHS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+
+function formatTimeLabel(ts: string): string {
+  const parsed = new Date(ts);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(11, 19) : "??:??:??";
 }
 
-/** Build bounded graphs only from valid train_step events belonging to one run. */
-export function buildOperatorSurfaceGraphs(telemetry: TelemetryState): OperatorSurfaceGraphs {
-  const runId = selectedRunId(telemetry);
+export const PLOT_PREFIX_WIDTH = 24;
+
+function retainedIndices(sampleCount: number, maxPoints: number, checkpointIndices: Set<number>): number[] {
+  if (sampleCount <= maxPoints) return Array.from({ length: sampleCount }, (_, index) => index);
+  const count = Math.max(2, Math.min(sampleCount, Math.floor(maxPoints)));
+  const required = new Set<number>([sampleCount - 1]);
+  checkpointIndices.forEach((index) => { if (index >= 0 && index < sampleCount) required.add(index); });
+  const selected = new Set<number>();
+  const requiredSorted = [...required].sort((left, right) => left - right);
+  if (requiredSorted.length > count) {
+    selected.add(sampleCount - 1);
+    for (let index = requiredSorted.length - 1; index >= 0 && selected.size < count; index -= 1) selected.add(requiredSorted[index]!);
+  } else {
+    selected.add(0);
+    requiredSorted.forEach((index) => { if (selected.size < count) selected.add(index); });
+    for (let index = 1; selected.size < count && index < sampleCount - 1; index += 1) selected.add(index);
+  }
+  selected.add(sampleCount - 1);
+  return [...selected].sort((left, right) => left - right);
+}
+
+function downsampleSamples(samples: OperatorMetricPoint[], maxPoints: number, checkpointSteps: Set<number>): OperatorMetricPoint[] {
+  const indices = retainedIndices(samples.length, maxPoints, new Set(samples.map((sample, index) => checkpointSteps.has(sample.step) ? index : -1).filter((index) => index >= 0)));
+  return indices.map((index) => samples[index]!);
+}
+function alignedPlotLine(label: string, content: string): string {
+  return `${label.padEnd(PLOT_PREFIX_WIDTH, " ")}${content}`;
+}
+
+function plotLines(
+  title: string,
+  samples: OperatorMetricPoint[],
+  checkpointSteps: Set<number> = new Set(),
+  maxPoints: number = 72,
+): string[] {
+  if (samples.length < 2) return [`${title.toUpperCase()}: INSUFFICIENT REAL HISTORY`, "INSUFFICIENT REAL HISTORY"];
+  const plotted = downsampleSamples(samples, maxPoints, checkpointSteps);
+  const values = plotted.map((sample) => sample.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const glyphs = values.map((value) => PLOT_GLYPHS[Math.min(7, Math.floor(span === 0 ? 7 : ((value - min) / span) * 7))]).join("");
+  const axis = plotted.map((sample) => `${sample.step}@${formatTimeLabel(sample.ts)}`).join(" ");
+  const lines = [
+    `${title} range [${min.toFixed(2)}..${max.toFixed(2)}]`,
+    `step/time ${axis}`,
+    alignedPlotLine(`${title} plot `, glyphs),
+  ];
+  if (checkpointSteps.size > 0) {
+    lines.push(alignedPlotLine("checkpoint plot ", plotted.map((sample) => checkpointSteps.has(sample.step) ? "\u25b2" : "\u00b7").join("")));
+  }
+  return lines;
+}
+
+function valueSamples(points: OperatorSeriesPoint[], value: (point: OperatorSeriesPoint) => number | undefined): OperatorMetricPoint[] {
+  return points
+    .map((point) => {
+      const sample = value(point);
+      return finiteNumber(sample) ? { step: point.step, ts: point.ts, value: sample } : undefined;
+    })
+    .filter((sample): sample is OperatorMetricPoint => sample !== undefined);
+}
+
+function eventMetricSamples(
+  telemetry: TelemetryState,
+  runId: string | undefined,
+  kind: "model_growth" | "capability_score",
+  key: "value" | "score",
+  nowMs: number = Date.now(),
+): OperatorMetricPoint[] {
+  if (!runId) return [];
+  return telemetry.recentEvents
+    .filter((event) => event.kind === kind && eventRunId(event) === runId)
+    .map((event) => {
+      const step = event.payload["step"];
+      const value = event.payload[key];
+      return finiteNumber(step) && finiteNumber(value) && finiteNumber(eventTime(event)) && eventTime(event) <= nowMs
+        ? { step, ts: event.ts, value }
+        : undefined;
+    })
+    .filter((sample): sample is OperatorMetricPoint => sample !== undefined)
+    .sort((left, right) => left.step - right.step || Date.parse(left.ts) - Date.parse(right.ts));
+}
+
+function familyLines(title: string, samples: OperatorMetricPoint[], unbound: string, maxPoints: number, checkpointSteps: Set<number>): string[] {
+  if (samples.length === 0) return [`${unbound}: SOURCE UNBOUND`];
+  return plotLines(title, samples, checkpointSteps, maxPoints);
+}
+
+/** Build bounded graphs only from valid, provenance-selected events belonging to one run. */
+export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth: number = 80, nowMs: number = Date.now()): OperatorSurfaceGraphs {
+  const maxPoints = Math.max(2, Math.floor(plotWidth) - 8);
+  const runId = selectedRunId(telemetry, nowMs);
   const points = runId
     ? telemetry.recentEvents
-        .map(validTrainStep)
+        .map((event) => validTrainStep(event, nowMs))
         .filter((point): point is OperatorSeriesPoint => point?.runId === runId)
-        .sort((left, right) => left.step - right.step || eventTime({ ts: left.ts, kind: "", source: "", payload: {} }) - eventTime({ ts: right.ts, kind: "", source: "", payload: {} }))
+        .sort((left, right) => left.step - right.step || Date.parse(left.ts) - Date.parse(right.ts))
     : [];
   const checkpoints = runId
     ? telemetry.recentEvents
         .filter((event) => event.kind === "checkpoint" && eventRunId(event) === runId)
         .map((event) => {
           const step = event.payload["step"];
-          return finiteNumber(step) && step >= 0 ? { step, label: "checkpoint" as const } : undefined;
+          return finiteNumber(step) && step >= 0 && finiteNumber(eventTime(event)) && eventTime(event) <= nowMs ? { step, label: "checkpoint" as const } : undefined;
         })
         .filter((marker): marker is { step: number; label: "checkpoint" } => marker !== undefined)
         .sort((left, right) => left.step - right.step)
     : [];
+  const checkpointSteps = new Set(checkpoints.map((marker) => marker.step));
+  const loss = plotLines("loss", valueSamples(points, (point) => point.loss), checkpointSteps, maxPoints);
+  const gpu = valueSamples(points, (point) => point.gpuUtilizationPct);
+  const vram = valueSamples(points, (point) => point.vramUsedGib);
+  const throughput = valueSamples(points, (point) => point.throughput);
+  const modelGrowth = eventMetricSamples(telemetry, runId, "model_growth", "value", nowMs);
+  const capability = eventMetricSamples(telemetry, runId, "capability_score", "score", nowMs);
+  const decorate = (lines: string[]): string[] =>
+    channelIsOffline(telemetry) ? decorateHistory(lines, "OFFLINE/HISTORICAL") : lines;
+  const lossLines = decorate(loss);
+  const resourceLines = decorate([
+    "RESOURCE EFFICIENCY",
+    ...familyLines("GPU utilization %", gpu, "GPU UTILIZATION", maxPoints, checkpointSteps),
+    ...familyLines("VRAM GiB", vram, "VRAM", maxPoints, checkpointSteps),
+    ...familyLines("throughput", throughput, "THROUGHPUT/SPEED", maxPoints, checkpointSteps),
+  ]);
+  const modelGrowthLines = decorate(familyLines("model growth", modelGrowth, "MODEL GROWTH", maxPoints, checkpointSteps));
+  const capabilityLines = decorate(familyLines("capability score", capability, "CAPABILITY SCORES", maxPoints, checkpointSteps));
   return {
     runId,
     points,
-    loss: graphLines("loss", points, (point) => point.loss),
-    resource: [
-      ...graphLines("throughput", points, (point) => point.throughput),
-      ...graphLines("VRAM GiB", points, (point) => point.vramUsedGib),
-      points.length >= 2
-        ? `steps ${points.map((point) => point.step).join(" ")}`
-        : "resource axis: insufficient real history",
-    ],
+    loss: lossLines,
+    resource: resourceLines,
+    modelGrowth: modelGrowthLines,
+    capability: capabilityLines,
+    training: decorate(["TRAINING/LOSS", ...loss]),
     checkpoints,
+    modelGrowthPoints: modelGrowth,
+    capabilityPoints: capability,
   };
 }
 
@@ -171,29 +291,34 @@ function channelIsOffline(telemetry: TelemetryState): boolean {
   return extended.channelStatus === "OFFLINE" || telemetry.runStatus?.phase === "OFFLINE";
 }
 
-/** Distinguish no evidence (IDLE) from old evidence (STALE), including channel OFFLINE. */
+function decorateHistory(lines: string[], marker: "OFFLINE/HISTORICAL" | "STALE/HISTORICAL"): string[] {
+  return lines.map((line) => /^(TRAINING\/LOSS|RESOURCE EFFICIENCY|MODEL GROWTH|CAPABILITY SCORES)(?::|\s|$)/.test(line)
+    ? `${line} [${marker}]`
+    : `${marker} ${line}`);
+}
+/** Derive status only from the same validated train-step evidence used by graphs. */
 export function getOperatorRunStatus(telemetry: TelemetryState, nowMs: number = Date.now()): OperatorRunStatus {
   if (channelIsOffline(telemetry)) return "OFFLINE";
   const eventTimes = telemetry.recentEvents
-    .filter((event) => event.kind === "train_step" && eventRunId(event) !== undefined)
-    .map(eventTime)
-    .filter(finiteNumber);
-  const activeTime = telemetry.activeRun ? Date.parse(telemetry.activeRun.lastTs) : NaN;
-  if (finiteNumber(activeTime)) eventTimes.push(activeTime);
+    .map((event) => validTrainStep(event, nowMs))
+    .filter((point): point is OperatorSeriesPoint => point !== undefined)
+    .map((point) => Date.parse(point.ts))
+    .filter((timestamp): timestamp is number => finiteNumber(timestamp) && timestamp <= nowMs);
   if (eventTimes.length === 0) return "IDLE";
   const latest = Math.max(...eventTimes);
   return nowMs - latest <= ACTIVE_RUN_TTL_MS ? "RUNNING" : "STALE";
 }
-
 export function buildOperatorSurfaceSnapshot({
   telemetry,
   activityLines,
   sourceIdentity,
   nowMs = Date.now(),
   maxAgentLines = 6,
+  plotWidth = 80,
 }: OperatorSurfaceInput): OperatorSurfaceSnapshot {
   const status = getOperatorRunStatus(telemetry, nowMs);
-  const run = telemetry.activeRun;
+  const rawGraphs = buildOperatorSurfaceGraphs(telemetry, plotWidth, nowMs);
+  const run = telemetry.activeRun && telemetry.activeRun.runId === rawGraphs.runId && status === "RUNNING" ? telemetry.activeRun : undefined;
   const metrics: string[] = [];
 
   if (run && status === "RUNNING") {
@@ -209,12 +334,28 @@ export function buildOperatorSurfaceSnapshot({
   }
 
   const governor = telemetry.lastGovernor;
-  if (governor && finiteNumber(governor.vramUsedGib) && finiteNumber(governor.vramTotalGib)) {
+  if (status === "RUNNING" && governor && governor.runId === rawGraphs.runId && finiteNumber(governor.vramUsedGib) && finiteNumber(governor.vramTotalGib)) {
     metrics.push(`VRAM ${governor.vramUsedGib.toFixed(1)}/${governor.vramTotalGib.toFixed(1)} GiB`);
   }
 
+  const decorateStale = (lines: string[]): string[] =>
+    status === "STALE" ? decorateHistory(lines, "STALE/HISTORICAL") : lines;
+  const graphs: OperatorSurfaceGraphs = status === "STALE"
+    ? {
+        ...rawGraphs,
+        loss: decorateStale(rawGraphs.loss),
+        resource: decorateStale(rawGraphs.resource),
+        modelGrowth: decorateStale(rawGraphs.modelGrowth),
+        capability: decorateStale(rawGraphs.capability),
+        training: decorateStale(rawGraphs.training),
+      }
+    : rawGraphs;
   const checkpoint = telemetry.lastCheckpoint;
-  if (checkpoint && /^[0-9a-f]{64}$/i.test(checkpoint.checkpointManifestSha256)) {
+  if (
+    status === "RUNNING" &&
+    checkpoint &&
+    checkpoint.runId === rawGraphs.runId
+  ) {
     metrics.push(`checkpoint step ${checkpoint.step} ${shortDigest(checkpoint.checkpointManifestSha256)}`);
   }
 
@@ -228,26 +369,105 @@ export function buildOperatorSurfaceSnapshot({
     metrics,
     source: sourceLine(sourceIdentity),
     agentLines,
-    graphs: buildOperatorSurfaceGraphs(telemetry),
+    graphs,
   };
 }
 
 export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
   width?: number;
+  height?: number;
+  terminalColumns?: number;
+  terminalRows?: number;
 }
 
-export function OperatorSurfacePane({ width, ...input }: OperatorSurfacePaneProps): React.ReactElement {
-  const snapshot = buildOperatorSurfaceSnapshot(input);
-  const statusColor = snapshot.status === "RUNNING" ? "green" : snapshot.status === "OFFLINE" ? "red" : "yellow";
-  const graphLines = [
-    "LOSS HISTORY",
-    ...snapshot.graphs.loss,
-    "RESOURCE HISTORY",
-    ...snapshot.graphs.resource,
-    snapshot.graphs.checkpoints.length > 0
-      ? `checkpoints ${snapshot.graphs.checkpoints.map((marker) => marker.step).join(" ")}`
-      : "checkpoints: none observed",
+function sharedWindow<T extends { step: number }>(samples: T[], maxPoints: number, checkpointSteps: Set<number> = new Set()): T[] {
+  const indices = retainedIndices(samples.length, maxPoints, new Set(samples.map((sample, index) => checkpointSteps.has(sample.step) ? index : -1).filter((index) => index >= 0)));
+  return indices.map((index) => samples[index]!);
+}
+function boundedSurfaceLine(line: string, width: number): string {
+  return line.length <= width ? line : `${line.slice(0, Math.max(0, width - 1))}\u2026`;
+}
+
+function compactMetricLine(
+  label: string,
+  points: Array<{ step: number; value?: number }>,
+  columns: number,
+  statusTag: string | undefined,
+): string {
+  const finite = points.filter((point) => finiteNumber(point.value));
+  const prefix = `${label.padEnd(20, " ")}${statusTag ? `${statusTag} ` : ""}`;
+  if (finite.length === 0) return `${prefix}SOURCE UNBOUND`;
+  if (finite.length < 2) return `${prefix}INSUFFICIENT REAL HISTORY`;
+  const min = Math.min(...finite.map((point) => point.value!));
+  const max = Math.max(...finite.map((point) => point.value!));
+  const span = max - min;
+  const glyphs = points.map((point) => {
+    if (!finiteNumber(point.value)) return "\u00b7";
+    const level = span === 0 ? 7 : Math.floor(((point.value - min) / span) * 7);
+    return PLOT_GLYPHS[Math.max(0, Math.min(7, level))];
+  }).join("");
+  return `${prefix}${glyphs.slice(0, columns)}`;
+}
+
+function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns: number): string[] {
+  const checkpointSteps = new Set(snapshot.graphs.checkpoints.map((checkpoint) => checkpoint.step));
+  const axisByStep = new Map<number, { step: number }>();
+  for (const point of snapshot.graphs.points) axisByStep.set(point.step, { step: point.step });
+  for (const point of snapshot.graphs.modelGrowthPoints) axisByStep.set(point.step, { step: point.step });
+  for (const point of snapshot.graphs.capabilityPoints) axisByStep.set(point.step, { step: point.step });
+  for (const step of checkpointSteps) axisByStep.set(step, { step });
+  const axisSamples = sharedWindow([...axisByStep.values()].sort((left, right) => left.step - right.step), plotColumns, checkpointSteps);
+  const stateTag = snapshot.status === "STALE" ? "STALE/HISTORICAL" : snapshot.status === "OFFLINE" ? "OFFLINE/HISTORICAL" : undefined;
+  const pointMetric = (value: (point: OperatorSeriesPoint) => number | undefined) =>
+    axisSamples.map((axisPoint) => {
+      const point = snapshot.graphs.points.find((candidate) => candidate.step === axisPoint.step);
+      return { step: axisPoint.step, value: point ? value(point) : undefined };
+    });
+  const eventMetric = (points: OperatorMetricPoint[]) =>
+    axisSamples.map((axisPoint) => ({ step: axisPoint.step, value: points.find((point) => point.step === axisPoint.step)?.value }));
+  const axis = axisSamples.length > 0
+    ? `step/time ${axisSamples.map((point) => point.step).join(" ")}`
+    : "step/time INSUFFICIENT REAL HISTORY";
+  const marker = axisSamples.length > 0
+    ? `checkpoint ${axisSamples.map((point) => checkpointSteps.has(point.step) ? "▲" : "·").join("")}`
+    : "checkpoint INSUFFICIENT REAL HISTORY";
+  return [
+    `TRAINING/LOSS${stateTag ? ` [${stateTag}]` : ""}`,
+    compactMetricLine("loss", pointMetric((point) => point.loss), plotColumns, stateTag),
+    `RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`,
+    compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag),
+    compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag),
+    compactMetricLine("throughput/speed", pointMetric((point) => point.throughput), plotColumns, stateTag),
+    `MODEL GROWTH${stateTag ? ` [${stateTag}]` : ""}`,
+    compactMetricLine("model growth", eventMetric(snapshot.graphs.modelGrowthPoints), plotColumns, stateTag),
+    `CAPABILITY SCORES${stateTag ? ` [${stateTag}]` : ""}`,
+    compactMetricLine("capability score", eventMetric(snapshot.graphs.capabilityPoints), plotColumns, stateTag),
+    boundedSurfaceLine(axis, plotColumns + 20),
+    boundedSurfaceLine(marker, plotColumns + 20),
   ];
+}
+export function OperatorSurfacePane({
+  width,
+  height,
+  terminalColumns,
+  terminalRows,
+  ...input
+}: OperatorSurfacePaneProps): React.ReactElement {
+  const terminalWidth = finiteNumber(terminalColumns) ? terminalColumns : 1727;
+  const terminalHeight = finiteNumber(terminalRows) ? terminalRows : 1447;
+  const effectiveWidth = Math.max(20, Math.min(finiteNumber(width) ? width : 36, terminalWidth));
+  const effectiveHeight = Math.max(8, Math.min(finiteNumber(height) ? height : 24, terminalHeight));
+  const snapshot = buildOperatorSurfaceSnapshot({
+    ...input,
+    plotWidth: Math.max(8, effectiveWidth - 4),
+  });
+  const statusColor = snapshot.status === "RUNNING" ? "green" : snapshot.status === "OFFLINE" ? "red" : "yellow";
+  const plotColumns = Math.max(8, effectiveWidth - 24);
+  const graphLines = compactSharedGraphLines(snapshot, plotColumns);
+  const compactMetrics = snapshot.metrics.length > 0
+    ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, effectiveWidth - 4)]
+    : [];
+  const compactAgentLines = snapshot.agentLines.slice(-1);
   const body = React.createElement(
     Box,
     {
@@ -255,18 +475,19 @@ export function OperatorSurfacePane({ width, ...input }: OperatorSurfacePaneProp
       borderColor: "cyan",
       borderTitle: "LIVE RUN / ACTIVITY/EVENT FEED",
       flexDirection: "column",
-      width,
-      minWidth: 36,
+      width: effectiveWidth,
+      height: effectiveHeight,
+      minWidth: effectiveWidth,
       flexShrink: 0,
       overflow: "hidden",
       paddingX: 1,
     },
     React.createElement(Text, { key: "status", color: statusColor, bold: true }, snapshot.status),
-    ...snapshot.metrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
+    ...compactMetrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
     React.createElement(Text, { key: "source", dimColor: true }, snapshot.source),
     ...graphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
     React.createElement(Text, { key: "stream-title", color: "magenta", bold: true }, "ACTIVITY/EVENT FEED"),
-    ...snapshot.agentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
+    ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
   );
 
   return React.createElement("div", { "data-operator-surface": "right-pane" }, body);

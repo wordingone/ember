@@ -141,8 +141,12 @@ export const ANALYTICS_SESSION_END      = "ember_repl_session_end";
 
 /** Width budget for the in-window provenance/agent pane. */
 export function operatorSurfaceWidth(terminalColumns: number): number {
-  if (!Number.isFinite(terminalColumns) || terminalColumns <= 0) return 36;
-  return Math.max(36, Math.floor(terminalColumns * 0.42));
+  if (!Number.isFinite(terminalColumns) || terminalColumns <= 0) return 28;
+  const minTranscript = Math.min(20, Math.max(10, Math.floor(terminalColumns * 0.5)));
+  const minPane = Math.min(28, Math.max(10, Math.floor(terminalColumns * 0.5)));
+  const preferred = Math.floor(terminalColumns * 0.42);
+  const maxPane = Math.max(minPane, terminalColumns - minTranscript);
+  return Math.max(minPane, Math.min(maxPane, preferred));
 }
 
 // ---------------------------------------------------------------------------
@@ -1381,103 +1385,87 @@ export function ReplScreen({
   // Render
   // ---------------------------------------------------------------------------
 
+  const paneWidth = operatorSurfaceWidth(terminalCols);
+  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
+
   return React.createElement(
     Box,
-    { flexDirection: "column", height: terminalRows },
-
-    // #561/#565: banner — always mounted, top-locked (flexShrink:0, same protection as the
-    // bottom chrome below). Previously this was `messages[0]` inside the scrolling/flex-end
-    // transcript, so once enough turns or activity events landed it scrolled away entirely
-    // (the operator's "top banner also scrolled away" report). It now renders directly from
-    // this component's own state, independent of transcript volume, restart, or resize.
+    { flexDirection: "row", width: terminalCols, height: terminalRows, overflow: "hidden" },
     React.createElement(
       Box,
-      { key: "banner", flexShrink: 0 },
-      React.createElement(Homescreen, {
-        state: {
-          model:   config.model,
-          cwd,
-          version: process.env["EMBER_VERSION"] ?? "0.0.0",
-          dataRoot: dataRoot ?? "",
-        },
-        viewportWidth: terminalCols,
-        boardSummary,
-      }),
-    ),
-
-    // Main conversation plus the right-side operator surface live in this one terminal window.
-    // The pane consumes only telemetry/activity state already read from real journals/receipts.
-    React.createElement(
-      Box,
-      { key: "workspace", flexDirection: "row", flexGrow: 1, minHeight: 0, overflow: "hidden" },
+      { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
       React.createElement(
         Box,
-        { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 36, overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
-        transcript,
+        { key: "banner", flexShrink: 0, overflow: "hidden" },
+        React.createElement(Homescreen, {
+          state: {
+            model:   config.model,
+            cwd,
+            version: process.env["EMBER_VERSION"] ?? "0.0.0",
+            dataRoot: dataRoot ?? "",
+          },
+          viewportWidth: mainColumnWidth,
+          boardSummary,
+        }),
       ),
-      React.createElement(OperatorSurfacePane, {
-        key: "operator-surface",
+      React.createElement(
+        Box,
+        { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
+        React.createElement(
+          Box,
+          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
+          transcript,
+        ),
+      ),
+      dialogOverlay,
+      busy
+        ? React.createElement(SpinnerAnimationRow, {
+            key:         "spinner",
+            elapsedMs:   spinnerElapsed,
+            startedAtMs: spinnerStartRef.current,
+          })
+        : null,
+      dropdownOpen && dropdownDisplay.visible.length > 0
+        ? React.createElement(SlashDropdown, {
+            key:           "slash-dropdown",
+            commands:      dropdownDisplay.visible,
+            selectedIndex: dropdownDisplay.selectedIndex,
+            overflowCount: dropdownDisplay.overflowCount,
+            width:         mainColumnWidth,
+          })
+        : null,
+      React.createElement(PromptInput, {
+        key:            "input",
+        state:          inputState,
+        isProcessing:   busy,
+        showStatusLine: false,
+        suggestion:     currentSuggestion ?? undefined,
+        width:          mainColumnWidth,
+      }),
+      React.createElement(StatusLine, {
+        key:            "status",
+        permissionMode: permModeState,
+        interrupt:      interruptHandler,
+        taskPanel:      taskPanelState,
         telemetry,
-        activityLines: getActivityFeedState().recentLines,
-        sourceIdentity: {
-          publicCommit: env["EMBER_PUBLIC_SOURCE_COMMIT"],
-          binarySha256: env["EMBER_CLI_BINARY_SHA256"],
-        },
-        width: operatorSurfaceWidth(terminalCols),
+        modelMetrics:   modelMetrics ?? undefined,
+        effort:         retryStatus,
+        degraded:       degradedBanner,
+        outage:         outageBanner,
       }),
     ),
-
-    // Dialog overlay (idle-return, cost-threshold, …)
-    dialogOverlay,
-
-    // Spinner while processing
-    busy
-      ? React.createElement(SpinnerAnimationRow, {
-          key:         "spinner",
-          elapsedMs:   spinnerElapsed,
-          startedAtMs: spinnerStartRef.current,
-        })
-      : null,
-
-    // Slash-command completion dropdown (b22 item 1) — sits directly above the input line while
-    // composing a command name; b23: each row's description ellipsis-truncates to the live
-    // terminal width instead of hard-clipping mid-word.
-    dropdownOpen && dropdownDisplay.visible.length > 0
-      ? React.createElement(SlashDropdown, {
-          key:           "slash-dropdown",
-          commands:      dropdownDisplay.visible,
-          selectedIndex: dropdownDisplay.selectedIndex,
-          overflowCount: dropdownDisplay.overflowCount,
-          width:         terminalCols,
-        })
-      : null,
-
-    // Text input (suggestion = dimmed ghost text after cursor; Tab accepts it)
-    // #303 fix: pass terminalCols so input rules re-measure on resize (b242 bar).
-    React.createElement(PromptInput, {
-      key:            "input",
-      state:          inputState,
-      isProcessing:   busy,
-      showStatusLine: false,
-      suggestion:     currentSuggestion ?? undefined,
-      width:          terminalCols,
-    }),
-
-    // Status bar — modelMetrics is null when the model server is unreachable (meter hidden).
-    // effort: issue #197's live retry-attempt indicator (transient; never a
-    // transcript message — see retryStatus state and its clear sites above).
-    // #303 fix: StatusLine doesn't have a width prop yet, but components inside
-    // (like text rendering) will respond to viewport width through their own renders.
-    React.createElement(StatusLine, {
-      key:            "status",
-      permissionMode: permModeState,
-      interrupt:      interruptHandler,
-      taskPanel:      taskPanelState,
+    React.createElement(OperatorSurfacePane, {
+      key: "operator-surface",
       telemetry,
-      modelMetrics:   modelMetrics ?? undefined,
-      effort:         retryStatus,
-      degraded:       degradedBanner,
-      outage:         outageBanner,
+      activityLines: getActivityFeedState().recentLines,
+      sourceIdentity: {
+        publicCommit: env["EMBER_PUBLIC_SOURCE_COMMIT"],
+        binarySha256: env["EMBER_CLI_BINARY_SHA256"],
+      },
+      width: paneWidth,
+      height: terminalRows,
+      terminalColumns: terminalCols,
+      terminalRows,
     }),
   );
 }

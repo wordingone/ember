@@ -39,6 +39,25 @@ describe("training telemetry custody", () => {
       handle.stop();
     }
   });
+  test("never stores invalid VRAM governor or train-step measurements", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-vram-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    const events = [
+      { ts: "2026-07-17T05:00:00.000Z", kind: "governor", source: "journal", payload: { free_gib: 25, total_gib: 24, run_id: "bad" } },
+      { ts: "2026-07-17T05:00:01.000Z", kind: "governor", source: "journal", payload: { free_gib: -1, total_gib: 24, run_id: "bad" } },
+      { ts: "2026-07-17T05:00:02.000Z", kind: "governor", source: "journal", payload: { total_gib: 24, run_id: "bad" } },
+      { ts: "2026-07-17T05:00:03.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-a", step: 1, loss: 2, free_gib: 30, total_gib: 24 } },
+    ];
+    await writeFile(channel, events.map((event) => JSON.stringify(event)).join("\n") + "\n", "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T05:00:04.000Z") });
+    try {
+      await Bun.sleep(650);
+      expect(getState().lastGovernor).toBeUndefined();
+      expect(getState().recentEvents).toHaveLength(4);
+    } finally {
+      handle.stop();
+    }
+  });
   test("marks a disappeared live channel OFFLINE and clears any running claim", async () => {
     scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-offline-"));
     const channel = join(scratch, "telemetry.jsonl");
@@ -76,6 +95,29 @@ describe("training telemetry custody", () => {
     }
   });
 
+  test("resets evidence when an equal-length channel is rewritten in place", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-rewrite-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    const oldEvent = { ts: "2026-07-17T05:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-a", step: 1, loss: 2 } };
+    const newEvent = { ts: "2026-07-17T05:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-b", step: 1, loss: 1 } };
+    const oldLine = JSON.stringify(oldEvent) + "\n";
+    const newLine = JSON.stringify(newEvent) + "\n";
+    expect(newLine.length).toBe(oldLine.length);
+    await writeFile(channel, oldLine, "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T05:00:01.000Z") });
+    try {
+      await Bun.sleep(650);
+      expect(getState().recentEvents.map((event) => event.payload["run_id"])).toEqual(["run-a"]);
+      await writeFile(channel, newLine, "utf8");
+      await Bun.sleep(650);
+      expect(getState().channelStatus).toBe("ONLINE");
+      expect(getState().recentEvents.map((event) => event.payload["run_id"])).toEqual(["run-b"]);
+      expect(getState().activeRun?.runId).toBe("run-b");
+    } finally {
+      handle.stop();
+    }
+  });
+
   test("keeps an unchanged channel ONLINE while ordinary run evidence expires to stale", async () => {
     scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-stale-"));
     const channel = join(scratch, "telemetry.jsonl");
@@ -90,4 +132,16 @@ describe("training telemetry custody", () => {
       handle.stop();
     }
   });
-});
+  test("rejects missing or invalid timestamps instead of fabricating evidence time", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-missing-ts-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    await writeFile(channel, JSON.stringify({ kind: "train_step", source: "journal", payload: { run_id: "run-a", step: 1, loss: 2 } }) + "\n" + JSON.stringify({ ts: "not-a-time", kind: "train_step", source: "journal", payload: { run_id: "run-b", step: 2, loss: 1 } }) + "\n", "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T05:00:01.000Z") });
+    try {
+      await Bun.sleep(650);
+      expect(getState().recentEvents).toHaveLength(0);
+      expect(getState().activeRun).toBeUndefined();
+    } finally {
+      handle.stop();
+    }
+  });});
