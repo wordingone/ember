@@ -60,5 +60,6 @@ must not be summarized as native capability coverage.
 Before adding any result, preserve the checkpoint manifest hash, evaluator
 commit, benchmark version/split, harness and protocol hashes, raw predictions,
 score artifact, resource receipt, variance, and comparator identity. The
-completion-certificate validator rejects a record that omits honest unresolved
+checked-in `manifests/ember-restart-eval-completion-certificate-v1.json` enumerates the current matrix and honest unresolved
+gaps; the completion-certificate validator rejects a record that omits honest unresolved
 gaps or inflates a preflight into a measured result.
