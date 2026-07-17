@@ -436,12 +436,63 @@ def _custody_ledger_lock_is_stale(lock_dir: Path, owner: Path) -> bool:
         return False
     return age_seconds >= _LEDGER_LOCK_OWNER_GRACE_SECONDS
 
+def _windows_custody_ledger_mutex_name(parent: Path) -> str:
+    """Return a process-global kernel mutex name for one canonical custody root."""
+
+    canonical = str(parent.resolve()).casefold().encode("utf-8")
+    return "Local\\ember-checkpoint-custody-" + hashlib.sha256(canonical).hexdigest()
+
+
+@contextlib.contextmanager
+def _windows_custody_ledger_mutex(parent: Path) -> object:
+    """Hold a kernel-owned cross-process mutex with automatic abandoned-owner recovery."""
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_mutex = kernel32.CreateMutexW
+    create_mutex.argtypes = (ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p)
+    create_mutex.restype = ctypes.c_void_p
+    wait_for_single_object = kernel32.WaitForSingleObject
+    wait_for_single_object.argtypes = (ctypes.c_void_p, ctypes.c_ulong)
+    wait_for_single_object.restype = ctypes.c_ulong
+    release_mutex = kernel32.ReleaseMutex
+    release_mutex.argtypes = (ctypes.c_void_p,)
+    release_mutex.restype = ctypes.c_bool
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (ctypes.c_void_p,)
+    close_handle.restype = ctypes.c_bool
+    handle = create_mutex(None, False, _windows_custody_ledger_mutex_name(parent))
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    acquired = False
+    try:
+        milliseconds = max(0, int(_LEDGER_LOCK_WAIT_SECONDS * 1000))
+        result = int(wait_for_single_object(handle, milliseconds))
+        if result in {0x00000000, 0x00000080}:  # WAIT_OBJECT_0 / WAIT_ABANDONED
+            acquired = True
+            yield
+            return
+        if result == 0x00000102:  # WAIT_TIMEOUT
+            raise RuntimeError("timed out waiting for the custody ledger writer lock")
+        raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        try:
+            if acquired and not release_mutex(handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            if not close_handle(handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+
+
 @contextlib.contextmanager
 def _custody_ledger_write_lock(parent: Path) -> object:
     """Serialize a ledger snapshot/replacement across threads and live processes."""
 
     parent = parent.resolve()
-    key = str(parent).casefold() if os.name == "nt" else str(parent)
+    if os.name == "nt":
+        with _windows_custody_ledger_mutex(parent):
+            yield
+        return
+    key = str(parent)
     with _LEDGER_THREAD_LOCKS_GUARD:
         thread_lock = _LEDGER_THREAD_LOCKS.setdefault(key, threading.Lock())
     thread_lock.acquire()

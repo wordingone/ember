@@ -936,24 +936,92 @@ class RunnerStorageTests(unittest.TestCase):
             _, recorded = run_vertical_slice._custody_ledger_snapshot(parent)
             self.assertEqual({row["pointer"] for row in recorded if isinstance(row, dict)}, {event["pointer"] for event in events})
 
-    def test_timed_out_ledger_waiter_preserves_live_owner_lock(self) -> None:
-        """A waiter that never acquires the lock must not remove the live owner’s custody boundary."""
+    @unittest.skipUnless(os.name == "nt", "native Windows mutex contract")
+    def test_windows_ledger_writer_lock_has_no_ownerless_custody_directory_gap(self) -> None:
+        """Windows uses a kernel-owned mutex rather than a mkdir-then-attest lock directory."""
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
-            lock_dir = parent / ".checkpoint-custody-deletion-ledger.lock"
-            lock_dir.mkdir()
-            owner = lock_dir / "owner.json"
-            owner_bytes = json.dumps({"pid": os.getpid(), "token": "live-owner"}, sort_keys=True).encode("utf-8") + b"\\n"
-            owner.write_bytes(owner_bytes)
-            event = {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "c" * 64 + ".json", "bytes": 1, "sha256": "c" * 64, "reason": "timed out waiter test"}
-            with unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_WAIT_SECONDS", 0.0):
-                with self.assertRaisesRegex(RuntimeError, "timed out"):
-                    run_vertical_slice._append_custody_ledger_transition(parent, event)
-            self.assertTrue(lock_dir.is_dir())
-            self.assertEqual(owner.read_bytes(), owner_bytes)
-            self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.jsonl").exists())
+            with run_vertical_slice._custody_ledger_write_lock(parent):
+                self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.lock").exists())
+    def test_timed_out_ledger_waiter_preserves_live_owner_lock(self) -> None:
+        """A native waiter cannot append while another process owns the kernel mutex."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ready = parent / "owner-ready"
+            release = parent / "owner-release"
+            module_root = ROOT / "tools" / "ember-restart-3b"
+            owner = (
+                "import os, pathlib, sys, time\n"
+                f"sys.path.insert(0, {str(module_root)!r})\n"
+                "import run_vertical_slice as runner\n"
+                "parent = pathlib.Path(os.environ['LEDGER_PARENT'])\n"
+                "ready = pathlib.Path(os.environ['LEDGER_READY'])\n"
+                "release = pathlib.Path(os.environ['LEDGER_RELEASE'])\n"
+                "with runner._custody_ledger_write_lock(parent):\n"
+                "    ready.write_text('held')\n"
+                "    while not release.exists(): time.sleep(0.005)\n"
+            )
+            environment = os.environ.copy()
+            environment.update({"LEDGER_PARENT": str(parent), "LEDGER_READY": str(ready), "LEDGER_RELEASE": str(release)})
+            process = subprocess.Popen([sys.executable, "-c", owner], env=environment, text=True)
+            try:
+                deadline = time.monotonic() + 5.0
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists(), "owner process did not acquire the kernel mutex")
+                event = {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "c" * 64 + ".json", "bytes": 1, "sha256": "c" * 64, "reason": "timed out waiter test"}
+                with unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_WAIT_SECONDS", 0.0):
+                    with self.assertRaisesRegex(RuntimeError, "timed out"):
+                        run_vertical_slice._append_custody_ledger_transition(parent, event)
+                self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.jsonl").exists())
+            finally:
+                release.touch(exist_ok=True)
+                if process.poll() is None:
+                    self.assertEqual(process.wait(timeout=10), 0)
+    @unittest.skipUnless(os.name == "nt", "native Windows mutex contract")
+    def test_windows_ledger_mutex_recovers_an_abandoned_owner_without_lock_artifacts(self) -> None:
+        """A dead mutex owner cannot strand custody or require a creator-attestation grace path."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ready = parent / "owner-ready"
+            module_root = ROOT / "tools" / "ember-restart-3b"
+            owner = (
+                "import os, pathlib, sys\n"
+                f"sys.path.insert(0, {str(module_root)!r})\n"
+                "import run_vertical_slice as runner\n"
+                "parent = pathlib.Path(os.environ['LEDGER_PARENT'])\n"
+                "ready = pathlib.Path(os.environ['LEDGER_READY'])\n"
+                "with runner._custody_ledger_write_lock(parent):\n"
+                "    ready.write_text('held', encoding='utf-8')\n"
+                "    os._exit(0)\n"
+            )
+            environment = os.environ.copy()
+            environment["LEDGER_PARENT"] = str(parent)
+            environment["LEDGER_READY"] = str(ready)
+            process = subprocess.Popen([sys.executable, "-c", owner], env=environment)
+            try:
+                deadline = time.monotonic() + 10
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists(), "owner never acquired the native mutex")
+                self.assertEqual(process.wait(timeout=10), 0)
+                event = {
+                    "schema_version": "ember-checkpoint-custody-deletion-v2",
+                    "event": "PREPARED",
+                    "pointer": ".checkpoint-quarantine/evidence-" + "c" * 64 + ".json",
+                    "bytes": 1,
+                    "sha256": "c" * 64,
+                    "reason": "abandoned native mutex owner test",
+                }
+                run_vertical_slice._append_custody_ledger_transition(parent, event)
+                self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.lock").exists())
+                self.assertEqual(len(run_vertical_slice._custody_ledger_snapshot(parent)[1]), 1)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=10)
     def test_atomic_ledger_reclaims_crashed_owner_before_owner_attestation(self) -> None:
-        """A process dying after mkdir but before owner.json cannot strand the ledger."""
+        """The non-Windows fallback reclaims a creator that died before owner.json."""
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             lock_dir = parent / ".checkpoint-custody-deletion-ledger.lock"
@@ -961,8 +1029,9 @@ class RunnerStorageTests(unittest.TestCase):
             environment = os.environ.copy()
             environment["LEDGER_LOCK"] = str(lock_dir)
             self.assertEqual(subprocess.run([sys.executable, "-c", creator], env=environment, check=False).returncode, 0)
-            with unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_OWNER_GRACE_SECONDS", 0.0):
-                run_vertical_slice._append_custody_ledger_transition(parent, {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json", "bytes": 1, "sha256": "b" * 64, "reason": "unattested crashed owner test"})
+            event = {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json", "bytes": 1, "sha256": "b" * 64, "reason": "unattested crashed owner test"}
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_OWNER_GRACE_SECONDS", 0.0), unittest.mock.patch.object(run_vertical_slice, "_atomic_replace_durable", side_effect=os.replace):
+                run_vertical_slice._append_custody_ledger_transition(parent, event)
             self.assertFalse(lock_dir.exists())
     def test_custody_ledger_lock_namespace_is_not_custody_evidence(self) -> None:
         """The ephemeral cross-process lock is excluded from durable custody accounting."""
@@ -973,7 +1042,7 @@ class RunnerStorageTests(unittest.TestCase):
             (lock / "owner.json").write_text("{\\\"pid\\\":1}\\n", encoding="utf-8")
             self.assertEqual(run_vertical_slice._custody_serialized_bytes(parent), 0)
     def test_atomic_ledger_reclaims_crashed_process_owner(self) -> None:
-        """A dead process owner cannot permanently strand the rooted ledger lock."""
+        """The non-Windows fallback reclaims a dead owner process without stranding the ledger."""
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             lock_dir = parent / ".checkpoint-custody-deletion-ledger.lock"
@@ -986,9 +1055,10 @@ class RunnerStorageTests(unittest.TestCase):
             environment = os.environ.copy()
             environment["LEDGER_LOCK"] = str(lock_dir)
             self.assertEqual(subprocess.run([sys.executable, "-c", creator], env=environment, check=False).returncode, 0)
-            run_vertical_slice._append_custody_ledger_transition(parent, {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 1, "sha256": "a" * 64, "reason": "crashed owner test"})
+            event = {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 1, "sha256": "a" * 64, "reason": "crashed owner test"}
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.object(run_vertical_slice, "_atomic_replace_durable", side_effect=os.replace):
+                run_vertical_slice._append_custody_ledger_transition(parent, event)
             self.assertFalse(lock_dir.exists())
-
     def test_atomic_bytes_refuses_to_claim_a_windows_replace_failure(self) -> None:
         """A write-through failure leaves no target or temporary custody claim behind."""
         with tempfile.TemporaryDirectory() as directory:
