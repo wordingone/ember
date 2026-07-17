@@ -12,7 +12,7 @@
 // The watcher is steerable: consumers call startTelemetryWatch() and hold the
 // returned handle.stop() to tear it down cleanly.
 
-import { readFile } from "fs/promises";
+import { readFile, stat } from "fs/promises";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -83,6 +83,7 @@ export interface RunStatusState {
 
 export interface TelemetryState {
   recentEvents: TelemetryEvent[];
+  channelStatus?: "UNKNOWN" | "ONLINE" | "OFFLINE";
   lastGovernor?: GovernorSnapshot;
   activeRun?: ActiveRunState;
   lastCheckpoint?: CheckpointState;
@@ -93,6 +94,7 @@ export interface TelemetryState {
 let _state: TelemetryState = { recentEvents: [] };
 let _byteOffset = 0;
 let _lineBuffer = "";
+let _fileIdentity: string | undefined;
 let _intervalHandle: ReturnType<typeof setInterval> | null = null;
 
 // ---------------------------------------------------------------------------
@@ -199,13 +201,38 @@ function checkActiveRunExpiry(clock: () => number): void {
   }
 }
 
+function markChannelOffline(): void {
+  _state = { ..._state, channelStatus: "OFFLINE", activeRun: undefined };
+}
+
+function resetForNewChannelFile(): void {
+  _state = { recentEvents: [], channelStatus: "ONLINE" };
+  _byteOffset = 0;
+  _lineBuffer = "";
+}
+
+function fileIdentity(info: { dev: number; ino: number; birthtimeMs: number }): string {
+  return `${info.dev}:${info.ino}:${info.birthtimeMs}`;
+}
+
 async function pollOnce(path: string, clock: () => number): Promise<void> {
   let buf: Buffer;
+  let identity: string;
   try {
+    const info = await stat(path);
+    if (!info.isFile()) throw new Error("telemetry channel is not a regular file");
+    identity = fileIdentity(info);
     buf = await readFile(path);
   } catch {
+    markChannelOffline();
     return;
   }
+
+  const rotated = _fileIdentity !== undefined && identity !== _fileIdentity;
+  const truncated = buf.length < _byteOffset;
+  if (rotated || truncated) resetForNewChannelFile();
+  _fileIdentity = identity;
+  _state = { ..._state, channelStatus: "ONLINE" };
 
   if (buf.length === 0) {
     checkActiveRunExpiry(clock);
@@ -277,9 +304,10 @@ export function startTelemetryWatch(
   const clock = deps?.now ?? Date.now.bind(Date);
 
   // Reset state for a fresh watch session
-  _state = { recentEvents: [] };
+  _state = { recentEvents: [], channelStatus: "UNKNOWN" };
   _byteOffset = 0;
   _lineBuffer = "";
+  _fileIdentity = undefined;
 
   _intervalHandle = setInterval(() => {
     pollOnce(path, clock);
