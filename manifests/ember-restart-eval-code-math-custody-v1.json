@@ -35,6 +35,11 @@
             "schema_version": "ember-restart-math500-freeze-v2"
         },
         "target_execution_permitted": false
+        ,"runtime_audit": {
+            "path": "scripts/ember_restart_eval_math500_runtime_audit.py",
+            "sha256": "509cb13f4b17fa59ccd85bae39aec6b87e298374e40cc1b239e62fb346a10a09",
+            "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+        }
     },
     "benchmark_id": "evalplus",
     "goal_id": "EMBER-02",
