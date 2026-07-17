@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 //! Fail-closed host resource admission and exact owned-tree termination planning.
 //!
 //! This module is deliberately a policy boundary rather than a process-control
