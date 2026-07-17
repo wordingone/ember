@@ -606,6 +606,45 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertFalse(candidate.exists())
             self.assertEqual(__import__("hashlib").sha256(target.joinpath("shared.pt").read_bytes()).hexdigest(), shared_sha256)
             self.assertEqual(admitted["checkpoint_manifest_sha256"], __import__("hashlib").sha256(target.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest())
+    def test_admission_rejects_counter_mapping_that_mutates_shard_after_verifier_returns(self) -> None:
+        """The final immutable closure snapshot must follow every Mapping-controlled access."""
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=94)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-mapping-mutation"
+
+            class MutatingReceipt(dict[str, object]):
+                def __init__(self, payload: dict[str, object], shard: Path) -> None:
+                    super().__init__(payload)
+                    self._shard = shard
+                    self._mutated = False
+
+                def items(self):  # type: ignore[override]
+                    if not self._mutated:
+                        self._mutated = True
+                        self._shard.write_bytes(b"mutated-after-final-snapshot")
+                    return super().items()
+
+            def verifier(candidate: Path, receipt: dict[str, object]) -> dict[str, object]:
+                payload = _counter_receipt(candidate, receipt)
+                return MutatingReceipt(payload, candidate / "expert-vision.pt")
+
+            with self.assertRaises(ValueError):
+                write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=94,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    pre_publish_verifier=verifier,
+                )
+            self.assertFalse(target.exists())
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
+            self.assertEqual(len(candidates), 1)
+            self.assertEqual(candidates[0].joinpath("expert-vision.pt").read_bytes(), b"mutated-after-final-snapshot")
+
     def test_refuses_checkpoint_receipt_without_optimizer_contract(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=11)

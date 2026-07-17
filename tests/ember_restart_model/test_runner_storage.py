@@ -433,6 +433,22 @@ class RunnerStorageTests(unittest.TestCase):
             evidence = list((parent / ".checkpoint-quarantine").glob("*.json"))
             self.assertLessEqual(len(evidence), 32)
             self.assertLessEqual(sum(path.stat().st_size for path in evidence), 1024 * 1024)
+    def test_bounded_evidence_retention_preserves_noncanonical_preexisting_leaf(self) -> None:
+        """Only generator-valid evidence may enter the deletion ledger or retention set."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                original = run_vertical_slice._write_bounded_quarantine_evidence(parent, "valid", {"result": "OLD"})
+                invalid = parent / ".checkpoint-quarantine" / "UPPER.json"
+                invalid.write_bytes(b"preserve-me")
+                replacement = run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+            self.assertFalse(original.exists())
+            self.assertTrue(replacement.exists())
+            self.assertEqual(invalid.read_bytes(), b"preserve-me")
+            events = [json.loads(line) for line in (parent / ".checkpoint-custody-deletion-ledger.jsonl").read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(all(event["pointer"] != ".checkpoint-quarantine/UPPER.json" for event in events))
+            run_vertical_slice._custody_reconciliation(parent)
+
     def test_production_artifact_root_requires_b_unless_c_relocation_is_explicitly_runner_bound(self) -> None:
         with self.assertRaisesRegex(ValueError, "B:"):
             run_vertical_slice.production_artifact_root(Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))
@@ -480,6 +496,30 @@ class RunnerStorageTests(unittest.TestCase):
                 self.skipTest("symlink creation unavailable")
             with self.assertRaisesRegex(RuntimeError, "symlink or reparse"):
                 run_vertical_slice._custody_serialized_bytes(parent)
+
+    def test_bounded_evidence_retention_revalidates_victim_before_unlink(self) -> None:
+        """A post-PREPARED mutation must preserve the victim and never commit deletion."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
+                victim = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "OLD"})
+                real_identity = run_vertical_slice._quarantine_evidence_identity
+                calls = 0
+
+                def mutate_at_unlink_boundary(root: Path, path: Path):
+                    nonlocal calls
+                    if path == victim:
+                        calls += 1
+                        if calls == 3:
+                            path.write_bytes(b"swapped-after-prepared")
+                    return real_identity(root, path)
+
+                with unittest.mock.patch.object(run_vertical_slice, "_quarantine_evidence_identity", side_effect=mutate_at_unlink_boundary):
+                    with self.assertRaisesRegex(RuntimeError, "changed before unlink"):
+                        run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "NEW"})
+            self.assertEqual(victim.read_bytes(), b"swapped-after-prepared")
+            events = [json.loads(line) for line in (parent / ".checkpoint-custody-deletion-ledger.jsonl").read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([event["event"] for event in events], ["PREPARED"])
 
     def test_evidence_deletion_prepared_failure_preserves_and_reconciles(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

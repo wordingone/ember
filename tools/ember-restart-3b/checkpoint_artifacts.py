@@ -650,10 +650,27 @@ def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> 
     return target, publication_mode
 
 
-def _validate_counter_receipt(candidate: Path, manifest_receipt: Mapping[str, Any], returned: Any) -> dict[str, Any]:
+def _materialize_counter_receipt(returned: Any) -> dict[str, Any]:
+    """Force every callback-controlled Mapping access before closure revalidation."""
+
     if not isinstance(returned, Mapping):
         raise ValueError("post-run judge must return a validated counter receipt")
+    try:
+        encoded = json.dumps(dict(returned.items()), sort_keys=True, separators=(",", ":"))
+        materialized = json.loads(encoded)
+    except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("post-run judge returned a non-JSON counter receipt") from error
+    if not isinstance(materialized, dict):
+        raise ValueError("post-run judge must return a counter receipt object")
+    return materialized
+
+
+def _validate_counter_receipt(manifest_receipt: Mapping[str, Any], returned: Mapping[str, Any], persisted: Any) -> dict[str, Any]:
+    """Validate only immutable snapshots; this function must never read candidate paths."""
+
     validated = validate_realization_receipt(returned)
+    if not isinstance(persisted, Mapping) or validate_realization_receipt(persisted) != validated:
+        raise ValueError("post-run counter receipt file does not match the judge result")
     architecture = manifest_receipt.get("architecture")
     if not isinstance(architecture, Mapping):
         raise ValueError("checkpoint manifest lacks measured architecture for counter validation")
@@ -670,14 +687,6 @@ def _validate_counter_receipt(candidate: Path, manifest_receipt: Mapping[str, An
         expected[field] = architecture.get(field)
     if any(validated.get(field) != value for field, value in expected.items()):
         raise ValueError("post-run counter receipt does not bind subject, source, genesis, or measured counts")
-    receipt_path = candidate / "parameter-counter-receipt.json"
-    try:
-        receipt_bytes = receipt_path.read_bytes()
-        receipt_payload = json.loads(receipt_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError("post-run judge did not persist a valid counter receipt") from error
-    if validate_realization_receipt(receipt_payload) != validated:
-        raise ValueError("post-run counter receipt file does not match the judge result")
     return validated
 
 
@@ -686,12 +695,13 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     if _is_link_or_reparse(manifest_path):
         raise ValueError("checkpoint manifest cannot be a symlink or reparse point")
     try:
-        manifest = json.loads(manifest_path.read_bytes())
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError("quarantined checkpoint candidate lacks a valid manifest") from error
     if not isinstance(manifest, dict):
         raise ValueError("quarantined checkpoint candidate manifest is not an object")
-    manifest_sha256 = _sha256(manifest_path)
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
     receipt = {**manifest, "checkpoint_manifest_sha256": manifest_sha256}
     records = _validated_records(candidate, receipt)
     declared_files = {"checkpoint-manifest.json", *records}
@@ -708,18 +718,32 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     missing = declared_files - actual_files
     if unexpected or missing:
         raise ValueError("checkpoint candidate filesystem closure is not exact")
-    metadata = {}
+    metadata: dict[str, dict[str, Any]] = {}
+    counter_receipt_payload: dict[str, Any] | None = None
     for name in sorted(actual_files & _ALLOWED_CANDIDATE_METADATA):
         path = candidate / name
-        metadata[name] = {"sha256": _sha256(path), "bytes": path.stat().st_size}
+        try:
+            payload_bytes = path.read_bytes()
+        except OSError as error:
+            raise ValueError("checkpoint candidate metadata cannot be read") from error
+        metadata[name] = {"sha256": hashlib.sha256(payload_bytes).hexdigest(), "bytes": len(payload_bytes)}
+        if name == "parameter-counter-receipt.json":
+            try:
+                payload = json.loads(payload_bytes)
+            except (UnicodeError, json.JSONDecodeError) as error:
+                raise ValueError("post-run judge did not persist a valid counter receipt") from error
+            if not isinstance(payload, dict):
+                raise ValueError("post-run judge did not persist a valid counter receipt")
+            counter_receipt_payload = payload
     metadata_bytes = sum(int(item["bytes"]) for item in metadata.values())
-    serialized_bytes = sum(int(record["bytes"]) for record in records.values()) + manifest_path.stat().st_size + metadata_bytes
-    incremental_bytes = sum(int(record["incremental_bytes"]) for record in records.values()) + manifest_path.stat().st_size + metadata_bytes
+    serialized_bytes = sum(int(record["bytes"]) for record in records.values()) + len(manifest_bytes) + metadata_bytes
+    incremental_bytes = sum(int(record["incremental_bytes"]) for record in records.values()) + len(manifest_bytes) + metadata_bytes
     return {
         **receipt,
         "metadata": metadata,
         "serialized_bytes": serialized_bytes,
         "incremental_publication_bytes": incremental_bytes,
+        "_counter_receipt_payload": counter_receipt_payload,
     }
 
 
@@ -744,22 +768,30 @@ def admit_quarantined_checkpoint(
         raise ValueError("quarantined checkpoint candidate retains a writer lease")
     receipt = _checkpoint_candidate_receipt(candidate)
     try:
-        returned_counter_receipt = verifier(candidate, receipt)
+        # Take a snapshot after direct verifier work, then materialize the returned
+        # Mapping before the final snapshot.  No callback-controlled object is touched
+        # after final_snapshot.
+        returned_counter_receipt = verifier(candidate, dict(receipt))
         try:
-            final_receipt = _checkpoint_candidate_receipt(candidate)
+            post_callback_receipt = _checkpoint_candidate_receipt(candidate)
         except Exception as error:
             raise ValueError("checkpoint candidate changed after verifier validation") from error
-        volatile = {"metadata", "serialized_bytes", "incremental_publication_bytes"}
+        volatile = {"metadata", "serialized_bytes", "incremental_publication_bytes", "_counter_receipt_payload"}
         initial_stable = {key: value for key, value in receipt.items() if key not in volatile}
-        final_stable = {key: value for key, value in final_receipt.items() if key not in volatile}
-        if final_stable != initial_stable:
+        post_callback_stable = {key: value for key, value in post_callback_receipt.items() if key not in volatile}
+        if post_callback_stable != initial_stable:
             raise ValueError("checkpoint candidate changed after verifier validation")
-        _validate_counter_receipt(candidate, final_receipt, returned_counter_receipt)
-        post_verifier_bytes = int(final_receipt["incremental_publication_bytes"])
+        returned_counter_receipt = _materialize_counter_receipt(returned_counter_receipt)
+        _validate_counter_receipt(post_callback_receipt, returned_counter_receipt, post_callback_receipt.get("_counter_receipt_payload"))
+        post_verifier_bytes = int(post_callback_receipt["incremental_publication_bytes"])
         if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
             raise ValueError("counter evidence exceeds the derived byte bound")
         if published_root.exists():
             raise FileExistsError(f"published checkpoint bundle appeared during admission: {published_root}")
+        # This is deliberately the final candidate operation before no-replace promotion.
+        final_receipt = _checkpoint_candidate_receipt(candidate)
+        if final_receipt != post_callback_receipt:
+            raise ValueError("checkpoint candidate changed after verifier validation")
     except Exception as error:
         _retain_write_failure_evidence(published_root, candidate, error)
         raise
@@ -770,7 +802,7 @@ def admit_quarantined_checkpoint(
             _retain_write_failure_evidence(published_root, candidate, error)
             raise FileExistsError(f"published checkpoint bundle appeared during admission: {published_root}") from error
         raise
-    return final_receipt
+    return {key: value for key, value in final_receipt.items() if key != "_counter_receipt_payload"}
 
 def _write_checkpoint_artifacts_impl(
     model: UnifiedDecoder,
