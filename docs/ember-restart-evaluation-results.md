@@ -50,7 +50,7 @@ preflight record is not a checkpoint-bound score.
 | Files | SWE-bench source custody plus deterministic patch/changed-file fixture adapter | `SELFTEST_ONLY`; no frozen repository execution environment or checkpoint predictions |
 | Browser/UI | BrowserGym/MiniWoB source pin | No local pinned BrowserGym runtime or frozen MiniWoB task bundle |
 | Image | MMMU validation custody and scorer pin | No checkpoint-bound multimodal predictions |
-| Audio | AudioBench custody and bound scorer pin | No checkpoint-bound audio predictions |
+| Audio | AudioBench custody and bound scorer pin | No checkpoint-bound audio predictions; no closed-run artifact hash is materialized, so caller-selected runs are rejected |
 | Structured tools | BFCL static task custody and preflight scorer | No pinned live tool harness or checkpoint predictions |
 
 These visible failure and preflight states are intentionally non-admissible and
