@@ -39,4 +39,55 @@ describe("training telemetry custody", () => {
       handle.stop();
     }
   });
+  test("marks a disappeared live channel OFFLINE and clears any running claim", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-offline-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    await writeFile(channel, JSON.stringify({ ts: "2026-07-17T05:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-a", step: 1, loss: 2 } }) + "\n", "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T05:00:01.000Z") });
+    try {
+      await Bun.sleep(650);
+      expect(getState().channelStatus).toBe("ONLINE");
+      await rm(channel, { force: true });
+      await Bun.sleep(650);
+      expect(getState().channelStatus).toBe("OFFLINE");
+      expect(getState().activeRun).toBeUndefined();
+    } finally {
+      handle.stop();
+    }
+  });
+
+  test("resets offset and evidence on channel rotation without mixing runs", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-rotate-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    const oldEvent = { ts: "2026-07-17T05:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "old-run", step: 1, loss: 2 } };
+    const newEvent = { ts: "2026-07-17T05:00:02.000Z", kind: "train_step", source: "journal", payload: { run_id: "new-run", step: 7, loss: 1 } };
+    await writeFile(channel, JSON.stringify(oldEvent) + "\n", "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T05:00:03.000Z") });
+    try {
+      await Bun.sleep(650);
+      await rm(channel, { force: true });
+      await writeFile(channel, JSON.stringify(newEvent) + "\n", "utf8");
+      await Bun.sleep(650);
+      expect(getState().channelStatus).toBe("ONLINE");
+      expect(getState().recentEvents.map((event) => event.payload["run_id"])).toEqual(["new-run"]);
+      expect(getState().activeRun?.runId).toBe("new-run");
+    } finally {
+      handle.stop();
+    }
+  });
+
+  test("keeps an unchanged channel ONLINE while ordinary run evidence expires to stale", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-stale-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    await writeFile(channel, JSON.stringify({ ts: "2026-07-17T05:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-a", step: 1, loss: 2 } }) + "\n", "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T06:00:00.000Z") });
+    try {
+      await Bun.sleep(650);
+      expect(getState().channelStatus).toBe("ONLINE");
+      expect(getState().activeRun).toBeUndefined();
+      expect(getState().recentEvents).toHaveLength(1);
+    } finally {
+      handle.stop();
+    }
+  });
 });
