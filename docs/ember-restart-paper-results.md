@@ -36,3 +36,6 @@ identity when strict manifests are used, but no canonical checkpoint predictions
 exist. BrowserGym fixture outcomes are `SELFTEST_ONLY_FIXTURE_BROWSER_OUTCOMES`;
 BFCL runtime is `RUNTIME_HELD_UNPINNED_DEPENDENCY_AND_LIVE_TOOL_NETWORK`. The
 result surface is [`ember-restart-evaluation-results.md`](ember-restart-evaluation-results.md).
+
+
+The current matrix certificate is [ember-restart-eval-completion-certificate-v1.json](../manifests/ember-restart-eval-completion-certificate-v1.json); it records exact custody and unresolved non-execution gaps, with no measured score claim.

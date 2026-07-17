@@ -36,3 +36,6 @@ predictions exist. HellaSwag has a deterministic scorer but its frozen labels ar
 withheld; ARC-Challenge and GSM8K are likewise preflight-only. No score is
 inferred from these descriptors.
 The MATH-500 revision `2cd6fe926f1203a15d19f73c9a329cbe62b806fd` is custody-materialized as a 500-row MIT-licensed frozen suite (card SHA-256 `561724c0c751b31828bf8c2f5c7ffc20dc92deb804657c86d9f07a99e8100fd9`) with disposition `FROZEN_MATH500_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS`. BrowserGym source commit/tree/license is custody-bound, but its runtime and frozen MiniWoB task set remain absent. MMMU validation now also has a 900-row same-byte image-input digest artifact with disposition `FROZEN_MMMU_IMAGE_INPUTS_NO_CHECKPOINT_BOUND_PREDICTIONS`. None has checkpoint-bound predictions or a capability score.
+
+
+The matrix certificate is [ember-restart-eval-completion-certificate-v1.json](../manifests/ember-restart-eval-completion-certificate-v1.json); it records PREFLIGHT_ONLY boundaries and unresolved runtime gaps, not capability credit.
