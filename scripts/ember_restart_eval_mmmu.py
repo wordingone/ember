@@ -81,7 +81,12 @@ def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> tuple[
     image_sha = image_materialization.get("artifact_sha256") if isinstance(image_materialization, dict) else ""
     if image_materialization is not None and (not isinstance(image_sha, str) or len(image_sha) != 64 or image_sha.lower() != image_sha):
         raise ValueError("MMMU image custody requires artifact identity")
-    expected = sha256(f"MMMU:{version}:{answer_sha}:{scorer['sha256']}:{license_sha256}:{upstream_tree}:{adapter['sha256']}:{image_sha}".encode())
+    checkpoint_sha256 = manifest.get("checkpoint_manifest_sha256")
+    config_sha256 = manifest.get("model_config_sha256")
+    for field, value in (("checkpoint_manifest_sha256", checkpoint_sha256), ("model_config_sha256", config_sha256)):
+        if not isinstance(value, str) or len(value) != 64 or value.lower() != value or any(character not in "0123456789abcdef" for character in value):
+            raise ValueError(f"MMMU frozen custody requires {field}")
+    expected = sha256(f"MMMU:{version}:{answer_sha}:{scorer['sha256']}:{license_sha256}:{upstream_tree}:{adapter['sha256']}:{image_sha}:{checkpoint_sha256}:{config_sha256}".encode())
     if protocol != expected:
         raise ValueError("MMMU protocol is not derived from complete scorer/source custody")
     return protocol, source
