@@ -53,7 +53,7 @@ def _fixture(protocol_sha256: str | None = None):
         "scoring_adapter": {"path": "scripts/ember_restart_eval_mmmu.py", "sha256": _digest(adapter)},
         "checkpoint_manifest_sha256": checkpoint,
         "model_config_sha256": config,
-        "protocol_sha256": protocol,
+        "protocol_sha256": protocol if protocol_sha256 is None else protocol_sha256,
     }
     return json.dumps(custody, sort_keys=True, separators=(",", ":")).encode(), answers_bytes, image_bytes, scorer, adapter, protocol
 
