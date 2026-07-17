@@ -219,6 +219,14 @@ class RunnerPreflightTests(unittest.TestCase):
         )
         self.assertEqual(full, 3_839_161_856 * 2 + active * 2 + 1024**3)
 
+    def test_checkpoint_host_commit_reserve_is_contract_bound(self) -> None:
+        self.assertEqual(
+            run_vertical_slice.checkpoint_host_commit_reserve_bytes(
+                ROOT / "configs" / "ember-restart-3b.json"
+            ),
+            8 * 1024**3,
+        )
+
     def test_semantic_publication_plan_bounds_write_budget_by_interval_and_final_checkpoint(self) -> None:
         plan = run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=40)
         self.assertEqual(plan, {"publication_count": 4, "checkpoint_byte_bound": 10, "projected_write_bytes": 40})
@@ -305,6 +313,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(retention_bounds, [run_vertical_slice.checkpoint_retention_budget_bytes(ROOT / "configs" / "ember-restart-3b.json")])
         self.assertEqual(writer.call_count, 1)
         self.assertEqual(writer.call_args.kwargs["max_serialized_bytes"], bound)
+        self.assertEqual(writer.call_args.kwargs["host_commit_reserve_bytes"], 8 * 1024**3)
 
     def test_semantic_run_resume_uses_parent_step_and_final_publication(self) -> None:
         result, segment_kwargs, writer, _retention_bounds = self._run_semantic_with_mocks(resume=True)
@@ -314,6 +323,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(result["publication_plan"], {"publication_count": 2, "checkpoint_byte_bound": bound, "projected_write_bytes": 2 * bound})
         self.assertEqual(writer.call_count, 2)
         self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
+        self.assertTrue(all(call.kwargs["host_commit_reserve_bytes"] == 8 * 1024**3 for call in writer.call_args_list))
     def _run_vertical_resume_with_mocks(
         self, *, specialist: bool, callback_steps: tuple[int, ...] = (),
     ) -> tuple[dict[str, object], dict[str, object], MagicMock]:
