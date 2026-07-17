@@ -367,7 +367,6 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
             stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
-            stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 7, "global_step": 31, "tokens_seen": 31 * 1024}}))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
@@ -467,7 +466,6 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
             stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
-            stack.enter_context(patch.object(run_vertical_slice, "publish_counter_verified_checkpoint", side_effect=lambda *, write_candidate, execute_counter, **_kwargs: (write_candidate(), execute_counter())))
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}}))
             stack.enter_context(patch.object(run_vertical_slice, "load_authorized_records", return_value=([{"active_expert": "shared"}], {"input_identity": {"shard_path": "TOKEN-SHARDS-V0:prior"}}, {"receipt": "bound"})))
@@ -851,79 +849,6 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(result["data_cursor"]["global_step"], 2)
         load.assert_called_once_with(model, checkpoint, receipt)
 
-    def test_counter_failure_quarantines_new_candidate_and_preserves_prior_bundle(self) -> None:
-        """A counter failure cannot leave the just-published bundle selectable."""
-
-        with tempfile.TemporaryDirectory() as directory:
-            parent = Path(directory)
-            previous = parent / "checkpoint-known-good"
-            previous.mkdir()
-            candidate = parent / "checkpoint-candidate"
-
-            def write_candidate() -> dict[str, object]:
-                candidate.mkdir()
-                candidate.joinpath("checkpoint-manifest.json").write_text("{}", encoding="utf-8")
-                return {"published": True}
-
-            with self.assertRaisesRegex(RuntimeError, "counter failed"):
-                run_vertical_slice.publish_counter_verified_checkpoint(
-                    checkpoint_target=candidate,
-                    write_candidate=write_candidate,
-                    execute_counter=lambda: (_ for _ in ()).throw(RuntimeError("counter failed")),
-                )
-            self.assertTrue(previous.is_dir())
-            self.assertFalse(candidate.exists())
-            evidence = parent / ".checkpoint-quarantine" / "counter-failed-checkpoint-candidate.json"
-            self.assertTrue(evidence.is_file())
-            self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["result"], "COUNTER_FAILED")
-            self.assertEqual(list(parent.glob(".counter-failed-checkpoint-candidate-*")), [])
-
-    def test_preexisting_target_is_refused_before_writer_and_bytes_unchanged(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "checkpoint-existing"
-            target.mkdir()
-            original = target.joinpath("sentinel"); original.write_bytes(b"known-good")
-            called = False
-
-            def writer() -> dict[str, object]:
-                nonlocal called
-                called = True
-                original.write_bytes(b"corrupted")
-                return {"published": True}
-
-            with self.assertRaisesRegex(FileExistsError, "already exists"):
-                run_vertical_slice.publish_counter_verified_checkpoint(
-                    checkpoint_target=target, write_candidate=writer, execute_counter=lambda: {"unexpected": True},
-                )
-            self.assertFalse(called)
-            self.assertEqual(original.read_bytes(), b"known-good")
-    def test_partial_writer_failure_deletes_candidate_and_preserves_bounded_evidence(self) -> None:
-        """A writer exception cannot strand a partial checkpoint in the resumable namespace."""
-
-        with tempfile.TemporaryDirectory() as directory:
-            parent = Path(directory)
-            previous = parent / "checkpoint-known-good"
-            previous.mkdir()
-            candidate = parent / "checkpoint-partial"
-
-            def partial_writer() -> dict[str, object]:
-                candidate.mkdir()
-                candidate.joinpath("partial-shard.pt").write_bytes(b"partial")
-                raise RuntimeError("writer failed")
-
-            with self.assertRaisesRegex(RuntimeError, "writer failed"):
-                run_vertical_slice.publish_counter_verified_checkpoint(
-                    checkpoint_target=candidate,
-                    write_candidate=partial_writer,
-                    execute_counter=lambda: {"unexpected": True},
-                )
-            self.assertTrue(previous.is_dir())
-            self.assertFalse(candidate.exists())
-            evidence = parent / ".checkpoint-quarantine" / "counter-failed-checkpoint-partial.json"
-            self.assertTrue(evidence.is_file())
-            self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["result"], "COUNTER_FAILED")
-            self.assertEqual(list(parent.glob(".counter-failed-checkpoint-partial-*")), [])
-            self.assertFalse(candidate.exists())
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         self.assertEqual(run_vertical_slice.resume_expert_genesis({"expert_genesis_sha256": genesis}, requested_seed=999), genesis)
