@@ -22,3 +22,13 @@ def test_rejects_malformed_comparator_or_resource_receipt_records():
    result=subprocess.run([sys.executable,str(SCRIPT),'validate',str(certificate),'--output',str(output)],capture_output=True,text=True)
    assert result.returncode != 0
    assert not output.exists()
+
+
+def test_public_certificate_enumerates_current_matrix_and_validates():
+    root = Path(__file__).resolve().parents[1]
+    certificate = root / "manifests" / "ember-restart-eval-completion-certificate-v1.json"
+    with tempfile.TemporaryDirectory() as temporary:
+        result = subprocess.run([sys.executable, str(SCRIPT), "validate", str(certificate), "--output", str(Path(temporary) / "validated")], capture_output=True, text=True)
+    value = json.loads(certificate.read_text(encoding="utf-8"))
+    assert value["checkpoint_manifest_sha256"] == "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b"
+    assert {row["family"] for row in value["benchmarks"]} == {"text", "image", "audio", "reasoning", "code", "mathematics", "sql", "files", "browser_ui", "terminal", "structured_tools"}
