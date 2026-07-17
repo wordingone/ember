@@ -17,8 +17,10 @@
   repository and target-training lineage.
 
 The source README identifies `harbor run --dataset terminal-bench@2.0` as the
-task-outcome runner. Its illustrated hosted-agent commands are not Ember
-evidence and must not be used for an owned-checkpoint score.
+task-outcome runner. The scorer accepts only the freezer-produced
+`ember-restart-terminal-bench-freeze-v2` manifest; handwritten legacy manifests are
+rejected before any Harbor outcome is considered. Its illustrated hosted-agent
+commands are not Ember evidence and must not be used for an owned-checkpoint score.
 
 ## Target admission contract
 
