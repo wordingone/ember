@@ -252,6 +252,15 @@ def specialist_publication_plan(
         "projected_write_bytes": projected_write_bytes,
     }
 
+def _has_quarantine_component(path: Path) -> bool:
+    return any(str(part).casefold() == ".checkpoint-quarantine" for part in Path(path).parts)
+
+
+def _reject_quarantined_checkpoint_path(*paths: Path) -> None:
+    if any(_has_quarantine_component(path) for path in paths):
+        raise ValueError("quarantined checkpoint is not admitted or selectable")
+
+
 def production_artifact_root(
     candidate: Path,
     *,
@@ -262,9 +271,9 @@ def production_artifact_root(
 
     if type(c_relocated_under_disk_budget_runner) is not bool:
         raise ValueError("C relocation custody flag must be boolean")
-    resolved = candidate.resolve()
-    if ".checkpoint-quarantine" in resolved.parts:
-        raise ValueError("checkpoint quarantine is never a selectable production artifact root")
+    lexical = Path(candidate)
+    resolved = lexical.resolve()
+    _reject_quarantined_checkpoint_path(lexical, resolved)
     if c_relocated_under_disk_budget_runner:
         if not isinstance(relocation_custody_root, Path):
             raise ValueError("runner-bound C relocation requires an explicit custody root")
@@ -289,6 +298,23 @@ def _custody_link_or_reparse(path: Path) -> bool:
     except OSError as error:
         raise RuntimeError(f"custody byte accounting could not inspect {path}") from error
     return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _lexical_nonreparse_directory(path: Path) -> Path:
+    """Return an absolute lexical directory only after inspecting every component."""
+
+    lexical = Path(os.path.abspath(str(path)))
+    parts = lexical.parts
+    current = Path(parts[0]) if parts else lexical
+    for part in parts[1:]:
+        current = current / part
+        if _custody_link_or_reparse(current):
+            raise ValueError("checkpoint quarantine source contains a link or reparse component")
+    if _custody_link_or_reparse(lexical):
+        raise ValueError("checkpoint quarantine source contains a link or reparse component")
+    if not lexical.is_dir():
+        raise ValueError("checkpoint quarantine source must be a directory")
+    return lexical
 
 
 def _file_identity(path: Path) -> tuple[int, int] | str:
@@ -330,16 +356,16 @@ def _custody_serialized_bytes(parent: Path) -> int:
 
 
 def _custody_reconciliation(parent: Path) -> dict[str, object]:
-    """Reconcile live, quarantine, evidence, and evidence-qualified deletions."""
+    """Reconcile custody bytes with an ordered, fail-closed deletion ledger."""
 
     parent = parent.resolve()
     rows = _custody_file_rows(parent)
     totals = {"live": 0, "quarantine": 0, "evidence": 0, "other": 0}
     for row in rows:
         totals[str(row["bucket"])] += int(row["bytes"])
-    deleted_bytes = 0
-    ledger_events: dict[tuple[str, str, int], set[str]] = {}
     ledger = parent / _CUSTODY_LEDGER
+    transitions: dict[str, dict[str, object]] = {}
+    legacy_deleted: dict[str, dict[str, object]] = {}
     if ledger.exists():
         try:
             lines = ledger.read_bytes().splitlines()
@@ -350,24 +376,53 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
                 event = json.loads(line)
             except (UnicodeError, json.JSONDecodeError) as error:
                 raise RuntimeError("custody deletion ledger is malformed") from error
-            if not isinstance(event, dict) or event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA:
+            if not isinstance(event, dict):
                 raise RuntimeError("custody deletion ledger has an invalid schema")
-            if event.get("event") not in {"PREPARED", "COMMITTED", "DELETED"}:
-                raise RuntimeError("custody deletion ledger has an invalid event")
+            schema = event.get("schema_version")
+            kind = event.get("event")
             pointer = event.get("pointer")
+            if schema not in {_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA}:
+                raise RuntimeError("custody deletion ledger has an invalid schema")
             if not isinstance(pointer, str) or not pointer or Path(pointer).is_absolute() or ".." in Path(pointer).parts:
                 raise RuntimeError("custody deletion ledger lacks a safe pointer")
             if type(event.get("bytes")) is not int or event["bytes"] < 0 or not _is_sha256(event.get("sha256")):
                 raise RuntimeError("custody deletion ledger has invalid byte evidence")
-            key = (pointer, event["sha256"], event["bytes"])
-            ledger_events.setdefault(key, set()).add(event["event"])
-        for (pointer, _digest, bytes_count), states in ledger_events.items():
-            deleted_path = parent / pointer
-            if deleted_path.exists():
-                if states & {"COMMITTED", "DELETED"}:
-                    raise RuntimeError("custody deletion ledger claims deletion while bytes still exist")
+            if not isinstance(event.get("reason"), str) or not event["reason"]:
+                raise RuntimeError("custody deletion ledger lacks a deletion reason")
+            identity = {"bytes": event["bytes"], "sha256": event["sha256"]}
+            if schema == _LEGACY_CUSTODY_LEDGER_SCHEMA and kind == "DELETED":
+                if pointer in transitions or pointer in legacy_deleted:
+                    raise RuntimeError("custody deletion ledger has a duplicate legacy deletion")
+                legacy_deleted[pointer] = identity
                 continue
-            deleted_bytes += bytes_count
+            if kind not in {"PREPARED", "COMMITTED"}:
+                raise RuntimeError("custody deletion ledger has an invalid event")
+            if pointer in legacy_deleted:
+                raise RuntimeError("custody deletion ledger mixes legacy and ordered events")
+            prior = transitions.get(pointer)
+            if prior is None:
+                if kind != "PREPARED":
+                    raise RuntimeError("custody deletion ledger has COMMITTED without PREPARED")
+                transitions[pointer] = {**identity, "state": "PREPARED"}
+                continue
+            if prior["bytes"] != identity["bytes"] or prior["sha256"] != identity["sha256"]:
+                raise RuntimeError("custody deletion ledger changes a prepared pointer identity")
+            if prior["state"] != "PREPARED" or kind != "COMMITTED":
+                raise RuntimeError("custody deletion ledger has a duplicate or reversed transition")
+            prior["state"] = "COMMITTED"
+    deleted_bytes = 0
+    for pointer, record in transitions.items():
+        deleted_path = parent / pointer
+        if deleted_path.exists():
+            if record["state"] == "COMMITTED":
+                raise RuntimeError("custody deletion ledger claims deletion while bytes still exist")
+            continue
+        # PREPARED+missing is an interruption-safe inferred deletion; count once.
+        deleted_bytes += int(record["bytes"])
+    for pointer, record in legacy_deleted.items():
+        if (parent / pointer).exists():
+            raise RuntimeError("legacy custody deletion claims deletion while bytes still exist")
+        deleted_bytes += int(record["bytes"])
     physical_bytes = sum(int(row["bytes"]) for row in rows)
     return {
         "schema_version": "ember-checkpoint-custody-reconciliation-v1",
@@ -392,7 +447,8 @@ _WRITER_LEASE = ".writer-lease.json"
 _MAX_QUARANTINE_FILES = 32
 _MAX_QUARANTINE_BYTES = 1024 * 1024
 _CUSTODY_LEDGER = ".checkpoint-custody-deletion-ledger.jsonl"
-_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
+_LEGACY_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
+_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
 
 
 def _pid_is_alive(pid: object) -> bool:
@@ -543,11 +599,16 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
 def _move_bundle_to_quarantine(bundle: Path, *, prefix: str = "candidate") -> Path:
     """Atomically preserve serialized bytes in the nonselectable quarantine namespace."""
 
-    source = bundle.resolve(strict=True)
+    lexical = _lexical_nonreparse_directory(bundle)
+    source = lexical.resolve(strict=True)
     if not source.is_dir():
         raise ValueError("checkpoint quarantine source must be a directory")
     quarantine = source.parent / ".checkpoint-quarantine"
+    if quarantine.exists() and _custody_link_or_reparse(quarantine):
+        raise ValueError("checkpoint quarantine target contains a link or reparse component")
     quarantine.mkdir(parents=True, exist_ok=True)
+    if _custody_link_or_reparse(quarantine):
+        raise ValueError("checkpoint quarantine target contains a link or reparse component")
     candidate = quarantine / f"{prefix}-{source.name}-{uuid.uuid4().hex[:16]}"
     _atomic_publish_no_replace(source, candidate)
     return candidate
@@ -863,7 +924,9 @@ def authorize_production_resume_checkpoint(
 ) -> tuple[Path, dict[str, object]]:
     """Authorize a resume and disclose the exact verifier trust path used."""
 
-    resolved = candidate.resolve()
+    lexical = Path(candidate)
+    resolved = lexical.resolve()
+    _reject_quarantined_checkpoint_path(lexical, resolved)
     accepted = resolved.drive.upper() == "B:" and resolved.is_dir()
     if not accepted and c_relocated_under_disk_budget_runner:
         resolved = production_artifact_root(

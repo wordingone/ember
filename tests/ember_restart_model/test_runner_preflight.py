@@ -842,6 +842,29 @@ class RunnerPreflightTests(unittest.TestCase):
                     relocation_custody_root=custody,
                 )
 
+    def test_quarantined_resume_is_rejected_before_counter_or_transition_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory)
+            checkpoint = custody / ".checkpoint-quarantine" / "candidate-valid"
+            checkpoint.mkdir(parents=True)
+            (checkpoint / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            counter = checkpoint / "parameter-counter-receipt.json"
+            counter.write_text("{}", encoding="utf-8")
+            registry = custody / "transition" / "trusted-transitions.json"
+            registry.parent.mkdir()
+            registry.write_text("{}", encoding="utf-8")
+            registry_sha256 = hashlib.sha256(registry.read_bytes()).hexdigest()
+            transition = {"receipt_sha256": "r" * 64, "registry_sha256": registry_sha256, "source": {"checkpoint_manifest_sha256": "m" * 64, "semantic_model_contract_sha256": "s" * 64}, "target": {"model_config_sha256": "c" * 64, "semantic_model_contract_sha256": "t" * 64}}
+            with patch.object(run_vertical_slice, "production_artifact_root", return_value=checkpoint.resolve()):
+                with patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={}) as counter_validate:
+                    with self.assertRaisesRegex(ValueError, "quarantined"):
+                        run_vertical_slice.authorize_production_resume_checkpoint(checkpoint, counter_success_receipt=counter, c_relocated_under_disk_budget_runner=True, relocation_custody_root=custody)
+                counter_validate.assert_not_called()
+                with patch.object(run_vertical_slice, "validate_optimizer_transition_registry", return_value=transition) as transition_validate:
+                    with self.assertRaisesRegex(ValueError, "quarantined"):
+                        run_vertical_slice.authorize_production_resume_checkpoint(checkpoint, optimizer_transition_registry=registry, optimizer_transition_registry_sha256=registry_sha256, c_relocated_under_disk_budget_runner=True, relocation_custody_root=custody)
+                transition_validate.assert_not_called()
+
     def test_model_only_transition_never_loads_parent_optimizer_state(self) -> None:
         model = object()
         optimizer = object()
