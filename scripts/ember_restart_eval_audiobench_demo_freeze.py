@@ -43,8 +43,6 @@ def main() -> int:
     parser.add_argument("--protocol-sha256", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if not SHA256.fullmatch(args.protocol_sha256):
-        parser.error("protocol_sha256 must be lowercase SHA-256")
     root = args.audiobench_root
     paths = {
         "demo_pack": root / "src" / "audiobench" / "data" / "sound_id" / "packs" / "demo.json",
