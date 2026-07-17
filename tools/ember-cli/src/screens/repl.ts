@@ -120,6 +120,7 @@ import {
 } from "../services/run-progress-scanner.ts";
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
+import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -137,6 +138,12 @@ export const COMPACTION_TOKEN_THRESHOLD = 180_000;
 export const COMPACTION_INDICATOR_TEXT  = "Razzle-dazzling...";
 export const ANALYTICS_SESSION_START    = "ember_repl_session_start";
 export const ANALYTICS_SESSION_END      = "ember_repl_session_end";
+
+/** Width budget for the in-window provenance/agent pane. */
+export function operatorSurfaceWidth(terminalColumns: number): number {
+  if (!Number.isFinite(terminalColumns) || terminalColumns <= 0) return 36;
+  return Math.max(36, Math.floor(terminalColumns * 0.42));
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1398,12 +1405,26 @@ export function ReplScreen({
       }),
     ),
 
-    // Transcript — real conversation turns + activity events only now; the banner above never
-    // scrolls with it.
+    // Main conversation plus the right-side operator surface live in this one terminal window.
+    // The pane consumes only telemetry/activity state already read from real journals/receipts.
     React.createElement(
       Box,
-      { key: "transcript", flexDirection: "column", flexGrow: transcriptFlexGrow(messages), overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
-      transcript,
+      { key: "workspace", flexDirection: "row", flexGrow: 1, minHeight: 0, overflow: "hidden" },
+      React.createElement(
+        Box,
+        { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 36, overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
+        transcript,
+      ),
+      React.createElement(OperatorSurfacePane, {
+        key: "operator-surface",
+        telemetry,
+        activityLines: getActivityFeedState().recentLines,
+        sourceIdentity: {
+          publicCommit: env["EMBER_PUBLIC_SOURCE_COMMIT"],
+          binarySha256: env["EMBER_CLI_BINARY_SHA256"],
+        },
+        width: operatorSurfaceWidth(terminalCols),
+      }),
     ),
 
     // Dialog overlay (idle-return, cost-threshold, …)
