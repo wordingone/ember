@@ -19,30 +19,12 @@ from typing import Any, Callable, Mapping
 import torch
 
 from model import EXPERT_NAMES, UnifiedDecoder
-from parameter_counter import measure_parameter_counts
+from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts
 
 
 _STAGING_LEASE = ".writer-lease.json"
 _FAILURE_EVIDENCE_LIMIT = 64 * 1024
 _STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
-SPECIALIST_VERIFICATION_FIELDS = {
-    "schema_version",
-    "result",
-    "capability",
-    "data_manifest_sha256",
-    "tokenizer_sha256",
-    "verifier_sha256",
-    "data_class",
-    "record_count",
-    "token_count",
-    "source_manifest_sha256",
-    "records_artifact_sha256",
-    "semantic_checks",
-    "generator_replay_verified",
-    "admission",
-    "semantic_model_contract_sha256",
-    "runtime_semantic_model_contract_sha256",
-}
 
 
 def _sha256(path: Path) -> str:
@@ -603,6 +585,57 @@ def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> 
         raise ValueError("parent expert shard hash mismatch during inactive-bank reuse")
     return target, publication_mode
 
+
+def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
+    manifest_path = candidate / "checkpoint-manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_bytes())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("quarantined checkpoint candidate lacks a valid manifest") from error
+    if not isinstance(manifest, dict):
+        raise ValueError("quarantined checkpoint candidate manifest is not an object")
+    manifest_sha256 = _sha256(manifest_path)
+    receipt = {**manifest, "checkpoint_manifest_sha256": manifest_sha256}
+    records = _validated_records(candidate, receipt)
+    serialized_bytes = sum(int(record["bytes"]) for record in records.values()) + manifest_path.stat().st_size
+    incremental_bytes = sum(int(record["incremental_bytes"]) for record in records.values()) + manifest_path.stat().st_size
+    return {
+        **receipt,
+        "serialized_bytes": serialized_bytes,
+        "incremental_publication_bytes": incremental_bytes,
+    }
+
+
+def admit_quarantined_checkpoint(
+    candidate: Path,
+    published_root: Path,
+    *,
+    verifier: Callable[[Path, dict[str, Any]], None],
+    max_serialized_bytes: int | None = None,
+) -> dict[str, Any]:
+    """Judge durable raw bytes and atomically make only a passing candidate selectable."""
+
+    candidate = candidate.resolve(strict=True)
+    published_root = published_root.resolve()
+    quarantine = (published_root.parent / ".checkpoint-quarantine").resolve(strict=True)
+    if candidate.parent != quarantine or not candidate.name.startswith("candidate-"):
+        raise ValueError("checkpoint candidate is not in the bound quarantine namespace")
+    if published_root.exists():
+        raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
+    if (candidate / _STAGING_LEASE).exists():
+        raise ValueError("quarantined checkpoint candidate retains a writer lease")
+    receipt = _checkpoint_candidate_receipt(candidate)
+    try:
+        verifier(candidate, receipt)
+        post_verifier_bytes = sum(path.stat().st_size for path in candidate.rglob("*") if path.is_file())
+        if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
+            raise ValueError("counter evidence exceeds the derived byte bound")
+    except Exception as error:
+        _retain_write_failure_evidence(published_root, candidate, error)
+        raise
+    os.replace(candidate, published_root)
+    return receipt
+
 def write_checkpoint_artifacts(
     model: UnifiedDecoder,
     optimizer: torch.optim.Optimizer,
@@ -759,16 +792,20 @@ def write_checkpoint_artifacts(
             "serialized_bytes": logical_serialized_bytes,
             "incremental_publication_bytes": incremental_publication_bytes,
         }
-        if pre_publish_verifier is not None:
-            pre_publish_verifier(root, receipt)
-            post_verifier_bytes = sum(
-                path.stat().st_size
-                for path in root.rglob("*")
-                if path.is_file() and path.name != _STAGING_LEASE
-            )
-            if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
-                raise ValueError("counter evidence exceeds the derived byte bound")
         (root / _STAGING_LEASE).unlink(missing_ok=True)
+        if pre_publish_verifier is not None:
+            quarantine = published_root.parent / ".checkpoint-quarantine"
+            quarantine.mkdir(exist_ok=True)
+            candidate = quarantine / f"candidate-{published_root.name}-{receipt['checkpoint_manifest_sha256'][:16]}"
+            if candidate.exists():
+                raise FileExistsError(f"quarantined checkpoint candidate already exists: {candidate}")
+            os.replace(root, candidate)
+            return admit_quarantined_checkpoint(
+                candidate,
+                published_root,
+                verifier=pre_publish_verifier,
+                max_serialized_bytes=max_serialized_bytes,
+            )
         os.replace(root, published_root)
         return receipt
     except Exception as error:
@@ -837,6 +874,9 @@ def load_checkpoint_artifacts(
 ) -> None:
     """Verify every manifest/shard/payload before mutating model or optimizer."""
 
+    root = root.resolve()
+    if ".checkpoint-quarantine" in root.parts:
+        raise ValueError("quarantined checkpoint is not admitted or selectable")
     if receipt.get("schema_version") not in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
         raise ValueError("checkpoint optimizer contract requires a v3 or v4 manifest")
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
