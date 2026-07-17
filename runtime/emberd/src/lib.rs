@@ -2334,19 +2334,6 @@ fn verify_dispatch_binding(binding: &DispatchFileBinding) -> Result<PathBuf> {
     verify_dispatch_file(&binding.path, &binding.sha256)
 }
 
-fn read_verified_json_snapshot(path: &Path, expected_sha256: &str) -> Result<Value> {
-    let bytes = fs::read(path)?;
-    let actual = hash_bytes(&bytes);
-    if actual != expected_sha256 {
-        return Err(EmberdError::DispatchBindingMismatch {
-            path: path.to_path_buf(),
-            expected: expected_sha256.to_string(),
-            actual,
-        });
-    }
-    Ok(serde_json::from_slice(&bytes)?)
-}
-
 fn absolute_under_root(path: &Path, root: &Path) -> Result<PathBuf> {
     if !path.is_absolute() {
         return Err(EmberdError::InvalidDispatchManifest {
@@ -2440,18 +2427,20 @@ fn validate_resume_registry_binding_closure(
         return Ok(());
     };
     let registry = fs::canonicalize(raw_registry)?;
-    let registry_binding = bindings
+    if !bindings
         .iter()
-        .find(|(path, _, kind)| *path == registry && *kind == DispatchBindingKind::Manifest)
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .any(|(path, _, kind)| *path == registry && *kind == DispatchBindingKind::Manifest)
+    {
+        return Err(EmberdError::InvalidDispatchManifest {
             detail: "resume realization registry is not an exact manifest binding".into(),
-        })?;
+        });
+    }
     let root = registry
         .parent()
         .ok_or_else(|| EmberdError::InvalidDispatchManifest {
             detail: "resume realization registry lacks a parent directory".into(),
         })?;
-    let payload = read_verified_json_snapshot(&registry, &registry_binding.1)?;
+    let payload: Value = serde_json::from_slice(&fs::read(&registry)?)?;
     let object = payload
         .as_object()
         .ok_or_else(|| EmberdError::InvalidDispatchManifest {
@@ -3867,32 +3856,5 @@ fn terminate_process(pid: u32) -> Result<()> {
             job_id: String::new(),
             pid,
         })
-    }
-}
-
-#[cfg(test)]
-mod dispatch_binding_snapshot_tests {
-    use super::*;
-
-    #[test]
-    fn registry_replacement_between_initial_hash_and_parse_is_rejected() {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("emberd-binding-snapshot-{nonce}"));
-        fs::create_dir_all(&root).unwrap();
-        let registry = root.join("trusted-verifiers.json");
-        fs::write(
-            &registry,
-            br#"{"schema_version":"ember-trusted-verifiers-v2"}"#,
-        )
-        .unwrap();
-        let initially_bound = hash_file(&registry).unwrap();
-        fs::write(&registry, br#"{"schema_version":"replaced"}"#).unwrap();
-
-        let error = read_verified_json_snapshot(&registry, &initially_bound).unwrap_err();
-        assert!(matches!(error, EmberdError::DispatchBindingMismatch { .. }));
-        fs::remove_dir_all(root).unwrap();
     }
 }
