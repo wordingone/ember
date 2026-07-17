@@ -21,3 +21,17 @@ def test_cleans_temporary_payload_when_final_hellaswag_publication_fails(monkeyp
   monkeypatch.setattr(module.os,"replace",lambda *_:(_ for _ in ()).throw(OSError("replace denied")))
   with pytest.raises(OSError,match="replace denied"):module.main()
   assert not out.exists() and not list(root.glob("frozen.*.tmp"))
+def test_hellaswag_protocol_identity_is_not_caller_attested():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        (root / "README.md").write_text("# HellaSwag\n\n## Licensing Information\n\nMIT\n", encoding="utf-8")
+        split = root / "data" / "test-00000-of-00001.parquet"
+        split.parent.mkdir()
+        pq.write_table(pa.table({"ind": [1], "source_id": ["a"], "ctx": ["context"], "endings": [["x", "y"]], "label": [""]}), split)
+        protocols = []
+        for supplied in ("a" * 64, "b" * 64):
+            output = root / ("freeze-" + supplied[0] + ".json")
+            result = subprocess.run([sys.executable, str(SCRIPT), "--dataset-root", str(root), "--revision", "218ec52e09a7e7462a5400043bb9a69a41d06b76", "--protocol-sha256", supplied, "--output", str(output)], text=True, capture_output=True, check=False)
+            assert result.returncode == 0, result.stderr
+            protocols.append(json.loads(output.read_text(encoding="utf-8"))["protocol_sha256"])
+        assert protocols[0] == protocols[1]
