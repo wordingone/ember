@@ -199,6 +199,25 @@ def test_claim_renderer_rejects_present_but_unbound_identity_values(tmp_path, mo
     assert "NOT CLAIM-BEARING" in output.read_text(encoding="utf-8")
 
 
+def test_claim_renderer_preserves_subject_checkpoint_identity_from_central_receipt(tmp_path, monkeypatch):
+    module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_surface_subject_checkpoint")
+    monkeypatch.setattr(module, "_admitted", lambda *args: True)
+    source = tmp_path / "receipt.json"
+    source.write_text(json.dumps({
+        "result": "MEASURED", "capability": "text", "subject_checkpoint_sha256": "a" * 64,
+        "model_config_sha256": "b" * 64, "benchmark_id": "local-text", "benchmark_version": "1",
+        "split_sha256": "c" * 64, "harness_sha256": "d" * 64, "protocol_sha256": "e" * 64,
+        "predictions_sha256": "f" * 64, "score_artifact_sha256": "1" * 64,
+        "criterion_id": "ember-3b-text-capability-v1", "criterion_result": "PASSED",
+        "metrics": {"accuracy": 1.0}, "verifier_sha256": "2" * 64,
+    }), encoding="utf-8")
+    output = tmp_path / "surface.md"
+    monkeypatch.setattr(sys, "argv", [str(module.__file__), "--input", str(source), "--output", str(output)])
+    module.main()
+    rendered = output.read_text(encoding="utf-8")
+    assert "MEASURED CAPABILITY" in rendered
+    assert "subject_checkpoint_sha256:" in rendered
+
 def test_audiobench_rejects_a_valid_foreign_closed_run_even_when_predictions_are_well_formed(tmp_path):
     module = _load("scripts/ember_restart_eval_audiobench_bound.py", "four_p1_audio_custody")
     custody = json.loads((ROOT / "manifests" / "ember-restart-audiobench-custody-v1.json").read_text(encoding="utf-8"))

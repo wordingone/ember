@@ -8,6 +8,7 @@ from pathlib import Path
 
 EXECUTION_AUTHORITIES = Path(__file__).resolve().parents[1] / "manifests" / "ember-restart-execution-authorities-v1.json"
 IDENTITY_FIELDS = ("checkpoint_manifest_sha256", "model_config_sha256", "benchmark_id", "benchmark_version", "split_sha256", "harness_sha256", "protocol_sha256", "predictions_sha256", "score_artifact_sha256", "criterion_id", "criterion_result", "metrics", "verifier_sha256")
+OPTIONAL_IDENTITY_FIELDS = ("subject_checkpoint_sha256",)
 IDENTITY_SHA_FIELDS = ("checkpoint_manifest_sha256", "model_config_sha256", "split_sha256", "harness_sha256", "protocol_sha256", "predictions_sha256", "score_artifact_sha256", "verifier_sha256")
 
 
@@ -261,7 +262,10 @@ def _admitted(manifest, registry, input_bytes):
 
 
 def _claim_identity_complete(result):
-    if any(not isinstance(result.get(field), str) or not re.fullmatch(r"[0-9a-f]{64}", result[field]) for field in IDENTITY_SHA_FIELDS):
+    checkpoint_identity = result.get("checkpoint_manifest_sha256") or result.get("subject_checkpoint_sha256")
+    if not isinstance(checkpoint_identity, str) or not re.fullmatch(r"[0-9a-f]{64}", checkpoint_identity):
+        return False
+    if any(field != "checkpoint_manifest_sha256" and (not isinstance(result.get(field), str) or not re.fullmatch(r"[0-9a-f]{64}", result[field])) for field in IDENTITY_SHA_FIELDS):
         return False
     if not isinstance(result.get("benchmark_id"), str) or not result["benchmark_id"].strip() or not isinstance(result.get("benchmark_version"), str) or not result["benchmark_version"].strip():
         return False
@@ -295,8 +299,9 @@ def main():
         if measured:
             handle.write(f"\nreceipt_sha256: {_sha256(input_bytes)}\n")
             handle.write(f"receipt_json: {json.dumps(result, sort_keys=True, separators=(',', ':'))}\n")
-            for key in IDENTITY_FIELDS:
-                handle.write(f"{key}: {json.dumps(result[key], sort_keys=True, separators=(',', ':'))}\n")
+            for key in IDENTITY_FIELDS + OPTIONAL_IDENTITY_FIELDS:
+                if key in result:
+                    handle.write(f"{key}: {json.dumps(result[key], sort_keys=True, separators=(',', ':'))}\n")
         temporary = Path(handle.name)
     try:
         os.replace(temporary, args.output)
