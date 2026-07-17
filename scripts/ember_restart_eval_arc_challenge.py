@@ -2,11 +2,12 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Score canonical ARC-Challenge choice predictions against frozen parquet bytes."""
+"""Score canonical ARC-Challenge choice predictions against frozen parquet."""
 import argparse
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -14,55 +15,12 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from ember_restart.prediction_contract import ContractError, validate_predictions
 
+HASH = re.compile(r"[0-9a-f]{64}")
+STRICT_SCHEMA = "ember-restart-arc-challenge-freeze-v2"
 
-def sha256(data: bytes) -> str:
+
+def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def expected_answers(data: bytes) -> dict[str, str]:
-    try:
-        rows = pq.read_table(pa.BufferReader(data), columns=["id", "choices", "answerKey"]).to_pylist()
-    except pa.ArrowException as error:
-        raise ValueError("frozen ARC references must be parquet") from error
-    answers: dict[str, str] = {}
-    for row in rows:
-        choices = row.get("choices") if isinstance(row, dict) else None
-        labels = choices.get("label") if isinstance(choices, dict) else None
-        identifier = row.get("id") if isinstance(row, dict) else None
-        answer = row.get("answerKey") if isinstance(row, dict) else None
-        if not isinstance(identifier, str) or not identifier or identifier in answers or not isinstance(labels, list) or not labels or any(not isinstance(label, str) or not label for label in labels) or not isinstance(answer, str) or answer not in labels:
-            raise ValueError("frozen ARC references require unique ids and answer keys in choice labels")
-        answers[identifier] = answer
-    if not answers:
-        raise ValueError("frozen ARC references must be non-empty")
-    return answers
-
-
-def predicted_answers(data: bytes) -> tuple[dict, dict[str, str]]:
-    try:
-        envelope = validate_predictions(json.loads(data.decode("utf-8")))
-    except (ContractError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError("canonical checkpoint predictions are required") from error
-    rows: dict[str, str] = {}
-    for row in envelope["rows"]:
-        output = row["output"]
-        if output.get("kind") != "text" or not isinstance(output.get("text"), str) or row["id"] in rows:
-            raise ValueError("canonical ARC predictions require unique text outputs")
-        rows[row["id"]] = output["text"].strip()
-    if not rows:
-        raise ValueError("canonical ARC predictions must be non-empty")
-    return envelope, rows
-
-
-def atomic_write(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
-        temporary = Path(handle.name)
-    try:
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -79,17 +37,47 @@ def main() -> int:
         reference_bytes = args.references.read_bytes()
         prediction_bytes = args.predictions.read_bytes()
         manifest = json.loads(manifest_bytes.decode("utf-8"))
-        references = expected_answers(reference_bytes)
-        envelope, predictions = predicted_answers(prediction_bytes)
+        source_rows = pq.read_table(pa.BufferReader(reference_bytes), columns=["id", "choices", "answerKey"]).to_pylist()
+        references = {}
+        for row in source_rows:
+            choices = row.get("choices") if isinstance(row, dict) else None
+            labels = choices.get("label") if isinstance(choices, dict) else None
+            identifier = row.get("id") if isinstance(row, dict) else None
+            answer = row.get("answerKey") if isinstance(row, dict) else None
+            if not isinstance(identifier, str) or not identifier or identifier in references or not isinstance(labels, list) or not labels or any(not isinstance(label, str) or not label for label in labels) or not isinstance(answer, str) or answer not in labels:
+                raise ValueError("frozen ARC references require unique ids and answer keys in choice labels")
+            references[identifier] = answer
+        if not references:
+            raise ValueError("frozen ARC references must be non-empty")
+        envelope = validate_predictions(json.loads(prediction_bytes.decode("utf-8")))
         benchmark = envelope["benchmark"]
-        if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "arc-challenge" or manifest.get("capability") != "reasoning" or manifest.get("references_sha256") != sha256(reference_bytes) or manifest.get("split_sha256") != sha256(reference_bytes) or manifest.get("task_count") != len(references) or any(benchmark.get(field) != manifest.get({"id": "benchmark_id", "version": "benchmark_version", "split_sha256": "split_sha256", "protocol_sha256": "protocol_sha256"}[field]) for field in ("id", "version", "split_sha256", "protocol_sha256")):
+        predictions = {}
+        for row in envelope["rows"]:
+            output = row.get("output")
+            if not isinstance(output, dict) or output.get("kind") != "text" or not isinstance(output.get("text"), str) or row["id"] in predictions:
+                raise ValueError("canonical ARC predictions require unique text outputs")
+            predictions[row["id"]] = output["text"].strip()
+        if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "arc-challenge" or manifest.get("capability") != "reasoning" or manifest.get("references_sha256") != digest(reference_bytes) or manifest.get("split_sha256") != digest(reference_bytes) or manifest.get("task_count") != len(references) or any(benchmark.get(key) != manifest.get(field) for key, field in (("id", "benchmark_id"), ("version", "benchmark_version"), ("split_sha256", "split_sha256"), ("protocol_sha256", "protocol_sha256"))):
             raise ValueError("frozen ARC manifest does not bind canonical prediction identity")
         if set(references) != set(predictions):
             raise ValueError("canonical ARC predictions must exactly cover frozen reference ids")
-    except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError, pa.ArrowException) as error:
+        strict = manifest.get("schema_version") == STRICT_SCHEMA or any(field in manifest for field in ("checkpoint_manifest_sha256", "model_config_sha256"))
+        if strict:
+            for field in ("checkpoint_manifest_sha256", "model_config_sha256"):
+                if not isinstance(manifest.get(field), str) or not HASH.fullmatch(manifest[field]) or envelope.get(field) != manifest[field]:
+                    raise ValueError("strict ARC custody does not bind canonical checkpoint/config identity")
+    except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError, ContractError, pa.ArrowException) as error:
         parser.error(f"invalid ARC scorer inputs: {error}")
-    payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_ARC_CHALLENGE_SCORER", "criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"accuracy": sum(predictions[identifier] == answer for identifier, answer in references.items()) / len(references)}, "sample_count": len(references), "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "references_sha256": sha256(reference_bytes), "predictions_sha256": sha256(prediction_bytes), "frozen_manifest_sha256": sha256(manifest_bytes), "upstream": "deterministic frozen ARC-Challenge exact-label scorer"}
-    atomic_write(args.score_output, payload)
+    payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_ARC_CHALLENGE_SCORER", "criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"accuracy": sum(predictions[key] == value for key, value in references.items()) / len(references)}, "sample_count": len(references), "benchmark_id": benchmark["id"], "benchmark_version": benchmark["version"], "split_sha256": benchmark["split_sha256"], "protocol_sha256": benchmark["protocol_sha256"], "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "references_sha256": digest(reference_bytes), "predictions_sha256": digest(prediction_bytes), "frozen_manifest_sha256": digest(manifest_bytes), "upstream": "deterministic frozen ARC-Challenge exact-label scorer"}
+    args.score_output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=args.score_output.parent, delete=False) as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+        temporary = Path(handle.name)
+    try:
+        os.replace(temporary, args.score_output)
+    finally:
+        temporary.unlink(missing_ok=True)
     return 0
 
 

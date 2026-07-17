@@ -2,6 +2,7 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import json
+import hashlib
 from pathlib import Path
 
 MANIFEST = Path(__file__).resolve().parents[1] / "manifests" / "ember-restart-arc-challenge-custody-v1.json"
@@ -18,3 +19,9 @@ def test_arc_challenge_custody_binds_actual_test_parquet_without_overwriting_inh
     }
     assert value["inherited_template_compatibility"] == "HASH_MISMATCH_SEPARATE_NONEXECUTABLE_CUSTODY"
     assert value["target_execution_permitted"] is False
+def test_arc_protocol_pins_the_deterministic_scorer_bytes():
+    protocol = json.loads((MANIFEST.parent / "ember-restart-arc-challenge-protocol-v1.json").read_text(encoding="utf-8"))
+    adapter = protocol["scoring_adapter"]
+    assert adapter["path"] == "scripts/ember_restart_eval_arc_challenge.py"
+    assert adapter["sha256"] == hashlib.sha256((MANIFEST.parents[1] / adapter["path"]).read_bytes()).hexdigest()
+    assert adapter["result_disposition"] == "PREFLIGHT_ONLY_NON_ADMISSIBLE"
