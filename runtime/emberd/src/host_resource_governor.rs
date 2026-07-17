@@ -8,9 +8,11 @@
 //! after recording the receipt and revalidating the exact PID/HWND/process-tree
 //! identity. It never authorizes name-based or foreign-process termination.
 
+use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub enum GpuTenancy {
     Owned,
     None,
@@ -18,7 +20,7 @@ pub enum GpuTenancy {
     Unknown,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub enum ChildLiveness {
     Alive,
     Dead,
@@ -36,7 +38,7 @@ pub struct HostResourceLimits {
     pub maximum_process_growth: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct HostResourceSample {
     pub observed_at_ms: u64,
     pub ram_available_bytes: Option<u64>,
@@ -73,12 +75,36 @@ pub struct PreflightReceipt {
     pub observed_at_ms: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ThresholdBreachReceipt {
+    pub schema_version: &'static str,
+    pub lease_id: String,
+    pub root_pid: u32,
+    pub pids: Vec<u32>,
+    pub observed_at_ms: u64,
+    pub sample_sha256: String,
+    pub reasons: Vec<String>,
+}
+
+impl ThresholdBreachReceipt {
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(self).expect("threshold receipt fields are serializable")
+    }
+
+    pub fn sha256(&self) -> String {
+        let digest = Sha256::digest(self.canonical_bytes());
+        format!("{digest:x}")
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminationPlan {
     pub root_pid: u32,
     pub pids: Vec<u32>,
     pub scope: &'static str,
     pub receipt_required: bool,
+    pub breach_receipt: ThresholdBreachReceipt,
+    pub receipt_sha256: String,
     pub reason: String,
 }
 
@@ -97,6 +123,22 @@ impl std::error::Error for GovernorError {}
 
 type GovernorResult<T> = std::result::Result<T, GovernorError>;
 
+impl TerminationPlan {
+    pub fn verify_receipt(&self, receipt: &ThresholdBreachReceipt) -> GovernorResult<()> {
+        if receipt != &self.breach_receipt {
+            return Err(error(
+                "threshold receipt content does not match the termination plan",
+            ));
+        }
+        if receipt.sha256() != self.receipt_sha256 {
+            return Err(error(
+                "threshold receipt digest does not match the termination plan",
+            ));
+        }
+        Ok(())
+    }
+}
+
 fn error(reason: impl Into<String>) -> GovernorError {
     GovernorError {
         reason: reason.into(),
@@ -105,6 +147,11 @@ fn error(reason: impl Into<String>) -> GovernorError {
 
 fn require_metric<T: Copy>(value: Option<T>, name: &str) -> GovernorResult<T> {
     value.ok_or_else(|| error(format!("missing decisive metric: {name}")))
+}
+
+fn sample_sha256(sample: &HostResourceSample) -> String {
+    let bytes = serde_json::to_vec(sample).expect("host resource sample fields are serializable");
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn local_breach_reasons(
@@ -228,11 +275,23 @@ pub fn plan_termination(
         return Err(error("no owned threshold breach requires termination"));
     }
     let pids = verify_exact_tree(owned, observed)?;
+    let breach_receipt = ThresholdBreachReceipt {
+        schema_version: "ember-host-resource-breach-v1",
+        lease_id: owned.lease_id.clone(),
+        root_pid: owned.root_pid,
+        pids: pids.clone(),
+        observed_at_ms: sample.observed_at_ms,
+        sample_sha256: sample_sha256(sample),
+        reasons: reasons.clone(),
+    };
+    let receipt_sha256 = breach_receipt.sha256();
     Ok(TerminationPlan {
         root_pid: owned.root_pid,
         pids,
         scope: "exact_owned_process_tree",
         receipt_required: true,
+        breach_receipt,
+        receipt_sha256,
         reason: reasons.join("; "),
     })
 }

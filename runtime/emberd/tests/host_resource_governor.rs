@@ -133,3 +133,21 @@ fn dead_or_unknown_child_liveness_is_not_a_kill_authorization() {
     sample.child_liveness = ChildLiveness::Unknown;
     assert!(evaluate_preflight(&sample, &limits()).is_err());
 }
+
+#[test]
+fn termination_plan_carries_content_addressed_breach_receipt() {
+    let mut sample = healthy();
+    sample.ram_available_bytes = Some(2);
+    let plan = plan_termination(&sample, &limits(), &owned_tree(), &observed_tree())
+        .expect("owned breach should produce a receipted plan");
+    assert_eq!(
+        plan.breach_receipt.schema_version,
+        "ember-host-resource-breach-v1"
+    );
+    assert_eq!(plan.breach_receipt.sha256(), plan.receipt_sha256);
+    plan.verify_receipt(&plan.breach_receipt)
+        .expect("the exact generated receipt must verify");
+    let mut tampered = plan.breach_receipt.clone();
+    tampered.pids.push(999);
+    assert!(plan.verify_receipt(&tampered).is_err());
+}
