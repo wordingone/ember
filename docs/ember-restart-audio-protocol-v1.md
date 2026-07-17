@@ -5,16 +5,13 @@
 
 ## Source and bounded materialization result
 
-- Candidate source: `audiollms/audiobench`
-- Resolved source commit: `85dcdb88c41e6ebb2bcb3ce19b15d061dfef9dba`
-- Source-only materialization budget: C `0.50 GiB`, B `0.01 GiB`
-- Result: `STOPPED_BY_DISK_BUDGET`, exit `125`, after C consumption exceeded
-  the declared cap.
-
-The partial checkout resolved to the stated commit but was not clean: its
-working tree showed deleted tracked paths plus untracked paths after the runner
-terminated the checkout. The on-disk partial tree occupied approximately
-`562,349,037` bytes. It is not a frozen evaluator artifact.
+- Candidate source: `THENIROCK/audiobench`
+- Resolved source commit: `0fc7fef2709c00ac1e2eb2b372ec4c56362bb8c6`
+- Source Git tree: `4a01fdd3731c70a496993055bbf11499053ea344`
+- License: MIT; exact `LICENSE` SHA-256: `54233ca9f039653155e71f92b7cdf484041bee1fdcd90bafac2b5e21e4c916c9`
+- Repeatable custody command: `scripts/ember_restart_eval_audiobench_source_audit.py`
+- Verified source-only cache: 324 files and 11,013,938 bytes; the audit emits `PREFLIGHT_ONLY` with `closed_run_artifact_sha256: null`.
+- Result: source custody is exact, but no closed-run artifact is materialized or eligible for target scoring.
 
 ## Judge-integrity exclusion
 
