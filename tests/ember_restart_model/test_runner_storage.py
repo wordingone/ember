@@ -936,6 +936,22 @@ class RunnerStorageTests(unittest.TestCase):
             _, recorded = run_vertical_slice._custody_ledger_snapshot(parent)
             self.assertEqual({row["pointer"] for row in recorded if isinstance(row, dict)}, {event["pointer"] for event in events})
 
+    def test_timed_out_ledger_waiter_preserves_live_owner_lock(self) -> None:
+        """A waiter that never acquires the lock must not remove the live owner’s custody boundary."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            lock_dir = parent / ".checkpoint-custody-deletion-ledger.lock"
+            lock_dir.mkdir()
+            owner = lock_dir / "owner.json"
+            owner_bytes = json.dumps({"pid": os.getpid(), "token": "live-owner"}, sort_keys=True).encode("utf-8") + b"\\n"
+            owner.write_bytes(owner_bytes)
+            event = {"schema_version": "ember-checkpoint-custody-deletion-v2", "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "c" * 64 + ".json", "bytes": 1, "sha256": "c" * 64, "reason": "timed out waiter test"}
+            with unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_WAIT_SECONDS", 0.0):
+                with self.assertRaisesRegex(RuntimeError, "timed out"):
+                    run_vertical_slice._append_custody_ledger_transition(parent, event)
+            self.assertTrue(lock_dir.is_dir())
+            self.assertEqual(owner.read_bytes(), owner_bytes)
+            self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.jsonl").exists())
     def test_atomic_ledger_reclaims_crashed_owner_before_owner_attestation(self) -> None:
         """A process dying after mkdir but before owner.json cannot strand the ledger."""
         with tempfile.TemporaryDirectory() as directory:
