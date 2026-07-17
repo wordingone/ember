@@ -3,19 +3,19 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02C",
   "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
-  "evaluator_commit": "13858f3815452d54cc2e344d2cf9fca1d6430c06",
+  "evaluator_commit": "254b4cd7b137962be558b1c7fea657fe9ea9552b",
   "benchmarks": [
     {
       "family": "text",
       "benchmark_id": "gsm8k",
       "benchmark_version": "740312add88f781978c0658806c59bc2815b9866",
       "split_sha256": "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
-      "protocol_sha256": "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6",
-      "command_sha256": "f0b117244346e2d76362a44f46bb59817492366dceb25d0f0a268d6eb82c7eec",
+      "protocol_sha256": "6060a263a17ff3cc21374e88293e6d12d62e06bc9a653ecd25b632c455f9d727",
+      "command_sha256": "87253ca41b0833b3f401701ff0d907472c9bfb2324161ce283c265a740b8e481",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_gsm8k_score.py",
       "custody_path": "manifests/ember-restart-gsm8k-custody-v1.json",
-      "custody_sha256": "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6"
+      "custody_sha256": "804e16306f95ee1e55222f0220caf2e2e3a3ef7493125900d3a16607d26cefeb"
     },
     {
       "family": "image",
