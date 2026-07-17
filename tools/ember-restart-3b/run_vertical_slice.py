@@ -583,6 +583,28 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
     evidence_stem = _portable_evidence_stem(name)
     ledger = parent / _CUSTODY_LEDGER
 
+    def matching_prepared_exists(deletion: dict[str, object]) -> bool:
+        if not ledger.exists():
+            return False
+        prepared = False
+        try:
+            for line in ledger.read_bytes().splitlines():
+                event = json.loads(line)
+                if not isinstance(event, dict):
+                    raise ValueError("custody deletion ledger has an invalid schema")
+                if _canonical_custody_deletion_pointer(event.get("pointer")) != deletion["pointer"]:
+                    continue
+                identity = {key: event.get(key) for key in ("schema_version", "pointer", "bytes", "sha256", "reason")}
+                expected = {key: deletion[key] for key in ("schema_version", "pointer", "bytes", "sha256", "reason")}
+                if identity != expected:
+                    raise ValueError("prepared evidence identity does not match the current victim")
+                if event.get("event") != "PREPARED" or prepared:
+                    raise ValueError("prepared evidence has an invalid prior transition")
+                prepared = True
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+            raise RuntimeError(str(error)) from error
+        return prepared
+
     def ledger_events(pointer_path: Path) -> set[str]:
         if not ledger.exists():
             return set()
@@ -665,11 +687,13 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
             "sha256": digest,
             "reason": "bounded evidence retention",
         }
-        prepared = {**deletion, "event": "PREPARED"}
-        with ledger.open("ab") as handle:
-            handle.write((json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
-            handle.flush()
-            os.fsync(handle.fileno())
+        recovering_prepared = matching_prepared_exists(deletion)
+        if not recovering_prepared:
+            prepared = {**deletion, "event": "PREPARED"}
+            with ledger.open("ab") as handle:
+                handle.write((json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+                handle.flush()
+                os.fsync(handle.fileno())
         try:
             if _quarantine_evidence_identity(parent, victim) != (pointer, byte_count, digest, identity):
                 raise RuntimeError("bounded evidence victim changed before unlink; bytes preserved")
