@@ -20,7 +20,7 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def canonical_predictions(data: bytes) -> tuple[dict, dict[str, object]]:
+def canonical_predictions(data: bytes, checkpoint_manifest_sha256: str | None = None, model_config_sha256: str | None = None) -> tuple[dict, dict[str, object]]:
     try:
         envelope = validate_predictions(json.loads(data.decode("utf-8")))
     except (ContractError, UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -28,6 +28,9 @@ def canonical_predictions(data: bytes) -> tuple[dict, dict[str, object]]:
     benchmark = envelope["benchmark"]
     if benchmark.get("id") != "MMMU" or benchmark.get("capability") != "image":
         raise ValueError("canonical predictions must declare MMMU image capability")
+    for identity, expected in (("checkpoint_manifest_sha256", checkpoint_manifest_sha256), ("model_config_sha256", model_config_sha256)):
+        if expected is not None and envelope.get(identity) != expected:
+            raise ValueError(f"MMMU canonical predictions do not bind frozen {identity}")
     converted: dict[str, object] = {}
     for row in envelope["rows"]:
         output = row.get("output")
@@ -125,7 +128,9 @@ def main() -> int:
         manifest_bytes = arguments.frozen_mmmu_manifest.read_bytes()
         answers = json.loads(answer_bytes.decode("utf-8"))
         manifest = json.loads(manifest_bytes.decode("utf-8"))
-        envelope, converted = canonical_predictions(prediction_bytes)
+        expected_checkpoint = manifest.get("checkpoint_manifest_sha256") if isinstance(manifest, dict) else None
+        expected_config = manifest.get("model_config_sha256") if isinstance(manifest, dict) else None
+        envelope, converted = canonical_predictions(prediction_bytes, expected_checkpoint, expected_config)
         validate_manifest_identity(manifest, envelope)
         benchmark = envelope["benchmark"]
         if not isinstance(answers, dict) or not answers or any(not isinstance(value, dict) or value.get("question_type") != "multiple-choice" for value in answers.values()):

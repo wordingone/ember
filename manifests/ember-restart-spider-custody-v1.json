@@ -39,10 +39,10 @@
     },
     "scoring_adapter": {
         "path": "scripts/ember_restart_eval_spider.py",
-        "sha256": "79add87ff61e2e895e01242a1335a08f0b4083d85045b3773c4baccfed05e7ee",
+        "sha256": "22b44ed9da2781bffdd2c98ae42b5d1c664a6ec0e82d6c2aecb50de6b3ce6ac0",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
-    "protocol_sha256": "f938dc3308c63e5f125222b6ca6b3b8a2665d5e494040b11bc27701ae4bbad1e",
+    "protocol_sha256": "53e67b6310a27fb7a671385535f368c43a994c72408ba5aa9b6b6b0c948f7008",
     "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
     "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
 }
