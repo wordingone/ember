@@ -119,6 +119,31 @@ pub enum EmberdError {
         expected: String,
         actual: String,
     },
+    InvalidDispatchManifest {
+        detail: String,
+    },
+    DispatchTooEarly {
+        not_before_ms: i64,
+        observed_at_ms: i64,
+    },
+    DispatchExpired {
+        expires_at_ms: i64,
+        observed_at_ms: i64,
+    },
+    DispatchBindingMismatch {
+        path: PathBuf,
+        expected: String,
+        actual: String,
+    },
+    DispatchStorageReserve {
+        root: PathBuf,
+        minimum_free_bytes: u64,
+        available_free_bytes: u64,
+    },
+    DispatchVramReserve {
+        minimum_free_bytes: u64,
+        available_free_bytes: u64,
+    },
     Poisoned,
 }
 
@@ -239,6 +264,63 @@ pub struct JobSpec {
     resource_lease: String,
     env: BTreeMap<String, String>,
     restart_policy: RestartPolicy,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchFileHash {
+    pub path: PathBuf,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchFileBinding {
+    pub kind: DispatchBindingKind,
+    pub path: PathBuf,
+    pub sha256: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchBindingKind {
+    Config,
+    Manifest,
+    Input,
+    Verifier,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchStorageReserve {
+    pub root: PathBuf,
+    pub minimum_free_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchManifest {
+    pub schema_version: String,
+    pub job_id: String,
+    pub source_commit: String,
+    pub not_before_ms: i64,
+    pub expires_at_ms: i64,
+    pub resource_lease: String,
+    pub program: DispatchFileHash,
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    pub bindings: Vec<DispatchFileBinding>,
+    pub custody_root: PathBuf,
+    pub storage_reserves: Vec<DispatchStorageReserve>,
+    pub minimum_free_vram_bytes: u64,
+    pub preflight_receipt: PathBuf,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DispatchOutcome {
+    pub handle: JobHandle,
+    pub receipt: ReceiptArtifact,
 }
 
 impl JobSpec {
@@ -839,6 +921,231 @@ impl Daemon {
                 job_id: job_id.into(),
             })?;
         RestartPolicy::parse(&policy)
+    }
+
+    pub fn dispatch_manifest(&self, manifest_path: &Path) -> Result<DispatchOutcome> {
+        self.dispatch_manifest_at_with_probes(
+            manifest_path,
+            now_ms(),
+            available_free_bytes,
+            available_free_vram_bytes,
+        )
+    }
+
+    pub fn dispatch_manifest_at_with_probes<F, G>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        mut free_space: F,
+        mut free_vram: G,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+    {
+        let manifest_path = fs::canonicalize(manifest_path).map_err(|error| {
+            EmberdError::InvalidDispatchManifest {
+                detail: format!("dispatch manifest is not a canonical file: {error}"),
+            }
+        })?;
+        let manifest_bytes = fs::read(&manifest_path)?;
+        let manifest: DispatchManifest =
+            serde_json::from_slice(&manifest_bytes).map_err(|error| {
+                EmberdError::InvalidDispatchManifest {
+                    detail: format!("dispatch manifest schema is invalid: {error}"),
+                }
+            })?;
+        if manifest.schema_version != "emberd-dispatch-manifest-v1"
+            || manifest.job_id.trim().is_empty()
+            || manifest.source_commit.len() != 40
+            || !manifest
+                .source_commit
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+            || manifest.resource_lease.trim().is_empty()
+            || manifest.not_before_ms < 0
+            || manifest.expires_at_ms <= manifest.not_before_ms
+            || manifest.bindings.is_empty()
+            || manifest.storage_reserves.is_empty()
+            || manifest.minimum_free_vram_bytes == 0
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "dispatch manifest requires the closed v1 schema, identities, window, bindings, and reserves".into(),
+            });
+        }
+        if observed_at_ms < manifest.not_before_ms {
+            return Err(EmberdError::DispatchTooEarly {
+                not_before_ms: manifest.not_before_ms,
+                observed_at_ms,
+            });
+        }
+        if observed_at_ms >= manifest.expires_at_ms {
+            return Err(EmberdError::DispatchExpired {
+                expires_at_ms: manifest.expires_at_ms,
+                observed_at_ms,
+            });
+        }
+
+        let custody_root = fs::canonicalize(&manifest.custody_root).map_err(|error| {
+            EmberdError::InvalidDispatchManifest {
+                detail: format!("dispatch custody root is unavailable: {error}"),
+            }
+        })?;
+        if !custody_root.is_dir() {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "dispatch custody root is not a directory".into(),
+            });
+        }
+        let receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
+        if receipt_path.exists() {
+            return Err(EmberdError::ReceiptAlreadyExists { path: receipt_path });
+        }
+
+        let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
+        let mut verified_bindings = Vec::with_capacity(manifest.bindings.len());
+        let mut seen = std::collections::BTreeSet::new();
+        let mut kinds = std::collections::BTreeSet::new();
+        for binding in &manifest.bindings {
+            let canonical = verify_dispatch_binding(binding)?;
+            if !seen.insert(canonical.clone()) {
+                return Err(EmberdError::InvalidDispatchManifest {
+                    detail: "dispatch bindings contain a duplicate canonical path".into(),
+                });
+            }
+            kinds.insert(binding.kind);
+            verified_bindings.push((canonical, binding.sha256.clone(), binding.kind));
+        }
+        if !kinds.contains(&DispatchBindingKind::Config)
+            || !kinds.contains(&DispatchBindingKind::Manifest)
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "dispatch bindings must include at least one config and one manifest"
+                    .into(),
+            });
+        }
+
+        const CACHE_KEYS: [&str; 7] = [
+            "TEMP",
+            "TMP",
+            "TORCH_HOME",
+            "TRITON_CACHE_DIR",
+            "CUDA_CACHE_PATH",
+            "HF_HOME",
+            "XDG_CACHE_HOME",
+        ];
+        for key in CACHE_KEYS {
+            let raw =
+                manifest
+                    .env
+                    .get(key)
+                    .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                        detail: format!("dispatch environment lacks custody binding {key}"),
+                    })?;
+            let cache =
+                fs::canonicalize(raw).map_err(|error| EmberdError::InvalidDispatchManifest {
+                    detail: format!("dispatch cache {key} is unavailable: {error}"),
+                })?;
+            if !cache.is_dir() || !cache.starts_with(&custody_root) {
+                return Err(EmberdError::InvalidDispatchManifest {
+                    detail: format!("dispatch cache {key} escapes custody"),
+                });
+            }
+        }
+
+        let mut reserve_receipts = Vec::with_capacity(manifest.storage_reserves.len());
+        let mut reserve_roots = std::collections::BTreeSet::new();
+        for reserve in &manifest.storage_reserves {
+            if reserve.minimum_free_bytes == 0 {
+                return Err(EmberdError::InvalidDispatchManifest {
+                    detail: "dispatch storage reserve must be positive".into(),
+                });
+            }
+            let root = fs::canonicalize(&reserve.root).map_err(|error| {
+                EmberdError::InvalidDispatchManifest {
+                    detail: format!("dispatch storage root is unavailable: {error}"),
+                }
+            })?;
+            if !reserve_roots.insert(root.clone()) {
+                return Err(EmberdError::InvalidDispatchManifest {
+                    detail: "dispatch storage roots must be unique".into(),
+                });
+            }
+            let available = free_space(&root)?;
+            if available < reserve.minimum_free_bytes {
+                return Err(EmberdError::DispatchStorageReserve {
+                    root,
+                    minimum_free_bytes: reserve.minimum_free_bytes,
+                    available_free_bytes: available,
+                });
+            }
+            reserve_receipts.push(json!({
+                "root": root,
+                "minimum_free_bytes": reserve.minimum_free_bytes,
+                "available_free_bytes": available,
+            }));
+        }
+
+        let available_vram = free_vram()?;
+        if available_vram < manifest.minimum_free_vram_bytes {
+            return Err(EmberdError::DispatchVramReserve {
+                minimum_free_bytes: manifest.minimum_free_vram_bytes,
+                available_free_bytes: available_vram,
+            });
+        }
+
+        validate_absolute_dispatch_args(
+            &manifest.args,
+            &program,
+            &verified_bindings,
+            &custody_root,
+        )?;
+        let manifest_sha256 = hash_bytes(&manifest_bytes);
+        let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
+        let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
+        let receipt_payload = json!({
+            "schema_version": "emberd-dispatch-preflight-v1",
+            "result": "PREFLIGHT_PASSED",
+            "job_id": &manifest.job_id,
+            "source_commit": &manifest.source_commit,
+            "observed_at_ms": observed_at_ms,
+            "not_before_ms": manifest.not_before_ms,
+            "expires_at_ms": manifest.expires_at_ms,
+            "dispatch_manifest_sha256": manifest_sha256,
+            "program": {"path": &program, "sha256": &manifest.program.sha256},
+            "bindings": verified_bindings.iter().map(|(path, sha256, kind)| json!({"kind":kind,"path":path,"sha256":sha256})).collect::<Vec<_>>(),
+            "args_sha256": args_sha256,
+            "env_sha256": env_sha256,
+            "custody_root": &custody_root,
+            "storage_reserves": reserve_receipts,
+            "vram_reserve": {
+                "minimum_free_bytes": manifest.minimum_free_vram_bytes,
+                "available_free_bytes": available_vram,
+            },
+            "emberd_identity": {
+                "binary_sha256": &self.emberd_binary_sha256,
+                "source_sha256": &self.emberd_source_sha256,
+            },
+        });
+        let receipt_bytes = serde_json::to_vec(&receipt_payload)?;
+        atomic_replace(&receipt_path, &receipt_bytes)?;
+        let receipt = ReceiptArtifact {
+            path: receipt_path,
+            sha256: hash_bytes(&receipt_bytes),
+        };
+
+        self.bind_identity(&manifest.job_id, &manifest_path, &manifest_sha256)?;
+        self.acquire_lease(&manifest.resource_lease, &manifest.job_id)?;
+        let mut spec = JobSpec::new(
+            manifest.job_id,
+            program.to_string_lossy().into_owned(),
+            manifest.args,
+            manifest.resource_lease,
+        );
+        for (key, value) in manifest.env {
+            spec = spec.with_env(key, value);
+        }
+        let handle = self.start_job(spec)?;
+        Ok(DispatchOutcome { handle, receipt })
     }
 
     pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
@@ -1972,6 +2279,169 @@ fn hash_file(path: &Path) -> Result<String> {
 }
 fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+fn verify_dispatch_file(path: &Path, sha256: &str) -> Result<PathBuf> {
+    validate_hash(sha256).map_err(|_| EmberdError::InvalidDispatchManifest {
+        detail: format!(
+            "dispatch binding has an invalid SHA-256: {}",
+            path.display()
+        ),
+    })?;
+    let canonical =
+        fs::canonicalize(path).map_err(|error| EmberdError::InvalidDispatchManifest {
+            detail: format!(
+                "dispatch binding is unavailable at {}: {error}",
+                path.display()
+            ),
+        })?;
+    if !canonical.is_file() {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: format!("dispatch binding is not a file: {}", canonical.display()),
+        });
+    }
+    let actual = hash_file(&canonical)?;
+    if actual != sha256 {
+        return Err(EmberdError::DispatchBindingMismatch {
+            path: canonical,
+            expected: sha256.to_string(),
+            actual,
+        });
+    }
+    Ok(canonical)
+}
+
+fn verify_dispatch_binding(binding: &DispatchFileBinding) -> Result<PathBuf> {
+    verify_dispatch_file(&binding.path, &binding.sha256)
+}
+
+fn absolute_under_root(path: &Path, root: &Path) -> Result<PathBuf> {
+    if !path.is_absolute() {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: format!("dispatch output path must be absolute: {}", path.display()),
+        });
+    }
+    let name = path
+        .file_name()
+        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            detail: format!("dispatch output path lacks a file name: {}", path.display()),
+        })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            detail: format!("dispatch output path lacks a parent: {}", path.display()),
+        })?;
+    let parent =
+        fs::canonicalize(parent).map_err(|error| EmberdError::InvalidDispatchManifest {
+            detail: format!("dispatch output parent is unavailable: {error}"),
+        })?;
+    if !parent.starts_with(root) {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: format!("dispatch output escapes custody: {}", path.display()),
+        });
+    }
+    Ok(parent.join(name))
+}
+
+fn validate_absolute_dispatch_args(
+    args: &[String],
+    program: &Path,
+    bindings: &[(PathBuf, String, DispatchBindingKind)],
+    custody_root: &Path,
+) -> Result<()> {
+    for raw in args {
+        let value = raw.split_once('=').map_or(raw.as_str(), |(_, value)| value);
+        let path = Path::new(value);
+        if path.is_absolute() {
+            let allowed = if path.exists() {
+                let canonical = fs::canonicalize(path)?;
+                canonical == program
+                    || canonical.starts_with(custody_root)
+                    || bindings.iter().any(|(bound, _, _)| {
+                        canonical == *bound
+                            || bound.parent().is_some_and(|parent| canonical == parent)
+                    })
+            } else {
+                path.starts_with(custody_root)
+            };
+            if !allowed {
+                return Err(EmberdError::InvalidDispatchManifest {
+                    detail: format!(
+                        "absolute dispatch argument is neither hash-bound nor in custody: {raw}"
+                    ),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn available_free_bytes(root: &Path) -> Result<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+    let mut wide: Vec<u16> = root.as_os_str().encode_wide().collect();
+    wide.push(0);
+    let mut available = 0u64;
+    if unsafe {
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(available)
+}
+
+#[cfg(not(windows))]
+fn available_free_bytes(_root: &Path) -> Result<u64> {
+    Err(EmberdError::InvalidDispatchManifest {
+        detail: "native disk reserve probing is currently Windows-only".into(),
+    })
+}
+
+fn available_free_vram_bytes() -> Result<u64> {
+    let output = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
+        .output()
+        .map_err(|error| EmberdError::InvalidDispatchManifest {
+            detail: format!("nvidia-smi VRAM probe failed to start: {error}"),
+        })?;
+    if !output.status.success() {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: format!("nvidia-smi VRAM probe failed with {}", output.status),
+        });
+    }
+    let stdout =
+        String::from_utf8(output.stdout).map_err(|error| EmberdError::InvalidDispatchManifest {
+            detail: format!("nvidia-smi VRAM output was not UTF-8: {error}"),
+        })?;
+    let values = stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.trim().parse::<u64>())
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|error| EmberdError::InvalidDispatchManifest {
+            detail: format!("nvidia-smi VRAM output was invalid: {error}"),
+        })?;
+    if values.len() != 1 {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: format!(
+                "dispatch requires exactly one visible GPU, observed {}",
+                values.len()
+            ),
+        });
+    }
+    values[0]
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            detail: "nvidia-smi VRAM value overflowed bytes".into(),
+        })
 }
 fn emberd_source_hash() -> String {
     let sources: [&[u8]; 5] = [
