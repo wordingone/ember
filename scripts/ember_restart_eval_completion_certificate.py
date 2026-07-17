@@ -36,7 +36,7 @@ def _validate_benchmark(row: object, root: Path) -> None:
         raise ValueError("certificate benchmark record is invalid")
     if row.get("family") not in FAMILIES or not isinstance(row.get("benchmark_id"), str) or not row["benchmark_id"] or not isinstance(row.get("benchmark_version"), str) or not row["benchmark_version"]:
         raise ValueError("certificate benchmark identity is invalid")
-    if any(not SHA.fullmatch(row.get(key, "")) for key in ("split_sha256", "protocol_sha256", "command_sha256")) or row.get("result") not in ("PREFLIGHT_ONLY", "NON_CLAIM_RAW_FORWARD"):
+    if any(not SHA.fullmatch(row.get(key, "")) for key in ("split_sha256", "protocol_sha256", "command_sha256")) or row.get("result") not in ("PREFLIGHT_ONLY", "SELFTEST_ONLY", "NON_CLAIM_RAW_FORWARD"):
         raise ValueError("certificate benchmark hashes/result are invalid")
     if "command_path" in row:
         command_path = _safe_relative(row["command_path"])
