@@ -51,7 +51,7 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_mmlu_pro_score.py",
       "custody_path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
-      "custody_sha256": "73b0857819df05bde280873d13855df99348a5a2ee66385e90313f93ba3abb26"
+      "custody_sha256": "582f1fb2476dd9d8ca3ba4bce3a229a5a2f70c360c094f8e140d8a570921e862"
     },
     {
       "family": "code",

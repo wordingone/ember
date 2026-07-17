@@ -22,7 +22,7 @@
     "scoring_adapter_sha256": "3c8b91f03745800d16662a99b807315aaa0af07cbfa58a50b3d2f514e132ec9b",
     "runtime_audit": {
         "path": "scripts/ember_restart_eval_mmlu_pro_runtime_audit.py",
-        "sha256": "b18cfd97a79c6820148807f6f22fed2b40661b5b39a726b864f4d94200e43f4c",
+        "sha256": "547f057d9857cbd913eda10bcb60daf224523443989618e0fcc4ac83a1766a7b",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
     "strict_protocol_required": true,
