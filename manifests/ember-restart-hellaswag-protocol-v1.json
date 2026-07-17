@@ -15,7 +15,7 @@
                           ],
     "scoring_adapter":  {
                             "path":  "scripts/ember_restart_eval_hellaswag_score.py",
-                            "sha256":  "adfc0f78261be7446792e196d82956aff8938f306dee9f59b0a9d27e53f3ba51",
+                            "sha256":  "f1baae7fb6cc42a29100cf8be3e7fcd4ea6acdb5bd12642c9bd07eb4d5feb92f",
                             "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
                         }
 }
