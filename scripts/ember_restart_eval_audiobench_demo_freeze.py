@@ -19,6 +19,10 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def derived_protocol_sha256(split_sha256: str) -> str:
+    return digest(f"audiobench-demo-procedural:{SOURCE_COMMIT}:{split_sha256}".encode("ascii"))
+
+
 def atomic(path: Path, payload: dict) -> None:
     if path.exists():
         raise ValueError("frozen demo output must not pre-exist")
@@ -56,7 +60,7 @@ def main() -> int:
             raise ValueError("invalid bundled AudioBench demo pack")
         split = digest(b"\n".join(role.encode("utf-8") + b"\0" + blobs[role] for role in paths))
         files = [{"role": role, "bytes": len(blobs[role]), "sha256": digest(blobs[role])} for role in paths]
-        atomic(args.output, {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "schema_version": "ember-restart-audiobench-demo-freeze-v1", "result": "PREFLIGHT_ONLY", "claim_status": "SELFTEST_ONLY_PROCEDURAL_AUDIO", "benchmark_id": "audiobench-demo-procedural", "benchmark_version": SOURCE_COMMIT, "capability": "audio", "split_sha256": split, "protocol_sha256": args.protocol_sha256, "source_files": files, "task_count": sum(counts.values())})
+        atomic(args.output, {"goal_id": "EMBER-02", "workstream_id": "EMBER-02C", "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember", "schema_version": "ember-restart-audiobench-demo-freeze-v2", "result": "PREFLIGHT_ONLY", "claim_status": "SELFTEST_ONLY_PROCEDURAL_AUDIO", "benchmark_id": "audiobench-demo-procedural", "benchmark_version": SOURCE_COMMIT, "capability": "audio", "split_sha256": split, "protocol_sha256": derived_protocol_sha256(split), "source_files": files, "task_count": sum(counts.values())})
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         parser.error(f"invalid AudioBench demo source: {error}")
     return 0
