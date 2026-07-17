@@ -23,7 +23,7 @@ describe("OperatorSurfacePane", () => {
   test("derives scalar status metrics and binds checkpoint to the active run", () => {
     const snapshot = buildOperatorSurfaceSnapshot({
       telemetry: telemetry({
-        recentEvents: [train("run-1", 12, "2026-07-17T17:30:00.000Z", 1.25, { step_ms: 500 })],
+        recentEvents: [train("run-1", 12, "2026-07-17T17:30:00.000Z", 1.25, { step_ms: 500, total_steps: 100 })],
         activeRun: { runId: "run-1", step: 12, totalSteps: 100, loss: 1.25, stepMs: 500, lastTs: "2026-07-17T17:30:00.000Z" },
         lastGovernor: { runId: "run-1", vramUsedGib: 7.5, vramTotalGib: 24, fractionApplied: 0.5 },
         lastCheckpoint: { runId: "run-1", step: 10, checkpointManifestSha256: "a".repeat(64), lastTs: "2026-07-17T17:29:00.000Z" },
@@ -131,6 +131,28 @@ describe("OperatorSurfacePane", () => {
     expect(getOperatorRunStatus(telemetry({ channelStatus: "OFFLINE" } as any), now)).toBe("OFFLINE");
   });
 
+  test("binds status to the selected graph run instead of maxing across runs", () => {
+    const now = Date.parse("2026-07-17T17:31:00.000Z");
+    const telemetryState = telemetry({ recentEvents: [
+      train("run-b", 8, "2026-07-17T17:30:59.000Z", 1),
+      train("run-a", 3, "2026-07-17T17:30:00.000Z", 2),
+    ] });
+    expect(getOperatorRunStatus(telemetryState, now)).toBe("STALE");
+  });
+
+  test("does not apply retained OFFLINE run status to a different selected run", () => {
+    const now = Date.parse("2026-07-17T17:30:03.000Z");
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry({
+        recentEvents: [train("run-b", 2, "2026-07-17T17:30:02.000Z", 1, { step_ms: 500 })],
+        runStatus: { runId: "run-a", phase: "OFFLINE", modelChat: "OFFLINE", lastTs: "2026-07-17T17:30:01.000Z" },
+      }),
+      activityLines: [],
+      nowMs: now,
+    });
+    expect(snapshot.status).toBe("RUNNING");
+    expect(snapshot.graphs.loss.some((line) => line.includes("OFFLINE/HISTORICAL"))).toBe(false);
+  });
   test("source env claims stay unverified without independent binding", () => {
     const snapshot = buildOperatorSurfaceSnapshot({ telemetry: telemetry(), activityLines: [], sourceIdentity: { publicCommit: "f".repeat(40), binarySha256: "b".repeat(64) } });
     expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
@@ -245,6 +267,15 @@ describe("OperatorSurfacePane", () => {
     expect(snapshot.graphs.loss.every((line) => line.includes("STALE/HISTORICAL"))).toBe(true);
   });
 
+  test("rejects injected invalid governor totals at the render boundary", () => {
+    const telemetryState = telemetry({
+      recentEvents: [train("run-boundary", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000 })],
+      lastGovernor: { runId: "run-boundary", vramUsedGib: -1, vramTotalGib: 0, fractionApplied: 0.5 },
+    });
+    const snapshot = buildOperatorSurfaceSnapshot({ telemetry: telemetryState, activityLines: [], nowMs: Date.parse("2026-07-17T17:30:02.000Z") });
+    expect(snapshot.status).toBe("RUNNING");
+    expect(snapshot.metrics.some((line) => line.startsWith("VRAM"))).toBe(false);
+  });
   test("parses resource-only events independently, bounds GPU utilization, and rejects future timestamps", () => {
     const graphs = buildOperatorSurfaceGraphs(telemetry({
       recentEvents: [

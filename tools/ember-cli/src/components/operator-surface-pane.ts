@@ -37,6 +37,7 @@ export interface OperatorSeriesPoint {
   runId: string;
   step: number;
   loss?: number;
+  totalSteps?: number;
   throughput?: number;
   vramUsedGib?: number;
   gpuUtilizationPct?: number;
@@ -106,7 +107,7 @@ function validTrainStep(event: TelemetryEvent, nowMs: number = Date.now()): Oper
   const runId = eventRunId(event);
   const step = event.payload["step"];
   const timestamp = eventTime(event);
-  if (!runId || !finiteNumber(step) || !finiteNumber(timestamp) || timestamp > nowMs) return undefined;
+  if (!runId || !finiteNumber(step) || !Number.isInteger(step) || step < 1 || !finiteNumber(timestamp) || timestamp > nowMs) return undefined;
   const lossValue = event.payload["loss"];
   const loss = finiteNumber(lossValue) ? lossValue : undefined;
   const stepMs = event.payload["step_ms"];
@@ -119,7 +120,9 @@ function validTrainStep(event: TelemetryEvent, nowMs: number = Date.now()): Oper
   const gpuValue = event.payload["gpu_utilization_pct"];
   const gpuUtilizationPct = finiteNumber(gpuValue) && gpuValue >= 0 && gpuValue <= 100 ? gpuValue : undefined;
   if (loss === undefined && throughput === undefined && vramUsedGib === undefined && gpuUtilizationPct === undefined) return undefined;
-  return { runId, step, loss, throughput, vramUsedGib, gpuUtilizationPct, ts: event.ts };
+  const totalStepsValue = event.payload["total_steps"];
+  const totalSteps = finiteNumber(totalStepsValue) && Number.isInteger(totalStepsValue) && totalStepsValue > 0 ? totalStepsValue : undefined;
+  return { runId, step, totalSteps, loss, throughput, vramUsedGib, gpuUtilizationPct, ts: event.ts };
 }
 
 function selectedRunId(telemetry: TelemetryState, nowMs: number): string | undefined {
@@ -262,7 +265,7 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   const modelGrowth = eventMetricSamples(telemetry, runId, "model_growth", "value", nowMs);
   const capability = eventMetricSamples(telemetry, runId, "capability_score", "score", nowMs);
   const decorate = (lines: string[]): string[] =>
-    channelIsOffline(telemetry) ? decorateHistory(lines, "OFFLINE/HISTORICAL") : lines;
+    channelIsOffline(telemetry, runId) ? decorateHistory(lines, "OFFLINE/HISTORICAL") : lines;
   const lossLines = decorate(loss);
   const resourceLines = decorate([
     "RESOURCE EFFICIENCY",
@@ -286,9 +289,9 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   };
 }
 
-function channelIsOffline(telemetry: TelemetryState): boolean {
+function channelIsOffline(telemetry: TelemetryState, selectedRunId?: string): boolean {
   const extended = telemetry as TelemetryState & { channelStatus?: string };
-  return extended.channelStatus === "OFFLINE" || telemetry.runStatus?.phase === "OFFLINE";
+  return extended.channelStatus === "OFFLINE" || (selectedRunId !== undefined && telemetry.runStatus?.runId === selectedRunId && telemetry.runStatus.phase === "OFFLINE");
 }
 
 function decorateHistory(lines: string[], marker: "OFFLINE/HISTORICAL" | "STALE/HISTORICAL"): string[] {
@@ -297,11 +300,13 @@ function decorateHistory(lines: string[], marker: "OFFLINE/HISTORICAL" | "STALE/
     : `${marker} ${line}`);
 }
 /** Derive status only from the same validated train-step evidence used by graphs. */
-export function getOperatorRunStatus(telemetry: TelemetryState, nowMs: number = Date.now()): OperatorRunStatus {
-  if (channelIsOffline(telemetry)) return "OFFLINE";
+export function getOperatorRunStatus(telemetry: TelemetryState, nowMs: number = Date.now(), selectedRun?: string): OperatorRunStatus {
+  const runId = selectedRun ?? selectedRunId(telemetry, nowMs);
+  if (channelIsOffline(telemetry, runId)) return "OFFLINE";
+  if (!runId) return "IDLE";
   const eventTimes = telemetry.recentEvents
     .map((event) => validTrainStep(event, nowMs))
-    .filter((point): point is OperatorSeriesPoint => point !== undefined)
+    .filter((point): point is OperatorSeriesPoint => point !== undefined && point.runId === runId)
     .map((point) => Date.parse(point.ts))
     .filter((timestamp): timestamp is number => finiteNumber(timestamp) && timestamp <= nowMs);
   if (eventTimes.length === 0) return "IDLE";
@@ -316,25 +321,32 @@ export function buildOperatorSurfaceSnapshot({
   maxAgentLines = 6,
   plotWidth = 80,
 }: OperatorSurfaceInput): OperatorSurfaceSnapshot {
-  const status = getOperatorRunStatus(telemetry, nowMs);
   const rawGraphs = buildOperatorSurfaceGraphs(telemetry, plotWidth, nowMs);
-  const run = telemetry.activeRun && telemetry.activeRun.runId === rawGraphs.runId && status === "RUNNING" ? telemetry.activeRun : undefined;
+  const status = getOperatorRunStatus(telemetry, nowMs, rawGraphs.runId);
+  const latestPoint = rawGraphs.points.length > 0 ? rawGraphs.points[rawGraphs.points.length - 1] : undefined;
   const metrics: string[] = [];
 
-  if (run && status === "RUNNING") {
-    if (finiteNumber(run.loss)) metrics.push(`loss ${run.loss.toFixed(2)}`);
-    if (finiteNumber(run.step)) {
-      metrics.push(run.totalSteps != null && finiteNumber(run.totalSteps)
-        ? `step ${run.step}/${run.totalSteps}`
-        : `step ${run.step}`);
+  if (latestPoint && status === "RUNNING") {
+    if (finiteNumber(latestPoint.loss)) metrics.push(`loss ${latestPoint.loss.toFixed(2)}`);
+    if (finiteNumber(latestPoint.step)) {
+      metrics.push(latestPoint.totalSteps !== undefined
+        ? `step ${latestPoint.step}/${latestPoint.totalSteps}`
+        : `step ${latestPoint.step}`);
     }
-    if (finiteNumber(run.stepMs) && run.stepMs > 0) {
-      metrics.push(`throughput ${(60_000 / run.stepMs).toFixed(1)} step/min`);
+    if (finiteNumber(latestPoint.throughput)) {
+      metrics.push(`throughput ${latestPoint.throughput.toFixed(1)} step/min`);
     }
   }
 
   const governor = telemetry.lastGovernor;
-  if (status === "RUNNING" && governor && governor.runId === rawGraphs.runId && finiteNumber(governor.vramUsedGib) && finiteNumber(governor.vramTotalGib)) {
+  const validGovernor = governor
+    && governor.runId === rawGraphs.runId
+    && finiteNumber(governor.vramUsedGib)
+    && finiteNumber(governor.vramTotalGib)
+    && governor.vramTotalGib > 0
+    && governor.vramUsedGib >= 0
+    && governor.vramUsedGib <= governor.vramTotalGib;
+  if (status === "RUNNING" && validGovernor) {
     metrics.push(`VRAM ${governor.vramUsedGib.toFixed(1)}/${governor.vramTotalGib.toFixed(1)} GiB`);
   }
 

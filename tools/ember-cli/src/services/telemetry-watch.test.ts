@@ -19,7 +19,7 @@ describe("training telemetry custody", () => {
   test("retains live VRAM, optimizer progress, verified checkpoint, and model-seat status", async () => {
     scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-"));
     const channel = join(scratch, "telemetry.jsonl");
-    const now = Date.parse("2026-07-17T05:00:00.000Z");
+    const now = Date.parse("2026-07-17T05:00:04.000Z");
     const events = [
       { ts: "2026-07-17T05:00:00.000Z", kind: "run_status", source: "ember-restart-3b", payload: { run_id: "vision-v4", phase: "TRAINING", model_chat: "OFFLINE", restore_not_before: "2026-07-18T11:00:00-07:00" } },
       { ts: "2026-07-17T05:00:01.000Z", kind: "governor", source: "ember-restart-3b", payload: { free_gib: 3.5, total_gib: 24, vram_fraction_applied: 0.95 } },
@@ -54,6 +54,29 @@ describe("training telemetry custody", () => {
       await Bun.sleep(650);
       expect(getState().lastGovernor).toBeUndefined();
       expect(getState().recentEvents).toHaveLength(4);
+    } finally {
+      handle.stop();
+    }
+  });
+  test("rejects future events before recent or derived state mutation", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-future-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    const events = [
+      { ts: "2026-07-17T05:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "current", step: 1, loss: 2, free_gib: 10, total_gib: 24 } },
+      { ts: "2026-07-17T05:00:02.000Z", kind: "governor", source: "journal", payload: { run_id: "future", free_gib: 1, total_gib: 24 } },
+      { ts: "2026-07-17T05:00:03.000Z", kind: "train_step", source: "journal", payload: { run_id: "future", step: 99, loss: 0.1 } },
+      { ts: "2026-07-17T05:00:04.000Z", kind: "checkpoint", source: "journal", payload: { run_id: "future", step: 99, checkpoint_manifest_sha256: "f".repeat(64) } },
+      { ts: "2026-07-17T05:00:05.000Z", kind: "run_status", source: "journal", payload: { run_id: "future", phase: "OFFLINE", model_chat: "OFFLINE" } },
+    ];
+    await writeFile(channel, events.map((event) => JSON.stringify(event)).join("\n") + "\n", "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T05:00:01.000Z") });
+    try {
+      await Bun.sleep(650);
+      expect(getState().recentEvents.map((event) => event.payload["run_id"])).toEqual(["current"]);
+      expect(getState().activeRun?.runId).toBe("current");
+      expect(getState().lastGovernor).toMatchObject({ runId: "current", vramUsedGib: 14 });
+      expect(getState().lastCheckpoint).toBeUndefined();
+      expect(getState().runStatus).toBeUndefined();
     } finally {
       handle.stop();
     }
