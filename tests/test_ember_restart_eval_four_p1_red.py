@@ -136,6 +136,17 @@ def test_registry_anchor_fails_closed_on_malformed_authority_shape(tmp_path, mon
     assert module._registry_is_pinned(registry) is False
 
 
+def test_registry_snapshot_rejects_verifier_source_hash_drift(tmp_path, monkeypatch):
+    module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_verifier_hash")
+    verifier = tmp_path / "verifier.py"
+    verifier.write_text("VALUE = 1\n", encoding="utf-8")
+    registry = tmp_path / "trusted-verifiers.json"
+    registry.write_text(json.dumps({"schema_version": "ember-trusted-verifiers-v1", "verifiers": [{"path": verifier.name, "sha256": "0" * 64}]}), encoding="utf-8")
+    authority = tmp_path / "authorities.json"
+    authority.write_text(json.dumps({"authorities": [{"trusted_verifier_registry_sha256": _sha(registry)}]}), encoding="utf-8")
+    monkeypatch.setattr(module, "EXECUTION_AUTHORITIES", authority)
+    assert module._pinned_registry_snapshot(registry) is None
+
 def test_claim_renderer_serializes_every_identity_field_so_admitted_receipts_cannot_collide(tmp_path, monkeypatch):
     module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_surface_identity")
     monkeypatch.setattr(module, "_admitted", lambda *args: True)
