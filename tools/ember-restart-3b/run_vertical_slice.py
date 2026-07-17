@@ -39,6 +39,67 @@ def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def bind_specialist_execution_slice(
+    records: list[dict[str, object]], *, start_record: int, max_records: int,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Bind one exact contiguous execution slice without weakening full-corpus verification."""
+
+    if type(start_record) is not int or start_record < 0 or start_record >= len(records):
+        raise ValueError("specialist execution slice start record is outside the verified corpus")
+    if type(max_records) is not int or max_records < 1:
+        raise ValueError("specialist execution slice max records must be positive")
+    if start_record + max_records > len(records):
+        raise ValueError("specialist execution slice exceeds the verified corpus")
+    selected = records[start_record:start_record + max_records]
+    return selected, specialist_execution_slice_receipt(selected, source_start_record=start_record)
+
+
+def specialist_execution_slice_receipt(
+    records: list[dict[str, object]], *, source_start_record: int,
+) -> dict[str, object]:
+    """Content-address records executed since the immediate checkpoint parent."""
+
+    if type(source_start_record) is not int or source_start_record < 0 or not records:
+        raise ValueError("specialist execution slice selected no verified records")
+    token_rows: list[list[int]] = []
+    for record in records:
+        token_ids = record.get("token_ids")
+        if not isinstance(token_ids, list) or not token_ids or any(type(token) is not int or token < 0 for token in token_ids):
+            raise ValueError("specialist execution slice requires nonempty nonnegative token_ids")
+        token_rows.append(list(token_ids))
+    canonical_records = json.dumps(records, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    canonical_tokens = json.dumps(token_rows, separators=(",", ":")).encode("utf-8")
+    return {
+        "schema_version": "ember-specialist-execution-slice-v1",
+        "start_record": source_start_record,
+        "record_count": len(records),
+        "token_count": sum(len(row) for row in token_rows),
+        "records_sha256": hashlib.sha256(canonical_records).hexdigest(),
+        "tokens_sha256": hashlib.sha256(canonical_tokens).hexdigest(),
+    }
+
+
+def validate_specialist_execution_slice(
+    execution_slice: dict[str, object], *, verified_record_count: int,
+) -> None:
+    fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
+    if not isinstance(execution_slice, dict) or set(execution_slice) != fields:
+        raise ValueError("specialist execution slice has an invalid shape")
+    if execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1":
+        raise ValueError("specialist execution slice has an unsupported schema")
+    if type(verified_record_count) is not int or verified_record_count < 1:
+        raise ValueError("specialist execution slice requires a verified corpus size")
+    start, count, tokens = execution_slice.get("start_record"), execution_slice.get("record_count"), execution_slice.get("token_count")
+    if type(start) is not int or start < 0 or type(count) is not int or count < 1 or start + count > verified_record_count:
+        raise ValueError("specialist execution slice exceeds the verified corpus")
+    if type(tokens) is not int or tokens < 1:
+        raise ValueError("specialist execution slice has no token evidence")
+    for field in ("records_sha256", "tokens_sha256"):
+        digest = execution_slice.get(field)
+        if not isinstance(digest, str) or len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+            raise ValueError(f"specialist execution slice has an invalid {field}")
+
+
 def append_training_telemetry(path: Path, *, kind: str, payload: dict[str, object]) -> None:
     """Append one bounded, path-free cockpit event from the canonical trainer."""
 
@@ -838,7 +899,15 @@ def run(
         records = records_override
         launch_packet = {"input_identity": {"shard_path": "verified-specialist"}}
         input_receipt = specialist_verification
-        data_shard_id = "VERIFIED_SPECIALIST:" + str(specialist_verification["data_manifest_sha256"])[:12]
+        execution_slice = specialist_lineage.get("execution_slice")
+        if not isinstance(execution_slice, dict) or not isinstance(execution_slice.get("records_sha256"), str):
+            raise ValueError("specialist production run requires an execution-slice receipt")
+        data_shard_id = (
+            "VERIFIED_SPECIALIST:"
+            + str(specialist_verification["data_manifest_sha256"])[:12]
+            + ":SLICE:"
+            + str(execution_slice["records_sha256"])[:12]
+        )
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
 
@@ -888,16 +957,29 @@ def run(
     checkpoint: dict[str, object] | None = None
     parameter_receipt: dict[str, object] | None = None
     latest_parent_manifest = Path(specialist_lineage["parent_manifest"]) if specialist_lineage is not None else None
+    published_specialist_records = 0
 
     def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
-        nonlocal checkpoint, parameter_receipt, latest_parent_manifest
+        nonlocal checkpoint, parameter_receipt, latest_parent_manifest, published_specialist_records
         data_cursor = dict(state["data_cursor"])
         data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
         current_lineage: dict[str, object] | None = None
         if specialist_lineage is not None:
             if latest_parent_manifest is None:
                 raise RuntimeError("specialist checkpoint publication lost its verified parent manifest")
-            current_lineage = {**specialist_lineage, "parent_manifest": str(latest_parent_manifest)}
+            planned_slice = specialist_lineage["execution_slice"]
+            processed_records = int(data_cursor["record_index"])
+            if processed_records <= published_specialist_records or processed_records > len(records):
+                raise RuntimeError("specialist checkpoint cursor does not identify a new bound episode")
+            episode_slice = specialist_execution_slice_receipt(
+                records[published_specialist_records:processed_records],
+                source_start_record=int(planned_slice["start_record"]) + published_specialist_records,
+            )
+            current_lineage = {
+                **specialist_lineage,
+                "parent_manifest": str(latest_parent_manifest),
+                "execution_slice": episode_slice,
+            }
             data_cursor["specialist_verification"] = specialist_verification
             checkpoint_target = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{global_step}"
         else:
@@ -937,6 +1019,7 @@ def run(
         )
         if current_lineage is not None:
             latest_parent_manifest = checkpoint_target / "checkpoint-manifest.json"
+            published_specialist_records = int(data_cursor["record_index"])
         if telemetry_path is not None and telemetry_run_id is not None:
             append_training_telemetry(telemetry_path, kind="checkpoint", payload={
                 "run_id": telemetry_run_id,
@@ -986,13 +1069,14 @@ def run(
 
 def specialist_lineage_request(
     *, capability: str, verification: dict[str, object], resume_checkpoint: Path | None,
-    parent_manifest: Path, root_manifest: Path,
+    parent_manifest: Path, root_manifest: Path, execution_slice: dict[str, object],
 ) -> dict[str, object]:
     """Bind a specialist launch to externally supplied parent/root manifests before allocation."""
 
     expected_expert = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}.get(capability)
     if expected_expert is None or verification.get("capability") != capability or verification.get("result") != "VERIFIED":
         raise ValueError("specialist lineage requires a verified capability-matched data receipt")
+    validate_specialist_execution_slice(execution_slice, verified_record_count=verification.get("record_count"))
     if resume_checkpoint is None:
         raise ValueError("specialist v4 launch requires the parent checkpoint for resume")
     resume_manifest = resume_checkpoint.resolve() / "checkpoint-manifest.json"
@@ -1007,6 +1091,7 @@ def specialist_lineage_request(
         "root_manifest": root_manifest.resolve(),
         "trained_expert_ids": [*parent_history, *([] if expected_expert in parent_history else [expected_expert])],
         "data_verification_receipt": verification,
+        "execution_slice": execution_slice,
     }
 
 
@@ -1014,6 +1099,7 @@ def run_specialist(
     *, seed: int, artifact_root: Path, data_manifest: Path, tokenizer_path: Path,
     capability: str, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None, parent_manifest: Path, root_manifest: Path,
     checkpoint_interval: int, write_budget_bytes: int,
+    start_record: int = 0, max_records: int | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
     telemetry_path: Path | None = None,
@@ -1026,13 +1112,17 @@ def run_specialist(
     records, verification = load_verified_specialist_records(
         root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
     )
+    selected_records, execution_slice = bind_specialist_execution_slice(
+        records, start_record=start_record,
+        max_records=(len(records) - start_record if max_records is None else max_records),
+    )
     lineage = specialist_lineage_request(
         capability=capability, verification=verification, resume_checkpoint=resume_checkpoint,
-        parent_manifest=parent_manifest, root_manifest=root_manifest,
+        parent_manifest=parent_manifest, root_manifest=root_manifest, execution_slice=execution_slice,
     )
     return run(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
-        records_override=records, specialist_verification=verification, specialist_lineage=lineage,
+        records_override=selected_records, specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,
@@ -1197,6 +1287,8 @@ def main() -> None:
     specialist.add_argument("--resume-counter-receipt", type=Path, required=True)
     specialist.add_argument("--parent-manifest", type=Path, required=True)
     specialist.add_argument("--root-manifest", type=Path, required=True)
+    specialist.add_argument("--start-record", type=int, default=0)
+    specialist.add_argument("--max-records", type=int, required=True)
     specialist.add_argument("--checkpoint-interval", type=int, required=True)
     specialist.add_argument("--write-budget-gib", type=int, required=True)
     specialist.add_argument("--c-relocated-under-disk-budget-runner", action="store_true")
@@ -1218,7 +1310,7 @@ def main() -> None:
     semantic.add_argument("--resume-counter-receipt", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
