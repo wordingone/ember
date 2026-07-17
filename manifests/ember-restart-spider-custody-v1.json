@@ -26,6 +26,11 @@
         "runner_receipt_sha256": "476348c1ad82995a3824e55eb19cedee70c782b219ea750dfa5aaee127aeb0f2",
         "claim_status": "SOURCE_ONLY_NO_FROZEN_SQL_EVALUATION_ASSETS"
     },
+    "source_audit": {
+        "path": "scripts/ember_restart_eval_spider_source_audit.py",
+        "sha256": "cdef1be8654b2d387ff98a4f71eb20400849e5698112fd3c7a32d01441f9d685",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "validation_pairs_materialization": {
         "upstream_revision": "0c350918f3f29ec754f1181c65cdce76cd6c133c",
         "artifact_sha256": "6fa91248385896a6e74dff55a01fdc8df9fc7854bd007bd092a75c663631c6de",
