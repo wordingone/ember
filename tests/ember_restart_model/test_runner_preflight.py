@@ -30,6 +30,26 @@ from verify_capability_record import expected_receipt
 
 
 class RunnerPreflightTests(unittest.TestCase):
+    def test_training_telemetry_is_bounded_path_free_jsonl(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            channel = Path(directory) / "ember-telemetry.jsonl"
+            run_vertical_slice.append_training_telemetry(
+                channel,
+                kind="train_step",
+                payload={"run_id": "vision-v4", "step": 3, "total_steps": 10, "loss": 4.0, "step_ms": 125.0},
+            )
+            event = json.loads(channel.read_text(encoding="utf-8"))
+            self.assertEqual(event["kind"], "train_step")
+            self.assertEqual(event["source"], "ember-restart-3b")
+            self.assertEqual(event["payload"]["step"], 3)
+            self.assertLess(channel.stat().st_size, 4096)
+            with self.assertRaisesRegex(ValueError, "filesystem paths"):
+                run_vertical_slice.append_training_telemetry(
+                    channel,
+                    kind="checkpoint",
+                    payload={"run_id": "vision-v4", "checkpoint_path": "C:/secret"},
+                )
+
     def test_specialist_loader_ignores_ambient_pythonpath_and_prioritizes_canonical_verifier(self) -> None:
         """The independent verifier must never import ambient generator/tokenizer modules."""
         from build_specialist_bundle import emit_bundle
@@ -482,12 +502,12 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(cuda_runner.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
     def test_specialist_cli_dispatches_one_verified_route(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "B:/ember-artifacts", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
                 run_vertical_slice.main()
-        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None)
+        specialist.assert_called_once_with(seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"), tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"), resume_counter_receipt=Path("B:/parent/parameter-counter-receipt.json"), parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"), checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3, c_relocated_under_disk_budget_runner=False, relocation_custody_root=None, telemetry_path=Path("state/ember-telemetry.jsonl"), telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00")
     def test_specialist_cli_forwards_explicit_c_relocation_custody(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
-            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120"]):
+            with patch.object(sys, "argv", ["run_vertical_slice.py", "specialist", "--seed", "84", "--artifact-root", "C:/tmp/ember-restart-niko-3b/production-artifacts/vision", "--data-manifest", "data/vision.json", "--tokenizer", "tokenizer.json", "--capability", "image", "--resume-checkpoint", "B:/parent", "--resume-counter-receipt", "B:/parent/parameter-counter-receipt.json", "--parent-manifest", "B:/parent/checkpoint-manifest.json", "--root-manifest", "B:/root/checkpoint-manifest.json", "--c-relocated-under-disk-budget-runner", "--relocation-custody-root", "C:/tmp/ember-restart-niko-3b/production-artifacts", "--checkpoint-interval", "8192", "--write-budget-gib", "120", "--telemetry-path", "state/ember-telemetry.jsonl", "--telemetry-run-id", "vision-v4", "--model-chat-restore-not-before", "2026-07-18T11:00:00-07:00"]):
                 run_vertical_slice.main()
         self.assertIs(specialist.call_args.kwargs["c_relocated_under_disk_budget_runner"], True)
         self.assertEqual(specialist.call_args.kwargs["artifact_root"], Path("C:/tmp/ember-restart-niko-3b/production-artifacts/vision"))

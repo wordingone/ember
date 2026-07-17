@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -36,6 +37,27 @@ def _sha256(path: Path) -> str:
 
 def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def append_training_telemetry(path: Path, *, kind: str, payload: dict[str, object]) -> None:
+    """Append one bounded, path-free cockpit event from the canonical trainer."""
+
+    if kind not in {"run_status", "train_step", "checkpoint"}:
+        raise ValueError("training telemetry kind is not authorized")
+    if any("path" in key.lower() for key in payload):
+        raise ValueError("training telemetry payload must not disclose filesystem paths")
+    event = {
+        "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "kind": kind,
+        "source": "ember-restart-3b",
+        "payload": payload,
+    }
+    encoded = json.dumps(event, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+    if len(encoded) > 4096:
+        raise ValueError("training telemetry event exceeds the bounded channel contract")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("ab") as handle:
+        handle.write(encoded)
 
 
 def specialist_resume_cursor(cursor: dict[str, object], *, data_shard_id: str) -> dict[str, object]:
@@ -741,11 +763,19 @@ def run(
     write_budget_bytes: int | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
+    telemetry_path: Path | None = None,
+    telemetry_run_id: str | None = None,
+    model_chat_restore_not_before: str | None = None,
 ) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
         raise ValueError("launch seed must be a nonnegative integer")
+    telemetry_values = (telemetry_path, telemetry_run_id, model_chat_restore_not_before)
+    if any(value is not None for value in telemetry_values) and not all(value is not None for value in telemetry_values):
+        raise ValueError("training telemetry requires path, run id, and model-chat restore time together")
+    if telemetry_run_id is not None and (not telemetry_run_id or len(telemetry_run_id) > 128):
+        raise ValueError("training telemetry run id is invalid")
     artifact_root = production_artifact_root(
         artifact_root,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
@@ -766,6 +796,13 @@ def run(
         active_parameters=active_parameters,
         device_free_bytes=int(device_free_bytes),
     )
+    if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
+        append_training_telemetry(telemetry_path, kind="run_status", payload={
+            "run_id": telemetry_run_id,
+            "phase": "ALLOCATING",
+            "model_chat": "OFFLINE",
+            "restore_not_before": model_chat_restore_not_before,
+        })
     if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
         raise RuntimeError("memory preflight and production numerics disagree")
     if records_override is None:
@@ -877,16 +914,42 @@ def run(
         )
         if current_lineage is not None:
             latest_parent_manifest = checkpoint_target / "checkpoint-manifest.json"
+        if telemetry_path is not None and telemetry_run_id is not None:
+            append_training_telemetry(telemetry_path, kind="checkpoint", payload={
+                "run_id": telemetry_run_id,
+                "step": global_step,
+                "checkpoint_manifest_sha256": _sha256(checkpoint_target / "checkpoint-manifest.json"),
+            })
+
+    def progress_callback(progress: dict[str, object]) -> None:
+        if telemetry_path is None or telemetry_run_id is None:
+            return
+        free_bytes, total_bytes = torch.cuda.mem_get_info()
+        append_training_telemetry(telemetry_path, kind="train_step", payload={
+            "run_id": telemetry_run_id,
+            **progress,
+            "free_gib": float(free_bytes / 1024**3),
+            "total_gib": float(total_bytes / 1024**3),
+            "vram_fraction_applied": float(torch.cuda.get_per_process_memory_fraction()),
+        })
 
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
         checkpoint_every=(int(checkpoint_interval) if records_override is not None else len(records)),
         checkpoint_callback=checkpoint_callback, initial_global_step=int(resume_cursor["global_step"]),
+        progress_callback=progress_callback,
         initial_tokens_seen=int(resume_cursor["tokens_seen"]), initial_data_cursor=int(resume_cursor["record_index"]),
         data_shard_id=data_shard_id, require_complete_coverage=(records_override is None),
     )
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("training segment completed without a durable verified checkpoint")
+    if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
+        append_training_telemetry(telemetry_path, kind="run_status", payload={
+            "run_id": telemetry_run_id,
+            "phase": "COMPLETE",
+            "model_chat": "OFFLINE",
+            "restore_not_before": model_chat_restore_not_before,
+        })
     counts = measure_parameter_counts(model)
     if counts["unique_parameters"] != 3_839_161_856 or counts["active_parameters"] != 1_725_232_640:
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
@@ -930,6 +993,9 @@ def run_specialist(
     checkpoint_interval: int, write_budget_bytes: int,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
+    telemetry_path: Path | None = None,
+    telemetry_run_id: str | None = None,
+    model_chat_restore_not_before: str | None = None,
 ) -> dict[str, object]:
     """Run one verifier-bound specialist family through the canonical v4 lineage path."""
 
@@ -947,6 +1013,9 @@ def run_specialist(
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,
+        telemetry_path=telemetry_path,
+        telemetry_run_id=telemetry_run_id,
+        model_chat_restore_not_before=model_chat_restore_not_before,
     )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
@@ -1107,6 +1176,9 @@ def main() -> None:
     specialist.add_argument("--write-budget-gib", type=int, required=True)
     specialist.add_argument("--c-relocated-under-disk-budget-runner", action="store_true")
     specialist.add_argument("--relocation-custody-root", type=Path)
+    specialist.add_argument("--telemetry-path", type=Path, required=True)
+    specialist.add_argument("--telemetry-run-id", required=True)
+    specialist.add_argument("--model-chat-restore-not-before", required=True)
     semantic = subparsers.add_parser("semantic")
     semantic.add_argument("--seed", type=int, required=True)
     semantic.add_argument("--artifact-root", type=Path, required=True)
@@ -1121,7 +1193,7 @@ def main() -> None:
     semantic.add_argument("--resume-counter-receipt", type=Path)
     args = parser.parse_args()
     if args.command == "specialist":
-        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root)
+        result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
     elif args.command == "semantic":
         result = run_semantic(
             seed=args.seed,
