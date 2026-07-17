@@ -45,8 +45,7 @@ class SpecialistBundleTests(unittest.TestCase):
             frozen = Tokenizer(models.WordLevel(vocabulary, unk_token="<unk>"))
             frozen.pre_tokenizer = pre_tokenizers.Whitespace()
             frozen.save(str(tokenizer))
-            config = root / "config.json"
-            config.write_text(json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}), encoding="utf-8")
+            config = ROOT / "configs" / "ember-restart-3b.json"
             emitted = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)
             self.assertEqual(set(emitted), {"image", "audio", "reasoning", "tool"})
             for capability, manifest in emitted.items():
@@ -74,8 +73,7 @@ class SpecialistBundleTests(unittest.TestCase):
             frozen = Tokenizer(models.WordLevel(vocabulary, unk_token="<unk>"))
             frozen.pre_tokenizer = pre_tokenizers.Whitespace()
             frozen.save(str(tokenizer))
-            config = root / "config.json"
-            config.write_text(json.dumps({"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}}), encoding="utf-8")
+            config = ROOT / "configs" / "ember-restart-3b.json"
             manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)["image"]
             payload = json.loads(manifest.read_text(encoding="utf-8"))
             records_path = ROOT / payload["records_artifact"]["path"]

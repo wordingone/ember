@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
+from semantic_contract import semantic_model_contract_sha256, SCHEMA_VERSION
+
 SEMANTIC_CHECKS = {
     "tool": ["token_roundtrip", "source_target_pair", "typed_tool_execution"],
     "image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"],
@@ -114,6 +116,26 @@ def _bound_file(root: Path, record: object, name: str) -> tuple[Path, bytes, str
     return path, payload, digest
 
 
+
+def _bound_semantic_contract(root: Path, record: object) -> tuple[dict[str, Any], str]:
+    if not isinstance(record, Mapping) or record.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("semantic model contract binding is missing or malformed")
+    relative = record.get("path")
+    expected = record.get("semantic_sha256")
+    if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+        raise ValueError("semantic model contract path must be nonempty and relative")
+    if not isinstance(expected, str) or len(expected) != 64 or expected.lower() != expected:
+        raise ValueError("semantic model contract sha256 is malformed")
+    path = (root / relative).resolve()
+    if root not in path.parents or not path.is_file():
+        raise ValueError("semantic model contract path escapes verifier root")
+    payload_bytes, _file_sha256 = _read_authority_bytes(path, "semantic model contract")
+    payload = _json_from_authority_bytes(payload_bytes, "semantic model contract")
+    actual = semantic_model_contract_sha256(payload)
+    if actual != expected:
+        raise ValueError("semantic model contract sha256 does not match")
+    return payload, actual
+
 def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path) -> dict[str, Any]:
     if capability not in SEMANTIC_CHECKS:
         raise ValueError("unsupported semantic capability")
@@ -132,15 +154,29 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
     if data.get("tokenizer_sha256") != tokenizer_hash:
         raise ValueError("data manifest tokenizer sha256 does not match")
     raw_contract: dict[str, int] | None = None
-    if capability in {"image", "audio"}:
-        config_path, config_bytes, _config_sha256 = _bound_file(root, data.get("model_config"), "model config")
+    semantic_contract_sha256: str | None = None
+    semantic_contract_payload: dict[str, Any] | None = None
+    if isinstance(data.get("model_contract"), Mapping):
+        semantic_contract_payload, semantic_contract_sha256 = _bound_semantic_contract(root, data.get("model_contract"))
+        config = semantic_contract_payload.get("model")
+        if not isinstance(config, Mapping) or not isinstance(config.get("vocab_size"), int):
+            raise ValueError("semantic model contract lacks a valid vocabulary")
+    elif capability in {"image", "audio"}:
+        # Legacy fixtures are retained for migration evidence only; emitted
+        # specialist bundles use model_contract and are checked below.
+        _config_path, config_bytes, _config_sha256 = _bound_file(root, data.get("model_config"), "model config")
         config = _json_from_authority_bytes(config_bytes, "model config").get("model")
         if not isinstance(config, Mapping) or not isinstance(config.get("vocab_size"), int):
             raise ValueError("model config lacks a valid vocabulary")
+    else:
+        config = None
+    if capability in {"image", "audio"}:
+        if not isinstance(config, Mapping):
+            raise ValueError("model contract lacks modality configuration")
         image = config.get("image_projection")
         audio = config.get("audio_projection")
         if not isinstance(image, Mapping) or not isinstance(audio, Mapping) or image.get("input_shape") != [48, 48, 3] or audio.get("frame_samples") != 640:
-            raise ValueError("model config lacks the authorized raw modality shapes")
+            raise ValueError("model contract lacks the authorized raw modality shapes")
         raw_contract = {"image_marker": config["vocab_size"] - 2, "audio_marker": config["vocab_size"] - 1}
 
     source_path, source_bytes, source_sha256 = _bound_file(root, data.get("source_manifest"), "source manifest")
@@ -173,6 +209,8 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         if generator_path.suffix != ".py":
             raise ValueError("semantic source generator must bind Python generator bytes")
         generation = semantic_source.get("generation")
+        if generation is not None and semantic_contract_sha256 is None:
+            raise ValueError("generated specialist bundle must bind a semantic model contract")
     tokenizer = _json_from_authority_bytes(tokenizer_bytes, "tokenizer")
     vocab = tokenizer.get("model", {}).get("vocab") if isinstance(tokenizer.get("model"), dict) else None
     if not isinstance(vocab, dict) or not vocab:
@@ -299,6 +337,8 @@ def verify(data_path: Path, tokenizer_path: Path, capability: str, *, root: Path
         "source_manifest_sha256": source_sha256,
         "records_artifact_sha256": records_sha256,
         "semantic_checks": SEMANTIC_CHECKS[capability],
+        "semantic_model_contract_sha256": semantic_contract_sha256,
+        "admission": "ADMISSIBLE_SEMANTIC_CONTRACT" if semantic_contract_sha256 is not None else "NON_ADMISSIBLE_LEGACY",
     }
 
 
