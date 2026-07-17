@@ -57,7 +57,10 @@
     "runtime_audit": {
         "artifact_sha256": "f2bf6444a47103ed1ecdb9ccf7e97ee984fa10925ce8f7e673da1bd296e43a45",
         "runner_receipt_sha256": "b192a9e35220bec690440c24774401c70256523d5e9d84f9bd3015db50c4afd4",
-        "claim_status": "RUNTIME_HELD_MUTABLE_CONTAINER_BUILD"
+        "claim_status": "RUNTIME_HELD_MUTABLE_CONTAINER_BUILD",
+        "path": "scripts/ember_restart_eval_evalplus_runtime_audit.py",
+        "sha256": "ae0b304dceccad8d9ab6f297a286ebd964ed4aa8ba9b1494cabbbf327f25af7f",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
     "scoring_adapters": [
         {
