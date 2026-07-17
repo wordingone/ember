@@ -22,6 +22,14 @@ STRICT_SCHEMA = "ember-restart-hellaswag-freeze-v2"
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
+def protocol_sha256(manifest: dict[str, object], adapter_sha256: str) -> str:
+    license_sha256 = manifest.get("license_sha256")
+    reference_sha256 = manifest.get("references_sha256")
+    version = manifest.get("benchmark_version")
+    if not isinstance(license_sha256, str) or not HASH.fullmatch(license_sha256) or not isinstance(reference_sha256, str) or not HASH.fullmatch(reference_sha256) or not isinstance(version, str):
+        raise ValueError("HellaSwag custody lacks license, reference, or version identity")
+    return digest(f"hellaswag:{version}:{reference_sha256}:{license_sha256}:{adapter_sha256}".encode())
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -65,6 +73,11 @@ def main() -> int:
             for field in ("checkpoint_manifest_sha256", "model_config_sha256"):
                 if not isinstance(manifest.get(field), str) or not HASH.fullmatch(manifest[field]) or envelope.get(field) != manifest[field]:
                     raise ValueError("strict HellaSwag custody does not bind canonical checkpoint/config identity")
+            adapter_sha256 = manifest.get("scoring_adapter_sha256")
+            if manifest.get("scoring_adapter_path") != "scripts/ember_restart_eval_hellaswag_score.py" or not isinstance(adapter_sha256, str) or not HASH.fullmatch(adapter_sha256) or digest(Path(__file__).read_bytes()) != adapter_sha256:
+                raise ValueError("HellaSwag strict custody requires exact scorer identity")
+            if manifest.get("protocol_sha256") != protocol_sha256(manifest, adapter_sha256):
+                raise ValueError("HellaSwag protocol is not derived from scorer custody")
     except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError, ContractError, pa.ArrowException) as error:
         parser.error(f"invalid HellaSwag scorer inputs: {error}")
     payload = {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_HELLASWAG_SCORER", "criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"accuracy": sum(predictions[key] == value for key, value in references.items()) / len(references)}, "sample_count": len(references), "benchmark_id": benchmark["id"], "benchmark_version": benchmark["version"], "split_sha256": benchmark["split_sha256"], "protocol_sha256": benchmark["protocol_sha256"], "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "references_sha256": digest(reference_bytes), "predictions_sha256": digest(prediction_bytes), "frozen_manifest_sha256": digest(manifest_bytes), "upstream": "deterministic frozen HellaSwag exact-label scorer"}
