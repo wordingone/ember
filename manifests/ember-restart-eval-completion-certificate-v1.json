@@ -39,7 +39,7 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_audiobench_bound.py",
       "custody_path": "manifests/ember-restart-audiobench-custody-v1.json",
-      "custody_sha256": "36f13b302474779b464487b660cf131200fc53e94682881f2867eb42dde7c85f"
+      "custody_sha256": "ba2d228ea7b5e385d71030c0f63f92ded53f617402b44dd6719170de8f4d5ca8"
     },
     {
       "family": "reasoning",
