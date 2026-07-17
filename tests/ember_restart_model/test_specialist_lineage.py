@@ -18,8 +18,16 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, write_checkpoint_artifacts
+from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, write_checkpoint_artifacts as _write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
+
+
+def write_checkpoint_artifacts(*args, **kwargs):
+    """Make this module's synthetic checkpoint publications explicitly non-production."""
+    kwargs.setdefault("test_only_allow_unverified", True)
+    return _write_checkpoint_artifacts(*args, **kwargs)
+
+
 from parameter_counter import execute_counter
 
 
