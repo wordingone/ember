@@ -1,0 +1,22 @@
+{
+  "schema_version": "ember-detached-worktree-artifact-inventory-v2",
+  "generated_at": "2026-07-17T17:06:36Z",
+  "workspace_role": "detached worktree custody",
+  "tracked_changes": "NONE",
+  "inventory_scope": "One detached worktree; full path map is retained in private owner custody and is not published here.",
+  "file_count": 176,
+  "total_bytes": 386459,
+  "scope_totals_bytes": {
+    "scripts": 4244,
+    "tests": 1362,
+    "stale_local_scratch": 151324,
+    "other_untracked": 229529
+  },
+  "disposition_counts": {
+    "requires_owner_review": 162,
+    "stale_local_only_not_published": 14
+  },
+  "private_full_inventory_sha256": "C04CEA6274AD8CEF25ACA9FFAA3BF95F0E3E78508D400E5E5DB2E558AE867135",
+  "private_inventory_digest_algorithm": "SHA-256 over the exact privately retained full inventory bytes",
+  "custody_disposition": "Do not delete, apply, or publish any privately retained artifact without owner review; rehome or retain only after provenance is established."
+}

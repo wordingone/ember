@@ -1,0 +1,23 @@
+{
+  "schema_version": "ember-issue-closure-candidate-batch-v1",
+  "generated_at": "2026-07-17T16:48:00Z",
+  "public_master_git_oid": "f919b116066106fc91a7d86feff39eecc70e14d0",
+  "batch_limit": 10,
+  "review_only": true,
+  "closures_performed": 0,
+  "candidate_count": 0,
+  "candidates": [],
+  "screened_open_issues": [
+    {"number": 917, "url": "https://github.com/wordingone/ember/issues/917", "state": "OPEN", "disposition": "LIVE_DEFECT_ACTIVE_WORK"},
+    {"number": 898, "url": "https://github.com/wordingone/ember/issues/898", "state": "OPEN", "disposition": "LIVE_DEFECT_ACTIVE_WORK"},
+    {"number": 896, "url": "https://github.com/wordingone/ember/issues/896", "state": "OPEN", "disposition": "LIVE_WORK_NO_CLOSURE_EVIDENCE"},
+    {"number": 894, "url": "https://github.com/wordingone/ember/issues/894", "state": "OPEN", "disposition": "LIVE_DEFECT_NO_CLOSURE_EVIDENCE"},
+    {"number": 887, "url": "https://github.com/wordingone/ember/issues/887", "state": "OPEN", "disposition": "LIVE_DEFECT_NO_CLOSURE_EVIDENCE"},
+    {"number": 881, "url": "https://github.com/wordingone/ember/issues/881", "state": "OPEN", "disposition": "LIVE_DEFECT_NO_CLOSURE_EVIDENCE"},
+    {"number": 877, "url": "https://github.com/wordingone/ember/issues/877", "state": "OPEN", "disposition": "LIVE_WORK_NOT_EXECUTED"},
+    {"number": 876, "url": "https://github.com/wordingone/ember/issues/876", "state": "OPEN", "disposition": "LIVE_WORK_NOT_EXECUTED"},
+    {"number": 875, "url": "https://github.com/wordingone/ember/issues/875", "state": "OPEN", "disposition": "LIVE_WORK_NOT_EXECUTED"},
+    {"number": 874, "url": "https://github.com/wordingone/ember/issues/874", "state": "OPEN", "disposition": "LIVE_WORK_NOT_EXECUTED"}
+  ],
+  "evidence_rule": "An OPEN issue remains a closure candidate only when its public issue record supplies complete acceptance evidence; this batch found none. No issue is proposed for closure without that evidence."
+}
