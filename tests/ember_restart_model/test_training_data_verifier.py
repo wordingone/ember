@@ -66,6 +66,13 @@ class TrainingDataVerifierTests(unittest.TestCase):
                 receipt = verify_training_data.verify(data, tokenizer, "text", root=root)
         self.assertEqual(reads, {path: 1 for path in tracked})
         self.assertEqual(receipt["data_manifest_sha256"], data_sha256)
+        from checkpoint_artifacts import SPECIALIST_VERIFICATION_FIELDS
+
+        self.assertEqual(
+            set(receipt) | {"runtime_semantic_model_contract_sha256"},
+            SPECIALIST_VERIFICATION_FIELDS,
+        )
+
     def test_audio_manifest_rejects_raw_frames_with_fabricated_caption_target(self) -> None:
         from tokenizers import Tokenizer, models, pre_tokenizers
         with tempfile.TemporaryDirectory() as temporary:
@@ -291,4 +298,3 @@ class TrainingDataVerifierTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
