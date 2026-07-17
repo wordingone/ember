@@ -226,7 +226,7 @@ def _default_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
 
 def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
     required = {"name", "implementation", "hyperparameters", "state_format"}
-    if not isinstance(contract, Mapping) or set(contract) != required:
+    if not isinstance(contract, Mapping) or set(contract) not in (required, required | {"placement"}):
         raise ValueError("checkpoint optimizer contract has an invalid shape")
     if not isinstance(contract["name"], str) or not contract["name"]:
         raise ValueError("checkpoint optimizer contract name is invalid")
@@ -236,7 +236,12 @@ def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("checkpoint optimizer contract hyperparameters are invalid")
     if not isinstance(contract["state_format"], str) or not contract["state_format"]:
         raise ValueError("checkpoint optimizer contract state format is invalid")
-    return {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
+    if "placement" in contract and (not isinstance(contract["placement"], str) or contract["placement"] not in {"cuda_non_paged", "host_paged"}):
+        raise ValueError("checkpoint optimizer contract placement is invalid")
+    result = {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
+    if "placement" in contract:
+        result["placement"] = contract["placement"]
+    return result
 
 
 def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
@@ -244,7 +249,7 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
 
     cls = type(optimizer)
     runtime_implementation = f"{cls.__module__}.{cls.__qualname__}"
-    if runtime_implementation == "bitsandbytes.optim.adamw.PagedAdamW8bit":
+    if runtime_implementation in {"bitsandbytes.optim.adamw.PagedAdamW8bit", "bitsandbytes.optim.PagedAdamW8bit"}:
         if not optimizer.param_groups or not hasattr(optimizer, "args"):
             raise ValueError("runtime PagedAdamW8bit lacks required state")
         group = optimizer.param_groups[0]
@@ -264,6 +269,27 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
             "block_wise": bool(args.block_wise),
         }
         state_format = "bitsandbytes-paged-8bit-adamw-state-dict-v1"
+    elif runtime_implementation in {"bitsandbytes.optim.adamw.AdamW8bit", "bitsandbytes.optim.AdamW8bit"}:
+        if not optimizer.param_groups or not hasattr(optimizer, "args"):
+            raise ValueError("runtime AdamW8bit lacks required state")
+        group = optimizer.param_groups[0]
+        args = optimizer.args
+        required_group = ("lr", "weight_decay")
+        required_args = ("percentile_clipping", "block_wise", "optim_bits")
+        if any(field not in group for field in required_group) or any(not hasattr(args, field) for field in required_args):
+            raise ValueError("runtime AdamW8bit lacks required hyperparameters")
+        if int(args.optim_bits) != 8:
+            raise ValueError("runtime AdamW8bit does not use 8-bit optimizer state")
+        implementation = "bitsandbytes.optim.AdamW8bit"
+        name = "8bit_adamw"
+        hyperparameters = {
+            "learning_rate": float(group["lr"]),
+            "weight_decay": float(group["weight_decay"]),
+            "percentile_clipping": int(args.percentile_clipping),
+            "block_wise": bool(args.block_wise),
+        }
+        state_format = "bitsandbytes-8bit-adamw-state-dict-v1"
+        placement = "cuda_non_paged"
     else:
         implementation = runtime_implementation
         name = cls.__name__
@@ -276,6 +302,7 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
         "implementation": implementation,
         "hyperparameters": hyperparameters,
         "state_format": state_format,
+        **({"placement": placement} if "placement" in locals() else {}),
     }
 
 
@@ -291,6 +318,7 @@ def _optimizer_realization(optimizer: torch.optim.Optimizer, contract: Mapping[s
         "implementation_source_sha256": _sha256(Path(source)),
         "state_format": runtime_contract["state_format"],
         "optimizer_contract_sha256": _canonical_sha256(runtime_contract),
+        **({"placement": runtime_contract["placement"]} if "placement" in runtime_contract else {}),
     }
 
 
@@ -307,9 +335,11 @@ def _validate_runtime_optimizer_realization(
 
 def _validate_optimizer_realization(contract: Mapping[str, Any], realization: Any) -> dict[str, str]:
     required = {"implementation", "implementation_source_sha256", "state_format", "optimizer_contract_sha256"}
+    if isinstance(contract, Mapping) and "placement" in contract:
+        required.add("placement")
     if not isinstance(realization, Mapping) or set(realization) != required:
         raise ValueError("checkpoint optimizer realization has an invalid shape")
-    if realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"]:
+    if realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"] or ("placement" in contract and realization.get("placement") != contract["placement"]):
         raise ValueError("checkpoint optimizer realization drifts from its contract")
     for field in ("implementation_source_sha256", "optimizer_contract_sha256"):
         _sha256_value(str(realization.get(field, "")), name=f"optimizer realization {field}")
@@ -410,7 +440,7 @@ def _specialist_lineage(
     if active_expert not in EXPERT_NAMES:
         raise ValueError("specialist lineage requires one specialist active expert")
     required = {"parent_manifest", "root_manifest", "trained_expert_ids", "data_verification_receipt", "execution_slice"}
-    if not isinstance(lineage, Mapping) or set(lineage) != required:
+    if not isinstance(lineage, Mapping) or set(lineage) not in (required, required | {"optimizer_transition"}):
         raise ValueError("specialist lineage has an invalid shape")
     parent_source, root_source = lineage["parent_manifest"], lineage["root_manifest"]
     if not isinstance(parent_source, (str, Path)) or not isinstance(root_source, (str, Path)):
@@ -464,6 +494,22 @@ def _specialist_lineage(
         _sha256_value(verification.get(field), name=f"specialist verification {field}")
     if type(verification.get("record_count")) is not int or verification["record_count"] <= 0 or type(verification.get("token_count")) is not int or verification["token_count"] <= 0:
         raise ValueError("specialist lineage verification has no training evidence")
+    if "optimizer_transition" in lineage:
+        transition = lineage["optimizer_transition"]
+        transition_fields = {"schema_version", "optimizer_state_reused", "parent_optimizer_contract", "target_optimizer_contract", "data_cursor"}
+        if not isinstance(transition, Mapping) or set(transition) != transition_fields:
+            raise ValueError("specialist optimizer transition has an invalid shape")
+        if transition.get("schema_version") != "ember-specialist-optimizer-transition-v1" or transition.get("optimizer_state_reused") is not False:
+            raise ValueError("specialist optimizer transition must prove parent optimizer state was not reused")
+        for field in ("parent_optimizer_contract", "target_optimizer_contract", "data_cursor"):
+            if not isinstance(transition.get(field), Mapping):
+                raise ValueError(f"specialist optimizer transition lacks {field}")
+        for contract_name in ("parent_optimizer_contract", "target_optimizer_contract"):
+            if any(isinstance(value, (str, Path)) and (":" in str(value) or "\\" in str(value)) for value in transition[contract_name].values()):
+                raise ValueError("specialist optimizer transition may not contain paths")
+        cursor = transition["data_cursor"]
+        if set(cursor) != {"shard", "record_index", "global_step", "tokens_seen"}:
+            raise ValueError("specialist optimizer transition cursor is not closed")
     execution_slice = lineage["execution_slice"]
     slice_fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
     if not isinstance(execution_slice, Mapping) or set(execution_slice) != slice_fields:
@@ -490,6 +536,7 @@ def _specialist_lineage(
             "execution_slice": dict(execution_slice),
             "execution_slice_sha256": _canonical_sha256(execution_slice),
         },
+        **({"optimizer_transition": dict(lineage["optimizer_transition"])} if "optimizer_transition" in lineage else {}),
     }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
 def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> tuple[Path, str]:
     publication_mode = "copy"

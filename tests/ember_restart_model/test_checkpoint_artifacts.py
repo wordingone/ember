@@ -211,17 +211,50 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertRegex(receipt["optimizer_realization"]["optimizer_contract_sha256"], r"^[0-9a-f]{64}$")
 
 
-    def test_paged_8bit_realization_reads_live_args_not_receipt_fields(self) -> None:
+    def test_nonpaged_8bit_realization_reads_live_args_not_receipt_fields(self) -> None:
         with warnings.catch_warnings():
 
             warnings.simplefilter("ignore", DeprecationWarning)
 
             import bitsandbytes as bnb
         model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=11)
-        optimizer = bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
         contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         realization = _optimizer_realization(optimizer, contract)
-        self.assertEqual(realization["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+        self.assertEqual(realization["implementation"], "bitsandbytes.optim.AdamW8bit")
+    def test_legacy_paged_optimizer_contract_without_placement_remains_replayable(self) -> None:
+        import bitsandbytes as bnb
+        model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=21)
+        optimizer = bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
+        legacy = {
+            "name": "paged_8bit_adamw",
+            "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+            "hyperparameters": {"learning_rate": 1e-5, "weight_decay": 0.01, "percentile_clipping": 100, "block_wise": True},
+            "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+        }
+        realization = _optimizer_realization(optimizer, legacy)
+        self.assertNotIn("placement", realization)
+    def test_nonpaged_optimizer_contract_round_trips_checkpoint_realization(self) -> None:
+        import bitsandbytes as bnb
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=19)
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
+        contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "checkpoint"
+            receipt = write_checkpoint_artifacts(
+                model, optimizer, root, launch_seed=19,
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
+                data_cursor={"shard": "owned-test", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(), optimizer_contract=contract,
+                test_only_allow_unverified=True,
+            )
+            restored = UnifiedDecoder(config, genesis_seed=20)
+            restore_optimizer = bnb.optim.AdamW8bit(restored.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
+            load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+        self.assertEqual(receipt["optimizer_contract"]["placement"], "cuda_non_paged")
+        self.assertEqual(receipt["optimizer_realization"]["placement"], "cuda_non_paged")
     def test_writes_and_restores_shared_semantic_checkpoint(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=17)

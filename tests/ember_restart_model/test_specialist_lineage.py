@@ -95,7 +95,7 @@ class SpecialistLineageTests(unittest.TestCase):
         candidate._activate_expert("vision")
         return parent, manifest_path, candidate, optimizer
 
-    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None, max_serialized_bytes: int | None = None) -> dict[str, object]:
+    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None, max_serialized_bytes: int | None = None, optimizer_transition: dict[str, object] | None = None) -> dict[str, object]:
         parent, default_manifest, candidate, optimizer = self._root_and_candidate(base)
         parent_manifest = parent_manifest or default_manifest
         root_manifest = root_manifest or default_manifest
@@ -111,6 +111,7 @@ class SpecialistLineageTests(unittest.TestCase):
                 "trained_expert_ids": trained if trained is not None else ["vision"],
                 "data_verification_receipt": _verification(),
                 "execution_slice": _execution_slice(),
+                **({"optimizer_transition": optimizer_transition} if optimizer_transition is not None else {}),
             },
             max_serialized_bytes=max_serialized_bytes,
         )
@@ -133,6 +134,17 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertNotIn("root_manifest", json.dumps(receipt))
         self.assertEqual(parent["active_expert_ids"], ["shared"])
 
+    def test_first_v4_successor_binds_optimizer_transition_without_reuse_claim(self) -> None:
+        transition = {
+            "schema_version": "ember-specialist-optimizer-transition-v1",
+            "optimizer_state_reused": False,
+            "parent_optimizer_contract": {"implementation": "bitsandbytes.optim.PagedAdamW8bit"},
+            "target_optimizer_contract": {"implementation": "bitsandbytes.optim.AdamW8bit", "placement": "cuda_non_paged"},
+            "data_cursor": {"shard": "root", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            receipt = self._write_vision_successor(Path(directory), optimizer_transition=transition)
+        self.assertEqual(receipt["lineage"]["optimizer_transition"], transition)
     def test_first_successor_rejects_unreceipted_shared_v3_continuation(self) -> None:
         """Equal specialist bytes cannot launder an arbitrary shared-core v3 mutation."""
         with tempfile.TemporaryDirectory() as directory:

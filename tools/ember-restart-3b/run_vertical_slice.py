@@ -700,6 +700,37 @@ def production_resume_checkpoint(
     require_counter_success_receipt(resolved, receipt_path=counter_success_receipt)
     return resolved
 
+def load_specialist_parent_model_only(
+    model: UnifiedDecoder,
+    parent_root: Path,
+    parent_receipt: Mapping[str, Any],
+    *,
+    target_optimizer_contract: Mapping[str, Any],
+) -> dict[str, object]:
+    """Load an immutable v3 parent model while explicitly transitioning optimizer contracts.
+
+    The first v4 specialist child may change optimizer placement when the measured
+    runtime requires it.  This path verifies every parent shard and replay binding,
+    mutates only model state, and records that the parent optimizer state was not
+    reused; silently treating a Paged state as non-paged state is forbidden.
+    """
+
+    parent_optimizer_contract = parent_receipt.get("optimizer_contract")
+    if not isinstance(parent_optimizer_contract, Mapping):
+        raise ValueError("specialist parent lacks an optimizer contract")
+    if dict(parent_optimizer_contract) == dict(target_optimizer_contract):
+        raise ValueError("model-only optimizer transition requires a changed contract")
+    loaded = load_checkpoint_artifacts(model, None, parent_root, parent_receipt)
+    if not isinstance(loaded, Mapping) or not isinstance(loaded.get("data_cursor"), Mapping):
+        raise ValueError("specialist parent model-only load did not return a data cursor")
+    return {
+        "schema_version": "ember-specialist-optimizer-transition-v1",
+        "optimizer_state_reused": False,
+        "parent_optimizer_contract": dict(parent_optimizer_contract),
+        "target_optimizer_contract": dict(target_optimizer_contract),
+        "data_cursor": dict(loaded["data_cursor"]),
+    }
+
 def checkpoint_retention_budget_bytes(config_path: Path) -> int:
     """Load the measured serialized-byte ceiling for published checkpoint bundles."""
     try:
@@ -748,15 +779,16 @@ def load_optimizer_contract(config_path: Path) -> dict[str, object]:
         contract = json.loads(config_path.read_text(encoding="utf-8"))["training"]["optimizer"]
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
         raise ValueError("production contract must declare a structured optimizer") from error
-    if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"}:
+    if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "placement", "hyperparameters", "state_format"}:
         raise ValueError("production optimizer contract has an invalid shape")
     expected = {
-        "name": "paged_8bit_adamw",
-        "implementation": "bitsandbytes.optim.PagedAdamW8bit",
-        "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+        "name": "8bit_adamw",
+        "implementation": "bitsandbytes.optim.AdamW8bit",
+        "placement": "cuda_non_paged",
+        "state_format": "bitsandbytes-8bit-adamw-state-dict-v1",
     }
     if any(contract.get(field) != value for field, value in expected.items()):
-        raise ValueError("production optimizer contract does not declare canonical PagedAdamW8bit")
+        raise ValueError("production optimizer contract does not declare canonical non-paged AdamW8bit")
     hyperparameters = contract.get("hyperparameters")
     if not isinstance(hyperparameters, dict) or set(hyperparameters) != {"learning_rate", "weight_decay", "percentile_clipping", "block_wise"}:
         raise ValueError("production optimizer hyperparameters have an invalid shape")
@@ -834,16 +866,16 @@ def _execute_realization_counter(
 
 
 def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dict[str, object]) -> torch.optim.Optimizer:
-    """Build exactly the structured PagedAdamW8bit optimizer declared by config."""
+    """Build the explicitly placed structured 8-bit optimizer declared by config."""
 
-    if optimizer_contract.get("implementation") != "bitsandbytes.optim.PagedAdamW8bit":
-        raise ValueError("production optimizer implementation must be PagedAdamW8bit")
+    if optimizer_contract.get("implementation") != "bitsandbytes.optim.AdamW8bit" or optimizer_contract.get("placement") != "cuda_non_paged":
+        raise ValueError("production optimizer must declare cuda_non_paged AdamW8bit")
     hyperparameters = optimizer_contract.get("hyperparameters")
     if not isinstance(hyperparameters, dict):
         raise ValueError("production optimizer contract lacks hyperparameters")
     import bitsandbytes as bnb
 
-    return bnb.optim.PagedAdamW8bit(
+    return bnb.optim.AdamW8bit(
         model.parameters(),
         lr=float(hyperparameters["learning_rate"]),
         weight_decay=float(hyperparameters["weight_decay"]),
@@ -946,6 +978,7 @@ def run(
     optimizer_contract = load_optimizer_contract(config_path)
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
+    optimizer_transition: dict[str, object] | None = None
     if resume_checkpoint is not None:
         resume_checkpoint = production_resume_checkpoint(
             resume_checkpoint,
@@ -957,8 +990,15 @@ def run(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
         receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
-        resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
+        if records_override is not None and isinstance(receipt.get("optimizer_contract"), Mapping) and receipt.get("optimizer_contract") != optimizer_contract:
+            optimizer_transition = load_specialist_parent_model_only(
+                model, resume_checkpoint, receipt, target_optimizer_contract=optimizer_contract,
+            )
+            resume_cursor = dict(optimizer_transition["data_cursor"])
+        else:
+            resume_cursor = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)["data_cursor"]
         for group in optimizer.param_groups:
+
             group["lr"] = 1e-5
         if records_override is not None:
             resume_cursor = specialist_resume_cursor(resume_cursor, data_shard_id=data_shard_id)
@@ -998,6 +1038,8 @@ def run(
                 "parent_manifest": str(latest_parent_manifest),
                 "execution_slice": episode_slice,
             }
+            if optimizer_transition is not None:
+                current_lineage["optimizer_transition"] = optimizer_transition
             data_cursor["specialist_verification"] = specialist_verification
             checkpoint_target = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{global_step}"
         else:
@@ -1212,6 +1254,7 @@ def run_semantic(
     optimizer_contract = load_optimizer_contract(config_path)
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
     resume_cursor: dict[str, object] | None = None
+    optimizer_transition: dict[str, object] | None = None
     initial_global_step = 0
     initial_tokens_seen = 0
     if resume_checkpoint is not None:
@@ -1222,10 +1265,15 @@ def run_semantic(
         manifest_path = resume_checkpoint / "checkpoint-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
-        loaded = load_checkpoint_artifacts(
-            model, optimizer, resume_checkpoint, {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
-        )
-        resume_cursor = dict(loaded["data_cursor"])
+        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+        if isinstance(receipt.get("optimizer_contract"), Mapping) and receipt.get("optimizer_contract") != optimizer_contract:
+            optimizer_transition = load_specialist_parent_model_only(
+                model, resume_checkpoint, receipt, target_optimizer_contract=optimizer_contract,
+            )
+            resume_cursor = dict(optimizer_transition["data_cursor"])
+        else:
+            loaded = load_checkpoint_artifacts(model, optimizer, resume_checkpoint, receipt)
+            resume_cursor = dict(loaded["data_cursor"])
         initial_global_step = int(resume_cursor["global_step"])
         initial_tokens_seen = int(resume_cursor["tokens_seen"])
     checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=shared_active_parameters)

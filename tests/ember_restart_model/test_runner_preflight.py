@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import run_vertical_slice
+from model import RestartDecoderConfig, UnifiedDecoder
 from build_owned_reasoning_tool_trajectories import build_records
 from verify_capability_record import expected_receipt
 
@@ -191,7 +192,7 @@ class RunnerPreflightTests(unittest.TestCase):
                         tokenizer_path=root / "tokenizer.json",
                         capability="image",
                     )
-    def test_production_optimizer_uses_declared_paged_8bit_adamw_state(self) -> None:
+    def test_production_optimizer_uses_declared_nonpaged_8bit_adamw_state(self) -> None:
         calls: dict[str, object] = {}
 
         class Subject:
@@ -203,16 +204,41 @@ class RunnerPreflightTests(unittest.TestCase):
             calls.update(kwargs)
             return "optimizer"
 
-        fake = SimpleNamespace(optim=SimpleNamespace(PagedAdamW8bit=make_adamw))
+        fake = SimpleNamespace(optim=SimpleNamespace(AdamW8bit=make_adamw))
         with patch.dict(sys.modules, {"bitsandbytes": fake}):
             contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
             optimizer = run_vertical_slice.build_production_optimizer(Subject(), optimizer_contract=contract)
         self.assertEqual(optimizer, "optimizer")
-        self.assertEqual(contract["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+        self.assertEqual(contract["implementation"], "bitsandbytes.optim.AdamW8bit")
         self.assertEqual(contract["hyperparameters"]["learning_rate"], 1e-5)
         self.assertEqual(calls["parameters"], ["parameter"])
         self.assertEqual(calls["percentile_clipping"], 100)
         self.assertEqual(calls["lr"], 1e-5)
+    def test_specialist_parent_model_only_transition_does_not_claim_optimizer_reuse(self) -> None:
+        from checkpoint_artifacts import write_checkpoint_artifacts
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=33)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "parent"
+            receipt = write_checkpoint_artifacts(
+                model, optimizer, root, launch_seed=33,
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
+                data_cursor={"shard": "root", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(), test_only_allow_unverified=True,
+            )
+            restored = UnifiedDecoder(config, genesis_seed=34)
+            result = run_vertical_slice.load_specialist_parent_model_only(
+                restored, root, receipt, target_optimizer_contract=run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json"),
+            )
+        self.assertFalse(result["optimizer_state_reused"])
+        self.assertEqual(result["parent_optimizer_contract"]["implementation"], "torch.optim.adamw.AdamW")
+    def test_nonpaged_optimizer_rejects_placement_drift(self) -> None:
+        contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        contract["placement"] = "host_paged"
+        with self.assertRaisesRegex(ValueError, "cuda_non_paged"):
+            run_vertical_slice.build_production_optimizer(object(), optimizer_contract=contract)
     def test_contract_retention_limit_is_used_as_the_runner_limit(self) -> None:
         contract = ROOT / "configs" / "ember-restart-3b.json"
         self.assertTrue(hasattr(run_vertical_slice, "checkpoint_retention_budget_bytes"))
@@ -798,5 +824,33 @@ class RunnerPreflightTests(unittest.TestCase):
     def test_bf16_contract_disables_unsupported_percentile_clipping(self) -> None:
         contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         self.assertEqual(contract["hyperparameters"]["percentile_clipping"], 100)
+    def test_production_optimizer_contract_binds_nonpaged_cuda_placement(self) -> None:
+        contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        self.assertEqual(contract["name"], "8bit_adamw")
+        self.assertEqual(contract["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(contract["placement"], "cuda_non_paged")
+        self.assertEqual(contract["state_format"], "bitsandbytes-8bit-adamw-state-dict-v1")
+
+    def test_build_production_optimizer_uses_declared_nonpaged_runtime(self) -> None:
+        calls: dict[str, object] = {}
+
+        class Subject:
+            def parameters(self) -> list[str]:
+                return ["parameter"]
+
+        def make_adamw(parameters: object, **kwargs: object) -> object:
+            calls["parameters"] = parameters
+            calls.update(kwargs)
+            return "optimizer"
+
+        fake = SimpleNamespace(optim=SimpleNamespace(AdamW8bit=make_adamw))
+        with patch.dict(sys.modules, {"bitsandbytes": fake}):
+            contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+            optimizer = run_vertical_slice.build_production_optimizer(Subject(), optimizer_contract=contract)
+        self.assertEqual(optimizer, "optimizer")
+        self.assertEqual(calls["parameters"], ["parameter"])
+        self.assertEqual(calls["percentile_clipping"], 100)
+        self.assertEqual(calls["block_wise"], True)
+        self.assertEqual(calls["lr"], 1e-5)
 if __name__ == "__main__":
     unittest.main()
