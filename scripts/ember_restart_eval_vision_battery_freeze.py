@@ -12,58 +12,56 @@ import tempfile
 from pathlib import Path
 
 SHA1 = re.compile(r"[0-9a-f]{40}")
+TARGET_CHECKPOINT = "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b"
+TARGET_CONFIG = "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
 
 
 BATTERY = [
     {
         "name": "MMLU-Pro",
         "protocol_manifest": "manifests/ember-restart-mmlu-pro-protocol-v1.json",
-        "execution_status": "BLOCKED_MMLU_PRO_LICENSE_CARD_HASH",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
     {
         "name": "GSM8K",
         "protocol_manifest": "manifests/ember-restart-gsm8k-protocol-v1.json",
-        "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
     {
         "name": "MATH-500",
         "protocol_manifest": "manifests/ember-restart-eval-code-math-custody-v1.json",
-        "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
     {
         "name": "ARC-Challenge",
         "protocol_manifest": "manifests/ember-restart-arc-challenge-protocol-v1.json",
-        "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
     {
         "name": "HumanEval+",
         "protocol_manifest": "manifests/ember-restart-eval-code-math-custody-v1.json",
-        "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
     {
         "name": "MBPP",
         "protocol_manifest": "manifests/ember-restart-eval-code-math-custody-v1.json",
-        "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
     {
         "name": "HellaSwag",
         "protocol_manifest": "manifests/ember-restart-hellaswag-protocol-v1.json",
-        "execution_status": "BLOCKED_OWNED_CHECKPOINT_BINDING",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
     {
         "name": "MMMU validation native-image scorer",
         "protocol_manifest": "manifests/ember-restart-mmmu-validation-custody-v1.json",
         "total_records": 900,
         "eligible_multiple_choice_items": 847,
-        "execution_status": "BLOCKED_MMMU_CANONICAL_LOADER_PREDICTION_BINDING",
+        "execution_status": "BLOCKED_NO_CHECKPOINT_BOUND_PREDICTIONS",
     },
 ]
 
-BLOCKERS = [
-    "MMLU-Pro license-card hash",
-    "owned checkpoint binding",
-    "MMMU canonical loader/prediction binding",
-]
+BLOCKERS = ["no checkpoint-bound predictions"]
 
 
 def digest(value: object) -> str:
@@ -79,6 +77,8 @@ def build_receipt(evaluator_commit: str) -> dict[str, object]:
         "receipt_status": "FROZEN_PRELAUNCH",
         "battery_id": "vision-v4-postrun",
         "evaluator_commit": evaluator_commit,
+        "checkpoint_manifest_sha256": TARGET_CHECKPOINT,
+        "model_config_sha256": TARGET_CONFIG,
         "mutation_policy": "FROZEN_NO_ADDITIONS_OR_RENAMES_AFTER_LAUNCH",
         "benchmarks": BATTERY,
         "runnability_blockers": BLOCKERS,
