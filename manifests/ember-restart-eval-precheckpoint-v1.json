@@ -134,11 +134,11 @@
         },
         "files": {
             "path": "manifests/ember-restart-swebench-custody-v1.json",
-            "sha256": "24d8356af0947ad39f9ce2aa2b3d72c6a8c55aa55024f64a17cbde6b5a129aed"
+            "sha256": "13e901e0b343fb9e2d0ef8ebbe6ca7446a7558cde6f3931f5e3d8faca1d7de8f"
         },
         "browser_ui": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "38dab015c33b3d548637a1ce849c89f2d264b41a6efb0a0776744c003cd1184f"
+            "sha256": "bc523d18c09d26ecc5792335a4f4605f660bc43ec56b5e7eb1941b1361a590bf"
         },
         "image": {
             "path": "manifests/ember-restart-mmmu-validation-custody-v1.json",
@@ -150,7 +150,7 @@
         },
         "structured_tools": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "38dab015c33b3d548637a1ce849c89f2d264b41a6efb0a0776744c003cd1184f"
+            "sha256": "bc523d18c09d26ecc5792335a4f4605f660bc43ec56b5e7eb1941b1361a590bf"
         }
     }
 }

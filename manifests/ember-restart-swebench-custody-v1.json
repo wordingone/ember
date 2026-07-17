@@ -9,6 +9,11 @@
                              "files"
                          ],
     "source_commit":  "f7bbbb2ccdf479001d6467c9e34af59e44a840f9",
+    "benchmark_version":  "f7bbbb2ccdf479001d6467c9e34af59e44a840f9",
+    "harness_sha256":  "6959f0b4e4eaf979771f529b88e3e9df1daa7fe86bc4291feec2e7d320bf7f2e",
+    "license_sha256":  "2bd2e08df7147f67a69b42c10efae09bd4bf119df397371036187d5dd1b02f57",
+    "protocol_sha256":  "713f49f4382bead975b4e8e19674142ced799bb14396f8191614b7c81c6b0e2e",
+    "protocol_derivation":  "sha256(canonical benchmark/source/harness/license/task-release/admission identity)",
     "upstream_url":  "https://github.com/SWE-bench/SWE-bench",
     "license":  "MIT",
     "source_only_audit":  {
@@ -27,7 +32,7 @@
                                     },
     "source_audit_adapter":  {
                                  "path":  "scripts/ember_restart_eval_swebench_source_audit.py",
-                                 "sha256":  "27dae57558d6fff9b07812e354e80e5f8e37194c77f518562aca373bb06c61f8",
+                                 "sha256":  "af219c28e54e2fea4cecefeee21e7a2019c49479ea4c19f3f5a73b76af3e8abc",
                                  "result_disposition":  "PREFLIGHT_ONLY_NON_ADMISSIBLE"
                              }
 }

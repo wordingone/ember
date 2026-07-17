@@ -2,12 +2,22 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import json
+import hashlib
+import importlib.util
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ember_restart_eval_swebench_source_audit.py"
+
+
+def load_module():
+    spec = importlib.util.spec_from_file_location("swebench_source_audit_protocol", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def make_source(root: Path, include_release: bool = False) -> str:
@@ -39,6 +49,18 @@ def test_source_audit_binds_exact_swebench_source_without_task_release():
         assert payload["source_commit"] == commit
         assert payload["capability_families"] == ["code", "files"]
         assert payload["missing_task_release_paths"] == ["data", "datasets", "swebench_lite.json", "swebench_verified.json"]
+        harness_sha = hashlib.sha256((root / "swebench" / "harness" / "run_evaluation.py").read_bytes()).hexdigest()
+        license_sha = hashlib.sha256((root / "LICENSE").read_bytes()).hexdigest()
+        module = load_module()
+        assert payload["benchmark_version"] == commit
+        assert payload["protocol_sha256"] == module.swebench_protocol_sha256(commit, harness_sha, license_sha)
+
+
+def test_source_audit_protocol_changes_when_bound_harness_bytes_change():
+    module = load_module()
+    first = module.swebench_protocol_sha256("a" * 40, "b" * 64, "c" * 64)
+    second = module.swebench_protocol_sha256("a" * 40, "b" * 63 + "d", "c" * 64)
+    assert first != second
 
 
 def test_source_audit_refuses_swebench_task_release_in_source_tree():
