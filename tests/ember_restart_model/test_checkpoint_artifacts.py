@@ -25,6 +25,54 @@ from run_vertical_slice import load_optimizer_contract
 
 
 class CheckpointArtifactTests(unittest.TestCase):
+    def test_test_only_verifier_opt_out_cannot_leak_into_production_call_sites(self) -> None:
+        tools_root = ROOT / "tools"
+        offenders = []
+        for path in tools_root.rglob("*.py"):
+            if path.name == "checkpoint_artifacts.py":
+                continue
+            if "test_only_allow_unverified" in path.read_text(encoding="utf-8"):
+                offenders.append(path.relative_to(ROOT).as_posix())
+        self.assertEqual(offenders, [])
+
+    def test_test_only_verifier_opt_out_is_closed_and_boolean(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=14)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        arguments = {
+            "launch_seed": 14,
+            "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+            "data_cursor": {"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+            "model_config_sha256": "c" * 64,
+            "contract_sha256": "d" * 64,
+            "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, "must be a boolean"):
+                write_checkpoint_artifacts(model, optimizer, root / "non-bool", test_only_allow_unverified=1, **arguments)
+            with self.assertRaisesRegex(ValueError, "cannot accompany"):
+                write_checkpoint_artifacts(
+                    model, optimizer, root / "ambiguous", test_only_allow_unverified=True,
+                    pre_publish_verifier=lambda _root, _receipt: None, **arguments,
+                )
+
+    def test_checkpoint_publication_requires_realization_verifier_by_default(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=14)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "checkpoint-unverified"
+            with self.assertRaisesRegex(ValueError, "pre-publish verifier is required"):
+                write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=14,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                )
+            self.assertFalse(target.exists())
+
     def test_commit_preflight_requires_streaming_peak_plus_reserve(self) -> None:
         plan = checkpoint_commit_preflight(
             available_commit_bytes=10_000,
@@ -139,7 +187,7 @@ class CheckpointArtifactTests(unittest.TestCase):
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "checkpoint-0001"
-            receipt = write_checkpoint_artifacts(model, optimizer, root, launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            receipt = write_checkpoint_artifacts(model, optimizer, root, launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), test_only_allow_unverified=True)
             receipt.pop("optimizer_contract")
             restored = UnifiedDecoder(config, genesis_seed=12)
             with self.assertRaisesRegex(ValueError, "optimizer contract"):
@@ -149,7 +197,7 @@ class CheckpointArtifactTests(unittest.TestCase):
         model = UnifiedDecoder(config, genesis_seed=11)
         optimizer = torch.optim.AdamW((parameter for parameter in model.parameters() if parameter.requires_grad), lr=1e-4)
         with tempfile.TemporaryDirectory() as directory:
-            receipt = write_checkpoint_artifacts(model, optimizer, Path(directory) / "checkpoint-0001", launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            receipt = write_checkpoint_artifacts(model, optimizer, Path(directory) / "checkpoint-0001", launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), test_only_allow_unverified=True)
             self.assertEqual(receipt["contract_version"], 3)
             self.assertEqual(receipt["architecture_revision"], "ember-sparse-3b-v2")
             restored = UnifiedDecoder(config, genesis_seed=99)
@@ -186,6 +234,7 @@ class CheckpointArtifactTests(unittest.TestCase):
                 rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
                 data_cursor={"shard": "TOKEN-SHARDS-V0:receipt", "record_index": 2, "global_step": 2, "tokens_seen": 2048},
                 model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                test_only_allow_unverified=True,
             )
             restored = UnifiedDecoder(config, genesis_seed=18)
             restore_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
@@ -214,7 +263,7 @@ class CheckpointArtifactTests(unittest.TestCase):
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "checkpoint-0001"
-            receipt = write_checkpoint_artifacts(model, optimizer, root, launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            receipt = write_checkpoint_artifacts(model, optimizer, root, launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), test_only_allow_unverified=True)
             restored = UnifiedDecoder(config, genesis_seed=12)
             wrong_optimizer = torch.optim.SGD(restored.parameters(), lr=1e-4)
             with self.assertRaisesRegex(ValueError, "runtime optimizer realization"):
@@ -230,6 +279,7 @@ class CheckpointArtifactTests(unittest.TestCase):
                 rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
                 data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 1, "global_step": 1, "tokens_seen": 16},
                 model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                test_only_allow_unverified=True,
             )
         expected = measure_parameter_counts(model)
         architecture = receipt["architecture"]
