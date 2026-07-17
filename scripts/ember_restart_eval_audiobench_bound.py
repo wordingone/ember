@@ -43,8 +43,8 @@ def _frozen_custody(data):
  if custody.get('protocol_sha256') != _protocol_sha256(custody):
   raise ValueError('frozen AudioBench custody invalid')
  closed_hash = custody.get('closed_run_artifact_sha256')
- if closed_hash is not None and (not isinstance(closed_hash, str) or len(closed_hash) != 64 or closed_hash.lower() != closed_hash or any(char not in '0123456789abcdef' for char in closed_hash)):
-  raise ValueError('frozen AudioBench closed-run custody invalid')
+ if not isinstance(closed_hash, str) or len(closed_hash) != 64 or closed_hash.lower() != closed_hash or any(char not in '0123456789abcdef' for char in closed_hash):
+  raise ValueError('frozen AudioBench closed run custody required')
  return custody
 
 def _closed_run(run):
