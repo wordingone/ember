@@ -381,6 +381,27 @@ def _canonical_custody_deletion_pointer(raw_pointer: object) -> str:
     return canonical
 
 
+def _quarantine_evidence_identity(parent: Path, path: Path) -> tuple[str, int, str, tuple[int, int]]:
+    """Read one direct evidence leaf and bind its canonical path, bytes, and inode."""
+
+    if _custody_link_or_reparse(path) or not path.is_file():
+        raise ValueError("quarantine evidence leaf is not a direct regular file")
+    try:
+        pointer = _canonical_custody_deletion_pointer(path.relative_to(parent).as_posix())
+        before = path.stat()
+        payload = path.read_bytes()
+        after = path.stat()
+    except OSError as error:
+        raise ValueError("quarantine evidence leaf could not be snapshotted") from error
+    if _custody_link_or_reparse(path) or not path.is_file():
+        raise ValueError("quarantine evidence leaf changed into a link or non-file")
+    identity = (int(getattr(before, "st_dev", 0)), int(getattr(before, "st_ino", 0)))
+    after_identity = (int(getattr(after, "st_dev", 0)), int(getattr(after, "st_ino", 0)))
+    if identity != after_identity or before.st_size != after.st_size or after.st_size != len(payload):
+        raise ValueError("quarantine evidence leaf changed while being snapshotted")
+    return pointer, len(payload), hashlib.sha256(payload).hexdigest(), identity
+
+
 def _portable_evidence_stem(name: str) -> str:
     if not isinstance(name, str) or not name:
         raise ValueError("quarantine evidence name must be a nonempty string")
@@ -616,20 +637,32 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
                 raise RuntimeError("historical quarantine evidence pointer reappeared")
             if evidence_path.read_bytes() != payload_bytes:
                 raise RuntimeError("quarantine evidence appeared with different bytes")
-    files = sorted(
-        (path for path in evidence_dir.glob("*.json") if path.is_file()),
-        key=lambda path: (path.stat().st_mtime_ns, path.name),
-    )
+    def valid_evidence_files() -> list[Path]:
+        files: list[Path] = []
+        for path in evidence_dir.iterdir():
+            # Preexisting foreign leaves are custody bytes, never retention victims.
+            try:
+                _quarantine_evidence_identity(parent, path)
+            except ValueError:
+                continue
+            files.append(path)
+        return files
+
+    files = sorted(valid_evidence_files(), key=lambda path: (path.stat().st_mtime_ns, path.name))
     while len(files) > _MAX_QUARANTINE_FILES or sum(path.stat().st_size for path in files) > _MAX_QUARANTINE_BYTES:
         victim = next((path for path in files if path != evidence_path), None)
         if victim is None:
             break
         ledger = parent / _CUSTODY_LEDGER
+        try:
+            pointer, byte_count, digest, identity = _quarantine_evidence_identity(parent, victim)
+        except ValueError as error:
+            raise RuntimeError("bounded evidence victim is no longer a valid direct evidence leaf") from error
         deletion = {
             "schema_version": _CUSTODY_LEDGER_SCHEMA,
-            "pointer": victim.relative_to(parent).as_posix(),
-            "bytes": victim.stat().st_size,
-            "sha256": _sha256(victim),
+            "pointer": pointer,
+            "bytes": byte_count,
+            "sha256": digest,
             "reason": "bounded evidence retention",
         }
         prepared = {**deletion, "event": "PREPARED"}
@@ -638,8 +671,12 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
             handle.flush()
             os.fsync(handle.fileno())
         try:
+            if _quarantine_evidence_identity(parent, victim) != (pointer, byte_count, digest, identity):
+                raise RuntimeError("bounded evidence victim changed before unlink; bytes preserved")
             victim.unlink()
-        except OSError as error:
+        except RuntimeError:
+            raise
+        except (OSError, ValueError) as error:
             raise RuntimeError("bounded evidence deletion did not commit; bytes preserved") from error
         committed = {**deletion, "event": "COMMITTED"}
         with ledger.open("ab") as handle:
