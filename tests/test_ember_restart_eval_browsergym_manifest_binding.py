@@ -53,3 +53,48 @@ def test_rejects_browser_protocol_substitution_even_with_matching_tasks():
         completed = subprocess.run([sys.executable, str(SCRIPT), "--frozen-task-manifest", str(manifest), "--browser-results", str(runs), "--score-output", str(output)], capture_output=True, text=True)
         assert completed.returncode != 0
         assert not output.exists()
+
+
+def strict_frozen_manifest(task_sha, environment_sha, checkpoint_sha, config_sha):
+    value = {
+        "schema_version": "ember-restart-browsergym-miniwob-frozen-v2",
+        "result": "PREFLIGHT_ONLY",
+        "benchmark_id": "browsergym-miniwob",
+        "benchmark_version": "1",
+        "source_commit": "9e779f087de9a65668b6974d11f9ce9816026e96",
+        "source_tree": "d33e398c18d04d5da742b1c1ec11c4aab8bc010b",
+        "license_sha256": "b192c58991e8ff585cc574615d40e74185404d4b96c1109d423071ab1367344b",
+        "checkpoint_manifest_sha256": checkpoint_sha,
+        "model_config_sha256": config_sha,
+        "tasks": [{"task_id": "click-test", "task_sha256": task_sha, "environment_sha256": environment_sha}],
+    }
+    value["protocol_sha256"] = _BROWSER.protocol_sha256(value)
+    return value
+
+
+def test_browsergym_strict_manifest_emits_checkpoint_config_identity():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        manifest, runs, output = root / "frozen.json", root / "runs.json", root / "score.json"
+        checkpoint, config = "c" * 64, "d" * 64
+        manifest.write_text(json.dumps(strict_frozen_manifest("a" * 64, "b" * 64, checkpoint, config)), encoding="utf-8")
+        runs.write_text(json.dumps([{"task_id": "click-test", "success": True, "trace_sha256": "e" * 64, "environment_sha256": "b" * 64}]), encoding="utf-8")
+        result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-task-manifest", str(manifest), "--browser-results", str(runs), "--score-output", str(output)], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        assert payload["checkpoint_manifest_sha256"] == checkpoint
+        assert payload["model_config_sha256"] == config
+
+
+def test_browsergym_strict_manifest_rejects_missing_checkpoint_config_identity():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        manifest, runs, output = root / "frozen.json", root / "runs.json", root / "score.json"
+        value = strict_frozen_manifest("a" * 64, "b" * 64, "c" * 64, "d" * 64)
+        value.pop("model_config_sha256")
+        value["protocol_sha256"] = "0" * 64
+        manifest.write_text(json.dumps(value), encoding="utf-8")
+        runs.write_text(json.dumps([{"task_id": "click-test", "success": True, "trace_sha256": "e" * 64, "environment_sha256": "b" * 64}]), encoding="utf-8")
+        result = subprocess.run([sys.executable, str(SCRIPT), "--frozen-task-manifest", str(manifest), "--browser-results", str(runs), "--score-output", str(output)], capture_output=True, text=True)
+        assert result.returncode != 0
+        assert not output.exists()
