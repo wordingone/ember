@@ -909,6 +909,7 @@ def run(
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
                 pre_publish_verifier=verify_staging,
+                require_pre_publish_verifier=True,
             )
             return published, verified_holder["receipt"]
 
@@ -1115,6 +1116,7 @@ def run_semantic(
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 max_serialized_bytes=checkpoint_byte_bound, pre_publish_verifier=verify_staging,
+                require_pre_publish_verifier=True,
             )
             return published, verified_holder["receipt"]
 

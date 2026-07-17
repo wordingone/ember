@@ -194,5 +194,25 @@ class CheckpointArtifactTests(unittest.TestCase):
         for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
             self.assertEqual(architecture[field], expected[field])
         self.assertEqual(architecture["shared_text_ffn"], "always_active_SwiGLU_4H")
+    def test_production_publication_requires_counter_verifier_before_promotion(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=14)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "checkpoint-unverified"
+            with self.assertRaisesRegex(ValueError, "pre-publish counter verifier"):
+                write_checkpoint_artifacts(
+                    model, optimizer, target, launch_seed=14,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    max_serialized_bytes=1024,
+                    require_pre_publish_verifier=True,
+                )
+            self.assertFalse(target.exists())
+            self.assertEqual(list(parent.glob(".*.staging")), [])
+
 if __name__ == "__main__":
     unittest.main()

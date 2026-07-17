@@ -381,11 +381,14 @@ def write_checkpoint_artifacts(
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
     pre_publish_verifier: Callable[[Path, dict[str, Any]], None] | None = None,
+    require_pre_publish_verifier: bool = False,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
     if max_serialized_bytes is not None and (type(max_serialized_bytes) is not int or max_serialized_bytes < 1):
         raise ValueError("max_serialized_bytes must be a positive integer")
+    if require_pre_publish_verifier and pre_publish_verifier is None:
+        raise ValueError("production checkpoint publication requires a pre-publish counter verifier")
     _validate_replay_bindings(
         launch_seed=launch_seed,
         rng_state=rng_state,
