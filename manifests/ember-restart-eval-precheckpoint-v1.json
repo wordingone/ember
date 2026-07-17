@@ -64,7 +64,12 @@
             "labeling",
             "routing",
             "target_lineage"
-        ]
+        ],
+        "preflight_adapter": {
+            "path": "scripts/ember_restart_eval_comparator_preflight.py",
+            "sha256": "16c1151827e69a4b4380a22424d70a917cff8534396ea631abf456dad6f0f62a",
+            "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+        }
     },
     "inherited_frozen_text_code_suite": {
         "harness_commit": "97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176",
