@@ -44,10 +44,14 @@ def test_demo_freezer_protocol_is_not_caller_attested(tmp_path):
     (data / "procedural.py").write_text("DEMO_SAMPLE_RATE = 16000\n", encoding="utf-8")
     (root / "src" / "audiobench" / "suites" / "sound_id.py").write_text("SUITE_ID = 'ab/sound-id'\n", encoding="utf-8")
     outputs = []
-    for supplied in ("a" * 64, "b" * 64):
-        output = tmp_path / f"frozen-{supplied[0]}.json"
-        result = subprocess.run([sys.executable, str(SCRIPT), "--audiobench-root", str(root), "--protocol-sha256", supplied, "--output", str(output)], text=True, capture_output=True, check=False)
+    for supplied in ("a" * 64, "b" * 64, None):
+        output = tmp_path / f"frozen-{supplied[0] if supplied else 'omitted'}.json"
+        command = [sys.executable, str(SCRIPT), "--audiobench-root", str(root)]
+        if supplied is not None:
+            command.extend(["--protocol-sha256", supplied])
+        command.extend(["--output", str(output)])
+        result = subprocess.run(command, text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
         outputs.append(json.loads(output.read_text(encoding="utf-8"))["protocol_sha256"])
-    assert outputs[0] == outputs[1]
+    assert outputs[0] == outputs[1] == outputs[2]
     assert outputs[0] not in {"a" * 64, "b" * 64}

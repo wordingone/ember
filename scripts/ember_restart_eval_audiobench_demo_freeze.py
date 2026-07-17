@@ -7,11 +7,9 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import tempfile
 from pathlib import Path
 
-SHA256 = re.compile(r"[0-9a-f]{64}")
 SOURCE_COMMIT = "0fc7fef2709c00ac1e2eb2b372ec4c56362bb8c6"
 
 
@@ -40,7 +38,7 @@ def atomic(path: Path, payload: dict) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--audiobench-root", type=Path, required=True)
-    parser.add_argument("--protocol-sha256", required=True)
+    parser.add_argument("--protocol-sha256", required=False, help=argparse.SUPPRESS)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     root = args.audiobench_root
