@@ -15,6 +15,11 @@
         "disk_receipt_sha256": "41a06044333342cc998eefa2ed87bda34ae40647eca4b1bb4200eb8c35bdcb4f",
         "claim_status": "SELFTEST_ONLY_PROCEDURAL_AUDIO"
     },
+    "source_audit": {
+        "path": "scripts/ember_restart_eval_audiobench_source_audit.py",
+        "sha256": "4d684f4f520761b299bbc3095e0a07b35edf0447b4c4135dc98e14c9c9bd6b2e",
+        "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
+    },
     "source_materialization": "disk-budgeted source-only cache",
     "target_training_access": "FORBIDDEN",
     "public_source_or_answer_artifacts": "FORBIDDEN",
