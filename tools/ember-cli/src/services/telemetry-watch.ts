@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/telemetry-watch.ts — tail-polling watcher for the ember telemetry channel.
 //
 // Reads the shared telemetry JSONL file on a 500ms interval, parses newly-appended
@@ -59,6 +62,21 @@ export interface ActiveRunState {
   lastTs: string;
 }
 
+export interface CheckpointState {
+  runId: string;
+  step: number;
+  checkpointManifestSha256: string;
+  lastTs: string;
+}
+
+export interface RunStatusState {
+  runId: string;
+  phase: string;
+  modelChat: string;
+  restoreNotBefore?: string;
+  lastTs: string;
+}
+
 // ---------------------------------------------------------------------------
 // Watcher state
 // ---------------------------------------------------------------------------
@@ -67,6 +85,8 @@ export interface TelemetryState {
   recentEvents: TelemetryEvent[];
   lastGovernor?: GovernorSnapshot;
   activeRun?: ActiveRunState;
+  lastCheckpoint?: CheckpointState;
+  runStatus?: RunStatusState;
 }
 
 // Module-level state (singleton watcher)
@@ -138,6 +158,36 @@ function processLine(line: string, clock: () => number): void {
     const stepMs =
       typeof payload["step_ms"] === "number" ? payload["step_ms"] : undefined;
     _state.activeRun = { runId, step, totalSteps, loss, stepMs, lastTs: ts };
+    const free = typeof payload["free_gib"] === "number" ? payload["free_gib"] : undefined;
+    const total = typeof payload["total_gib"] === "number" ? payload["total_gib"] : undefined;
+    if (free != null && total != null) {
+      _state.lastGovernor = {
+        vramUsedGib: total - free,
+        vramTotalGib: total,
+        fractionApplied: typeof payload["vram_fraction_applied"] === "number"
+          ? payload["vram_fraction_applied"]
+          : 0,
+      };
+    }
+  } else if (kind === "checkpoint") {
+    const runId = typeof payload["run_id"] === "string" ? payload["run_id"] : "";
+    const step = typeof payload["step"] === "number" ? payload["step"] : 0;
+    const digest = typeof payload["checkpoint_manifest_sha256"] === "string"
+      ? payload["checkpoint_manifest_sha256"]
+      : "";
+    if (runId && step > 0 && /^[0-9a-f]{64}$/.test(digest)) {
+      _state.lastCheckpoint = { runId, step, checkpointManifestSha256: digest, lastTs: ts };
+    }
+  } else if (kind === "run_status") {
+    const runId = typeof payload["run_id"] === "string" ? payload["run_id"] : "";
+    const phase = typeof payload["phase"] === "string" ? payload["phase"] : "";
+    const modelChat = typeof payload["model_chat"] === "string" ? payload["model_chat"] : "";
+    const restoreNotBefore = typeof payload["restore_not_before"] === "string"
+      ? payload["restore_not_before"]
+      : undefined;
+    if (runId && phase && modelChat) {
+      _state.runStatus = { runId, phase, modelChat, restoreNotBefore, lastTs: ts };
+    }
   }
 }
 
