@@ -389,8 +389,16 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
                 raise RuntimeError("custody deletion ledger has invalid byte evidence")
             if not isinstance(event.get("reason"), str) or not event["reason"]:
                 raise RuntimeError("custody deletion ledger lacks a deletion reason")
-            identity = {"bytes": event["bytes"], "sha256": event["sha256"]}
-            if schema == _LEGACY_CUSTODY_LEDGER_SCHEMA and kind == "DELETED":
+            identity = {
+                "schema_version": schema,
+                "pointer": pointer,
+                "bytes": event["bytes"],
+                "sha256": event["sha256"],
+                "reason": event["reason"],
+            }
+            if schema == _LEGACY_CUSTODY_LEDGER_SCHEMA:
+                if kind != "DELETED":
+                    raise RuntimeError("legacy custody deletion ledger permits only DELETED")
                 if pointer in transitions or pointer in legacy_deleted:
                     raise RuntimeError("custody deletion ledger has a duplicate legacy deletion")
                 legacy_deleted[pointer] = identity
@@ -405,7 +413,7 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
                     raise RuntimeError("custody deletion ledger has COMMITTED without PREPARED")
                 transitions[pointer] = {**identity, "state": "PREPARED"}
                 continue
-            if prior["bytes"] != identity["bytes"] or prior["sha256"] != identity["sha256"]:
+            if any(prior[field] != identity[field] for field in ("schema_version", "pointer", "bytes", "sha256", "reason")):
                 raise RuntimeError("custody deletion ledger changes a prepared pointer identity")
             if prior["state"] != "PREPARED" or kind != "COMMITTED":
                 raise RuntimeError("custody deletion ledger has a duplicate or reversed transition")
@@ -524,7 +532,7 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
             raise RuntimeError("custody deletion ledger could not be inspected") from error
         return events
 
-    terminal_events = {"COMMITTED", "DELETED"}
+    terminal_events = {"PREPARED", "COMMITTED", "DELETED"}
     base_path = evidence_dir / f"{name}-{digest}.json"
     evidence_path = base_path
     base_events = ledger_events(base_path)
