@@ -854,6 +854,12 @@ def load_optimizer_contract(config_path: Path) -> dict[str, object]:
         contract = json.loads(config_path.read_text(encoding="utf-8"))["training"]["optimizer"]
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
         raise ValueError("production contract must declare a structured optimizer") from error
+    return validate_optimizer_contract(contract)
+
+
+def validate_optimizer_contract(contract: object) -> dict[str, object]:
+    """Validate an optimizer object taken from an already verified config snapshot."""
+
     if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "placement", "hyperparameters", "state_format"}:
         raise ValueError("production optimizer contract has an invalid shape")
     expected = {
@@ -869,7 +875,7 @@ def load_optimizer_contract(config_path: Path) -> dict[str, object]:
         raise ValueError("production optimizer hyperparameters have an invalid shape")
     if (not isinstance(hyperparameters["learning_rate"], (int, float)) or hyperparameters["learning_rate"] <= 0 or not isinstance(hyperparameters["weight_decay"], (int, float)) or hyperparameters["weight_decay"] < 0 or not isinstance(hyperparameters["percentile_clipping"], int) or hyperparameters["percentile_clipping"] <= 0 or not isinstance(hyperparameters["block_wise"], bool)):
         raise ValueError("production optimizer hyperparameters are invalid")
-    return contract
+    return dict(contract)
 
 def _rng_state(device: torch.device) -> dict[str, torch.Tensor]:
     return {"cpu": torch.get_rng_state().clone(), "cuda": torch.cuda.get_rng_state(device).clone()}

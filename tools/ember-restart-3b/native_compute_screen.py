@@ -25,7 +25,7 @@ import torch.nn.functional as F
 from batch import decode_owned_batch
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
-from run_vertical_slice import build_production_optimizer, load_optimizer_contract
+from run_vertical_slice import build_production_optimizer, validate_optimizer_contract
 from semantic_stream import ManifestBoundTokenStream
 
 _SEQUENCE_LENGTH = 1024
@@ -64,6 +64,15 @@ def screen_receipt(
     batch_measurements: list[dict[str, Any]],
 ) -> dict[str, object]:
     plan = screen_plan(total_vram_bytes=total_vram_bytes)
+    identity_hashes = (
+        model_config_sha256,
+        optimizer_contract_sha256,
+        tokenizer_sha256,
+        checkpoint_manifest_sha256,
+        source_sha256,
+    )
+    if any(not _is_sha256(value) for value in identity_hashes):
+        raise ValueError("screen receipt identity hashes must be lowercase SHA-256 digests")
     required = list(plan["required_batches"])
     max_peak = int(plan["max_peak_allocated_bytes"])
     available = total_vram_bytes if available_vram_bytes is None else available_vram_bytes
@@ -159,6 +168,31 @@ def _read_json_receipt(path: Path, label: str) -> tuple[dict[str, object], str]:
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must be a JSON object")
     return payload, hashlib.sha256(raw).hexdigest()
+
+
+def _load_screen_authority(*, config_path: Path, reference_checkpoint_manifest: Path) -> dict[str, object]:
+    """Parse every authority object from the same bytes used for its receipt hash."""
+
+    config_payload, config_sha256 = _read_json_receipt(config_path, "model config")
+    checkpoint_payload, checkpoint_sha256 = _read_json_receipt(
+        reference_checkpoint_manifest,
+        "reference checkpoint manifest",
+    )
+    if checkpoint_payload.get("schema_version") not in {
+        "ember-sparse-checkpoint-v3",
+        "ember-sparse-checkpoint-v4",
+    }:
+        raise ValueError("reference checkpoint manifest has an invalid schema")
+    try:
+        optimizer_payload = config_payload["training"]["optimizer"]
+    except (KeyError, TypeError) as error:
+        raise ValueError("model config must declare the production optimizer") from error
+    return {
+        "config": RestartDecoderConfig.from_contract_payload(config_payload),
+        "optimizer_contract": validate_optimizer_contract(optimizer_payload),
+        "model_config_sha256": config_sha256,
+        "checkpoint_manifest_sha256": checkpoint_sha256,
+    }
 
 
 def _dispatch_binding(*, output: Path, seed: int) -> dict[str, object]:
@@ -623,8 +657,12 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
     # This is deliberately before model allocation: all 26 shard bytes and tokenizer bytes are rechecked first.
     stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path)
     config_path = root / "configs" / "ember-restart-3b.json"
-    config = RestartDecoderConfig.from_contract(config_path)
-    optimizer_contract = load_optimizer_contract(config_path)
+    authority = _load_screen_authority(
+        config_path=config_path,
+        reference_checkpoint_manifest=reference_checkpoint_manifest,
+    )
+    config = authority["config"]
+    optimizer_contract = authority["optimizer_contract"]
     device = torch.device("cuda")
     available, total = torch.cuda.mem_get_info(device)
     plan = screen_plan(total_vram_bytes=int(total))
@@ -676,15 +714,15 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         total_parameters=int(counts["unique_parameters"]) if counts else 0,
         allocator_peak_vram_bytes=max(int(step["peak_reserved_bytes"]) for step in steps),
         target_vector_sha256=target_vector_sha256,
-        checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest),
+        checkpoint_manifest_sha256=str(authority["checkpoint_manifest_sha256"]),
     )
     if _source_closure(root) != source_closure_before:
         raise RuntimeError("native screen source closure changed before receipt publication")
     result = screen_receipt(
-        model_config_sha256=_sha256(config_path),
+        model_config_sha256=str(authority["model_config_sha256"]),
         optimizer_contract_sha256=hashlib.sha256(json.dumps(optimizer_contract, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
         tokenizer_sha256=stream.tokenizer_sha256,
-        checkpoint_manifest_sha256=_sha256(reference_checkpoint_manifest),
+        checkpoint_manifest_sha256=str(authority["checkpoint_manifest_sha256"]),
         source_sha256=_sha256(Path(__file__)),
         total_vram_bytes=int(total),
         available_vram_bytes=int(available),
