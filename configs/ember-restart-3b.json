@@ -122,7 +122,7 @@
                      "gpu":  {
                                  "required":  true,
                                  "memory_cap_gib":  22,
-                                 "gpu_hours_cap":  1,
+                                 "gpu_hours_cap":  24,
                                  "receipt_path":  "receipts/ember-restart-3b"
                              },
                      "memory":  {
