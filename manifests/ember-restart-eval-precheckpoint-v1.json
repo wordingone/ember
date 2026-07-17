@@ -151,7 +151,7 @@
         },
         "audio": {
             "path": "manifests/ember-restart-audiobench-custody-v1.json",
-            "sha256": "b2676eef7c4744a0e9b258b6d5bdf5cf211b02229b883f62748525fae8feb5e4"
+            "sha256": "36f13b302474779b464487b660cf131200fc53e94682881f2867eb42dde7c85f"
         },
         "structured_tools": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
