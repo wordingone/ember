@@ -31,8 +31,7 @@ ARC-Challenge, GSM8K, MMLU-Pro, and MATH-500 have byte-bound references and
 canonical-envelope scorers. Their outputs remain `PREFLIGHT_ONLY` with a failed
 criterion until a conforming checkpoint prediction envelope is produced. HellaSwag
 now has a deterministic exact-label scorer, but its owned frozen test split
-withholds labels and remains `NOT_EXECUTABLE_NO_FROZEN_LABELS`; no score is inferred
-or fabricated. MMLU-Pro strict custody is bound to exact scorer bytes, the pinned
+withholds labels and remains `NOT_EXECUTABLE_NO_FROZEN_LABELS`; no score is inferred or fabricated. MMLU-Pro strict custody is bound to exact scorer bytes, the pinned
 license-card artifact, and its derived protocol; it remains preflight-only.
 
 MATH-500, MMLU-Pro, and static BFCL strict freeze manifests now derive protocol identity from exact scorer bytes plus frozen split/reference and license/version identity; valid-hex caller substitutions are rejected. These remain preflight-only and do not create checkpoint-bound scores.

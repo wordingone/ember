@@ -118,11 +118,11 @@
         },
         "code": {
             "path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-            "sha256": "c830196995640a34047d7c3730526147e0903413eae8ac050bc46a6a6dba5c8a"
+            "sha256": "80a0c4bcf8b87bf68abc2c2bf814bed90e437859399c2683fd5a864187130f7a"
         },
         "mathematics": {
             "path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-            "sha256": "c830196995640a34047d7c3730526147e0903413eae8ac050bc46a6a6dba5c8a"
+            "sha256": "80a0c4bcf8b87bf68abc2c2bf814bed90e437859399c2683fd5a864187130f7a"
         },
         "terminal": {
             "path": "manifests/ember-restart-terminal-bench-custody-v1.json",
@@ -130,7 +130,7 @@
         },
         "sql": {
             "path": "manifests/ember-restart-spider-custody-v1.json",
-            "sha256": "7a46688ea1060fdb3172e018ba98e6a80c717d13e32b31f6fb73522ccc8774fd"
+            "sha256": "3146be3c20c8f5791494225d7623a2d1819358c36082f0905667edd4259fc95c"
         },
         "files": {
             "path": "manifests/ember-restart-swebench-custody-v1.json",
@@ -138,11 +138,11 @@
         },
         "browser_ui": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "893a62251df4da809babc23e31929d0bbcbd675a453720de5da384207c48eb3e"
+            "sha256": "744551ec98bb6836f4039c30cb6b9a6b6120bd5ab3b7b88fbe0d29215415480a"
         },
         "image": {
             "path": "manifests/ember-restart-mmmu-validation-custody-v1.json",
-            "sha256": "263fa1cf9741942775828585e6492afc76e11802cbe9a77d7ac0584a0f714432"
+            "sha256": "b59d1e934f89131a1a8f34fe004ebc58b8b6ca7a0b78e328260261cc4ae86570"
         },
         "audio": {
             "path": "manifests/ember-restart-audiobench-custody-v1.json",
@@ -150,7 +150,7 @@
         },
         "structured_tools": {
             "path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-            "sha256": "893a62251df4da809babc23e31929d0bbcbd675a453720de5da384207c48eb3e"
+            "sha256": "744551ec98bb6836f4039c30cb6b9a6b6120bd5ab3b7b88fbe0d29215415480a"
         }
     }
 }
