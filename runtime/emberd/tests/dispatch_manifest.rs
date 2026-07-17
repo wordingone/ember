@@ -33,6 +33,14 @@ fn sha256(path: &Path) -> String {
 #[test]
 fn fixture_dispatch_child() {
     if std::env::var("EMBERD_DISPATCH_FIXTURE_CHILD").as_deref() == Ok("1") {
+        if let Ok(raw) = std::env::var("EMBERD_DISPATCH_ALLOCATE_BYTES") {
+            let bytes: usize = raw.parse().unwrap();
+            let mut allocation = vec![0u8; bytes];
+            for offset in (0..allocation.len()).step_by(4096) {
+                allocation[offset] = 1;
+            }
+            std::hint::black_box(allocation);
+        }
         thread::sleep(Duration::from_secs(30));
     }
 }
@@ -79,8 +87,9 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
         ],
             "custody_root": custody,
             "storage_reserves": [{"root": root, "minimum_free_bytes": 1}],
-            "minimum_free_vram_bytes": 1,
-            "preflight_receipt": root.join("custody").join("preflight.json")
+        "minimum_free_vram_bytes": 1,
+        "maximum_job_memory_bytes": 1_073_741_824u64,
+        "preflight_receipt": root.join("custody").join("preflight.json")
         }))
         .unwrap(),
     )
@@ -120,7 +129,57 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     assert_eq!(receipt["dispatch_manifest_sha256"], sha256(&manifest));
     assert_eq!(receipt["vram_reserve"]["minimum_free_bytes"], 1);
     assert_eq!(receipt["vram_reserve"]["available_free_bytes"], 2048);
+    assert_eq!(receipt["maximum_job_memory_bytes"], 1_073_741_824u64);
     daemon.stop_job("dispatch-green").unwrap();
+}
+
+#[test]
+fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
+    let root = sandbox("job-memory-ceiling");
+    let manifest = write_manifest(&root, "dispatch-memory-ceiling", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["maximum_job_memory_bytes"] = json!(134_217_728u64);
+    payload["env"]["EMBERD_DISPATCH_ALLOCATE_BYTES"] = json!(536_870_912u64.to_string());
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(1024))
+        .unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let state = daemon
+            .job_state("dispatch-memory-ceiling")
+            .unwrap()
+            .unwrap();
+        if matches!(state, JobState::Exited | JobState::Failed) {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "over-allocation probe remained live past the job-memory ceiling"
+        );
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+}
+
+#[test]
+fn dispatch_manifest_rejects_a_missing_job_memory_ceiling() {
+    let root = sandbox("missing-job-memory-ceiling");
+    let manifest = write_manifest(&root, "dispatch-missing-memory", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload
+        .as_object_mut()
+        .unwrap()
+        .remove("maximum_job_memory_bytes");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(1024),),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(daemon.job_state("dispatch-missing-memory").unwrap(), None);
+    assert!(!root.join("custody").join("preflight.json").exists());
 }
 
 #[test]

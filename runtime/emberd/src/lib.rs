@@ -264,6 +264,7 @@ pub struct JobSpec {
     resource_lease: String,
     env: BTreeMap<String, String>,
     restart_policy: RestartPolicy,
+    maximum_job_memory_bytes: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -314,6 +315,7 @@ pub struct DispatchManifest {
     pub custody_root: PathBuf,
     pub storage_reserves: Vec<DispatchStorageReserve>,
     pub minimum_free_vram_bytes: u64,
+    pub maximum_job_memory_bytes: u64,
     pub preflight_receipt: PathBuf,
 }
 
@@ -339,6 +341,7 @@ impl JobSpec {
             resource_lease: resource_lease.into(),
             env: BTreeMap::new(),
             restart_policy: RestartPolicy::Never,
+            maximum_job_memory_bytes: None,
         }
     }
     pub fn with_env<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
@@ -348,6 +351,11 @@ impl JobSpec {
 
     pub fn with_restart_policy(mut self, restart_policy: RestartPolicy) -> Self {
         self.restart_policy = restart_policy;
+        self
+    }
+
+    pub fn with_maximum_job_memory_bytes(mut self, maximum_job_memory_bytes: u64) -> Self {
+        self.maximum_job_memory_bytes = Some(maximum_job_memory_bytes);
         self
     }
 }
@@ -968,6 +976,7 @@ impl Daemon {
             || manifest.bindings.is_empty()
             || manifest.storage_reserves.is_empty()
             || manifest.minimum_free_vram_bytes == 0
+            || manifest.maximum_job_memory_bytes == 0
         {
             return Err(EmberdError::InvalidDispatchManifest {
                 detail: "dispatch manifest requires the closed v1 schema, identities, window, bindings, and reserves".into(),
@@ -1121,6 +1130,7 @@ impl Daemon {
                 "minimum_free_bytes": manifest.minimum_free_vram_bytes,
                 "available_free_bytes": available_vram,
             },
+            "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
             "emberd_identity": {
                 "binary_sha256": &self.emberd_binary_sha256,
                 "source_sha256": &self.emberd_source_sha256,
@@ -1140,7 +1150,8 @@ impl Daemon {
             program.to_string_lossy().into_owned(),
             manifest.args,
             manifest.resource_lease,
-        );
+        )
+        .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
@@ -2904,7 +2915,7 @@ fn spawn_managed(
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
     use windows_sys::Win32::System::JobObjects::{
         CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
-        TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_JOB_MEMORY,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{
@@ -2912,6 +2923,14 @@ fn spawn_managed(
         CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT,
         PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
     };
+
+    let maximum_job_memory = spec
+        .maximum_job_memory_bytes
+        .map(usize::try_from)
+        .transpose()
+        .map_err(|_| EmberdError::InvalidDispatchManifest {
+            detail: "maximum job memory does not fit the current Windows address space".into(),
+        })?;
 
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
     let name = wide(job_name);
@@ -2929,6 +2948,10 @@ fn spawn_managed(
 
     let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
     limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if let Some(maximum) = maximum_job_memory {
+        limits.JobMemoryLimit = maximum;
+        limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_MEMORY;
+    }
     if unsafe {
         SetInformationJobObject(
             job,
