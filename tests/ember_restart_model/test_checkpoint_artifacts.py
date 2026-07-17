@@ -20,7 +20,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts
+from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
@@ -222,7 +222,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertEqual(sentinel.read_bytes(), b"known-good")
             self.assertFalse(verifier.called)
             self.assertEqual(list(Path(directory).glob(".*.staging")), [])
-    def test_counter_verifier_runs_on_staging_before_atomic_promotion(self) -> None:
+    def test_counter_verifier_runs_on_durable_quarantine_before_atomic_promotion(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=12)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
@@ -230,9 +230,9 @@ class CheckpointArtifactTests(unittest.TestCase):
             target = Path(directory) / "checkpoint-atomic"
             observations: list[tuple[bool, bool, bool, bool, bool]] = []
 
-            def verify(staging: Path, _receipt: dict[str, object]) -> None:
-                observations.append((staging.is_dir(), target.exists(), (staging / "checkpoint-manifest.json").is_file(), f".{os.getpid()}." in staging.name, (staging / ".writer-lease.json").is_file()))
-                (staging / "parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8")
+            def verify(candidate: Path, _receipt: dict[str, object]) -> None:
+                observations.append((candidate.is_dir(), target.exists(), (candidate / "checkpoint-manifest.json").is_file(), candidate.parent.name == ".checkpoint-quarantine", (candidate / ".writer-lease.json").is_file()))
+                (candidate / "parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8")
 
             with patch("checkpoint_artifacts.available_host_commit_bytes", return_value=1024**3):
                 receipt = write_checkpoint_artifacts(
@@ -244,14 +244,14 @@ class CheckpointArtifactTests(unittest.TestCase):
                     host_commit_reserve_bytes=128 * 1024**2,
                     pre_publish_verifier=verify,
                 )
-            self.assertEqual(observations, [(True, False, True, True, True)])
+            self.assertEqual(observations, [(True, False, True, True, False)])
             self.assertTrue(target.joinpath("parameter-counter-receipt.json").is_file())
             self.assertFalse(target.joinpath(".writer-lease.json").exists())
             self.assertEqual(receipt["checkpoint_manifest_sha256"], __import__("hashlib").sha256(target.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest())
             self.assertEqual(receipt["host_commit_preflight"]["available_commit_bytes"], 1024**3)
             self.assertEqual(receipt["host_commit_preflight"]["reserve_bytes"], 128 * 1024**2)
 
-    def test_counter_verifier_failure_removes_staging_without_publishing(self) -> None:
+    def test_counter_failure_preserves_full_candidate_for_rejudging_without_retraining(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=13)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
@@ -269,6 +269,19 @@ class CheckpointArtifactTests(unittest.TestCase):
                 )
             self.assertFalse(target.exists())
             self.assertEqual(list(parent.glob(".*.staging")), [])
+            candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir()]
+            self.assertEqual(len(candidates), 1)
+            candidate = candidates[0]
+            self.assertTrue(candidate.joinpath("shared.pt").is_file())
+            self.assertTrue(candidate.joinpath("checkpoint-manifest.json").is_file())
+            self.assertFalse(candidate.joinpath(".writer-lease.json").exists())
+            shared_sha256 = __import__("hashlib").sha256(candidate.joinpath("shared.pt").read_bytes()).hexdigest()
+            candidate_manifest = __import__("json").loads(candidate.joinpath("checkpoint-manifest.json").read_text(encoding="utf-8"))
+            candidate_receipt = {**candidate_manifest, "checkpoint_manifest_sha256": __import__("hashlib").sha256(candidate.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest()}
+            restored = UnifiedDecoder(config, genesis_seed=99)
+            restored_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
+            with self.assertRaisesRegex(ValueError, "quarantined checkpoint"):
+                load_checkpoint_artifacts(restored, restored_optimizer, candidate, candidate_receipt)
             evidence = list((parent / ".checkpoint-quarantine").glob("checkpoint-write-failed-*.json"))
             self.assertEqual(len(evidence), 1)
             payload = __import__("json").loads(evidence[0].read_text(encoding="utf-8"))
@@ -281,6 +294,15 @@ class CheckpointArtifactTests(unittest.TestCase):
                 evidence[0].stem.removeprefix("checkpoint-write-failed-"),
                 __import__("hashlib").sha256(evidence[0].read_bytes()).hexdigest(),
             )
+            admitted = admit_quarantined_checkpoint(
+                candidate,
+                target,
+                verifier=lambda root, _receipt: root.joinpath("parameter-counter-receipt.json").write_text('{"result":"MEASURED"}' + chr(10), encoding="utf-8"),
+            )
+            self.assertTrue(target.is_dir())
+            self.assertFalse(candidate.exists())
+            self.assertEqual(__import__("hashlib").sha256(target.joinpath("shared.pt").read_bytes()).hexdigest(), shared_sha256)
+            self.assertEqual(admitted["checkpoint_manifest_sha256"], __import__("hashlib").sha256(target.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest())
     def test_refuses_checkpoint_receipt_without_optimizer_contract(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=11)
