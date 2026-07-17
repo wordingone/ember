@@ -126,6 +126,15 @@ def test_registry_anchor_rejects_a_structurally_substituted_authority_document(t
     assert module._admitted(admission, registry, receipt.read_bytes()) is True
 
 
+def test_registry_anchor_fails_closed_on_malformed_authority_shape(tmp_path, monkeypatch):
+    module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_authority_malformed")
+    registry = tmp_path / "trusted-verifiers.json"
+    registry.write_bytes(b'{}')
+    authority = tmp_path / "authorities.json"
+    authority.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(module, "EXECUTION_AUTHORITIES", authority)
+    assert module._registry_is_pinned(registry) is False
+
 
 def test_claim_renderer_serializes_every_identity_field_so_admitted_receipts_cannot_collide(tmp_path, monkeypatch):
     module = _load("scripts/ember_restart_eval_result_surface.py", "four_p1_surface_identity")
