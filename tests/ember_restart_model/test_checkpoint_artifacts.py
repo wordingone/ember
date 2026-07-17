@@ -115,6 +115,15 @@ class CheckpointArtifactTests(unittest.TestCase):
         for key, tensor in source.state_dict().items():
             self.assertTrue(torch.equal(tensor, target.state_dict()[key]), key)
 
+    def test_model_only_transition_rejects_quarantined_bundle_before_receipt_validation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=11)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / ".checkpoint-quarantine" / "candidate-valid"
+            root.mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, "quarantined checkpoint"):
+                load_checkpoint_model_only_transition(model, root, {"schema_version": "ember-sparse-checkpoint-v3"})
+
     def test_test_only_verifier_opt_out_cannot_leak_into_production_call_sites(self) -> None:
         tools_root = ROOT / "tools"
         offenders = []

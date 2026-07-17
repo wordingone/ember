@@ -47,6 +47,15 @@ def _path_has_link(path: Path, root: Path) -> bool:
     return _is_link_or_reparse(root)
 
 
+def _admitted_checkpoint_root(root: Path) -> Path:
+    lexical = Path(root)
+    resolved = lexical.resolve()
+    for path in (lexical, resolved):
+        if any(str(part).casefold() == ".checkpoint-quarantine" for part in path.parts):
+            raise ValueError("quarantined checkpoint is not admitted or selectable")
+    return resolved
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -1040,9 +1049,7 @@ def load_checkpoint_artifacts(
 ) -> None:
     """Verify every manifest/shard/payload before mutating model or optimizer."""
 
-    root = root.resolve()
-    if ".checkpoint-quarantine" in root.parts:
-        raise ValueError("quarantined checkpoint is not admitted or selectable")
+    root = _admitted_checkpoint_root(root)
     if receipt.get("schema_version") not in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
         raise ValueError("checkpoint optimizer contract requires a v3 or v4 manifest")
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
@@ -1116,6 +1123,7 @@ def load_checkpoint_model_only_transition(
     largest single shard rather than the whole checkpoint bundle.
     """
 
+    root = _admitted_checkpoint_root(root)
     if receipt.get("schema_version") != "ember-sparse-checkpoint-v3":
         raise ValueError("model-only optimizer transition requires a v3 source checkpoint")
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))

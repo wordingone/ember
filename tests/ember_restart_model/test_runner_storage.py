@@ -45,6 +45,42 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertEqual(len(seen_targets), 1)
             self.assertEqual(seen_targets[0].joinpath("existing-sentinel").read_bytes(), b"preserved")
 
+    def test_quarantine_move_rejects_lexical_symlink_source_before_resolve(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            outside = parent / "outside-bundle"
+            outside.mkdir()
+            outside.joinpath("shared.pt").write_bytes(b"outside-bytes")
+            escape = parent / "checkpoint-escape"
+            try:
+                escape.symlink_to(outside, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlink creation unavailable")
+            with unittest.mock.patch("run_vertical_slice._atomic_publish_no_replace", side_effect=AssertionError("must not mutate link target")) as publish:
+                with self.assertRaisesRegex(ValueError, "link|reparse"):
+                    run_vertical_slice._move_bundle_to_quarantine(escape)
+            publish.assert_not_called()
+            self.assertTrue(escape.is_symlink())
+            self.assertEqual(outside.joinpath("shared.pt").read_bytes(), b"outside-bytes")
+
+    def test_quarantine_move_rejects_symlink_component_before_resolve(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            outside_parent = parent / "outside-parent"
+            outside = outside_parent / "checkpoint-outside"
+            outside.mkdir(parents=True)
+            outside.joinpath("shared.pt").write_bytes(b"outside-bytes")
+            alias = parent / "alias"
+            try:
+                alias.symlink_to(outside_parent, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlink creation unavailable")
+            with unittest.mock.patch("run_vertical_slice._atomic_publish_no_replace", side_effect=AssertionError("must not mutate link target")) as publish:
+                with self.assertRaisesRegex(ValueError, "link|reparse"):
+                    run_vertical_slice._move_bundle_to_quarantine(alias / "checkpoint-outside")
+            publish.assert_not_called()
+            self.assertEqual(outside.joinpath("shared.pt").read_bytes(), b"outside-bytes")
+
     def test_retention_prunes_only_after_successful_publication(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
@@ -101,6 +137,24 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertEqual(reconciliation["quarantine_bytes"], 10)
             self.assertEqual(reconciliation["deleted_bytes"], 17)
             self.assertEqual(reconciliation["reconciled_bytes"], reconciliation["physical_bytes"] + 17)
+
+    def test_custody_reconciliation_rejects_lone_committed_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_text(json.dumps({"schema_version": "ember-checkpoint-custody-deletion-v1", "event": "COMMITTED", "pointer": ".checkpoint-quarantine/missing.json", "bytes": 17, "sha256": "a" * 64, "reason": "test"}, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "COMMITTED|transition"):
+                run_vertical_slice._custody_reconciliation(parent)
+
+    def test_custody_reconciliation_rejects_duplicate_or_reversed_transitions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            base = {"schema_version": "ember-checkpoint-custody-deletion-v1", "pointer": ".checkpoint-quarantine/missing.json", "bytes": 17, "sha256": "a" * 64, "reason": "test"}
+            events = [{**base, "event": "PREPARED"}, {**base, "event": "COMMITTED"}, {**base, "event": "COMMITTED"}]
+            ledger.write_text("\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "duplicate|transition"):
+                run_vertical_slice._custody_reconciliation(parent)
 
     def test_retention_byte_cap_charges_quarantined_bundle_after_move(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -339,7 +393,7 @@ class RunnerStorageTests(unittest.TestCase):
             payload = b"crashed-evidence"
             digest = __import__("hashlib").sha256(payload).hexdigest()
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
-            ledger.write_text(json.dumps({"schema_version": "ember-checkpoint-custody-deletion-v1", "event": "PREPARED", "pointer": pointer, "bytes": len(payload), "sha256": digest}) + "\n", encoding="utf-8")
+            ledger.write_text(json.dumps({"schema_version": "ember-checkpoint-custody-deletion-v1", "event": "PREPARED", "pointer": pointer, "bytes": len(payload), "sha256": digest, "reason": "crash replay"}) + "\n", encoding="utf-8")
             (quarantine / "crashed.json").write_bytes(payload)
             self.assertEqual(run_vertical_slice._custody_reconciliation(parent)["deleted_bytes"], 0)
             (quarantine / "crashed.json").unlink()
