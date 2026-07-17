@@ -1091,5 +1091,32 @@ class RunnerStorageTests(unittest.TestCase):
                     with run_vertical_slice._custody_ledger_write_lock(Path(directory)):
                         self.fail("fail-closed lock unexpectedly entered")
             self.assertFalse((Path(directory) / ".checkpoint-custody-deletion-ledger.lock").exists())
+    @unittest.skipUnless(os.name == "nt", "native Windows mutex contract")
+    def test_windows_directory_handle_identity_converges_drive_extended_and_case_aliases(self) -> None:
+        """A real opened directory handle, not path spelling, controls the mutex identity."""
+        with tempfile.TemporaryDirectory() as directory:
+            drive = Path(directory)
+            extended = Path("\\\\?\\" + str(drive.resolve()))
+            case_alias = Path(str(drive).upper())
+            identities = [run_vertical_slice._windows_directory_identity(path) for path in (drive, extended, case_alias)]
+            names = [run_vertical_slice._windows_custody_ledger_mutex_name(path) for path in (drive, extended, case_alias)]
+            self.assertEqual(identities[0], identities[1])
+            self.assertEqual(identities[0], identities[2])
+            self.assertEqual(names, [names[0], names[0], names[0]])
+    @unittest.skipUnless(os.name == "nt", "native Windows mutex contract")
+    def test_windows_abandoned_mutex_recovers_while_another_process_survives(self) -> None:
+        """Kernel abandoned-owner recovery is independent of unrelated live process/PID state."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            ready = parent / "ready"
+            module_root = ROOT / "tools" / "ember-restart-3b"
+            owner = "import os,pathlib,sys;sys.path.insert(0," + repr(str(module_root)) + ");import run_vertical_slice as r;p=pathlib.Path(os.environ['P']);q=pathlib.Path(os.environ['R']);\nwith r._custody_ledger_write_lock(p): q.write_text('held'); os._exit(0)"
+            environment = os.environ.copy(); environment.update({"P": str(parent), "R": str(ready)})
+            process = subprocess.Popen([sys.executable, "-c", owner], env=environment)
+            self.assertEqual(process.wait(timeout=10), 0)
+            self.assertTrue(ready.exists())
+            event = {"schema_version":"ember-checkpoint-custody-deletion-v2","event":"PREPARED","pointer":".checkpoint-quarantine/evidence-" + "d" * 64 + ".json","bytes":1,"sha256":"d" * 64,"reason":"surviving-process abandoned mutex"}
+            run_vertical_slice._append_custody_ledger_transition(parent, event)
+            self.assertEqual(len(run_vertical_slice._custody_ledger_snapshot(parent)[1]), 1)
 if __name__ == "__main__":
     unittest.main()
