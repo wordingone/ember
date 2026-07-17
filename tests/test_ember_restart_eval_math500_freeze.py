@@ -59,3 +59,16 @@ def test_cleans_temporary_payload_when_final_math500_publication_fails(monkeypat
             module.main()
         assert not output.exists()
         assert not list(root.glob("frozen.json.*.tmp"))
+
+def test_math500_protocol_identity_is_not_caller_attested():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        (root / "README.md").write_text("---\nlicense: mit\n---\n", encoding="utf-8")
+        (root / "test.jsonl").write_text('{"unique_id":"a","problem":"1+1","answer":"2"}\n', encoding="utf-8")
+        outputs = []
+        for protocol in ("a" * 64, "b" * 64):
+            output = root / ("freeze-" + protocol[0] + ".json")
+            result = subprocess.run([sys.executable, str(SCRIPT), "--dataset-root", str(root), "--revision", "2cd6fe926f1203a15d19f73c9a329cbe62b806fd", "--protocol-sha256", protocol, "--output", str(output)], text=True, capture_output=True, check=False)
+            assert result.returncode == 0, result.stderr
+            outputs.append(json.loads(output.read_text(encoding="utf-8"))["protocol_sha256"])
+        assert outputs[0] == outputs[1]

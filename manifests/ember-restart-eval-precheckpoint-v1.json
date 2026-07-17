@@ -123,11 +123,11 @@
         },
         "code": {
             "path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-            "sha256": "80a0c4bcf8b87bf68abc2c2bf814bed90e437859399c2683fd5a864187130f7a"
+            "sha256": "69d65e8afbe8811910efa8d3d515683e4d23301892148d401928258d41085812"
         },
         "mathematics": {
             "path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-            "sha256": "80a0c4bcf8b87bf68abc2c2bf814bed90e437859399c2683fd5a864187130f7a"
+            "sha256": "69d65e8afbe8811910efa8d3d515683e4d23301892148d401928258d41085812"
         },
         "terminal": {
             "path": "manifests/ember-restart-terminal-bench-custody-v1.json",
