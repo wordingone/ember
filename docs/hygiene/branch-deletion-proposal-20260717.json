@@ -3,6 +3,9 @@
   "result": "NO_SAFE_CANDIDATE",
   "generated_at": "2026-07-17T16:31:00Z",
   "public_master_sha256": "f919b116066106fc91a7d86feff39eecc70e14d0",
+  "snapshot_scope": "Census captured before publication of this hygiene PR; the later self-branch and PR are explicitly excluded from deletion candidates.",
+  "post_snapshot_census": {"open_issues": 242, "open_pull_requests": 14, "remote_branches": 237, "root_markdown_files": 8},
+  "self_branch_excluded": {"branch": "docs/continuous-custodian-c3", "pull_request": 920, "head_sha": "3d6ca28c5ba7ff6af92b8d9d3b1c395194b71229"},
   "baseline": {
     "open_issues": 242,
     "remote_branches": 236,
