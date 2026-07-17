@@ -436,11 +436,49 @@ def _custody_ledger_lock_is_stale(lock_dir: Path, owner: Path) -> bool:
         return False
     return age_seconds >= _LEDGER_LOCK_OWNER_GRACE_SECONDS
 
-def _windows_custody_ledger_mutex_name(parent: Path) -> str:
-    """Return a process-global kernel mutex name for one canonical custody root."""
+def _windows_custody_ledger_mutex_name_from_identity(identity: tuple[int, int, int]) -> str:
+    """Name one machine-wide mutex from immutable directory volume/file identity."""
 
-    canonical = str(parent.resolve()).casefold().encode("utf-8")
-    return "Local\\ember-checkpoint-custody-" + hashlib.sha256(canonical).hexdigest()
+    if len(identity) != 3 or any(type(part) is not int or part < 0 for part in identity):
+        raise ValueError("Windows custody directory identity is invalid")
+    payload = ":".join(str(part) for part in identity).encode("ascii")
+    return "Global\\ember-checkpoint-custody-" + hashlib.sha256(payload).hexdigest()
+
+
+def _windows_directory_identity(parent: Path) -> tuple[int, int, int]:
+    """Read volume serial and 64-bit file ID from one opened directory handle."""
+
+    class _ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [("attributes", ctypes.c_ulong), ("creation_low", ctypes.c_ulong), ("creation_high", ctypes.c_ulong), ("access_low", ctypes.c_ulong), ("access_high", ctypes.c_ulong), ("write_low", ctypes.c_ulong), ("write_high", ctypes.c_ulong), ("volume_serial", ctypes.c_ulong), ("size_high", ctypes.c_ulong), ("size_low", ctypes.c_ulong), ("link_count", ctypes.c_ulong), ("file_index_high", ctypes.c_ulong), ("file_index_low", ctypes.c_ulong)]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = (ctypes.c_wchar_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p)
+    create_file.restype = ctypes.c_void_p
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (ctypes.c_void_p,)
+    close_handle.restype = ctypes.c_bool
+    get_information = kernel32.GetFileInformationByHandle
+    get_information.argtypes = (ctypes.c_void_p, ctypes.POINTER(_ByHandleFileInformation))
+    get_information.restype = ctypes.c_bool
+    handle = create_file(str(parent), 0, 0x00000007, None, 3, 0x02000000, None)
+    invalid = ctypes.c_void_p(-1).value
+    if not handle or handle == invalid:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        information = _ByHandleFileInformation()
+        if not get_information(handle, ctypes.byref(information)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return int(information.volume_serial), int(information.file_index_high), int(information.file_index_low)
+    finally:
+        if not close_handle(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _windows_custody_ledger_mutex_name(parent: Path) -> str:
+    """Return a machine-wide mutex name from the opened custody directory identity."""
+
+    return _windows_custody_ledger_mutex_name_from_identity(_windows_directory_identity(parent))
 
 
 @contextlib.contextmanager
@@ -492,53 +530,20 @@ def _custody_ledger_write_lock(parent: Path) -> object:
         with _windows_custody_ledger_mutex(parent):
             yield
         return
-    key = str(parent)
-    with _LEDGER_THREAD_LOCKS_GUARD:
-        thread_lock = _LEDGER_THREAD_LOCKS.setdefault(key, threading.Lock())
-    thread_lock.acquire()
-    lock_dir = parent / _CUSTODY_LEDGER_LOCK
-    owner = lock_dir / "owner.json"
-    owner_token = uuid.uuid4().hex
-    acquired = False
-    deadline = time.monotonic() + _LEDGER_LOCK_WAIT_SECONDS
     try:
-        while True:
-            try:
-                lock_dir.mkdir()
-            except FileExistsError:
-                if _custody_ledger_lock_is_stale(lock_dir, owner):
-                    try:
-                        owner.unlink(missing_ok=True)
-                        lock_dir.rmdir()
-                    except OSError:
-                        pass
-                    continue
-                if time.monotonic() >= deadline:
-                    raise RuntimeError("timed out waiting for the custody ledger writer lock")
-                time.sleep(0.01)
-                continue
-            try:
-                owner.write_text(json.dumps({"pid": os.getpid(), "token": owner_token}, sort_keys=True) + "\n", encoding="utf-8")
-            except BaseException:
-                try:
-                    owner.unlink(missing_ok=True)
-                    lock_dir.rmdir()
-                except OSError:
-                    pass
-                raise
-            acquired = True
-            break
+        import fcntl
+    except ImportError as error:
+        raise RuntimeError("POSIX custody ledger requires fcntl.flock kernel locking") from error
+    lock_path = parent / _CUSTODY_LEDGER_LOCK
+    descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
         yield
     finally:
-        if acquired:
-            try:
-                payload = json.loads(owner.read_text(encoding="utf-8"))
-                if isinstance(payload, dict) and payload.get("token") == owner_token:
-                    owner.unlink()
-                    lock_dir.rmdir()
-            except (OSError, UnicodeError, json.JSONDecodeError):
-                pass
-        thread_lock.release()
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
     """Read one complete newline-framed ledger snapshot, rejecting torn tails."""
 
