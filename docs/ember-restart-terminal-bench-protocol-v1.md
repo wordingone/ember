@@ -17,7 +17,10 @@
   repository and target-training lineage.
 
 The source README identifies `harbor run --dataset terminal-bench@2.0` as the
-task-outcome runner. The scorer accepts only the freezer-produced
+task-outcome runner. The repeatable read-only cache audit is
+`scripts/ember_restart_eval_terminal_bench_cache_audit.py`; its current task
+manifest digest is `3a0c0127df1aab9c05c60c5bc08d1c7f2ab701e913614ec5b41082fd81c1e694`.
+The scorer accepts only the freezer-produced
 `ember-restart-terminal-bench-freeze-v2` manifest; handwritten legacy manifests are
 rejected before any Harbor outcome is considered. Its illustrated hosted-agent
 commands are not Ember evidence and must not be used for an owned-checkpoint score.

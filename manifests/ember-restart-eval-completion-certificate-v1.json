@@ -117,13 +117,13 @@
       "family": "terminal",
       "benchmark_id": "terminal-bench",
       "benchmark_version": "2.0",
-      "split_sha256": "de472cfd064c3b4dfcd6fc424673ef1f0a5df83db9ec67dacff042f33ebb578c",
+      "split_sha256": "e76b46502a8e2cf5fc73e366c89096962dc1c4ecfa26efcce8783de28ae6c4a6",
       "protocol_sha256": "4e80e1f56d57ad83b9e51509b06d40f62348218570642b35b9bd6d52be458160",
       "command_sha256": "9324fc506109ec0a8eb2c282a99c3c9c79365a77cb263ca75fa989b9cc12de31",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_terminal_bench.py",
       "custody_path": "manifests/ember-restart-terminal-bench-custody-v1.json",
-      "custody_sha256": "de472cfd064c3b4dfcd6fc424673ef1f0a5df83db9ec67dacff042f33ebb578c"
+      "custody_sha256": "e76b46502a8e2cf5fc73e366c89096962dc1c4ecfa26efcce8783de28ae6c4a6"
     },
     {
       "family": "structured_tools",
