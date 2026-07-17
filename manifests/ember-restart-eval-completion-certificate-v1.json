@@ -3,7 +3,7 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02C",
   "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
-  "evaluator_commit": "6e6bcd3cca37ae556aeed794f13ef2f82c651b34",
+  "evaluator_commit": "535fc9ed455b9af1fc6a68502cfdf33f4ad6c5d7",
   "benchmarks": [
     {
       "family": "text",
