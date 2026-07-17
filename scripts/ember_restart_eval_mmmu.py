@@ -93,10 +93,15 @@ def verify_frozen_scorer(manifest: dict[str, object], mmmu_root: Path) -> tuple[
 
 
 def validate_manifest_identity(manifest: dict[str, object], envelope: dict[str, object]) -> None:
-    """Reject canonical predictions whose checkpoint/config identity is not custody-bound."""
+    """Reject canonical predictions unless strict custody binds checkpoint/config identity."""
+    strict = manifest.get("schema_version") == "ember-restart-benchmark-custody-v1" or any(identity in manifest for identity in ("checkpoint_manifest_sha256", "model_config_sha256"))
+    if not strict:
+        return
     for identity in ("checkpoint_manifest_sha256", "model_config_sha256"):
         expected = manifest.get(identity)
-        if expected is not None and envelope.get(identity) != expected:
+        if not isinstance(expected, str) or len(expected) != 64 or expected.lower() != expected or any(c not in "0123456789abcdef" for c in expected):
+            raise ValueError(f"MMMU canonical custody requires {identity}")
+        if envelope.get(identity) != expected:
             raise ValueError(f"MMMU {identity} is not bound by frozen custody")
 
 

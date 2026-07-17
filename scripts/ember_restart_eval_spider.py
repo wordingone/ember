@@ -121,7 +121,16 @@ def spider_protocol_sha256(manifest: dict[str, object], expected: dict[str, str]
     adapter_source = (Path(__file__).resolve().parents[1] / adapter["path"]).resolve()
     if not adapter_source.is_file() or hashlib.sha256(adapter_source.read_bytes()).hexdigest() != adapter_sha:
         raise ValueError("Spider scoring adapter bytes do not match frozen custody")
-    material = ":".join(["spider", str(manifest.get("benchmark_version", "")), str(gold_identity), str(tables_identity), str(database_identity), evaluator_sha, source_identity, license_sha, str(manifest.get("upstream_tree_git_sha1", "")), str(manifest.get("admission", "")), adapter_sha])
+    checkpoint_sha = manifest.get("checkpoint_manifest_sha256")
+    config_sha = manifest.get("model_config_sha256")
+    if expected is None:
+        if not isinstance(checkpoint_sha, str) or len(checkpoint_sha) != 64 or checkpoint_sha.lower() != checkpoint_sha or any(c not in "0123456789abcdef" for c in checkpoint_sha):
+            raise ValueError("Spider protocol custody requires checkpoint_manifest_sha256")
+        if not isinstance(config_sha, str) or len(config_sha) != 64 or config_sha.lower() != config_sha or any(c not in "0123456789abcdef" for c in config_sha):
+            raise ValueError("Spider protocol custody requires model_config_sha256")
+    checkpoint_sha = checkpoint_sha if isinstance(checkpoint_sha, str) else ""
+    config_sha = config_sha if isinstance(config_sha, str) else ""
+    material = ":".join(["spider", str(manifest.get("benchmark_version", "")), str(gold_identity), str(tables_identity), str(database_identity), evaluator_sha, source_identity, license_sha, str(manifest.get("upstream_tree_git_sha1", "")), str(manifest.get("admission", "")), adapter_sha, checkpoint_sha, config_sha])
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
@@ -135,6 +144,13 @@ def snapshot_spider_inputs(source: Path, gold: Path, tables: Path, database: Pat
     shutil.copy2(tables, staged_tables)
     shutil.copytree(database, staged_database)
     return staged_source, staged_gold, staged_tables, staged_database
+
+def require_canonical_identity(manifest: dict[str, object]) -> None:
+    for identity in ("checkpoint_manifest_sha256", "model_config_sha256"):
+        value = manifest.get(identity)
+        if not isinstance(value, str) or len(value) != 64 or value.lower() != value or any(c not in "0123456789abcdef" for c in value):
+            raise ValueError(f"Spider canonical custody requires {identity}")
+
 
 def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, database: Path, include_protocol: bool = False) -> str:
     try:
@@ -150,6 +166,7 @@ def verify_frozen_custody(path: Path, source: Path, gold: Path, tables: Path, da
     if include_protocol:
         if manifest.get("schema_version") != "ember-restart-benchmark-custody-v1":
             raise ValueError("canonical Spider scoring requires the strict custody schema")
+        require_canonical_identity(manifest)
         if not isinstance(protocol, str) or len(protocol) != 64 or protocol.lower() != protocol or any(character not in "0123456789abcdef" for character in protocol):
             raise ValueError("frozen Spider custody manifest requires protocol_sha256 for canonical scoring")
         if protocol != spider_protocol_sha256(manifest, expected):
