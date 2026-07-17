@@ -111,7 +111,7 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_browsergym.py",
       "custody_path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-      "custody_sha256": "e66ed27c7d659332ab2f1680552a293313067c66fe13015db9a2fa31be062a03"
+      "custody_sha256": "71518c24895ac982b34d9d3502b946b1166af0addd514a929b78b895a3f44169"
     },
     {
       "family": "terminal",
@@ -135,7 +135,7 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_bfcl_static.py",
       "custody_path": "manifests/ember-restart-eval-browser-tool-custody-v1.json",
-      "custody_sha256": "e66ed27c7d659332ab2f1680552a293313067c66fe13015db9a2fa31be062a03"
+      "custody_sha256": "71518c24895ac982b34d9d3502b946b1166af0addd514a929b78b895a3f44169"
     }
   ],
   "comparators": [
