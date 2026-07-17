@@ -22,6 +22,6 @@
         "path": "scripts/ember_restart_eval_spider.py",
         "sha256": "22b44ed9da2781bffdd2c98ae42b5d1c664a6ec0e82d6c2aecb50de6b3ce6ac0"
     },
-    "protocol_sha256": "e206ad9ede91f6340b8b111559768ebe23f00667a10b434ef3a9d771e3e7f804",
+    "protocol_sha256": "8714810d6b98072a810c544badb85c0ebbb42c0316b9e39ed66c6876634a4ef0",
     "protocol_derivation": "sha256(canonical benchmark/version/split/license/scoring-adapter/no-database identity)"
 }
