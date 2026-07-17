@@ -63,7 +63,7 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_evalplus_adapter.py",
       "custody_path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-      "custody_sha256": "69d65e8afbe8811910efa8d3d515683e4d23301892148d401928258d41085812"
+      "custody_sha256": "eb948e7a7a61306abf2d434ec479d581a6beb70df0b2ec9235e639fca6fcea15"
     },
     {
       "family": "mathematics",
@@ -75,7 +75,7 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_math_exact.py",
       "custody_path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-      "custody_sha256": "69d65e8afbe8811910efa8d3d515683e4d23301892148d401928258d41085812"
+      "custody_sha256": "eb948e7a7a61306abf2d434ec479d581a6beb70df0b2ec9235e639fca6fcea15"
     },
     {
       "family": "sql",
