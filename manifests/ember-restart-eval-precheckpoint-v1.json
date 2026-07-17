@@ -142,7 +142,7 @@
         },
         "image": {
             "path": "manifests/ember-restart-mmmu-validation-custody-v1.json",
-            "sha256": "5dc7ac2681a7e45067f3cdc7f4598d1e0fadeb4ba13dbe699ad084c89958f6f0"
+            "sha256": "e428a9b4511436783ad5cad9dc6f3ecdd9d215077292e7c67d5acb0a9b934011"
         },
         "audio": {
             "path": "manifests/ember-restart-audiobench-custody-v1.json",
