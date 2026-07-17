@@ -3,7 +3,7 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02C",
   "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
-  "evaluator_commit": "254b4cd7b137962be558b1c7fea657fe9ea9552b",
+  "evaluator_commit": "f5035fc2a9a1ccb66ab550273c454c52ac5fdc60",
   "benchmarks": [
     {
       "family": "text",
@@ -63,19 +63,19 @@
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_evalplus_adapter.py",
       "custody_path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-      "custody_sha256": "80a0c4bcf8b87bf68abc2c2bf814bed90e437859399c2683fd5a864187130f7a"
+      "custody_sha256": "69d65e8afbe8811910efa8d3d515683e4d23301892148d401928258d41085812"
     },
     {
       "family": "mathematics",
       "benchmark_id": "math-500",
       "benchmark_version": "2cd6fe926f1203a15d19f73c9a329cbe62b806fd",
       "split_sha256": "35dc41080a3680858b27fa7e0533d2d547825316fc5dafe5d316f4ccc5a06132",
-      "protocol_sha256": "819ceca6edbd1713eeda56fbc959b28b03ea5ef58f7ee79e272d7e88b09afad0",
+      "protocol_sha256": "25ca39a4dca98509f166ee921e5f2883569bdcec046018e2a61411653c72188c",
       "command_sha256": "09591d6a97e9566fcc64453f2a5126cce35cd0fd0fc4cbfa51c18e0f967d4b61",
       "result": "PREFLIGHT_ONLY",
       "command_path": "scripts/ember_restart_eval_math_exact.py",
       "custody_path": "manifests/ember-restart-eval-code-math-custody-v1.json",
-      "custody_sha256": "80a0c4bcf8b87bf68abc2c2bf814bed90e437859399c2683fd5a864187130f7a"
+      "custody_sha256": "69d65e8afbe8811910efa8d3d515683e4d23301892148d401928258d41085812"
     },
     {
       "family": "sql",
