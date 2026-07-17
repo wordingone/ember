@@ -121,3 +121,16 @@ def test_freezer_emits_source_and_adapter_derived_protocol_identity():
         assert frozen['source_commit']==custody['source_commit'] and frozen['source_tree']==custody['source_tree']
         assert frozen['scoring_adapter_sha256']==hashlib.sha256((Path(__file__).resolve().parents[1]/'scripts'/'ember_restart_eval_terminal_bench.py').read_bytes()).hexdigest()
         assert frozen['protocol_sha256']
+
+def test_freezer_refuses_stale_custody_protocol(monkeypatch, tmp_path):
+    spec = importlib.util.spec_from_file_location("terminal_freeze_protocol", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    custody = json.loads((SCRIPT.parents[1] / "manifests" / "ember-restart-terminal-bench-custody-v1.json").read_text(encoding="utf-8"))
+    custody["protocol_sha256"] = "0" * 64
+    path = tmp_path / "custody.json"
+    path.write_text(json.dumps(custody), encoding="utf-8")
+    monkeypatch.setattr(module, "CUSTODY", path)
+    with pytest.raises(ValueError, match="protocol"):
+        module._custody_identity()

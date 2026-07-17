@@ -35,7 +35,10 @@ def _custody_identity() -> dict[str, object]:
     adapter_sha = hashlib.sha256(SCORER.read_bytes()).hexdigest()
     if custody.get('benchmark_id') != 'terminal-bench' or custody.get('benchmark_version') != '2.0' or not isinstance(custody.get('source_commit'), str) or not isinstance(custody.get('source_tree'), str) or not isinstance(custody.get('license_sha256'), str) or adapter.get('path') != 'scripts/ember_restart_eval_terminal_bench.py' or adapter.get('sha256') != adapter_sha:
         raise ValueError('Terminal-Bench custody identity does not match current scorer')
-    return {'benchmark_id': 'terminal-bench', 'benchmark_version': '2.0', 'source_commit': custody['source_commit'], 'source_tree': custody['source_tree'], 'license_sha256': custody['license_sha256'], 'scoring_adapter_path': adapter['path'], 'scoring_adapter_sha256': adapter_sha}
+    identity = {'benchmark_id': 'terminal-bench', 'benchmark_version': '2.0', 'source_commit': custody['source_commit'], 'source_tree': custody['source_tree'], 'license_sha256': custody['license_sha256'], 'scoring_adapter_path': adapter['path'], 'scoring_adapter_sha256': adapter_sha}
+    if custody.get('protocol_sha256') != _protocol_sha256(identity):
+        raise ValueError('Terminal-Bench custody protocol identity is stale or substituted')
+    return identity
 
 
 def _sha256(path: Path) -> str:
