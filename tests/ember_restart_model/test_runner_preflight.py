@@ -361,6 +361,11 @@ class RunnerPreflightTests(unittest.TestCase):
     ) -> tuple[dict[str, object], dict[str, object], MagicMock]:
         model = SimpleNamespace(active_expert="reasoning")
         model.train = lambda: None
+        model.activation_calls = []
+        def activate(expert: str) -> None:
+            model.active_expert = expert
+            model.activation_calls.append(expert)
+        model._activate_expert = activate
         model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
         optimizer = SimpleNamespace(param_groups=[{"lr": 1e-5}])
         counts = {"unique_parameters": 3_839_161_856, "active_parameters": 1_725_232_640}
@@ -400,8 +405,16 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
             stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path, **_kwargs: path))
             stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", return_value=model))
-            stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", return_value=counts))
-            stack.enter_context(patch.object(run_vertical_slice, "build_production_optimizer", return_value=optimizer))
+            def measure(_model: object) -> dict[str, int]:
+                if specialist:
+                    segment_kwargs["count_active_expert"] = model.active_expert
+                return counts
+            def build(_model: object, **_kwargs: object) -> object:
+                if specialist:
+                    segment_kwargs["optimizer_active_expert"] = model.active_expert
+                return optimizer
+            stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", side_effect=measure))
+            stack.enter_context(patch.object(run_vertical_slice, "build_production_optimizer", side_effect=build))
             stack.enter_context(patch.object(run_vertical_slice, "_rng_state_hash", return_value={"cpu": "c" * 64, "cuda": "d" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "_rng_state", return_value={"cpu": torch.tensor([1]), "cuda": torch.tensor([2])}))
             stack.enter_context(patch.object(run_vertical_slice, "run_pretraining_segment", side_effect=segment))
@@ -419,13 +432,29 @@ class RunnerPreflightTests(unittest.TestCase):
             result = run_vertical_slice.run(
                 seed=84, artifact_root=Path("B:/vertical-artifacts"), resume_checkpoint=parent,
                 records_override=([{"active_expert": "vision", "token_ids": [index + 1]} for index in range(len(callback_steps or (20,)))] if specialist else None),
-                specialist_verification={"data_manifest_sha256": "a" * 64} if specialist else None,
+                specialist_verification={"capability": "image", "data_manifest_sha256": "a" * 64} if specialist else None,
                 specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest), "execution_slice": {"start_record": 0, "records_sha256": "1" * 64}} if specialist else None,
                 checkpoint_interval=8_192 if specialist else None,
                 write_budget_bytes=100 * 1024**3 if specialist else None,
             )
         return result, segment_kwargs, writer
 
+    def test_verified_specialist_episode_binds_requested_expert_before_setup(self) -> None:
+        verification = {"capability": "image"}
+        self.assertEqual(
+            run_vertical_slice.verified_specialist_episode_expert(
+                [{"active_expert": "vision"}], verification,
+            ),
+            "vision",
+        )
+        with self.assertRaisesRegex(ValueError, "verified image episode must route to vision"):
+            run_vertical_slice.verified_specialist_episode_expert(
+                [{"active_expert": "reasoning"}], verification,
+            )
+    def test_verified_specialist_expert_is_active_before_counts_and_optimizer(self) -> None:
+        _result, segment_kwargs, _writer = self._run_vertical_resume_with_mocks(specialist=True)
+        self.assertEqual(segment_kwargs["count_active_expert"], "vision")
+        self.assertEqual(segment_kwargs["optimizer_active_expert"], "vision")
     def test_vertical_resume_preserves_owned_cursor_but_resets_only_specialist_cursor(self) -> None:
         _ordinary_result, ordinary_kwargs, ordinary_writer = self._run_vertical_resume_with_mocks(specialist=False)
         _specialist_result, specialist_kwargs, specialist_writer = self._run_vertical_resume_with_mocks(specialist=True)

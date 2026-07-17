@@ -529,11 +529,18 @@ def write_checkpoint_artifacts(
     max_serialized_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
     pre_publish_verifier: Callable[[Path, dict[str, Any]], None] | None = None,
+    test_only_allow_unverified: bool = False,
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
     if max_serialized_bytes is not None and (type(max_serialized_bytes) is not int or max_serialized_bytes < 1):
         raise ValueError("max_serialized_bytes must be a positive integer")
+    if type(test_only_allow_unverified) is not bool:
+        raise ValueError("test_only_allow_unverified must be a boolean")
+    if test_only_allow_unverified and pre_publish_verifier is not None:
+        raise ValueError("test-only verifier opt-out cannot accompany a real verifier")
+    if pre_publish_verifier is None and not test_only_allow_unverified:
+        raise ValueError("pre-publish verifier is required unless test_only_allow_unverified is explicit")
     _validate_replay_bindings(
         launch_seed=launch_seed,
         rng_state=rng_state,
