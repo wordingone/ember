@@ -50,6 +50,9 @@ def _verification(capability: str = "image") -> dict[str, object]:
         "source_manifest_sha256": "d" * 64,
         "records_artifact_sha256": "e" * 64,
         "semantic_checks": {"image": ["token_roundtrip", "source_target_pair", "raw_image_text_pair"], "audio": ["token_roundtrip", "source_target_pair", "raw_audio_text_pair"], "reasoning": ["token_roundtrip", "source_target_pair", "local_answer_execution"], "tool": ["token_roundtrip", "source_target_pair", "typed_tool_execution"]}[capability],
+        "admission": "ADMISSIBLE_SEMANTIC_CONTRACT",
+        "semantic_model_contract_sha256": "f" * 64,
+        "runtime_semantic_model_contract_sha256": "f" * 64,
     }
 
 
@@ -95,7 +98,7 @@ class SpecialistLineageTests(unittest.TestCase):
         candidate._activate_expert("vision")
         return parent, manifest_path, candidate, optimizer
 
-    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None, max_serialized_bytes: int | None = None) -> dict[str, object]:
+    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None, max_serialized_bytes: int | None = None, verification: dict[str, object] | None = None) -> dict[str, object]:
         parent, default_manifest, candidate, optimizer = self._root_and_candidate(base)
         parent_manifest = parent_manifest or default_manifest
         root_manifest = root_manifest or default_manifest
@@ -109,7 +112,7 @@ class SpecialistLineageTests(unittest.TestCase):
                 "parent_manifest": parent_manifest,
                 "root_manifest": root_manifest,
                 "trained_expert_ids": trained if trained is not None else ["vision"],
-                "data_verification_receipt": _verification(),
+                "data_verification_receipt": _verification() if verification is None else verification,
                 "execution_slice": _execution_slice(),
             },
             max_serialized_bytes=max_serialized_bytes,
@@ -132,6 +135,27 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertNotIn("parent_manifest", json.dumps(receipt))
         self.assertNotIn("root_manifest", json.dumps(receipt))
         self.assertEqual(parent["active_expert_ids"], ["shared"])
+
+    def test_specialist_successor_rejects_semantic_admission_or_runtime_contract_drift(self) -> None:
+        for name, mutate, expected in [
+            (
+                "admission",
+                lambda receipt: receipt.update(admission="NON_ADMISSIBLE_LEGACY"),
+                "lacks semantic-contract admission",
+            ),
+            (
+                "runtime-contract",
+                lambda receipt: receipt.update(runtime_semantic_model_contract_sha256="0" * 64),
+                "semantic contract differs from runtime",
+            ),
+        ]:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                verification = _verification()
+                mutate(verification)
+                with self.assertRaisesRegex(ValueError, expected):
+                    self._write_vision_successor(
+                        Path(directory), verification=verification
+                    )
 
     def test_first_successor_rejects_unreceipted_shared_v3_continuation(self) -> None:
         """Equal specialist bytes cannot launder an arbitrary shared-core v3 mutation."""
