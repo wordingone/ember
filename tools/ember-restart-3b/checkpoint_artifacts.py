@@ -25,6 +25,24 @@ from parameter_counter import measure_parameter_counts
 _STAGING_LEASE = ".writer-lease.json"
 _FAILURE_EVIDENCE_LIMIT = 64 * 1024
 _STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
+SPECIALIST_VERIFICATION_FIELDS = {
+    "schema_version",
+    "result",
+    "capability",
+    "data_manifest_sha256",
+    "tokenizer_sha256",
+    "verifier_sha256",
+    "data_class",
+    "record_count",
+    "token_count",
+    "source_manifest_sha256",
+    "records_artifact_sha256",
+    "semantic_checks",
+    "generator_replay_verified",
+    "admission",
+    "semantic_model_contract_sha256",
+    "runtime_semantic_model_contract_sha256",
+}
 
 
 def _sha256(path: Path) -> str:
@@ -461,9 +479,8 @@ def _specialist_lineage(
         if name not in trained and candidate_parameter_sha256[name] != root_parameters[name]:
             raise ValueError(f"not-yet-trained expert must remain equal to root genesis: {name}")
     verification = lineage["data_verification_receipt"]
-    verification_fields = {"schema_version", "result", "capability", "data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "data_class", "record_count", "token_count", "source_manifest_sha256", "records_artifact_sha256", "semantic_checks", "generator_replay_verified", "admission", "semantic_model_contract_sha256", "runtime_semantic_model_contract_sha256"}
     capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
-    if not isinstance(verification, Mapping) or set(verification) != verification_fields:
+    if not isinstance(verification, Mapping) or set(verification) != SPECIALIST_VERIFICATION_FIELDS:
         raise ValueError("specialist lineage requires the exact executed data verification receipt")
     if verification.get("schema_version") != "ember-training-data-verification-v1" or verification.get("result") != "VERIFIED" or verification.get("data_class") != "SEMANTIC_PRETRAINING" or verification.get("generator_replay_verified") is not True:
         raise ValueError("specialist lineage data verification was not replay-verified")
