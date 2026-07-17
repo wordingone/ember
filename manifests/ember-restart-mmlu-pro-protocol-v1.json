@@ -10,7 +10,7 @@
     "result": "PREFLIGHT_ONLY",
     "scoring_adapter": {
         "path": "scripts/ember_restart_eval_mmlu_pro_score.py",
-        "sha256": "c6d19c0e6734279b188a4179a39835a50683a267040ec2c37f6f0dbd54da1062",
+        "sha256": "3c8b91f03745800d16662a99b807315aaa0af07cbfa58a50b3d2f514e132ec9b",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
     "prohibited_claims": [
@@ -21,12 +21,12 @@
     "benchmark_version": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
     "references_sha256": "0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
     "strict_protocol_required": true,
-    "scoring_adapter_sha256": "c6d19c0e6734279b188a4179a39835a50683a267040ec2c37f6f0dbd54da1062",
+    "scoring_adapter_sha256": "3c8b91f03745800d16662a99b807315aaa0af07cbfa58a50b3d2f514e132ec9b",
     "protocol_derivation": "mmlu-pro:{benchmark_version}:{references_sha256}:{license_sha256}:{scoring_adapter_sha256}",
     "protocol_status": "FROZEN_LICENSE_CARD_BOUND",
     "custody_manifest_path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
-    "custody_manifest_sha256": "287863224d79852d7b6bbc367c8c8b1f04de39b7e481ca634ad53a8f9add1d5a",
+    "custody_manifest_sha256": "04cb92a53fb40a6673c3b7a32a57a979382f86d2702e1442e37691e4d3414217",
     "license_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
     "license_card_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
-    "protocol_sha256": "a6b74d5427d3051a383f1568f3d111aeb0e9950f543f65ea7c8a8330dafc3949"
+    "protocol_sha256": "c94a4ff384fc26fcc29333ee1711c2b4a1b8ee585502d66e79abc4b335a4a626"
 }

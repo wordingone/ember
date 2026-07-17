@@ -3,67 +3,122 @@
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Score canonical MMLU-Pro label predictions against frozen parquet bytes."""
-import argparse, hashlib, json, os, tempfile
+import argparse
+import hashlib
+import json
+import os
+import re
+import tempfile
 from pathlib import Path
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 from ember_restart.prediction_contract import ContractError, validate_predictions
 
-def sha256(data: bytes) -> str:return hashlib.sha256(data).hexdigest()
+HASH = re.compile(r"[0-9a-f]{64}")
+STRICT_CHECKPOINT_SCHEMA = "ember-restart-mmlu-pro-freeze-v2"
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
 
 def protocol_sha256(manifest: dict, adapter_sha256: str) -> str:
-    if not isinstance(adapter_sha256, str) or len(adapter_sha256) != 64 or adapter_sha256.lower() != adapter_sha256 or any(c not in "0123456789abcdef" for c in adapter_sha256):
-        raise ValueError("MMLU-Pro scorer identity must be a lowercase SHA-256")
     license_sha256 = manifest.get("license_sha256")
     reference_sha256 = manifest.get("references_sha256")
     version = manifest.get("benchmark_version")
-    if not isinstance(license_sha256, str) or len(license_sha256) != 64 or license_sha256.lower() != license_sha256 or any(c not in "0123456789abcdef" for c in license_sha256) or not isinstance(reference_sha256, str) or len(reference_sha256) != 64 or not isinstance(version, str):
+    if not isinstance(license_sha256, str) or not HASH.fullmatch(license_sha256) or not isinstance(reference_sha256, str) or not HASH.fullmatch(reference_sha256) or not isinstance(version, str):
         raise ValueError("MMLU-Pro custody lacks license, reference, or version identity")
     return sha256(f"mmlu-pro:{version}:{reference_sha256}:{license_sha256}:{adapter_sha256}".encode())
 
+
 def expected_answers(data: bytes) -> dict[str, str]:
- try:rows=pq.read_table(pa.BufferReader(data),columns=['question_id','options','answer','answer_index']).to_pylist()
- except pa.ArrowException as error:raise ValueError('frozen MMLU-Pro references must be parquet') from error
- answers={}
- for row in rows:
-  identifier=str(row.get('question_id')) if isinstance(row,dict) and isinstance(row.get('question_id'),int) and not isinstance(row.get('question_id'),bool) else None; options=row.get('options') if isinstance(row,dict) else None; answer=row.get('answer') if isinstance(row,dict) else None; index=row.get('answer_index') if isinstance(row,dict) else None
-  if not isinstance(identifier,str) or identifier in answers or not isinstance(options,list) or not options or any(not isinstance(option,str) or not option for option in options) or not isinstance(index,int) or isinstance(index,bool) or not 0<=index<len(options) or not isinstance(answer,str) or answer!=chr(ord('A')+index):raise ValueError('frozen MMLU-Pro references require unique ids and matching answer indexes')
-  answers[identifier]=answer
- if not answers:raise ValueError('frozen MMLU-Pro references must be non-empty')
- return answers
+    try:
+        values = pq.read_table(pa.BufferReader(data), columns=["question_id", "options", "answer", "answer_index"]).to_pylist()
+    except pa.ArrowException as error:
+        raise ValueError("frozen MMLU-Pro references must be parquet") from error
+    answers = {}
+    for row in values:
+        identifier = str(row.get("question_id")) if isinstance(row, dict) and isinstance(row.get("question_id"), int) and not isinstance(row.get("question_id"), bool) else None
+        options = row.get("options") if isinstance(row, dict) else None
+        answer = row.get("answer") if isinstance(row, dict) else None
+        index = row.get("answer_index") if isinstance(row, dict) else None
+        if not isinstance(identifier, str) or identifier in answers or not isinstance(options, list) or not options or any(not isinstance(option, str) or not option for option in options) or not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(options) or not isinstance(answer, str) or answer != chr(ord("A") + index):
+            raise ValueError("frozen MMLU-Pro references require unique ids and matching answer indexes")
+        answers[identifier] = answer
+    if not answers:
+        raise ValueError("frozen MMLU-Pro references must be non-empty")
+    return answers
 
-def predicted_answers(data: bytes) -> tuple[dict,dict[str,str]]:
- try:envelope=validate_predictions(json.loads(data.decode('utf-8')))
- except (ContractError,UnicodeDecodeError,json.JSONDecodeError) as error:raise ValueError('canonical checkpoint predictions are required') from error
- rows={}
- for row in envelope['rows']:
-  output=row['output']
-  if output.get('kind')!='text' or not isinstance(output.get('text'),str) or row['id'] in rows:raise ValueError('canonical MMLU-Pro predictions require unique text outputs')
-  rows[row['id']]=output['text'].strip()
- if not rows:raise ValueError('canonical MMLU-Pro predictions must be non-empty')
- return envelope,rows
 
-def atomic_write(path:Path,payload:dict)->None:
- path.parent.mkdir(parents=True,exist_ok=True)
- with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=path.parent,delete=False) as handle:handle.write(json.dumps(payload,sort_keys=True)+'\n');temporary=Path(handle.name)
- try:os.replace(temporary,path)
- finally:temporary.unlink(missing_ok=True)
+def predicted_answers(data: bytes) -> tuple[dict, dict[str, str]]:
+    try:
+        envelope = validate_predictions(json.loads(data.decode("utf-8")))
+    except (ContractError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("canonical checkpoint predictions are required") from error
+    rows = {}
+    for row in envelope["rows"]:
+        output = row["output"]
+        if output.get("kind") != "text" or not isinstance(output.get("text"), str) or row["id"] in rows:
+            raise ValueError("canonical MMLU-Pro predictions require unique text outputs")
+        rows[row["id"]] = output["text"].strip()
+    if not rows:
+        raise ValueError("canonical MMLU-Pro predictions must be non-empty")
+    return envelope, rows
 
-def main()->int:
- parser=argparse.ArgumentParser();parser.add_argument('--frozen-manifest',required=True,type=Path);parser.add_argument('--references',required=True,type=Path);parser.add_argument('--predictions',required=True,type=Path);parser.add_argument('--score-output',required=True,type=Path);args=parser.parse_args()
- if args.score_output.exists():parser.error('score output must not pre-exist')
- try:
-  manifest_bytes=args.frozen_manifest.read_bytes();reference_bytes=args.references.read_bytes();prediction_bytes=args.predictions.read_bytes();manifest=json.loads(manifest_bytes.decode('utf-8'));references=expected_answers(reference_bytes);envelope,predictions=predicted_answers(prediction_bytes);benchmark=envelope['benchmark']
-  fields={'id':'benchmark_id','version':'benchmark_version','split_sha256':'split_sha256','protocol_sha256':'protocol_sha256'}
-  if not isinstance(manifest,dict) or manifest.get('result')!='PREFLIGHT_ONLY' or manifest.get('benchmark_id')!='mmlu-pro' or manifest.get('capability')!='reasoning' or manifest.get('references_sha256')!=sha256(reference_bytes) or manifest.get('split_sha256')!=sha256(reference_bytes) or manifest.get('task_count')!=len(references) or any(benchmark.get(field)!=manifest.get(manifest_field) for field,manifest_field in fields.items()):raise ValueError('frozen MMLU-Pro manifest does not bind canonical prediction identity')
-  strict_manifest=manifest.get('schema_version')=='ember-restart-mmlu-pro-freeze-v1' or 'scoring_adapter_sha256' in manifest
-  if strict_manifest:
-   adapter_sha256=manifest.get('scoring_adapter_sha256')
-   if not isinstance(adapter_sha256,str) or len(adapter_sha256)!=64 or adapter_sha256.lower()!=adapter_sha256 or any(c not in '0123456789abcdef' for c in adapter_sha256) or sha256(Path(__file__).read_bytes())!=adapter_sha256:raise ValueError('MMLU-Pro strict custody requires exact scorer identity')
-   if manifest.get('scoring_adapter_path')!='scripts/ember_restart_eval_mmlu_pro_score.py':raise ValueError('MMLU-Pro scorer path is not the pinned adapter')
-   if manifest.get('protocol_sha256')!=protocol_sha256(manifest, adapter_sha256):raise ValueError('MMLU-Pro protocol is not derived from scorer custody')
-  if set(references)!=set(predictions):raise ValueError('canonical MMLU-Pro predictions must exactly cover frozen reference ids')
- except (OSError,UnicodeDecodeError,ValueError,json.JSONDecodeError,pa.ArrowException) as error:parser.error(f'invalid MMLU-Pro scorer inputs: {error}')
- atomic_write(args.score_output,{'result':'PREFLIGHT_ONLY','claim_status':'NON_ADMISSIBLE_FROZEN_MMLU_PRO_SCORER','criterion_id':'ember-3b-reasoning-capability-v1','criterion_result':'FAILED','metrics':{'accuracy':sum(predictions[key]==answer for key,answer in references.items())/len(references)},'sample_count':len(references),'checkpoint_manifest_sha256':envelope['checkpoint_manifest_sha256'],'model_config_sha256':envelope['model_config_sha256'],'references_sha256':sha256(reference_bytes),'predictions_sha256':sha256(prediction_bytes),'frozen_manifest_sha256':sha256(manifest_bytes),'upstream':'deterministic frozen MMLU-Pro exact-label scorer'})
- return 0
-if __name__=='__main__':raise SystemExit(main())
+
+def atomic_write(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        temporary = Path(handle.name)
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--frozen-manifest", required=True, type=Path)
+    parser.add_argument("--references", required=True, type=Path)
+    parser.add_argument("--predictions", required=True, type=Path)
+    parser.add_argument("--score-output", required=True, type=Path)
+    args = parser.parse_args()
+    if args.score_output.exists():
+        parser.error("score output must not pre-exist")
+    try:
+        manifest_bytes = args.frozen_manifest.read_bytes()
+        reference_bytes = args.references.read_bytes()
+        prediction_bytes = args.predictions.read_bytes()
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+        references = expected_answers(reference_bytes)
+        envelope, predictions = predicted_answers(prediction_bytes)
+        benchmark = envelope["benchmark"]
+        fields = {"id": "benchmark_id", "version": "benchmark_version", "split_sha256": "split_sha256", "protocol_sha256": "protocol_sha256"}
+        if not isinstance(manifest, dict) or manifest.get("result") != "PREFLIGHT_ONLY" or manifest.get("benchmark_id") != "mmlu-pro" or manifest.get("capability") != "reasoning" or manifest.get("references_sha256") != sha256(reference_bytes) or manifest.get("split_sha256") != sha256(reference_bytes) or manifest.get("task_count") != len(references) or any(benchmark.get(field) != manifest.get(manifest_field) for field, manifest_field in fields.items()):
+            raise ValueError("frozen MMLU-Pro manifest does not bind canonical prediction identity")
+        strict_checkpoint = manifest.get("schema_version") == STRICT_CHECKPOINT_SCHEMA or any(field in manifest for field in ("checkpoint_manifest_sha256", "model_config_sha256"))
+        if strict_checkpoint:
+            for field in ("checkpoint_manifest_sha256", "model_config_sha256"):
+                if not isinstance(manifest.get(field), str) or not HASH.fullmatch(manifest[field]) or envelope.get(field) != manifest[field]:
+                    raise ValueError("MMLU-Pro strict custody does not bind canonical checkpoint/config identity")
+        strict_manifest = manifest.get("schema_version") == "ember-restart-mmlu-pro-freeze-v1" or "scoring_adapter_sha256" in manifest
+        if strict_manifest:
+            adapter_sha256 = manifest.get("scoring_adapter_sha256")
+            if not isinstance(adapter_sha256, str) or not HASH.fullmatch(adapter_sha256) or sha256(Path(__file__).read_bytes()) != adapter_sha256:
+                raise ValueError("MMLU-Pro strict custody requires exact scorer identity")
+            if manifest.get("scoring_adapter_path") != "scripts/ember_restart_eval_mmlu_pro_score.py":
+                raise ValueError("MMLU-Pro scorer path is not the pinned adapter")
+            if manifest.get("protocol_sha256") != protocol_sha256(manifest, adapter_sha256):
+                raise ValueError("MMLU-Pro protocol is not derived from scorer custody")
+        if set(references) != set(predictions):
+            raise ValueError("canonical MMLU-Pro predictions must exactly cover frozen reference ids")
+    except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError, pa.ArrowException) as error:
+        parser.error(f"invalid MMLU-Pro scorer inputs: {error}")
+    atomic_write(args.score_output, {"result": "PREFLIGHT_ONLY", "claim_status": "NON_ADMISSIBLE_FROZEN_MMLU_PRO_SCORER", "criterion_id": "ember-3b-reasoning-capability-v1", "criterion_result": "FAILED", "metrics": {"accuracy": sum(predictions[key] == answer for key, answer in references.items()) / len(references)}, "sample_count": len(references), "benchmark_id": benchmark["id"], "benchmark_version": benchmark["version"], "split_sha256": benchmark["split_sha256"], "protocol_sha256": benchmark["protocol_sha256"], "checkpoint_manifest_sha256": envelope["checkpoint_manifest_sha256"], "model_config_sha256": envelope["model_config_sha256"], "references_sha256": sha256(reference_bytes), "predictions_sha256": sha256(prediction_bytes), "frozen_manifest_sha256": sha256(manifest_bytes), "upstream": "deterministic frozen MMLU-Pro exact-label scorer"})
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
