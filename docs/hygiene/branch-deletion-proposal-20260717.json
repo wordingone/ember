@@ -1,6 +1,6 @@
 {
   "schema_version": "ember-branch-deletion-proposal-v1",
-  "result": "NO_SAFE_CANDIDATE",
+  "result": "NO_SAFE_CANDIDATE_IN_SCREENED_SET",
   "generated_at": "2026-07-17T16:31:00Z",
   "public_master_sha256": "f919b116066106fc91a7d86feff39eecc70e14d0",
   "snapshot_scope": "Census captured before publication of this hygiene PR; the later self-branch and PR are explicitly excluded from deletion candidates.",
@@ -12,7 +12,9 @@
     "open_pull_requests": 13,
     "root_markdown_files": 8
   },
-  "candidate_count": 0,
+  "candidate_count": 0,  "screened_branch_count": 3,
+  "screening_scope": "Bounded first-pass near-miss screen; zero deletion proposals are authorized from this set, and remaining refs require a later exhaustive owner-reviewed census.",
+
   "candidates": [],
   "screened_examples": [
     {
