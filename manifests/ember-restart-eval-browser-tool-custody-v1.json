@@ -67,7 +67,7 @@
     "scoring_adapters": [
         {
             "path": "scripts/ember_restart_eval_browsergym.py",
-            "sha256": "ae5cd0693cdf59e61bee0f8badb0432f078f0b2d5675aa5352814f8d61e28e1b",
+            "sha256": "cd7e484aaab1e1a412b6bbf556c03b0af3bb6ff5c8cc2049c8802089e86b86c3",
             "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"
         },
         {
