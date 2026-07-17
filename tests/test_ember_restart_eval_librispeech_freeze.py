@@ -61,3 +61,18 @@ def test_librispeech_freeze_replace_failure_cleans_real_cli_temporary_output(mon
  monkeypatch.setattr(sys,'argv',[str(SCRIPT),'--dataset-root',str(tmp_path),'--revision','a'*40,'--protocol-sha256','b'*64,'--output',str(output)]);monkeypatch.setattr(module.os,'replace',lambda *_: (_ for _ in ()).throw(OSError('replace denied')))
  with pytest.raises(OSError,match='replace denied'):module.main()
  assert not output.exists() and not list(tmp_path.glob('frozen.*.tmp'))
+
+def test_librispeech_protocol_identity_is_not_caller_attested():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        (root / "README.md").write_text("---\nlicense: cc-by-4.0\n---\n", encoding="utf-8")
+        split = root / "clean" / "test" / "0000.parquet"
+        split.parent.mkdir(parents=True)
+        pq.write_table(pa.table({"id": ["1-2-3"], "text": ["WORDS"]}), split)
+        protocols = []
+        for supplied in ("a" * 64, "b" * 64):
+            output = root / ("freeze-" + supplied[0] + ".json")
+            result = subprocess.run([sys.executable, str(SCRIPT), "--dataset-root", str(root), "--revision", "71cacbfb7e2354c4226d01e70d77d5fca3d04ba1", "--protocol-sha256", supplied, "--output", str(output)], text=True, capture_output=True, check=False)
+            assert result.returncode == 0, result.stderr
+            protocols.append(json.loads(output.read_text(encoding="utf-8"))["protocol_sha256"])
+        assert protocols[0] == protocols[1]
