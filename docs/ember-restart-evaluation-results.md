@@ -47,7 +47,7 @@ preflight record is not a checkpoint-bound score.
 | Code | HumanEval+ and MBPP+ frozen tasks with EvalPlus adapter self-tests | No pinned code-sandbox runtime or checkpoint predictions |
 | Terminal | Terminal-Bench 2 source pin | `PREFLIGHT_ONLY_NO_ELIGIBLE_OFFLINE_DIGEST_PINNED_TASK`: no digest-pinned, network-disabled task image is eligible |
 | SQL | Spider source/split custody and deterministic scorer pin | No frozen gold/database execution artifact or checkpoint predictions |
-| Files | SWE-bench source custody | No frozen repository execution environment or checkpoint predictions |
+| Files | SWE-bench source custody plus deterministic patch/changed-file fixture adapter | `SELFTEST_ONLY`; no frozen repository execution environment or checkpoint predictions |
 | Browser/UI | BrowserGym/MiniWoB source pin | No local pinned BrowserGym runtime or frozen MiniWoB task bundle |
 | Image | MMMU validation custody and scorer pin | No checkpoint-bound multimodal predictions |
 | Audio | AudioBench custody and bound scorer pin | No checkpoint-bound audio predictions |
