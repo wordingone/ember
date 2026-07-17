@@ -12,7 +12,8 @@
       "split_sha256": "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
       "protocol_sha256": "773e15db1dc4b293adb98ae0db67c8fe8f09b8c08443e1aac3a26f2376dc04a6",
       "command_sha256": "f0b117244346e2d76362a44f46bb59817492366dceb25d0f0a268d6eb82c7eec",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_gsm8k_score.py"
     },
     {
       "family": "image",
@@ -21,7 +22,8 @@
       "split_sha256": "2f1f5ab0e961e8eb3f7082277dc354f0d503f775fb177a385585444ccd5110b4",
       "protocol_sha256": "74cd101e3cabd774d876252e6f26a8e1462564bbba849b3ca9c7f5e76c63dc4a",
       "command_sha256": "1c4d3dad210bfd259394d134a2ed9006c361f9d9c92ec0408d93340b8c091bd3",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_mmmu.py"
     },
     {
       "family": "audio",
@@ -30,7 +32,8 @@
       "split_sha256": "bd91917edb4ef4258624ea242fc4573364f18c8cae99423966002b6871cdcdf3",
       "protocol_sha256": "3128577f5dcccc84b03dd7259d4411b31971e51162a73457fd2b534c14dc1e33",
       "command_sha256": "a02993ea7293d0a5ba55e3000db2bbcbfd90c7d808f5a270906b9ffb15457000",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_audiobench_bound.py"
     },
     {
       "family": "reasoning",
@@ -39,7 +42,8 @@
       "split_sha256": "0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
       "protocol_sha256": "04cb92a53fb40a6673c3b7a32a57a979382f86d2702e1442e37691e4d3414217",
       "command_sha256": "3c8b91f03745800d16662a99b807315aaa0af07cbfa58a50b3d2f514e132ec9b",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_mmlu_pro_score.py"
     },
     {
       "family": "code",
@@ -48,7 +52,8 @@
       "split_sha256": "35dc41080a3680858b27fa7e0533d2d547825316fc5dafe5d316f4ccc5a06132",
       "protocol_sha256": "819ceca6edbd1713eeda56fbc959b28b03ea5ef58f7ee79e272d7e88b09afad0",
       "command_sha256": "64e40b316b123fcddc40a316a0d12573fb343ae362e411e66e8d45dd8178c260",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_evalplus_adapter.py"
     },
     {
       "family": "mathematics",
@@ -57,7 +62,8 @@
       "split_sha256": "35dc41080a3680858b27fa7e0533d2d547825316fc5dafe5d316f4ccc5a06132",
       "protocol_sha256": "819ceca6edbd1713eeda56fbc959b28b03ea5ef58f7ee79e272d7e88b09afad0",
       "command_sha256": "09591d6a97e9566fcc64453f2a5126cce35cd0fd0fc4cbfa51c18e0f967d4b61",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_math_exact.py"
     },
     {
       "family": "sql",
@@ -66,7 +72,8 @@
       "split_sha256": "c3e2a46303899a2d4afe3f6a3a62e59f8d589f241b3cbfb52356479b1f054888",
       "protocol_sha256": "f938dc3308c63e5f125222b6ca6b3b8a2665d5e494040b11bc27701ae4bbad1e",
       "command_sha256": "79add87ff61e2e895e01242a1335a08f0b4083d85045b3773c4baccfed05e7ee",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_spider.py"
     },
     {
       "family": "files",
@@ -75,7 +82,8 @@
       "split_sha256": "2a56f54d6b9f2f424e6a45032f5a619580ffd7065de458b046eb988d3257e752",
       "protocol_sha256": "713f49f4382bead975b4e8e19674142ced799bb14396f8191614b7c81c6b0e2e",
       "command_sha256": "af219c28e54e2fea4cecefeee21e7a2019c49479ea4c19f3f5a73b76af3e8abc",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_swebench_source_audit.py"
     },
     {
       "family": "browser_ui",
@@ -84,7 +92,8 @@
       "split_sha256": "b5397a483dfe48b202c8907622e02276c3a8c33f1009066899cf50c097256aac",
       "protocol_sha256": "571b4aa3e029a975fdfd512b915fdc85c908063d90fc5e72ac8ef7aa06ce05a4",
       "command_sha256": "0f4ac3aaeb2a0db6471fe685a77431e5b86f5edeccdcd34f1051e8d97bdd2e7b",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_browsergym.py"
     },
     {
       "family": "terminal",
@@ -93,7 +102,8 @@
       "split_sha256": "4995eb9978980f0ce0701bdc4ba30a1c02f8738876e04a301e4f23c9e38e8b1f",
       "protocol_sha256": "0ae24775aba588817bd37da1e2d0ec85ebb8d6e0e5ff70addbc09c92f087bbac",
       "command_sha256": "22cdc9ed2ecef10c7f16359cbd4c21ef12cc8170eca6663502ef3f49c70c0b7a",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_terminal_bench.py"
     },
     {
       "family": "structured_tools",
@@ -102,7 +112,8 @@
       "split_sha256": "b5397a483dfe48b202c8907622e02276c3a8c33f1009066899cf50c097256aac",
       "protocol_sha256": "571b4aa3e029a975fdfd512b915fdc85c908063d90fc5e72ac8ef7aa06ce05a4",
       "command_sha256": "7cf52bc73f95fe8aa1cd8b8aecb058c608a742ff0c7f73c3da1698ab19be7864",
-      "result": "PREFLIGHT_ONLY"
+      "result": "PREFLIGHT_ONLY",
+      "command_path": "scripts/ember_restart_eval_bfcl_static.py"
     }
   ],
   "comparators": [
