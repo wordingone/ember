@@ -447,7 +447,9 @@ def _custody_ledger_write_lock(parent: Path) -> object:
     thread_lock.acquire()
     lock_dir = parent / _CUSTODY_LEDGER_LOCK
     owner = lock_dir / "owner.json"
-    deadline = time.monotonic() + 30.0
+    owner_token = uuid.uuid4().hex
+    acquired = False
+    deadline = time.monotonic() + _LEDGER_LOCK_WAIT_SECONDS
     try:
         while True:
             try:
@@ -465,23 +467,27 @@ def _custody_ledger_write_lock(parent: Path) -> object:
                 time.sleep(0.01)
                 continue
             try:
-                owner.write_text(json.dumps({"pid": os.getpid()}, sort_keys=True) + "\n", encoding="utf-8")
+                owner.write_text(json.dumps({"pid": os.getpid(), "token": owner_token}, sort_keys=True) + "\n", encoding="utf-8")
             except BaseException:
                 try:
+                    owner.unlink(missing_ok=True)
                     lock_dir.rmdir()
                 except OSError:
                     pass
                 raise
+            acquired = True
             break
         yield
     finally:
-        try:
-            owner.unlink(missing_ok=True)
-            lock_dir.rmdir()
-        except OSError:
-            pass
+        if acquired:
+            try:
+                payload = json.loads(owner.read_text(encoding="utf-8"))
+                if isinstance(payload, dict) and payload.get("token") == owner_token:
+                    owner.unlink()
+                    lock_dir.rmdir()
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                pass
         thread_lock.release()
-
 def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
     """Read one complete newline-framed ledger snapshot, rejecting torn tails."""
 
@@ -612,6 +618,7 @@ _LEGACY_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
 _CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
 _LEDGER_THREAD_LOCKS: dict[str, threading.Lock] = {}
 _LEDGER_THREAD_LOCKS_GUARD = threading.Lock()
+_LEDGER_LOCK_WAIT_SECONDS = 30.0
 _LEDGER_LOCK_OWNER_GRACE_SECONDS = 1.0
 _EVIDENCE_FILENAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{64}(?:-g[1-9][0-9]*)?\.json")
 _WINDOWS_RESERVED_STEMS = {"aux", "clock$", "con", "nul", "prn", *(f"com{index}" for index in range(1, 10)), *(f"lpt{index}" for index in range(1, 10))}
