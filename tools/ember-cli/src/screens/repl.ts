@@ -121,6 +121,7 @@ import {
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
+import { getAgentEventFeedState, startAgentEventWatch, type AgentEventFeedState } from "../services/agent-event-feed.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -667,6 +668,21 @@ export function ReplScreen({
 
   // Telemetry state (polled every 500ms; deduped by memo key)
   const [telemetry, setTelemetry] = useState<TelemetryState>(() => getState());
+
+  // #485 rung 2: journal-bound choose/act/tool/verify/reply/reasoning-status events.
+  // No configured journal means no agent-stream claim and no synthetic fallback.
+  const [agentEventFeed, setAgentEventFeed] = useState<AgentEventFeedState>(() => getAgentEventFeedState());
+  const agentJournalPath = env["EMBER_AGENT_JOURNAL_PATH"];
+  useEffect(() => {
+    const journalPath = agentJournalPath;
+    if (!journalPath) return;
+    const handle = startAgentEventWatch({ journalPath });
+    return () => handle.stop();
+  }, [agentJournalPath]);
+  useInterval(() => {
+    const next = getAgentEventFeedState();
+    setAgentEventFeed((prev) => prev.events === next.events && prev.channelStatus === next.channelStatus ? prev : { ...next });
+  }, 500);
 
   useEffect(() => {
     const handle = startTelemetryWatch();
@@ -1419,6 +1435,8 @@ export function ReplScreen({
         key: "operator-surface",
         telemetry,
         activityLines: getActivityFeedState().recentLines,
+        agentEvents: agentEventFeed.events,
+        agentChannelStatus: agentEventFeed.channelStatus,
         sourceIdentity: {
           publicCommit: env["EMBER_PUBLIC_SOURCE_COMMIT"],
           binarySha256: env["EMBER_CLI_BINARY_SHA256"],

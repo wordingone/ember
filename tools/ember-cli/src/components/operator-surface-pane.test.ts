@@ -3,6 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, expect, test } from "bun:test";
 import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane } from "./operator-surface-pane.ts";
+import type { AgentJournalEvent } from "../services/agent-event-feed.ts";
 import type { TelemetryState } from "../services/telemetry-watch.ts";
 import type { ActivityFeedLine } from "./activity-feed-pane.ts";
 
@@ -144,6 +145,22 @@ describe("OperatorSurfacePane", () => {
     expect(rows).toContain("checkpoints 2");
     expect(rows).toContain("ACTIVITY/EVENT FEED");
     expect(rows).not.toContain("AGENT STREAM");
+  });
+  test("renders only real journal-bound agent events and labels absence honestly", () => {
+    const agentEvents: AgentJournalEvent[] = [
+      { schemaVersion: "ember-agent-event-v1", ts: "2026-07-17T17:30:01.000Z", runId: "run-a", seq: 1, kind: "choose", payload: { summary: "inspect" } },
+      { schemaVersion: "ember-agent-event-v1", ts: "2026-07-17T17:30:02.000Z", runId: "run-a", seq: 2, kind: "tool", payload: { summary: "read_file" } },
+    ];
+    const element = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], agentEvents, width: 48 });
+    const body = (element as any).props.children;
+    const rows = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string");
+    expect(rows).toContain("AGENT EVENT JOURNAL");
+    expect(rows).toContain("[choose] run-a#1 inspect");
+    expect(rows).toContain("[tool] run-a#2 read_file");
+    expect(rows).not.toContain("synthetic");
+    const empty = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], width: 48 });
+    const emptyRows = ((empty as any).props.children.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string");
+    expect(emptyRows).toContain("agent journal: none observed");
   });
   test("renders a titled right-side pane from the snapshot without inventing data", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], sourceIdentity: undefined, width: 48 });

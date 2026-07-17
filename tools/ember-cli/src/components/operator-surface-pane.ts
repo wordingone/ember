@@ -2,6 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import React from "react";
+import { formatAgentEventLine, selectAgentEventRun, type AgentEventChannelStatus, type AgentJournalEvent } from "../services/agent-event-feed.ts";
 import { Box, Text } from "../ink/components.ts";
 import {
   ACTIVE_RUN_TTL_MS,
@@ -28,6 +29,8 @@ export interface OperatorSurfaceInput {
   sourceIdentity?: OperatorSourceIdentity;
   nowMs?: number;
   maxAgentLines?: number;
+  agentEvents?: AgentJournalEvent[];
+  agentChannelStatus?: AgentEventChannelStatus;
 }
 
 export type OperatorRunStatus = "RUNNING" | "STALE" | "IDLE" | "OFFLINE";
@@ -238,6 +241,7 @@ export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
 
 export function OperatorSurfacePane({ width, ...input }: OperatorSurfacePaneProps): React.ReactElement {
   const snapshot = buildOperatorSurfaceSnapshot(input);
+  const agentEvents = selectAgentEventRun(input.agentEvents ?? [], input.maxAgentLines ?? 6);
   const statusColor = snapshot.status === "RUNNING" ? "green" : snapshot.status === "OFFLINE" ? "red" : "yellow";
   const graphLines = [
     "LOSS HISTORY",
@@ -267,6 +271,10 @@ export function OperatorSurfacePane({ width, ...input }: OperatorSurfacePaneProp
     ...graphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
     React.createElement(Text, { key: "stream-title", color: "magenta", bold: true }, "ACTIVITY/EVENT FEED"),
     ...snapshot.agentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
+    React.createElement(Text, { key: "agent-journal-title", color: "magenta", bold: true }, "AGENT EVENT JOURNAL"),
+    ...(agentEvents.length > 0
+      ? agentEvents.map((event, index) => React.createElement(Text, { key: `journal-${index}`, dimColor: true, wrap: "truncate-end" }, formatAgentEventLine(event)))
+      : [React.createElement(Text, { key: "agent-journal-empty", dimColor: true }, input.agentChannelStatus === "OFFLINE" ? "agent journal: OFFLINE" : "agent journal: none observed")]),
   );
 
   return React.createElement("div", { "data-operator-surface": "right-pane" }, body);
