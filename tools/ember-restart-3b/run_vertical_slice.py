@@ -14,7 +14,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 import tokenizers
 import torch
@@ -810,6 +810,7 @@ def run(
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     config = RestartDecoderConfig.from_contract(config_path)
     memory_contract = load_memory_contract(config_path)
+    episode_expert: str | None = None
     total_parameters = config.structural_parameter_count()
     active_parameters = total_parameters - (len(config.expert_names) - 1) * config.layers * 12 * config.hidden_size * config.hidden_size
     device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
@@ -839,6 +840,7 @@ def run(
         launch_packet = {"input_identity": {"shard_path": "verified-specialist"}}
         input_receipt = specialist_verification
         data_shard_id = "VERIFIED_SPECIALIST:" + str(specialist_verification["data_manifest_sha256"])[:12]
+        episode_expert = verified_specialist_episode_expert(records, specialist_verification)
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
 
@@ -851,6 +853,8 @@ def run(
         model = UnifiedDecoder(config, device="cuda", allow_production_allocation=True, genesis_seed=seed)
     finally:
         torch.set_default_dtype(previous_dtype)
+    if episode_expert is not None:
+        model._activate_expert(episode_expert)
     genesis_hashes = model.expert_bank_genesis_hashes()
     model.train()
     counts = measure_parameter_counts(model)
@@ -1008,6 +1012,22 @@ def specialist_lineage_request(
         "trained_expert_ids": [*parent_history, *([] if expected_expert in parent_history else [expected_expert])],
         "data_verification_receipt": verification,
     }
+
+
+def verified_specialist_episode_expert(
+    records: list[dict[str, object]], verification: Mapping[str, object],
+) -> str:
+    """Bind one verified capability episode to its declared specialist before setup."""
+
+    capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
+    capability = verification.get("capability")
+    expected = capability_experts.get(capability)
+    if expected is None:
+        raise ValueError("verified specialist receipt lacks a declared capability")
+    routed = {record.get("active_expert") for record in records}
+    if routed != {expected}:
+        raise ValueError(f"verified {capability} episode must route to {expected}")
+    return expected
 
 
 def run_specialist(
