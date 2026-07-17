@@ -115,3 +115,18 @@ def test_evalplus_spider_and_mmmu_reject_identity_drift_before_scoring():
             {"schema_version": "ember-restart-benchmark-custody-v1", "checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64},
             {"checkpoint_manifest_sha256": "9" * 64, "model_config_sha256": "b" * 64},
         )
+
+def test_admission_refuses_complete_receipt_when_registry_hash_is_substituted(tmp_path, monkeypatch):
+    module = _load("scripts/ember_restart_eval_result_surface.py", "mail18639_admission_anchor")
+    receipt = tmp_path / "receipt.json"
+    receipt_bytes = json.dumps(_complete_receipt("a" * 64), sort_keys=True).encode() + b"\n"
+    receipt.write_bytes(receipt_bytes)
+    admission = tmp_path / "admission.json"
+    admission.write_text(json.dumps({"stage": "OWNED_ADMITTED", "evaluations": [{"receipt_path": receipt.name}]}), encoding="utf-8")
+    registry = tmp_path / "registry.json"
+    registry.write_bytes(b'{"schema_version":"ember-trusted-verifiers-v1","verifiers":[]}')
+    authority = tmp_path / "authorities.json"
+    authority.write_text(json.dumps({"authorities": [{"trusted_verifier_registry_sha256": _sha(b"substituted")}]}), encoding="utf-8")
+    monkeypatch.setattr(module, "EXECUTION_AUTHORITIES", authority)
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: type("Completed", (), {"returncode": 0})())
+    assert module._admitted(admission, registry, receipt_bytes) is False
