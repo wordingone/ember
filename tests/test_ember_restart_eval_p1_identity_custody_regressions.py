@@ -87,6 +87,14 @@ def test_audiobench_rejects_changed_frozen_version_suite_and_protocol(tmp_path):
             module._frozen_custody(json.dumps(mutated, sort_keys=True).encode("utf-8"))
 
 
+
+def test_audiobench_frozen_custody_requires_a_content_addressed_closed_run():
+    """The public custody record must not leave the closed run caller-selected."""
+    module = _load("scripts/ember_restart_eval_audiobench_bound.py", "p1_audio_closed_run_required")
+    custody = json.loads((ROOT / "manifests" / "ember-restart-audiobench-custody-v1.json").read_text(encoding="utf-8"))
+    custody.pop("closed_run_artifact_sha256", None)
+    with pytest.raises(ValueError, match="closed run"):
+        module._frozen_custody(json.dumps(custody, sort_keys=True).encode("utf-8"))
 def test_evalplus_spider_and_mmmu_reject_altered_protocol_or_checkpoint(tmp_path):
     evalplus = _load("scripts/ember_restart_eval_evalplus_result.py", "p1_matrix_evalplus")
     manifest = json.loads((ROOT / "manifests" / "ember-restart-eval-code-math-custody-v1.json").read_text(encoding="utf-8"))
