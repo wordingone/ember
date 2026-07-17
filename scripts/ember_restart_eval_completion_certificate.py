@@ -26,7 +26,7 @@ def _safe_relative(value: object) -> Path:
     if not isinstance(value, str) or not value:
         raise ValueError("command_path must be a nonempty relative path")
     path = Path(value)
-    if path.is_absolute() or ".." in path.parts:
+    if path.is_absolute() or path.drive or ".." in path.parts:
         raise ValueError("command_path must stay inside the repository")
     return path
 

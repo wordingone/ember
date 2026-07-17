@@ -1,7 +1,8 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-import json,subprocess,sys,tempfile
+import json
+import pytest,subprocess,sys,tempfile
 from pathlib import Path
 SCRIPT=Path(__file__).resolve().parents[1]/'scripts'/'ember_restart_eval_completion_certificate.py'
 def test_rejects_certificate_with_measured_benchmark_or_no_honest_gap():
@@ -25,3 +26,13 @@ def test_rejects_obsolete_no_owned_checkpoint_disposition():
   certificate.write_text(json.dumps({'schema_version':'ember-restart-eval-completion-certificate-v1','goal_id':'EMBER-02','workstream_id':'EMBER-02C','checkpoint_manifest_sha256':'a'*64,'evaluator_commit':'b'*40,'benchmarks':[{ 'family':family,'benchmark_id':family,'benchmark_version':'1','split_sha256':'c'*64,'protocol_sha256':'d'*64,'command_sha256':'e'*64,'result':'NOT_EXECUTABLE_NO_OWNED_CHECKPOINT' if family=='text' else 'PREFLIGHT_ONLY'} for family in families],'comparators':[],'resource_receipts':[],'honest_unresolved_gaps':['specialists untrained'],'next_checkpoint_evaluation':'run frozen suite'}))
   result=subprocess.run([sys.executable,str(SCRIPT),'validate',str(certificate),'--output',str(output)],capture_output=True,text=True)
   assert result.returncode!=0 and not output.exists()
+
+def test_rejects_drive_qualified_certificate_paths():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("certificate_drive_path", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    with pytest.raises(ValueError, match="stay inside"):
+        module._safe_relative("C:detached.py")
