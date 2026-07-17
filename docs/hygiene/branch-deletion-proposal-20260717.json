@@ -1,0 +1,53 @@
+{
+  "schema_version": "ember-branch-deletion-proposal-v1",
+  "result": "NO_SAFE_CANDIDATE",
+  "generated_at": "2026-07-17T16:31:00Z",
+  "public_master_sha256": "f919b116066106fc91a7d86feff39eecc70e14d0",
+  "baseline": {
+    "open_issues": 242,
+    "remote_branches": 236,
+    "open_pull_requests": 13,
+    "root_markdown_files": 8
+  },
+  "candidate_count": 0,
+  "candidates": [],
+  "screened_examples": [
+    {
+      "branch": "feat/576-tailpoll-cap-instrumentation",
+      "head_sha": "ec127731c7d5262fb196cc845e0946fd28a26811",
+      "merged_pr": 578,
+      "merged_at": "2026-07-09T17:23:06Z",
+      "reachability": {"status": "diverged", "ahead": 1, "behind": 538},
+      "disposition": "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
+    },
+    {
+      "branch": "docs/acceptance-250-goal-fix-verified",
+      "head_sha": "d3f720437a134de6cae06b8814ddf3b8701b2d94",
+      "merged_pr": 284,
+      "merged_at": "2026-07-06T20:38:46Z",
+      "reachability": {"status": "diverged", "ahead": 1, "behind": 699},
+      "disposition": "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
+    },
+    {
+      "branch": "chore/custody-land-8",
+      "head_sha": "e2bd7130056b6a5e79aa370828603b506e32e07a",
+      "merged_pr": 418,
+      "merged_at": "2026-07-08T06:47:15Z",
+      "reachability": {"status": "diverged", "ahead": 1, "behind": 627},
+      "disposition": "RETAIN_UNSAFE_HEAD_NOT_REACHABLE_FROM_MASTER"
+    }
+  ],
+  "open_pr_heads_excluded": [754, 799, 806, 809, 810, 821, 846, 862, 878, 911, 913, 915, 919],
+  "deletion_rules": [
+    "not default or protected",
+    "no open pull request targets or originates from the branch",
+    "exact head SHA recorded",
+    "head is reachable from current public master",
+    "at least seven days after verified merge",
+    "no release, checkpoint, receipt, deployment, or external reference requires the ref",
+    "reconstruction command and public receipt are retained"
+  ],
+  "reconstruction_command": "git ls-remote --heads origin",
+  "remote_mutation": "NONE",
+  "operator_action_required": "operator approval is required before any remote deletion"
+}
