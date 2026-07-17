@@ -191,7 +191,7 @@ class RunnerPreflightTests(unittest.TestCase):
                         tokenizer_path=root / "tokenizer.json",
                         capability="image",
                     )
-    def test_production_optimizer_uses_declared_paged_8bit_adamw_state(self) -> None:
+    def test_production_optimizer_uses_declared_device_resident_8bit_adamw_state(self) -> None:
         calls: dict[str, object] = {}
 
         class Subject:
@@ -203,16 +203,29 @@ class RunnerPreflightTests(unittest.TestCase):
             calls.update(kwargs)
             return "optimizer"
 
-        fake = SimpleNamespace(optim=SimpleNamespace(PagedAdamW8bit=make_adamw))
+        fake = SimpleNamespace(optim=SimpleNamespace(AdamW8bit=make_adamw))
         with patch.dict(sys.modules, {"bitsandbytes": fake}):
             contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
             optimizer = run_vertical_slice.build_production_optimizer(Subject(), optimizer_contract=contract)
         self.assertEqual(optimizer, "optimizer")
-        self.assertEqual(contract["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+        self.assertEqual(contract["name"], "device_resident_8bit_adamw")
+        self.assertEqual(contract["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(contract["state_format"], "bitsandbytes-device-resident-8bit-adamw-state-dict-v1")
         self.assertEqual(contract["hyperparameters"]["learning_rate"], 1e-5)
         self.assertEqual(calls["parameters"], ["parameter"])
         self.assertEqual(calls["percentile_clipping"], 100)
         self.assertEqual(calls["lr"], 1e-5)
+
+    def test_production_optimizer_rejects_the_previous_paged_contract(self) -> None:
+        contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        previous = {
+            **contract,
+            "name": "paged_8bit_adamw",
+            "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+            "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+        }
+        with self.assertRaisesRegex(ValueError, "device-resident AdamW8bit"):
+            run_vertical_slice.build_production_optimizer(SimpleNamespace(parameters=lambda: []), optimizer_contract=previous)
     def test_contract_retention_limit_is_used_as_the_runner_limit(self) -> None:
         contract = ROOT / "configs" / "ember-restart-3b.json"
         self.assertTrue(hasattr(run_vertical_slice, "checkpoint_retention_budget_bytes"))

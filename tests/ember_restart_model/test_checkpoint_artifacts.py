@@ -211,17 +211,28 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertRegex(receipt["optimizer_realization"]["optimizer_contract_sha256"], r"^[0-9a-f]{64}$")
 
 
-    def test_paged_8bit_realization_reads_live_args_not_receipt_fields(self) -> None:
+    def test_device_resident_8bit_realization_reads_live_args_not_receipt_fields(self) -> None:
         with warnings.catch_warnings():
 
             warnings.simplefilter("ignore", DeprecationWarning)
 
             import bitsandbytes as bnb
         model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=11)
-        optimizer = bnb.optim.PagedAdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True)
         contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         realization = _optimizer_realization(optimizer, contract)
-        self.assertEqual(realization["implementation"], "bitsandbytes.optim.PagedAdamW8bit")
+        self.assertEqual(realization["implementation"], "bitsandbytes.optim.AdamW8bit")
+        self.assertEqual(realization["state_format"], "bitsandbytes-device-resident-8bit-adamw-state-dict-v1")
+
+    def test_device_resident_contract_rejects_adamw8bit_forced_into_paged_mode(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            import bitsandbytes as bnb
+        model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64), genesis_seed=11)
+        optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-5, weight_decay=0.01, percentile_clipping=100, block_wise=True, is_paged=True)
+        contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        with self.assertRaisesRegex(ValueError, "not device-resident"):
+            _optimizer_realization(optimizer, contract)
     def test_writes_and_restores_shared_semantic_checkpoint(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=17)

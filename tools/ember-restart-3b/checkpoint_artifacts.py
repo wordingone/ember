@@ -244,26 +244,28 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
 
     cls = type(optimizer)
     runtime_implementation = f"{cls.__module__}.{cls.__qualname__}"
-    if runtime_implementation == "bitsandbytes.optim.adamw.PagedAdamW8bit":
+    if runtime_implementation == "bitsandbytes.optim.adamw.AdamW8bit":
         if not optimizer.param_groups or not hasattr(optimizer, "args"):
-            raise ValueError("runtime PagedAdamW8bit lacks required state")
+            raise ValueError("runtime AdamW8bit lacks required state")
         group = optimizer.param_groups[0]
         args = optimizer.args
         required_group = ("lr", "weight_decay")
         required_args = ("percentile_clipping", "block_wise", "optim_bits")
         if any(field not in group for field in required_group) or any(not hasattr(args, field) for field in required_args):
-            raise ValueError("runtime PagedAdamW8bit lacks required hyperparameters")
+            raise ValueError("runtime AdamW8bit lacks required hyperparameters")
         if int(args.optim_bits) != 8:
-            raise ValueError("runtime PagedAdamW8bit does not use 8-bit optimizer state")
-        implementation = "bitsandbytes.optim.PagedAdamW8bit"
-        name = "paged_8bit_adamw"
+            raise ValueError("runtime AdamW8bit does not use 8-bit optimizer state")
+        if bool(getattr(optimizer, "is_paged", True)):
+            raise ValueError("runtime AdamW8bit is not device-resident")
+        implementation = "bitsandbytes.optim.AdamW8bit"
+        name = "device_resident_8bit_adamw"
         hyperparameters = {
             "learning_rate": float(group["lr"]),
             "weight_decay": float(group["weight_decay"]),
             "percentile_clipping": int(args.percentile_clipping),
             "block_wise": bool(args.block_wise),
         }
-        state_format = "bitsandbytes-paged-8bit-adamw-state-dict-v1"
+        state_format = "bitsandbytes-device-resident-8bit-adamw-state-dict-v1"
     else:
         implementation = runtime_implementation
         name = cls.__name__

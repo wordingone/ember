@@ -802,12 +802,12 @@ def load_optimizer_contract(config_path: Path) -> dict[str, object]:
     if not isinstance(contract, dict) or set(contract) != {"name", "implementation", "hyperparameters", "state_format"}:
         raise ValueError("production optimizer contract has an invalid shape")
     expected = {
-        "name": "paged_8bit_adamw",
-        "implementation": "bitsandbytes.optim.PagedAdamW8bit",
-        "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+        "name": "device_resident_8bit_adamw",
+        "implementation": "bitsandbytes.optim.AdamW8bit",
+        "state_format": "bitsandbytes-device-resident-8bit-adamw-state-dict-v1",
     }
     if any(contract.get(field) != value for field, value in expected.items()):
-        raise ValueError("production optimizer contract does not declare canonical PagedAdamW8bit")
+        raise ValueError("production optimizer contract does not declare canonical device-resident AdamW8bit")
     hyperparameters = contract.get("hyperparameters")
     if not isinstance(hyperparameters, dict) or set(hyperparameters) != {"learning_rate", "weight_decay", "percentile_clipping", "block_wise"}:
         raise ValueError("production optimizer hyperparameters have an invalid shape")
@@ -885,16 +885,16 @@ def _execute_realization_counter(
 
 
 def build_production_optimizer(model: UnifiedDecoder, *, optimizer_contract: dict[str, object]) -> torch.optim.Optimizer:
-    """Build exactly the structured PagedAdamW8bit optimizer declared by config."""
+    """Build exactly the structured device-resident AdamW8bit declared by config."""
 
-    if optimizer_contract.get("implementation") != "bitsandbytes.optim.PagedAdamW8bit":
-        raise ValueError("production optimizer implementation must be PagedAdamW8bit")
+    if optimizer_contract.get("implementation") != "bitsandbytes.optim.AdamW8bit":
+        raise ValueError("production optimizer implementation must be device-resident AdamW8bit")
     hyperparameters = optimizer_contract.get("hyperparameters")
     if not isinstance(hyperparameters, dict):
         raise ValueError("production optimizer contract lacks hyperparameters")
     import bitsandbytes as bnb
 
-    return bnb.optim.PagedAdamW8bit(
+    return bnb.optim.AdamW8bit(
         model.parameters(),
         lr=float(hyperparameters["learning_rate"]),
         weight_decay=float(hyperparameters["weight_decay"]),
