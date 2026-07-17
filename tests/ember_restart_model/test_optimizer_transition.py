@@ -80,6 +80,9 @@ class OptimizerTransitionTests(unittest.TestCase):
             self.assertTrue(admitted["model_state_reused"])
             self.assertEqual(admitted["source"]["optimizer_implementation"], "bitsandbytes.optim.PagedAdamW8bit")
             self.assertEqual(admitted["target"]["optimizer_implementation"], "bitsandbytes.optim.AdamW8bit")
+            self.assertEqual(admitted["target"]["optimizer_placement"], "cuda_non_paged")
+            target_config = json.loads((root / "transition" / "target-config.json").read_bytes())
+            self.assertEqual(target_config["training"]["optimizer"]["placement"], "cuda_non_paged")
             self.assertEqual(set(admitted["model_shards"]), {"shared.pt", "replay-state.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"})
 
     def test_transition_rejects_target_config_drift(self) -> None:
@@ -93,6 +96,22 @@ class OptimizerTransitionTests(unittest.TestCase):
             drift.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "target config"):
                 validate_optimizer_transition_registry(registry, checkpoint_root=checkpoint, current_target_config_path=drift)
+
+    def test_transition_requires_exact_parent_successor_hyperparameter_parity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkpoint, source_registry = self._source_authority(root)
+            target = json.loads((ROOT / "configs" / "ember-restart-3b.json").read_bytes())
+            target["training"]["optimizer"]["hyperparameters"]["learning_rate"] = 2e-5
+            target_path = root / "target-config.json"
+            target_path.write_text(json.dumps(target, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "hyperparameters"):
+                write_optimizer_transition_registry(
+                    root / "transition",
+                    source_registry_path=source_registry,
+                    checkpoint_root=checkpoint,
+                    target_config_path=target_path,
+                )
 
     def test_transition_writer_rejects_unrecorded_source_authority_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

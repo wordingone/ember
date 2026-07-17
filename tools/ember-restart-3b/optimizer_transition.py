@@ -26,6 +26,7 @@ _SOURCE_OPTIMIZER = {
 _TARGET_OPTIMIZER = {
     "name": "device_resident_8bit_adamw",
     "implementation": "bitsandbytes.optim.AdamW8bit",
+    "placement": "cuda_non_paged",
     "state_format": "bitsandbytes-device-resident-8bit-adamw-state-dict-v1",
 }
 
@@ -90,7 +91,7 @@ def _require_closed_source_authority(source_registry_path: Path) -> None:
 def _exact_optimizer(config: Mapping[str, Any], expected: Mapping[str, str], label: str) -> dict[str, Any]:
     training = config.get("training")
     optimizer = training.get("optimizer") if isinstance(training, Mapping) else None
-    if not isinstance(optimizer, dict) or set(optimizer) != {"name", "implementation", "hyperparameters", "state_format"}:
+    if not isinstance(optimizer, dict) or set(optimizer) != set(expected) | {"hyperparameters"}:
         raise ValueError(f"{label} optimizer contract shape is invalid")
     if any(optimizer.get(field) != value for field, value in expected.items()):
         raise ValueError(f"{label} optimizer contract is not exact")
@@ -154,6 +155,8 @@ def validate_optimizer_transition_registry(
         raise ValueError("target config bytes drift from the admitted transition")
     source_optimizer = _exact_optimizer(source_config, _SOURCE_OPTIMIZER, "source")
     target_optimizer = _exact_optimizer(target_config, _TARGET_OPTIMIZER, "target")
+    if source_optimizer["hyperparameters"] != target_optimizer["hyperparameters"]:
+        raise ValueError("optimizer transition must preserve exact parent/successor hyperparameters")
     if manifest.get("optimizer_contract") != source_optimizer:
         raise ValueError("source checkpoint optimizer contract is not the admitted paged contract")
     source_semantic = semantic_model_contract_sha256(source_config)
@@ -175,6 +178,7 @@ def validate_optimizer_transition_registry(
         "semantic_model_contract_sha256": target_semantic,
         "optimizer_contract_sha256": _canonical_sha256(target_optimizer),
         "optimizer_implementation": target_optimizer["implementation"],
+        "optimizer_placement": target_optimizer["placement"],
     }
     if source != expected_source or target != expected_target:
         raise ValueError("optimizer transition source/target identity mismatch")
@@ -208,6 +212,8 @@ def write_optimizer_transition_registry(
     target_config, target_config_sha256 = _json(target_config_path, "target model config")
     source_optimizer = _exact_optimizer(source_config, _SOURCE_OPTIMIZER, "source")
     target_optimizer = _exact_optimizer(target_config, _TARGET_OPTIMIZER, "target")
+    if source_optimizer["hyperparameters"] != target_optimizer["hyperparameters"]:
+        raise ValueError("optimizer transition must preserve exact parent/successor hyperparameters")
     if manifest.get("optimizer_contract") != source_optimizer:
         raise ValueError("source checkpoint optimizer contract is not the admitted paged contract")
     records = _validated_records(checkpoint_root, {**manifest, "checkpoint_manifest_sha256": manifest_sha256})
@@ -229,6 +235,7 @@ def write_optimizer_transition_registry(
             "semantic_model_contract_sha256": semantic_model_contract_sha256(target_config),
             "optimizer_contract_sha256": _canonical_sha256(target_optimizer),
             "optimizer_implementation": target_optimizer["implementation"],
+            "optimizer_placement": target_optimizer["placement"],
         },
         "model_state_reused": True,
         "optimizer_state_reused": False,

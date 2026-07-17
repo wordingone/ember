@@ -226,7 +226,7 @@ def _default_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
 
 def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
     required = {"name", "implementation", "hyperparameters", "state_format"}
-    if not isinstance(contract, Mapping) or set(contract) != required:
+    if not isinstance(contract, Mapping) or set(contract) not in (required, required | {"placement"}):
         raise ValueError("checkpoint optimizer contract has an invalid shape")
     if not isinstance(contract["name"], str) or not contract["name"]:
         raise ValueError("checkpoint optimizer contract name is invalid")
@@ -236,7 +236,12 @@ def _validate_optimizer_contract(contract: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("checkpoint optimizer contract hyperparameters are invalid")
     if not isinstance(contract["state_format"], str) or not contract["state_format"]:
         raise ValueError("checkpoint optimizer contract state format is invalid")
-    return {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
+    if "placement" in contract and contract["placement"] != "cuda_non_paged":
+        raise ValueError("checkpoint optimizer contract placement is invalid")
+    validated = {"name": contract["name"], "implementation": contract["implementation"], "hyperparameters": dict(contract["hyperparameters"]), "state_format": contract["state_format"]}
+    if "placement" in contract:
+        validated["placement"] = contract["placement"]
+    return validated
 
 
 def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
@@ -266,6 +271,7 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
             "block_wise": bool(args.block_wise),
         }
         state_format = "bitsandbytes-device-resident-8bit-adamw-state-dict-v1"
+        placement = "cuda_non_paged"
     else:
         implementation = runtime_implementation
         name = cls.__name__
@@ -278,6 +284,7 @@ def _runtime_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, A
         "implementation": implementation,
         "hyperparameters": hyperparameters,
         "state_format": state_format,
+        **({"placement": placement} if runtime_implementation == "bitsandbytes.optim.adamw.AdamW8bit" else {}),
     }
 
 
@@ -293,6 +300,7 @@ def _optimizer_realization(optimizer: torch.optim.Optimizer, contract: Mapping[s
         "implementation_source_sha256": _sha256(Path(source)),
         "state_format": runtime_contract["state_format"],
         "optimizer_contract_sha256": _canonical_sha256(runtime_contract),
+        **({"placement": runtime_contract["placement"]} if "placement" in runtime_contract else {}),
     }
 
 
@@ -309,9 +317,11 @@ def _validate_runtime_optimizer_realization(
 
 def _validate_optimizer_realization(contract: Mapping[str, Any], realization: Any) -> dict[str, str]:
     required = {"implementation", "implementation_source_sha256", "state_format", "optimizer_contract_sha256"}
+    if "placement" in contract:
+        required.add("placement")
     if not isinstance(realization, Mapping) or set(realization) != required:
         raise ValueError("checkpoint optimizer realization has an invalid shape")
-    if realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"]:
+    if realization.get("implementation") != contract["implementation"] or realization.get("state_format") != contract["state_format"] or ("placement" in contract and realization.get("placement") != contract["placement"]):
         raise ValueError("checkpoint optimizer realization drifts from its contract")
     for field in ("implementation_source_sha256", "optimizer_contract_sha256"):
         _sha256_value(str(realization.get(field, "")), name=f"optimizer realization {field}")
