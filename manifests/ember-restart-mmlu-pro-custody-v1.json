@@ -8,7 +8,7 @@
     "license": "MIT",
     "target_execution_permitted": false,
     "target_training_access": "FORBIDDEN",
-    "inherited_template_compatibility": "HASH_MISMATCH_SEPARATE_NONEXECUTABLE_CUSTODY",
+    "inherited_template_compatibility": "LICENSE_CARD_BOUND_SEPARATE_NONEXECUTABLE_CUSTODY",
     "materialization": {
         "upstream_revision": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
         "artifact_sha256": "3577c66990ac2d1cc396d49c6d6b4d3c0b24e160915885b0f9e3b3d0f0577514",
@@ -20,5 +20,8 @@
     "references_sha256": "0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
     "scoring_adapter_path": "scripts/ember_restart_eval_mmlu_pro_score.py",
     "scoring_adapter_sha256": "c6d19c0e6734279b188a4179a39835a50683a267040ec2c37f6f0dbd54da1062",
-    "strict_protocol_required": true
+    "strict_protocol_required": true,
+    "license_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
+    "license_card_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
+    "license_card_source": "upstream README.md at pinned dataset revision"
 }
