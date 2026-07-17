@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import uuid
@@ -19,6 +20,7 @@ import tokenizers
 import torch
 
 from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, write_checkpoint_artifacts
+from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from parameter_counter import measure_parameter_counts
@@ -281,6 +283,14 @@ def _bundle_serialized_bytes(bundle: Path) -> int:
     """Measure exactly the bytes currently published beneath one bundle root."""
     return sum(path.stat().st_size for path in bundle.rglob("*") if path.is_file())
 
+def _custody_link_or_reparse(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise RuntimeError(f"custody byte accounting could not inspect {path}") from error
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
 def _file_identity(path: Path) -> tuple[int, int] | str:
     stat = path.stat()
     inode = int(getattr(stat, "st_ino", 0))
@@ -296,6 +306,8 @@ def _custody_file_rows(parent: Path) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for path in parent.rglob("*"):
         try:
+            if _custody_link_or_reparse(path):
+                raise RuntimeError(f"custody accounting encountered a symlink or reparse point: {path}")
             if not path.is_file():
                 continue
             identity = _file_identity(path)
@@ -326,6 +338,7 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
     for row in rows:
         totals[str(row["bucket"])] += int(row["bytes"])
     deleted_bytes = 0
+    ledger_events: dict[tuple[str, str, int], set[str]] = {}
     ledger = parent / _CUSTODY_LEDGER
     if ledger.exists():
         try:
@@ -337,17 +350,24 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
                 event = json.loads(line)
             except (UnicodeError, json.JSONDecodeError) as error:
                 raise RuntimeError("custody deletion ledger is malformed") from error
-            if not isinstance(event, dict) or event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA or event.get("event") != "DELETED":
+            if not isinstance(event, dict) or event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA:
                 raise RuntimeError("custody deletion ledger has an invalid schema")
+            if event.get("event") not in {"PREPARED", "COMMITTED", "DELETED"}:
+                raise RuntimeError("custody deletion ledger has an invalid event")
             pointer = event.get("pointer")
-            if not isinstance(pointer, str) or not pointer:
-                raise RuntimeError("custody deletion ledger lacks a pointer")
-            deleted_path = parent / pointer
-            if deleted_path.exists():
-                raise RuntimeError("custody deletion ledger points at bytes that still exist")
+            if not isinstance(pointer, str) or not pointer or Path(pointer).is_absolute() or ".." in Path(pointer).parts:
+                raise RuntimeError("custody deletion ledger lacks a safe pointer")
             if type(event.get("bytes")) is not int or event["bytes"] < 0 or not _is_sha256(event.get("sha256")):
                 raise RuntimeError("custody deletion ledger has invalid byte evidence")
-            deleted_bytes += event["bytes"]
+            key = (pointer, event["sha256"], event["bytes"])
+            ledger_events.setdefault(key, set()).add(event["event"])
+        for (pointer, _digest, bytes_count), states in ledger_events.items():
+            deleted_path = parent / pointer
+            if deleted_path.exists():
+                if states & {"COMMITTED", "DELETED"}:
+                    raise RuntimeError("custody deletion ledger claims deletion while bytes still exist")
+                continue
+            deleted_bytes += bytes_count
     physical_bytes = sum(int(row["bytes"]) for row in rows)
     return {
         "schema_version": "ember-checkpoint-custody-reconciliation-v1",
@@ -430,8 +450,62 @@ def _writer_is_active(root: Path) -> bool:
 def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:
     evidence_dir = parent / ".checkpoint-quarantine"
     evidence_dir.mkdir(parents=True, exist_ok=True)
-    evidence_path = evidence_dir / f"{name}.json"
-    _atomic_json(evidence_path, payload)
+    payload_bytes = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    digest = hashlib.sha256(payload_bytes).hexdigest()
+    ledger = parent / _CUSTODY_LEDGER
+
+    def ledger_events(pointer_path: Path) -> set[str]:
+        if not ledger.exists():
+            return set()
+        pointer = pointer_path.relative_to(parent).as_posix()
+        events: set[str] = set()
+        try:
+            for line in ledger.read_bytes().splitlines():
+                event = json.loads(line)
+                if event.get("pointer") == pointer:
+                    events.add(str(event.get("event")))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("custody deletion ledger could not be inspected") from error
+        return events
+
+    terminal_events = {"COMMITTED", "DELETED"}
+    base_path = evidence_dir / f"{name}-{digest}.json"
+    evidence_path = base_path
+    base_events = ledger_events(base_path)
+    if base_path.exists():
+        if base_events & terminal_events:
+            raise RuntimeError("historical quarantine evidence pointer reappeared")
+        if base_path.read_bytes() != payload_bytes:
+            raise RuntimeError("quarantine evidence collision is not content-addressed")
+    elif base_events & terminal_events:
+        generation = 1
+        while True:
+            candidate = evidence_dir / f"{name}-{digest}-g{generation}.json"
+            candidate_events = ledger_events(candidate)
+            if candidate.exists():
+                if candidate_events & terminal_events:
+                    raise RuntimeError("historical quarantine evidence pointer reappeared")
+                if candidate.read_bytes() != payload_bytes:
+                    raise RuntimeError("quarantine evidence collision is not content-addressed")
+                evidence_path = candidate
+                break
+            if candidate_events & terminal_events:
+                generation += 1
+                continue
+            evidence_path = candidate
+            break
+
+    if not evidence_path.exists():
+        try:
+            with evidence_path.open("xb") as handle:
+                handle.write(payload_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except FileExistsError:
+            if ledger_events(evidence_path) & terminal_events:
+                raise RuntimeError("historical quarantine evidence pointer reappeared")
+            if evidence_path.read_bytes() != payload_bytes:
+                raise RuntimeError("quarantine evidence appeared with different bytes")
     files = sorted(
         (path for path in evidence_dir.glob("*.json") if path.is_file()),
         key=lambda path: (path.stat().st_mtime_ns, path.name),
@@ -443,17 +517,25 @@ def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[st
         ledger = parent / _CUSTODY_LEDGER
         deletion = {
             "schema_version": _CUSTODY_LEDGER_SCHEMA,
-            "event": "DELETED",
             "pointer": victim.relative_to(parent).as_posix(),
             "bytes": victim.stat().st_size,
             "sha256": _sha256(victim),
             "reason": "bounded evidence retention",
         }
+        prepared = {**deletion, "event": "PREPARED"}
         with ledger.open("ab") as handle:
-            handle.write((json.dumps(deletion, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+            handle.write((json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
             handle.flush()
             os.fsync(handle.fileno())
-        victim.unlink()
+        try:
+            victim.unlink()
+        except OSError as error:
+            raise RuntimeError("bounded evidence deletion did not commit; bytes preserved") from error
+        committed = {**deletion, "event": "COMMITTED"}
+        with ledger.open("ab") as handle:
+            handle.write((json.dumps(committed, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+            handle.flush()
+            os.fsync(handle.fileno())
         files.remove(victim)
     return evidence_path
 
@@ -716,25 +798,27 @@ def _is_sha256(value: object) -> bool:
 
 def require_counter_success_receipt(checkpoint_root: Path, *, receipt_path: Path | None = None) -> dict[str, object]:
     """Make resumability contingent on the exact successful realization counter output."""
-
     checkpoint_root = checkpoint_root.resolve()
     manifest, manifest_sha256 = _json_snapshot(checkpoint_root / "checkpoint-manifest.json", label="checkpoint manifest")
     receipt_source = (receipt_path if receipt_path is not None else checkpoint_root / _COUNTER_SUCCESS_RECEIPT).resolve()
     receipt, _receipt_sha256 = _json_snapshot(receipt_source, label="counter-success receipt")
-    expected = {
-        "schema_version": "ember-sparse-realization-receipt-v1", "verification_boundary": "VERIFIED_MEASURED",
-        "result": "MEASURED", "subject_checkpoint_sha256": manifest_sha256,
-        "model_config_sha256": manifest.get("model_config_sha256"), "architecture_revision": manifest.get("architecture_revision"),
-        "active_expert_ids": manifest.get("active_expert_ids"), "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
-    }
-    if any(receipt.get(field) != value for field, value in expected.items()):
-        raise ValueError("counter-success receipt does not bind this checkpoint realization")
+    validated = validate_realization_receipt(receipt)
     architecture = manifest.get("architecture")
-    if not isinstance(architecture, dict) or any(receipt.get(field) != architecture.get(field) for field in _COUNTER_COUNT_FIELDS):
+    expected = {
+        "model_config_sha256": manifest.get("model_config_sha256"),
+        "subject_checkpoint_sha256": manifest_sha256,
+        "architecture_revision": manifest.get("architecture_revision"),
+        "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
+        "active_expert_ids": manifest.get("active_expert_ids"),
+        "expert_genesis_sha256": manifest.get("expert_genesis_sha256"),
+        "expert_parameter_sha256": manifest.get("expert_parameter_sha256"),
+    }
+    if not isinstance(architecture, dict):
         raise ValueError("counter-success receipt does not reproduce checkpoint capacity")
-    if not _is_sha256(receipt.get("counter_sha256")):
-        raise ValueError("counter-success receipt has an invalid counter source hash")
-    return receipt
+    expected.update({field: architecture.get(field) for field in _COUNTER_COUNT_FIELDS})
+    if any(validated.get(field) != value for field, value in expected.items()):
+        raise ValueError("counter-success receipt does not bind this checkpoint realization")
+    return validated
 
 
 def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseException) -> Path | None:

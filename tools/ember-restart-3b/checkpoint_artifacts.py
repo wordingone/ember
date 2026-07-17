@@ -12,6 +12,7 @@ import inspect
 import json
 import os
 import shutil
+import stat
 import time
 import uuid
 from pathlib import Path
@@ -20,13 +21,30 @@ from typing import Any, Callable, Mapping
 import torch
 
 from model import EXPERT_NAMES, UnifiedDecoder
-from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts
+from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_realization_receipt
 
 
 _STAGING_LEASE = ".writer-lease.json"
 _ALLOWED_CANDIDATE_METADATA = {"parameter-counter-receipt.json"}
 _FAILURE_EVIDENCE_LIMIT = 64 * 1024
 _STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
+
+
+def _is_link_or_reparse(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise ValueError(f"checkpoint path cannot be inspected: {path}") from error
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _path_has_link(path: Path, root: Path) -> bool:
+    current = path
+    while current != root:
+        if _is_link_or_reparse(current):
+            return True
+        current = current.parent
+    return _is_link_or_reparse(root)
 
 
 def _sha256(path: Path) -> str:
@@ -626,36 +644,38 @@ def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> 
 def _validate_counter_receipt(candidate: Path, manifest_receipt: Mapping[str, Any], returned: Any) -> dict[str, Any]:
     if not isinstance(returned, Mapping):
         raise ValueError("post-run judge must return a validated counter receipt")
-    expected = {
-        "schema_version": "ember-sparse-realization-receipt-v1",
-        "verification_boundary": "VERIFIED_MEASURED",
-        "result": "MEASURED",
-        "subject_checkpoint_sha256": manifest_receipt.get("checkpoint_manifest_sha256"),
-        "model_config_sha256": manifest_receipt.get("model_config_sha256"),
-        "architecture_revision": manifest_receipt.get("architecture_revision"),
-        "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
-        "active_expert_ids": manifest_receipt.get("active_expert_ids"),
-    }
+    validated = validate_realization_receipt(returned)
     architecture = manifest_receipt.get("architecture")
     if not isinstance(architecture, Mapping):
         raise ValueError("checkpoint manifest lacks measured architecture for counter validation")
+    expected = {
+        "model_config_sha256": manifest_receipt.get("model_config_sha256"),
+        "subject_checkpoint_sha256": manifest_receipt.get("checkpoint_manifest_sha256"),
+        "architecture_revision": manifest_receipt.get("architecture_revision"),
+        "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
+        "active_expert_ids": manifest_receipt.get("active_expert_ids"),
+        "expert_genesis_sha256": manifest_receipt.get("expert_genesis_sha256"),
+        "expert_parameter_sha256": manifest_receipt.get("expert_parameter_sha256"),
+    }
     for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
         expected[field] = architecture.get(field)
-    if any(returned.get(field) != value for field, value in expected.items()):
-        raise ValueError("post-run counter receipt does not bind subject, source, or measured counts")
+    if any(validated.get(field) != value for field, value in expected.items()):
+        raise ValueError("post-run counter receipt does not bind subject, source, genesis, or measured counts")
     receipt_path = candidate / "parameter-counter-receipt.json"
     try:
         receipt_bytes = receipt_path.read_bytes()
         receipt_payload = json.loads(receipt_bytes)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError("post-run judge did not persist a valid counter receipt") from error
-    if not isinstance(receipt_payload, dict) or receipt_payload != dict(returned):
+    if validate_realization_receipt(receipt_payload) != validated:
         raise ValueError("post-run counter receipt file does not match the judge result")
-    return dict(returned)
+    return validated
 
 
 def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     manifest_path = candidate / "checkpoint-manifest.json"
+    if _is_link_or_reparse(manifest_path):
+        raise ValueError("checkpoint manifest cannot be a symlink or reparse point")
     try:
         manifest = json.loads(manifest_path.read_bytes())
     except (OSError, json.JSONDecodeError) as error:
@@ -669,6 +689,8 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     actual_files: set[str] = set()
     for path in candidate.rglob("*"):
         relative = path.relative_to(candidate).as_posix()
+        if _is_link_or_reparse(path):
+            raise ValueError("checkpoint candidate filesystem closure contains a symlink or reparse point")
         if path.is_dir():
             raise ValueError("checkpoint candidate filesystem closure contains an unexpected directory")
         if path.is_file():
@@ -702,7 +724,8 @@ def admit_quarantined_checkpoint(
     """Judge durable raw bytes and atomically make only a passing candidate selectable."""
 
     candidate = candidate.resolve(strict=True)
-    published_root = published_root.resolve()
+    published_root = Path(published_root)
+    published_root = published_root.parent.resolve(strict=True) / published_root.name
     quarantine = (published_root.parent / ".checkpoint-quarantine").resolve(strict=True)
     if candidate.parent != quarantine or not candidate.name.startswith("candidate-"):
         raise ValueError("checkpoint candidate is not in the bound quarantine namespace")
@@ -723,7 +746,7 @@ def admit_quarantined_checkpoint(
         if final_stable != initial_stable:
             raise ValueError("checkpoint candidate changed after verifier validation")
         _validate_counter_receipt(candidate, final_receipt, returned_counter_receipt)
-        post_verifier_bytes = int(final_receipt["serialized_bytes"])
+        post_verifier_bytes = int(final_receipt["incremental_publication_bytes"])
         if max_serialized_bytes is not None and post_verifier_bytes > max_serialized_bytes:
             raise ValueError("counter evidence exceeds the derived byte bound")
         if published_root.exists():
@@ -755,19 +778,14 @@ def _write_checkpoint_artifacts_impl(
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
-    pre_publish_verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]] | None = None,
-    test_only_allow_unverified: bool = False,
+    pre_publish_verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
     if max_serialized_bytes is not None and (type(max_serialized_bytes) is not int or max_serialized_bytes < 1):
         raise ValueError("max_serialized_bytes must be a positive integer")
-    if type(test_only_allow_unverified) is not bool:
-        raise ValueError("test_only_allow_unverified must be a boolean")
-    if test_only_allow_unverified and pre_publish_verifier is not None:
-        raise ValueError("test-only verifier opt-out cannot accompany a real verifier")
-    if pre_publish_verifier is None and not test_only_allow_unverified:
-        raise ValueError("pre-publish verifier is required unless test_only_allow_unverified is explicit")
+    if not callable(pre_publish_verifier):
+        raise ValueError("pre-publish verifier is required")
     _validate_replay_bindings(
         launch_seed=launch_seed,
         rng_state=rng_state,
@@ -969,10 +987,6 @@ def write_checkpoint_artifacts(
     )
 
 
-def _write_checkpoint_artifacts_test_only(*args: Any, **kwargs: Any) -> dict[str, Any]:
-    kwargs["test_only_allow_unverified"] = True
-    return _write_checkpoint_artifacts_impl(*args, **kwargs)
-
 
 def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     manifest_path = root / "checkpoint-manifest.json"
@@ -989,6 +1003,8 @@ def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict
         if relative in records:
             raise ValueError("checkpoint contains duplicate shard paths")
         path = root / relative
+        if _path_has_link(path, root):
+            raise ValueError(f"checkpoint shard is a symlink or reparse point: {relative}")
         if not path.is_file():
             raise ValueError(f"checkpoint shard is missing: {relative}")
         expected_size = item.get("bytes")
