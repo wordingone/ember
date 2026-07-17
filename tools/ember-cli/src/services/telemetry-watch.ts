@@ -131,7 +131,8 @@ function processLine(line: string, clock: () => number): void {
   const ev = parsed as Record<string, unknown>;
 
   const ts = typeof ev["ts"] === "string" ? ev["ts"] : undefined;
-  if (!ts || !Number.isFinite(Date.parse(ts))) return;
+  const eventTimestamp = ts ? Date.parse(ts) : NaN;
+  if (!ts || !Number.isFinite(eventTimestamp) || eventTimestamp > clock()) return;
   const kind = typeof ev["kind"] === "string" ? ev["kind"] : "unknown";
   const source = typeof ev["source"] === "string" ? ev["source"] : "";
   const payload =
