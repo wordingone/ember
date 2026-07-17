@@ -20,7 +20,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, checkpoint_commit_preflight, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts
+from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
@@ -147,6 +147,44 @@ class CheckpointArtifactTests(unittest.TestCase):
                 available_commit_bytes=9_999,
                 streaming_peak_bytes=4_000,
                 reserve_bytes=6_000,
+            )
+
+    def test_checkpoint_capacity_uses_fixed_pagefile_maximum_not_current_limit(self) -> None:
+        gib = 1024**3
+        available = configured_maximum_available_commit_bytes(
+            physical_ram_bytes=64 * gib,
+            commit_total_bytes=60 * gib,
+            current_commit_limit_bytes=80 * gib,
+            paging_files=[r"C:\pagefile.sys 16384 32768"],
+        )
+        self.assertEqual(available, 36 * gib)
+        for paging_files in (
+            [r"C:\pagefile.sys 0 0"],
+            [r"C:\pagefile.sys 16384 automatic"],
+            [],
+        ):
+            with self.subTest(paging_files=paging_files), self.assertRaisesRegex(
+                RuntimeError, "fixed positive maximum"
+            ):
+                configured_maximum_available_commit_bytes(
+                    physical_ram_bytes=64 * gib,
+                    commit_total_bytes=60 * gib,
+                    current_commit_limit_bytes=80 * gib,
+                    paging_files=paging_files,
+                )
+        with self.assertRaisesRegex(RuntimeError, "below the live Windows commit limit"):
+            configured_maximum_available_commit_bytes(
+                physical_ram_bytes=64 * gib,
+                commit_total_bytes=60 * gib,
+                current_commit_limit_bytes=100 * gib,
+                paging_files=[r"C:\pagefile.sys 16384 32768"],
+            )
+        with self.assertRaisesRegex(RuntimeError, "live committed bytes exceed"):
+            configured_maximum_available_commit_bytes(
+                physical_ram_bytes=64 * gib,
+                commit_total_bytes=100 * gib,
+                current_commit_limit_bytes=80 * gib,
+                paging_files=[r"C:\pagefile.sys 16384 32768"],
             )
 
     def test_serialization_state_views_reuse_tensor_storage_without_cpu_clones(self) -> None:

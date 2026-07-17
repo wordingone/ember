@@ -85,8 +85,45 @@ def checkpoint_streaming_peak_bytes(
     return largest + _STREAMING_OVERHEAD_BYTES
 
 
+def configured_maximum_available_commit_bytes(
+    *,
+    physical_ram_bytes: int,
+    commit_total_bytes: int,
+    current_commit_limit_bytes: int,
+    paging_files: object,
+) -> int:
+    """Return headroom against fixed maximum pagefile capacity, or fail closed."""
+
+    for name, value in (
+        ("physical RAM", physical_ram_bytes),
+        ("commit total", commit_total_bytes),
+        ("current commit limit", current_commit_limit_bytes),
+    ):
+        if type(value) is not int or value < 0:
+            raise ValueError(f"{name} bytes must be a nonnegative integer")
+    if not isinstance(paging_files, list) or not paging_files:
+        raise RuntimeError("pagefile setting is not a fixed positive maximum")
+    pagefile_maximum_mib = 0
+    for entry in paging_files:
+        if not isinstance(entry, str) or not entry.strip():
+            raise RuntimeError("pagefile setting is not a fixed positive maximum")
+        try:
+            maximum_mib = int(entry.split()[-1])
+        except (IndexError, ValueError) as error:
+            raise RuntimeError("pagefile setting is not a fixed positive maximum") from error
+        if maximum_mib <= 0:
+            raise RuntimeError("pagefile setting is not a fixed positive maximum")
+        pagefile_maximum_mib += maximum_mib
+    maximum_commit_capacity_bytes = physical_ram_bytes + pagefile_maximum_mib * 1024**2
+    if maximum_commit_capacity_bytes < current_commit_limit_bytes:
+        raise RuntimeError("configured pagefile maximum is below the live Windows commit limit")
+    if maximum_commit_capacity_bytes < commit_total_bytes:
+        raise RuntimeError("live committed bytes exceed configured maximum commit capacity")
+    return maximum_commit_capacity_bytes - commit_total_bytes
+
+
 def available_host_commit_bytes() -> int:
-    """Return Windows system commit headroom (commit limit minus committed pages)."""
+    """Return Windows headroom against physical RAM plus fixed pagefile maximum."""
 
     if os.name != "nt":
         raise RuntimeError("host commit probe currently requires Windows")
@@ -113,7 +150,25 @@ def available_host_commit_bytes() -> int:
     info.cb = ctypes.sizeof(info)
     if not ctypes.windll.psapi.GetPerformanceInfo(ctypes.byref(info), info.cb):
         raise RuntimeError("Windows host commit probe failed")
-    return max(0, int(info.CommitLimit - info.CommitTotal) * int(info.PageSize))
+    import winreg
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+        ) as key:
+            paging_files, value_type = winreg.QueryValueEx(key, "PagingFiles")
+    except OSError as error:
+        raise RuntimeError("fixed pagefile maximum registry read failed") from error
+    if value_type != winreg.REG_MULTI_SZ:
+        raise RuntimeError("pagefile setting is not a fixed positive maximum")
+    page_size = int(info.PageSize)
+    return configured_maximum_available_commit_bytes(
+        physical_ram_bytes=int(info.PhysicalTotal) * page_size,
+        commit_total_bytes=int(info.CommitTotal) * page_size,
+        current_commit_limit_bytes=int(info.CommitLimit) * page_size,
+        paging_files=paging_files,
+    )
 
 
 def checkpoint_commit_preflight(
