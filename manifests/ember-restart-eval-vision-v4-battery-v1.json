@@ -1,4 +1,6 @@
 {
+  "baseline_checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+  "baseline_model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
   "battery_id": "vision-v4-postrun",
   "benchmarks": [
     {
@@ -44,14 +46,18 @@
       "total_records": 900
     }
   ],
-  "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
   "claim_boundary": "NO_CAPABILITY_ADMISSION_OR_SUFFICIENT_PRETRAINING_CREDIT",
-  "content_sha256": "94099acc950d5302fecdeee477f24780e0ee1e487c98a97391e57ddd204e87f4",
-  "evaluator_commit": "e80b48416e4adedfd54c8f624c0cfab5d7a9abe6",
+  "content_sha256": "b023bebb5b49db9e2fa4e7e863853867c852d3e3332f3d81179e86125c56905b",
+  "evaluator_commit": "6dc17f8f37b98f715c7b67324b9a2386ba8d20da",
   "goal_id": "EMBER-02",
-  "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
   "mutation_policy": "FROZEN_NO_ADDITIONS_OR_RENAMES_AFTER_LAUNCH",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "postrun_binding": {
+    "checkpoint_manifest_sha256": null,
+    "model_config_sha256": null,
+    "receipt_sha256": null,
+    "status": "UNRESOLVED_AWAITING_EMITTED_CHECKPOINT"
+  },
   "receipt_status": "FROZEN_PRELAUNCH",
   "runnability_blockers": [
     "no checkpoint-bound predictions"
