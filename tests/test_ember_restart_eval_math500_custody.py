@@ -20,5 +20,9 @@ def test_math500_exact_mit_revision_and_frozen_test_split_are_custody_bound():
         "artifact_sha256": "32a13d5fc494bb5ff7a83522cce14941c00b98a7e861f665f7ac2cf4a8cee380",
         "runner_receipt_sha256": "2453fac63dbeaba4d68e259e7f12e6bca802ab34899447bfb35d846dbdad28c6",
         "claim_status": "FROZEN_MATH500_TASKS_NO_CHECKPOINT_BOUND_PREDICTIONS",
+        "protocol_sha256": "25ca39a4dca98509f166ee921e5f2883569bdcec046018e2a61411653c72188c",
+        "scoring_adapter_path": "scripts/ember_restart_eval_math_exact.py",
+        "scoring_adapter_sha256": "09591d6a97e9566fcc64453f2a5126cce35cd0fd0fc4cbfa51c18e0f967d4b61",
+        "schema_version": "ember-restart-math500-freeze-v2",
     }
     assert math["target_execution_permitted"] is False
