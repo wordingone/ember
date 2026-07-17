@@ -806,3 +806,78 @@ def load_checkpoint_artifacts(
     if torch.cuda.is_available():
             torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
     return {"data_cursor": dict(replay_payload["data_cursor"])}
+
+
+def load_checkpoint_model_only_transition(
+    model: UnifiedDecoder,
+    root: Path,
+    receipt: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Stream a verified historical checkpoint without reusing optimizer state.
+
+    The historical shared shard physically contains model and optimizer state.
+    It is loaded once, its model tensors are applied, and its optimizer payload
+    is discarded without calling ``Optimizer.load_state_dict``. Expert shards
+    are then loaded and released one at a time so host demand is bounded by the
+    largest single shard rather than the whole checkpoint bundle.
+    """
+
+    if receipt.get("schema_version") != "ember-sparse-checkpoint-v3":
+        raise ValueError("model-only optimizer transition requires a v3 source checkpoint")
+    optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
+    expected_optimizer = {
+        "name": "paged_8bit_adamw",
+        "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+        "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+    }
+    if any(optimizer_contract.get(field) != value for field, value in expected_optimizer.items()):
+        raise ValueError("model-only transition source optimizer is not canonical paged AdamW8bit")
+    optimizer_realization = _validate_optimizer_realization(optimizer_contract, receipt.get("optimizer_realization"))
+    expected = receipt.get("expert_checkpoint_sha256")
+    genesis = receipt.get("expert_genesis_sha256")
+    active = receipt.get("active_expert_ids")
+    if not isinstance(expected, dict) or set(expected) != set(EXPERT_NAMES):
+        raise ValueError("checkpoint receipt lacks the four expert hashes")
+    if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES):
+        raise ValueError("checkpoint receipt lacks the four expert genesis hashes")
+    if not isinstance(active, list) or len(active) != 1 or active[0] not in {*EXPERT_NAMES, "shared"}:
+        raise ValueError("checkpoint receipt lacks exactly one declared active expert")
+    records = _validated_records(root, receipt)
+    expected_state = model.state_dict()
+
+    replay_payload = torch.load(root / "replay-state.pt", map_location="cpu", weights_only=False, mmap=True)
+    if (not isinstance(replay_payload, dict) or not isinstance(replay_payload.get("rng_state"), dict) or set(replay_payload["rng_state"]) != {"cpu", "cuda"} or replay_payload.get("data_cursor") != receipt.get("data_cursor")):
+        raise ValueError("checkpoint replay state is incomplete or cursor-mismatched")
+    for name, state in replay_payload["rng_state"].items():
+        if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
+            raise ValueError(f"checkpoint replay RNG state is invalid: {name}")
+
+    shared_payload = torch.load(root / "shared.pt", map_location="cpu", weights_only=False, mmap=True)
+    if not isinstance(shared_payload, dict) or not isinstance(shared_payload.get("optimizer"), dict):
+        raise ValueError("shared checkpoint does not contain optimizer state")
+    if shared_payload.get("optimizer_contract") != optimizer_contract or shared_payload.get("optimizer_realization") != optimizer_realization:
+        raise ValueError("shared checkpoint optimizer realization does not match manifest")
+    shared_expected = {key: value for key, value in expected_state.items() if ".experts." not in key}
+    shared_state = _validate_model_state(shared_expected, shared_payload.get("model"), label="shared")
+    model.load_state_dict(shared_state, strict=False)
+    del shared_state
+    del shared_payload
+
+    for name in EXPERT_NAMES:
+        relative = f"expert-{name}.pt"
+        payload = torch.load(root / relative, map_location="cpu", weights_only=False, mmap=True)
+        if not isinstance(payload, dict) or payload.get("expert") != name:
+            raise ValueError(f"checkpoint expert payload does not identify {name}")
+        if records[relative]["sha256"] != expected[name]:
+            raise ValueError(f"checkpoint expert receipt does not bind {name}")
+        expert_expected = {key: value for key, value in expected_state.items() if f".experts.{name}." in key}
+        expert_state = _validate_model_state(expert_expected, payload.get("model"), label=f"expert {name}")
+        model.load_state_dict(expert_state, strict=False)
+        del expert_state
+        del payload
+
+    model._activate_expert(active[0])
+    torch.set_rng_state(replay_payload["rng_state"]["cpu"])
+    if torch.cuda.is_available():
+        torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
+    return {"data_cursor": dict(replay_payload["data_cursor"])}
