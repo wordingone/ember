@@ -79,3 +79,9 @@ def test_public_certificate_binds_comparator_command_bytes():
         path = root / row["command_path"]
         assert path.is_file()
         assert hashlib.sha256(path.read_bytes()).hexdigest() == row["command_sha256"]
+
+
+def test_public_certificate_preserves_files_selftest_disposition():
+    root = Path(__file__).resolve().parents[1]
+    value = json.loads((root / "manifests" / "ember-restart-eval-completion-certificate-v1.json").read_text(encoding="utf-8"))
+    assert next(row for row in value["benchmarks"] if row["family"] == "files")["result"] == "SELFTEST_ONLY"
