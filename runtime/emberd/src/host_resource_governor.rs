@@ -27,7 +27,7 @@ pub enum ChildLiveness {
     Unknown,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct HostResourceLimits {
     pub minimum_ram_available_bytes: u64,
     pub minimum_commit_available_bytes: u64,
@@ -68,11 +68,33 @@ pub struct ObservedProcessTree {
     pub pids: BTreeSet<u32>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct PreflightReceipt {
+    pub schema_version: &'static str,
     pub status: &'static str,
     pub scope: &'static str,
     pub observed_at_ms: u64,
+    pub sample_sha256: String,
+    pub limits_sha256: String,
+}
+
+impl PreflightReceipt {
+    pub fn verify(
+        &self,
+        sample: &HostResourceSample,
+        limits: &HostResourceLimits,
+    ) -> GovernorResult<()> {
+        if self.schema_version != "ember-host-preflight-v1" {
+            return Err(error("unknown host preflight receipt schema"));
+        }
+        if self.sample_sha256 != sample_sha256(sample) {
+            return Err(error("host preflight sample digest mismatch"));
+        }
+        if self.limits_sha256 != limits_sha256(limits) {
+            return Err(error("host preflight limits digest mismatch"));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -147,6 +169,11 @@ fn error(reason: impl Into<String>) -> GovernorError {
 
 fn require_metric<T: Copy>(value: Option<T>, name: &str) -> GovernorResult<T> {
     value.ok_or_else(|| error(format!("missing decisive metric: {name}")))
+}
+
+fn limits_sha256(limits: &HostResourceLimits) -> String {
+    let bytes = serde_json::to_vec(limits).expect("host resource limits fields are serializable");
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn sample_sha256(sample: &HostResourceSample) -> String {
@@ -234,9 +261,12 @@ pub fn evaluate_preflight(
         return Err(error(format!("host preflight refused: {reason}")));
     }
     Ok(PreflightReceipt {
+        schema_version: "ember-host-preflight-v1",
         status: "ADMITTED",
         scope: "registered_owned_tree",
         observed_at_ms: sample.observed_at_ms,
+        sample_sha256: sample_sha256(sample),
+        limits_sha256: limits_sha256(limits),
     })
 }
 

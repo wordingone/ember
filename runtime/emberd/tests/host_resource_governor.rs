@@ -151,3 +151,24 @@ fn termination_plan_carries_content_addressed_breach_receipt() {
     tampered.pids.push(999);
     assert!(plan.verify_receipt(&tampered).is_err());
 }
+
+#[test]
+fn preflight_receipt_binds_exact_sample_and_limits() {
+    let sample = healthy();
+    let limits = limits();
+    let receipt = evaluate_preflight(&sample, &limits).expect("healthy sample should admit");
+    assert_eq!(receipt.schema_version, "ember-host-preflight-v1");
+    assert!(!receipt.sample_sha256.is_empty());
+    assert!(!receipt.limits_sha256.is_empty());
+    receipt
+        .verify(&sample, &limits)
+        .expect("unchanged admission evidence must verify");
+
+    let mut changed_sample = sample.clone();
+    changed_sample.c_free_bytes = Some(499);
+    assert!(receipt.verify(&changed_sample, &limits).is_err());
+
+    let mut changed_limits = limits.clone();
+    changed_limits.minimum_c_free_bytes = 501;
+    assert!(receipt.verify(&sample, &changed_limits).is_err());
+}
