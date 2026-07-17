@@ -144,6 +144,14 @@ pub enum EmberdError {
         minimum_free_bytes: u64,
         available_free_bytes: u64,
     },
+    DispatchHostCommitReserve {
+        free_commit_at_dispatch_bytes: u64,
+        observed_free_commit_bytes: u64,
+        reserve_bytes: u64,
+        maximum_job_memory_bytes: u64,
+        simulated_peak_commit_bytes: u64,
+        receipt_path: PathBuf,
+    },
     Poisoned,
 }
 
@@ -315,9 +323,13 @@ pub struct DispatchManifest {
     pub custody_root: PathBuf,
     pub storage_reserves: Vec<DispatchStorageReserve>,
     pub minimum_free_vram_bytes: u64,
+    pub free_commit_at_dispatch_bytes: u64,
     pub maximum_job_memory_bytes: u64,
+    pub simulated_peak_commit_bytes: u64,
     pub preflight_receipt: PathBuf,
 }
+
+const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -944,12 +956,34 @@ impl Daemon {
         &self,
         manifest_path: &Path,
         observed_at_ms: i64,
-        mut free_space: F,
-        mut free_vram: G,
+        free_space: F,
+        free_vram: G,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
+    {
+        self.dispatch_manifest_at_with_probes_and_host(
+            manifest_path,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            available_host_commit_bytes,
+        )
+    }
+
+    pub fn dispatch_manifest_at_with_probes_and_host<F, G, H>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        mut free_space: F,
+        mut free_vram: G,
+        mut free_host_commit: H,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<u64>,
     {
         let manifest_path = fs::canonicalize(manifest_path).map_err(|error| {
             EmberdError::InvalidDispatchManifest {
@@ -976,7 +1010,9 @@ impl Daemon {
             || manifest.bindings.is_empty()
             || manifest.storage_reserves.is_empty()
             || manifest.minimum_free_vram_bytes == 0
+            || manifest.free_commit_at_dispatch_bytes == 0
             || manifest.maximum_job_memory_bytes == 0
+            || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberdError::InvalidDispatchManifest {
                 detail: "dispatch manifest requires the closed v1 schema, identities, window, bindings, and reserves".into(),
@@ -1008,6 +1044,40 @@ impl Daemon {
         let receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
         if receipt_path.exists() {
             return Err(EmberdError::ReceiptAlreadyExists { path: receipt_path });
+        }
+
+        let observed_free_commit_bytes = free_host_commit()?;
+        let derived_maximum = manifest
+            .free_commit_at_dispatch_bytes
+            .checked_sub(DISPATCH_HOST_COMMIT_RESERVE_BYTES);
+        if derived_maximum != Some(manifest.maximum_job_memory_bytes)
+            || observed_free_commit_bytes < manifest.free_commit_at_dispatch_bytes
+            || manifest.simulated_peak_commit_bytes > manifest.maximum_job_memory_bytes
+        {
+            let refusal = json!({
+                "schema_version": "emberd-dispatch-preflight-v1",
+                "result": "REFUSED_HOST_COMMIT_CAP",
+                "job_id": &manifest.job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
+                "host_commit": {
+                    "free_commit_at_dispatch_bytes": manifest.free_commit_at_dispatch_bytes,
+                    "observed_free_commit_bytes": observed_free_commit_bytes,
+                    "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
+                    "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
+                    "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
+                },
+            });
+            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            return Err(EmberdError::DispatchHostCommitReserve {
+                free_commit_at_dispatch_bytes: manifest.free_commit_at_dispatch_bytes,
+                observed_free_commit_bytes,
+                reserve_bytes: DISPATCH_HOST_COMMIT_RESERVE_BYTES,
+                maximum_job_memory_bytes: manifest.maximum_job_memory_bytes,
+                simulated_peak_commit_bytes: manifest.simulated_peak_commit_bytes,
+                receipt_path,
+            });
         }
 
         let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
@@ -1132,6 +1202,13 @@ impl Daemon {
                 "available_free_bytes": available_vram,
             },
             "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
+            "host_commit": {
+                "free_commit_at_dispatch_bytes": manifest.free_commit_at_dispatch_bytes,
+                "observed_free_commit_bytes": observed_free_commit_bytes,
+                "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
+                "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
+                "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
+            },
             "emberd_identity": {
                 "binary_sha256": &self.emberd_binary_sha256,
                 "source_sha256": &self.emberd_source_sha256,
@@ -2572,6 +2649,30 @@ fn available_free_bytes(root: &Path) -> Result<u64> {
 fn available_free_bytes(_root: &Path) -> Result<u64> {
     Err(EmberdError::InvalidDispatchManifest {
         detail: "native disk reserve probing is currently Windows-only".into(),
+    })
+}
+
+#[cfg(windows)]
+fn available_host_commit_bytes() -> Result<u64> {
+    use windows_sys::Win32::System::ProcessStatus::{GetPerformanceInfo, PERFORMANCE_INFORMATION};
+
+    let mut info: PERFORMANCE_INFORMATION = unsafe { std::mem::zeroed() };
+    info.cb = std::mem::size_of::<PERFORMANCE_INFORMATION>() as u32;
+    if unsafe { GetPerformanceInfo(&mut info, info.cb) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let free_pages = info.CommitLimit.saturating_sub(info.CommitTotal) as u64;
+    free_pages.checked_mul(info.PageSize as u64).ok_or_else(|| {
+        EmberdError::InvalidDispatchManifest {
+            detail: "Windows host commit probe overflowed bytes".into(),
+        }
+    })
+}
+
+#[cfg(not(windows))]
+fn available_host_commit_bytes() -> Result<u64> {
+    Err(EmberdError::InvalidDispatchManifest {
+        detail: "native host commit probing is currently Windows-only".into(),
     })
 }
 

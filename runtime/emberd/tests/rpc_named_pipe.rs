@@ -150,7 +150,9 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
             "custody_root": custody,
             "storage_reserves": [{"root": root, "minimum_free_bytes": 1}],
             "minimum_free_vram_bytes": 1,
+            "free_commit_at_dispatch_bytes": 11_811_160_064u64,
             "maximum_job_memory_bytes": 1_073_741_824u64,
+            "simulated_peak_commit_bytes": 536_870_912u64,
             "preflight_receipt": root.join("custody").join("preflight.json")
         }))
         .unwrap(),

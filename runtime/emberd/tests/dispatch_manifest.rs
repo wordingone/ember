@@ -13,6 +13,12 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+const GIB: u64 = 1024 * 1024 * 1024;
+const HOST_COMMIT_RESERVE_BYTES: u64 = 10 * GIB;
+const DECLARED_FREE_COMMIT_BYTES: u64 = 16 * GIB;
+const MAXIMUM_JOB_MEMORY_BYTES: u64 = DECLARED_FREE_COMMIT_BYTES - HOST_COMMIT_RESERVE_BYTES;
+const SIMULATED_PEAK_COMMIT_BYTES: u64 = 1 * GIB;
+
 fn sandbox(name: &str) -> PathBuf {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -88,7 +94,9 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
             "custody_root": custody,
             "storage_reserves": [{"root": root, "minimum_free_bytes": 1}],
         "minimum_free_vram_bytes": 1,
-        "maximum_job_memory_bytes": 1_073_741_824u64,
+        "free_commit_at_dispatch_bytes": DECLARED_FREE_COMMIT_BYTES,
+        "maximum_job_memory_bytes": MAXIMUM_JOB_MEMORY_BYTES,
+        "simulated_peak_commit_bytes": SIMULATED_PEAK_COMMIT_BYTES,
         "preflight_receipt": root.join("custody").join("preflight.json")
         }))
         .unwrap(),
@@ -103,7 +111,13 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     let manifest = write_manifest(&root, "dispatch-green", 10_000);
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     let outcome = daemon
-        .dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(2048))
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(DECLARED_FREE_COMMIT_BYTES),
+        )
         .unwrap();
     assert!(outcome.handle.pid > 0);
     assert_eq!(
@@ -129,8 +143,93 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     assert_eq!(receipt["dispatch_manifest_sha256"], sha256(&manifest));
     assert_eq!(receipt["vram_reserve"]["minimum_free_bytes"], 1);
     assert_eq!(receipt["vram_reserve"]["available_free_bytes"], 2048);
-    assert_eq!(receipt["maximum_job_memory_bytes"], 1_073_741_824u64);
+    assert_eq!(
+        receipt["host_commit"]["free_commit_at_dispatch_bytes"],
+        DECLARED_FREE_COMMIT_BYTES
+    );
+    assert_eq!(
+        receipt["host_commit"]["observed_free_commit_bytes"],
+        DECLARED_FREE_COMMIT_BYTES
+    );
+    assert_eq!(
+        receipt["host_commit"]["reserve_bytes"],
+        HOST_COMMIT_RESERVE_BYTES
+    );
+    assert_eq!(
+        receipt["host_commit"]["maximum_job_memory_bytes"],
+        MAXIMUM_JOB_MEMORY_BYTES
+    );
+    assert_eq!(
+        receipt["host_commit"]["simulated_peak_commit_bytes"],
+        SIMULATED_PEAK_COMMIT_BYTES
+    );
     daemon.stop_job("dispatch-green").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_refuses_unsafe_host_commit_cap_with_receipt_before_spawn() {
+    for (name, declared_free, maximum, simulated_peak, observed_free) in [
+        (
+            "formula",
+            DECLARED_FREE_COMMIT_BYTES,
+            MAXIMUM_JOB_MEMORY_BYTES + 1,
+            SIMULATED_PEAK_COMMIT_BYTES,
+            DECLARED_FREE_COMMIT_BYTES,
+        ),
+        (
+            "drift",
+            DECLARED_FREE_COMMIT_BYTES,
+            MAXIMUM_JOB_MEMORY_BYTES,
+            SIMULATED_PEAK_COMMIT_BYTES,
+            DECLARED_FREE_COMMIT_BYTES - 1,
+        ),
+        (
+            "simulated-peak",
+            DECLARED_FREE_COMMIT_BYTES,
+            MAXIMUM_JOB_MEMORY_BYTES,
+            MAXIMUM_JOB_MEMORY_BYTES + 1,
+            DECLARED_FREE_COMMIT_BYTES,
+        ),
+    ] {
+        let root = sandbox(name);
+        let manifest = write_manifest(&root, &format!("dispatch-{name}"), 10_000);
+        let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        payload["free_commit_at_dispatch_bytes"] = json!(declared_free);
+        payload["maximum_job_memory_bytes"] = json!(maximum);
+        payload["simulated_peak_commit_bytes"] = json!(simulated_peak);
+        fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+        let error = daemon
+            .dispatch_manifest_at_with_probes_and_host(
+                &manifest,
+                10_001,
+                |_root| Ok(1024),
+                || Ok(2048),
+                || Ok(observed_free),
+            )
+            .unwrap_err();
+        assert!(
+            format!("{error:?}").contains("DispatchHostCommitReserve"),
+            "unexpected error: {error:?}"
+        );
+        assert_eq!(daemon.job_state(&format!("dispatch-{name}")).unwrap(), None);
+        let receipt_path = root.join("custody").join("preflight.json");
+        let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
+        assert_eq!(receipt["result"], "REFUSED_HOST_COMMIT_CAP");
+        assert_eq!(
+            receipt["host_commit"]["free_commit_at_dispatch_bytes"],
+            declared_free
+        );
+        assert_eq!(
+            receipt["host_commit"]["observed_free_commit_bytes"],
+            observed_free
+        );
+        assert_eq!(receipt["host_commit"]["maximum_job_memory_bytes"], maximum);
+        assert_eq!(
+            receipt["host_commit"]["simulated_peak_commit_bytes"],
+            simulated_peak
+        );
+    }
 }
 
 #[test]
@@ -138,12 +237,20 @@ fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
     let root = sandbox("job-memory-ceiling");
     let manifest = write_manifest(&root, "dispatch-memory-ceiling", 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["free_commit_at_dispatch_bytes"] = json!(HOST_COMMIT_RESERVE_BYTES + 134_217_728u64);
     payload["maximum_job_memory_bytes"] = json!(134_217_728u64);
+    payload["simulated_peak_commit_bytes"] = json!(67_108_864u64);
     payload["env"]["EMBERD_DISPATCH_ALLOCATE_BYTES"] = json!(536_870_912u64.to_string());
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     daemon
-        .dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(1024))
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(DECLARED_FREE_COMMIT_BYTES),
+        )
         .unwrap();
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
     loop {
@@ -175,7 +282,13 @@ fn dispatch_manifest_rejects_a_missing_job_memory_ceiling() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(1024),),
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(DECLARED_FREE_COMMIT_BYTES)
+        ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(daemon.job_state("dispatch-missing-memory").unwrap(), None);
@@ -197,11 +310,12 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
         }
         let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
         let error = daemon
-            .dispatch_manifest_at_with_probes(
+            .dispatch_manifest_at_with_probes_and_host(
                 &manifest,
                 now_ms,
                 |_root| Ok(free_bytes),
                 || Ok(free_vram),
+                || Ok(DECLARED_FREE_COMMIT_BYTES),
             )
             .unwrap_err();
         assert!(
@@ -223,7 +337,13 @@ fn dispatch_manifest_rejects_unknown_fields_and_cache_escape() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(1024),),
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(DECLARED_FREE_COMMIT_BYTES)
+        ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
 }
@@ -240,7 +360,13 @@ fn dispatch_manifest_requires_typed_config_and_manifest_bindings() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(1024),),
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(DECLARED_FREE_COMMIT_BYTES)
+        ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(daemon.job_state("dispatch-binding-classes").unwrap(), None);
@@ -282,7 +408,13 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(2048)),
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(DECLARED_FREE_COMMIT_BYTES)
+        ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
 
@@ -305,7 +437,13 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     registry_binding["sha256"] = json!(sha256(&registry));
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(1024), || Ok(2048)),
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(DECLARED_FREE_COMMIT_BYTES)
+        ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     registry_payload["verifiers"][0]
@@ -322,7 +460,13 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     registry_binding["sha256"] = json!(sha256(&registry));
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes(&manifest, 10_001, |_root| Ok(0), || Ok(2048)),
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(0),
+            || Ok(2048),
+            || Ok(DECLARED_FREE_COMMIT_BYTES)
+        ),
         Err(EmberdError::DispatchStorageReserve { .. })
     ));
     assert_eq!(daemon.job_state("dispatch-resume-registry").unwrap(), None);
@@ -343,11 +487,12 @@ fn dispatch_manifest_rejects_cache_and_equals_path_escapes() {
         fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
         let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
         assert!(matches!(
-            daemon.dispatch_manifest_at_with_probes(
+            daemon.dispatch_manifest_at_with_probes_and_host(
                 &manifest,
                 10_001,
                 |_root| Ok(1024),
                 || Ok(1024),
+                || Ok(DECLARED_FREE_COMMIT_BYTES),
             ),
             Err(EmberdError::InvalidDispatchManifest { .. })
         ));
