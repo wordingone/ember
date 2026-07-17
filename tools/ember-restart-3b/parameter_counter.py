@@ -368,7 +368,8 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         episode = lineage.get("episode")
         receipt_fields = {"schema_version", "result", "capability", "data_manifest_sha256", "tokenizer_sha256", "verifier_sha256", "data_class", "record_count", "token_count", "source_manifest_sha256", "records_artifact_sha256", "semantic_checks", "generator_replay_verified"}
         capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
-        if (not isinstance(episode, Mapping) or set(episode) != {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256"}
+        episode_fields = {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256", "execution_slice", "execution_slice_sha256"}
+        if (not isinstance(episode, Mapping) or set(episode) != episode_fields
                 or episode.get("active_expert") != active_expert or not isinstance(episode.get("data_verification_receipt"), Mapping)):
             raise ValueError("specialist v4 lineage lacks a closed active episode")
         verification = episode["data_verification_receipt"]
@@ -380,6 +381,20 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         canonical = hashlib.sha256(json.dumps(dict(verification), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         if episode.get("data_verification_receipt_sha256") != canonical:
             raise ValueError("specialist v4 lineage data verification receipt hash does not match")
+        execution_slice = episode.get("execution_slice")
+        slice_fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
+        if (not isinstance(execution_slice, Mapping) or set(execution_slice) != slice_fields
+                or execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1"
+                or type(execution_slice.get("start_record")) is not int or execution_slice["start_record"] < 0
+                or type(execution_slice.get("record_count")) is not int or execution_slice["record_count"] <= 0
+                or type(execution_slice.get("token_count")) is not int or execution_slice["token_count"] <= 0
+                or execution_slice["start_record"] + execution_slice["record_count"] > verification["record_count"]):
+            raise ValueError("specialist v4 lineage has an invalid execution slice")
+        for field in ("records_sha256", "tokens_sha256"):
+            _sha256_value(execution_slice.get(field), label=f"specialist execution slice {field}")
+        slice_canonical = hashlib.sha256(json.dumps(dict(execution_slice), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if episode.get("execution_slice_sha256") != slice_canonical:
+            raise ValueError("specialist v4 lineage execution slice hash does not match")
         candidate_parameters = manifest.get("expert_parameter_sha256")
         parent_parameters = parent_external.get("expert_parameter_sha256", parent_external.get("expert_genesis_sha256"))
         root_parameters = root_external.get("expert_parameter_sha256", root_external.get("expert_genesis_sha256"))
