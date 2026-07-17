@@ -27,8 +27,7 @@ def fixture_counter_receipt(candidate: Path, manifest: dict[str, Any]) -> dict[s
     for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
         payload[field] = architecture[field]
     validate_realization_receipt(payload)
-    (candidate / "parameter-counter-receipt.json").write_text(json.dumps(payload, sort_keys=True) + "
-", encoding="utf-8")
+    (candidate / "parameter-counter-receipt.json").write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
     return payload
 
 
@@ -36,5 +35,3 @@ def write_checkpoint_artifacts(*args: Any, **kwargs: Any) -> dict[str, Any]:
     kwargs.pop("test_only_allow_unverified", None)
     kwargs.setdefault("pre_publish_verifier", fixture_counter_receipt)
     return _production_write(*args, **kwargs)
-
-\r
