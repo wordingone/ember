@@ -4,7 +4,7 @@
 
 #![cfg(windows)]
 
-use emberd::{Daemon, EmberdError, JobState};
+use emberd::{Daemon, EmberdError, HostCommitCapacity, JobState};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -15,9 +15,28 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const HOST_COMMIT_RESERVE_BYTES: u64 = 10 * GIB;
-const DECLARED_FREE_COMMIT_BYTES: u64 = 16 * GIB;
-const MAXIMUM_JOB_MEMORY_BYTES: u64 = DECLARED_FREE_COMMIT_BYTES - HOST_COMMIT_RESERVE_BYTES;
+const DECLARED_PHYSICAL_RAM_BYTES: u64 = 64 * GIB;
+const DECLARED_PAGEFILE_MAXIMUM_BYTES: u64 = 32 * GIB;
+const DECLARED_COMMIT_TOTAL_BYTES: u64 = 80 * GIB;
+const DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES: u64 = 16 * GIB;
+const MAXIMUM_JOB_MEMORY_BYTES: u64 =
+    DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES - HOST_COMMIT_RESERVE_BYTES;
 const SIMULATED_PEAK_COMMIT_BYTES: u64 = 1 * GIB;
+
+fn host_capacity(available_maximum_commit_bytes: u64) -> HostCommitCapacity {
+    HostCommitCapacity {
+        physical_ram_bytes: 64 * GIB,
+        pagefile_maximum_bytes: 32 * GIB,
+        pagefile_configuration_source:
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
+                .to_string(),
+        pagefile_configuration_sha256: "a".repeat(64),
+        commit_total_bytes: 96 * GIB - available_maximum_commit_bytes,
+        current_commit_limit_bytes: 80 * GIB,
+        maximum_commit_capacity_bytes: 96 * GIB,
+        available_maximum_commit_bytes,
+    }
+}
 
 fn sandbox(name: &str) -> PathBuf {
     let nonce = SystemTime::now()
@@ -78,7 +97,7 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
     fs::write(
         &manifest,
         serde_json::to_vec(&json!({
-            "schema_version": "emberd-dispatch-manifest-v1",
+        "schema_version": "emberd-dispatch-manifest-v2",
             "job_id": job_id,
             "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
             "not_before_ms": not_before_ms,
@@ -94,7 +113,7 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
             "custody_root": custody,
             "storage_reserves": [{"root": root, "minimum_free_bytes": 1}],
         "minimum_free_vram_bytes": 1,
-        "free_commit_at_dispatch_bytes": DECLARED_FREE_COMMIT_BYTES,
+        "required_available_maximum_commit_bytes": DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
         "maximum_job_memory_bytes": MAXIMUM_JOB_MEMORY_BYTES,
         "simulated_peak_commit_bytes": SIMULATED_PEAK_COMMIT_BYTES,
         "preflight_receipt": root.join("custody").join("preflight.json")
@@ -116,7 +135,7 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
-            || Ok(DECLARED_FREE_COMMIT_BYTES),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
         )
         .unwrap();
     assert!(outcome.handle.pid > 0);
@@ -144,12 +163,35 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     assert_eq!(receipt["vram_reserve"]["minimum_free_bytes"], 1);
     assert_eq!(receipt["vram_reserve"]["available_free_bytes"], 2048);
     assert_eq!(
-        receipt["host_commit"]["free_commit_at_dispatch_bytes"],
-        DECLARED_FREE_COMMIT_BYTES
+        receipt["host_commit"]["required_available_maximum_commit_bytes"],
+        DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES
     );
     assert_eq!(
-        receipt["host_commit"]["observed_free_commit_bytes"],
-        DECLARED_FREE_COMMIT_BYTES
+        receipt["host_commit"]["observed_available_maximum_commit_bytes"],
+        DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES
+    );
+    assert_eq!(receipt["host_commit"]["physical_ram_bytes"], 64 * GIB);
+    assert_eq!(receipt["host_commit"]["pagefile_maximum_bytes"], 32 * GIB);
+    assert_eq!(
+        receipt["host_commit"]["pagefile_configuration_source"],
+        r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
+    );
+    assert_eq!(
+        receipt["host_commit"]["pagefile_configuration_sha256"],
+        "a".repeat(64)
+    );
+    assert_eq!(receipt["host_commit"]["commit_total_bytes"], 80 * GIB);
+    assert_eq!(
+        receipt["host_commit"]["current_commit_limit_bytes"],
+        80 * GIB
+    );
+    assert_eq!(
+        receipt["host_commit"]["maximum_commit_capacity_bytes"],
+        96 * GIB
+    );
+    assert_eq!(
+        receipt["host_commit"]["basis"],
+        "maximum_configured_capacity"
     );
     assert_eq!(
         receipt["host_commit"]["reserve_bytes"],
@@ -167,34 +209,121 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
 }
 
 #[test]
+fn dispatch_manifest_rejects_stale_v1_host_capacity_schema() {
+    let root = sandbox("stale-v1-host-capacity");
+    let manifest = write_manifest(&root, "dispatch-stale-v1", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["schema_version"] = json!("emberd-dispatch-manifest-v1");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(daemon.job_state("dispatch-stale-v1").unwrap(), None);
+    assert!(!root.join("custody").join("preflight.json").exists());
+}
+
+#[test]
+fn dispatch_manifest_refuses_physical_pagefile_and_commit_drift() {
+    for (name, physical, pagefile_maximum, commit_total) in [
+        (
+            "physical-drift",
+            DECLARED_PHYSICAL_RAM_BYTES - 1,
+            DECLARED_PAGEFILE_MAXIMUM_BYTES,
+            DECLARED_COMMIT_TOTAL_BYTES,
+        ),
+        (
+            "pagefile-drift",
+            DECLARED_PHYSICAL_RAM_BYTES,
+            DECLARED_PAGEFILE_MAXIMUM_BYTES - 1,
+            DECLARED_COMMIT_TOTAL_BYTES,
+        ),
+        (
+            "commit-drift",
+            DECLARED_PHYSICAL_RAM_BYTES,
+            DECLARED_PAGEFILE_MAXIMUM_BYTES,
+            DECLARED_COMMIT_TOTAL_BYTES + 1,
+        ),
+    ] {
+        let root = sandbox(name);
+        let manifest = write_manifest(&root, &format!("dispatch-{name}"), 10_000);
+        let maximum = physical + pagefile_maximum;
+        let observed_available = maximum - commit_total;
+        let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+        let error = daemon
+            .dispatch_manifest_at_with_probes_and_host(
+                &manifest,
+                10_001,
+                |_root| Ok(1024),
+                || Ok(1024),
+                || {
+                    Ok(HostCommitCapacity {
+                        physical_ram_bytes: physical,
+                        pagefile_maximum_bytes: pagefile_maximum,
+                        pagefile_configuration_source: r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles".to_string(),
+                        pagefile_configuration_sha256: "b".repeat(64),
+                        commit_total_bytes: commit_total,
+                        current_commit_limit_bytes: 80 * GIB,
+                        maximum_commit_capacity_bytes: maximum,
+                        available_maximum_commit_bytes: observed_available,
+                    })
+                },
+            )
+            .unwrap_err();
+        assert!(format!("{error:?}").contains("DispatchHostCommitReserve"));
+        let receipt: Value =
+            serde_json::from_slice(&fs::read(root.join("custody").join("preflight.json")).unwrap())
+                .unwrap();
+        assert_eq!(receipt["result"], "REFUSED_HOST_COMMIT_CAP");
+        assert_eq!(receipt["host_commit"]["physical_ram_bytes"], physical);
+        assert_eq!(
+            receipt["host_commit"]["pagefile_maximum_bytes"],
+            pagefile_maximum
+        );
+        assert_eq!(receipt["host_commit"]["commit_total_bytes"], commit_total);
+        assert_eq!(
+            receipt["host_commit"]["observed_available_maximum_commit_bytes"],
+            observed_available
+        );
+    }
+}
+
+#[test]
 fn dispatch_manifest_refuses_unsafe_host_commit_cap_with_receipt_before_spawn() {
     for (name, declared_free, maximum, simulated_peak, observed_free) in [
         (
             "formula",
-            DECLARED_FREE_COMMIT_BYTES,
+            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
             MAXIMUM_JOB_MEMORY_BYTES + 1,
             SIMULATED_PEAK_COMMIT_BYTES,
-            DECLARED_FREE_COMMIT_BYTES,
+            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
         ),
         (
             "drift",
-            DECLARED_FREE_COMMIT_BYTES,
+            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
             MAXIMUM_JOB_MEMORY_BYTES,
             SIMULATED_PEAK_COMMIT_BYTES,
-            DECLARED_FREE_COMMIT_BYTES - 1,
+            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES - 1,
         ),
         (
             "simulated-peak",
-            DECLARED_FREE_COMMIT_BYTES,
+            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
             MAXIMUM_JOB_MEMORY_BYTES,
             MAXIMUM_JOB_MEMORY_BYTES + 1,
-            DECLARED_FREE_COMMIT_BYTES,
+            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
         ),
     ] {
         let root = sandbox(name);
         let manifest = write_manifest(&root, &format!("dispatch-{name}"), 10_000);
         let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-        payload["free_commit_at_dispatch_bytes"] = json!(declared_free);
+        payload["required_available_maximum_commit_bytes"] = json!(declared_free);
         payload["maximum_job_memory_bytes"] = json!(maximum);
         payload["simulated_peak_commit_bytes"] = json!(simulated_peak);
         fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
@@ -205,7 +334,7 @@ fn dispatch_manifest_refuses_unsafe_host_commit_cap_with_receipt_before_spawn() 
                 10_001,
                 |_root| Ok(1024),
                 || Ok(2048),
-                || Ok(observed_free),
+                || Ok(host_capacity(observed_free)),
             )
             .unwrap_err();
         assert!(
@@ -217,11 +346,11 @@ fn dispatch_manifest_refuses_unsafe_host_commit_cap_with_receipt_before_spawn() 
         let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
         assert_eq!(receipt["result"], "REFUSED_HOST_COMMIT_CAP");
         assert_eq!(
-            receipt["host_commit"]["free_commit_at_dispatch_bytes"],
+            receipt["host_commit"]["required_available_maximum_commit_bytes"],
             declared_free
         );
         assert_eq!(
-            receipt["host_commit"]["observed_free_commit_bytes"],
+            receipt["host_commit"]["observed_available_maximum_commit_bytes"],
             observed_free
         );
         assert_eq!(receipt["host_commit"]["maximum_job_memory_bytes"], maximum);
@@ -237,7 +366,8 @@ fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
     let root = sandbox("job-memory-ceiling");
     let manifest = write_manifest(&root, "dispatch-memory-ceiling", 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-    payload["free_commit_at_dispatch_bytes"] = json!(HOST_COMMIT_RESERVE_BYTES + 134_217_728u64);
+    let declared_available = HOST_COMMIT_RESERVE_BYTES + 134_217_728u64;
+    payload["required_available_maximum_commit_bytes"] = json!(declared_available);
     payload["maximum_job_memory_bytes"] = json!(134_217_728u64);
     payload["simulated_peak_commit_bytes"] = json!(67_108_864u64);
     payload["env"]["EMBERD_DISPATCH_ALLOCATE_BYTES"] = json!(536_870_912u64.to_string());
@@ -249,7 +379,7 @@ fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
-            || Ok(DECLARED_FREE_COMMIT_BYTES),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
         )
         .unwrap();
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
@@ -287,7 +417,7 @@ fn dispatch_manifest_rejects_a_missing_job_memory_ceiling() {
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
-            || Ok(DECLARED_FREE_COMMIT_BYTES)
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -315,7 +445,7 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
                 now_ms,
                 |_root| Ok(free_bytes),
                 || Ok(free_vram),
-                || Ok(DECLARED_FREE_COMMIT_BYTES),
+                || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
             )
             .unwrap_err();
         assert!(
@@ -342,7 +472,7 @@ fn dispatch_manifest_rejects_unknown_fields_and_cache_escape() {
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
-            || Ok(DECLARED_FREE_COMMIT_BYTES)
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -365,7 +495,7 @@ fn dispatch_manifest_requires_typed_config_and_manifest_bindings() {
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
-            || Ok(DECLARED_FREE_COMMIT_BYTES)
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -413,7 +543,7 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
-            || Ok(DECLARED_FREE_COMMIT_BYTES)
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -442,7 +572,7 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
-            || Ok(DECLARED_FREE_COMMIT_BYTES)
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -465,7 +595,7 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
             10_001,
             |_root| Ok(0),
             || Ok(2048),
-            || Ok(DECLARED_FREE_COMMIT_BYTES)
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
         ),
         Err(EmberdError::DispatchStorageReserve { .. })
     ));
@@ -492,7 +622,7 @@ fn dispatch_manifest_rejects_cache_and_equals_path_escapes() {
                 10_001,
                 |_root| Ok(1024),
                 || Ok(1024),
-                || Ok(DECLARED_FREE_COMMIT_BYTES),
+                || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
             ),
             Err(EmberdError::InvalidDispatchManifest { .. })
         ));

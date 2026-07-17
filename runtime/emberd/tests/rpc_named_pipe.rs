@@ -4,6 +4,7 @@
 
 #![cfg(windows)]
 
+use emberd::probe_host_commit_capacity;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -130,11 +131,16 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
+    let host_commit = probe_host_commit_capacity().unwrap();
+    let maximum_job_memory_bytes = 1_073_741_824u64;
+    let declared_available_maximum_commit_bytes =
+        10 * 1024 * 1024 * 1024 + maximum_job_memory_bytes;
+    assert!(host_commit.available_maximum_commit_bytes >= declared_available_maximum_commit_bytes);
     let manifest = root.join("dispatch.json");
     fs::write(
         &manifest,
         serde_json::to_vec(&json!({
-            "schema_version": "emberd-dispatch-manifest-v1",
+            "schema_version": "emberd-dispatch-manifest-v2",
             "job_id": job_id,
             "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
             "not_before_ms": now - 1_000,
@@ -150,8 +156,8 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
             "custody_root": custody,
             "storage_reserves": [{"root": root, "minimum_free_bytes": 1}],
             "minimum_free_vram_bytes": 1,
-            "free_commit_at_dispatch_bytes": 11_811_160_064u64,
-            "maximum_job_memory_bytes": 1_073_741_824u64,
+            "required_available_maximum_commit_bytes": declared_available_maximum_commit_bytes,
+            "maximum_job_memory_bytes": maximum_job_memory_bytes,
             "simulated_peak_commit_bytes": 536_870_912u64,
             "preflight_receipt": root.join("custody").join("preflight.json")
         }))
