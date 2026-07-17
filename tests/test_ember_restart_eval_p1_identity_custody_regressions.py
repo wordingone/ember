@@ -112,3 +112,30 @@ def test_evalplus_spider_and_mmmu_reject_altered_protocol_or_checkpoint(tmp_path
     mmmu = _load("scripts/ember_restart_eval_mmmu.py", "p1_matrix_mmmu")
     with pytest.raises(ValueError, match="checkpoint"):
         mmmu.validate_manifest_identity({"checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64}, {"checkpoint_manifest_sha256": "9" * 64, "model_config_sha256": "b" * 64})
+
+
+def test_evalplus_requires_checkpoint_and_config_identity_in_frozen_custody(tmp_path):
+    module = _load("scripts/ember_restart_eval_evalplus_result.py", "p1_evalplus_required_identity")
+    manifest = json.loads((ROOT / "manifests" / "ember-restart-eval-code-math-custody-v1.json").read_text(encoding="utf-8"))
+    manifest.pop("checkpoint_manifest_sha256", None)
+    manifest.pop("model_config_sha256", None)
+    repo = tmp_path / "evalplus"; (repo / "manifests").mkdir(parents=True)
+    for entry in manifest["scoring_adapters"]:
+        destination = repo / entry["path"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((ROOT / entry["path"]).read_bytes())
+        entry["sha256"] = _sha(destination)
+    with pytest.raises(ValueError, match="checkpoint/config"):
+        module.evalplus_protocol_sha256(manifest, "humanevalplus_v0.1.10", manifest["scoring_adapters"])
+
+
+def test_spider_requires_checkpoint_and_config_identity_in_canonical_custody():
+    module = _load("scripts/ember_restart_eval_spider.py", "p1_spider_required_identity")
+    with pytest.raises(ValueError, match="checkpoint_manifest_sha256"):
+        module.require_canonical_identity({"schema_version": "ember-restart-benchmark-custody-v1"})
+
+
+def test_mmmu_requires_checkpoint_and_config_identity_in_canonical_custody():
+    module = _load("scripts/ember_restart_eval_mmmu.py", "p1_mmmu_required_identity")
+    with pytest.raises(ValueError, match="checkpoint_manifest_sha256"):
+        module.validate_manifest_identity({"schema_version": "ember-restart-benchmark-custody-v1"}, {})

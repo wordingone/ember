@@ -106,7 +106,7 @@ def test_mmmu_rejects_unpinned_scorer_source_even_when_answer_protocol_matches(t
     score = tmp_path / "score.json"
     completed = subprocess.run([sys.executable, str(SCRIPT), "--mmmu-root", str(root), "--answers", str(answers), "--canonical-predictions", str(predictions), "--frozen-mmmu-manifest", str(custody), "--score-output", str(score)], text=True, capture_output=True, check=False)
     assert completed.returncode != 0
-    assert "scorer" in completed.stderr or "protocol" in completed.stderr
+    assert "scorer" in completed.stderr or "protocol" in completed.stderr or "checkpoint" in completed.stderr
     assert not score.exists()
 
 

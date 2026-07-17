@@ -5,7 +5,7 @@
     "schema_version": "ember-restart-benchmark-custody-v1",
     "scoring_adapter": {
         "path": "scripts/ember_restart_eval_mmmu.py",
-        "sha256": "51489e463e59481254cee2ea53ee9d4942540957030ef9f13b321b8fd6dce5f5",
+        "sha256": "1c4d3dad210bfd259394d134a2ed9006c361f9d9c92ec0408d93340b8c091bd3",
         "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
     },
     "benchmark_id": "MMMU",
@@ -39,7 +39,7 @@
         "path": "mmmu/main_eval_only.py",
         "sha256": "d527738e3beeccb0620d41bdaa94324f89e376a9935b28a48f4975b1815234d6"
     },
-    "protocol_sha256": "d67b336b7693993c0fd29d54146ad03ce75b38f04dd66fbb5f86ac5e4abe2a8e",
+    "protocol_sha256": "74cd101e3cabd774d876252e6f26a8e1462564bbba849b3ca9c7f5e76c63dc4a",
     "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
     "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
 }

@@ -63,7 +63,7 @@
         },
         {
             "path": "scripts/ember_restart_eval_evalplus_result.py",
-            "sha256": "18b9e0279532f99b19e70928276c0299ecf9fa29f85127506bdd5caab19d42cc",
+            "sha256": "085dd947444e3548148b1964578f0dfccf0d405a398e9e3f4979c66a9b7b754f",
             "result_disposition": "SELFTEST_ONLY_NON_ADMISSIBLE"
         },
         {
@@ -72,5 +72,7 @@
             "result_disposition": "PREFLIGHT_ONLY_NON_ADMISSIBLE"
         }
     ],
-    "protocol_sha256": "ad162dca6884ae46461b9efcb50b91f2d6b1cf2389cf1800405d3f091f450e5e"
+    "protocol_sha256": "819ceca6edbd1713eeda56fbc959b28b03ea5ef58f7ee79e272d7e88b09afad0",
+    "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
 }

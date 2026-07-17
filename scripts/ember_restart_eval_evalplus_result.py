@@ -39,8 +39,12 @@ def evalplus_protocol_sha256(manifest: dict[str, object], suite: str, adapters: 
     source_tree = manifest.get("source_tree")
     if not isinstance(source_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", source_commit) or not isinstance(source_tree, str) or not re.fullmatch(r"[0-9a-f]{40}", source_tree):
         raise ValueError("EvalPlus custody lacks upstream source commit/tree identity")
+    checkpoint_sha = manifest.get("checkpoint_manifest_sha256")
+    config_sha = manifest.get("model_config_sha256")
+    if not isinstance(checkpoint_sha, str) or not SHA256_RE.fullmatch(checkpoint_sha) or not isinstance(config_sha, str) or not SHA256_RE.fullmatch(config_sha):
+        raise ValueError("EvalPlus custody lacks checkpoint/config identity for protocol")
     adapter_identity = "|".join(f"{entry['path']}:{entry['sha256']}" for entry in sorted(adapters, key=lambda item: item["path"]))
-    material = f"evalplus:{manifest.get('benchmark_id')}:{suite}:{asset_sha}:{license_sha}:{source_commit}:{source_tree}:{adapter_identity}"
+    material = f"evalplus:{manifest.get('benchmark_id')}:{suite}:{asset_sha}:{license_sha}:{source_commit}:{source_tree}:{checkpoint_sha}:{config_sha}:{adapter_identity}"
     return sha256(material.encode("utf-8"))
 
 
@@ -81,9 +85,8 @@ def _load_frozen_code_manifest(path: Path, binding: dict[str, object], suite: st
         raise ValueError("EvalPlus protocol is not derived from frozen code custody")
     for identity in ("checkpoint_manifest_sha256", "model_config_sha256"):
         expected = manifest.get(identity)
-        if expected is not None:
-            if not isinstance(expected, str) or not SHA256_RE.fullmatch(expected) or binding.get(identity) != expected:
-                raise ValueError(f"EvalPlus {identity} is not bound by frozen custody")
+        if not isinstance(expected, str) or not SHA256_RE.fullmatch(expected) or binding.get(identity) != expected:
+            raise ValueError(f"EvalPlus {identity} is not bound by frozen custody")
     return manifest_bytes, manifest
 
 
