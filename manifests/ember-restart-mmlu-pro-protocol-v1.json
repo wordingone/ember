@@ -25,7 +25,7 @@
     "protocol_derivation": "mmlu-pro:{benchmark_version}:{references_sha256}:{license_sha256}:{scoring_adapter_sha256}",
     "protocol_status": "FROZEN_LICENSE_CARD_BOUND",
     "custody_manifest_path": "manifests/ember-restart-mmlu-pro-custody-v1.json",
-    "custody_manifest_sha256": "04cb92a53fb40a6673c3b7a32a57a979382f86d2702e1442e37691e4d3414217",
+    "custody_manifest_sha256": "73b0857819df05bde280873d13855df99348a5a2ee66385e90313f93ba3abb26",
     "license_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
     "license_card_sha256": "4bd710f67da3fa359a33edce1b4b5816b3de416c823c2624ba5e89c2557d2a47",
     "protocol_sha256": "c94a4ff384fc26fcc29333ee1711c2b4a1b8ee585502d66e79abc4b335a4a626"
