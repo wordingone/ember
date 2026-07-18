@@ -190,9 +190,7 @@ re-derivation.**
 
 ## 4. Where state lives
 
-`CONTINUITY.md` is the single actively-maintained position ledger — read it, not `STATE.md`
-(which is now a one-line pointer stub; its old content is preserved in git history). `GOAL.md` is
-the standing goal. Neither is duplicated by commit messages or by `receipts/`.
+`CONTINUITY.md` is the single actively-maintained position ledger â€” read it for the current cursor and the migrated artifact-state resolver. `STATE.md` is a one-line compatibility pointer to that resolver; it carries no independent authority and does not replace receipt evidence. `GOAL.md` is the standing goal. Receipts remain independent evidence under `receipts/` and are never upgraded by prose.
 
 ## 5. Verify one claim yourself (no GPU required)
 
