@@ -795,8 +795,9 @@ def migrate_legacy_custody_ledger(parent: Path, *, transaction_receipt_path: Pat
         else:
             _atomic_json(migration_receipt_path, receipt)
         return {**receipt, "migration_receipt": str(migration_receipt_path)}
-def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict[str, object], *, transaction_receipt_path: Path, operation_id: str, subject: str) -> None:
+def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict[str, object], *, transaction_receipt_path: Path, operation_id: str, subject: str, recovery_idempotent: bool = False) -> bool:
     """Validate one semantic custody transition under lock before minting external authority."""
+    _custody_reconciliation(canonical_parent)
     prior, prior_events = _custody_ledger_snapshot(canonical_parent)
     pointer = _canonical_custody_deletion_pointer(event["pointer"])
     matching = [row for row in prior_events if isinstance(row, dict) and row.get("schema_version") == _CUSTODY_LEDGER_SCHEMA and row.get("pointer") == pointer]
@@ -804,6 +805,15 @@ def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict
         if matching:
             raise RuntimeError("custody ledger PREPARED transition already exists")
     elif event["event"] == "COMMITTED":
+        if recovery_idempotent and len(matching) == 2:
+            prepared, committed = matching
+            if (
+                prepared.get("event") == "PREPARED"
+                and committed.get("event") == "COMMITTED"
+                and all(row.get(key) == event.get(key) for row in (prepared, committed) for key in ("pointer", "bytes", "sha256", "reason"))
+                and not _custody_deletion_path(canonical_parent, pointer).exists()
+            ):
+                return False
         if len(matching) != 1 or matching[0].get("event") != "PREPARED":
             raise RuntimeError("custody ledger COMMITTED requires exactly one prior PREPARED transition")
         prepared = matching[0]
@@ -820,17 +830,23 @@ def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict
     if transaction["result"] != "PREPARED":
         raise RuntimeError("ledger append requires a fresh nonterminal transaction operation ID")
     _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, new_ledger)
+    return True
 
-def _append_custody_ledger_transition(parent: Path, event: dict[str, object], *, transaction_receipt_path: Path | None = None, operation_id: str | None = None, subject: str | None = None) -> None:
+def _append_custody_ledger_transition(parent: Path, event: dict[str, object], *, transaction_receipt_path: Path | None = None, operation_id: str | None = None, subject: str | None = None, recovery_idempotent: bool = False) -> None:
     """Durably replace only through an externally bound old/new transaction."""
     effective_operation_id = operation_id or f"append-{uuid.uuid4().hex}"
     with _custody_ledger_write_lock(parent) as canonical_parent:
+        expected_subject = f"custody:{canonical_parent.name}"
+        if subject is not None and subject != expected_subject:
+            raise RuntimeError("append transaction subject does not match custody root")
         _recover_parent_scoped_transactions_locked(canonical_parent)
         if transaction_receipt_path is None:
             transaction_receipt_path = canonical_parent.parent / f"custody-append-{canonical_parent.name}-{effective_operation_id}.json"
         if transaction_receipt_path.resolve().is_relative_to(canonical_parent.resolve()):
             raise RuntimeError("append transaction receipt must be outside custody root")
-        _append_custody_ledger_transition_locked(canonical_parent, event, transaction_receipt_path=transaction_receipt_path, operation_id=effective_operation_id, subject=subject or f"custody:{canonical_parent.name}")
+        applied = _append_custody_ledger_transition_locked(canonical_parent, event, transaction_receipt_path=transaction_receipt_path, operation_id=effective_operation_id, subject=expected_subject, recovery_idempotent=recovery_idempotent)
+        if not applied:
+            return
         transaction = _head_transaction(transaction_receipt_path)
         current, _ = _custody_ledger_snapshot(canonical_parent)
         if _ledger_binding(current) != transaction["new"]:
@@ -1022,11 +1038,7 @@ def _recover_missing_prepared_evidence(parent: Path) -> None:
             except OSError as error:
                 raise RuntimeError("prepared evidence could not be inspected for recovery") from error
     for committed in commits:
-        try:
-            _append_custody_ledger_transition(parent, committed)
-        except RuntimeError as error:
-            if "already committed" not in str(error):
-                raise
+        _append_custody_ledger_transition(parent, committed, recovery_idempotent=True)
     if commits:
         _custody_reconciliation(parent)
 def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:

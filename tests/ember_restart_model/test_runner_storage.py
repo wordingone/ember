@@ -292,10 +292,50 @@ class RunnerStorageTests(unittest.TestCase):
 
             with unittest.mock.patch.object(run_vertical_slice, "_custody_ledger_write_lock", lock), unittest.mock.patch.object(run_vertical_slice, "_custody_reconciliation", side_effect=reconcile) as reconciled:
                 run_vertical_slice._recover_missing_prepared_evidence(parent)
-            self.assertEqual(reconciled.call_count, 2)
+            self.assertEqual(reconciled.call_count, 3)
             self.assertFalse(held)
             _, events = run_vertical_slice._custody_ledger_snapshot(parent)
             self.assertEqual([event["event"] for event in events], ["PREPARED", "COMMITTED"])
+    def test_two_recoverers_commit_one_missing_prepared_transition(self) -> None:
+        """Concurrent recovery observes one durable semantic COMMITTED transition."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            parent = root / "custody"
+            parent.mkdir()
+            prepared = run_vertical_slice._next_custody_ledger_frame({
+                "event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "f" * 64 + ".json",
+                "bytes": 17, "sha256": "f" * 64, "reason": "two recoverers",
+            }, [])
+            (parent / ".checkpoint-custody-deletion-ledger.jsonl").write_text(
+                json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+            )
+            barrier = threading.Barrier(2)
+            errors: list[BaseException] = []
+            real_append = run_vertical_slice._append_custody_ledger_transition
+
+            def synchronized_append(*args: object, **kwargs: object) -> None:
+                barrier.wait(timeout=5)
+                real_append(*args, **kwargs)
+
+            def recover() -> None:
+                try:
+                    run_vertical_slice._recover_missing_prepared_evidence(parent)
+                except BaseException as error:
+                    errors.append(error)
+
+            with unittest.mock.patch.object(run_vertical_slice, "_append_custody_ledger_transition", synchronized_append):
+                first = threading.Thread(target=recover)
+                second = threading.Thread(target=recover)
+                first.start(); second.start(); first.join(timeout=10); second.join(timeout=10)
+            self.assertFalse(first.is_alive() or second.is_alive())
+            self.assertEqual(errors, [])
+            _, events = run_vertical_slice._custody_ledger_snapshot(parent)
+            self.assertEqual([event["event"] for event in events], ["PREPARED", "COMMITTED"])
+            self.assertEqual(run_vertical_slice._custody_reconciliation(parent)["deleted_bytes"], 17)
+            receipts = list(root.glob(f"custody-append-{parent.name}-*.json"))
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(json.loads(receipts[0].read_text(encoding="utf-8"))["result"], "COMMITTED")
+            self.assertEqual(list(root.glob(".*.tmp")), [])
     def test_custody_reconciliation_rejects_reordered_or_replayed_v3_frames(self) -> None:
         def frame(event: str, previous: str, sequence: int) -> dict[str, object]:
             body = {
@@ -1158,6 +1198,32 @@ class RunnerStorageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "identity differs"):
                 run_vertical_slice._append_custody_ledger_transition(parent, mismatched, transaction_receipt_path=receipt, operation_id="invalid-2", subject=f"custody:{parent.name}")
             self.assertEqual((parent / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes(), before)
+            self.assertFalse(receipt.exists())
+    def test_append_rejects_hash_valid_prior_semantic_poison_before_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipts:
+            parent = Path(directory)
+            poisoned = run_vertical_slice._next_custody_ledger_frame({
+                "event": "COMMITTED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json",
+                "bytes": 1, "sha256": "a" * 64, "reason": "poison",
+            }, [])
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_text(json.dumps(poisoned, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            before = ledger.read_bytes()
+            receipt = Path(receipts) / "must-not-exist.json"
+            event = {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json", "bytes": 1, "sha256": "b" * 64, "reason": "new"}
+            with self.assertRaisesRegex(RuntimeError, "COMMITTED without PREPARED"):
+                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt)
+            self.assertEqual(ledger.read_bytes(), before)
+            self.assertFalse(receipt.exists())
+
+    def test_append_rejects_foreign_subject_before_external_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipts:
+            parent = Path(directory)
+            receipt = Path(receipts) / "foreign.json"
+            event = {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "c" * 64 + ".json", "bytes": 1, "sha256": "c" * 64, "reason": "foreign"}
+            with self.assertRaisesRegex(RuntimeError, "subject"):
+                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt, subject="custody:another-root")
+            self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.jsonl").exists())
             self.assertFalse(receipt.exists())
     def test_atomic_ledger_transition_serializes_distinct_concurrent_writers(self) -> None:
         """Concurrent transitions retain both rows rather than last-writer-wins replacement."""
