@@ -416,5 +416,39 @@ class SpecialistStreamTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "family roots"):
                 self._open_bound(manifest_path)
 
+    def test_open_rejects_legacy_schema_alias(self) -> None:
+        from specialist_stream import build_stream_manifest
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            manifest_path = root / "stream.json"
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            manifest["legacy_materialized_compatibility"] = None
+            manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "stream manifest schema"):
+                self._open_bound(manifest_path)
+
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            manifest["range"]["start"] = False
+            manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "invalid stream range"):
+                self._open_bound(manifest_path)
+
 if __name__ == "__main__":
     unittest.main()

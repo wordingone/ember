@@ -124,7 +124,7 @@ def _manifest_corpus_root_sha256(families: dict[str, Any]) -> str:
 def _validate_family_commitment(value: object, *, capability: str, count: int, chunk_size: int) -> None:
     if not isinstance(value, dict) or set(value) != {"record_count", "token_count", "serialized_bytes", "corpus_root_sha256", "chunks"}:
         raise ValueError("invalid stream manifest schema")
-    if value.get("record_count") != count or type(value.get("token_count")) is not int or value["token_count"] < 1:
+    if type(value.get("record_count")) is not int or value["record_count"] != count or type(value.get("token_count")) is not int or value["token_count"] < 1:
         raise ValueError("invalid stream manifest schema")
     if type(value.get("serialized_bytes")) is not int or value["serialized_bytes"] < 1:
         raise ValueError("invalid stream manifest schema")
@@ -138,7 +138,7 @@ def _validate_family_commitment(value: object, *, capability: str, count: int, c
         expected_count = min(chunk_size, count - start)
         if not isinstance(chunk, dict) or set(chunk) != {"start", "record_count", "sha256"}:
             raise ValueError("invalid stream manifest schema")
-        if chunk.get("start") != start or chunk.get("record_count") != expected_count:
+        if type(chunk.get("start")) is not int or type(chunk.get("record_count")) is not int or chunk["start"] != start or chunk["record_count"] != expected_count:
             raise ValueError("invalid stream manifest schema")
         _require_sha256(chunk.get("sha256"), f"{capability} chunk")
 
@@ -431,10 +431,12 @@ def open_specialist_stream(
         raise ValueError("invalid stream manifest schema")
     if manifest.get("schema_version") != SCHEMA_VERSION or manifest.get("lineage") != "NEW_PREREGISTERED_STREAM":
         raise ValueError("invalid stream manifest")
+    if manifest.get("legacy_materialized_compatibility") != "UNAVAILABLE_NO_ACCEPTED_ARTIFACT_BOUND_AT_KNOWN_PATH":
+        raise ValueError("invalid stream manifest schema")
     if manifest.get("generator_contract") != {"version": "owned-specialist-indexed-v1", "randomness": "INDEX_PURE_NO_PRNG", "seed": None}:
         raise ValueError("invalid generator contract binding")
     stream_range = manifest.get("range")
-    if not isinstance(stream_range, dict) or set(stream_range) != {"start", "record_count_per_family"} or stream_range.get("start") != 0:
+    if not isinstance(stream_range, dict) or set(stream_range) != {"start", "record_count_per_family"} or type(stream_range.get("start")) is not int or stream_range["start"] != 0:
         raise ValueError("invalid stream range")
     count = stream_range.get("record_count_per_family")
     chunk_size = manifest.get("chunk_size")
