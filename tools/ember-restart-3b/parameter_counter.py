@@ -469,7 +469,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
                     or selection.get("capability") != "image" or selection.get("scene_split") != "train"
                     or selection.get("full_records_artifact_sha256") != verification.get("records_artifact_sha256")
                     or selection.get("selected_record_count") != execution_slice.get("scene_split_record_count")
-                    or execution_slice["record_count"] > selection.get("selected_record_count", 0)
+                    or execution_slice["start_record"] + execution_slice["record_count"] > selection.get("selected_record_count", 0)
                     or execution_slice["token_count"] > selection.get("selected_token_count", 0)):
                 raise ValueError("specialist v4 lineage has an invalid train scene split selection")
             for field in ("full_records_artifact_sha256", "selected_records_sha256", "selected_tokens_sha256"):

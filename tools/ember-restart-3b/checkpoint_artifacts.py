@@ -633,7 +633,7 @@ def _specialist_lineage(
     if scene_selection is not None and (
             set(execution_slice) != {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256", "scene_split_record_count"}
             or execution_slice["scene_split_record_count"] != scene_selection["selected_record_count"]
-            or execution_slice["record_count"] > scene_selection["selected_record_count"]
+            or execution_slice["start_record"] + execution_slice["record_count"] > scene_selection["selected_record_count"]
             or execution_slice["token_count"] > scene_selection["selected_token_count"]):
         raise ValueError("vision specialist execution slice does not bind the selected train receipt")
     for field in ("records_sha256", "tokens_sha256"):

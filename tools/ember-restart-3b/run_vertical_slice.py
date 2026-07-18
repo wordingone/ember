@@ -107,12 +107,11 @@ def validate_image_scene_split_execution(
             raise ValueError("image specialist scene split execution requires only train vision rows")
         encoded_records = json.dumps(records, sort_keys=True, separators=(",", ":")).encode("utf-8")
         encoded_tokens = json.dumps([record.get("token_ids") for record in records], separators=(",", ":")).encode("utf-8")
-        if (selection["selected_record_count"] < len(records)
-                or selection["selected_token_count"] < sum(len(record.get("token_ids", [])) for record in records)
-                or execution_slice.get("record_count") != len(records)
-                or execution_slice.get("records_sha256") != hashlib.sha256(encoded_records).hexdigest()
-                or execution_slice.get("tokens_sha256") != hashlib.sha256(encoded_tokens).hexdigest()):
-            raise ValueError("image specialist execution slice does not match the selected train receipt")
+        if (selection["selected_record_count"] != len(records)
+                or selection["selected_token_count"] != sum(len(record.get("token_ids", [])) for record in records)
+                or selection["selected_records_sha256"] != hashlib.sha256(encoded_records).hexdigest()
+                or selection["selected_tokens_sha256"] != hashlib.sha256(encoded_tokens).hexdigest()):
+            raise ValueError("image specialist complete train selection does not match its receipt")
 
 def bind_specialist_execution_slice(
     records: list[dict[str, object]], *, start_record: int, max_records: int, scene_split_record_count: int | None = None,
@@ -1894,6 +1893,7 @@ def run(
     resume_optimizer_transition_registry: Path | None = None,
     resume_optimizer_transition_registry_sha256: str | None = None,
     records_override: list[dict[str, object]] | None = None,
+    scene_split_records: list[dict[str, object]] | None = None,
     specialist_verification: dict[str, object] | None = None,
     specialist_lineage: dict[str, object] | None = None,
     checkpoint_interval: int | None = None,
@@ -1909,9 +1909,18 @@ def run(
         execution_slice = specialist_lineage.get("execution_slice")
         if not isinstance(selection, Mapping) or not isinstance(execution_slice, Mapping):
             raise ValueError("image specialist production run requires a separate scene split receipt")
+        if not isinstance(scene_split_records, list):
+            raise ValueError("image specialist production run requires the complete selected train records")
         validate_image_scene_split_execution(
-            records_override, verification=specialist_verification, selection=selection, execution_slice=execution_slice,
+            scene_split_records, verification=specialist_verification, selection=selection, execution_slice=execution_slice,
         )
+        start, count = execution_slice.get("start_record"), execution_slice.get("record_count")
+        if (type(start) is not int or type(count) is not int or start < 0 or count < 1
+                or start + count > selection["selected_record_count"]
+                or records_override != scene_split_records[start:start + count]
+                or execution_slice.get("records_sha256") != specialist_execution_slice_receipt(records_override, source_start_record=start)["records_sha256"]
+                or execution_slice.get("tokens_sha256") != specialist_execution_slice_receipt(records_override, source_start_record=start)["tokens_sha256"]):
+            raise ValueError("image specialist execution slice does not resolve the selected train records")
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
@@ -2237,7 +2246,8 @@ def run_specialist(
         resume_realization_registry=resume_realization_registry,
         resume_optimizer_transition_registry=resume_optimizer_transition_registry,
         resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
-        records_override=selected_records, specialist_verification=verification, specialist_lineage=lineage,
+        records_override=selected_records, scene_split_records=records,
+        specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,

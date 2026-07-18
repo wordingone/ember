@@ -643,6 +643,34 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(selection["selected_record_count"], 1)
         self.assertEqual(selection["selected_token_count"], 2)
 
+    def test_image_run_rejects_unverifiable_selected_subset_before_cuda_probe(self) -> None:
+        full_records = [
+            {"active_expert": "vision", "scene_split": "train", "token_ids": [1]},
+            {"active_expert": "vision", "scene_split": "train", "token_ids": [2]},
+        ]
+        _selected, selection = run_vertical_slice.select_verified_scene_split(
+            full_records, capability="image", scene_split="train", full_records_artifact_sha256="a" * 64,
+        )
+        for label, mutate in {
+            "records-hash": lambda receipt: receipt.__setitem__("selected_records_sha256", "b" * 64),
+            "tokens-hash": lambda receipt: receipt.__setitem__("selected_tokens_sha256", "c" * 64),
+            "record-count": lambda receipt: receipt.__setitem__("selected_record_count", 3),
+            "token-count": lambda receipt: receipt.__setitem__("selected_token_count", 3),
+        }.items():
+            receipt = dict(selection)
+            mutate(receipt)
+            lineage = {"execution_slice": {**run_vertical_slice.specialist_execution_slice_receipt(full_records[:1], source_start_record=0, scene_split_record_count=receipt["selected_record_count"])}, "scene_split_selection": receipt}
+            with self.subTest(label=label), patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                with self.assertRaisesRegex(ValueError, "image specialist"):
+                    run_vertical_slice.run(seed=1, artifact_root=Path("B:/artifacts"), records_override=full_records[:1], scene_split_records=full_records, specialist_verification={"capability": "image", "records_artifact_sha256": "a" * 64}, specialist_lineage=lineage, checkpoint_interval=1, write_budget_bytes=1)
+                cuda_probe.assert_not_called()
+        execution = run_vertical_slice.specialist_execution_slice_receipt(
+            full_records[:1], source_start_record=2, scene_split_record_count=2,
+        )
+        with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+            with self.assertRaisesRegex(ValueError, "selected train records"):
+                run_vertical_slice.run(seed=1, artifact_root=Path("B:/artifacts"), records_override=full_records[:1], scene_split_records=full_records, specialist_verification={"capability": "image", "records_artifact_sha256": "a" * 64}, specialist_lineage={"execution_slice": execution, "scene_split_selection": selection}, checkpoint_interval=1, write_budget_bytes=1)
+        cuda_probe.assert_not_called()
     def test_specialist_run_rejects_nontrain_or_unknown_image_rows_before_cuda_probe(self) -> None:
         selection = {
             "schema_version": "ember-specialist-scene-split-selection-v1",
@@ -669,7 +697,7 @@ class RunnerPreflightTests(unittest.TestCase):
             for label, rows in invalid_rows.items():
                 with self.subTest(label=label), self.assertRaisesRegex(ValueError, "scene split"):
                     run_vertical_slice.run(
-                        seed=1, artifact_root=Path("B:/artifacts"), records_override=rows,
+                        seed=1, artifact_root=Path("B:/artifacts"), records_override=rows, scene_split_records=rows,
                         specialist_verification=verification, specialist_lineage=lineage,
                         checkpoint_interval=1, write_budget_bytes=1,
                     )
@@ -708,6 +736,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     )
         self.assertEqual(cuda_runner.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
         self.assertEqual(cuda_runner.call_args.kwargs["records_override"], [{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}])
+        self.assertEqual(cuda_runner.call_args.kwargs["scene_split_records"], [{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}])
         self.assertEqual(cuda_runner.call_args.kwargs["specialist_verification"], verification)
         self.assertEqual(cuda_runner.call_args.kwargs["specialist_lineage"]["scene_split_selection"]["scene_split"], "train")
         self.assertIn("execution_slice", cuda_runner.call_args.kwargs["specialist_lineage"])
