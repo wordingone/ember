@@ -445,8 +445,9 @@ def _windows_custody_ledger_mutex_name_from_identity(identity: tuple[int, int, i
     return "Global\\ember-checkpoint-custody-" + hashlib.sha256(payload).hexdigest()
 
 
-def _windows_directory_identity(parent: Path) -> tuple[int, int, int]:
-    """Read volume serial and 64-bit file ID from one opened directory handle."""
+@contextlib.contextmanager
+def _windows_open_custody_directory(parent: Path) -> object:
+    """Hold a non-delete-share handle and yield its canonical target and identity."""
 
     class _ByHandleFileInformation(ctypes.Structure):
         _fields_ = [("attributes", ctypes.c_ulong), ("creation_low", ctypes.c_ulong), ("creation_high", ctypes.c_ulong), ("access_low", ctypes.c_ulong), ("access_high", ctypes.c_ulong), ("write_low", ctypes.c_ulong), ("write_high", ctypes.c_ulong), ("volume_serial", ctypes.c_ulong), ("size_high", ctypes.c_ulong), ("size_low", ctypes.c_ulong), ("link_count", ctypes.c_ulong), ("file_index_high", ctypes.c_ulong), ("file_index_low", ctypes.c_ulong)]
@@ -461,7 +462,10 @@ def _windows_directory_identity(parent: Path) -> tuple[int, int, int]:
     get_information = kernel32.GetFileInformationByHandle
     get_information.argtypes = (ctypes.c_void_p, ctypes.POINTER(_ByHandleFileInformation))
     get_information.restype = ctypes.c_bool
-    handle = create_file(str(parent), 0, 0x00000007, None, 3, 0x02000000, None)
+    get_final_name = kernel32.GetFinalPathNameByHandleW
+    get_final_name.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_ulong, ctypes.c_ulong)
+    get_final_name.restype = ctypes.c_ulong
+    handle = create_file(str(parent), 0x80000000, 0x00000003, None, 3, 0x02000000, None)
     invalid = ctypes.c_void_p(-1).value
     if not handle or handle == invalid:
         raise ctypes.WinError(ctypes.get_last_error())
@@ -469,11 +473,21 @@ def _windows_directory_identity(parent: Path) -> tuple[int, int, int]:
         information = _ByHandleFileInformation()
         if not get_information(handle, ctypes.byref(information)):
             raise ctypes.WinError(ctypes.get_last_error())
-        return int(information.volume_serial), int(information.file_index_high), int(information.file_index_low)
+        buffer = ctypes.create_unicode_buffer(32768)
+        written = int(get_final_name(handle, buffer, len(buffer), 0))
+        if not written or written >= len(buffer):
+            raise ctypes.WinError(ctypes.get_last_error())
+        yield Path(buffer.value), (int(information.volume_serial), int(information.file_index_high), int(information.file_index_low))
     finally:
         if not close_handle(handle):
             raise ctypes.WinError(ctypes.get_last_error())
 
+
+def _windows_directory_identity(parent: Path) -> tuple[int, int, int]:
+    """Read volume serial and 64-bit file ID from one opened directory handle."""
+
+    with _windows_open_custody_directory(parent) as (_, identity):
+        return identity
 
 def _windows_custody_ledger_mutex_name(parent: Path) -> str:
     """Return a machine-wide mutex name from the opened custody directory identity."""
@@ -482,8 +496,8 @@ def _windows_custody_ledger_mutex_name(parent: Path) -> str:
 
 
 @contextlib.contextmanager
-def _windows_custody_ledger_mutex(parent: Path) -> object:
-    """Hold a kernel-owned cross-process mutex with automatic abandoned-owner recovery."""
+def _windows_custody_ledger_mutex_from_identity(identity: tuple[int, int, int]) -> object:
+    """Hold the machine-wide mutex for one already-opened custody directory."""
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     create_mutex = kernel32.CreateMutexW
@@ -498,18 +512,18 @@ def _windows_custody_ledger_mutex(parent: Path) -> object:
     close_handle = kernel32.CloseHandle
     close_handle.argtypes = (ctypes.c_void_p,)
     close_handle.restype = ctypes.c_bool
-    handle = create_mutex(None, False, _windows_custody_ledger_mutex_name(parent))
+    handle = create_mutex(None, False, _windows_custody_ledger_mutex_name_from_identity(identity))
     if not handle:
         raise ctypes.WinError(ctypes.get_last_error())
     acquired = False
     try:
         milliseconds = max(0, int(_LEDGER_LOCK_WAIT_SECONDS * 1000))
         result = int(wait_for_single_object(handle, milliseconds))
-        if result in {0x00000000, 0x00000080}:  # WAIT_OBJECT_0 / WAIT_ABANDONED
+        if result in {0x00000000, 0x00000080}:
             acquired = True
             yield
             return
-        if result == 0x00000102:  # WAIT_TIMEOUT
+        if result == 0x00000102:
             raise RuntimeError("timed out waiting for the custody ledger writer lock")
         raise ctypes.WinError(ctypes.get_last_error())
     finally:
@@ -522,14 +536,22 @@ def _windows_custody_ledger_mutex(parent: Path) -> object:
 
 
 @contextlib.contextmanager
+def _windows_custody_ledger_mutex(parent: Path) -> object:
+    """Bind ledger operations to one held directory handle and its machine-wide mutex."""
+
+    with _windows_open_custody_directory(parent) as (canonical_parent, identity):
+        with _windows_custody_ledger_mutex_from_identity(identity):
+            yield canonical_parent
+
+@contextlib.contextmanager
 def _custody_ledger_write_lock(parent: Path) -> object:
     """Serialize a ledger snapshot/replacement across threads and live processes."""
 
-    parent = parent.resolve()
     if os.name == "nt":
-        with _windows_custody_ledger_mutex(parent):
-            yield
+        with _windows_custody_ledger_mutex(parent) as canonical_parent:
+            yield canonical_parent
         return
+    parent = parent.resolve()
     try:
         import fcntl
     except ImportError as error:
@@ -568,11 +590,10 @@ def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
 def _append_custody_ledger_transition(parent: Path, event: dict[str, object]) -> None:
     """Durably replace the complete framed ledger; never append to a live tail."""
 
-    parent = parent.resolve()
     framed = (json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    with _custody_ledger_write_lock(parent):
-        prior, _ = _custody_ledger_snapshot(parent)
-        _atomic_bytes(parent / _CUSTODY_LEDGER, prior + framed)
+    with _custody_ledger_write_lock(parent) as canonical_parent:
+        prior, _ = _custody_ledger_snapshot(canonical_parent)
+        _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, prior + framed)
 
 def _custody_reconciliation(parent: Path) -> dict[str, object]:
     """Reconcile custody bytes with an ordered, fail-closed deletion ledger."""

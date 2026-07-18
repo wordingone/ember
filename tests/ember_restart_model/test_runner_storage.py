@@ -792,7 +792,7 @@ class RunnerStorageTests(unittest.TestCase):
                 def crash_after_replace(source: object, target: object) -> None:
                     nonlocal replaced
                     real_replace(source, target)
-                    if Path(target) == ledger and not replaced:
+                    if Path(target).name == ledger.name and not replaced:
                         replaced = True
                         raise OSError("injected crash after atomic ledger replace")
 
@@ -1103,6 +1103,35 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertEqual(identities[0], identities[1])
             self.assertEqual(identities[0], identities[2])
             self.assertEqual(names, [names[0], names[0], names[0]])
+    @unittest.skipUnless(os.name == "nt", "native Windows mutex contract")
+    def test_windows_bound_directory_handle_rejects_swap_and_preserves_ledger_row(self) -> None:
+        """A path swap cannot redirect a locked snapshot/write to a replacement directory."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            parent = root / "custody"
+            parent.mkdir()
+            moved = root / "moved-custody"
+            event = {
+                "schema_version": "ember-checkpoint-custody-deletion-v2",
+                "event": "PREPARED",
+                "pointer": ".checkpoint-quarantine/evidence-" + "e" * 64 + ".json",
+                "bytes": 1,
+                "sha256": "e" * 64,
+                "reason": "directory swap regression",
+            }
+            real_atomic = run_vertical_slice._atomic_bytes
+
+            def swap_then_write(path: Path, payload: bytes) -> None:
+                with self.assertRaises(PermissionError):
+                    parent.rename(moved)
+                real_atomic(path, payload)
+
+            with unittest.mock.patch.object(run_vertical_slice, "_atomic_bytes", side_effect=swap_then_write):
+                run_vertical_slice._append_custody_ledger_transition(parent, event)
+            self.assertTrue((parent / ".checkpoint-custody-deletion-ledger.jsonl").is_file())
+            self.assertFalse(moved.exists())
+            _, rows = run_vertical_slice._custody_ledger_snapshot(parent)
+            self.assertEqual(rows, [event])
     @unittest.skipUnless(os.name == "nt", "native Windows mutex contract")
     def test_windows_abandoned_mutex_recovers_while_another_process_survives(self) -> None:
         """Kernel abandoned-owner recovery is independent of unrelated live process/PID state."""
