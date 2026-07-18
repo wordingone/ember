@@ -99,29 +99,19 @@ def _scene(index: int) -> tuple[list[bytes], list[list[int]]]:
     patches[green_patch].append(("green", local_x, local_y))
     raw_patches = [_patch(patch) for patch in patches]
 
-    # Every raw scene remains distinct after a geometry cycle repeats.  The
-    # distractor is deliberately non-query colour and never overwrites a red or
-    # green pixel, so the locally derived supervision remains unchanged.
-    content_variant = variation // (32 * 32 * 16)
-    occupied = {
-        (patch, local_x + dx, local_y + dy)
-        for patch in (red_patch, green_patch)
-        for dx in range(4)
-        for dy in range(4)
-    }
-    candidate = (content_variant * 17) % (4 * 48 * 48)
-    for _ in range(4 * 48 * 48):
-        patch_index, remainder = divmod(candidate, 48 * 48)
-        pixel_y, pixel_x = divmod(remainder, 48)
-        if (patch_index, pixel_x, pixel_y) not in occupied:
-            payload = bytearray(raw_patches[patch_index])
-            offset = (pixel_y * 48 + pixel_x) * 3
-            payload[offset : offset + 3] = bytes(PALETTE["blue"])
-            raw_patches[patch_index] = bytes(payload)
-            break
-        candidate = (candidate + 1) % (4 * 48 * 48)
-    else:
-        raise RuntimeError("no safe non-query distractor pixel exists")
+    # Two fixed-count blue markers make each variation's raw content distinct
+    # across the target scale while remaining non-query pixels.  Their positions
+    # occupy disjoint ranges in patch 2, so the unordered patch content encodes
+    # the variation without leaking a relation label or changing the histogram.
+    marker_patch = 2
+    first_marker = variation % 1_024
+    second_marker = 1_024 + (variation // 1_024) % 1_280
+    payload = bytearray(raw_patches[marker_patch])
+    for marker in (first_marker, second_marker):
+        pixel_y, pixel_x = divmod(marker, 48)
+        offset = (pixel_y * 48 + pixel_x) * 3
+        payload[offset : offset + 3] = bytes(PALETTE["blue"])
+    raw_patches[marker_patch] = bytes(payload)
 
     permutation = _PATCH_PERMUTATIONS[patch_permutation_class(index)]
     return ([raw_patches[position] for position in permutation], [coordinates[position] for position in permutation])

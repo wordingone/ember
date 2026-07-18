@@ -29,6 +29,14 @@ class OwnedVisionSceneTests(unittest.TestCase):
             structural_scene_sha256(repeated_patches, repeated_coordinates),
         )
 
+    def test_default_scale_grid_cycle_changes_coordinate_blind_raw_content(self) -> None:
+        """The 65,536-record grid dimension must not recreate one four-label content group."""
+        first_patches, _ = build_owned_vision_scenes._scene(0)
+        grid_cycle_patches, _ = build_owned_vision_scenes._scene(4_096)
+        self.assertNotEqual(
+            build_owned_vision_scenes.coordinate_blind_content_sha256(first_patches),
+            build_owned_vision_scenes.coordinate_blind_content_sha256(grid_cycle_patches),
+        )
     def test_grouping_rejects_the_planted_0_131072_duplicate_before_split(self) -> None:
         """A structural duplicate cannot silently land in two independently assigned splits."""
         first_patches, first_coordinates = build_owned_vision_scenes._scene(0)
