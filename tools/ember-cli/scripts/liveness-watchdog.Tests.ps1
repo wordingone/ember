@@ -92,6 +92,31 @@ Describe 'Get-PlannedOutageMarker + Test-MarkerCoversTarget (frozen contract, is
         $coverage.StandDown | Should Be $false
         $coverage.Expired | Should Be $false
     }
+
+    It 'rejects a malformed started timestamp for a both-target marker' {
+        $marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'both'
+            started = 'not-an-iso-timestamp'; expires = '2026-07-08T13:00:00Z'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+
+        $m = Get-PlannedOutageMarker -Path $markerPath
+        $m | Should BeNullOrEmpty
+        (Test-MarkerCoversTarget -Marker $m -Target 'cockpit' -Now ([datetime]::Parse('2026-07-08T12:00:00Z'))).StandDown | Should Be $false
+        (Test-MarkerCoversTarget -Marker $m -Target 'server' -Now ([datetime]::Parse('2026-07-08T12:00:00Z'))).StandDown | Should Be $false
+    }
+
+    It 'rejects a non-Z expires timestamp for a both-target marker' {
+        $marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'both'
+            started = '2026-07-08T11:00:00Z'; expires = '2026-07-08T13:00:00+00:00'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+
+        Get-PlannedOutageMarker -Path $markerPath | Should BeNullOrEmpty
+    }
 }
 
 Describe 'Invoke-CockpitWatchdogTick' {
@@ -294,6 +319,31 @@ Describe 'Invoke-CockpitWatchdogTick' {
         $r4.Action | Should Be 'backoff'
         $launcherCalls | Should Be 3   # still 3 -- no 4th restart
     }
+
+    It 'escalates cockpit backoff across crash windows and resets after a quiet window' {
+        $baseTs = [datetime]::Parse('2026-07-08T12:00:00Z').ToUniversalTime()
+        $invoke = {
+            param([datetime]$Now)
+            $row = @{ ts = $Now.AddMinutes(-5).ToString('o'); pid = 1000; version = 'abc' }
+            ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+            Invoke-CockpitWatchdogTick -Now $Now -State $state `
+                -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+                -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath `
+                -DeathWindowMinutes 10 -DeathThreshold 3 -BackoffMinutes 10
+        }
+
+        0..2 | ForEach-Object { & $invoke $baseTs.AddMinutes($_ * 2) | Out-Null }
+        $state.cockpit.backoffLevel | Should Be 1
+        $state.cockpit.backoffUntil | Should Be $baseTs.AddMinutes(14).ToString('o')
+
+        0..2 | ForEach-Object { & $invoke $baseTs.AddMinutes(15 + ($_ * 2)) | Out-Null }
+        $state.cockpit.backoffLevel | Should Be 2
+        $state.cockpit.backoffUntil | Should Be $baseTs.AddMinutes(39).ToString('o')
+
+        0..2 | ForEach-Object { & $invoke $baseTs.AddMinutes(50 + ($_ * 2)) | Out-Null }
+        $state.cockpit.backoffLevel | Should Be 1
+        $state.cockpit.backoffState | Should Be 'active'
+    }
 }
 
 Describe 'Invoke-ServerWatchdogTick' {
@@ -453,6 +503,32 @@ Describe 'Invoke-ServerWatchdogTick' {
         $state.server.lastHealthCheckAt | Should Be $relaunchAt.ToString('o')
         $row = (Get-Content -Path $restartLogPath -Raw) | ConvertFrom-Json
         $row.healthAgeSec | Should Be 300
+    }
+
+    It 'escalates server backoff across crash windows and resets after a quiet window' {
+        $baseTs = [datetime]::Parse('2026-07-08T12:00:00Z').ToUniversalTime()
+        Mock Test-ServerHealth { $false }
+        Mock Find-ServerProcess { return $null }
+        $invoke = {
+            param([datetime]$Now)
+            $state.server.consecutiveFailures = 1
+            Invoke-ServerWatchdogTick -Now $Now -State $state -FailureThreshold 2 `
+                -MarkerPath $markerPath -ServerCmdline $cmdline -ServerExePath $exePath `
+                -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath `
+                -DeathWindowMinutes 10 -DeathThreshold 3 -BackoffMinutes 10
+        }
+
+        0..2 | ForEach-Object { & $invoke $baseTs.AddMinutes($_ * 2) | Out-Null }
+        $state.server.backoffLevel | Should Be 1
+        $state.server.backoffUntil | Should Be $baseTs.AddMinutes(14).ToString('o')
+
+        0..2 | ForEach-Object { & $invoke $baseTs.AddMinutes(15 + ($_ * 2)) | Out-Null }
+        $state.server.backoffLevel | Should Be 2
+        $state.server.backoffUntil | Should Be $baseTs.AddMinutes(39).ToString('o')
+
+        0..2 | ForEach-Object { & $invoke $baseTs.AddMinutes(50 + ($_ * 2)) | Out-Null }
+        $state.server.backoffLevel | Should Be 1
+        $state.server.backoffState | Should Be 'active'
     }
 }
 
