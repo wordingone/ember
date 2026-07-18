@@ -1,0 +1,464 @@
+{
+    "schema_version":  "c1-public-branch-archive-v6",
+    "repository":  "wordingone/ember",
+    "generated_at_utc":  "2026-07-18T03:16:26.1862021Z",
+    "public_master":  "f2a8a20e972d391fd5608295f2aa3120aafcae8a",
+    "candidate_count":  2,
+    "deletion_authority":  "OPERATOR_APPROVAL_REQUIRED_PER_REF",
+    "deletion_executed":  false,
+    "archival_refs_created":  true,
+    "external_consumer_boundary":  {
+                                       "scan_schema":  "vera-c1-external-consumer-scan-v2",
+                                       "scope":  "Explicit named Ember textual subroots only",
+                                       "no_drive_root_scan":  true,
+                                       "wsl_invoked":  false,
+                                       "max_file_bytes":  1048576,
+                                       "max_files_per_root":  5000,
+                                       "max_hits_per_root":  200,
+                                       "named_root_count":  35,
+                                       "existing_named_root_count":  17,
+                                       "files_scanned":  7948,
+                                       "hits":  4,
+                                       "historical_public_pr_number_hits":  4,
+                                       "actual_branch_ref_consumers":  0,
+                                       "actual_head_sha_consumers":  0,
+                                       "releases":  0,
+                                       "deployments":  0,
+                                       "disposition":  "HISTORICAL_PR_NUMBER_REFERENCES_ONLY_NO_BRANCH_REF_CONSUMER_FOUND"
+                                   },
+    "root_inventory":  [
+                           {
+                               "role":  "explicit_named_textual_root_01",
+                               "exists":  true,
+                               "files_scanned":  3,
+                               "bytes_scanned":  4493,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "c4139c1b75c3290196a56eed649d36383c864e1d1b4d4375a7890b213bda34bb"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_02",
+                               "exists":  true,
+                               "files_scanned":  220,
+                               "bytes_scanned":  2339951,
+                               "hit_count":  1,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "37fc3f1c71dcf1169ac182577a62e5891a7b5384f82d89341b27665def6bad4c"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_03",
+                               "exists":  true,
+                               "files_scanned":  9,
+                               "bytes_scanned":  184604,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "74352726a05f1bb1d0f1a958abc6c681ff4b60aee5682e64b1b6e82e88e307e5"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_04",
+                               "exists":  true,
+                               "files_scanned":  4594,
+                               "bytes_scanned":  46697690,
+                               "hit_count":  3,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "bb27c4d8e0b7db9b53220251e7cfde8fe73c59bb43e645323907a0077d0dbf0b"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_05",
+                               "exists":  true,
+                               "files_scanned":  1446,
+                               "bytes_scanned":  15892621,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "70368291e5c52fa13f9cb30b1618a527de4ac55ea3881acba6eb6de8de311095"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_06",
+                               "exists":  true,
+                               "files_scanned":  325,
+                               "bytes_scanned":  2635246,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "48147f0e829516a7e0b1bcc459643e584c3898d9981bd8165314934bc5bb28df"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_07",
+                               "exists":  true,
+                               "files_scanned":  8,
+                               "bytes_scanned":  22083,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "fc68b4cefbeded3c895426bb0cd2fb755fb1d23913030825918c75c4097466fe"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_08",
+                               "exists":  true,
+                               "files_scanned":  2,
+                               "bytes_scanned":  4004,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "ad6c4a01a33686848c8cb1e66099366ec157be0f28d47d14ec39a77c032829a2"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_09",
+                               "exists":  true,
+                               "files_scanned":  137,
+                               "bytes_scanned":  1495498,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "7e9779a68c3b4d95cad3f33305c1ee3a00654567c87882b0ea10014d3bae39e2"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_10",
+                               "exists":  true,
+                               "files_scanned":  9,
+                               "bytes_scanned":  184604,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "407e2a8c2e98ded4ba32da47a3216ec699ea4f257206ed7ed54bbf9c8076107c"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_11",
+                               "exists":  true,
+                               "files_scanned":  761,
+                               "bytes_scanned":  14994979,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "95c32e79ba22caee854ce8029e3322808d3e3575130e728de29236233ed1f306"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_12",
+                               "exists":  true,
+                               "files_scanned":  412,
+                               "bytes_scanned":  4763475,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "70b052627cce9b6c3fc2e0300d4af42a25f7de7c3b8ae84fbcd028596d908de9"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_13",
+                               "exists":  true,
+                               "files_scanned":  14,
+                               "bytes_scanned":  52051,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "be2ae44da2546cdb48a09c2c1d0d55981e0ff54b086efcc106736a34a081272d"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_14",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "c243d5dae764f74bfdaa2a01c8513296aadac8450934ad7ac2ba88c42f2a0b47"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_15",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "964dd29b71a860c29efccc65821674d408641f59381cc7dcfdbd88ca9da2cf50"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_16",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "0578405a20c3bef2ab7ebe5426d943f0d7095b6b71d4585f2ab1f7ff9cd26ca0"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_17",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "d62d70a21dfcd5ffca6543277cdd5f38870548c938d198982639a87dbd3bb320"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_18",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "41dd6e9f3cded3bbe1fd825e864a0a9ccf371bd86f2cf743eb7a77e9b8b22614"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_19",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "72bbb2d6b0034830c66c16c0d29044edf6a59660ff9118cb6037b31a658d21e6"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_20",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "d0ebde49bd89845281c3a69cc0df2a2c22dafcbe49438ee7f624c4c64ef1d233"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_21",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "16c37c6ec2833ceca9dad6711f58adf67bf31ce64392909415bf663ea84c6984"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_22",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "47841e7918dd516d63c0a9d8f597cd545b526d6b0ba461eb55248aeef632b38c"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_23",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "a4480487180bd3898250556e4c459ae4f14b9652ffb90722ec6a46459ce8ba3d"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_24",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "0cd6b6ceec3e55abd7a5c8c1f1d4d3c15fa6a27531d45398ffe73fc8a61a6970"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_25",
+                               "exists":  true,
+                               "files_scanned":  1,
+                               "bytes_scanned":  1,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "71c2178e1e77d803af03faf48d8cf399ddfd645fb3b06654eb40c691d6a6563e"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_26",
+                               "exists":  true,
+                               "files_scanned":  5,
+                               "bytes_scanned":  13701,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "fe7c524a86558a49b3bfc898ede094e48c55c18fc55cb6d898522ebe6b0b758e"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_27",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "7c6ff27198c8f0256f6b0a933273a646259e03e9577858aa03064321725a26fb"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_28",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "b3e63d54f33472e255a48cbdc250257af398be0aa8f5f852f1463c6ff189b1d6"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_29",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "2b7d6fd48e116fe91a379afd0826163bbd8a558e6c982c3a5f0cd9595e7137da"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_30",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "89a3780a03a3008f80daf96e41eb7e62760c3d1337289d92d6ca668bd15ab5cb"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_31",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "e468e65d99294876b3d42efe0c1fec1889e0cd50ffbca77393da957ebbed36f4"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_32",
+                               "exists":  true,
+                               "files_scanned":  1,
+                               "bytes_scanned":  24649,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "590ba2d1817d6b3498d2558253860df29569beae9586ae353ca374e7d4b583b5"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_33",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "61d7b6490f42f9a643ecbcd6908dcc1a4c5e537ac01a687d85d84c8c2e4ae0f0"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_34",
+                               "exists":  true,
+                               "files_scanned":  1,
+                               "bytes_scanned":  4990,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "ceb02b9af3e2171c5bcaf9d150b56b1d473d310e8d4a70e2acb6426026644b3f"
+                           },
+                           {
+                               "role":  "explicit_named_textual_root_35",
+                               "exists":  false,
+                               "files_scanned":  0,
+                               "bytes_scanned":  0,
+                               "hit_count":  0,
+                               "output_truncated":  false,
+                               "scan_digest_sha256":  "b797b43f176d2324238a525f77d66bf40faeef859b03a474b04354b5bdb066c6"
+                           }
+                       ],
+    "root_inventory_digest_sha256":  "cd4a3d90096c51363a544263f9678354b61d81371759e0354731373c7041027b",
+    "private_scan_v2_digest_sha256":  "97f4be37f4aec9b29de4318c41f6fe2f47b5e664f9c8638e00cb430b51c30162",
+    "private_manifest_v6_digest_sha256":  "d99cb457d01efdce40f9c645b04f4d8af58ac765005500aac90730e16b3977cb",
+    "rows":  [
+                 {
+                     "pr":  574,
+                     "branch":  "feat/485-p0b-watermark-exclusion-coalescing",
+                     "exact_head":  "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
+                     "branch_ref_head":  "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
+                     "branch_ref_matches_pr":  true,
+                     "merged_pr_url":  "https://github.com/wordingone/ember/pull/574",
+                     "merged_at":  "2026-07-09T16:36:48Z",
+                     "merge_commit":  "33e0164245d2da4e0044c8f7cdd7ef8c7bb82348",
+                     "pr_base_sha":  "b1ee102063b25be4ebf3801f8a75cdc3c5ae9b9c",
+                     "pr_state":  "closed",
+                     "merged":  true,
+                     "age_days":  8,
+                     "age_at_least_7_days":  true,
+                     "branch_protected":  false,
+                     "open_pr_count":  0,
+                     "compare_status":  "diverged",
+                     "ahead_by":  1,
+                     "behind_by":  591,
+                     "head_reachable_from_master":  false,
+                     "affected_path_count":  2,
+                     "affected_path_set_sha256":  "3de456615daa157e30df91e998a5a2cf59e6938377e7d5b62a4b56c534ed7f6b",
+                     "affected_path_set_equal_to_merge":  true,
+                     "full_tree_path_count":  2424,
+                     "full_tree_path_set_sha256":  "79f903ca9291b530252e63bc93862d7c09424b2f1036cb16ceec5fdb040d244a",
+                     "full_tree_path_set_equal_to_merge":  true,
+                     "full_tree_blob_mismatch_count":  0,
+                     "branch_tree_content_sha256":  "5d53ee3a03ba060a064d0fa380081b81735a91a0497408dacf6b7c21a66712ae",
+                     "merge_tree_content_sha256":  "5d53ee3a03ba060a064d0fa380081b81735a91a0497408dacf6b7c21a66712ae",
+                     "full_tree_equal_to_merge":  true,
+                     "reference_scan":  {
+                                            "current_master_tracked":  "NO_EXACT_BRANCH_OR_HEAD_MATCH_AT_PUBLIC_MASTER; PUBLIC_HITS_HISTORICAL_PR_NUMBERS_ONLY",
+                                            "issue_pr_release_tag":  "EXACT_HEAD/BRANCH SEARCH SOURCE PR ONLY; ARCHIVE REFS VERIFIED; RELEASES=0",
+                                            "deployments":  "EXACT_HEAD DEPLOYMENT SEARCH=0",
+                                            "external_checkpoint_receipt_consumer":  "NO_BRANCH_REF_OR_HEAD_SHA_CONSUMER_FOUND_IN_BOUND_NAMED_TEXTUAL_SURFACES",
+                                            "historical_public_pr_number_hits":  4
+                                        },
+                     "archival_ref":  {
+                                          "status":  "VERIFIED_IMMUTABLE_ARCHIVE_REF",
+                                          "ref_utf8_base64":  "cmVmcy90YWdzL3ZlcmEtYzEtYXJjaGl2ZS8yMDI2MDcxOC9wci01NzQtZmVhdC00ODUtcDBiLXdhdGVybWFyay1leGNsdXNpb24tY29hbGVzY2luZy1hZjUzYzQ5ZjhiN2U=",
+                                          "tag_name_utf8_base64":  "dmVyYS1jMS1hcmNoaXZlLzIwMjYwNzE4L3ByLTU3NC1mZWF0LTQ4NS1wMGItd2F0ZXJtYXJrLWV4Y2x1c2lvbi1jb2FsZXNjaW5nLWFmNTNjNDlmOGI3ZQ==",
+                                          "target_commit":  "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
+                                          "expected_peeled_commit":  "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
+                                          "preexisting_ref":  "ABSENT_AT_AUDIT",
+                                          "creation_authority":  "AUTHORIZED_OPERATOR_ARCHIVE_CREATION_ONLY",
+                                          "ref_object_sha":  "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
+                                          "peeled_commit_sha":  "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
+                                          "immutable_policy":  "No force-update or deletion; future deletion requires per-ref approval and fresh verification."
+                                      },
+                     "eligibility":  "PENDING_PUBLIC_CARRIER_REVIEW_AND_PER_REF_OPERATOR_APPROVAL",
+                     "blockers":  [
+                                      "OPERATOR_DELETION_APPROVAL_REQUIRED"
+                                  ],
+                     "deletion_authority":  "NOT_GRANTED",
+                     "deletion_executed":  false
+                 },
+                 {
+                     "pr":  690,
+                     "branch":  "exp/580-corrected-rerun",
+                     "exact_head":  "39dc9e1fb0737b61affbff0b6d413b3988bfbd36",
+                     "branch_ref_head":  "39dc9e1fb0737b61affbff0b6d413b3988bfbd36",
+                     "branch_ref_matches_pr":  true,
+                     "merged_pr_url":  "https://github.com/wordingone/ember/pull/690",
+                     "merged_at":  "2026-07-10T16:46:37Z",
+                     "merge_commit":  "50fc7c610d78a227e54d59ff32a95042f2e1ff2e",
+                     "pr_base_sha":  "225d5cf2b3f0e41a944fc04588ac21dd5bae2962",
+                     "pr_state":  "closed",
+                     "merged":  true,
+                     "age_days":  7,
+                     "age_at_least_7_days":  true,
+                     "branch_protected":  false,
+                     "open_pr_count":  0,
+                     "compare_status":  "diverged",
+                     "ahead_by":  2,
+                     "behind_by":  532,
+                     "head_reachable_from_master":  false,
+                     "affected_path_count":  3,
+                     "affected_path_set_sha256":  "aea3ed97df5d91139492ed391d156727d5d9f2b8c4eadbbf0a15e5847394b92e",
+                     "affected_path_set_equal_to_merge":  true,
+                     "full_tree_path_count":  2692,
+                     "full_tree_path_set_sha256":  "e1c3039c4ac4f4b308a821ddbf60aedca82417bf43cb69be7b937bce1dc3a22e",
+                     "full_tree_path_set_equal_to_merge":  true,
+                     "full_tree_blob_mismatch_count":  0,
+                     "branch_tree_content_sha256":  "1d93ce068529fd5b0048b46de3f23fff641a4aa3f8969364298075711a6c8287",
+                     "merge_tree_content_sha256":  "1d93ce068529fd5b0048b46de3f23fff641a4aa3f8969364298075711a6c8287",
+                     "full_tree_equal_to_merge":  true,
+                     "reference_scan":  {
+                                            "current_master_tracked":  "NO_EXACT_BRANCH_OR_HEAD_MATCH_AT_PUBLIC_MASTER; PUBLIC_HITS_HISTORICAL_PR_NUMBERS_ONLY",
+                                            "issue_pr_release_tag":  "EXACT_HEAD/BRANCH SEARCH SOURCE PR ONLY; ARCHIVE REFS VERIFIED; RELEASES=0",
+                                            "deployments":  "EXACT_HEAD DEPLOYMENT SEARCH=0",
+                                            "external_checkpoint_receipt_consumer":  "NO_BRANCH_REF_OR_HEAD_SHA_CONSUMER_FOUND_IN_BOUND_NAMED_TEXTUAL_SURFACES",
+                                            "historical_public_pr_number_hits":  4
+                                        },
+                     "archival_ref":  {
+                                          "status":  "VERIFIED_IMMUTABLE_ARCHIVE_REF",
+                                          "ref_utf8_base64":  "cmVmcy90YWdzL3ZlcmEtYzEtYXJjaGl2ZS8yMDI2MDcxOC9wci02OTAtZXhwLTU4MC1jb3JyZWN0ZWQtcmVydW4tMzlkYzllMWZiMDcz",
+                                          "tag_name_utf8_base64":  "dmVyYS1jMS1hcmNoaXZlLzIwMjYwNzE4L3ByLTY5MC1leHAtNTgwLWNvcnJlY3RlZC1yZXJ1bi0zOWRjOWUxZmIwNzM=",
+                                          "target_commit":  "39dc9e1fb0737b61affbff0b6d413b3988bfbd36",
+                                          "expected_peeled_commit":  "39dc9e1fb0737b61affbff0b6d413b3988bfbd36",
+                                          "preexisting_ref":  "ABSENT_AT_AUDIT",
+                                          "creation_authority":  "AUTHORIZED_OPERATOR_ARCHIVE_CREATION_ONLY",
+                                          "ref_object_sha":  "39dc9e1fb0737b61affbff0b6d413b3988bfbd36",
+                                          "peeled_commit_sha":  "39dc9e1fb0737b61affbff0b6d413b3988bfbd36",
+                                          "immutable_policy":  "No force-update or deletion; future deletion requires per-ref approval and fresh verification."
+                                      },
+                     "eligibility":  "PENDING_PUBLIC_CARRIER_REVIEW_AND_PER_REF_OPERATOR_APPROVAL",
+                     "blockers":  [
+                                      "OPERATOR_DELETION_APPROVAL_REQUIRED"
+                                  ],
+                     "deletion_authority":  "NOT_GRANTED",
+                     "deletion_executed":  false
+                 }
+             ],
+    "protocol":  "Public reconstructable carrier only. No private paths, branch deletion, ref deletion, or manifest retirement is authorized. Fresh per-ref verification and operator approval are required before any future deletion request."
+}
