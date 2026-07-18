@@ -468,6 +468,8 @@ print(json.dumps({
             str(manifest_path),
             "--trusted-verifier-registry",
             str(registry),
+            "--expected-trusted-verifier-registry-sha256",
+            _sha256(registry),
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -1207,3 +1209,12 @@ def test_admission_missing_sufficiency_receipt_returns_structured_failure(tmp_pa
     payload = json.loads(result.stdout)
     assert payload["valid"] is False
     assert payload["errors"]
+
+
+def test_registry_replacement_cannot_follow_candidate_asserted_hash():
+ with tempfile.TemporaryDirectory() as directory:
+  root=Path(directory); verifier=root/'verifier.py'; verifier.write_text('pass\n',encoding='utf-8')
+  registry=root/'registry.json'; payload={'schema_version':'ember-trusted-verifiers-v1','verifiers':[{'path':'verifier.py','sha256':hashlib.sha256(verifier.read_bytes()).hexdigest(),'evidence_classes':['x'],'criterion_ids':[]}]}; registry.write_text(json.dumps(payload),encoding='utf-8')
+  authority=hashlib.sha256(registry.read_bytes()).hexdigest(); errors=[]; assert contract._load_trusted_verifiers(registry,errors,authority)
+  payload['verifiers'][0]['criterion_ids']=['candidate-controlled']; registry.write_text(json.dumps(payload),encoding='utf-8')
+  errors=[]; assert contract._load_trusted_verifiers(registry,errors,hashlib.sha256(b'candidate-local-assertion').hexdigest())=={}; assert errors==['trusted_verifier_registry: external authority hash mismatch']
