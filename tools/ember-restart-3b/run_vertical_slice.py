@@ -561,7 +561,7 @@ def _custody_ledger_write_lock(parent: Path) -> object:
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
-        yield
+        yield parent
     finally:
         try:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
@@ -652,11 +652,16 @@ def _custody_path_subject(canonical_parent: Path) -> str:
 
     canonical = Path(canonical_parent).resolve(strict=True)
     spelling = str(canonical)
-    if spelling.startswith("\\\\?\\UNC\\"):
-        spelling = "\\\\" + spelling[8:]
-    elif spelling.startswith("\\\\?\\"):
-        spelling = spelling[4:]
-    normalized = os.path.normcase(os.path.normpath(spelling)).casefold()
+    if os.name == "nt":
+        if spelling.startswith("\\\\?\\UNC\\"):
+            spelling = "\\\\" + spelling[8:]
+        elif spelling.startswith("\\\\?\\"):
+            spelling = spelling[4:]
+        normalized = os.path.normcase(os.path.normpath(spelling)).casefold()
+    else:
+        # POSIX path spellings are case-sensitive; collapsing their case would
+        # allow distinct custody roots to share one opaque receipt identity.
+        normalized = os.path.normpath(spelling)
     return "custody-path-sha256:" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 

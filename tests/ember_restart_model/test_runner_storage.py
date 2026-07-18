@@ -9,6 +9,7 @@ import contextlib
 import hashlib
 import json
 import os
+import posixpath
 import subprocess
 import sys
 import tempfile
@@ -1451,6 +1452,54 @@ class RunnerStorageTests(unittest.TestCase):
             parent = Path(directory)
             with run_vertical_slice._custody_ledger_write_lock(parent):
                 self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.lock").exists())
+    def test_posix_custody_subject_preserves_case_distinct_canonical_paths(self) -> None:
+        """Case-sensitive POSIX custody roots must not collapse into one opaque subject."""
+        class CanonicalPath:
+            def __init__(self, spelling: str) -> None:
+                self.spelling = spelling
+
+            def resolve(self, *, strict: bool = True) -> "CanonicalPath":
+                self.assert_true(strict)
+                return self
+
+            def assert_true(self, value: bool) -> None:
+                if not value:
+                    raise AssertionError("custody subject must use a strict canonical path")
+
+            def __str__(self) -> str:
+                return self.spelling
+
+        upper = CanonicalPath("case-root/CaseDistinct")
+        lower = CanonicalPath("case-root/casedistinct")
+        with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.object(run_vertical_slice.os, "path", posixpath), unittest.mock.patch.object(run_vertical_slice, "Path", side_effect=lambda value: value):
+            self.assertNotEqual(
+                run_vertical_slice._custody_path_subject(upper),
+                run_vertical_slice._custody_path_subject(lower),
+            )
+            self.assertEqual(
+                run_vertical_slice._custody_path_subject(upper),
+                run_vertical_slice._custody_path_subject(upper),
+            )
+    def test_posix_custody_ledger_lock_yields_canonical_parent_and_releases_flock(self) -> None:
+        """The non-Windows lock must yield the canonical root consumed by custody subjects."""
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            flock_calls: list[tuple[int, int]] = []
+
+            class FakeFcntl:
+                LOCK_EX = 1
+                LOCK_UN = 2
+
+                @staticmethod
+                def flock(descriptor: int, operation: int) -> None:
+                    flock_calls.append((descriptor, operation))
+
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.dict(sys.modules, {"fcntl": FakeFcntl}):
+                with run_vertical_slice._custody_ledger_write_lock(parent) as canonical_parent:
+                    self.assertEqual(canonical_parent, parent.resolve())
+                    self.assertEqual(len(flock_calls), 1)
+                    self.assertEqual(flock_calls[0][1], FakeFcntl.LOCK_EX)
+            self.assertEqual([operation for _, operation in flock_calls], [FakeFcntl.LOCK_EX, FakeFcntl.LOCK_UN])
     def test_timed_out_ledger_waiter_preserves_live_owner_lock(self) -> None:
         """A native waiter cannot append while another process owns the kernel mutex."""
         with tempfile.TemporaryDirectory() as directory:
