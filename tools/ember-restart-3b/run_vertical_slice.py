@@ -647,6 +647,25 @@ def _ledger_binding(payload: bytes) -> dict[str, object]:
     return {"ledger_sha256": hashlib.sha256(payload).hexdigest(), "ledger_bytes": len(payload), "chain_head_sha256": _custody_chain_head(events), "frame_count": len(events)}
 
 
+def _custody_path_subject(canonical_parent: Path) -> str:
+    """Return the opaque receipt identity for one OS-canonical custody directory."""
+
+    canonical = Path(canonical_parent).resolve(strict=True)
+    spelling = str(canonical)
+    if spelling.startswith("\\\\?\\UNC\\"):
+        spelling = "\\\\" + spelling[8:]
+    elif spelling.startswith("\\\\?\\"):
+        spelling = spelling[4:]
+    normalized = os.path.normcase(os.path.normpath(spelling)).casefold()
+    return "custody-path-sha256:" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _custody_subject_token(canonical_parent: Path) -> str:
+    """Return only the opaque digest portion for external receipt filenames."""
+
+    return _custody_path_subject(canonical_parent).split(":", 1)[1]
+
+
 def prepare_custody_ledger_transaction(*, receipt_path: Path, old_ledger: bytes, new_ledger: bytes, operation_id: str, subject: str) -> dict[str, object]:
     """Exclusively create, or exactly resume, a durable external old/new transaction."""
     if not isinstance(operation_id, str) or not operation_id or not isinstance(subject, str) or not subject:
@@ -672,8 +691,9 @@ def _head_transaction(path: Path) -> dict[str, object]:
 
 
 def _finalize_custody_ledger_transaction_locked(canonical_parent: Path, *, receipt_path: Path) -> dict[str, object]:
+    expected_subject = _custody_path_subject(canonical_parent)
     receipt = _head_transaction(receipt_path)
-    if receipt["subject"] != f"custody:{canonical_parent.name}":
+    if receipt["subject"] != expected_subject:
         raise RuntimeError("custody ledger transaction subject does not match canonical parent")
     current, _ = _custody_ledger_snapshot(canonical_parent)
     current_binding = _ledger_binding(current)
@@ -701,10 +721,11 @@ def finalize_custody_ledger_transaction(parent: Path, *, receipt_path: Path) -> 
         return _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=receipt_path)
 def _recover_parent_scoped_transactions_locked(canonical_parent: Path) -> None:
     """Resolve pending external append receipts before certifying a later head."""
-    pattern = f"custody-append-{canonical_parent.name}-*.json"
+    expected_subject = _custody_path_subject(canonical_parent)
+    pattern = f"custody-append-{_custody_subject_token(canonical_parent)}-*.json"
     for receipt_path in sorted(canonical_parent.parent.glob(pattern)):
         receipt = _head_transaction(receipt_path)
-        if receipt["subject"] != f"custody:{canonical_parent.name}":
+        if receipt["subject"] != expected_subject:
             raise RuntimeError("parent-scoped custody transaction has a foreign subject")
         if receipt["result"] == "PREPARED":
             _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=receipt_path)
@@ -720,7 +741,7 @@ def migrate_legacy_custody_ledger(parent: Path, *, transaction_receipt_path: Pat
     with _custody_ledger_write_lock(parent) as canonical_parent:
         _recover_parent_scoped_transactions_locked(canonical_parent)
         if transaction_receipt_path is None:
-            transaction_receipt_path = canonical_parent.parent / f"custody-migration-{canonical_parent.name}.json"
+            transaction_receipt_path = canonical_parent.parent / f"custody-migration-{_custody_subject_token(canonical_parent)}.json"
         if transaction_receipt_path.resolve().is_relative_to(canonical_parent.resolve()):
             raise RuntimeError("migration transaction receipt must be outside custody root")
         prior, events = _custody_ledger_snapshot(canonical_parent)
@@ -770,7 +791,7 @@ def migrate_legacy_custody_ledger(parent: Path, *, transaction_receipt_path: Pat
                 replay.append(chained)
                 rewritten_rows.append(chained)
         rewritten = b"".join((json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8") for row in rewritten_rows)
-        prepare_custody_ledger_transaction(receipt_path=transaction_receipt_path, old_ledger=prior, new_ledger=rewritten, operation_id=f"migration-{digest}", subject=f"custody:{canonical_parent.name}")
+        prepare_custody_ledger_transaction(receipt_path=transaction_receipt_path, old_ledger=prior, new_ledger=rewritten, operation_id=f"migration-{digest}", subject=_custody_path_subject(canonical_parent))
         _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, rewritten)
         _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=transaction_receipt_path)
         published, published_events = _custody_ledger_snapshot(canonical_parent)
@@ -838,12 +859,12 @@ def _append_custody_ledger_transition(parent: Path, event: dict[str, object], *,
     """Durably replace only through an externally bound old/new transaction."""
     effective_operation_id = operation_id or f"append-{uuid.uuid4().hex}"
     with _custody_ledger_write_lock(parent) as canonical_parent:
-        expected_subject = f"custody:{canonical_parent.name}"
+        expected_subject = _custody_path_subject(canonical_parent)
         if subject is not None and subject != expected_subject:
             raise RuntimeError("append transaction subject does not match custody root")
         _recover_parent_scoped_transactions_locked(canonical_parent)
         if transaction_receipt_path is None:
-            transaction_receipt_path = canonical_parent.parent / f"custody-append-{canonical_parent.name}-{effective_operation_id}.json"
+            transaction_receipt_path = canonical_parent.parent / f"custody-append-{_custody_subject_token(canonical_parent)}-{effective_operation_id}.json"
         if transaction_receipt_path.resolve().is_relative_to(canonical_parent.resolve()):
             raise RuntimeError("append transaction receipt must be outside custody root")
         applied = _append_custody_ledger_transition_locked(canonical_parent, event, transaction_receipt_path=transaction_receipt_path, operation_id=effective_operation_id, subject=expected_subject, recovery_idempotent=recovery_idempotent)

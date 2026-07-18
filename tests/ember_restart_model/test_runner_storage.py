@@ -152,7 +152,7 @@ class RunnerStorageTests(unittest.TestCase):
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
             ledger.write_bytes(old)
             transaction_path = Path(receipt_directory) / "ledger-transaction.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="old-ledger-abort", subject=f"custody:{parent.name}")
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="old-ledger-abort", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             receipt = run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=transaction_path)
             self.assertEqual(ledger.read_bytes(), old)
             self.assertEqual(receipt["result"], "ABORTED")
@@ -176,13 +176,41 @@ class RunnerStorageTests(unittest.TestCase):
                 old_ledger=b"",
                 new_ledger=new,
                 operation_id="cross-root",
-                subject=f"custody:{root_b.name}",
+                subject=run_vertical_slice._custody_path_subject(root_b.resolve()),
             )
             before_ledger = (root_a / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes()
             before_receipt = receipt_path.read_bytes()
             with self.assertRaisesRegex(RuntimeError, "subject"):
                 run_vertical_slice.recover_torn_custody_ledger_tail(root_a, transaction_receipt_path=receipt_path)
             self.assertEqual((root_a / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes(), before_ledger)
+            self.assertEqual(receipt_path.read_bytes(), before_receipt)
+    def test_direct_recovery_rejects_same_basename_cross_parent_subject_before_mutation(self) -> None:
+        """Opaque path identity must distinguish separate custody roots named checkpoint."""
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+            root_a = Path(directory) / "a" / "checkpoint"
+            root_b = Path(directory) / "b" / "checkpoint"
+            root_a.mkdir(parents=True)
+            root_b.mkdir(parents=True)
+            prepared = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 17, "sha256": "a" * 64, "reason": "same-basename-cross-parent"},
+                [],
+            )
+            new = (json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            ledger = root_a / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_bytes(new)
+            receipt_path = Path(receipt_directory) / "cross-parent.json"
+            run_vertical_slice.prepare_custody_ledger_transaction(
+                receipt_path=receipt_path,
+                old_ledger=b"",
+                new_ledger=new,
+                operation_id="same-basename-cross-parent",
+                subject=run_vertical_slice._custody_path_subject(root_b.resolve()),
+            )
+            before_ledger = ledger.read_bytes()
+            before_receipt = receipt_path.read_bytes()
+            with self.assertRaisesRegex(RuntimeError, "subject"):
+                run_vertical_slice.recover_torn_custody_ledger_tail(root_a, transaction_receipt_path=receipt_path)
+            self.assertEqual(ledger.read_bytes(), before_ledger)
             self.assertEqual(receipt_path.read_bytes(), before_receipt)
     def test_transaction_recovery_commits_only_exact_prebound_new_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
@@ -193,7 +221,7 @@ class RunnerStorageTests(unittest.TestCase):
             new = (json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
             ledger.write_bytes(new)
             transaction_path = Path(receipt_directory) / "ledger-transaction.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="new-ledger-commit", subject=f"custody:{parent.name}")
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="new-ledger-commit", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             receipt = run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=transaction_path)
             self.assertEqual(receipt["result"], "COMMITTED")
             self.assertEqual(ledger.read_bytes(), new)
@@ -268,16 +296,16 @@ class RunnerStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipts:
             parent = Path(directory)
             receipt_path = Path(receipts) / "aborted.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=b"", new_ledger=b"", operation_id="aborted-op", subject=f"custody:{parent.name}")
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=b"", new_ledger=b"", operation_id="aborted-op", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             self.assertEqual(run_vertical_slice.finalize_custody_ledger_transaction(parent, receipt_path=receipt_path)["result"], "ABORTED")
             event = {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json", "bytes": 1, "sha256": "b" * 64, "reason": "retry"}
             with self.assertRaisesRegex(RuntimeError, "collision|fresh nonterminal"):
-                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt_path, operation_id="aborted-op", subject=f"custody:{parent.name}")
+                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt_path, operation_id="aborted-op", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8"))["result"], "ABORTED")
     def test_parent_scoped_recovery_rejects_foreign_subject_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
-            receipt_path = parent.parent / f"custody-append-{parent.name}-foreign.json"
+            receipt_path = parent.parent / f"custody-append-{run_vertical_slice._custody_subject_token(parent.resolve())}-foreign.json"
             run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=b"", new_ledger=b"", operation_id="foreign", subject="custody:another-root")
             with self.assertRaisesRegex(RuntimeError, "foreign subject"):
                 run_vertical_slice._append_custody_ledger_transition(parent, {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 1, "sha256": "a" * 64, "reason": "foreign"})
@@ -288,8 +316,8 @@ class RunnerStorageTests(unittest.TestCase):
             first = run_vertical_slice._next_custody_ledger_frame({"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "c" * 64 + ".json", "bytes": 17, "sha256": "c" * 64, "reason": "stranded"}, [])
             old = b""
             new = (json.dumps(first, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-            receipt_path = parent.parent / f"custody-append-{parent.name}-stranded.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=old, new_ledger=new, operation_id="stranded", subject=f"custody:{parent.name}")
+            receipt_path = parent.parent / f"custody-append-{run_vertical_slice._custody_subject_token(parent.resolve())}-stranded.json"
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=old, new_ledger=new, operation_id="stranded", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             ledger.write_bytes(new)
             run_vertical_slice._append_custody_ledger_transition(parent, {"event": "COMMITTED", "pointer": first["pointer"], "bytes": 17, "sha256": "c" * 64, "reason": "stranded"})
             self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8"))["result"], "COMMITTED")
@@ -394,7 +422,7 @@ class RunnerStorageTests(unittest.TestCase):
             _, events = run_vertical_slice._custody_ledger_snapshot(parent)
             self.assertEqual([event["event"] for event in events], ["PREPARED", "COMMITTED"])
             self.assertEqual(run_vertical_slice._custody_reconciliation(parent)["deleted_bytes"], 17)
-            receipts = list(root.glob(f"custody-append-{parent.name}-*.json"))
+            receipts = list(root.glob(f"custody-append-{run_vertical_slice._custody_subject_token(parent.resolve())}-*.json"))
             self.assertEqual(len(receipts), 1)
             self.assertEqual(json.loads(receipts[0].read_text(encoding="utf-8"))["result"], "COMMITTED")
             self.assertEqual(list(root.glob(".*.tmp")), [])
@@ -479,7 +507,7 @@ class RunnerStorageTests(unittest.TestCase):
             digest = hashlib.sha256(old).hexdigest()
             (parent / f".checkpoint-custody-ledger-legacy-{digest}.jsonl").write_bytes(old)
             transaction_path = Path(receipts) / "migration.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="migration-crash", subject=f"custody:{parent.name}")
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="migration-crash", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             receipt = run_vertical_slice.migrate_legacy_custody_ledger(parent, transaction_receipt_path=transaction_path)
             self.assertEqual(receipt["result"], "MIGRATED")
             self.assertEqual(json.loads(transaction_path.read_text(encoding="utf-8"))["result"], "COMMITTED")
@@ -502,7 +530,7 @@ class RunnerStorageTests(unittest.TestCase):
             digest = hashlib.sha256(old).hexdigest()
             (parent / f".checkpoint-custody-ledger-legacy-{digest}.jsonl").write_bytes(old)
             transaction_path = Path(receipts) / "completion.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="completion-crash", subject=f"custody:{parent.name}")
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="completion-crash", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             real_atomic_json = run_vertical_slice._atomic_json
             def fail_completion(path: Path, payload: dict[str, object]) -> None:
                 if path.name.endswith(f"-migration-{digest}.json"):
@@ -1250,7 +1278,7 @@ class RunnerStorageTests(unittest.TestCase):
             event = {"event": "COMMITTED", "pointer": pointer, "bytes": 1, "sha256": "d" * 64, "reason": "invalid"}
             receipt = Path(receipts) / "invalid.json"
             with self.assertRaisesRegex(RuntimeError, "requires exactly one prior PREPARED"):
-                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt, operation_id="invalid", subject=f"custody:{parent.name}")
+                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt, operation_id="invalid", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.jsonl").exists())
             self.assertFalse(receipt.exists())
             prepared = {**event, "event": "PREPARED"}
@@ -1258,7 +1286,7 @@ class RunnerStorageTests(unittest.TestCase):
             before = (parent / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes()
             mismatched = {**event, "reason": "mismatch"}
             with self.assertRaisesRegex(RuntimeError, "identity differs"):
-                run_vertical_slice._append_custody_ledger_transition(parent, mismatched, transaction_receipt_path=receipt, operation_id="invalid-2", subject=f"custody:{parent.name}")
+                run_vertical_slice._append_custody_ledger_transition(parent, mismatched, transaction_receipt_path=receipt, operation_id="invalid-2", subject=run_vertical_slice._custody_path_subject(parent.resolve()))
             self.assertEqual((parent / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes(), before)
             self.assertFalse(receipt.exists())
     def test_append_rejects_hash_valid_prior_semantic_poison_before_receipt(self) -> None:
