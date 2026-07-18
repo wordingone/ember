@@ -105,7 +105,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
 
             admitted = resolve_central_owned_admission(
                 run_manifest=manifest, snapshot_manifest=snapshot,
-                trusted_verifier_registry=root / "registry.json", trusted_verifier_registry_approval=root / "approval.json", checkpoint_sha256=checkpoint, runner=runner,
+                trusted_verifier_registry=root / "registry.json", checkpoint_sha256=checkpoint, runner=runner,
             )
         self.assertEqual(admitted["checkpoint_sha256"], checkpoint)
     def test_development_identity_and_sse_completion_are_non_admissible(self) -> None:
@@ -345,7 +345,6 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 "--config", "config.json",
                 "--run-manifest", "run.json",
                 "--trusted-verifier-registry", "registry.json",
-                "--trusted-verifier-registry-approval", "approval.json",
                 "--mode", "INTERACTIVE",
                 "--parent-pid", str(os.getpid()),
                 "--device", "cpu",
@@ -356,7 +355,6 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(events[1][0], "load")
         self.assertEqual(load.call_args.kwargs["config_path"], Path("config.json"))
         self.assertIsNone(load.call_args.kwargs["frozen_split"])
-        self.assertEqual(load.call_args.kwargs["trusted_verifier_registry_approval"], Path("approval.json"))
         create.assert_called_once_with(runtime, host="127.0.0.1", port=8000, mode="INTERACTIVE")
         server.serve_forever.assert_called_once_with()
     def test_loaded_runtime_stops_on_tokenizer_derived_eos(self) -> None:
@@ -669,20 +667,18 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         resolved = resolve_central_owned_admission(
             run_manifest=Path("run.json"),
             trusted_verifier_registry=Path("registry.json"),
-            trusted_verifier_registry_approval=Path("approval.json"),
             checkpoint_sha256=checkpoint,
             runner=runner,
         )
         self.assertEqual(resolved, payload)
         self.assertEqual(calls[0][1], "-I")
-        self.assertEqual(calls[0][-5:], ["run.json", "--trusted-verifier-registry", "registry.json", "--trusted-verifier-registry-approval", "approval.json"])
+        self.assertEqual(calls[0][-3:], ["run.json", "--trusted-verifier-registry", "registry.json"])
 
         payload["checkpoint_sha256"] = "b" * 64
         with self.assertRaisesRegex(ValueError, "checkpoint hash"):
             resolve_central_owned_admission(
                 run_manifest=Path("run.json"),
                 trusted_verifier_registry=Path("registry.json"),
-                trusted_verifier_registry_approval=Path("approval.json"),
                 checkpoint_sha256=checkpoint,
                 runner=runner,
             )
