@@ -46,3 +46,19 @@ def build_records(tokenizer: Any, *, count: int, capability: str) -> list[dict[s
         record["capability_receipt"] = expected_receipt(record)
         records.append(record)
     return records
+def record_at(tokenizer: Any, *, count: int, capability: str, index: int) -> dict[str, object]:
+    """Regenerate one executed reasoning or tool episode without family allocation."""
+    if capability not in {"reasoning", "tool"} or not isinstance(count, int) or count < 512 or not isinstance(index, int) or not 0 <= index < count:
+        raise ValueError("owned trajectory stream arguments are invalid")
+    left, right, result = _episode(index)
+    target_text = f"reasoning sum {left} plus {right} equals {result}" if capability == "reasoning" else f"tool calculator {left} plus {right} equals {result}"
+    encoded = list(tokenizer.encode(target_text).ids)
+    if len(encoded) < 2:
+        raise ValueError("frozen tokenizer cannot encode owned reasoning/tool transcript")
+    record: dict[str, object] = {"schema_version": "ember-owned-semantic-record-v1", "sample_id": f"owned-{capability}-trajectory-{index:08d}", "active_expert": capability, "token_ids": encoded[:-1], "target_ids": encoded[1:], "target_text": target_text, "image_coordinates": [], "multimodal_spans": []}
+    if capability == "reasoning":
+        record["capability_evidence"] = {"reasoning": {"operands": [left, right], "target": result, "trace": [left, right, result]}}
+    else:
+        record["capability_evidence"] = {"tool": {"name": "owned_calculator", "arguments": {"expression": f"{left}+{right}"}, "observation": {"value": result}}}
+    record["capability_receipt"] = expected_receipt(record)
+    return record

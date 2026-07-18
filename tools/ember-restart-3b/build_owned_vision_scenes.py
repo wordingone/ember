@@ -251,3 +251,20 @@ def build_records(tokenizer: Any, *, count: int, image_marker: int) -> list[dict
             }},
         })
     return _shuffle_serialized_records_within_splits(records)
+
+def record_at(tokenizer: Any, *, count: int, image_marker: int, index: int) -> dict[str, object]:
+    """Regenerate one new-lineage stream scene in O(1), preserving group-atomic split membership."""
+    declared_split_plan(record_count=count)
+    if not isinstance(image_marker, int) or image_marker < 0 or not isinstance(index, int) or not 0 <= index < count:
+        raise ValueError("owned vision stream index is outside the declared range")
+    source_index = (12_289 * index + 4_093) % count
+    variation = source_index // len(_RELATIONS)
+    group_count = count // len(_RELATIONS)
+    rank = (8_191 * variation + 3_137) % group_count
+    split = "train" if rank < group_count // 2 else "validation" if rank < group_count * 3 // 4 else "test"
+    patches, coordinates = _scene(source_index)
+    caption = spatial_relation_caption(patches, coordinates)
+    encoded = list(tokenizer.encode(caption).ids)
+    if len(encoded) < 2:
+        raise ValueError("frozen tokenizer cannot encode an owned spatial relation caption")
+    return {"schema_version": "ember-owned-semantic-record-v1", "sample_id": f"owned-vision-spatial-{source_index:08d}", "scene_split": split, "active_expert": "vision", "token_ids": [*[image_marker] * 4, *encoded[:-1]], "target_ids": [*[image_marker] * 3, *encoded], "target_text": caption, "image_patches_u8_base64": [base64.b64encode(patch).decode("ascii") for patch in patches], "image_coordinates": coordinates, "multimodal_spans": [{"start": 0, "length": 4, "modality": "image", "attention_mode": "isolated"}], "capability_evidence": {"image": {"target_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "scene_sha256": structural_scene_sha256(patches, coordinates), "derivation": "raw_image_spatial_relation_execution"}}}

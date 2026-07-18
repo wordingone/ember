@@ -61,3 +61,21 @@ def build_records(tokenizer: Any, *, count: int, audio_marker: int) -> list[dict
             "capability_evidence": {"audio": {"caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "derivation": "raw_audio_signal_execution"}},
         })
     return records
+def record_at(tokenizer: Any, *, count: int, audio_marker: int, index: int) -> dict[str, object]:
+    """Regenerate one owned audio episode without allocating its family."""
+    if not isinstance(count, int) or count < 512 or not isinstance(index, int) or not 0 <= index < count:
+        raise ValueError("owned audio stream index is outside the declared range")
+    if not isinstance(audio_marker, int) or audio_marker < 0:
+        raise ValueError("audio marker must be a nonnegative token ID")
+    frames = _episode_frames(index)
+    caption = audio_caption(frames)
+    encoded = list(tokenizer.encode(caption).ids)
+    if len(encoded) < 2:
+        raise ValueError("frozen tokenizer cannot encode an owned audio caption")
+    return {
+        "schema_version": "ember-owned-semantic-record-v1", "sample_id": f"owned-audio-frame-{index:08d}", "active_expert": "audio",
+        "token_ids": [*[audio_marker] * 4, *encoded[:-1]], "target_ids": [*[audio_marker] * 3, *encoded], "target_text": caption,
+        "audio_frames_i16le_base64": [base64.b64encode(frame).decode("ascii") for frame in frames], "image_coordinates": [],
+        "multimodal_spans": [{"start": 0, "length": 4, "modality": "audio", "attention_mode": "causal"}],
+        "capability_evidence": {"audio": {"caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "derivation": "raw_audio_signal_execution"}},
+    }
