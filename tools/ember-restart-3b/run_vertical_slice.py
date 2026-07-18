@@ -49,6 +49,35 @@ def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+_SCENE_SPLITS = ("train", "validation", "test")
+
+
+def select_verified_scene_split(
+    records: list[dict[str, object]], *, capability: str, scene_split: str,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Bind one image scene split for either training or held-out evaluation."""
+
+    if capability != "image" or scene_split not in _SCENE_SPLITS:
+        raise ValueError("scene split selection requires image capability and a declared scene split")
+    if not records or any(record.get("active_expert") != "vision" for record in records):
+        raise ValueError("scene split selection requires one vision route")
+    if any(record.get("scene_split") not in _SCENE_SPLITS for record in records):
+        raise ValueError("scene split selection requires every record to declare a scene split")
+    selected = [record for record in records if record["scene_split"] == scene_split]
+    if not selected:
+        raise ValueError("scene split selection selected no records")
+    encoded_records = json.dumps(selected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    encoded_tokens = json.dumps([record["token_ids"] for record in selected], separators=(",", ":")).encode("utf-8")
+    return selected, {
+        "schema_version": "ember-specialist-scene-split-selection-v1",
+        "capability": capability,
+        "scene_split": scene_split,
+        "record_count": len(selected),
+        "token_count": sum(len(record["token_ids"]) for record in selected),
+        "records_sha256": hashlib.sha256(encoded_records).hexdigest(),
+        "tokens_sha256": hashlib.sha256(encoded_tokens).hexdigest(),
+    }
+
 def bind_specialist_execution_slice(
     records: list[dict[str, object]], *, start_record: int, max_records: int,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
@@ -2125,6 +2154,11 @@ def run_specialist(
     records, verification = load_verified_specialist_records(
         root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
     )
+    if capability == "image":
+        records, scene_split_selection = select_verified_scene_split(
+            records, capability=capability, scene_split="train",
+        )
+        verification = {**verification, "scene_split_selection": scene_split_selection}
     selected_records, execution_slice = bind_specialist_execution_slice(
         records, start_record=start_record,
         max_records=(len(records) - start_record if max_records is None else max_records),

@@ -62,6 +62,31 @@ class RunnerPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds"):
             run_vertical_slice.bind_specialist_execution_slice(records, start_record=2, max_records=2)
 
+    def test_vision_scene_split_selection_keeps_train_out_of_evaluation(self) -> None:
+        records = [
+            {"active_expert": "vision", "scene_split": "train", "token_ids": [1], "row_id": "train"},
+            {"active_expert": "vision", "scene_split": "validation", "token_ids": [2], "row_id": "validation"},
+            {"active_expert": "vision", "scene_split": "test", "token_ids": [3], "row_id": "test"},
+        ]
+        train, train_receipt = run_vertical_slice.select_verified_scene_split(
+            records, capability="image", scene_split="train",
+        )
+        validation, validation_receipt = run_vertical_slice.select_verified_scene_split(
+            records, capability="image", scene_split="validation",
+        )
+        test, test_receipt = run_vertical_slice.select_verified_scene_split(
+            records, capability="image", scene_split="test",
+        )
+        self.assertEqual([record["row_id"] for record in train], ["train"])
+        self.assertEqual([record["row_id"] for record in validation], ["validation"])
+        self.assertEqual([record["row_id"] for record in test], ["test"])
+        self.assertEqual(train_receipt["scene_split"], "train")
+        self.assertNotEqual(train_receipt["records_sha256"], validation_receipt["records_sha256"])
+        self.assertNotEqual(validation_receipt["records_sha256"], test_receipt["records_sha256"])
+        with self.assertRaisesRegex(ValueError, "declare a scene split"):
+            run_vertical_slice.select_verified_scene_split(
+                [{"active_expert": "vision", "token_ids": [1]}], capability="image", scene_split="train",
+            )
     def test_training_telemetry_is_bounded_path_free_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             channel = Path(directory) / "ember-telemetry.jsonl"
@@ -598,7 +623,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     )
     def test_specialist_dispatch_does_not_enter_cuda_runner_when_lineage_preflight_fails(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image"}
-        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "token_ids": [1]}], verification)):
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}, {"active_expert": "vision", "scene_split": "validation", "token_ids": [2]}, {"active_expert": "vision", "scene_split": "test", "token_ids": [3]}], verification)):
             with patch.object(run_vertical_slice, "specialist_lineage_request", side_effect=ValueError("parent shard hash mismatch")):
                 with patch.object(run_vertical_slice, "run") as cuda_runner:
                     with self.assertRaisesRegex(ValueError, "hash mismatch"):
@@ -610,7 +635,7 @@ class RunnerPreflightTests(unittest.TestCase):
         cuda_runner.assert_not_called()
     def test_specialist_forwards_counter_success_receipt_to_cuda_runner(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image"}
-        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "token_ids": [1]}], verification)):
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}, {"active_expert": "vision", "scene_split": "validation", "token_ids": [2]}, {"active_expert": "vision", "scene_split": "test", "token_ids": [3]}], verification)):
             with patch.object(run_vertical_slice, "specialist_lineage_request", side_effect=lambda **kwargs: {"parent_manifest": "parent", "root_manifest": "root", "execution_slice": kwargs["execution_slice"]}):
                 with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as cuda_runner:
                     run_vertical_slice.run_specialist(
@@ -629,7 +654,8 @@ class RunnerPreflightTests(unittest.TestCase):
                         max_records=1,
                     )
         self.assertEqual(cuda_runner.call_args.kwargs["resume_counter_receipt"], Path("B:/parent/parameter-counter-receipt.json"))
-        self.assertEqual(cuda_runner.call_args.kwargs["records_override"], [{"active_expert": "vision", "token_ids": [1]}])
+        self.assertEqual(cuda_runner.call_args.kwargs["records_override"], [{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}])
+        self.assertEqual(cuda_runner.call_args.kwargs["specialist_verification"]["scene_split_selection"]["scene_split"], "train")
         self.assertIn("execution_slice", cuda_runner.call_args.kwargs["specialist_lineage"])
     def test_specialist_cli_dispatches_one_verified_route(self) -> None:
         with patch.object(run_vertical_slice, "run_specialist", return_value={"steps": 1}) as specialist:
