@@ -5,21 +5,27 @@
 
 from __future__ import annotations
 
+import contextlib
+import ctypes
 import hashlib
 import json
 import os
-import shutil
+import re
+import stat
 import subprocess
 import sys
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 
 import tokenizers
 import torch
 
-from checkpoint_artifacts import load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, write_checkpoint_artifacts
+from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, write_checkpoint_artifacts
+from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from parameter_counter import measure_parameter_counts
@@ -251,6 +257,15 @@ def specialist_publication_plan(
         "projected_write_bytes": projected_write_bytes,
     }
 
+def _has_quarantine_component(path: Path) -> bool:
+    return any(str(part).casefold() == ".checkpoint-quarantine" for part in Path(path).parts)
+
+
+def _reject_quarantined_checkpoint_path(*paths: Path) -> None:
+    if any(_has_quarantine_component(path) for path in paths):
+        raise ValueError("quarantined checkpoint is not admitted or selectable")
+
+
 def production_artifact_root(
     candidate: Path,
     *,
@@ -261,7 +276,9 @@ def production_artifact_root(
 
     if type(c_relocated_under_disk_budget_runner) is not bool:
         raise ValueError("C relocation custody flag must be boolean")
-    resolved = candidate.resolve()
+    lexical = Path(candidate)
+    resolved = lexical.resolve()
+    _reject_quarantined_checkpoint_path(lexical, resolved)
     if c_relocated_under_disk_budget_runner:
         if not isinstance(relocation_custody_root, Path):
             raise ValueError("runner-bound C relocation requires an explicit custody root")
@@ -280,6 +297,388 @@ def _bundle_serialized_bytes(bundle: Path) -> int:
     """Measure exactly the bytes currently published beneath one bundle root."""
     return sum(path.stat().st_size for path in bundle.rglob("*") if path.is_file())
 
+def _custody_link_or_reparse(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise RuntimeError(f"custody byte accounting could not inspect {path}") from error
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _lexical_nonreparse_directory(path: Path) -> Path:
+    """Return an absolute lexical directory only after inspecting every component."""
+
+    lexical = Path(os.path.abspath(str(path)))
+    parts = lexical.parts
+    current = Path(parts[0]) if parts else lexical
+    for part in parts[1:]:
+        current = current / part
+        if _custody_link_or_reparse(current):
+            raise ValueError("checkpoint quarantine source contains a link or reparse component")
+    if _custody_link_or_reparse(lexical):
+        raise ValueError("checkpoint quarantine source contains a link or reparse component")
+    if not lexical.is_dir():
+        raise ValueError("checkpoint quarantine source must be a directory")
+    return lexical
+
+
+def _file_identity(path: Path) -> tuple[int, int] | str:
+    stat = path.stat()
+    inode = int(getattr(stat, "st_ino", 0))
+    if inode:
+        return (int(getattr(stat, "st_dev", 0)), inode)
+    return str(path.resolve())
+
+def _custody_file_rows(parent: Path) -> list[dict[str, object]]:
+    """Snapshot every physical custody file once and classify its root bucket."""
+
+    parent = parent.resolve()
+    seen: set[tuple[int, int] | str] = set()
+    rows: list[dict[str, object]] = []
+    for path in parent.rglob("*"):
+        try:
+            if _custody_link_or_reparse(path):
+                raise RuntimeError(f"custody accounting encountered a symlink or reparse point: {path}")
+            if not path.is_file():
+                continue
+            relative = path.relative_to(parent)
+            top = relative.parts[0] if relative.parts else ""
+            if top == _CUSTODY_LEDGER_LOCK:
+                continue
+            identity = _file_identity(path)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            bucket = "quarantine" if top == ".checkpoint-quarantine" else "live" if top.startswith("checkpoint-") else "evidence" if top == _CUSTODY_LEDGER else "other"
+            rows.append({"path": relative.as_posix(), "bucket": bucket, "bytes": path.stat().st_size})
+        except OSError as error:
+            raise RuntimeError(f"custody byte accounting could not inspect {path}") from error
+    return rows
+
+
+def _custody_serialized_bytes(parent: Path) -> int:
+    """Charge all custody bytes with a unique-inode walk."""
+
+    return sum(int(row["bytes"]) for row in _custody_file_rows(parent))
+
+
+def _canonical_custody_deletion_pointer(raw_pointer: object) -> str:
+    """Return the sole portable ledger spelling for quarantine evidence paths."""
+
+    if not isinstance(raw_pointer, str) or not raw_pointer:
+        raise ValueError("custody deletion ledger lacks a canonical pointer")
+    if "\\" in raw_pointer or raw_pointer != raw_pointer.casefold():
+        raise ValueError("custody deletion ledger pointer is not canonical POSIX form")
+    path = PurePosixPath(raw_pointer)
+    parts = path.parts
+    canonical = "/".join(parts)
+    if (
+        path.is_absolute()
+        or raw_pointer != canonical
+        or len(parts) != 2
+        or parts[0] != ".checkpoint-quarantine"
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
+        raise ValueError("custody deletion ledger lacks a safe canonical quarantine pointer")
+    leaf = parts[1]
+    stem = leaf.split("-", 1)[0]
+    if not _EVIDENCE_FILENAME_RE.fullmatch(leaf) or stem in _WINDOWS_RESERVED_STEMS:
+        raise ValueError("custody deletion ledger pointer is not a portable evidence filename")
+    return canonical
+
+
+def _quarantine_evidence_identity(parent: Path, path: Path) -> tuple[str, int, str, tuple[int, int]]:
+    """Read one direct evidence leaf and bind its canonical path, bytes, and inode."""
+
+    if _custody_link_or_reparse(path) or not path.is_file():
+        raise ValueError("quarantine evidence leaf is not a direct regular file")
+    try:
+        pointer = _canonical_custody_deletion_pointer(path.relative_to(parent).as_posix())
+        before = path.stat()
+        payload = path.read_bytes()
+        after = path.stat()
+    except OSError as error:
+        raise ValueError("quarantine evidence leaf could not be snapshotted") from error
+    if _custody_link_or_reparse(path) or not path.is_file():
+        raise ValueError("quarantine evidence leaf changed into a link or non-file")
+    identity = (int(getattr(before, "st_dev", 0)), int(getattr(before, "st_ino", 0)))
+    after_identity = (int(getattr(after, "st_dev", 0)), int(getattr(after, "st_ino", 0)))
+    if identity != after_identity or before.st_size != after.st_size or after.st_size != len(payload):
+        raise ValueError("quarantine evidence leaf changed while being snapshotted")
+    return pointer, len(payload), hashlib.sha256(payload).hexdigest(), identity
+
+
+def _portable_evidence_stem(name: str) -> str:
+    if not isinstance(name, str) or not name:
+        raise ValueError("quarantine evidence name must be a nonempty string")
+    stem = re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-") or "evidence"
+    if stem.split("-", 1)[0] in _WINDOWS_RESERVED_STEMS:
+        stem = f"evidence-{stem}"
+    return stem
+
+
+def _custody_deletion_path(parent: Path, pointer: str) -> Path:
+    return parent.joinpath(*PurePosixPath(pointer).parts)
+
+
+def _custody_ledger_lock_is_stale(lock_dir: Path, owner: Path) -> bool:
+    """Recover only a dead or unattested writer lock after a bounded grace interval."""
+
+    try:
+        payload = json.loads(owner.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        payload = None
+    if isinstance(payload, dict) and "pid" in payload:
+        return not _pid_is_alive(payload.get("pid"))
+    try:
+        age_seconds = max(0.0, time.time() - lock_dir.stat().st_mtime)
+    except OSError:
+        return False
+    return age_seconds >= _LEDGER_LOCK_OWNER_GRACE_SECONDS
+
+def _windows_custody_ledger_mutex_name_from_identity(identity: tuple[int, int, int]) -> str:
+    """Name one machine-wide mutex from immutable directory volume/file identity."""
+
+    if len(identity) != 3 or any(type(part) is not int or part < 0 for part in identity):
+        raise ValueError("Windows custody directory identity is invalid")
+    payload = ":".join(str(part) for part in identity).encode("ascii")
+    return "Global\\ember-checkpoint-custody-" + hashlib.sha256(payload).hexdigest()
+
+
+@contextlib.contextmanager
+def _windows_open_custody_directory(parent: Path) -> object:
+    """Hold a non-delete-share handle and yield its canonical target and identity."""
+
+    class _ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [("attributes", ctypes.c_ulong), ("creation_low", ctypes.c_ulong), ("creation_high", ctypes.c_ulong), ("access_low", ctypes.c_ulong), ("access_high", ctypes.c_ulong), ("write_low", ctypes.c_ulong), ("write_high", ctypes.c_ulong), ("volume_serial", ctypes.c_ulong), ("size_high", ctypes.c_ulong), ("size_low", ctypes.c_ulong), ("link_count", ctypes.c_ulong), ("file_index_high", ctypes.c_ulong), ("file_index_low", ctypes.c_ulong)]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = (ctypes.c_wchar_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p)
+    create_file.restype = ctypes.c_void_p
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (ctypes.c_void_p,)
+    close_handle.restype = ctypes.c_bool
+    get_information = kernel32.GetFileInformationByHandle
+    get_information.argtypes = (ctypes.c_void_p, ctypes.POINTER(_ByHandleFileInformation))
+    get_information.restype = ctypes.c_bool
+    get_final_name = kernel32.GetFinalPathNameByHandleW
+    get_final_name.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_ulong, ctypes.c_ulong)
+    get_final_name.restype = ctypes.c_ulong
+    handle = create_file(str(parent), 0x80000000, 0x00000003, None, 3, 0x02000000, None)
+    invalid = ctypes.c_void_p(-1).value
+    if not handle or handle == invalid:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        information = _ByHandleFileInformation()
+        if not get_information(handle, ctypes.byref(information)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        buffer = ctypes.create_unicode_buffer(32768)
+        written = int(get_final_name(handle, buffer, len(buffer), 0))
+        if not written or written >= len(buffer):
+            raise ctypes.WinError(ctypes.get_last_error())
+        yield Path(buffer.value), (int(information.volume_serial), int(information.file_index_high), int(information.file_index_low))
+    finally:
+        if not close_handle(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _windows_directory_identity(parent: Path) -> tuple[int, int, int]:
+    """Read volume serial and 64-bit file ID from one opened directory handle."""
+
+    with _windows_open_custody_directory(parent) as (_, identity):
+        return identity
+
+def _windows_custody_ledger_mutex_name(parent: Path) -> str:
+    """Return a machine-wide mutex name from the opened custody directory identity."""
+
+    return _windows_custody_ledger_mutex_name_from_identity(_windows_directory_identity(parent))
+
+
+@contextlib.contextmanager
+def _windows_custody_ledger_mutex_from_identity(identity: tuple[int, int, int]) -> object:
+    """Hold the machine-wide mutex for one already-opened custody directory."""
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_mutex = kernel32.CreateMutexW
+    create_mutex.argtypes = (ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p)
+    create_mutex.restype = ctypes.c_void_p
+    wait_for_single_object = kernel32.WaitForSingleObject
+    wait_for_single_object.argtypes = (ctypes.c_void_p, ctypes.c_ulong)
+    wait_for_single_object.restype = ctypes.c_ulong
+    release_mutex = kernel32.ReleaseMutex
+    release_mutex.argtypes = (ctypes.c_void_p,)
+    release_mutex.restype = ctypes.c_bool
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (ctypes.c_void_p,)
+    close_handle.restype = ctypes.c_bool
+    handle = create_mutex(None, False, _windows_custody_ledger_mutex_name_from_identity(identity))
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    acquired = False
+    try:
+        milliseconds = max(0, int(_LEDGER_LOCK_WAIT_SECONDS * 1000))
+        result = int(wait_for_single_object(handle, milliseconds))
+        if result in {0x00000000, 0x00000080}:
+            acquired = True
+            yield
+            return
+        if result == 0x00000102:
+            raise RuntimeError("timed out waiting for the custody ledger writer lock")
+        raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        try:
+            if acquired and not release_mutex(handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            if not close_handle(handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+
+
+@contextlib.contextmanager
+def _windows_custody_ledger_mutex(parent: Path) -> object:
+    """Bind ledger operations to one held directory handle and its machine-wide mutex."""
+
+    with _windows_open_custody_directory(parent) as (canonical_parent, identity):
+        with _windows_custody_ledger_mutex_from_identity(identity):
+            yield canonical_parent
+
+@contextlib.contextmanager
+def _custody_ledger_write_lock(parent: Path) -> object:
+    """Serialize a ledger snapshot/replacement across threads and live processes."""
+
+    if os.name == "nt":
+        with _windows_custody_ledger_mutex(parent) as canonical_parent:
+            yield canonical_parent
+        return
+    parent = parent.resolve()
+    try:
+        import fcntl
+    except ImportError as error:
+        raise RuntimeError("POSIX custody ledger requires fcntl.flock kernel locking") from error
+    lock_path = parent / _CUSTODY_LEDGER_LOCK
+    descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
+    """Read one complete newline-framed ledger snapshot, rejecting torn tails."""
+
+    ledger = parent / _CUSTODY_LEDGER
+    if not ledger.exists():
+        return b"", []
+    try:
+        payload = ledger.read_bytes()
+    except OSError as error:
+        raise RuntimeError("custody deletion ledger could not be read") from error
+    if payload and not payload.endswith(b"\n"):
+        raise RuntimeError("custody deletion ledger has an unterminated or torn tail")
+    events: list[object] = []
+    for line in payload.splitlines():
+        try:
+            events.append(json.loads(line))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("custody deletion ledger is malformed") from error
+    return payload, events
+
+
+def _append_custody_ledger_transition(parent: Path, event: dict[str, object]) -> None:
+    """Durably replace the complete framed ledger; never append to a live tail."""
+
+    framed = (json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    with _custody_ledger_write_lock(parent) as canonical_parent:
+        prior, _ = _custody_ledger_snapshot(canonical_parent)
+        _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, prior + framed)
+
+def _custody_reconciliation(parent: Path) -> dict[str, object]:
+    """Reconcile custody bytes with an ordered, fail-closed deletion ledger."""
+
+    parent = parent.resolve()
+    rows = _custody_file_rows(parent)
+    totals = {"live": 0, "quarantine": 0, "evidence": 0, "other": 0}
+    for row in rows:
+        totals[str(row["bucket"])] += int(row["bytes"])
+    ledger = parent / _CUSTODY_LEDGER
+    transitions: dict[str, dict[str, object]] = {}
+    legacy_deleted: dict[str, dict[str, object]] = {}
+    if ledger.exists():
+        _, events = _custody_ledger_snapshot(parent)
+        for event in events:
+            if not isinstance(event, dict):
+                raise RuntimeError("custody deletion ledger has an invalid schema")
+            schema = event.get("schema_version")
+            kind = event.get("event")
+            raw_pointer = event.get("pointer")
+            if schema not in {_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA}:
+                raise RuntimeError("custody deletion ledger has an invalid schema")
+            try:
+                pointer = _canonical_custody_deletion_pointer(raw_pointer)
+            except ValueError as error:
+                raise RuntimeError(str(error)) from error
+            if type(event.get("bytes")) is not int or event["bytes"] < 0 or not _is_sha256(event.get("sha256")):
+                raise RuntimeError("custody deletion ledger has invalid byte evidence")
+            if not isinstance(event.get("reason"), str) or not event["reason"]:
+                raise RuntimeError("custody deletion ledger lacks a deletion reason")
+            identity = {
+                "schema_version": schema,
+                "pointer": pointer,
+                "bytes": event["bytes"],
+                "sha256": event["sha256"],
+                "reason": event["reason"],
+            }
+            if schema == _LEGACY_CUSTODY_LEDGER_SCHEMA:
+                if kind != "DELETED":
+                    raise RuntimeError("legacy custody deletion ledger permits only DELETED")
+                if pointer in transitions or pointer in legacy_deleted:
+                    raise RuntimeError("custody deletion ledger has a duplicate legacy deletion")
+                legacy_deleted[pointer] = identity
+                continue
+            if kind not in {"PREPARED", "COMMITTED"}:
+                raise RuntimeError("custody deletion ledger has an invalid event")
+            if pointer in legacy_deleted:
+                raise RuntimeError("custody deletion ledger mixes legacy and ordered events")
+            prior = transitions.get(pointer)
+            if prior is None:
+                if kind != "PREPARED":
+                    raise RuntimeError("custody deletion ledger has COMMITTED without PREPARED")
+                transitions[pointer] = {**identity, "state": "PREPARED"}
+                continue
+            if any(prior[field] != identity[field] for field in ("schema_version", "pointer", "bytes", "sha256", "reason")):
+                raise RuntimeError("custody deletion ledger changes a prepared pointer identity")
+            if prior["state"] != "PREPARED" or kind != "COMMITTED":
+                raise RuntimeError("custody deletion ledger has a duplicate or reversed transition")
+            prior["state"] = "COMMITTED"
+    deleted_bytes = 0
+    for pointer, record in transitions.items():
+        deleted_path = _custody_deletion_path(parent, pointer)
+        if deleted_path.exists():
+            if record["state"] == "COMMITTED":
+                raise RuntimeError("custody deletion ledger claims deletion while bytes still exist")
+            continue
+        # PREPARED+missing is an interruption-safe inferred deletion; count once.
+        deleted_bytes += int(record["bytes"])
+    for pointer, record in legacy_deleted.items():
+        if _custody_deletion_path(parent, pointer).exists():
+            raise RuntimeError("legacy custody deletion claims deletion while bytes still exist")
+        deleted_bytes += int(record["bytes"])
+    physical_bytes = sum(int(row["bytes"]) for row in rows)
+    return {
+        "schema_version": "ember-checkpoint-custody-reconciliation-v1",
+        "live_bytes": totals["live"],
+        "quarantine_bytes": totals["quarantine"],
+        "evidence_bytes": totals["evidence"],
+        "other_bytes": totals["other"],
+        "physical_bytes": physical_bytes,
+        "deleted_bytes": deleted_bytes,
+        "reconciled_bytes": physical_bytes + deleted_bytes,
+        "file_count": len(rows),
+    }
+
 def _receipt_valid_for_retention(bundle: Path) -> bool:
     try:
         require_counter_success_receipt(bundle)
@@ -290,6 +689,16 @@ def _receipt_valid_for_retention(bundle: Path) -> bool:
 _WRITER_LEASE = ".writer-lease.json"
 _MAX_QUARANTINE_FILES = 32
 _MAX_QUARANTINE_BYTES = 1024 * 1024
+_CUSTODY_LEDGER = ".checkpoint-custody-deletion-ledger.jsonl"
+_CUSTODY_LEDGER_LOCK = ".checkpoint-custody-deletion-ledger.lock"
+_LEGACY_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
+_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
+_LEDGER_THREAD_LOCKS: dict[str, threading.Lock] = {}
+_LEDGER_THREAD_LOCKS_GUARD = threading.Lock()
+_LEDGER_LOCK_WAIT_SECONDS = 30.0
+_LEDGER_LOCK_OWNER_GRACE_SECONDS = 1.0
+_EVIDENCE_FILENAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{64}(?:-g[1-9][0-9]*)?\.json")
+_WINDOWS_RESERVED_STEMS = {"aux", "clock$", "con", "nul", "prn", *(f"com{index}" for index in range(1, 10)), *(f"lpt{index}" for index in range(1, 10))}
 
 
 def _pid_is_alive(pid: object) -> bool:
@@ -344,26 +753,189 @@ def _writer_is_active(root: Path) -> bool:
     return _pid_is_alive(lease.get("pid"))
 
 
+def _recover_missing_prepared_evidence(parent: Path) -> None:
+    """Finish only verified PREPARED deletions whose direct evidence bytes are absent."""
+
+    parent = parent.resolve()
+    ledger = parent / _CUSTODY_LEDGER
+    if not ledger.exists():
+        return
+    _custody_reconciliation(parent)
+    _, events = _custody_ledger_snapshot(parent)
+    terminal: dict[str, dict[str, object]] = {}
+    for event in events:
+        if event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA:
+            continue
+        pointer = _canonical_custody_deletion_pointer(event.get("pointer"))
+        terminal[pointer] = event
+    for pointer, event in terminal.items():
+        if event.get("event") != "PREPARED":
+            continue
+        target = _custody_deletion_path(parent, pointer)
+        try:
+            target.stat()
+        except FileNotFoundError:
+            committed = {
+                "schema_version": _CUSTODY_LEDGER_SCHEMA,
+                "event": "COMMITTED",
+                "pointer": pointer,
+                "bytes": event["bytes"],
+                "sha256": event["sha256"],
+                "reason": event["reason"],
+            }
+            _append_custody_ledger_transition(parent, committed)
+        except OSError as error:
+            raise RuntimeError("prepared evidence could not be inspected for recovery") from error
+
 def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:
     evidence_dir = parent / ".checkpoint-quarantine"
     evidence_dir.mkdir(parents=True, exist_ok=True)
-    evidence_path = evidence_dir / f"{name}.json"
-    _atomic_json(evidence_path, payload)
-    files = sorted(
-        (path for path in evidence_dir.glob("*.json") if path.is_file()),
-        key=lambda path: (path.stat().st_mtime_ns, path.name),
-    )
+    _recover_missing_prepared_evidence(parent)
+    payload_bytes = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    digest = hashlib.sha256(payload_bytes).hexdigest()
+    evidence_stem = _portable_evidence_stem(name)
+    ledger = parent / _CUSTODY_LEDGER
+
+    def matching_prepared_exists(deletion: dict[str, object]) -> bool:
+        if not ledger.exists():
+            return False
+        prepared = False
+        try:
+            for event in _custody_ledger_snapshot(parent)[1]:
+                if not isinstance(event, dict):
+                    raise ValueError("custody deletion ledger has an invalid schema")
+                if _canonical_custody_deletion_pointer(event.get("pointer")) != deletion["pointer"]:
+                    continue
+                identity = {key: event.get(key) for key in ("schema_version", "pointer", "bytes", "sha256", "reason")}
+                expected = {key: deletion[key] for key in ("schema_version", "pointer", "bytes", "sha256", "reason")}
+                if identity != expected:
+                    raise ValueError("prepared evidence identity does not match the current victim")
+                if event.get("event") != "PREPARED" or prepared:
+                    raise ValueError("prepared evidence has an invalid prior transition")
+                prepared = True
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+            raise RuntimeError(str(error)) from error
+        return prepared
+
+    def ledger_events(pointer_path: Path) -> set[str]:
+        if not ledger.exists():
+            return set()
+        try:
+            pointer = _canonical_custody_deletion_pointer(pointer_path.relative_to(parent).as_posix())
+            events: set[str] = set()
+            for event in _custody_ledger_snapshot(parent)[1]:
+                if not isinstance(event, dict):
+                    raise ValueError("custody deletion ledger has an invalid schema")
+                if _canonical_custody_deletion_pointer(event.get("pointer")) == pointer:
+                    events.add(str(event.get("event")))
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+            raise RuntimeError("custody deletion ledger could not be inspected") from error
+        return events
+
+    terminal_events = {"PREPARED", "COMMITTED", "DELETED"}
+    base_path = evidence_dir / f"{evidence_stem}-{digest}.json"
+    evidence_path = base_path
+    base_events = ledger_events(base_path)
+    if base_path.exists():
+        if base_events & terminal_events:
+            raise RuntimeError("historical quarantine evidence pointer reappeared")
+        if base_path.read_bytes() != payload_bytes:
+            raise RuntimeError("quarantine evidence collision is not content-addressed")
+    elif base_events & terminal_events:
+        generation = 1
+        while True:
+            candidate = evidence_dir / f"{evidence_stem}-{digest}-g{generation}.json"
+            candidate_events = ledger_events(candidate)
+            if candidate.exists():
+                if candidate_events & terminal_events:
+                    raise RuntimeError("historical quarantine evidence pointer reappeared")
+                if candidate.read_bytes() != payload_bytes:
+                    raise RuntimeError("quarantine evidence collision is not content-addressed")
+                evidence_path = candidate
+                break
+            if candidate_events & terminal_events:
+                generation += 1
+                continue
+            evidence_path = candidate
+            break
+
+    if not evidence_path.exists():
+        try:
+            with evidence_path.open("xb") as handle:
+                handle.write(payload_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except FileExistsError:
+            if ledger_events(evidence_path) & terminal_events:
+                raise RuntimeError("historical quarantine evidence pointer reappeared")
+            if evidence_path.read_bytes() != payload_bytes:
+                raise RuntimeError("quarantine evidence appeared with different bytes")
+    def valid_evidence_files() -> list[Path]:
+        files: list[Path] = []
+        for path in evidence_dir.iterdir():
+            # Preexisting foreign leaves are custody bytes, never retention victims.
+            try:
+                _quarantine_evidence_identity(parent, path)
+            except ValueError:
+                continue
+            files.append(path)
+        return files
+
+    files = sorted(valid_evidence_files(), key=lambda path: (path.stat().st_mtime_ns, path.name))
     while len(files) > _MAX_QUARANTINE_FILES or sum(path.stat().st_size for path in files) > _MAX_QUARANTINE_BYTES:
         victim = next((path for path in files if path != evidence_path), None)
         if victim is None:
             break
-        victim.unlink()
+        ledger = parent / _CUSTODY_LEDGER
+        try:
+            pointer, byte_count, digest, identity = _quarantine_evidence_identity(parent, victim)
+        except ValueError as error:
+            raise RuntimeError("bounded evidence victim is no longer a valid direct evidence leaf") from error
+        deletion = {
+            "schema_version": _CUSTODY_LEDGER_SCHEMA,
+            "pointer": pointer,
+            "bytes": byte_count,
+            "sha256": digest,
+            "reason": "bounded evidence retention",
+        }
+        recovering_prepared = matching_prepared_exists(deletion)
+        if not recovering_prepared:
+            prepared = {**deletion, "event": "PREPARED"}
+            _append_custody_ledger_transition(parent, prepared)
+        try:
+            if _quarantine_evidence_identity(parent, victim) != (pointer, byte_count, digest, identity):
+                raise RuntimeError("bounded evidence victim changed before unlink; bytes preserved")
+            victim.unlink()
+        except RuntimeError:
+            raise
+        except (OSError, ValueError) as error:
+            raise RuntimeError("bounded evidence deletion did not commit; bytes preserved") from error
+        committed = {**deletion, "event": "COMMITTED"}
+        _append_custody_ledger_transition(parent, committed)
         files.remove(victim)
     return evidence_path
 
 
+def _move_bundle_to_quarantine(bundle: Path, *, prefix: str = "candidate") -> Path:
+    """Atomically preserve serialized bytes in the nonselectable quarantine namespace."""
+
+    lexical = _lexical_nonreparse_directory(bundle)
+    source = lexical.resolve(strict=True)
+    if not source.is_dir():
+        raise ValueError("checkpoint quarantine source must be a directory")
+    quarantine = source.parent / ".checkpoint-quarantine"
+    if quarantine.exists() and _custody_link_or_reparse(quarantine):
+        raise ValueError("checkpoint quarantine target contains a link or reparse component")
+    quarantine.mkdir(parents=True, exist_ok=True)
+    if _custody_link_or_reparse(quarantine):
+        raise ValueError("checkpoint quarantine target contains a link or reparse component")
+    candidate = quarantine / f"{prefix}-{source.name}-{uuid.uuid4().hex[:16]}"
+    _atomic_publish_no_replace(source, candidate)
+    return candidate
+
+
 def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
-    """Remove an unselectable checkpoint while preserving only bounded evidence."""
+    """Preserve an unselectable checkpoint for rejudging; only bounded JSON is prunable."""
 
     if not bundle.is_dir() or not bundle.name.startswith("checkpoint-"):
         raise ValueError("retention quarantine requires a checkpoint-* directory")
@@ -373,21 +945,17 @@ def _quarantine_unverified_bundle(bundle: Path, *, reason: str) -> None:
     except OSError as error:
         manifest_sha256 = None
         reason = f"{reason}; manifest_hash_error={type(error).__name__}"
+    candidate = _move_bundle_to_quarantine(bundle)
     evidence = {
         "schema_version": "ember-checkpoint-quarantine-v1",
         "result": "UNSELECTABLE",
         "source_bundle": bundle.name,
+        "quarantine_candidate": candidate.name,
         "reason": reason[:512],
         "manifest_sha256": manifest_sha256,
-        "bulk_candidate_cleanup": "deleted",
+        "bulk_candidate_cleanup": "moved_to_quarantine",
     }
-    _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
-    try:
-        shutil.rmtree(bundle)
-    except Exception:
-        evidence["bulk_candidate_cleanup"] = "failed"
-        _write_bounded_quarantine_evidence(bundle.parent, bundle.name, evidence)
-        raise
+    _write_bounded_quarantine_evidence(candidate.parent.parent, bundle.name, evidence)
 
 
 def _reclaim_stale_staging(parent: Path) -> None:
@@ -400,14 +968,15 @@ def _reclaim_stale_staging(parent: Path) -> None:
         except OSError:
             manifest_sha256 = None
         evidence_name = f"staging-{hashlib.sha256(staging.name.encode()).hexdigest()[:16]}"
+        candidate = _move_bundle_to_quarantine(staging, prefix="candidate")
         _write_bounded_quarantine_evidence(parent, evidence_name, {
             "schema_version": "ember-staging-failure-v1",
             "result": "UNSELECTABLE",
             "source_bundle": staging.name,
+            "quarantine_candidate": candidate.name,
             "manifest_sha256": manifest_sha256,
-            "bulk_candidate_cleanup": "deleted",
+            "bulk_candidate_cleanup": "moved_to_quarantine",
         })
-        shutil.rmtree(staging)
 
 
 def _reclaim_unverified_orphans(parent: Path) -> None:
@@ -447,16 +1016,15 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
         else:
             bundles.append(candidate)
     bundles.sort(key=lambda path: (path.stat().st_mtime_ns, path.name))
-    if max_count is not None:
-        while len(bundles) > max_count:
-            shutil.rmtree(bundles.pop(0))
+    if max_count is not None and len(bundles) > max_count:
+        raise RuntimeError("selectable checkpoint count cannot be reduced without evidence-qualified deletion")
     if max_serialized_bytes is not None:
-        total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+        total = int(_custody_reconciliation(parent)["reconciled_bytes"])
         while total > max_serialized_bytes and len(bundles) > 1:
-            shutil.rmtree(bundles.pop(0))
-            total = sum(_bundle_serialized_bytes(bundle) for bundle in bundles)
+            _move_bundle_to_quarantine(bundles.pop(0))
+            total = int(_custody_reconciliation(parent)["reconciled_bytes"])
         if total > max_serialized_bytes:
-            raise RuntimeError("published checkpoint exceeds serialized-byte retention budget while preserving the final known-good bundle")
+            raise RuntimeError("checkpoint custody exceeds serialized-byte retention budget; quarantined bytes remain charged")
 
 
 def _retain_after_success(
@@ -575,6 +1143,30 @@ _COUNTER_COUNT_FIELDS = (
 )
 
 
+def _windows_atomic_replace(source: Path, target: Path) -> None:
+    """Replace a Windows directory entry only when the kernel accepts write-through durability."""
+
+    movefile_replace_existing = 0x00000001
+    movefile_write_through = 0x00000008
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    if not kernel32.MoveFileExW(str(source), str(target), movefile_replace_existing | movefile_write_through):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _atomic_replace_durable(source: Path, target: Path) -> None:
+    """Atomically replace one small file and durably persist its containing metadata."""
+
+    if os.name == "nt":
+        _windows_atomic_replace(source, target)
+        return
+    os.replace(source, target)
+    descriptor = os.open(str(target.parent), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _atomic_bytes(path: Path, payload: bytes) -> None:
     """Publish small custody evidence only after complete bytes are durable."""
 
@@ -584,11 +1176,10 @@ def _atomic_bytes(path: Path, payload: bytes) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        _atomic_replace_durable(temporary, path)
     finally:
         if temporary.exists():
             temporary.unlink()
-
 
 def _atomic_json(path: Path, payload: dict[str, object]) -> None:
     _atomic_bytes(path, (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
@@ -611,29 +1202,31 @@ def _is_sha256(value: object) -> bool:
 
 def require_counter_success_receipt(checkpoint_root: Path, *, receipt_path: Path | None = None) -> dict[str, object]:
     """Make resumability contingent on the exact successful realization counter output."""
-
     checkpoint_root = checkpoint_root.resolve()
     manifest, manifest_sha256 = _json_snapshot(checkpoint_root / "checkpoint-manifest.json", label="checkpoint manifest")
     receipt_source = (receipt_path if receipt_path is not None else checkpoint_root / _COUNTER_SUCCESS_RECEIPT).resolve()
     receipt, _receipt_sha256 = _json_snapshot(receipt_source, label="counter-success receipt")
-    expected = {
-        "schema_version": "ember-sparse-realization-receipt-v1", "verification_boundary": "VERIFIED_MEASURED",
-        "result": "MEASURED", "subject_checkpoint_sha256": manifest_sha256,
-        "model_config_sha256": manifest.get("model_config_sha256"), "architecture_revision": manifest.get("architecture_revision"),
-        "active_expert_ids": manifest.get("active_expert_ids"), "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
-    }
-    if any(receipt.get(field) != value for field, value in expected.items()):
-        raise ValueError("counter-success receipt does not bind this checkpoint realization")
+    validated = validate_realization_receipt(receipt)
     architecture = manifest.get("architecture")
-    if not isinstance(architecture, dict) or any(receipt.get(field) != architecture.get(field) for field in _COUNTER_COUNT_FIELDS):
+    expected = {
+        "model_config_sha256": manifest.get("model_config_sha256"),
+        "subject_checkpoint_sha256": manifest_sha256,
+        "architecture_revision": manifest.get("architecture_revision"),
+        "counter_sha256": _sha256(Path(__file__).with_name("parameter_counter.py")),
+        "active_expert_ids": manifest.get("active_expert_ids"),
+        "expert_genesis_sha256": manifest.get("expert_genesis_sha256"),
+        "expert_parameter_sha256": manifest.get("expert_parameter_sha256"),
+    }
+    if not isinstance(architecture, dict):
         raise ValueError("counter-success receipt does not reproduce checkpoint capacity")
-    if not _is_sha256(receipt.get("counter_sha256")):
-        raise ValueError("counter-success receipt has an invalid counter source hash")
-    return receipt
+    expected.update({field: architecture.get(field) for field in _COUNTER_COUNT_FIELDS})
+    if any(validated.get(field) != value for field, value in expected.items()):
+        raise ValueError("counter-success receipt does not bind this checkpoint realization")
+    return validated
 
 
 def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseException) -> Path | None:
-    """Delete bulk candidate bytes while retaining bounded manifest/failure evidence."""
+    """Preserve a counter-failed candidate as durable, nonselectable raw bytes."""
 
     if not checkpoint_target.exists():
         return None
@@ -644,40 +1237,23 @@ def _quarantine_counter_failed_checkpoint(checkpoint_target: Path, error: BaseEx
             manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     except OSError:
         manifest_sha256 = None
+    candidate = _move_bundle_to_quarantine(checkpoint_target, prefix="candidate")
     evidence = _write_bounded_quarantine_evidence(
-        checkpoint_target.parent,
-        f"counter-failed-{checkpoint_target.name}",
+        candidate.parent.parent,
+        f"counter-failed-{checkpoint_target.name}-{candidate.name.rsplit('-', 1)[-1]}",
         {
             "schema_version": "ember-counter-failure-v1",
             "result": "COUNTER_FAILED",
             "source_bundle": checkpoint_target.name,
+            "quarantine_candidate": candidate.name,
             "checkpoint_manifest_sha256": manifest_sha256,
             "error_type": type(error).__name__,
             "error": str(error)[:512],
-            "bulk_candidate_cleanup": "deleted",
+            "bulk_candidate_cleanup": "moved_to_quarantine",
         },
     )
-    shutil.rmtree(checkpoint_target)
-    if checkpoint_target.exists():
-        raise RuntimeError("counter-failed checkpoint could not be removed from the selectable namespace")
     return evidence
 
-def publish_counter_verified_checkpoint(*, checkpoint_target: Path, write_candidate: Callable[[], dict[str, object]], execute_counter: Callable[[], dict[str, object]]) -> tuple[dict[str, object], dict[str, object]]:
-    """Cover candidate creation through realization verification in one fail-closed transaction."""
-
-    target_existed = checkpoint_target.exists()
-    if target_existed:
-        raise FileExistsError(f"published checkpoint bundle already exists: {checkpoint_target}")
-    try:
-        published = write_candidate()
-        counter_receipt = execute_counter()
-        _atomic_json(checkpoint_target / _COUNTER_SUCCESS_RECEIPT, counter_receipt)
-        require_counter_success_receipt(checkpoint_target)
-    except BaseException as error:
-        if not target_existed:
-            _quarantine_counter_failed_checkpoint(checkpoint_target, error)
-        raise
-    return published, counter_receipt
 
 def authorize_production_resume_checkpoint(
     candidate: Path,
@@ -691,7 +1267,9 @@ def authorize_production_resume_checkpoint(
 ) -> tuple[Path, dict[str, object]]:
     """Authorize a resume and disclose the exact verifier trust path used."""
 
-    resolved = candidate.resolve()
+    lexical = Path(candidate)
+    resolved = lexical.resolve()
+    _reject_quarantined_checkpoint_path(lexical, resolved)
     accepted = resolved.drive.upper() == "B:" and resolved.is_dir()
     if not accepted and c_relocated_under_disk_budget_runner:
         resolved = production_artifact_root(
@@ -1139,6 +1717,7 @@ def run(
             _atomic_json(staging_root / _COUNTER_SUCCESS_RECEIPT, verified)
             require_counter_success_receipt(staging_root)
             verified_holder["receipt"] = verified
+            return verified
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
             published = write_checkpoint_artifacts(
@@ -1387,6 +1966,7 @@ def run_semantic(
             _atomic_json(staging_root / _COUNTER_SUCCESS_RECEIPT, verified)
             require_counter_success_receipt(staging_root)
             verified_holder["receipt"] = verified
+            return verified
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
             data_cursor = dict(state["data_cursor"])
