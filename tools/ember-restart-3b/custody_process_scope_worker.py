@@ -4,9 +4,10 @@
 """Subprocess worker for the cross-process custody ledger regression suite
 (tests/ember_restart_model/test_custody_process_scope.py).
 
-Ported from the two ad-hoc attack harnesses run this session (fburst-proclock
-zzz_worker.py, fburst-unlinkwin zzz_unlink_worker.py) into a single reusable
-worker with two subcommands so the repo test only needs one helper module.
+Ported from the two ad-hoc negative-test harnesses run this session
+(fburst-proclock zzz_worker.py, fburst-unlinkwin zzz_unlink_worker.py) into a
+single reusable worker with two subcommands so the repo test only needs one
+helper module.
 
 race    -- barrier on a go-file, then race ONE PREPARED custody-ledger
            transition against N siblings on the same pointer. Optional
@@ -71,7 +72,7 @@ def cmd_race(args: argparse.Namespace) -> None:
         "pointer": pointer,
         "bytes": len(EXPECTED_VICTIM_BYTES),
         "sha256": hashlib.sha256(EXPECTED_VICTIM_BYTES).hexdigest(),
-        "reason": "process-race attack",
+        "reason": "process-race negative test",
     }
 
     while not go_file.exists():
@@ -140,7 +141,7 @@ def cmd_unlink(args: argparse.Namespace) -> None:
 
     try:
         path = m._write_bounded_quarantine_evidence(
-            parent, "attack", {"tag": tag, "pid": os.getpid()})
+            parent, "probe", {"tag": tag, "pid": os.getpid()})
         outcome["result"] = "OK"
         outcome["evidence"] = path.name
     except Exception as exc:  # noqa: BLE001 - classify the outcome
