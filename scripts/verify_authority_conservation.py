@@ -788,10 +788,10 @@ def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | No
 def parse_config_classifications(
     root: Path, errors: list[dict[str, Any]]
 ) -> dict[str, dict[str, str]]:
-    state_path = root / "STATE.md"
-    if not state_path.is_file():
+    continuity_path = root / "CONTINUITY.md"
+    if not continuity_path.is_file():
         return {}
-    lines = read_text(state_path).splitlines()
+    lines = read_text(continuity_path).splitlines()
     table_rows: list[list[str]] = []
     for index, raw in enumerate(lines):
         if not raw.lstrip().startswith("|"):
@@ -1041,13 +1041,20 @@ def parse_markdown_table(text: str, expected_columns: int) -> list[list[str]]:
 
 
 def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
-    path = root / "STATE.md"
-    if not path.is_file():
+    pointer_path = root / "STATE.md"
+    if not pointer_path.is_file():
         errors.append(finding(6, "state.missing", "STATE.md is absent"))
+        return
+    pointer_lines = [line.strip() for line in read_text(pointer_path).splitlines() if line.strip()]
+    if len(pointer_lines) != 1 or "CONTINUITY.md" not in pointer_lines[0]:
+        errors.append(finding(6, "state.pointer_invalid", "STATE.md must be a one-line CONTINUITY.md pointer"))
+    path = root / "CONTINUITY.md"
+    if not path.is_file():
+        errors.append(finding(6, "state.missing", "CONTINUITY.md is absent"))
         return
     rows = parse_markdown_table(read_text(path), 9)
     if not rows:
-        errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows"))
+        errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows in CONTINUITY.md"))
         return
     ids = [row[0] for row in rows]
     identities = [row[2] for row in rows]
