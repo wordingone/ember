@@ -745,6 +745,17 @@ class RunnerPreflightTests(unittest.TestCase):
                     relocation_custody_root=checkpoint.parent,
                 )
 
+    def test_planted_complete_published_but_unverified_bundle_is_not_resumable(self) -> None:
+        """A complete-looking six-shard bundle without counter evidence is unselectable."""
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory)
+            checkpoint = custody / "checkpoint-complete-looking"
+            checkpoint.mkdir()
+            checkpoint.joinpath("checkpoint-manifest.json").write_text(json.dumps({"schema_version": "ember-sparse-checkpoint-v3", "shards": []}), encoding="utf-8")
+            for name in ("shared.pt", "replay-state.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"):
+                checkpoint.joinpath(name).write_bytes(b"complete-looking checkpoint bytes")
+            with self.assertRaisesRegex(ValueError, "counter-success receipt"):
+                run_vertical_slice.production_resume_checkpoint(checkpoint, c_relocated_under_disk_budget_runner=True, relocation_custody_root=custody)
     def test_historical_resume_uses_one_exact_registry_instead_of_current_counter(self) -> None:
         """The portable historical counter bundle is an explicit, mutually exclusive path."""
 
