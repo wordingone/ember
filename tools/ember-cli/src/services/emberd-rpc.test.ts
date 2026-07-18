@@ -55,6 +55,25 @@ winTest("callEmberd uses one request per connection and reconnects for each call
   ]);
 });
 
+winTest("callEmberd writes the first request inside the daemon 500ms idle boundary", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-idle-boundary-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  let firstRequestDelayMs = Number.POSITIVE_INFINITY;
+  const server = net.createServer((socket) => {
+    const connectedAt = performance.now();
+    socket.setEncoding("utf8");
+    socket.once("data", (line: string) => {
+      firstRequestDelayMs = performance.now() - connectedAt;
+      const request = JSON.parse(line) as { id: string };
+      socket.end(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { status: "ok" } }) + "\n");
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
+
+  await expect(pingEmberd({ pipeName: pipe, requestId: "idle-boundary", timeoutMs: 500 })).resolves.toBeUndefined();
+  expect(firstRequestDelayMs).toBeLessThan(500);
+});
+
 winTest("callEmberd retries a transient pipe-open failure within the bounded window", async () => {
   const pipe = `\\\\.\\pipe\\emberd-p2c-retry-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const pending = callEmberd({ pipeName: pipe, requestId: "retry", method: "ping", params: {} });
