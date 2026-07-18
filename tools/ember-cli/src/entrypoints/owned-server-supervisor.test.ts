@@ -37,6 +37,8 @@ function identity(): OwnedModelIdentity {
       serverPath: "C:\\repo\\tools\\ember-restart-3b\\serve_owned_openai.py",
       tokenizerPath: "C:\\owned\\tokenizer.json",
       trustedVerifierRegistryPath: "C:\\owned\\trusted-verifiers.json",
+      trustedVerifierRegistryApprovalPath: "C:\\owned\\trusted-registry-approval.json",
+      trustedVerifierRegistryApprovalSha256: "e".repeat(64),
     },
   };
 }
@@ -71,6 +73,7 @@ describe("owned server supervisor", () => {
       "--config", "C:\\owned\\model-config.json",
       "--run-manifest", "C:\\owned\\run.json",
       "--trusted-verifier-registry", "C:\\owned\\trusted-verifiers.json",
+      "--trusted-verifier-registry-approval", "C:\\owned\\trusted-registry-approval.json",
       "--host", "127.0.0.1",
       "--port", "8083",
       "--device", "cuda",

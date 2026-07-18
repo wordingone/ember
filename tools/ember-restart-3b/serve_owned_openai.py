@@ -335,6 +335,7 @@ def resolve_central_owned_admission(
     *,
     run_manifest: Path,
     trusted_verifier_registry: Path,
+    trusted_verifier_registry_approval: Path,
     checkpoint_sha256: str,
     snapshot_manifest: Path | None = None,
     runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
@@ -348,6 +349,8 @@ def resolve_central_owned_admission(
         str(snapshot_manifest if snapshot_manifest is not None else run_manifest),
         "--trusted-verifier-registry",
         str(trusted_verifier_registry),
+        "--trusted-verifier-registry-approval",
+        str(trusted_verifier_registry_approval),
     ]
     try:
         completed = (
@@ -511,6 +514,7 @@ class LoadedOwnedRuntime:
         run_manifest: Path,
         frozen_split: Path | None,
         trusted_verifier_registry: Path,
+        trusted_verifier_registry_approval: Path,
         device: str,
     ) -> "LoadedOwnedRuntime":
         manifest_path = checkpoint / "checkpoint-manifest.json"
@@ -525,6 +529,7 @@ class LoadedOwnedRuntime:
                 run_manifest=run_manifest,
                 snapshot_manifest=resolver_snapshot,
                 trusted_verifier_registry=trusted_verifier_registry,
+                trusted_verifier_registry_approval=trusted_verifier_registry_approval,
                 checkpoint_sha256=checkpoint_sha256,
             )
         finally:
@@ -666,6 +671,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-development-manifest-sha256")
     parser.add_argument("--expected-runtime-index-sha256")
     parser.add_argument("--trusted-verifier-registry", type=Path)
+    parser.add_argument("--trusted-verifier-registry-approval", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--mode", choices=("INTERACTIVE", "FROZEN_EVAL"), required=True)
     parser.add_argument("--parent-pid", type=int, required=True)
@@ -709,9 +715,9 @@ def main(argv: list[str] | None = None) -> int:
         identity = DevelopmentIdentity(checkpoint_sha256=str(development["checkpoint_sha256"]), model_config_sha256=str(development["model_config_sha256"]), tokenizer_sha256=tokenizer.sha256, server_source_sha256=sha(Path(__file__)), tokens_seen=int(development["tokens_seen"]), allocated_parameters=int(development["allocated_parameters"]), active_parameters=int(development["active_parameters"]))
         runtime = LoadedOwnedRuntime(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(args.device), frozen_split=frozen_split)
     else:
-        if args.trusted_verifier_registry is None:
-            raise ValueError("admitted server requires trusted verifier registry")
-        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, device=args.device, frozen_split=frozen_split)
+        if args.trusted_verifier_registry is None or args.trusted_verifier_registry_approval is None:
+            raise ValueError("admitted server requires trusted verifier registry and external approval")
+        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, trusted_verifier_registry_approval=args.trusted_verifier_registry_approval, device=args.device, frozen_split=frozen_split)
     server = create_loopback_server(runtime, host=args.host, port=args.port, mode=args.mode)
     server.serve_forever()
     return 0

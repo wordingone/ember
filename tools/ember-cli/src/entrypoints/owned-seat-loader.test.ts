@@ -137,6 +137,7 @@ describe("owned seat loader", () => {
         configHome: "C:/home",
         manifestPath: resolve("C:/run.json"),
         verifierRegistryPath: resolve("C:/trusted.json"),
+        verifierRegistryApprovalPath: resolve("C:/trusted-approval.json"),
         pythonExecutable: "python-owned",
       },
       {
@@ -165,6 +166,8 @@ describe("owned seat loader", () => {
                 server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
                 tokenizer_path: resolve("C:/owned/tokenizer.json"),
                 trusted_verifier_registry_path: resolve("C:/trusted.json"),
+                trusted_verifier_registry_approval_path: resolve("C:/trusted-approval.json"),
+                trusted_verifier_registry_approval_sha256: "e".repeat(64),
               },
             }),
           };
@@ -191,6 +194,8 @@ describe("owned seat loader", () => {
         serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
         tokenizerPath: resolve("C:/owned/tokenizer.json"),
         trustedVerifierRegistryPath: resolve("C:/trusted.json"),
+        trustedVerifierRegistryApprovalPath: resolve("C:/trusted-approval.json"),
+        trustedVerifierRegistryApprovalSha256: "e".repeat(64),
       },
     });
     expect(observedArgs).toEqual([
@@ -199,6 +204,8 @@ describe("owned seat loader", () => {
       "C:\\run.json",
       "--trusted-verifier-registry",
       "C:\\trusted.json",
+      "--trusted-verifier-registry-approval",
+      "C:\\trusted-approval.json",
     ]);
   });
 
