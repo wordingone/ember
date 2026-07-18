@@ -27,6 +27,15 @@ For a fresh context, start with [docs/START-HERE.md](docs/START-HERE.md).
 **Legend:** GREEN = a fresh receipt satisfies the condition's CHK; RED = CHK unmet or a satisfying artifact is absent; UNEVALUABLE = the probe genuinely cannot look (counts as RED for completion math); AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH = the three standing process-invariant rows (cadence-audit results, never a completion conjunct).
 <!-- BOARD-STATUS-END -->
 
+**What changed 2026-07-06.** `GOAL.md` was re-founded from scratch via an
+8-round maintainer-operator constitutional interview; the totality board was
+honestly **reset** under stricter probes rather than carried forward from the
+pre-refound era. The counts above will not resemble the prior 29-GREEN board
+and are not a regression — that record is archive only (`docs/goal-archive.md`),
+describing a goal document and a probe set that no longer exist. Read the
+counts above as the honest starting line under the current constitution, not
+as a drop from a prior score.
+
 No current checkpoint is an admissible Ember model.
 
 - A clean-genesis sparse unified decoder with 3,839,161,856 allocated, unique,
