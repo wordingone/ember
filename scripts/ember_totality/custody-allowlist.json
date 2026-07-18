@@ -1,4 +1,9 @@
 {
-  "schema_version": "ember-c-custody-allowlist-v1",
-  "allowed_receipt_basenames": []
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02A",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "schema_version":  "ember-c-custody-allowlist-v1",
+    "allowed_receipt_basenames":  [
+
+                                  ]
 }
