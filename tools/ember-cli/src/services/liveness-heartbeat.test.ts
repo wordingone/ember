@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/liveness-heartbeat.test.ts — heartbeat writer + reader tests (issue #413).
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -135,5 +138,51 @@ describe("readHeartbeatRow", () => {
     const filePath = path.join(scratchDir, "heartbeat.json");
     fs.writeFileSync(filePath, JSON.stringify({ ts: new Date().toISOString(), pid: "777", version: "x" }));
     expect(readHeartbeatRow(filePath)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// Issue #666 — a writer LAUNCHED FROM a worktree cwd must land its heartbeat at the MAIN
+// checkout's contract path (the path the watchdog polls), via the real resolution chain
+// (no repoRoot override) — production-shaped, not hand-built paths.
+// ---------------------------------------------------------------------------------------
+
+describe("issue #666 — writer launched from a worktree cwd", () => {
+  test("heartbeat file resolves under the main checkout, not the worktree", () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-666-"));
+    const savedCwd = process.cwd();
+    const savedEnv = process.env["EMBER_REPO_ROOT"];
+    try {
+      const mainRoot = path.join(scratch, "main-checkout");
+      fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
+      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
+
+      const worktreeRoot = path.join(scratch, "wt", "lane");
+      fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
+      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(
+        path.join(worktreeRoot, ".git"),
+        `gitdir: ${path.join(mainRoot, ".git", "worktrees", "lane")}\n`,
+      );
+
+      delete process.env["EMBER_REPO_ROOT"];
+      process.chdir(path.join(worktreeRoot, "tools", "ember-cli"));
+
+      const writer = createLivenessHeartbeatWriter({ pid: 4242, version: "t" });
+      const expected = path.join(path.resolve(mainRoot), "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+      expect(writer.filePath).toBe(expected);
+
+      writer.write();
+      // The watchdog-side read of the MAIN-tree path sees the row the writer just wrote.
+      expect(readHeartbeatRow(expected)?.pid).toBe(4242);
+      // And nothing landed at the worktree-derived path (the old divergent behavior).
+      expect(fs.existsSync(path.join(worktreeRoot, "tools", "ember-cli", "state", "cockpit-heartbeat.json"))).toBe(false);
+    } finally {
+      process.chdir(savedCwd);
+      if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedEnv;
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });

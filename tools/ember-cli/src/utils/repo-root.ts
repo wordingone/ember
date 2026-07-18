@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // repo-root.ts — resolves the ember repository root from a deterministic anchor that
 // survives `bun build --compile` (issue #172: under a compiled binary, import.meta.url
 // resolves to a virtual bunfs path, so a relative parent-walk from it lands at the drive
@@ -31,6 +34,50 @@ function isRepoRoot(candidate: string): boolean {
   );
 }
 
+/** Issue #666: a git WORKTREE checkout carries the marker files too (GOAL.md +
+ *  tools/ember-cli are regular checked-out files), so a marker walk started inside a
+ *  worktree validates the WORKTREE root — and state paths derived from it (the liveness
+ *  heartbeat) silently diverge from a watchdog anchored at the main checkout. This
+ *  canonicalizes any marker-validated root through the worktree's `.git` FILE
+ *  (`gitdir: <main>/.git/worktrees/<name>`) to the main checkout root, so every launch
+ *  location converges on ONE root. A worktree whose main checkout cannot be resolved or
+ *  fails the marker check THROWS — writing state to a root the watchdog will never poll
+ *  is exactly the silent divergence this exists to kill. */
+function canonicalizeThroughWorktree(root: string): string {
+  const dotGit = path.join(root, ".git");
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(dotGit);
+  } catch {
+    return root; // git-less deployment (plain copy/archive) — marker root stands as-is.
+  }
+  if (stat.isDirectory()) return root; // main checkout.
+
+  let gitdir: string;
+  try {
+    const m = fs.readFileSync(dotGit, "utf8").match(/^gitdir:\s*(.+?)\s*$/m);
+    if (!m) return root; // not the worktree pointer shape — leave it alone.
+    gitdir = m[1]!;
+  } catch {
+    return root;
+  }
+  // <main>/.git/worktrees/<name> -> <main>. A gitdir of any other shape (e.g. a
+  // submodule's .git/modules path) is not the worktree divergence — leave it alone.
+  const resolvedGitdir = path.resolve(root, gitdir);
+  const wtMatch = resolvedGitdir.match(/^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$/);
+  if (!wtMatch) return root;
+  const mainRoot = path.resolve(wtMatch[1]!);
+  if (!isRepoRoot(mainRoot)) {
+    throw new Error(
+      `Resolved root ${root} is a git worktree of ${mainRoot}, but that main checkout ` +
+        "does not validate as the ember repo root (missing GOAL.md + tools/ember-cli). " +
+        "Refusing to bind state paths to a worktree root the watchdog will never poll " +
+        "(issue #666). Set EMBER_REPO_ROOT to the main checkout.",
+    );
+  }
+  return mainRoot;
+}
+
 function walkUpForMarker(startDir: string): string | null {
   let dir = path.resolve(startDir);
   for (;;) {
@@ -59,16 +106,16 @@ export function resolveEmberRepoRoot(options: ResolveEmberRepoRootOptions = {}):
   const envValue = options.envRepoRoot ?? process.env["EMBER_REPO_ROOT"];
   if (envValue) {
     const resolvedEnv = path.resolve(envValue);
-    if (isRepoRoot(resolvedEnv)) return resolvedEnv;
+    if (isRepoRoot(resolvedEnv)) return canonicalizeThroughWorktree(resolvedEnv);
     // Invalid EMBER_REPO_ROOT is rejected, not trusted blindly — fall through to
     // discovery rather than anchoring on a directory that isn't actually the repo.
   }
 
   const fromCwd = walkUpForMarker(options.startDir ?? process.cwd());
-  if (fromCwd) return fromCwd;
+  if (fromCwd) return canonicalizeThroughWorktree(fromCwd);
 
   const fromExe = walkUpForMarker(path.dirname(options.execPath ?? process.execPath));
-  if (fromExe) return fromExe;
+  if (fromExe) return canonicalizeThroughWorktree(fromExe);
 
   throw new Error(
     "Could not resolve the ember repo root (no directory containing GOAL.md + " +

@@ -90,6 +90,32 @@ param(
     [switch]$WhatIf = $false
 )
 
+# Issue #666: if this script's checkout is itself a git WORKTREE (`.git` is a FILE with a
+# `gitdir: <main>/.git/worktrees/<name>` pointer), state paths derived from it would
+# diverge from the main-tree paths the cockpit writer resolves to. Canonicalize to the
+# main checkout so writer and watchdog provably bind the SAME heartbeat file.
+function Resolve-CanonicalRepoRoot {
+    param([Parameter(Mandatory)][string]$Root)
+    $dotGit = Join-Path $Root '.git'
+    if (-not (Test-Path $dotGit -PathType Leaf)) { return $Root }
+    try {
+        $m = [regex]::Match((Get-Content -Path $dotGit -Raw -ErrorAction Stop), '(?m)^gitdir:\s*(.+?)\s*$')
+        if (-not $m.Success) { return $Root }
+        $gitdir = $m.Groups[1].Value
+        if (-not [System.IO.Path]::IsPathRooted($gitdir)) { $gitdir = Join-Path $Root $gitdir }
+        $wt = [regex]::Match([System.IO.Path]::GetFullPath($gitdir), '^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$')
+        if (-not $wt.Success) { return $Root }
+        $mainRoot = $wt.Groups[1].Value
+        if ((Test-Path (Join-Path $mainRoot 'GOAL.md')) -and (Test-Path (Join-Path $mainRoot 'tools\ember-cli'))) {
+            return $mainRoot
+        }
+        throw "repo root $Root is a git worktree of $mainRoot, but that main checkout does not validate as the ember repo root (issue #666) -- refusing to poll a worktree-scoped heartbeat path."
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        return $Root
+    }
+}
+$RepoRoot = Resolve-CanonicalRepoRoot -Root $RepoRoot
+
 $StateDir          = Join-Path $RepoRoot 'tools\ember-cli\state'
 $HeartbeatPath     = Join-Path $StateDir 'cockpit-heartbeat.json'
 $MarkerPath        = Join-Path $StateDir 'planned-outage.json'
@@ -931,6 +957,14 @@ function Start-LivenessWatchdogLoop {
     $dir = Split-Path -Parent $PidFilePath
     if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Set-Content -Path $PidFilePath -Value $PID -Encoding utf8
+
+    # #666 startup path-assert twin of the writer's log line: name the exact heartbeat
+    # file this watchdog polls, in both the console and the restart-log ledger.
+    Write-Host "[liveness-watchdog] polling heartbeat at $HeartbeatPath (repo root $RepoRoot)"
+    Write-RestartLogRow -Path $RestartLogPath -Row @{
+        ts = [datetime]::UtcNow.ToString('o'); target = 'cockpit'; event = 'watchdog-start'
+        heartbeatPath = $HeartbeatPath; repoRoot = $RepoRoot
+    }
 
     $state = Read-WatchdogState -Path $WatchdogStatePath
     $nextCockpitCheck = [datetime]::UtcNow

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/liveness-heartbeat.ts — writes a per-render-cycle heartbeat file so external census
 // tooling (issue #413) can tell a live cockpit process from a dead one without needing pixels.
 //
@@ -56,6 +59,11 @@ export function createLivenessHeartbeatWriter(
   const version  = options.version ?? "unknown";
   const dir      = path.join(repoRoot, "tools", "ember-cli", "state");
   const filePath = path.join(dir, "cockpit-heartbeat.json");
+
+  // #666 startup path-assert: name the exact file this process will write, so a divergence
+  // from the path the watchdog logs on ITS side is visible in two adjacent log lines
+  // instead of manifesting as a phantom-stale heartbeat and a duplicate cockpit.
+  console.warn(`[liveness-heartbeat] writing heartbeat to ${filePath} (repo root ${repoRoot})`);
 
   try {
     fs.mkdirSync(dir, { recursive: true });
