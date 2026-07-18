@@ -225,6 +225,7 @@ describe("process entry model-seat enforcement", () => {
     let initCalls = 0;
     let verifyCalls = 0;
     let ensureCalls = 0;
+    const startupOrder: string[] = [];
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((chunk: string) => {
@@ -255,8 +256,10 @@ describe("process entry model-seat enforcement", () => {
             trustedVerifierRegistryPath: "C:\\owned\\trusted.json",
           },
         }),
+        handshakeEmberdFn: async () => { startupOrder.push("handshake"); },
         ensureOwnedServerFn: async (ownedIdentity) => {
           expect(ownedIdentity.launch?.mode).toBe("INTERACTIVE");
+          startupOrder.push("supervise");
           ensureCalls += 1;
           return {
             outcome: "spawned",
@@ -271,7 +274,11 @@ describe("process entry model-seat enforcement", () => {
           initCalls += 1;
         },
         getLoopDepsFn: fakeDeps,
-        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        builtinToolsFn: async () => [{ name: "clean-checkout-tool" }] as never[],
+        headlessRunner: async (_prompt, _io, tools) => {
+          expect(tools).toEqual([{ name: "clean-checkout-tool" }]);
+          return { events: [], exitCode: 0 };
+        },
         exitFn: (code: number) => {
           exitCode = code;
         },
@@ -284,6 +291,7 @@ describe("process entry model-seat enforcement", () => {
     expect(initCalls).toBe(1);
     expect(ensureCalls).toBe(1);
     expect(verifyCalls).toBe(1);
+    expect(startupOrder).toEqual(["handshake", "supervise"]);
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_ADMITTED");
     expect(process.env["EMBER_MODEL_URL"]).toBe("http://127.0.0.1:9");
     expect(process.env["EMBER_MODEL_NAME"]).toBe(
@@ -304,6 +312,8 @@ describe("process entry model-seat enforcement", () => {
     );
     let exitCode = -1;
     let ensureCalls = 0;
+    const injectedTools = [{ name: "test-tool" }] as never[];
+    let injectedToolCount = -1;
     let verifyCalls = 0;
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
@@ -340,6 +350,7 @@ describe("process entry model-seat enforcement", () => {
             tokenizerPath: "C:\\owned\\tokenizer.json",
           },
         }),
+        handshakeEmberdFn: async () => {},
         ensureOwnedServerFn: async () => {
           ensureCalls += 1;
           return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never };
@@ -347,7 +358,8 @@ describe("process entry model-seat enforcement", () => {
         verifyOwnedEndpointFn: async () => { verifyCalls += 1; },
         initFn: async () => {},
         getLoopDepsFn: fakeDeps,
-        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        builtinToolsFn: async () => injectedTools,
+        headlessRunner: async (_prompt, _io, tools) => { expect(tools).toBe(injectedTools); injectedToolCount = tools.length; return { events: [], exitCode: 0 }; },
         exitFn: (code: number) => { exitCode = code; },
       });
     } finally {
@@ -356,6 +368,7 @@ describe("process entry model-seat enforcement", () => {
 
     expect(exitCode).toBe(0);
     expect(ensureCalls).toBe(1);
+    expect(injectedToolCount).toBeGreaterThan(0);
     expect(verifyCalls).toBe(1);
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_DEVELOPMENT");
     expect(process.env["EMBER_MODEL_NAME"]).toBe("ember-owned-development:" + "f".repeat(12));
@@ -390,7 +403,11 @@ describe("process entry model-seat enforcement", () => {
           initCalls += 1;
         },
         getLoopDepsFn: fakeDeps,
-        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        builtinToolsFn: async () => [{ name: "clean-checkout-tool" }] as never[],
+        headlessRunner: async (_prompt, _io, tools) => {
+          expect(tools).toEqual([{ name: "clean-checkout-tool" }]);
+          return { events: [], exitCode: 0 };
+        },
         exitFn: (code: number) => {
           exitCode = code;
         },
@@ -406,5 +423,36 @@ describe("process entry model-seat enforcement", () => {
       "REFERENCE_ONLY: qwen3.6-27b",
     );
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("REFERENCE_ONLY");
+  });
+
+  it("requires emberd handshake before owned server supervision", async () => {
+    let exitCode = -1;
+    let ensureCalls = 0;
+    let initCalls = 0;
+    let stderr = "";
+    const originalStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => { stderr += chunk; return true; }) as typeof process.stderr.write;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => ({
+          checkpointSha256: "d".repeat(64), endpointUrl: "http://127.0.0.1:9", identityUrl: "http://127.0.0.1:9/v1/models",
+          modelConfigSha256: "b".repeat(64), modelName: "ember-owned:" + "d".repeat(12), serverSourceSha256: "a".repeat(64), tokenizerSha256: "c".repeat(64),
+          launch: { authorityKind: "ADMISSION", checkpointDir: "C:\\owned\\checkpoint", mode: "INTERACTIVE", modelConfigPath: "C:\\owned\\model-config.json", pythonExecutable: "python-owned", runManifestPath: "C:\\owned\\run.json", serverPath: "C:\\repo\\serve_owned_openai.py", tokenizerPath: "C:\\owned\\tokenizer.json", trustedVerifierRegistryPath: "C:\\owned\\trusted.json" },
+        }),
+        handshakeEmberdFn: async () => { throw new Error("ping unavailable"); },
+        ensureOwnedServerFn: async () => { ensureCalls += 1; return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never }; },
+        initFn: async () => { initCalls += 1; },
+        getLoopDepsFn: fakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = originalStderr;
+    }
+    expect(exitCode).toBe(1);
+    expect(ensureCalls).toBe(0);
+    expect(initCalls).toBe(0);
+    expect(stderr).toContain("emberd handshake");
   });
 });
