@@ -669,6 +669,7 @@ export interface MainOptions {
   verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
   ensureOwnedServerFn?: typeof ensureOwnedServer;
   handshakeEmberdFn?: typeof handshakeConfiguredEmberd;
+  builtinToolsFn?: () => Promise<Tool[]>;
   initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
@@ -1018,16 +1019,15 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       userSpecifiedModel: process.env["EMBER_MODEL_NAME"],
     };
 
+    // Keep injected and default headless execution on the same structured-tool contract.
+    const tools = opts.builtinToolsFn
+      ? await opts.builtinToolsFn()
+      : (await import("../tools/builtin-tools.ts") as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
     let exitCode: number;
     if (opts.headlessRunner) {
-      // Injected runners own their tool surface; avoid loading optional interactive
-      // tool dependencies during clean-checkout ownership/handshake verification.
-      const result = await opts.headlessRunner(prompt, io, [], headlessOpts, deps);
+      const result = await opts.headlessRunner(prompt, io, tools, headlessOpts, deps);
       exitCode     = result.exitCode;
     } else {
-      // as unknown as Tool[]: BUILTIN_TOOLS satisfies the Tool interface at runtime.
-      const btMod = await import("../tools/builtin-tools.ts");
-      const tools = (btMod as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
       const { runHeadlessPrompt } = await import("../cli/headless-repl.ts");
       const result = await runHeadlessPrompt(prompt, io as Parameters<typeof runHeadlessPrompt>[1], tools, headlessOpts, deps);
       exitCode     = result.exitCode;

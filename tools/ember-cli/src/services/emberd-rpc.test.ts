@@ -137,6 +137,25 @@ winTest("pingEmberd rejects a response frame above the fixed 65536-byte bound", 
   await expect(pingEmberd({ pipeName: pipe, requestId: "large", timeoutMs: 500 }))
     .rejects.toThrow("65536");
 });
+winTest("pingEmberd rejects malformed JSON, malformed results, and multiple response frames", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-malformed-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  const responses = [
+    "not-json\n",
+    "[]\n",
+    '{"jsonrpc":"2.0","id":"bad-result","result":"not-an-object"}\n',
+    '{"jsonrpc":"2.0","id":"multi","result":{"status":"ok"}}\n{"jsonrpc":"2.0","id":"multi","result":{"status":"ok"}}\n',
+  ];
+  const server = net.createServer((socket) => {
+    socket.once("data", () => socket.end(responses.shift()!));
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
+
+  await expect(pingEmberd({ pipeName: pipe, requestId: "bad-json", timeoutMs: 500 })).rejects.toThrow("not JSON");
+  await expect(pingEmberd({ pipeName: pipe, requestId: "non-object", timeoutMs: 500 })).rejects.toThrow("not an object");
+  await expect(pingEmberd({ pipeName: pipe, requestId: "bad-result", timeoutMs: 500 })).rejects.toThrow("malformed");
+  await expect(pingEmberd({ pipeName: pipe, requestId: "multi", timeoutMs: 500 })).rejects.toThrow("multiple frames");
+});
 winTest("pingEmberd rejects mismatched IDs and JSON-RPC errors", async () => {
   const pipe = `\\\\.\\pipe\\emberd-p2c-bad-${process.pid}-${Math.random().toString(16).slice(2)}`;
   let connection = 0;
