@@ -217,7 +217,7 @@ function Save-WatchdogState {
 function Convert-Iso8601Z {
     param([Parameter(Mandatory)][string]$Value)
     $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal
-    foreach ($format in @("yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'")) {
+    foreach ($format in @("yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:ss.f'Z'", "yyyy-MM-dd'T'HH:mm:ss.ff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fff'Z'", "yyyy-MM-dd'T'HH:mm:ss.ffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'")) {
         try {
             return [datetimeoffset]::ParseExact($Value, $format, [System.Globalization.CultureInfo]::InvariantCulture, $styles)
         } catch { }
@@ -344,11 +344,23 @@ function Add-DeathRecord {
     $updated = @($existing) + $Now.ToString('o')
     $tripped = $false
     if ($updated.Count -ge $Threshold) {
-        $nextLevel = [math]::Max(1, $previousLevel + 1)
-        $exponent = [math]::Min(30, $nextLevel - 1)
-        $durationMinutes = [int][math]::Round([math]::Max(1, $BackoffMinutes) * [math]::Pow(2, $exponent))
-        $TargetState.backoffLevel = $nextLevel
-        $TargetState.backoffState = if ($nextLevel -gt 1) { 'escalated' } else { 'active' }
+        # Keep both the level and DateTime arithmetic inside Int32-safe minutes.
+        # Saturate at the largest representable duration instead of allowing a
+        # high-level crashloop to overflow the Int32 cast or AddMinutes call.
+        $maxMinutes = [int64][int]::MaxValue
+        $baseMinutes = [int64]$BackoffMinutes
+        if ($baseMinutes -lt 1) { $baseMinutes = 1 }
+        if ($baseMinutes -gt $maxMinutes) { $baseMinutes = $maxMinutes }
+        $desiredLevel = [int64]$previousLevel + 1
+        if ($desiredLevel -lt 1) { $desiredLevel = 1 }
+        $actualLevel = 1
+        $durationMinutes = $baseMinutes
+        while ($actualLevel -lt $desiredLevel -and $durationMinutes -le [int64]($maxMinutes / 2)) {
+            $durationMinutes *= 2
+            $actualLevel++
+        }
+        $TargetState.backoffLevel = [int]$actualLevel
+        $TargetState.backoffState = if ($actualLevel -gt 1) { 'escalated' } else { 'active' }
         $TargetState.backoffUntil = $Now.AddMinutes($durationMinutes).ToString('o')
         $TargetState.deaths = @()
         $tripped = $true
@@ -752,7 +764,7 @@ function Invoke-FreshnessWatchdogTick {
         }
     } else {
         # Dirty or collisions: enumerate the problematic files
-        $status = if ($WhatIfMode) { @() } else { & git -C $RepoPath status --porcelain 2>$null }
+        $status = & git -C $RepoPath status --porcelain 2>$null
         $files = @($status -split "`n" | Where-Object { $_ } | ForEach-Object { $_.Substring(3) })
         $fileList = $files -join '; '
         Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
