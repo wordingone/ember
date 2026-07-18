@@ -18,10 +18,13 @@ never has to diff the two by hand):
 
   1. Rounds cut way down (5/8-process race -> 2 rounds; 5x3 unlink rounds ->
      1 round per test) and hold durations shrunk (5000ms torn-write hold ->
-     a 200ms max-wait ceiling on a release-file block, never a fixed sleep;
-     300s unlink-window hold -> 20s ceiling, released by an immediate kill
-     once the window marker lands) so the whole module stays under the
-     wall-clock budget while keeping every race window real.
+     a release-file block, never a fixed sleep, bounded by a 30s backstop
+     ceiling in the mid-write kill test itself -- the real kill lands ~10ms
+     after the marker, so the ceiling is orphan-only defense in depth, never
+     part of the intended timing; 300s unlink-window hold -> 20s ceiling,
+     released by an immediate kill once the window marker lands) so the
+     whole module stays under the wall-clock budget while keeping every
+     race window real.
   2. The session-side external kill-receipt ledger append is replaced by an
      in-tmp_path receipt list. Kill discipline (receipt
      before kill, exact spawned PID, JSON serializer) is preserved in full;
@@ -111,6 +114,51 @@ def _kill_if_alive(proc: subprocess.Popen, receipts_path: Path, script: str) -> 
         assert proc.poll() is not None, (
             f"{script}: pid {proc.pid} still alive after kill + 10s cleanup wait"
         )
+
+
+# The worker's own bounded ceiling backstop (custody_process_scope_worker.py,
+# cmd_race's slow_atomic_bytes): reached only if nobody ever kills or
+# releases it -- never the expected path for a correctly-timed kill.
+_WORKER_SELF_EXPIRY_CODE = 97
+# Measured empirically in this repair's worktree (round-2, 2026-07-18):
+# subprocess.Popen.kill() on Windows calls TerminateProcess, which this
+# interpreter/OS reports as exit code 1. Distinct from _WORKER_SELF_EXPIRY_CODE
+# so a worker that died of its own bounded ceiling can never be mistaken for
+# one this test actually terminated.
+_PLATFORM_KILL_RETURNCODE = 1
+
+
+def _verify_alive_then_kill(
+    p: subprocess.Popen,
+    receipts: Path,
+    script: str,
+    write_receipt=_write_kill_receipt,
+) -> None:
+    """The exact liveness-then-terminate sequence under test: assert the
+    worker is still inside the mid-write window at the instant of kill, kill
+    it, then prove the death was OUR termination and not the worker's own
+    bounded self-expiry. A coordinator that is too slow (a delayed kill call,
+    or a delay hidden inside the receipt-write step) lets the worker's own
+    ceiling fire first -- that must show up here as a wrong-code failure,
+    never as a silently accepted nonzero return code."""
+    assert p.poll() is None, (
+        "worker already exited before termination -- mid-write window closed "
+        "on its own (ceiling elapsed or process finished) instead of being killed"
+    )
+    write_receipt(receipts, p.pid, script)
+    p.kill()
+    p.wait(timeout=15)
+    assert p.poll() is not None, "killed worker still alive"
+    assert p.returncode != _WORKER_SELF_EXPIRY_CODE, (
+        f"worker self-expired (ceiling elapsed) instead of being terminated by "
+        f"the kill -- the kill call (or the receipt write immediately before "
+        f"it) arrived too late: rc={p.returncode}"
+    )
+    assert p.returncode == _PLATFORM_KILL_RETURNCODE, (
+        f"expected the platform-kill exit code {_PLATFORM_KILL_RETURNCODE} "
+        f"(Popen.kill() -> TerminateProcess, measured empirically on this "
+        f"Windows box), got {p.returncode}"
+    )
 
 
 def _fresh_custody_dir(base: Path, tag: str) -> Path:
@@ -225,7 +273,13 @@ def test_kill_mid_write_converges(tmp_path: Path) -> None:
     go = parent / "GO"
     res = parent / "res-hold.json"
 
-    p = _spawn_race(parent, go, res, hold_ms=200)
+    # Ceiling raised to a 30s backstop (defense in depth, round-2 repair):
+    # the real kill lands ~10ms after the marker appears (measured), so this
+    # ceiling can never plausibly precede a correctly-timed kill and exists
+    # only to bound an orphaned/never-killed worker. Self-expiry (exit 97)
+    # is caught by _verify_alive_then_kill's own assertion, never accepted
+    # as if it were the intended termination.
+    p = _spawn_race(parent, go, res, hold_ms=30000)
     try:
         time.sleep(0.15)
         go.write_text("go")
@@ -274,22 +328,7 @@ def test_kill_mid_write_converges(tmp_path: Path) -> None:
             "operation's own bound transaction receipt"
         )
 
-        # The worker is blocked on the release-file wait inside
-        # slow_atomic_bytes (see custody_process_scope_worker.py) -- prove it
-        # is still alive, in the window, at the exact instant we terminate
-        # it. A delayed or no-op termination that let the worker run past
-        # its own bounded ceiling would show up here as a dead process.
-        assert p.poll() is None, (
-            "worker already exited before termination -- mid-write window closed "
-            "on its own (ceiling elapsed or process finished) instead of being killed"
-        )
-        _write_kill_receipt(receipts, p.pid, "test_kill_mid_write_converges")
-        p.kill()
-        p.wait(timeout=15)
-        assert p.poll() is not None, "killed worker still alive"
-        assert p.returncode != 0, (
-            f"killed worker exited with a clean code (expected nonzero): {p.returncode}"
-        )
+        _verify_alive_then_kill(p, receipts, "test_kill_mid_write_converges")
     finally:
         _kill_if_alive(p, receipts, "test_kill_mid_write_converges")
 
@@ -329,6 +368,59 @@ def test_kill_mid_write_converges(tmp_path: Path) -> None:
 
     prepared = _read_ledger_prepared_count(parent)  # raises if chain corrupt
     assert prepared == 1, "expected exactly one PREPARED frame, never a double frame"
+
+
+# --------------------------------------------------------------------------
+# Durable negative -- an independent reviewer defeated this suite twice by
+# delaying the coordinator AFTER its last observed liveness check (round 1:
+# before the whole kill sequence; round 2: inside the receipt-write call
+# immediately preceding p.kill()). Both perturbations let a short self-expiry
+# ceiling elapse before the real kill lands, so the worker dies of its own
+# bounded timeout rather than the intended termination. This test reproduces
+# round 2's exact shape and PASSES only because _verify_alive_then_kill's own
+# assertions correctly refuse a self-expired worker -- delete either the
+# self-expiry check or the platform-code check in _verify_alive_then_kill and
+# this test starts failing.
+# --------------------------------------------------------------------------
+
+def test_kill_receipt_delay_detected(tmp_path: Path) -> None:
+    receipts = tmp_path / "kill-receipts.jsonl"
+    parent = _fresh_custody_dir(tmp_path, "probe0")
+    go = parent / "GO"
+    res = parent / "res-probe.json"
+
+    # SHORT ceiling ON PURPOSE: this is what lets a 1s post-liveness delay
+    # actually cause self-expiry. test_kill_mid_write_converges uses a 30s
+    # backstop specifically so this can never happen on the legitimate path;
+    # this test isolates the detection logic itself against a ceiling a
+    # careless coordinator delay CAN outrun.
+    p = _spawn_race(parent, go, res, hold_ms=200)
+    try:
+        time.sleep(0.15)
+        go.write_text("go")
+
+        hold_marker = parent / "HOLD_REACHED"
+        deadline = time.time() + 5
+        while not hold_marker.exists() and time.time() < deadline:
+            time.sleep(0.02)
+        assert hold_marker.exists(), "worker never signalled it was holding mid-write"
+
+        def delayed_write_kill_receipt(receipts_path: Path, pid: int, script: str) -> None:
+            # Reproduces the reviewer's round-2 perturbation verbatim: the
+            # coordinator's own clock runs 1s past the point where it last
+            # confirmed liveness (_verify_alive_then_kill's poll() check has
+            # already passed by the time this runs) -- long enough for the
+            # 200ms ceiling above to elapse before the kill actually lands.
+            time.sleep(1.0)
+            _write_kill_receipt(receipts_path, pid, script)
+
+        with pytest.raises(AssertionError, match="self-expired"):
+            _verify_alive_then_kill(
+                p, receipts, "test_kill_receipt_delay_detected",
+                write_receipt=delayed_write_kill_receipt,
+            )
+    finally:
+        _kill_if_alive(p, receipts, "test_kill_receipt_delay_detected")
 
 
 # --------------------------------------------------------------------------
