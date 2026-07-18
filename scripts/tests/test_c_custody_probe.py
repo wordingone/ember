@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 #!/usr/bin/env python3
 """TDD test suite for C-CUSTODY probe (issue #381).
 
@@ -84,6 +87,39 @@ def test_shape_a_untracked():
             f"Expected UNTRACKED/custody mention, got: {output}"
         )
         print("✓ Shape (a) untracked: PASS")
+
+
+def test_post_landing_untracked_is_red():
+    """A new untracked receipt after a receipt landing is still a RED violation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+
+        landed = os.path.join(receipts_dir, "landed-receipt.json")
+        with open(landed, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-LANDED", "status": "success"}, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", "receipts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "land receipt"], cwd=tmpdir, capture_output=True)
+
+        silent = os.path.join(receipts_dir, "silent-after-landing.json")
+        with open(silent, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-SILENT", "status": "success"}, f)
+        landing_ts = int(subprocess.run(
+            ["git", "log", "-1", "--format=%ct"],
+            cwd=tmpdir, capture_output=True, text=True, check=True,
+        ).stdout.strip())
+        os.utime(silent, (landing_ts + 60, landing_ts + 60))
+
+        output, _ = run_probe(tmpdir)
+        assert "RED" in output, (
+            "A post-landing silent untracked receipt must be RED, got: "
+            f"{output}"
+        )
+        assert "untracked=1" in output, f"Expected untracked=1 in output, got: {output}"
 
 
 def test_shape_b_unparseable():
@@ -214,7 +250,9 @@ def test_clean_pass():
 def test_empty_receipts():
     """Edge case: receipts/ directory is empty or missing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create an empty git repo with no receipts directory
+        # Create an empty git repo with an empty receipts directory.
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(
             ["git", "config", "user.email", "test@test.com"],
@@ -239,9 +277,7 @@ def test_empty_receipts():
 
         output, _ = run_probe(tmpdir)
         # Could be GREEN (empty is fine) or UNEVALUABLE (no receipts/ to check)
-        assert "RED" not in output or "UNEVALUABLE" not in output, (
-            f"Empty receipts should not be RED (unless receipts/ missing), got: {output}"
-        )
+        assert "GREEN" in output, f"Empty receipts should be GREEN, got: {output}"
         print("✓ Empty receipts: PASS")
 
 
@@ -251,6 +287,7 @@ def main():
 
     try:
         test_shape_a_untracked()
+        test_post_landing_untracked_is_red()
         test_shape_b_unparseable()
         test_shape_c_cited_missing()
         test_clean_pass()

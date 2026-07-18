@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 #!/usr/bin/env python3
 """Ember totality test — Condition C-CUSTODY (status probe / TDD).
 
@@ -505,12 +508,13 @@ def main():
                     if _is_match_pattern(basename, allowlist):
                         pass  # Whitelisted, skip
                     else:
-                        # Classify by age: if mtime > last_landing, it's pending_landing
+                        # A non-allowlisted receipt is always a custody failure.  Keep
+                        # the age classification as disclosure, but never let a
+                        # post-landing file silently bypass the RED gate.
                         file_mtime = os.path.getmtime(fpath)
                         if last_landing_ts is not None and file_mtime > last_landing_ts:
                             pending_landing.append(f"UNTRACKED: {rel_path} (mtime={int(file_mtime)})")
-                        else:
-                            failures.append(f"UNTRACKED: {rel_path}")
+                        failures.append(f"UNTRACKED: {rel_path}")
                 else:
                     failures.append(f"UNTRACKED: {rel_path}")
             except Exception:
