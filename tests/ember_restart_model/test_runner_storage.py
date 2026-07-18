@@ -1141,6 +1141,24 @@ class RunnerStorageTests(unittest.TestCase):
             event = {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "d" * 64 + ".json", "bytes": 1, "sha256": "d" * 64, "reason": "post-write replay"}
             with unittest.mock.patch.object(run_vertical_slice, "_custody_ledger_write_lock", lock), unittest.mock.patch.object(run_vertical_slice, "_atomic_bytes", atomic), unittest.mock.patch.object(run_vertical_slice, "_custody_ledger_snapshot", snapshot):
                 run_vertical_slice._append_custody_ledger_transition(parent, event)
+    def test_invalid_semantic_transition_leaves_ledger_and_receipt_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipts:
+            parent = Path(directory)
+            pointer = ".checkpoint-quarantine/evidence-" + "d" * 64 + ".json"
+            event = {"event": "COMMITTED", "pointer": pointer, "bytes": 1, "sha256": "d" * 64, "reason": "invalid"}
+            receipt = Path(receipts) / "invalid.json"
+            with self.assertRaisesRegex(RuntimeError, "requires exactly one prior PREPARED"):
+                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt, operation_id="invalid", subject=f"custody:{parent.name}")
+            self.assertFalse((parent / ".checkpoint-custody-deletion-ledger.jsonl").exists())
+            self.assertFalse(receipt.exists())
+            prepared = {**event, "event": "PREPARED"}
+            run_vertical_slice._append_custody_ledger_transition(parent, prepared)
+            before = (parent / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes()
+            mismatched = {**event, "reason": "mismatch"}
+            with self.assertRaisesRegex(RuntimeError, "identity differs"):
+                run_vertical_slice._append_custody_ledger_transition(parent, mismatched, transaction_receipt_path=receipt, operation_id="invalid-2", subject=f"custody:{parent.name}")
+            self.assertEqual((parent / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes(), before)
+            self.assertFalse(receipt.exists())
     def test_atomic_ledger_transition_serializes_distinct_concurrent_writers(self) -> None:
         """Concurrent transitions retain both rows rather than last-writer-wins replacement."""
         with tempfile.TemporaryDirectory() as directory:

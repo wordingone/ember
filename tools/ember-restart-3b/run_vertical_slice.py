@@ -796,12 +796,24 @@ def migrate_legacy_custody_ledger(parent: Path, *, transaction_receipt_path: Pat
             _atomic_json(migration_receipt_path, receipt)
         return {**receipt, "migration_receipt": str(migration_receipt_path)}
 def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict[str, object], *, transaction_receipt_path: Path, operation_id: str, subject: str) -> None:
-    """Prepare fresh external authority before replacing one complete v4 ledger snapshot."""
+    """Validate one semantic custody transition under lock before minting external authority."""
     prior, prior_events = _custody_ledger_snapshot(canonical_parent)
     pointer = _canonical_custody_deletion_pointer(event["pointer"])
-    terminal = [row for row in prior_events if isinstance(row, dict) and row.get("schema_version") == _CUSTODY_LEDGER_SCHEMA and row.get("pointer") == pointer]
-    if terminal and terminal[-1].get("event") == "COMMITTED" and event["event"] == "COMMITTED":
-        raise RuntimeError("custody ledger transition is already committed")
+    matching = [row for row in prior_events if isinstance(row, dict) and row.get("schema_version") == _CUSTODY_LEDGER_SCHEMA and row.get("pointer") == pointer]
+    if event["event"] == "PREPARED":
+        if matching:
+            raise RuntimeError("custody ledger PREPARED transition already exists")
+    elif event["event"] == "COMMITTED":
+        if len(matching) != 1 or matching[0].get("event") != "PREPARED":
+            raise RuntimeError("custody ledger COMMITTED requires exactly one prior PREPARED transition")
+        prepared = matching[0]
+        if any(prepared.get(key) != event.get(key) for key in ("pointer", "bytes", "sha256", "reason")):
+            raise RuntimeError("custody ledger COMMITTED identity differs from its PREPARED transition")
+        target = _custody_deletion_path(canonical_parent, pointer)
+        if target.exists():
+            raise RuntimeError("custody ledger COMMITTED requires the prepared victim to be absent")
+    else:
+        raise RuntimeError("custody ledger transition event is invalid")
     framed_event = _next_custody_ledger_frame(event, prior_events)
     new_ledger = prior + (json.dumps(framed_event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     transaction = prepare_custody_ledger_transaction(receipt_path=transaction_receipt_path, old_ledger=prior, new_ledger=new_ledger, operation_id=operation_id, subject=subject)
