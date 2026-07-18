@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # liveness-watchdog.Tests.ps1 -- Pester fixture for issue #464 (standing liveness
 # watchdogs). Dot-sources liveness-watchdog.ps1: the execution guard at the bottom of
 # that file means dot-sourcing only defines functions -- it never starts the live loop
@@ -142,6 +145,7 @@ Describe 'Invoke-CockpitWatchdogTick' {
         $logRow.event | Should Be 'relaunch'
         $logRow.deadPid | Should Be 1234
         $logRow.relaunchPid | Should Be 42424
+        @($logRow.PSObject.Properties.Name | Where-Object { $_ -eq 'backoffUntil' }).Count | Should Be 1
     }
 
     It 'missing/unreadable heartbeat -> treated as stale (cannot confirm liveness) -> relaunch' {
@@ -167,14 +171,72 @@ Describe 'Invoke-CockpitWatchdogTick' {
         }
         ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
 
+        $script:standdownRows = @()
+        $script:originalWriteRestartLogRow = (Get-Command Write-RestartLogRow).ScriptBlock
+        Mock Write-RestartLogRow { param($Path, $Row) $script:standdownRows += [PSCustomObject]$Row; & $script:originalWriteRestartLogRow -Path $Path -Row $Row }
         $result = Invoke-CockpitWatchdogTick -Now $now -State $state `
             -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
             -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath
 
         $result.Action | Should Be 'standdown'
         $launcherCalls | Should Be 0
+        $rows = @($standdownRows)
+        $rows.Count | Should Be 1
+        $rows[0].event | Should Be 'standdown'
+        $rows[0].target | Should Be 'cockpit'
+        $rows[0].owner | Should Be 'test-lane'
+        $rows[0].backoffState | Should Be 'clear'
     }
 
+    It 'repeated planned-outage cockpit polls emit one bounded stand-down decision row' {
+        $now = [datetime]::Parse('2026-07-08T12:05:00Z').ToUniversalTime()
+        $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }
+        ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+        $marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'cockpit'
+            started = '2026-07-08T11:00:00Z'; expires = '2026-07-08T13:00:00Z'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+
+        $first = Invoke-CockpitWatchdogTick -Now $now -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath
+        $second = Invoke-CockpitWatchdogTick -Now $now.AddSeconds(15) -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath
+
+        $first.Action | Should Be 'standdown'
+        $second.Action | Should Be 'standdown'
+        @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json }).Count | Should Be 1
+    }
+
+    It 'reason-only marker change emits a fresh stand-down decision row' {
+        $now = [datetime]::Parse('2026-07-08T12:05:00Z').ToUniversalTime()
+        $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }
+        ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+        $marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'cockpit'
+            started = '2026-07-08T11:00:00Z'; expires = '2026-07-08T13:00:00Z'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+
+        Invoke-CockpitWatchdogTick -Now $now -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath | Out-Null
+
+        $marker.reason = 'corrected probe'
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+        Invoke-CockpitWatchdogTick -Now $now.AddSeconds(15) -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath | Out-Null
+
+        $rows = @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json })
+        $rows.Count | Should Be 2
+        $rows[0].reason | Should Be 'planned probe'
+        $rows[1].reason | Should Be 'corrected probe'
+    }
     It 'expired planned-outage marker -> resumes duty (relaunch) AND logs a marker-overrun row naming the owner' {
         $now = [datetime]::Parse('2026-07-08T14:00:00Z').ToUniversalTime()
         $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }   # very stale
@@ -307,6 +369,24 @@ Describe 'Invoke-ServerWatchdogTick' {
         $state.server.consecutiveFailures | Should Be 0
     }
 
+    It 'server restart row carries health age and backoff state' {
+        Mock Test-ServerHealth { $script:healthCalls++; return $false }
+        Mock Find-ServerProcess { return $null }
+        $state.server.consecutiveFailures = 1
+        $state.server.lastHealthyAt = '2026-07-08T12:00:00Z'
+        $now = [datetime]::Parse('2026-07-08T12:05:00Z').ToUniversalTime()
+
+        $result = Invoke-ServerWatchdogTick -Now $now -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath
+
+        $result.Action | Should Be 'relaunch'
+        $row = (Get-Content -Path $restartLogPath -Raw) | ConvertFrom-Json
+        @($row.PSObject.Properties.Name | Where-Object { $_ -eq 'healthAgeSec' }).Count | Should Be 1
+        $row.healthAgeSec | Should Be 300
+        @($row.PSObject.Properties.Name | Where-Object { $_ -eq 'backoffUntil' }).Count | Should Be 1
+    }
+
     It 'no live process found at the failure threshold (already dead) -> no kill-receipt, still relaunches' {
         Mock Test-ServerHealth { $script:healthCalls++; return $false }
         Mock Find-ServerProcess { return $null }
@@ -332,15 +412,107 @@ Describe 'Invoke-ServerWatchdogTick' {
         ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
         Mock Test-ServerHealth { $script:healthCalls++; return $false }
 
+        $script:standdownRows = @()
+        $script:originalWriteRestartLogRow = (Get-Command Write-RestartLogRow).ScriptBlock
+        Mock Write-RestartLogRow { param($Path, $Row) $script:standdownRows += [PSCustomObject]$Row; & $script:originalWriteRestartLogRow -Path $Path -Row $Row }
         $result = Invoke-ServerWatchdogTick -Now ([datetime]::UtcNow) -State $state `
             -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
             -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath
 
         $result.Action | Should Be 'standdown'
         $healthCalls | Should Be 0
+        $rows = @($standdownRows)
+        $rows.Count | Should Be 1
+        $rows[0].event | Should Be 'standdown'
+        $rows[0].target | Should Be 'server'
+        $rows[0].owner | Should Be 'probe-lane'
+        $rows[0].backoffState | Should Be 'clear'
+    }
+
+    It 'healthy then two failed server polls preserve last healthy age and bound stand-down-independent state' {
+        $healthyAt = [datetime]::Parse('2026-07-08T12:00:00Z').ToUniversalTime()
+        $failedAt = $healthyAt.AddMinutes(1)
+        $relaunchAt = $healthyAt.AddMinutes(5)
+        $script:healthCalls = 0
+        Mock Test-ServerHealth { $script:healthCalls++; return ($script:healthCalls -eq 1) }
+        Mock Find-ServerProcess { return $null }
+        $state.server.consecutiveFailures = 0
+
+        (Invoke-ServerWatchdogTick -Now $healthyAt -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath).Action | Should Be 'none'
+        (Invoke-ServerWatchdogTick -Now $failedAt -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath).Action | Should Be 'none'
+        $result = Invoke-ServerWatchdogTick -Now $relaunchAt -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath
+
+        $result.Action | Should Be 'relaunch'
+        $state.server.lastHealthyAt | Should Be $healthyAt.ToString('o')
+        $state.server.lastHealthCheckAt | Should Be $relaunchAt.ToString('o')
+        $row = (Get-Content -Path $restartLogPath -Raw) | ConvertFrom-Json
+        $row.healthAgeSec | Should Be 300
     }
 }
 
+Describe 'Watchdog state migration' {
+    BeforeEach { $script:scratch = New-Scratch; $script:statePath = Join-Path $scratch 'watchdog-state.json' }
+    AfterEach { Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue }
+
+    It 'maps legacy lastHealthAt to lastHealthCheckAt without claiming a successful health' {
+        $legacy = @{ server = @{ deaths = @(); backoffUntil = $null; consecutiveFailures = 1; lastHealthAt = '2026-07-08T12:00:00Z' }; cockpit = @{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }; freshness = @{} }
+        ($legacy | ConvertTo-Json -Depth 8) | Set-Content -Path $statePath -Encoding utf8
+
+        $migrated = Read-WatchdogState -Path $statePath
+
+        $migrated.server.lastHealthCheckAt | Should Be '2026-07-08T12:00:00Z'
+        $migrated.server.lastHealthyAt | Should Be $null
+    }
+}
+
+Describe 'Stand-down receipt append atomicity' {
+    BeforeEach {
+        $script:scratch = New-Scratch
+        $script:restartLogPath = Join-Path $scratch 'restart-log.jsonl'
+        $script:state = Get-DefaultWatchdogState
+        $script:marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'cockpit'
+            started = '2026-07-08T11:00:00Z'; expires = '2026-07-08T13:00:00Z'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+    }
+    AfterEach {
+        Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'does not consume dedupe state when the first receipt append fails, then retries once' {
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        $row = @{ ts = '2026-07-08T12:05:00Z'; target = 'cockpit'; event = 'standdown'; decision = 'planned-outage'; reason = $marker.reason }
+        $script:appendAttempts = 0
+        $script:originalWriteRestartLogRow = (Get-Command Write-RestartLogRow).ScriptBlock
+        Mock Write-RestartLogRow {
+            param($Path, $Row)
+            $script:appendAttempts++
+            if ($script:appendAttempts -eq 1) { throw 'simulated append failure' }
+            & $script:originalWriteRestartLogRow -Path $Path -Row $Row
+        }
+
+        $failed = $false
+        try { Write-StandDownDecision -Path $restartLogPath -Row $row -TargetState $state.cockpit -DecisionKey $decisionKey | Out-Null }
+        catch { $failed = $true }
+
+        $failed | Should Be $true
+        $state.cockpit.standdownDecisionKey | Should Be $null
+        (Test-Path $restartLogPath) | Should Be $false
+
+        (Write-StandDownDecision -Path $restartLogPath -Row $row -TargetState $state.cockpit -DecisionKey $decisionKey) | Should Be $true
+        (Write-StandDownDecision -Path $restartLogPath -Row $row -TargetState $state.cockpit -DecisionKey $decisionKey) | Should Be $false
+        $state.cockpit.standdownDecisionKey | Should Be $decisionKey
+        $script:appendAttempts | Should Be 2
+        @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json }).Count | Should Be 1
+    }
+}
 Describe 'Test-WatchdogAlreadyRunning (idempotent start)' {
     BeforeEach {
         $script:scratch = New-Scratch

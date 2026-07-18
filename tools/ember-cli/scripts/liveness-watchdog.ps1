@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 #requires -Version 5.1
 <#
 .SYNOPSIS
@@ -115,10 +118,42 @@ function Write-RestartLogRow {
     ($Row | ConvertTo-Json -Compress) | Add-Content -Path $Path -Encoding utf8
 }
 
+function Get-StandDownDecisionKey {
+    param([Parameter(Mandatory)]$Marker)
+    $canonical = [ordered]@{
+        target = [string]$Marker.target
+        owner = [string]$Marker.owner
+        reason = [string]$Marker.reason
+        started = [string]$Marker.started
+        expires = [string]$Marker.expires
+        kill_receipt_ref = [string]$Marker.kill_receipt_ref
+    }
+    $json = $canonical | ConvertTo-Json -Compress
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return (([BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($json)))) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
+function Write-StandDownDecision {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][hashtable]$Row,
+        [Parameter(Mandatory)]$TargetState,
+        [Parameter(Mandatory)][string]$DecisionKey
+    )
+    if ($TargetState.standdownDecisionKey -eq $DecisionKey) { return $false }
+    Write-RestartLogRow -Path $Path -Row $Row
+    $TargetState.standdownDecisionKey = $DecisionKey
+    return $true
+}
 function Get-DefaultWatchdogState {
     [PSCustomObject]@{
-        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }
-        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }
+        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; standdownDecisionKey = $null }
+        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; lastHealthAt = $null; lastHealthyAt = $null; lastHealthCheckAt = $null; standdownDecisionKey = $null }
         freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
     }
 }
@@ -137,8 +172,21 @@ function Read-WatchdogState {
         $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
         foreach ($t in 'cockpit', 'server') {
             if (-not ($parsed.PSObject.Properties.Name -contains $t)) {
-                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 })
+                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; standdownDecisionKey = $null })
             }
+            if (-not ($parsed.$t.PSObject.Properties.Name -contains 'standdownDecisionKey')) {
+                $parsed.$t | Add-Member -NotePropertyName 'standdownDecisionKey' -NotePropertyValue $null
+            }
+        }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthAt')) {
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthAt' -NotePropertyValue $null
+        }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthyAt')) {
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthyAt' -NotePropertyValue $null
+        }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthCheckAt')) {
+            $legacyHealthAt = $parsed.server.lastHealthAt
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthCheckAt' -NotePropertyValue $legacyHealthAt
         }
         if (-not ($parsed.PSObject.Properties.Name -contains 'freshness')) {
             $parsed | Add-Member -NotePropertyName 'freshness' -NotePropertyValue ([PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null })
@@ -319,7 +367,16 @@ function Invoke-CockpitWatchdogTick {
     )
     $marker = Get-PlannedOutageMarker -Path $MarkerPath
     $coverage = Test-MarkerCoversTarget -Marker $marker -Target 'cockpit' -Now $Now
+    if (-not $coverage.StandDown) { $State.cockpit.standdownDecisionKey = $null }
     if ($coverage.StandDown) {
+        $standdownBackoff = Get-BackoffState -TargetState $State.cockpit -Now $Now
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        Write-StandDownDecision -Path $RestartLogPath -TargetState $State.cockpit -DecisionKey $decisionKey -Row @{
+            ts = $Now.ToString('o'); target = 'cockpit'; event = 'standdown'; decision = 'planned-outage'
+            owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
+            backoffUntil = $standdownBackoff.Until
+            backoffState = $(if ($standdownBackoff.InBackoff) { 'active' } else { 'clear' })
+        } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
     if ($coverage.Expired) {
@@ -349,7 +406,7 @@ function Invoke-CockpitWatchdogTick {
     Write-RestartLogRow -Path $RestartLogPath -Row @{
         ts = $Now.ToString('o'); target = 'cockpit'; event = 'relaunch'
         deadPid = $deadPid; ageSec = $age; relaunchPid = $launch.Pid
-        deathsInWindow = $deathRecord.DeathsInWindow
+        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.cockpit.backoffUntil; backoffState = $(if ($State.cockpit.backoffUntil) { 'active' } else { 'clear' })
     }
     if ($deathRecord.Tripped) {
         Write-RestartLogRow -Path $RestartLogPath -Row @{
@@ -446,7 +503,16 @@ function Invoke-ServerWatchdogTick {
     )
     $marker = Get-PlannedOutageMarker -Path $MarkerPath
     $coverage = Test-MarkerCoversTarget -Marker $marker -Target 'server' -Now $Now
+    if (-not $coverage.StandDown) { $State.server.standdownDecisionKey = $null }
     if ($coverage.StandDown) {
+        $standdownBackoff = Get-BackoffState -TargetState $State.server -Now $Now
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        Write-StandDownDecision -Path $RestartLogPath -TargetState $State.server -DecisionKey $decisionKey -Row @{
+            ts = $Now.ToString('o'); target = 'server'; event = 'standdown'; decision = 'planned-outage'
+            owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
+            backoffUntil = $standdownBackoff.Until
+            backoffState = $(if ($standdownBackoff.InBackoff) { 'active' } else { 'clear' })
+        } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
     if ($coverage.Expired) {
@@ -461,8 +527,19 @@ function Invoke-ServerWatchdogTick {
         return [PSCustomObject]@{ Action = 'backoff'; Detail = "until=$($backoff.Until.ToString('o'))" }
     }
 
+    $lastHealthyAt = $null
+    if ($State.server.lastHealthyAt) {
+        try {
+            $lastHealthyAt = [datetime]::Parse([string]$State.server.lastHealthyAt, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+        } catch {
+            $lastHealthyAt = $null
+        }
+    }
+    $healthAgeSec = if ($null -ne $lastHealthyAt) { [int][math]::Max(0, [math]::Round(($Now - $lastHealthyAt).TotalSeconds)) } else { $null }
     $healthy = Test-ServerHealth -Url $HealthUrl
+    $State.server.lastHealthCheckAt = $Now.ToString('o')
     if ($healthy) {
+        $State.server.lastHealthyAt = $Now.ToString('o')
         $State.server.consecutiveFailures = 0
         return [PSCustomObject]@{ Action = 'none'; Detail = 'healthy' }
     }
@@ -493,8 +570,8 @@ function Invoke-ServerWatchdogTick {
 
     Write-RestartLogRow -Path $RestartLogPath -Row @{
         ts = $Now.ToString('o'); target = 'server'; event = 'relaunch'
-        deadPid = $(if ($proc) { [int]$proc.ProcessId } else { $null }); relaunchPid = $launch.Pid
-        deathsInWindow = $deathRecord.DeathsInWindow
+        deadPid = $(if ($proc) { [int]$proc.ProcessId } else { $null }); healthAgeSec = $healthAgeSec; relaunchPid = $launch.Pid
+        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.server.backoffUntil; backoffState = $(if ($State.server.backoffUntil) { 'active' } else { 'clear' })
     }
     if ($deathRecord.Tripped) {
         Write-RestartLogRow -Path $RestartLogPath -Row @{
