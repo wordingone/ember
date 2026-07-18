@@ -138,22 +138,25 @@ class SpecialistStream:
             raise ValueError("record lacks a specialist capability")
         return {"result": "VERIFIED", "capability": str(capability), "record_sha256": _sha256(canonical_record_bytes(record))}
 
-    def _verify_chunk(self, capability: str, index: int, record_hash: str) -> None:
+    def _materialize_verified_chunk(self, capability: str, start: int) -> list[dict[str, Any]]:
         if self.chunk_size is None:
-            return
+            raise ValueError("stream chunk size is required")
         family = self.families.get(capability)
         if not isinstance(family, dict):
             raise ValueError("missing capability commitment")
         chunks = family.get("chunks")
         if not isinstance(chunks, list):
             raise ValueError("missing chunk commitments")
-        start = (index // self.chunk_size) * self.chunk_size
-        hashes = [_sha256(canonical_record_bytes(self.record_at(capability, item))) for item in range(start, min(start + self.chunk_size, self.count))]
-        if hashes[index - start] != record_hash:
-            raise ValueError("record canonicalization changed")
+        if type(start) is not int or start < 0 or start >= self.count or start % self.chunk_size:
+            raise ValueError("invalid stream chunk start")
+        records = [self.record_at(capability, item) for item in range(start, min(start + self.chunk_size, self.count))]
+        hashes: list[str] = []
+        for record in records:
+            hashes.append(self.verify_record(record)["record_sha256"])
         expected = next((item for item in chunks if isinstance(item, dict) and item.get("start") == start), None)
         if not isinstance(expected, dict) or expected.get("record_count") != len(hashes) or expected.get("sha256") != _chunk_sha256(capability, start, hashes):
             raise ValueError("chunk commitment does not match")
+        return records
 
     def next_records(self, *, capability: str, cursor: object, limit: int) -> tuple[list[dict[str, Any]], dict[str, object]]:
         if capability not in CAPABILITIES:
@@ -172,10 +175,17 @@ class SpecialistStream:
             start = cursor["next_index"]
         if type(start) is not int or type(limit) is not int or limit <= 0 or not 0 <= start <= self.count:
             raise ValueError("invalid stream cursor")
-        records = [self.record_at(capability, index) for index in range(start, min(start + limit, self.count))]
-        for offset, record in enumerate(records):
-            receipt = self.verify_record(record)
-            self._verify_chunk(capability, start + offset, receipt["record_sha256"])
+        if self.chunk_size is None or limit > self.chunk_size:
+            raise ValueError("stream request exceeds manifest chunk bound")
+        end = min(start + limit, self.count)
+        records: list[dict[str, Any]] = []
+        chunk_start = (start // self.chunk_size) * self.chunk_size
+        while chunk_start < end:
+            chunk = self._materialize_verified_chunk(capability, chunk_start)
+            first = max(start, chunk_start) - chunk_start
+            last = min(end, chunk_start + len(chunk)) - chunk_start
+            records.extend(chunk[first:last])
+            chunk_start += self.chunk_size
         return records, {"schema_version": CURSOR_SCHEMA_VERSION, "manifest_sha256": self.manifest_sha256, "capability": capability, "next_index": start + len(records)}
 
     def validate_capability_commitment(self, capability: str) -> dict[str, int]:
@@ -185,16 +195,17 @@ class SpecialistStream:
         hashes: list[str] = []
         token_count = 0
         serialized_bytes = 0
-        for index in range(self.count):
-            record = self.record_at(capability, index)
-            receipt = self.verify_record(record)
-            hashes.append(receipt["record_sha256"])
-            token_ids = record.get("token_ids")
-            if not isinstance(token_ids, list):
-                raise ValueError("generated record lacks token ids")
-            token_count += len(token_ids)
-            serialized_bytes += len(canonical_record_bytes(record))
-            self._verify_chunk(capability, index, receipt["record_sha256"])
+        if self.chunk_size is None:
+            raise ValueError("stream chunk size is required")
+        for start in range(0, self.count, self.chunk_size):
+            for record in self._materialize_verified_chunk(capability, start):
+                encoded = canonical_record_bytes(record)
+                hashes.append(_sha256(encoded))
+                token_ids = record.get("token_ids")
+                if not isinstance(token_ids, list):
+                    raise ValueError("generated record lacks token ids")
+                token_count += len(token_ids)
+                serialized_bytes += len(encoded)
         family = self.families[capability]
         root = corpus_root_sha256(capability, hashes, chunk_size=self.chunk_size or 1)
         if family.get("corpus_root_sha256") != root or family.get("token_count") != token_count or family.get("serialized_bytes") != serialized_bytes:
@@ -210,16 +221,17 @@ class SpecialistStream:
             hashes: list[str] = []
             token_count = 0
             serialized_bytes = 0
-            for index in range(self.count):
-                record = self.record_at(capability, index)
-                receipt = self.verify_record(record)
-                hashes.append(receipt["record_sha256"])
-                token_ids = record.get("token_ids")
-                if not isinstance(token_ids, list):
-                    raise ValueError("generated record lacks token ids")
-                token_count += len(token_ids)
-                serialized_bytes += len(canonical_record_bytes(record))
-                self._verify_chunk(capability, index, receipt["record_sha256"])
+            if self.chunk_size is None:
+                raise ValueError("stream chunk size is required")
+            for start in range(0, self.count, self.chunk_size):
+                for record in self._materialize_verified_chunk(capability, start):
+                    encoded = canonical_record_bytes(record)
+                    hashes.append(_sha256(encoded))
+                    token_ids = record.get("token_ids")
+                    if not isinstance(token_ids, list):
+                        raise ValueError("generated record lacks token ids")
+                    token_count += len(token_ids)
+                    serialized_bytes += len(encoded)
             family = self.families[capability]
             root = corpus_root_sha256(capability, hashes, chunk_size=self.chunk_size or 1)
             if family.get("corpus_root_sha256") != root or family.get("token_count") != token_count or family.get("serialized_bytes") != serialized_bytes:

@@ -70,6 +70,48 @@ class SpecialistStreamTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "cursor capability"):
                 stream.next_records(capability="reasoning", cursor=cursor, limit=1)
 
+
+    def test_checked_in_stream_manifest_opens_and_replays_full_commitment(self) -> None:
+        from specialist_stream import open_specialist_stream
+
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        manifest = json.loads(manifest_path.read_bytes())
+        stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+        measured = stream.validate_full_commitment(manifest["corpus_root_sha256"])
+        self.assertEqual(set(measured), {"image", "audio", "reasoning", "tool"})
+        self.assertTrue(all(item["records"] == 4096 for item in measured.values()))
+
+    def test_next_records_verifies_each_touched_chunk_once_and_rejects_oversized_limit(self) -> None:
+        from specialist_stream import build_stream_manifest, open_specialist_stream
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            manifest_path = root / "stream.json"
+            build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=8,
+                data_class="MEASURED_RUNG",
+            )
+            stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+            original = stream.record_at
+            calls = 0
+
+            def counted(capability: str, index: int):
+                nonlocal calls
+                calls += 1
+                return original(capability, index)
+
+            stream.record_at = counted  # type: ignore[method-assign]
+            records, _cursor = stream.next_records(capability="tool", cursor=None, limit=8)
+            self.assertEqual(len(records), 8)
+            self.assertEqual(calls, 8)
+            with self.assertRaisesRegex(ValueError, "chunk bound"):
+                stream.next_records(capability="tool", cursor=None, limit=9)
+            self.assertEqual(calls, 8)
     def test_reopen_rejects_bound_tokenizer_mutation(self) -> None:
         from specialist_stream import build_stream_manifest, open_specialist_stream
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
