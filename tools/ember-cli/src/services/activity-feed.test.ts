@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/activity-feed.test.ts — issue #485 rung 1: pure formatter tests + real-fs engine
 // tests (fixture receipts, debounce, outage marker lifecycle, watchdog tail-poll, ledger
 // append). No fabricated/mocked "activity" — every engine test writes a real fixture file and
