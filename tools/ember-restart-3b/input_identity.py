@@ -53,6 +53,10 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
 def _relative_file(repo_root: Path, value: str, *, missing_code: str) -> tuple[Path, str]:
     if not isinstance(value, str) or not value:
         raise InputIdentityError("wrong_identity", "path must be a non-empty repository-relative string")
@@ -195,6 +199,26 @@ def validate_launch_packet(packet: dict[str, Any], *, repo_root: Path) -> dict[s
     if packet["input_identity"] != resolved.packet_value():
         raise InputIdentityError("decorative_argument", "caller packet identity was not the consumed identity")
     return {"decision": "ACCEPTED", "input_sha256": resolved.sha256}
+
+
+def read_admitted_shard_bytes(packet: dict[str, Any], *, repo_root: Path) -> bytes:
+    """Read the consumer artifact once and bind that exact buffer to the launch packet."""
+
+    identity = packet.get("input_identity") if isinstance(packet, dict) else None
+    if not isinstance(identity, dict):
+        raise InputIdentityError("caller_omission", "launch packet lacks a concrete input identity")
+    shard_path, _ = _relative_file(repo_root.resolve(), identity.get("shard_path"), missing_code="missing_input")
+    try:
+        shard_bytes = shard_path.read_bytes()
+    except OSError as exc:
+        raise InputIdentityError("missing_input", "admitted shard cannot be read by the consumer") from exc
+    expected_sha = identity.get("sha256")
+    expected_bytes = identity.get("bytes")
+    if not isinstance(expected_sha, str) or _sha256_bytes(shard_bytes) != expected_sha:
+        raise InputIdentityError("byte_drift", "admitted shard changed after launch admission")
+    if not isinstance(expected_bytes, int) or len(shard_bytes) != expected_bytes:
+        raise InputIdentityError("byte_drift", "admitted shard byte count changed after launch admission")
+    return shard_bytes
 
 
 def emit_integration_receipt(

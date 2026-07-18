@@ -10,6 +10,7 @@ from contextlib import ExitStack
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 
 import sys
@@ -26,6 +27,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import run_vertical_slice
 from build_owned_reasoning_tool_trajectories import build_records
+from train import run_launch as live_run_launch
 from verify_capability_record import expected_receipt
 
 
@@ -1040,5 +1042,35 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(len(records), 4)
         self.assertEqual(integration_receipt["launch_decision"], "ACCEPTED")
         self.assertEqual(integration_receipt["input_admission_receipt_sha256"], identity["admission_receipt_sha256"])
+
+    def test_authorized_records_rejects_a_schema_valid_shard_swapped_after_admission(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            for relative in ("configs", "tokenizer", "data/ember-restart-3b"):
+                shutil.copytree(ROOT / relative, root / relative)
+            tools = root / "tools" / "ember-restart-3b"
+            tools.mkdir(parents=True)
+            for name in (
+                "build_owned_audio_frames.py",
+                "build_owned_reasoning_tool_trajectories.py",
+                "build_owned_vision_scenes.py",
+                "semantic_contract.py",
+                "specialist_semantics.py",
+                "verify_capability_record.py",
+                "production_rung.py",
+            ):
+                shutil.copy2(ROOT / "tools" / "ember-restart-3b" / name, tools / name)
+            shard = root / "data" / "ember-restart-3b" / "owned-four-domain-production-rung-v1.json"
+
+            def admit_then_swap(*, repo_root: Path) -> tuple[dict[str, object], dict[str, str], dict[str, object]]:
+                packet, validation, receipt = live_run_launch(repo_root=repo_root, code_commit="a" * 40)
+                payload = json.loads(shard.read_bytes())
+                payload["records"] = list(reversed(payload["records"]))
+                shard.write_bytes(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+                return packet, validation, receipt
+
+            with patch.object(run_vertical_slice, "run_launch", side_effect=admit_then_swap):
+                with self.assertRaisesRegex(RuntimeError, "changed after admission"):
+                    run_vertical_slice.load_authorized_records(root)
 if __name__ == "__main__":
     unittest.main()
