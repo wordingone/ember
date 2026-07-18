@@ -10,9 +10,15 @@ worker with two subcommands so the repo test only needs one helper module.
 
 race    -- barrier on a go-file, then race ONE PREPARED custody-ledger
            transition against N siblings on the same pointer. Optional
-           --hold-ms injects a torn-state window: sleep AFTER the ledger
-           bytes land (post _atomic_bytes) but BEFORE the external receipt
-           commits, so a coordinator can kill this process mid-write.
+           --hold-ms injects a torn-state window AFTER the ledger bytes
+           land (post _atomic_bytes) but BEFORE the external receipt
+           commits: the worker writes a HOLD_REACHED marker, then BLOCKS
+           polling for a RELEASE file that the kill path never creates,
+           bounded by --hold-ms as a max-wait ceiling. A coordinator that
+           observes the marker is provably killing a still-blocked
+           process, never one free-running on a fixed sleep; a run that
+           is never killed and never released exits nonzero (97) once
+           the ceiling elapses, instead of completing or hanging.
 
 unlink  -- drive a REAL bounded-quarantine eviction
            (PREPARE -> unlink victim -> COMMIT). In "held" mode, freezes
@@ -75,12 +81,22 @@ def cmd_race(args: argparse.Namespace) -> None:
     try:
         if hold_ms > 0:
             original = m._atomic_bytes
+            release_file = parent / "RELEASE"
 
             def slow_atomic_bytes(path, payload):
                 original(path, payload)
                 if str(path).endswith(m._CUSTODY_LEDGER):
                     (parent / "HOLD_REACHED").write_text(str(os.getpid()))
-                time.sleep(hold_ms / 1000.0)
+                    deadline = time.time() + (hold_ms / 1000.0)
+                    while not release_file.exists():
+                        if time.time() >= deadline:
+                            # Ceiling reached with no release and no kill:
+                            # the sync window closed on its own, which is a
+                            # broken invariant for this worker mode -- never
+                            # a silent success. Exit nonzero without writing
+                            # an outcome file.
+                            sys.exit(97)
+                        time.sleep(0.01)
 
             m._atomic_bytes = slow_atomic_bytes
         m._append_custody_ledger_transition(parent, event)

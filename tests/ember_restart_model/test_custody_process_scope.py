@@ -18,9 +18,10 @@ never has to diff the two by hand):
 
   1. Rounds cut way down (5/8-process race -> 2 rounds; 5x3 unlink rounds ->
      1 round per test) and hold durations shrunk (5000ms torn-write hold ->
-     800ms; 300s unlink-window hold -> 20s ceiling, released by an
-     immediate kill once the window marker lands) so the whole module stays
-     under the wall-clock budget while keeping every race window real.
+     a 200ms max-wait ceiling on a release-file block, never a fixed sleep;
+     300s unlink-window hold -> 20s ceiling, released by an immediate kill
+     once the window marker lands) so the whole module stays under the
+     wall-clock budget while keeping every race window real.
   2. The session-side external kill-receipt ledger append is replaced by an
      in-tmp_path receipt list. Kill discipline (receipt
      before kill, exact spawned PID, JSON serializer) is preserved in full;
@@ -101,14 +102,15 @@ def _write_kill_receipt(receipts_path: Path, pid: int, script: str) -> None:
 def _kill_if_alive(proc: subprocess.Popen, receipts_path: Path, script: str) -> None:
     """Cleanup-only guard: if a spawned child is still alive (timeout, failed
     assertion, or any other early exit), receipt + kill it by its exact PID so
-    a torn test never leaves a sibling process running."""
+    a torn test never leaves a sibling process running. A child that outlives
+    the cleanup timeout is a test failure, never a silently swallowed one."""
     if proc.poll() is None:
         _write_kill_receipt(receipts_path, proc.pid, script)
         proc.kill()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            pass
+        proc.wait(timeout=10)
+        assert proc.poll() is not None, (
+            f"{script}: pid {proc.pid} still alive after kill + 10s cleanup wait"
+        )
 
 
 def _fresh_custody_dir(base: Path, tag: str) -> Path:
@@ -223,7 +225,7 @@ def test_kill_mid_write_converges(tmp_path: Path) -> None:
     go = parent / "GO"
     res = parent / "res-hold.json"
 
-    p = _spawn_race(parent, go, res, hold_ms=800)
+    p = _spawn_race(parent, go, res, hold_ms=200)
     try:
         time.sleep(0.15)
         go.write_text("go")
@@ -272,10 +274,22 @@ def test_kill_mid_write_converges(tmp_path: Path) -> None:
             "operation's own bound transaction receipt"
         )
 
+        # The worker is blocked on the release-file wait inside
+        # slow_atomic_bytes (see custody_process_scope_worker.py) -- prove it
+        # is still alive, in the window, at the exact instant we terminate
+        # it. A delayed or no-op termination that let the worker run past
+        # its own bounded ceiling would show up here as a dead process.
+        assert p.poll() is None, (
+            "worker already exited before termination -- mid-write window closed "
+            "on its own (ceiling elapsed or process finished) instead of being killed"
+        )
         _write_kill_receipt(receipts, p.pid, "test_kill_mid_write_converges")
         p.kill()
         p.wait(timeout=15)
         assert p.poll() is not None, "killed worker still alive"
+        assert p.returncode != 0, (
+            f"killed worker exited with a clean code (expected nonzero): {p.returncode}"
+        )
     finally:
         _kill_if_alive(p, receipts, "test_kill_mid_write_converges")
 
