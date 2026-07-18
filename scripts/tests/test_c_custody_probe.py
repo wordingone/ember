@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-#!/usr/bin/env python3
 """TDD test suite for C-CUSTODY probe (issue #381).
 
 Tests the three failure shapes:
@@ -18,6 +18,12 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+# Keep the test runner reproducible on default Windows CP1252 consoles.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 def run_probe(root_dir):
@@ -121,6 +127,27 @@ def test_post_landing_untracked_is_red():
         )
         assert "untracked=1" in output, f"Expected untracked=1 in output, got: {output}"
 
+
+def test_self_allowlist_cannot_authorize_itself():
+    """An untracked receipt cannot make itself trusted via __allowlist_untracked."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+        receipt_file = os.path.join(receipts_dir, "self-whitelist.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"__allowlist_untracked": ["self-whitelist.json"], "status": "ok"}, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        Path(os.path.join(tmpdir, ".gitkeep")).touch()
+        subprocess.run(["git", "add", ".gitkeep"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=tmpdir, capture_output=True)
+
+        output, _ = run_probe(tmpdir)
+        assert "RED" in output, f"A receipt must not self-authorize its untracked status, got: {output}"
+        assert "untracked=1" in output, f"Expected explicit untracked failure, got: {output}"
+        print("self-allowlist negative: PASS")
 
 def test_shape_b_unparseable():
     """Shape (b): unparseable — file with invalid JSON."""
@@ -288,6 +315,7 @@ def main():
     try:
         test_shape_a_untracked()
         test_post_landing_untracked_is_red()
+        test_self_allowlist_cannot_authorize_itself()
         test_shape_b_unparseable()
         test_shape_c_cited_missing()
         test_clean_pass()

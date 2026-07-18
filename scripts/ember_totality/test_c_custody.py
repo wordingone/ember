@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-#!/usr/bin/env python3
 """Ember totality test — Condition C-CUSTODY (status probe / TDD).
 
 C-CUSTODY — Receipts custody and integrity.
@@ -19,9 +19,10 @@ Three failure shapes (issue #381):
   (c) cited-path-missing: any receipts/ path cited in verdict-bearing receipt
                           or board receipt that doesn't exist on disk
 
-Disclosed allowlist mechanism: receipts may carry an "__allowlist_untracked"
-field (array of basename patterns) to exempt specific files from tracking
-requirement (staging files for future operations).
+Allowlist authority: any exception for an untracked staging receipt must come
+from the separately tracked scripts/ember_totality/custody-allowlist.json
+surface. A receipt's own "__allowlist_untracked" field is disclosure only and
+never grants authority.
 
 Issue #415 cure (72/72 cited_missing enumeration + four-bucket addendum +
 DESIGN RULING, gh issue #415): the naive citation extractor over-reported
@@ -98,6 +99,12 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+
+# Keep status output reproducible on default Windows CP1252 consoles.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # --- Locate <execution-root> robustly ----------------------------------------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -404,12 +411,24 @@ def _load_all_spend_annex_rows(root):
     return by_path
 
 
-def _get_allowlist_for_receipt(receipt_data):
-    """Extract __allowlist_untracked from receipt, if present. Returns set of basename patterns."""
-    allowlist = receipt_data.get("__allowlist_untracked", [])
-    if isinstance(allowlist, list):
-        return set(allowlist)
-    return set()
+ALLOWLIST_AUTHORITY_REL = "scripts/ember_totality/custody-allowlist.json"
+
+
+def _get_allowlist_from_tracked_authority(root, tracked_files):
+    """Load basename patterns only from the separately tracked authority file."""
+    if ALLOWLIST_AUTHORITY_REL not in tracked_files:
+        return set()
+    authority_path = os.path.join(root, *ALLOWLIST_AUTHORITY_REL.split("/"))
+    try:
+        data, _ = _load_json_with_fallback(authority_path)
+    except Exception:
+        return set()
+    if not isinstance(data, dict) or data.get("schema_version") != "ember-c-custody-allowlist-v1":
+        return set()
+    patterns = data.get("allowed_receipt_basenames", [])
+    if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+        return set()
+    return set(patterns)
 
 
 def _is_match_pattern(basename, patterns):
@@ -484,6 +503,7 @@ def main():
 
     # Normalize paths for comparison (git uses forward slashes)
     git_tracked_normalized = set(p.replace("\\", "/") for p in git_tracked)
+    allowlist = _get_allowlist_from_tracked_authority(ROOT, git_tracked_normalized)
 
     # --- (C) Compute last_landing for age-window classification -------
     last_landing_ts = _get_last_landing_time(ROOT)
@@ -498,26 +518,15 @@ def main():
         rel_path = os.path.relpath(fpath, ROOT).replace("\\", "/")
         basename = os.path.basename(fpath)
 
-        # Shape (a): Untracked check (with allowlist)
+        # Shape (a): Untracked check. Authority is loaded once from the
+        # separately tracked surface; a receipt cannot self-whitelist.
         if rel_path not in git_tracked_normalized:
-            # Check allowlist from any existing receipt file
-            try:
-                data, _ = _load_json_with_fallback(fpath)
-                if data:
-                    allowlist = _get_allowlist_for_receipt(data)
-                    if _is_match_pattern(basename, allowlist):
-                        pass  # Whitelisted, skip
-                    else:
-                        # A non-allowlisted receipt is always a custody failure.  Keep
-                        # the age classification as disclosure, but never let a
-                        # post-landing file silently bypass the RED gate.
-                        file_mtime = os.path.getmtime(fpath)
-                        if last_landing_ts is not None and file_mtime > last_landing_ts:
-                            pending_landing.append(f"UNTRACKED: {rel_path} (mtime={int(file_mtime)})")
-                        failures.append(f"UNTRACKED: {rel_path}")
-                else:
-                    failures.append(f"UNTRACKED: {rel_path}")
-            except Exception:
+            if not _is_match_pattern(basename, allowlist):
+                # A non-allowlisted receipt is always a custody failure. Keep
+                # age classification as disclosure, but never bypass the RED gate.
+                file_mtime = os.path.getmtime(fpath)
+                if last_landing_ts is not None and file_mtime > last_landing_ts:
+                    pending_landing.append(f"UNTRACKED: {rel_path} (mtime={int(file_mtime)})")
                 failures.append(f"UNTRACKED: {rel_path}")
 
         # Shape (b): Unparseable check
