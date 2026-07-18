@@ -16,6 +16,27 @@ from specialist_semantics import spatial_relation_caption
 
 _LABELS = ("red is left of green", "red is right of green", "red is above green", "red is below green")
 _SPLITS = ("train", "validation", "test")
+_ORDER_LEAK_SCHEMA = "ember-owned-vision-order-v1"
+_ORDER_LEAK_ALPHA = 0.01
+_ORDER_LEAK_HYPOTHESES = len(_LABELS) ** len(_LABELS)
+
+
+def _best_order_oracle_accuracy(labels: Sequence[str], features: Sequence[object]) -> float:
+    if len(labels) != len(features) or not labels:
+        raise ValueError("order oracle requires aligned nonempty labels and features")
+    groups: dict[object, Counter[str]] = defaultdict(Counter)
+    for label, feature in zip(labels, features):
+        groups[feature][label] += 1
+    return sum(max(values.values()) for values in groups.values()) / len(labels)
+
+
+def _order_leak_acceptance_bound(total: int) -> float:
+    """Bonferroni 99% upper control limit for 4^4 fitted label maps at chance p=0.25."""
+    if total < 2:
+        raise ValueError("order-leak acceptance bound requires at least two serialized records")
+    p0 = 0.25
+    z = NormalDist().inv_cdf(1.0 - _ORDER_LEAK_ALPHA / _ORDER_LEAK_HYPOTHESES)
+    return min(1.0, p0 + z * math.sqrt(p0 * (1.0 - p0) / total))
 
 
 def _patches(record: Mapping[str, object]) -> list[bytes]:
@@ -67,6 +88,7 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
     by_split_content: dict[str, dict[str, Counter[str]]] = {split: defaultdict(Counter) for split in _SPLITS}
     by_split_ordered_patch_mean: dict[str, dict[tuple[tuple[int, int, int], ...], Counter[str]]] = {split: defaultdict(Counter) for split in _SPLITS}
     content_splits: dict[str, set[str]] = defaultdict(set)
+    serialized_labels: dict[str, list[str]] = {split: [] for split in _SPLITS}
     raw_mask_rejected = 0
     paired_preserved = 0
     unpaired_changed = 0
@@ -78,6 +100,7 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
         patches = _patches(record)
         coordinates = _coordinates(record)
         support[split].add(patch_permutation_class(_sample_index(record)))
+        serialized_labels[split].append(str(label))
         content_key = coordinate_blind_content_sha256(patches)
         ordered_patch_mean_key = tuple(
             tuple(sum(patch[channel::3]) for channel in range(3))
@@ -106,6 +129,9 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
     per_split_ordered_patch_mean_accuracy: dict[str, float] = {}
     per_split_interval: dict[str, list[float]] = {}
     per_split_power: dict[str, float] = {}
+    per_split_position_mod_4_accuracy: dict[str, float] = {}
+    per_split_previous_label_accuracy: dict[str, float] = {}
+    per_split_order_leak_bound: dict[str, float] = {}
     per_split_counts = {split: sum(sum(labels.values()) for labels in by_split_content[split].values()) for split in _SPLITS}
     if per_split_counts != plan["record_counts"]:
         raise ValueError("record counts do not match the preregistered split ratio")
@@ -131,8 +157,20 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
             raise ValueError("content-only oracle exceeds preregistered chance within a split")
         if per_split_ordered_patch_mean_accuracy[split] != 0.25:
             raise ValueError("ordered per-patch RGB-mean oracle exceeds preregistered chance within a split")
+        labels = serialized_labels[split]
+        position_accuracy = _best_order_oracle_accuracy(labels, [index % len(_LABELS) for index in range(len(labels))])
+        previous_accuracy = _best_order_oracle_accuracy(labels[1:], labels[:-1])
+        bound = _order_leak_acceptance_bound(len(labels) - 1)
+        per_split_position_mod_4_accuracy[split] = position_accuracy
+        per_split_previous_label_accuracy[split] = previous_accuracy
+        per_split_order_leak_bound[split] = bound
+        if position_accuracy > bound:
+            raise ValueError("position-mod-4 serialized-order oracle exceeds preregistered chance bound")
+        if previous_accuracy > bound:
+            raise ValueError("previous-label serialized-order oracle exceeds preregistered chance bound")
     return {
-        "schema_version": "ember-owned-vision-shortcut-control-v2",
+        "schema_version": "ember-owned-vision-shortcut-control-v3",
+        "serialized_order_schema_version": _ORDER_LEAK_SCHEMA,
         "result": "MEASURED_NONMATERIALIZING_NONDISPATCHABLE",
         "record_count": len(records),
         "declared_support_records": declared_split_plan()["record_count"],
@@ -143,6 +181,12 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
         "per_split_ordered_patch_mean_oracle_accuracy": per_split_ordered_patch_mean_accuracy,
         "per_split_confidence_interval_95": per_split_interval,
         "per_split_power_for_10pp_effect": per_split_power,
+        "wilson_and_power_report_only": True,
+        "order_leak_alpha": _ORDER_LEAK_ALPHA,
+        "order_leak_fitted_hypotheses": _ORDER_LEAK_HYPOTHESES,
+        "per_split_position_mod_4_oracle_accuracy": per_split_position_mod_4_accuracy,
+        "per_split_previous_label_oracle_accuracy": per_split_previous_label_accuracy,
+        "per_split_order_leak_acceptance_bound": per_split_order_leak_bound,
         "permutation_support": {split: sorted(values) for split, values in support.items()},
         "raw_patch_mask_rejected": raw_mask_rejected,
         "paired_coordinate_shuffle_preserved": paired_preserved,

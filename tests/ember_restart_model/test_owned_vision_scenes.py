@@ -194,5 +194,18 @@ class OwnedVisionSceneTests(unittest.TestCase):
         self.assertEqual(plan["record_count"], 65_536)
         self.assertEqual(plan["group_count"], 16_384)
         self.assertEqual(plan["group_counts"], {"train": 8192, "validation": 4096, "test": 4096})
+    def test_serialized_split_order_is_deterministically_shuffled_from_record_content(self) -> None:
+        """Final per-split serialization cannot retain source-index relation cycles."""
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "red": 1, "is": 2, "left": 3, "of": 4, "green": 5, "right": 6, "above": 7, "below": 8}, unk_token="<unk>"))
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        first = build_records(tokenizer, count=512, image_marker=31_998)
+        second = build_records(tokenizer, count=512, image_marker=31_998)
+        self.assertEqual(
+            [record["sample_id"] for record in first],
+            [record["sample_id"] for record in second],
+        )
+        for split in ("train", "validation", "test"):
+            sample_ids = [record["sample_id"] for record in first if record["scene_split"] == split]
+            self.assertNotEqual(sample_ids, sorted(sample_ids))
 if __name__ == "__main__":
     unittest.main()

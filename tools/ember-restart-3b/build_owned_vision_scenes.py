@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import itertools
+import json
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -179,6 +180,74 @@ def group_and_split_scenes(scenes: Iterable[SceneDescriptor]) -> dict[int, str]:
     return split_by_index
 
 
+def _serialized_order_content_sha256(record: dict[str, object]) -> str:
+    """Hash a record's semantic/raw content without its source-index display identifier."""
+
+    content = {key: value for key, value in record.items() if key != "sample_id"}
+    payload = json.dumps(content, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(b"ember-owned-vision-order-v1\0" + payload).hexdigest()
+
+
+def _shuffle_serialized_records_within_splits(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Return the v1 content-bound final serialization order for complete split members."""
+
+    by_split: dict[str, list[dict[str, object]]] = {split: [] for split in _SPLITS}
+    for record in records:
+        split = record.get("scene_split")
+        if split not in by_split:
+            raise ValueError("serialized vision order requires one declared split per record")
+        by_split[str(split)].append(record)
+    ordered: list[dict[str, object]] = []
+    for split in _SPLITS:
+        members = by_split[split]
+        identities = [_serialized_order_content_sha256(record) for record in members]
+        if len(set(identities)) != len(identities):
+            raise ValueError("serialized vision order requires unique record content identities")
+        seed = hashlib.sha256(
+            b"ember-owned-vision-order-v1\0" + split.encode("utf-8") +
+            b"".join(bytes.fromhex(identity) for identity in sorted(identities))
+        ).digest()
+        ranked = sorted(
+            zip(identities, members),
+            key=lambda item: (hashlib.sha256(seed + bytes.fromhex(item[0])).digest(), item[0]),
+        )
+        ordered.extend(record for _identity, record in ranked)
+    return ordered
+
+def _serialized_order_content_sha256(record: dict[str, object]) -> str:
+    """Hash semantic/raw record content without the source-index display identifier."""
+
+    content = {key: value for key, value in record.items() if key != "sample_id"}
+    payload = json.dumps(content, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(b"ember-owned-vision-order-v1\0" + payload).hexdigest()
+
+
+def _shuffle_serialized_records_within_splits(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Return the v1 content-bound final serialization order for complete split members."""
+
+    by_split: dict[str, list[dict[str, object]]] = {split: [] for split in _SPLITS}
+    for record in records:
+        split = record.get("scene_split")
+        if split not in by_split:
+            raise ValueError("serialized vision order requires one declared split per record")
+        by_split[str(split)].append(record)
+    ordered: list[dict[str, object]] = []
+    for split in _SPLITS:
+        members = by_split[split]
+        identities = [_serialized_order_content_sha256(record) for record in members]
+        if len(set(identities)) != len(identities):
+            raise ValueError("serialized vision order requires unique record content identities")
+        seed = hashlib.sha256(
+            b"ember-owned-vision-order-v1\0" + split.encode("utf-8") +
+            b"".join(bytes.fromhex(identity) for identity in sorted(identities))
+        ).digest()
+        ranked = sorted(
+            zip(identities, members),
+            key=lambda item: (hashlib.sha256(seed + bytes.fromhex(item[0])).digest(), item[0]),
+        )
+        ordered.extend(record for _identity, record in ranked)
+    return ordered
+
 def build_records(tokenizer: Any, *, count: int, image_marker: int) -> list[dict[str, object]]:
     """Build balanced raw-spatial scenes whose target is recomputed from patch bytes and coordinates."""
 
@@ -215,4 +284,4 @@ def build_records(tokenizer: Any, *, count: int, image_marker: int) -> list[dict
                 "derivation": "raw_image_spatial_relation_execution",
             }},
         })
-    return records
+    return _shuffle_serialized_records_within_splits(records)
