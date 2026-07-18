@@ -156,6 +156,23 @@ winTest("pingEmberd rejects malformed JSON, malformed results, and multiple resp
   await expect(pingEmberd({ pipeName: pipe, requestId: "bad-result", timeoutMs: 500 })).rejects.toThrow("malformed");
   await expect(pingEmberd({ pipeName: pipe, requestId: "multi", timeoutMs: 500 })).rejects.toThrow("multiple frames");
 });
+winTest("pingEmberd closes after one valid frame; delayed second frames are outside the one-request connection", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-delayed-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  let closedBeforeDelayedWrite = false;
+  const server = net.createServer((socket) => {
+    socket.once("data", () => {
+      socket.write('{"jsonrpc":"2.0","id":"delayed","result":{"status":"ok"}}\n');
+      socket.once("close", () => { closedBeforeDelayedWrite = true; });
+      setTimeout(() => socket.write('{"jsonrpc":"2.0","id":"delayed","result":{"status":"ok"}}\n'), 25);
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
+
+  await expect(pingEmberd({ pipeName: pipe, requestId: "delayed", timeoutMs: 500 })).resolves.toBeUndefined();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(closedBeforeDelayedWrite).toBe(true);
+});
 winTest("pingEmberd rejects mismatched IDs and JSON-RPC errors", async () => {
   const pipe = `\\\\.\\pipe\\emberd-p2c-bad-${process.pid}-${Math.random().toString(16).slice(2)}`;
   let connection = 0;
