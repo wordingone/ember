@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use crate::{Daemon, JobSpec, RestartPolicy, SchedulePrediction};
+use crate::{Daemon, JobSpec, RestartPolicy, SchedulePrediction, MAX_DISPATCH_MANIFEST_BYTES};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -73,7 +73,7 @@ struct StartJobParams {
 
 #[derive(Debug, Deserialize)]
 struct DispatchManifestParams {
-    manifest_bytes: Vec<u8>,
+    manifest_utf8: String,
     manifest_sha256: String,
 }
 
@@ -238,7 +238,14 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 Ok(value) => value,
                 Err(response) => return (response, false),
             };
-            match daemon.dispatch_manifest_bytes(&params.manifest_bytes, &params.manifest_sha256) {
+            let manifest_bytes = params.manifest_utf8.into_bytes();
+            if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_BYTES {
+                return (
+                    invalid_params(id, "dispatch manifest exceeds the UTF-8 transport ceiling"),
+                    false,
+                );
+            }
+            match daemon.dispatch_manifest_bytes(&manifest_bytes, &params.manifest_sha256) {
                 Ok(outcome) => (
                     success(
                         id,

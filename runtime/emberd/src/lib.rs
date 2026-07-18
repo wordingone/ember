@@ -22,6 +22,9 @@ pub mod rpc;
 
 pub type Result<T> = std::result::Result<T, EmberdError>;
 
+/// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
+pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
+
 #[derive(Debug)]
 pub enum EmberdError {
     Sqlite(rusqlite::Error),
@@ -72,6 +75,10 @@ pub enum EmberdError {
     },
     ReceiptAlreadyExists {
         path: PathBuf,
+    },
+    DispatchReceiptRecoveryPending {
+        job_id: String,
+        receipt_path: PathBuf,
     },
     StateWriterBusy {
         path: PathBuf,
@@ -483,7 +490,8 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS schedule_runs(job_id TEXT PRIMARY KEY, artifact_class TEXT NOT NULL, predicted_at_ms INTEGER NOT NULL, predicted_duration_ms INTEGER NOT NULL, predicted_tokens INTEGER NOT NULL, predicted_program_completion_ms INTEGER NOT NULL, absolute_deadline_ms INTEGER NOT NULL, prediction_daemon_binary_sha256 TEXT NOT NULL, prediction_daemon_source_sha256 TEXT NOT NULL, measured_at_ms INTEGER, measured_duration_ms INTEGER, measured_tokens INTEGER, measurement_outcome TEXT, measurement_receipt_sha256 TEXT, measurement_daemon_binary_sha256 TEXT, measurement_daemon_source_sha256 TEXT);
             CREATE TABLE IF NOT EXISTS planned_outages(outage_id INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, starts_at_ms INTEGER NOT NULL, ends_at_ms INTEGER NOT NULL, reason TEXT NOT NULL, created_at_ms INTEGER NOT NULL, cancelled_at_ms INTEGER);
             CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);")?;
+            CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);")?;
         migrate_schema(&conn, &log_dir)?;
         conn.execute(
             "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
@@ -1058,7 +1066,6 @@ impl Daemon {
                 detail: "dispatch manifest bytes do not match the supplied sha256".into(),
             });
         }
-        const MAX_DISPATCH_MANIFEST_SNAPSHOT_BYTES: usize = 64 * 1024;
         const MAX_DISPATCH_MANIFEST_SNAPSHOTS: usize = 64;
         let manifest: DispatchManifest =
             serde_json::from_slice(manifest_bytes).map_err(|error| {
@@ -1066,7 +1073,7 @@ impl Daemon {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
-        if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_SNAPSHOT_BYTES {
+        if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_BYTES {
             return Err(EmberdError::InvalidDispatchManifest {
                 detail: "dispatch manifest snapshot exceeds the daemon byte ceiling".into(),
             });
@@ -1076,6 +1083,22 @@ impl Daemon {
         // validated by the byte consumer before it writes a preflight receipt.
         let snapshot_dir = self.log_dir.join("dispatch-manifests");
         fs::create_dir_all(&snapshot_dir)?;
+        let snapshot = snapshot_dir.join(format!("{expected_sha256}.json"));
+        if snapshot.exists() {
+            if hash_bytes(&fs::read(&snapshot)?) != expected_sha256 {
+                return Err(EmberdError::InvalidDispatchManifest {
+                    detail: "daemon dispatch snapshot conflicts with supplied sha256".into(),
+                });
+            }
+            return self.dispatch_manifest_bytes_at_with_probes_and_host_inner(
+                manifest_bytes,
+                &snapshot,
+                observed_at_ms,
+                free_space,
+                free_vram,
+                free_host_commit,
+            );
+        }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
             .filter_map(|entry| entry.ok())
             .filter_map(|entry| {
@@ -1091,7 +1114,6 @@ impl Daemon {
         while snapshots.len() >= MAX_DISPATCH_MANIFEST_SNAPSHOTS {
             fs::remove_file(snapshots.remove(0))?;
         }
-        let snapshot = snapshot_dir.join(format!("{expected_sha256}.json"));
         match OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -1155,10 +1177,7 @@ impl Daemon {
                 detail: "dispatch custody root is not a directory".into(),
             });
         }
-        let receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
-        if receipt_path.exists() {
-            return Err(EmberdError::ReceiptAlreadyExists { path: receipt_path });
-        }
+        let _receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
         let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
         let mut verified_bindings = Vec::with_capacity(manifest.bindings.len());
         let mut seen = std::collections::BTreeSet::new();
@@ -1298,8 +1317,10 @@ impl Daemon {
             });
         }
         let receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
-        if receipt_path.exists() {
-            return Err(EmberdError::ReceiptAlreadyExists { path: receipt_path });
+        if let Some(existing) =
+            self.reconstruct_existing_dispatch(&manifest, manifest_bytes, &receipt_path)?
+        {
+            return Ok(existing);
         }
 
         let host_commit = free_host_commit()?;
@@ -1490,6 +1511,14 @@ impl Daemon {
             },
         });
         let receipt_bytes = serde_json::to_vec(&receipt_payload)?;
+        if let Some(existing) = self.recover_pending_dispatch_receipt(
+            &manifest,
+            manifest_bytes,
+            &receipt_path,
+            &receipt_bytes,
+        )? {
+            return Ok(existing);
+        }
         let job_id = manifest.job_id.clone();
         let resource_lease = manifest.resource_lease.clone();
         let created_identity = self.identity_hash(&job_id)?.is_none();
@@ -1515,10 +1544,18 @@ impl Daemon {
                 return Err(error);
             }
         };
-        if let Err(error) = atomic_replace(&receipt_path, &receipt_bytes) {
-            let _ = self.stop_job(&job_id);
-            let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
-            return Err(error.into());
+        if atomic_replace(&receipt_path, &receipt_bytes).is_err() {
+            self.persist_dispatch_receipt_recovery(
+                &job_id,
+                &resource_lease,
+                manifest_bytes,
+                &receipt_path,
+                &receipt_bytes,
+            )?;
+            return Err(EmberdError::DispatchReceiptRecoveryPending {
+                job_id,
+                receipt_path,
+            });
         }
         let receipt = ReceiptArtifact {
             path: receipt_path,
@@ -1527,6 +1564,115 @@ impl Daemon {
         Ok(DispatchOutcome { handle, receipt })
     }
 
+    fn persist_dispatch_receipt_recovery(
+        &self,
+        job_id: &str,
+        resource_lease: &str,
+        manifest_bytes: &[u8],
+        receipt_path: &Path,
+        receipt_bytes: &[u8],
+    ) -> Result<()> {
+        self.conn()?.execute(
+            "INSERT INTO dispatch_receipt_recovery(job_id,resource_lease,manifest_sha256,receipt_path,receipt_sha256,receipt_bytes,created_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            params![
+                job_id,
+                resource_lease,
+                hash_bytes(manifest_bytes),
+                receipt_path.to_string_lossy(),
+                hash_bytes(receipt_bytes),
+                receipt_bytes,
+                now_ms(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn recover_pending_dispatch_receipt(
+        &self,
+        manifest: &DispatchManifest,
+        manifest_bytes: &[u8],
+        receipt_path: &Path,
+        receipt_bytes: &[u8],
+    ) -> Result<Option<DispatchOutcome>> {
+        let row: Option<(String, String, String, String, Vec<u8>)> = self
+            .conn()?
+            .query_row(
+                "SELECT resource_lease,manifest_sha256,receipt_path,receipt_sha256,receipt_bytes FROM dispatch_receipt_recovery WHERE job_id=?1",
+                [&manifest.job_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            )
+            .optional()?;
+        let Some((resource_lease, manifest_sha256, stored_path, receipt_sha256, stored_bytes)) =
+            row
+        else {
+            return Ok(None);
+        };
+        if resource_lease != manifest.resource_lease
+            || manifest_sha256 != hash_bytes(manifest_bytes)
+            || stored_path != receipt_path.to_string_lossy()
+            || receipt_sha256 != hash_bytes(receipt_bytes)
+            || stored_bytes != receipt_bytes
+            || self.identity_hash(&manifest.job_id)? != Some(manifest_sha256)
+            || self.lease_owner(&manifest.resource_lease)?.as_deref()
+                != Some(manifest.job_id.as_str())
+            || self.job_state(&manifest.job_id)? != Some(JobState::Running)
+        {
+            return Err(EmberdError::ReceiptAlreadyExists {
+                path: receipt_path.to_path_buf(),
+            });
+        }
+        atomic_replace(receipt_path, &stored_bytes)?;
+        self.conn()?.execute(
+            "DELETE FROM dispatch_receipt_recovery WHERE job_id=?1",
+            [&manifest.job_id],
+        )?;
+        Ok(Some(DispatchOutcome {
+            handle: self.adopt_job(&manifest.job_id)?,
+            receipt: ReceiptArtifact {
+                path: receipt_path.to_path_buf(),
+                sha256: receipt_sha256,
+            },
+        }))
+    }
+    fn reconstruct_existing_dispatch(
+        &self,
+        manifest: &DispatchManifest,
+        manifest_bytes: &[u8],
+        receipt_path: &Path,
+    ) -> Result<Option<DispatchOutcome>> {
+        if !receipt_path.exists() {
+            return Ok(None);
+        }
+        let receipt_bytes = fs::read(receipt_path)?;
+        let receipt: Value = serde_json::from_slice(&receipt_bytes).map_err(|_| {
+            EmberdError::ReceiptAlreadyExists {
+                path: receipt_path.to_path_buf(),
+            }
+        })?;
+        let manifest_sha256 = hash_bytes(manifest_bytes);
+        if receipt.get("schema_version")
+            != Some(&Value::String("emberd-dispatch-preflight-v1".into()))
+            || receipt.get("result") != Some(&Value::String("PREFLIGHT_PASSED".into()))
+            || receipt.get("job_id") != Some(&Value::String(manifest.job_id.clone()))
+            || receipt.get("dispatch_manifest_sha256")
+                != Some(&Value::String(manifest_sha256.clone()))
+            || self.identity_hash(&manifest.job_id)? != Some(manifest_sha256)
+            || self.lease_owner(&manifest.resource_lease)?.as_deref()
+                != Some(manifest.job_id.as_str())
+            || self.job_state(&manifest.job_id)? != Some(JobState::Running)
+        {
+            return Err(EmberdError::ReceiptAlreadyExists {
+                path: receipt_path.to_path_buf(),
+            });
+        }
+        Ok(Some(DispatchOutcome {
+            handle: self.adopt_job(&manifest.job_id)?,
+            receipt: ReceiptArtifact {
+                path: receipt_path.to_path_buf(),
+                sha256: hash_bytes(&receipt_bytes),
+            },
+        }))
+    }
     fn rollback_dispatch_attempt(
         &self,
         job_id: &str,

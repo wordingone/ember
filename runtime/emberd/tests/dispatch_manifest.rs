@@ -209,6 +209,85 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
 }
 
 #[test]
+fn identical_dispatch_retry_reconstructs_the_existing_job_and_receipt() {
+    let root = sandbox("idempotent-retry");
+    let manifest = write_manifest(&root, "dispatch-idempotent-retry", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let first = daemon
+        .dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let second = daemon
+        .dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert_eq!(first.handle.pid, second.handle.pid);
+    assert_eq!(first.receipt.path, second.receipt.path);
+    assert_eq!(first.receipt.sha256, second.receipt.sha256);
+    assert_eq!(
+        daemon.job_state("dispatch-idempotent-retry").unwrap(),
+        Some(JobState::Running)
+    );
+    daemon.stop_job("dispatch-idempotent-retry").unwrap();
+}
+
+#[test]
+fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_a_second_start() {
+    let root = sandbox("receipt-publication-recovery");
+    let manifest = write_manifest(&root, "dispatch-receipt-recovery", 10_000);
+    let receipt_path = root.join("custody").join("preflight.json");
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+
+    let first = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        10_001,
+        |_root| Ok(1024),
+        || {
+            fs::create_dir(&receipt_path).unwrap();
+            Ok(2048)
+        },
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+    );
+    assert!(matches!(
+        first,
+        Err(EmberdError::DispatchReceiptRecoveryPending { .. })
+    ));
+    assert_eq!(
+        daemon.job_state("dispatch-receipt-recovery").unwrap(),
+        Some(JobState::Running)
+    );
+    let first_pid = daemon.adopt_job("dispatch-receipt-recovery").unwrap().pid;
+    fs::remove_dir(&receipt_path).unwrap();
+
+    let recovered = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert_eq!(recovered.handle.pid, first_pid);
+    assert!(recovered.receipt.path.is_file());
+    daemon.stop_job("dispatch-receipt-recovery").unwrap();
+}
+
+#[test]
 fn dispatch_manifest_lease_conflict_leaves_no_selectable_preflight_and_retries() {
     let root = sandbox("lease-conflict-retry");
     let first = write_manifest(&root, "dispatch-lease-first", 10_000);
@@ -681,6 +760,50 @@ fn dispatch_manifest_snapshots_are_bounded_after_semantic_preflight() {
     let snapshots = root.join("emberd.sqlite3.logs").join("dispatch-manifests");
     let count = fs::read_dir(&snapshots).unwrap().count();
     assert_eq!(count, 64);
+}
+#[test]
+fn duplicate_snapshot_at_capacity_preserves_every_unrelated_snapshot() {
+    let root = sandbox("duplicate-snapshot-capacity");
+    let manifest = write_manifest(&root, "dispatch-duplicate-snapshot", 10_000);
+    let duplicate_bytes = fs::read(&manifest).unwrap();
+    let duplicate_digest = format!("{:x}", Sha256::digest(&duplicate_bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let snapshots = root.join("emberd.sqlite3.logs").join("dispatch-manifests");
+    fs::create_dir_all(&snapshots).unwrap();
+    for index in 0..63 {
+        fs::write(
+            snapshots.join(format!("unrelated-{index:02}.json")),
+            b"{}\n",
+        )
+        .unwrap();
+    }
+    std::thread::sleep(Duration::from_millis(20));
+    fs::write(
+        snapshots.join(format!("{duplicate_digest}.json")),
+        &duplicate_bytes,
+    )
+    .unwrap();
+    let before = fs::read_dir(&snapshots)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(before.len(), 64);
+    assert!(matches!(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+            &duplicate_bytes,
+            &duplicate_digest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(0)),
+        ),
+        Err(EmberdError::DispatchHostCommitReserve { .. })
+    ));
+    let after = fs::read_dir(&snapshots)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(after, before);
 }
 #[test]
 fn historical_resume_registry_requires_every_nested_authority_file_binding() {

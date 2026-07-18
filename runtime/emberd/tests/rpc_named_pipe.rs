@@ -4,7 +4,7 @@
 
 #![cfg(windows)]
 
-use emberd::probe_host_commit_capacity;
+use emberd::{probe_host_commit_capacity, MAX_DISPATCH_MANIFEST_BYTES};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -167,6 +167,28 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
     manifest
 }
 
+fn pad_dispatch_manifest_to_exact_bytes(path: &Path, target_bytes: usize) {
+    let mut manifest: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    manifest["env"]
+        .as_object_mut()
+        .unwrap()
+        .insert("EMBERD_TEST_PADDING".into(), Value::String(String::new()));
+    let encoded_without_padding = serde_json::to_vec(&manifest).unwrap();
+    assert!(encoded_without_padding.len() <= target_bytes);
+    let remaining = target_bytes - encoded_without_padding.len();
+    let padding = format!(
+        "{}{}",
+        "\\".repeat(remaining / 2),
+        "x".repeat(remaining % 2)
+    );
+    manifest["env"]
+        .as_object_mut()
+        .unwrap()
+        .insert("EMBERD_TEST_PADDING".into(), Value::String(padding));
+    let encoded = serde_json::to_vec(&manifest).unwrap();
+    assert_eq!(encoded.len(), target_bytes);
+    fs::write(path, encoded).unwrap();
+}
 #[test]
 fn fixture_rpc_child_process() {
     if std::env::var("EMBERD_RPC_FIXTURE_CHILD").as_deref() == Ok("1") {
@@ -230,6 +252,54 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
 }
 
 #[test]
+fn named_pipe_dispatch_accepts_the_exact_manifest_transport_ceiling() {
+    const MAX_MANIFEST_TRANSPORT_BYTES: usize = MAX_DISPATCH_MANIFEST_BYTES;
+    let root = sandbox("dispatch-transport-ceiling");
+    let db = root.join("emberd.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\emberd-dispatch-transport-ceiling-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "dispatch-transport-ceiling-job");
+    pad_dispatch_manifest_to_exact_bytes(&manifest, MAX_MANIFEST_TRANSPORT_BYTES);
+    assert_eq!(
+        fs::metadata(&manifest).unwrap().len(),
+        MAX_MANIFEST_TRANSPORT_BYTES as u64
+    );
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 180, "ping", json!({}))["status"], "ok");
+    let output = Command::new(&binary)
+        .args([
+            "dispatch",
+            "--pipe",
+            &pipe,
+            "--manifest",
+            &manifest.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "dispatch CLI failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(result["pid"].as_u64().unwrap() > 0);
+    rpc(
+        &pipe,
+        181,
+        "stop_job",
+        json!({"job_id": "dispatch-transport-ceiling-job"}),
+    );
+    rpc(&pipe, 182, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+#[test]
 fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation() {
     let root = sandbox("dispatch-bytes");
     let db = root.join("emberd.sqlite3");
@@ -245,6 +315,7 @@ fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation()
     let manifest = write_dispatch_manifest(&root, "dispatch-bytes-job");
     let manifest_bytes = fs::read(&manifest).unwrap();
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
     fs::write(&manifest, b"{\"mutated_after_cli_read\":true}").unwrap();
     let mut server = start_server(&binary, &db, &pipe);
     assert_eq!(rpc(&pipe, 200, "ping", json!({}))["status"], "ok");
@@ -253,11 +324,22 @@ fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation()
         &pipe,
         201,
         "dispatch_manifest",
-        json!({"manifest_bytes": manifest_bytes, "manifest_sha256": manifest_sha256}),
+        json!({"manifest_utf8": manifest_utf8.clone(), "manifest_sha256": manifest_sha256.clone()}),
     );
     assert!(result["pid"].as_u64().unwrap() > 0);
     let receipt = PathBuf::from(result["preflight_receipt_path"].as_str().unwrap());
     assert_eq!(sha256(&receipt), result["preflight_receipt_sha256"]);
+    let replay = rpc(
+        &pipe,
+        202,
+        "dispatch_manifest",
+        json!({"manifest_utf8": manifest_utf8.clone(), "manifest_sha256": manifest_sha256.clone()}),
+    );
+    assert_eq!(replay["pid"], result["pid"]);
+    assert_eq!(
+        replay["preflight_receipt_sha256"],
+        result["preflight_receipt_sha256"]
+    );
     assert_eq!(
         rpc(
             &pipe,
@@ -273,7 +355,7 @@ fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation()
         "stop_job",
         json!({"job_id": "dispatch-bytes-job"}),
     );
-    rpc(&pipe, 204, "shutdown", json!({}));
+    rpc(&pipe, 205, "shutdown", json!({}));
     wait_for_exit(&mut server);
 }
 #[test]
