@@ -194,3 +194,43 @@ winTest("pingEmberd rejects mismatched IDs and JSON-RPC errors", async () => {
   await expect(pingEmberd({ pipeName: pipe, requestId: "error", timeoutMs: 500 }))
     .rejects.toThrow("JSON-RPC error");
 });
+function oneUtf8ResponseServer(pipe: string, response: Buffer, splitAt?: number): Promise<net.Server> {
+  const server = net.createServer((socket) => {
+    socket.once("data", () => {
+      if (splitAt === undefined) socket.end(response);
+      else {
+        socket.write(response.subarray(0, splitAt));
+        setTimeout(() => socket.end(response.subarray(splitAt)), 5);
+      }
+    });
+  });
+  servers.push(server);
+  return new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject)).then(() => server);
+}
+
+winTest("callEmberd preserves one valid UTF-8 code point split across raw pipe chunks", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-utf8-valid-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  const explosion = String.fromCodePoint(0x1f4a5);
+  const explosionBytes = Buffer.from([0xf0, 0x9f, 0x92, 0xa5]);
+  const response = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: "emoji", result: { note: explosion } }) + "\n", "utf8");
+  const emoji = response.indexOf(explosionBytes);
+  await oneUtf8ResponseServer(pipe, response, emoji + 2);
+  await expect(callEmberd({ pipeName: pipe, requestId: "emoji", method: "ping", params: {} }))
+    .resolves.toMatchObject({ note: explosion });
+});
+
+winTest("callEmberd rejects one malformed raw UTF-8 byte", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-utf8-malformed-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  const response = Buffer.concat([Buffer.from('{"jsonrpc":"2.0","id":"malformed","result":{"note":"'), Buffer.from([0xff]), Buffer.from('"}}\n')]);
+  await oneUtf8ResponseServer(pipe, response);
+  await expect(callEmberd({ pipeName: pipe, requestId: "malformed", method: "ping", params: {} }))
+    .rejects.toThrow("valid UTF-8");
+});
+
+winTest("callEmberd rejects one incomplete raw UTF-8 sequence", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-utf8-incomplete-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  const response = Buffer.concat([Buffer.from('{"jsonrpc":"2.0","id":"incomplete","result":{"note":"'), Buffer.from([0xf0, 0x9f, 0x92]), Buffer.from('"}}\n')]);
+  await oneUtf8ResponseServer(pipe, response);
+  await expect(callEmberd({ pipeName: pipe, requestId: "incomplete", method: "ping", params: {} }))
+    .rejects.toThrow("valid UTF-8");
+});

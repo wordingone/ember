@@ -117,7 +117,6 @@ export async function callEmberd(options: EmberdRequestOptions): Promise<Record<
   const socket = await openEmberdPipe(pipeName);
   return new Promise<Record<string, unknown>>((resolve, reject) => {
     let settled = false;
-    let buffer = "";
     const finish = (error?: Error, result?: Record<string, unknown>): void => {
       if (settled) return;
       settled = true;
@@ -128,18 +127,27 @@ export async function callEmberd(options: EmberdRequestOptions): Promise<Record<
       else reject(responseError("response completed without a result"));
     };
     const deadline = setTimeout(() => finish(responseError("named-pipe response timeout")), timeoutMs);
-
-    socket.once("error", (error) => finish(responseError(error.message)));
-    socket.on("data", (chunk: Buffer | string) => {
-      buffer += chunk.toString();
-      if (Buffer.byteLength(buffer, "utf8") > MAX_FRAME_BYTES) {
-        finish(responseError("response exceeds 65536 bytes"));
+    let rawBuffer = Buffer.alloc(0);
+    const decodeUtf8 = (bytes: Buffer): string => {
+      try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      } catch {
+        throw responseError("response is not valid UTF-8");
+      }
+    };
+    const processFrame = (): void => {
+      const newline = rawBuffer.indexOf(0x0a);
+      if (newline < 0) return;
+      let line: string;
+      let trailing: string;
+      try {
+        line = decodeUtf8(rawBuffer.subarray(0, newline));
+        trailing = decodeUtf8(rawBuffer.subarray(newline + 1));
+      } catch (error) {
+        finish(error instanceof Error ? error : responseError("response is not valid UTF-8"));
         return;
       }
-      const newline = buffer.indexOf("\n");
-      if (newline < 0) return;
-      const line = buffer.slice(0, newline);
-      if (buffer.slice(newline + 1).trim() !== "") {
+      if (trailing.trim() !== "") {
         finish(responseError("response contains multiple frames"));
         return;
       }
@@ -170,6 +178,25 @@ export async function callEmberd(options: EmberdRequestOptions): Promise<Record<
       }
       // A valid frame completes this one-request connection; delayed bytes are outside the closed connection contract.
       finish(undefined, result as Record<string, unknown>);
+    };
+    socket.on("data", (chunk: Buffer | string) => {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+      rawBuffer = Buffer.concat([rawBuffer, bytes]);
+      if (rawBuffer.length > MAX_FRAME_BYTES) {
+        finish(responseError("response exceeds 65536 bytes"));
+        return;
+      }
+      processFrame();
+    });
+    socket.once("end", () => {
+      if (settled) return;
+      try {
+        decodeUtf8(rawBuffer);
+      } catch (error) {
+        finish(error instanceof Error ? error : responseError("response is not valid UTF-8"));
+        return;
+      }
+      finish(responseError("response ended before one complete frame"));
     });
     socket.write(request);
   });
