@@ -304,6 +304,18 @@ export function verifyDispatchReceiptCustody(path: unknown, sha256: unknown, cus
   return { path: receipt, sha256 };
 }
 
+export function dispatchManifestParams(manifestBytes: Buffer): { manifest_utf8: string; manifest_sha256: string } {
+  let manifestUtf8: string;
+  try {
+    manifestUtf8 = new TextDecoder("utf-8", { fatal: true }).decode(manifestBytes);
+  } catch {
+    throw new Error("dispatch manifest is not valid UTF-8");
+  }
+  return {
+    manifest_utf8: manifestUtf8,
+    manifest_sha256: createHash("sha256").update(manifestBytes).digest("hex"),
+  };
+}
 async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<OwnedDaemonDispatch> {
   const manifest = process.env["EMBERD_DISPATCH_MANIFEST"];
   const sourceCommit = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
@@ -312,18 +324,19 @@ async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<Ow
     throw new Error("compiled cockpit lacks an exact source-commit trust root");
   }
   let manifestBytes: Buffer;
+  let manifestParams: { manifest_utf8: string; manifest_sha256: string };
   let manifestPayload: unknown;
   try {
     manifestBytes = readFileSync(manifest);
-    manifestPayload = JSON.parse(manifestBytes.toString("utf8"));
+    manifestParams = dispatchManifestParams(manifestBytes);
+    manifestPayload = JSON.parse(manifestParams.manifest_utf8);
   } catch (error) { throw new Error("cannot read dispatch manifest: " + (error instanceof Error ? error.message : String(error))); }
   validateOwnedDispatchManifest(identity, manifestPayload, sourceCommit);
   const result = await callEmberd({
     pipeName: configuredEmberdPipe(),
     method: "dispatch_manifest",
     params: {
-      manifest_bytes: Array.from(manifestBytes),
-      manifest_sha256: createHash("sha256").update(manifestBytes).digest("hex"),
+      ...manifestParams,
     },
   });
   const pid = result["pid"];

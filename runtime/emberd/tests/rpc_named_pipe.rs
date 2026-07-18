@@ -30,6 +30,23 @@ fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
 }
 
+fn bun_binary() -> PathBuf {
+    if let Some(path) = std::env::var_os("BUN") {
+        return PathBuf::from(path);
+    }
+    let output = Command::new("where.exe").arg("bun.cmd").output().unwrap();
+    assert!(
+        output.status.success(),
+        "bun is required for the production TypeScript bridge test"
+    );
+    let paths = String::from_utf8(output.stdout).unwrap();
+    let path = paths
+        .lines()
+        .next()
+        .expect("where.exe returned no bun path")
+        .trim();
+    PathBuf::from(path)
+}
 fn emberd_binary() -> PathBuf {
     option_env!("CARGO_BIN_EXE_emberd")
         .map(PathBuf::from)
@@ -536,4 +553,64 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     assert_eq!(alarm["runs"][0]["measurement_outcome"], "COMPLETED");
     rpc(&pipe, 19, "shutdown", json!({}));
     wait_for_exit(&mut second);
+}
+
+#[test]
+fn production_typescript_manifest_transport_reaches_the_real_named_pipe_daemon() {
+    let root = sandbox("typescript-production-transport");
+    let db = root.join("emberd.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\emberd-typescript-production-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "typescript-production-transport-job");
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 220, "ping", json!({}))["status"], "ok");
+
+    let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()
+        .unwrap();
+    let output = Command::new("cmd.exe")
+        .args(["/D", "/S", "/C"])
+        .arg(bun_binary())
+        .current_dir(&repository)
+        .env("EMBERD_REAL_DAEMON_PIPE", &pipe)
+        .env("EMBERD_REAL_DAEMON_MANIFEST", &manifest)
+        .args([
+            "test",
+            "tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts",
+            "--test-name-pattern",
+            "uses the production manifest_utf8 request type against the real Rust daemon",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "production TypeScript named-pipe transport failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        rpc(
+            &pipe,
+            221,
+            "job_state",
+            json!({"job_id": "typescript-production-transport-job"})
+        )["state"],
+        "running"
+    );
+    rpc(
+        &pipe,
+        222,
+        "stop_job",
+        json!({"job_id": "typescript-production-transport-job"}),
+    );
+    rpc(&pipe, 223, "shutdown", json!({}));
+    wait_for_exit(&mut server);
 }
