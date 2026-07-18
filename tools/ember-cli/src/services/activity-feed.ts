@@ -48,6 +48,67 @@ export const RECEIPT_RETRY_DELAY_MS = 500;
 export const OUTAGE_POLL_INTERVAL_MS = 1000;
 export const TAIL_POLL_INTERVAL_MS = 1000;
 
+/** Hard cap for receipt/board path bookkeeping. Durable watermarks retain a recent replay
+ * horizon; the append-only activity ledger remains the complete activity history. */
+export const MAX_TRACKED_PATHS = 5000;
+
+/** At most this many goal-session tails are polled concurrently. */
+export const MAX_GOAL_TAIL_STATES = 50;
+
+/** FIFO-bounded dedupe set for long-running activity-feed path bookkeeping. */
+export class BoundedSet<T> {
+  private readonly order: T[] = [];
+  private readonly items = new Set<T>();
+
+  constructor(private readonly max: number) {}
+
+  has(value: T): boolean {
+    return this.items.has(value);
+  }
+
+  add(value: T): void {
+    if (this.items.has(value)) return;
+    this.items.add(value);
+    this.order.push(value);
+    while (this.order.length > this.max) {
+      const oldest = this.order.shift();
+      if (oldest !== undefined) this.items.delete(oldest);
+    }
+  }
+
+  get size(): number {
+    return this.items.size;
+  }
+}
+
+/** Bound an insertion-ordered string-keyed record without touching newer entries. */
+export function boundRecordKeys(record: Record<string, unknown>, max: number): void {
+  const excess = Object.keys(record).length - max;
+  if (excess <= 0) return;
+  for (const key of Object.keys(record).slice(0, excess)) delete record[key];
+}
+
+/** Insert/update a map entry and evict oldest entries above its fixed capacity. */
+export function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
+  map.set(key, value);
+  while (map.size > max) {
+    const oldest = map.keys().next().value as K | undefined;
+    if (oldest === undefined) return;
+    map.delete(oldest);
+  }
+}
+
+/** Return a runner that declines a new asynchronous tick while its prior tick is unsettled. */
+export function createSingleFlightRunner(): (work: () => Promise<unknown>) => boolean {
+  let inFlight = false;
+  return (work) => {
+    if (inFlight) return false;
+    inFlight = true;
+    void work().catch(() => {}).finally(() => { inFlight = false; });
+    return true;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Pure formatters — receipts
 // ---------------------------------------------------------------------------
@@ -560,8 +621,8 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
   }
   logTailPollDiagnostic({ event: "startActivityFeed" });
 
-  const seen = new Set<string>();
-  const rendered = new Set<string>();
+  const seen = new BoundedSet<string>(MAX_TRACKED_PATHS);
+  const rendered = new BoundedSet<string>(MAX_TRACKED_PATHS);
 
   // P0-B: loaded synchronously BEFORE either watcher arms (see loadWatermarkSync's comment) --
   // a file whose current mtime already matches this map was rendered in a PRIOR run and must
@@ -569,6 +630,7 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
   const watermark: Watermark = loadWatermarkSync(watermarkPath);
   let watermarkDirty = false;
   function persistWatermark(): void {
+    boundRecordKeys(watermark, MAX_TRACKED_PATHS);
     if (watermarkDirty) return; // a write is already scheduled; it will pick up the latest map
     watermarkDirty = true;
     setTimeout(() => {
@@ -754,7 +816,9 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       const name = filename.toString();
       if (isGoalSessionRelativePath(name)) {
         const abs = path.join(receiptsDir, name);
-        if (!goalTailStates.has(abs)) goalTailStates.set(abs, freshTailState());
+        if (!goalTailStates.has(abs)) {
+          setBoundedMapEntry(goalTailStates, abs, freshTailState(), MAX_GOAL_TAIL_STATES);
+        }
         return;
       }
       if (!name.endsWith(".json")) return;
@@ -876,26 +940,33 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     });
   }
 
+  const runTailTick = createSingleFlightRunner();
   const tailInterval = setInterval(() => {
-    void pollTail(
-      restartLogPath,
-      restartTail,
-      (line) => renderWatchdogLogLine(line, restartLogPath),
-      makeTailOverflowHandler(restartLogPath),
-    ).then((result) => {
-      if (result) logTailPollDiagnostic({ event: "pollTail", file: "restart-log", ...result });
-    });
+    runTailTick(async () => {
+      const pending: Array<Promise<unknown>> = [];
+      pending.push(
+        pollTail(
+          restartLogPath,
+          restartTail,
+          (line) => renderWatchdogLogLine(line, restartLogPath),
+          makeTailOverflowHandler(restartLogPath),
+        ).then((result) => {
+          if (result) logTailPollDiagnostic({ event: "pollTail", file: "restart-log", ...result });
+        }),
+      );
 
     if (resolvedKillReceiptsPath) {
       const killPath = resolvedKillReceiptsPath;
-      void pollTail(
-        killPath,
-        killTail,
-        (line) => renderWatchdogLogLine(line, killPath),
-        makeTailOverflowHandler(killPath),
-      ).then((result) => {
-        if (result) logTailPollDiagnostic({ event: "pollTail", file: "kill-receipts", ...result });
-      });
+      pending.push(
+        pollTail(
+          killPath,
+          killTail,
+          (line) => renderWatchdogLogLine(line, killPath),
+          makeTailOverflowHandler(killPath),
+        ).then((result) => {
+          if (result) logTailPollDiagnostic({ event: "pollTail", file: "kill-receipts", ...result });
+        }),
+      );
     }
 
     // -- Goal-organ session logs (ember issue #211 §7 delta 4) -------------
@@ -905,10 +976,11 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     // between creation and now -- same "boot replay is correct, not a bug" contract the
     // watchdog logs rely on (see freshTailState's callers).
     for (const [absPath, state] of goalTailStates) {
-      void pollTail(
-        absPath,
-        state,
-        (line) => {
+      pending.push(
+        pollTail(
+          absPath,
+          state,
+          (line) => {
           try {
             const row = JSON.parse(line) as GoalReceiptRow;
             const text = formatGoalReceiptLine(row);
@@ -916,12 +988,15 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
           } catch {
             // malformed row — skip, never crash the feed
           }
-        },
-        makeTailOverflowHandler(absPath, "goal"),
-      ).then((result) => {
-        if (result) logTailPollDiagnostic({ event: "pollTail", file: "goal-session", path: absPath, ...result });
-      });
+          },
+          makeTailOverflowHandler(absPath, "goal"),
+        ).then((result) => {
+          if (result) logTailPollDiagnostic({ event: "pollTail", file: "goal-session", path: absPath, ...result });
+        }),
+      );
     }
+    await Promise.allSettled(pending);
+    });
   }, TAIL_POLL_INTERVAL_MS);
   _stopFns.push(() => clearInterval(tailInterval));
   void resolveKillReceiptsPath;
