@@ -324,7 +324,9 @@ describe("owned server supervisor", () => {
       rmSync(root, { recursive: true, force: true });
       rmSync(outside, { recursive: true, force: true });
     }
-  });  it("sends exact bound manifest bytes to emberd without CLI custody writes", async () => {
+  });
+
+  it("sends exact bound manifest bytes to emberd without CLI custody writes", async () => {
     const root = mkdtempSync(join(tmpdir(), "ember-p2d-dispatch-bound-"));
     const sourcePath = join(root, "source-dispatch.json");
     const pipe = `\\\\.\\pipe\\emberd-p2d-dispatch-${process.pid}-${Math.random().toString(16).slice(2)}`;
@@ -376,7 +378,19 @@ describe("owned server supervisor", () => {
         }) + "\n");
       });
     });
-    await new Promise<void>((resolvePromise, reject) => server.listen(pipe, () => resolvePromise()).once("error", reject));
+    await new Promise<void>((resolvePromise, reject) => {
+      const onError = (error: Error): void => {
+        server.removeListener("listening", onListening);
+        reject(error);
+      };
+      const onListening = (): void => {
+        server.removeListener("error", onError);
+        resolvePromise();
+      };
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen({ path: pipe });
+    });
     process.env["EMBERD_PIPE"] = pipe;
     process.env["EMBERD_DISPATCH_MANIFEST"] = sourcePath;
     (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = "e".repeat(40);
