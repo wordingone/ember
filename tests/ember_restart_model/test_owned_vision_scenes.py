@@ -207,5 +207,13 @@ class OwnedVisionSceneTests(unittest.TestCase):
         for split in ("train", "validation", "test"):
             sample_ids = [record["sample_id"] for record in first if record["scene_split"] == split]
             self.assertNotEqual(sample_ids, sorted(sample_ids))
+
+    def test_serialized_order_helpers_have_one_source_authority_each(self) -> None:
+        """Python must not silently shadow a prior content-bound ordering helper."""
+        source = (ROOT / "tools" / "ember-restart-3b" / "build_owned_vision_scenes.py").read_text(
+            encoding="utf-8",
+        )
+        self.assertEqual(source.count("def _serialized_order_content_sha256("), 1)
+        self.assertEqual(source.count("def _shuffle_serialized_records_within_splits("), 1)
 if __name__ == "__main__":
     unittest.main()
