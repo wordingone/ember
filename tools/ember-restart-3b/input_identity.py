@@ -29,16 +29,21 @@ class ResolvedInputIdentity:
     sha256: str
     bytes: int
     selection_source: str
+    admission_receipt_path: str | None = None
+    admission_receipt_sha256: str | None = None
 
     def packet_value(self) -> dict[str, Any]:
-        return {
+        value = {
             "identity_manifest": self.identity_manifest,
             "artifact_id": self.artifact_id,
             "shard_path": self.shard_path,
             "sha256": self.sha256,
             "bytes": self.bytes,
         }
-
+        if self.admission_receipt_path is not None and self.admission_receipt_sha256 is not None:
+            value["admission_receipt_path"] = self.admission_receipt_path
+            value["admission_receipt_sha256"] = self.admission_receipt_sha256
+        return value
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -114,6 +119,24 @@ def resolve_input_identity(
         raise InputIdentityError("byte_drift", "shard content hash differs from the selected identity")
     if not isinstance(expected_bytes, int) or actual_bytes != expected_bytes:
         raise InputIdentityError("byte_drift", "shard byte count differs from the selected identity")
+    receipt_relative: str | None = None
+    receipt_sha256: str | None = None
+    if artifact_id == "owned-four-domain-production-rung-v1":
+        from production_rung import ARTIFACT_ID, RECEIPT_RELATIVE, SHARD_RELATIVE, verify_bound_rung
+
+        if artifact_id != ARTIFACT_ID or shard_relative != SHARD_RELATIVE:
+            raise InputIdentityError("wrong_identity", "production rung identity does not bind the canonical owned shard")
+        receipt_path, receipt_relative = _relative_file(repo_root, identity.get("admission_receipt_path"), missing_code="missing_input")
+        expected_receipt_sha = identity.get("admission_receipt_sha256")
+        if receipt_relative != RECEIPT_RELATIVE or not isinstance(expected_receipt_sha, str):
+            raise InputIdentityError("wrong_identity", "production rung identity lacks the canonical admission receipt")
+        receipt_sha256 = _sha256(receipt_path)
+        if receipt_sha256 != expected_receipt_sha:
+            raise InputIdentityError("byte_drift", "production rung receipt hash differs from the selected identity")
+        try:
+            verify_bound_rung(root=repo_root, shard_path=shard_path, receipt_path=receipt_path)
+        except ValueError as error:
+            raise InputIdentityError("wrong_identity", f"production rung receipt verification failed: {error}") from error
     return ResolvedInputIdentity(
         identity_manifest=manifest_relative,
         artifact_id=artifact_id,
@@ -121,6 +144,8 @@ def resolve_input_identity(
         sha256=actual_sha,
         bytes=actual_bytes,
         selection_source=selection_source,
+        admission_receipt_path=receipt_relative,
+        admission_receipt_sha256=receipt_sha256,
     )
 
 
@@ -185,7 +210,7 @@ def emit_integration_receipt(
     if validation.get("decision") != "ACCEPTED":
         raise InputIdentityError("wrong_identity", "only accepted launch packets receive a receipt")
     identity = packet["input_identity"]
-    return {
+    receipt = {
         "schema_version": "ember-input-integration-receipt-v1",
         "code_commit": code_commit,
         "config_sha256": packet["config_sha256"],
@@ -195,3 +220,9 @@ def emit_integration_receipt(
         "launch_decision": validation["decision"],
         "selection_source": packet["selection_source"],
     }
+    admission_receipt_sha256 = identity.get("admission_receipt_sha256")
+    if admission_receipt_sha256 is not None:
+        if not isinstance(admission_receipt_sha256, str) or re.fullmatch(r"[0-9a-f]{64}", admission_receipt_sha256) is None:
+            raise InputIdentityError("wrong_identity", "input admission receipt hash is malformed")
+        receipt["input_admission_receipt_sha256"] = admission_receipt_sha256
+    return receipt
