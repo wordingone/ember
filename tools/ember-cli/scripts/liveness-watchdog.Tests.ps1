@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # liveness-watchdog.Tests.ps1 -- Pester fixture for issue #464 (standing liveness
 # watchdogs). Dot-sources liveness-watchdog.ps1: the execution guard at the bottom of
 # that file means dot-sourcing only defines functions -- it never starts the live loop
@@ -142,6 +145,7 @@ Describe 'Invoke-CockpitWatchdogTick' {
         $logRow.event | Should Be 'relaunch'
         $logRow.deadPid | Should Be 1234
         $logRow.relaunchPid | Should Be 42424
+        @($logRow.PSObject.Properties.Name | Where-Object { $_ -eq 'backoffUntil' }).Count | Should Be 1
     }
 
     It 'missing/unreadable heartbeat -> treated as stale (cannot confirm liveness) -> relaunch' {
@@ -167,12 +171,20 @@ Describe 'Invoke-CockpitWatchdogTick' {
         }
         ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
 
+        $script:standdownRows = @()
+        $script:originalWriteRestartLogRow = (Get-Command Write-RestartLogRow).ScriptBlock
+        Mock Write-RestartLogRow { param($Path, $Row) $script:standdownRows += [PSCustomObject]$Row; & $script:originalWriteRestartLogRow -Path $Path -Row $Row }
         $result = Invoke-CockpitWatchdogTick -Now $now -State $state `
             -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
             -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath
 
         $result.Action | Should Be 'standdown'
         $launcherCalls | Should Be 0
+        $rows = @($standdownRows)
+        $rows.Count | Should Be 1
+        $rows[0].event | Should Be 'standdown'
+        $rows[0].target | Should Be 'cockpit'
+        $rows[0].owner | Should Be 'test-lane'
     }
 
     It 'expired planned-outage marker -> resumes duty (relaunch) AND logs a marker-overrun row naming the owner' {
@@ -307,6 +319,24 @@ Describe 'Invoke-ServerWatchdogTick' {
         $state.server.consecutiveFailures | Should Be 0
     }
 
+    It 'server restart row carries health age and backoff state' {
+        Mock Test-ServerHealth { $script:healthCalls++; return $false }
+        Mock Find-ServerProcess { return $null }
+        $state.server.consecutiveFailures = 1
+        $state.server.lastHealthAt = '2026-07-08T12:00:00Z'
+        $now = [datetime]::Parse('2026-07-08T12:05:00Z').ToUniversalTime()
+
+        $result = Invoke-ServerWatchdogTick -Now $now -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath
+
+        $result.Action | Should Be 'relaunch'
+        $row = (Get-Content -Path $restartLogPath -Raw) | ConvertFrom-Json
+        @($row.PSObject.Properties.Name | Where-Object { $_ -eq 'healthAgeSec' }).Count | Should Be 1
+        $row.healthAgeSec | Should Be 300
+        @($row.PSObject.Properties.Name | Where-Object { $_ -eq 'backoffUntil' }).Count | Should Be 1
+    }
+
     It 'no live process found at the failure threshold (already dead) -> no kill-receipt, still relaunches' {
         Mock Test-ServerHealth { $script:healthCalls++; return $false }
         Mock Find-ServerProcess { return $null }
@@ -332,12 +362,20 @@ Describe 'Invoke-ServerWatchdogTick' {
         ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
         Mock Test-ServerHealth { $script:healthCalls++; return $false }
 
+        $script:standdownRows = @()
+        $script:originalWriteRestartLogRow = (Get-Command Write-RestartLogRow).ScriptBlock
+        Mock Write-RestartLogRow { param($Path, $Row) $script:standdownRows += [PSCustomObject]$Row; & $script:originalWriteRestartLogRow -Path $Path -Row $Row }
         $result = Invoke-ServerWatchdogTick -Now ([datetime]::UtcNow) -State $state `
             -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
             -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath
 
         $result.Action | Should Be 'standdown'
         $healthCalls | Should Be 0
+        $rows = @($standdownRows)
+        $rows.Count | Should Be 1
+        $rows[0].event | Should Be 'standdown'
+        $rows[0].target | Should Be 'server'
+        $rows[0].owner | Should Be 'probe-lane'
     }
 }
 
