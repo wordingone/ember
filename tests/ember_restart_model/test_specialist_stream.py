@@ -9,6 +9,7 @@ import hashlib
 import json
 import sys
 import tempfile
+from unittest import mock
 import unittest
 from pathlib import Path
 
@@ -260,6 +261,58 @@ class SpecialistStreamTests(unittest.TestCase):
                 open_specialist_stream(repo_root=ROOT, manifest_path=second_path).next_records(
                     capability="tool", cursor=cursor, limit=1
                 )
+
+    def test_manifest_rejects_oversized_range_and_chunk_before_record_materialization(self) -> None:
+        import specialist_stream
+        from specialist_stream import build_stream_manifest
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            tokenizer = _frozen_tokenizer(root / "tokenizer.json")
+            common = dict(
+                repo_root=ROOT,
+                output_path=root / "stream.json",
+                tokenizer_path=tokenizer,
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                data_class="MEASURED_RUNG",
+            )
+            with mock.patch.object(
+                specialist_stream.SpecialistStream,
+                "record_at",
+                side_effect=AssertionError("oversized manifest reached record materialization"),
+            ):
+                with self.assertRaisesRegex(ValueError, "record count bound"):
+                    build_stream_manifest(record_count=1_000_000_000, chunk_size=1, **common)
+                with self.assertRaisesRegex(ValueError, "chunk bound"):
+                    build_stream_manifest(record_count=512, chunk_size=1_000_000_000, **common)
+
+            build_stream_manifest(record_count=512, chunk_size=64, **common)
+            hostile = json.loads((root / "stream.json").read_bytes())
+            hostile["range"]["record_count_per_family"] = 1_000_000_000
+            hostile["chunk_size"] = 64
+            (root / "stream.json").write_bytes(
+                json.dumps(hostile, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+            )
+            with mock.patch.object(
+                specialist_stream.SpecialistStream,
+                "_materialize_verified_chunk",
+                side_effect=AssertionError("hostile manifest reached chunk materialization"),
+            ):
+                with self.assertRaisesRegex(ValueError, "record count bound"):
+                    specialist_stream.open_specialist_stream(repo_root=ROOT, manifest_path=root / "stream.json")
+            hostile["range"]["record_count_per_family"] = 512
+            hostile["chunk_size"] = 1_000_000_000
+            (root / "stream.json").write_bytes(
+                json.dumps(hostile, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+            )
+            with mock.patch.object(
+                specialist_stream.SpecialistStream,
+                "_materialize_verified_chunk",
+                side_effect=AssertionError("hostile manifest reached chunk materialization"),
+            ):
+                with self.assertRaisesRegex(ValueError, "chunk bound"):
+                    specialist_stream.open_specialist_stream(repo_root=ROOT, manifest_path=root / "stream.json")
+
 
 if __name__ == "__main__":
     unittest.main()

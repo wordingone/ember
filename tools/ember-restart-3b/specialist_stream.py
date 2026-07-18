@@ -22,6 +22,8 @@ from verify_capability_record import verify_record as verify_capability_record
 CAPABILITIES = ("image", "audio", "reasoning", "tool")
 SCHEMA_VERSION = "ember-owned-specialist-stream-v1"
 CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-cursor-v1"
+MAX_RECORDS_PER_FAMILY = 65_536
+MAX_CHUNK_RECORDS = 256
 MEASURED_MIN_RECORDS = 512
 SEMANTIC_MIN_RECORDS = 4096
 _GENERATOR_SOURCES = {
@@ -269,6 +271,10 @@ def _family_commitment(stream: SpecialistStream, capability: str, record_count: 
 def build_stream_manifest(*, repo_root: Path, output_path: Path, tokenizer_path: Path, model_config_path: Path, record_count: int, chunk_size: int, data_class: str) -> dict[str, Any]:
     if type(record_count) is not int or type(chunk_size) is not int or chunk_size <= 0:
         raise ValueError("invalid stream range")
+    if record_count > MAX_RECORDS_PER_FAMILY:
+        raise ValueError("stream record count bound exceeded")
+    if chunk_size > MAX_CHUNK_RECORDS or chunk_size > record_count:
+        raise ValueError("stream chunk bound exceeded")
     if data_class == "SEMANTIC_PRETRAINING":
         if record_count < SEMANTIC_MIN_RECORDS:
             raise ValueError("SEMANTIC_PRETRAINING requires at least 4096 records per family")
@@ -298,6 +304,7 @@ def build_stream_manifest(*, repo_root: Path, output_path: Path, tokenizer_path:
         "range": {"start": 0, "record_count_per_family": record_count},
         "chunk_size": chunk_size,
         "tokenizer": {"path": tokenizer_relative, "sha256": _sha256(tokenizer_bytes)},
+        "consumer_limits": {"max_records_per_family": MAX_RECORDS_PER_FAMILY, "max_chunk_records": MAX_CHUNK_RECORDS},
         "model_config": {"path": config_relative, "sha256": _sha256(config_bytes)},
         "generator_sources": {name: _source_binding(repo_root, relative) for name, relative in _GENERATOR_SOURCES.items()},
         "verifier_sources": {name: _source_binding(repo_root, relative) for name, relative in _VERIFIER_SOURCES.items()},
@@ -372,6 +379,15 @@ def open_specialist_stream(*, repo_root: Path, manifest_path: Path) -> Specialis
     data_class = manifest.get("data_class")
     if type(count) is not int or type(chunk_size) is not int or chunk_size <= 0:
         raise ValueError("invalid stream range")
+    if manifest.get("consumer_limits") != {
+        "max_records_per_family": MAX_RECORDS_PER_FAMILY,
+        "max_chunk_records": MAX_CHUNK_RECORDS,
+    }:
+        raise ValueError("invalid consumer stream limits")
+    if count > MAX_RECORDS_PER_FAMILY:
+        raise ValueError("stream record count bound exceeded")
+    if chunk_size > MAX_CHUNK_RECORDS or chunk_size > count:
+        raise ValueError("stream chunk bound exceeded")
     if data_class == "SEMANTIC_PRETRAINING" and count < SEMANTIC_MIN_RECORDS:
         raise ValueError("SEMANTIC_PRETRAINING range is too small")
     if data_class == "MEASURED_RUNG" and count < MEASURED_MIN_RECORDS:
