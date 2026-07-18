@@ -12,14 +12,24 @@ import { referenceSeatModelName } from '../entrypoints/model-seat.ts';
 // ---------------------------------------------------------------------------
 
 /**
- * Fix #51 fiction purge: the prior value was a bare 'qwen3-5' literal --
- * an unverified claim about which model actually serves ultraplan sessions
- * when no feature-flag config supplies one. Labeled through the same
- * `referenceSeatModelName` convention every other borrowed/unverified
- * identity in the codebase uses, so it reads as a reference default, never
- * a verified served identity.
+ * Fix #51 round-5 repair (routing vs label): the prior single constant
+ * `ULTRAPLAN_DEFAULT_MODEL` equaled the display label
+ * "REFERENCE_ONLY: qwen3-5" and production passed that label straight to
+ * `launchRemoteSession({ model })` -- the provider session API needs the
+ * functional routing id, never a provenance-labeled string. These are now
+ * two structured fields:
+ *
+ * - `ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID`: the exact value the session API
+ *   expects in its `model` param. Never prefixed, never labeled.
+ * - `ULTRAPLAN_DEFAULT_MODEL_LABEL`: the same `referenceSeatModelName`
+ *   provenance/display label every other borrowed/unverified identity in
+ *   the codebase uses, for logging and display ONLY. It must never reach
+ *   `launchRemoteSession`'s `model` param.
  */
-export const ULTRAPLAN_DEFAULT_MODEL = referenceSeatModelName('qwen3-5');
+export const ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID = 'qwen3-5';
+export const ULTRAPLAN_DEFAULT_MODEL_LABEL = referenceSeatModelName(
+  ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID,
+);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,7 +51,10 @@ export interface UltraplanDeps {
   setUltraplanPendingChoice: (p: unknown) => void;
   checkRemoteSessionEligibility: () => Promise<boolean>;
   launchRemoteSession: (opts: {
+    /** Functional routing id passed to the provider session API. Never a display label. */
     model: string;
+    /** Provenance/display label only (e.g. "REFERENCE_ONLY: qwen3-5"); never sent as `model`. */
+    modelLabel: string;
     blurb: string;
     [key: string]: unknown;
   }) => Promise<UltraplanLaunchResult | null>;
@@ -103,12 +116,16 @@ export function createUltraplanCommand(deps: UltraplanDeps) {
         };
       }
 
-      const model = deps.getUltraplanModel() ?? ULTRAPLAN_DEFAULT_MODEL;
+      const configuredModel = deps.getUltraplanModel();
+      const model = configuredModel ?? ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID;
+      // Feature-flag config already supplies a routing id (never a label);
+      // only the hardcoded fallback carries a distinct display label.
+      const modelLabel = configuredModel ?? ULTRAPLAN_DEFAULT_MODEL_LABEL;
       deps.setUltraplanLaunching(true);
 
       let launchResult: UltraplanLaunchResult | null = null;
       try {
-        launchResult = await deps.launchRemoteSession({ model, blurb });
+        launchResult = await deps.launchRemoteSession({ model, modelLabel, blurb });
       } finally {
         deps.setUltraplanLaunching(false);
         deps.setUltraplanLaunchPending(null);

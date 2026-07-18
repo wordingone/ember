@@ -6,7 +6,12 @@
 // Spec: specs/commands/ultraplan.md
 
 import { describe, it, expect } from "bun:test";
-import { createUltraplanCommand, stopUltraplan, ULTRAPLAN_DEFAULT_MODEL } from "./ultraplan.ts";
+import {
+  createUltraplanCommand,
+  stopUltraplan,
+  ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID,
+  ULTRAPLAN_DEFAULT_MODEL_LABEL,
+} from "./ultraplan.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import type { UltraplanDeps, UltraplanLaunchResult } from "./ultraplan.ts";
 
@@ -102,7 +107,7 @@ describe("/ultraplan", () => {
       expect(usedModel).toBe("qwen3.6-fast");
     });
 
-    it("falls back to ULTRAPLAN_DEFAULT_MODEL when config returns null", async () => {
+    it("falls back to ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID when config returns null", async () => {
       let usedModel = "";
       const cmd = createUltraplanCommand(makeDefaultDeps({
         getUltraplanModel: () => null,
@@ -112,18 +117,56 @@ describe("/ultraplan", () => {
         },
       }));
       await cmd.execute("Build", mockContext);
-      expect(usedModel).toBe(ULTRAPLAN_DEFAULT_MODEL);
+      expect(usedModel).toBe(ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID);
     });
 
-    it("ULTRAPLAN_DEFAULT_MODEL is labeled REFERENCE_ONLY (Fix #51 fiction purge), never a bare borrowed model-name literal", () => {
+    it("ULTRAPLAN_DEFAULT_MODEL_LABEL is labeled REFERENCE_ONLY (Fix #51 fiction purge), never a bare borrowed model-name literal", () => {
       // Prior to the #51 fiction-purge repair this was the bare literal
       // 'qwen3-5' -- an unverified claim about which model actually serves
       // ultraplan sessions. It must now go through the same
       // `referenceSeatModelName` labeling every other reference-only
       // identity in the codebase uses, so it can never be read as a
       // verified served identity.
-      expect(ULTRAPLAN_DEFAULT_MODEL.startsWith("REFERENCE_ONLY: ")).toBe(true);
-      expect(ULTRAPLAN_DEFAULT_MODEL).not.toBe("qwen3-5");
+      expect(ULTRAPLAN_DEFAULT_MODEL_LABEL.startsWith("REFERENCE_ONLY: ")).toBe(true);
+      expect(ULTRAPLAN_DEFAULT_MODEL_LABEL).not.toBe("qwen3-5");
+    });
+
+    // Reviewer defect #1 (routing vs label): ULTRAPLAN_DEFAULT_MODEL used to
+    // equal the display label "REFERENCE_ONLY: qwen3-5" and production passed
+    // that label straight to launchRemoteSession({ model }) -- the provider
+    // session API never receives a "REFERENCE_ONLY: " prefix in a real
+    // routing id, so every default-model ultraplan launch was silently
+    // handed a non-functional value. The routing id and the provenance label
+    // must be two structured fields; only the routing id ever reaches
+    // launchRemoteSession's `model` param.
+    it("RED->GREEN: launchRemoteSession never receives a REFERENCE_ONLY-prefixed model id on default-model launch", async () => {
+      let usedModel = "";
+      const cmd = createUltraplanCommand(makeDefaultDeps({
+        getUltraplanModel: () => null,
+        launchRemoteSession: async (opts) => {
+          usedModel = opts.model;
+          return { sessionUrl: "https://x", executionTarget: "remote" };
+        },
+      }));
+      await cmd.execute("Build", mockContext);
+      expect(usedModel.startsWith("REFERENCE_ONLY: ")).toBe(false);
+    });
+
+    it("the REFERENCE_ONLY label field never reaches launchRemoteSession's model param", async () => {
+      let usedModel = "";
+      let usedLabel: unknown;
+      const cmd = createUltraplanCommand(makeDefaultDeps({
+        getUltraplanModel: () => null,
+        launchRemoteSession: async (opts) => {
+          usedModel = opts.model;
+          usedLabel = (opts as Record<string, unknown>).modelLabel;
+          return { sessionUrl: "https://x", executionTarget: "remote" };
+        },
+      }));
+      await cmd.execute("Build", mockContext);
+      expect(usedModel).toBe(ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID);
+      expect(usedModel).not.toBe(usedLabel);
+      expect(usedLabel).toBe(ULTRAPLAN_DEFAULT_MODEL_LABEL);
     });
   });
 
