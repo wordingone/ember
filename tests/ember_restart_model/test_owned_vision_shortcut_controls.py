@@ -30,6 +30,7 @@ class OwnedVisionShortcutControlTests(unittest.TestCase):
         self.assertEqual(report["per_split_record_counts"], {"train": 256, "validation": 128, "test": 128})
         for split in ("train", "validation", "test"):
             self.assertEqual(report["per_split_content_only_oracle_accuracy"][split], 0.25)
+            self.assertEqual(report["per_split_ordered_patch_mean_oracle_accuracy"][split], 0.25)
             self.assertLess(report["per_split_confidence_interval_95"][split][0], 0.25)
             self.assertGreater(report["per_split_confidence_interval_95"][split][1], 0.25)
 

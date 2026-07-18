@@ -65,6 +65,7 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
     plan = declared_split_plan(record_count=len(records))
     support: dict[str, set[int]] = {split: set() for split in _SPLITS}
     by_split_content: dict[str, dict[str, Counter[str]]] = {split: defaultdict(Counter) for split in _SPLITS}
+    by_split_ordered_patch_mean: dict[str, dict[tuple[tuple[int, int, int], ...], Counter[str]]] = {split: defaultdict(Counter) for split in _SPLITS}
     content_splits: dict[str, set[str]] = defaultdict(set)
     raw_mask_rejected = 0
     paired_preserved = 0
@@ -78,7 +79,12 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
         coordinates = _coordinates(record)
         support[split].add(patch_permutation_class(_sample_index(record)))
         content_key = coordinate_blind_content_sha256(patches)
+        ordered_patch_mean_key = tuple(
+            tuple(sum(patch[channel::3]) for channel in range(3))
+            for patch in patches
+        )
         by_split_content[split][content_key][str(label)] += 1
+        by_split_ordered_patch_mean[split][ordered_patch_mean_key][str(label)] += 1
         content_splits[content_key].add(split)
         try:
             spatial_relation_caption([bytes(len(patch)) for patch in patches], coordinates)
@@ -97,6 +103,7 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
     if any(values != expected_support for values in support.values()):
         raise ValueError("preregistered split lacks full 24-class permutation support")
     per_split_accuracy: dict[str, float] = {}
+    per_split_ordered_patch_mean_accuracy: dict[str, float] = {}
     per_split_interval: dict[str, list[float]] = {}
     per_split_power: dict[str, float] = {}
     per_split_counts = {split: sum(sum(labels.values()) for labels in by_split_content[split].values()) for split in _SPLITS}
@@ -109,10 +116,21 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
         successes = sum(max(labels.values()) for labels in groups.values())
         total = per_split_counts[split]
         per_split_accuracy[split] = successes / total
+        ordered_patch_mean_groups = by_split_ordered_patch_mean[split]
+        if not ordered_patch_mean_groups or any(
+            set(labels) != set(_LABELS) or len(set(labels.values())) != 1
+            for labels in ordered_patch_mean_groups.values()
+        ):
+            raise ValueError("ordered per-patch RGB means carry a relation shortcut")
+        per_split_ordered_patch_mean_accuracy[split] = (
+            sum(max(labels.values()) for labels in ordered_patch_mean_groups.values()) / total
+        )
         per_split_interval[split] = _wilson_interval(successes, total)
         per_split_power[split] = _power_for_10pp_effect(total)
         if per_split_accuracy[split] != 0.25:
             raise ValueError("content-only oracle exceeds preregistered chance within a split")
+        if per_split_ordered_patch_mean_accuracy[split] != 0.25:
+            raise ValueError("ordered per-patch RGB-mean oracle exceeds preregistered chance within a split")
     return {
         "schema_version": "ember-owned-vision-shortcut-control-v2",
         "result": "MEASURED_NONMATERIALIZING_NONDISPATCHABLE",
@@ -122,6 +140,7 @@ def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[
         "declared_split_ratio": plan["ratio"],
         "per_split_record_counts": per_split_counts,
         "per_split_content_only_oracle_accuracy": per_split_accuracy,
+        "per_split_ordered_patch_mean_oracle_accuracy": per_split_ordered_patch_mean_accuracy,
         "per_split_confidence_interval_95": per_split_interval,
         "per_split_power_for_10pp_effect": per_split_power,
         "permutation_support": {split: sorted(values) for split, values in support.items()},
