@@ -3,13 +3,13 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Cross-PROCESS regression coverage for the #934 custody ledger writer lock.
 
-Ported (bounded, repo-shaped, not burst-shaped) from two ad-hoc attack
+Ported (bounded, repo-shaped, not burst-shaped) from two ad-hoc negative-test
 harnesses executed 5+ rounds each this session and REUSED here rather than
 reinvented:
 
-  - fburst-proclock/tools/ember-restart-3b/zzz_proc_attack.py + zzz_worker.py
+  - fburst-proclock/tools/ember-restart-3b/zzz_proc_probe.py + zzz_worker.py
     -> test_exactly_once_across_processes, test_kill_mid_write_converges
-  - fburst-unlinkwin/tools/ember-restart-3b/zzz_unlink_attack.py +
+  - fburst-unlinkwin/tools/ember-restart-3b/zzz_unlink_probe.py +
     zzz_unlink_worker.py
     -> test_unlink_window_kill_recovery, test_unlink_window_live_race
 
@@ -29,7 +29,7 @@ never has to diff the two by hand):
      in-tmp_path receipt list. Kill discipline (receipt
      before kill, exact spawned PID, JSON serializer) is preserved in full;
      only the destination changes, because repo tests cannot depend on any
-     machine-local ledger being present or writable — that discipline is a
+     machine-local ledger being present or writable -- that discipline is a
      session rail, not a repo contract.
   3. Worker processes are consolidated into one reusable module,
      tools/ember-restart-3b/custody_process_scope_worker.py, with "race" and
