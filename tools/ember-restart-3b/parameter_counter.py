@@ -427,6 +427,8 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         episode = lineage.get("episode")
         capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
         episode_fields = {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256", "execution_slice", "execution_slice_sha256"}
+        if active_expert == "vision":
+            episode_fields |= {"scene_split_selection", "scene_split_selection_sha256"}
         if (not isinstance(episode, Mapping) or set(episode) != episode_fields
                 or episode.get("active_expert") != active_expert or not isinstance(episode.get("data_verification_receipt"), Mapping)):
             raise ValueError("specialist v4 lineage lacks a closed active episode")
@@ -445,6 +447,8 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
             raise ValueError("specialist v4 lineage data verification receipt hash does not match")
         execution_slice = episode.get("execution_slice")
         slice_fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
+        if active_expert == "vision":
+            slice_fields |= {"scene_split_record_count"}
         if (not isinstance(execution_slice, Mapping) or set(execution_slice) != slice_fields
                 or execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1"
                 or type(execution_slice.get("start_record")) is not int or execution_slice["start_record"] < 0
@@ -457,6 +461,24 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         slice_canonical = hashlib.sha256(json.dumps(dict(execution_slice), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         if episode.get("execution_slice_sha256") != slice_canonical:
             raise ValueError("specialist v4 lineage execution slice hash does not match")
+        if active_expert == "vision":
+            selection = episode.get("scene_split_selection")
+            selection_fields = {"schema_version", "capability", "scene_split", "full_records_artifact_sha256", "selected_record_count", "selected_token_count", "selected_records_sha256", "selected_tokens_sha256"}
+            if (not isinstance(selection, Mapping) or set(selection) != selection_fields
+                    or selection.get("schema_version") != "ember-specialist-scene-split-selection-v1"
+                    or selection.get("capability") != "image" or selection.get("scene_split") != "train"
+                    or selection.get("full_records_artifact_sha256") != verification.get("records_artifact_sha256")
+                    or selection.get("selected_record_count") != execution_slice.get("scene_split_record_count")
+                    or execution_slice["start_record"] + execution_slice["record_count"] > selection.get("selected_record_count", 0)
+                    or execution_slice["token_count"] > selection.get("selected_token_count", 0)):
+                raise ValueError("specialist v4 lineage has an invalid train scene split selection")
+            for field in ("full_records_artifact_sha256", "selected_records_sha256", "selected_tokens_sha256"):
+                _sha256_value(selection.get(field), label=f"scene split {field}")
+            if any(type(selection.get(field)) is not int or selection[field] <= 0 for field in ("selected_record_count", "selected_token_count")):
+                raise ValueError("specialist v4 lineage has invalid scene split counts")
+            selection_canonical = hashlib.sha256(json.dumps(dict(selection), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+            if episode.get("scene_split_selection_sha256") != selection_canonical:
+                raise ValueError("specialist v4 lineage scene split selection hash does not match")
         candidate_parameters = manifest.get("expert_parameter_sha256")
         parent_parameters = parent_external.get("expert_parameter_sha256", parent_external.get("expert_genesis_sha256"))
         root_parameters = root_external.get("expert_parameter_sha256", root_external.get("expert_genesis_sha256"))
