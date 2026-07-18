@@ -185,6 +185,30 @@ Describe 'Invoke-CockpitWatchdogTick' {
         $rows[0].event | Should Be 'standdown'
         $rows[0].target | Should Be 'cockpit'
         $rows[0].owner | Should Be 'test-lane'
+        $rows[0].backoffState | Should Be 'clear'
+    }
+
+    It 'repeated planned-outage cockpit polls emit one bounded stand-down decision row' {
+        $now = [datetime]::Parse('2026-07-08T12:05:00Z').ToUniversalTime()
+        $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }
+        ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+        $marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'cockpit'
+            started = '2026-07-08T11:00:00Z'; expires = '2026-07-08T13:00:00Z'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+
+        $first = Invoke-CockpitWatchdogTick -Now $now -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath
+        $second = Invoke-CockpitWatchdogTick -Now $now.AddSeconds(15) -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath
+
+        $first.Action | Should Be 'standdown'
+        $second.Action | Should Be 'standdown'
+        @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json }).Count | Should Be 1
     }
 
     It 'expired planned-outage marker -> resumes duty (relaunch) AND logs a marker-overrun row naming the owner' {
@@ -323,7 +347,7 @@ Describe 'Invoke-ServerWatchdogTick' {
         Mock Test-ServerHealth { $script:healthCalls++; return $false }
         Mock Find-ServerProcess { return $null }
         $state.server.consecutiveFailures = 1
-        $state.server.lastHealthAt = '2026-07-08T12:00:00Z'
+        $state.server.lastHealthyAt = '2026-07-08T12:00:00Z'
         $now = [datetime]::Parse('2026-07-08T12:05:00Z').ToUniversalTime()
 
         $result = Invoke-ServerWatchdogTick -Now $now -State $state `
@@ -376,6 +400,48 @@ Describe 'Invoke-ServerWatchdogTick' {
         $rows[0].event | Should Be 'standdown'
         $rows[0].target | Should Be 'server'
         $rows[0].owner | Should Be 'probe-lane'
+        $rows[0].backoffState | Should Be 'clear'
+    }
+
+    It 'healthy then two failed server polls preserve last healthy age and bound stand-down-independent state' {
+        $healthyAt = [datetime]::Parse('2026-07-08T12:00:00Z').ToUniversalTime()
+        $failedAt = $healthyAt.AddMinutes(1)
+        $relaunchAt = $healthyAt.AddMinutes(5)
+        $script:healthCalls = 0
+        Mock Test-ServerHealth { $script:healthCalls++; return ($script:healthCalls -eq 1) }
+        Mock Find-ServerProcess { return $null }
+        $state.server.consecutiveFailures = 0
+
+        (Invoke-ServerWatchdogTick -Now $healthyAt -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath).Action | Should Be 'none'
+        (Invoke-ServerWatchdogTick -Now $failedAt -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath).Action | Should Be 'none'
+        $result = Invoke-ServerWatchdogTick -Now $relaunchAt -State $state `
+            -MarkerPath $markerPath -FailureThreshold 2 -ServerCmdline $cmdline -ServerExePath $exePath `
+            -RestartLogPath $restartLogPath -KillReceiptsPath $killReceiptsPath
+
+        $result.Action | Should Be 'relaunch'
+        $state.server.lastHealthyAt | Should Be $healthyAt.ToString('o')
+        $state.server.lastHealthCheckAt | Should Be $relaunchAt.ToString('o')
+        $row = (Get-Content -Path $restartLogPath -Raw) | ConvertFrom-Json
+        $row.healthAgeSec | Should Be 300
+    }
+}
+
+Describe 'Watchdog state migration' {
+    BeforeEach { $script:scratch = New-Scratch; $script:statePath = Join-Path $scratch 'watchdog-state.json' }
+    AfterEach { Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue }
+
+    It 'maps legacy lastHealthAt to lastHealthCheckAt without claiming a successful health' {
+        $legacy = @{ server = @{ deaths = @(); backoffUntil = $null; consecutiveFailures = 1; lastHealthAt = '2026-07-08T12:00:00Z' }; cockpit = @{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }; freshness = @{} }
+        ($legacy | ConvertTo-Json -Depth 8) | Set-Content -Path $statePath -Encoding utf8
+
+        $migrated = Read-WatchdogState -Path $statePath
+
+        $migrated.server.lastHealthCheckAt | Should Be '2026-07-08T12:00:00Z'
+        $migrated.server.lastHealthyAt | Should Be $null
     }
 }
 

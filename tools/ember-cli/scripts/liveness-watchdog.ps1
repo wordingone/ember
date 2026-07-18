@@ -118,10 +118,28 @@ function Write-RestartLogRow {
     ($Row | ConvertTo-Json -Compress) | Add-Content -Path $Path -Encoding utf8
 }
 
+function Get-StandDownDecisionKey {
+    param([Parameter(Mandatory)]$Marker)
+    return "$($Marker.target)|$($Marker.owner)|$($Marker.started)|$($Marker.expires)|$($Marker.kill_receipt_ref)"
+}
+
+function Write-StandDownDecision {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][hashtable]$Row,
+        [Parameter(Mandatory)]$TargetState,
+        [Parameter(Mandatory)][string]$DecisionKey
+    )
+    if ($TargetState.standdownDecisionKey -eq $DecisionKey) { return $false }
+    $TargetState.standdownDecisionKey = $DecisionKey
+    Write-RestartLogRow -Path $Path -Row $Row
+    return $true
+}
+
 function Get-DefaultWatchdogState {
     [PSCustomObject]@{
-        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }
-        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; lastHealthAt = $null }
+        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; standdownDecisionKey = $null }
+        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; lastHealthAt = $null; lastHealthyAt = $null; lastHealthCheckAt = $null; standdownDecisionKey = $null }
         freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
     }
 }
@@ -140,11 +158,21 @@ function Read-WatchdogState {
         $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
         foreach ($t in 'cockpit', 'server') {
             if (-not ($parsed.PSObject.Properties.Name -contains $t)) {
-                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; lastHealthAt = $null })
+                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; standdownDecisionKey = $null })
+            }
+            if (-not ($parsed.$t.PSObject.Properties.Name -contains 'standdownDecisionKey')) {
+                $parsed.$t | Add-Member -NotePropertyName 'standdownDecisionKey' -NotePropertyValue $null
             }
         }
         if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthAt')) {
             $parsed.server | Add-Member -NotePropertyName 'lastHealthAt' -NotePropertyValue $null
+        }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthyAt')) {
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthyAt' -NotePropertyValue $null
+        }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthCheckAt')) {
+            $legacyHealthAt = $parsed.server.lastHealthAt
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthCheckAt' -NotePropertyValue $legacyHealthAt
         }
         if (-not ($parsed.PSObject.Properties.Name -contains 'freshness')) {
             $parsed | Add-Member -NotePropertyName 'freshness' -NotePropertyValue ([PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null })
@@ -325,12 +353,16 @@ function Invoke-CockpitWatchdogTick {
     )
     $marker = Get-PlannedOutageMarker -Path $MarkerPath
     $coverage = Test-MarkerCoversTarget -Marker $marker -Target 'cockpit' -Now $Now
+    if (-not $coverage.StandDown) { $State.cockpit.standdownDecisionKey = $null }
     if ($coverage.StandDown) {
-        Write-RestartLogRow -Path $RestartLogPath -Row @{
+        $standdownBackoff = Get-BackoffState -TargetState $State.cockpit -Now $Now
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        Write-StandDownDecision -Path $RestartLogPath -TargetState $State.cockpit -DecisionKey $decisionKey -Row @{
             ts = $Now.ToString('o'); target = 'cockpit'; event = 'standdown'; decision = 'planned-outage'
             owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
-            backoffUntil = $State.cockpit.backoffUntil
-        }
+            backoffUntil = $standdownBackoff.Until
+            backoffState = $(if ($standdownBackoff.InBackoff) { 'active' } else { 'clear' })
+        } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
     if ($coverage.Expired) {
@@ -457,12 +489,16 @@ function Invoke-ServerWatchdogTick {
     )
     $marker = Get-PlannedOutageMarker -Path $MarkerPath
     $coverage = Test-MarkerCoversTarget -Marker $marker -Target 'server' -Now $Now
+    if (-not $coverage.StandDown) { $State.server.standdownDecisionKey = $null }
     if ($coverage.StandDown) {
-        Write-RestartLogRow -Path $RestartLogPath -Row @{
+        $standdownBackoff = Get-BackoffState -TargetState $State.server -Now $Now
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        Write-StandDownDecision -Path $RestartLogPath -TargetState $State.server -DecisionKey $decisionKey -Row @{
             ts = $Now.ToString('o'); target = 'server'; event = 'standdown'; decision = 'planned-outage'
             owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
-            backoffUntil = $State.server.backoffUntil
-        }
+            backoffUntil = $standdownBackoff.Until
+            backoffState = $(if ($standdownBackoff.InBackoff) { 'active' } else { 'clear' })
+        } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
     if ($coverage.Expired) {
@@ -477,18 +513,19 @@ function Invoke-ServerWatchdogTick {
         return [PSCustomObject]@{ Action = 'backoff'; Detail = "until=$($backoff.Until.ToString('o'))" }
     }
 
-    $lastHealthAt = $null
-    if ($State.server.lastHealthAt) {
+    $lastHealthyAt = $null
+    if ($State.server.lastHealthyAt) {
         try {
-            $lastHealthAt = [datetime]::Parse([string]$State.server.lastHealthAt, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+            $lastHealthyAt = [datetime]::Parse([string]$State.server.lastHealthyAt, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
         } catch {
-            $lastHealthAt = $null
+            $lastHealthyAt = $null
         }
     }
-    $healthAgeSec = if ($null -ne $lastHealthAt) { [int][math]::Max(0, [math]::Round(($Now - $lastHealthAt).TotalSeconds)) } else { $null }
-    $State.server.lastHealthAt = $Now.ToString('o')
+    $healthAgeSec = if ($null -ne $lastHealthyAt) { [int][math]::Max(0, [math]::Round(($Now - $lastHealthyAt).TotalSeconds)) } else { $null }
     $healthy = Test-ServerHealth -Url $HealthUrl
+    $State.server.lastHealthCheckAt = $Now.ToString('o')
     if ($healthy) {
+        $State.server.lastHealthyAt = $Now.ToString('o')
         $State.server.consecutiveFailures = 0
         return [PSCustomObject]@{ Action = 'none'; Detail = 'healthy' }
     }
