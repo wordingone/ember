@@ -80,6 +80,7 @@ import {
   getActivityFeedState,
   startActivityFeed,
 }                                        from "../services/activity-feed.ts";
+import { advanceActivityTranscript }      from "../services/activity-transcript-window.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
 import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
 import { useOutageBanner }               from "../services/outage-banner-poller.ts";
@@ -693,7 +694,7 @@ export function ReplScreen({
   // are deduped by a content key (ts+source+text), not by array index, so the engine's own ring
   // buffer (which shifts old entries once it hits its cap) can never cause a re-render of an
   // already-seen event or the silent loss of a genuinely new one.
-  const seenActivityKeysRef = useRef<Set<string>>(new Set());
+  const activityCursorRef = useRef(0);
 
   useEffect(() => {
     const handle = startActivityFeed();
@@ -702,24 +703,13 @@ export function ReplScreen({
 
   useInterval(() => {
     const next = getActivityFeedState();
-    const fresh = next.recentLines.filter((line) => {
-      const key = `${line.ts}|${line.source}|${line.text}`;
-      if (seenActivityKeysRef.current.has(key)) return false;
-      seenActivityKeysRef.current.add(key);
-      return true;
+    const latest = next.recentLines[next.recentLines.length - 1]?.sequence ?? 0;
+    if (latest <= activityCursorRef.current) return;
+    setMessages((prev) => {
+      const advanced = advanceActivityTranscript(prev, activityCursorRef.current, next.recentLines);
+      activityCursorRef.current = advanced.cursor;
+      return advanced.messages;
     });
-    if (fresh.length === 0) return;
-    setMessages((prev) => [
-      ...prev,
-      ...fresh.map((line) => ({
-        id:     `activity-${crypto.randomUUID()}`,
-        type:   "activity",
-        ts:     line.ts,
-        source: line.source,
-        text:   line.text,
-        path:   line.path,
-      })),
-    ]);
   }, 500);
 
   // Keep messagesRef in sync with React state for use inside async callbacks.
