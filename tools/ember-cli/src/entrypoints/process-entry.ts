@@ -24,6 +24,7 @@ import {
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
 import { ensureOwnedServer } from "./owned-server-supervisor.ts";
+import { handshakeConfiguredEmberd } from "../services/emberd-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
@@ -668,6 +669,7 @@ export interface MainOptions {
   loadOwnedDevelopmentIdentityFn?: typeof loadOwnedDevelopmentIdentity;
   verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
   ensureOwnedServerFn?: typeof ensureOwnedServer;
+  handshakeEmberdFn?: typeof handshakeConfiguredEmberd;
   initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
@@ -799,6 +801,14 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   if (didSeatGatedFastPath) return;
 
   if (seatDecision.ownedIdentity) {
+    try {
+      await (opts.handshakeEmberdFn ?? handshakeConfiguredEmberd)();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: emberd handshake failed (" + message + ")\n");
+      doExitMain(1);
+      return;
+    }
     try {
       const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
       const ensure = opts.ensureOwnedServerFn ?? ((identity) =>
