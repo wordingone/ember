@@ -356,7 +356,7 @@ export function formatGoalReceiptLine(row: GoalReceiptRow): string | null {
 // ---------------------------------------------------------------------------
 
 export interface ActivityFeedState {
-  recentLines: ActivityFeedLine[];
+  recentLines: Array<ActivityFeedLine & { sequence: number }>;
 }
 
 export interface ActivityFeedDeps {
@@ -443,6 +443,7 @@ export interface ActivityFeedHandle {
 let _state: ActivityFeedState = { recentLines: [] };
 let _stopFns: Array<() => void> = [];
 
+let _nextSequence = 0;
 /** Returns a shallow copy safe to read at any time; last-polled snapshot. */
 export function getActivityFeedState(): ActivityFeedState {
   return _state;
@@ -580,7 +581,7 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       text: event.text,
       path: event.path,
     };
-    _state.recentLines.push(line);
+    _state.recentLines.push({ ...line, sequence: ++_nextSequence });
     if (_state.recentLines.length > RING_BUFFER_CAP) _state.recentLines.shift();
 
     // The ledger is the machine-checkable half — append-only, written ONLY for a line that was
