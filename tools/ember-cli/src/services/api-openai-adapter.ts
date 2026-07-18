@@ -33,9 +33,12 @@ export const PREFILL_OVERFLOW_FRACTION = 0.95;
  * value (3.5) was a guess and measurably too optimistic for the escaped-JSON-
  * heavy tool_result strings ember actually sends -- it undercounted real token
  * usage enough that a payload the estimator judged safe still 400'd against
- * the server. Measured directly against the production model's own real
- * llama-server /tokenize endpoint (Qwen3.6-27B-Q4_K_M, the exact checkpoint
- * the cockpit serves turns through) on two representative samples: a 6590-char
+ * the server. Measured directly against a llama-server /tokenize endpoint
+ * serving the checkpoint under test at calibration time -- this adapter
+ * serves whatever model the seat-authorized config names (never a
+ * hardcoded cockpit-identity claim), so this constant is a calibration
+ * snapshot against that one checkpoint, not a guarantee re-verified per
+ * served model. Two representative samples from that run: a 6590-char
  * escaped-JSON tool_result (nested object, `\n`/`\"`/`\\` escapes, code lines,
  * file paths) tokenized at 2424 tokens = 2.72 chars/token; an 8023-char
  * JSON-escaped markdown-prose sample tokenized at 1512 tokens = 5.31

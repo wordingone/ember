@@ -6,7 +6,6 @@
 
 import { readdir, readFile, stat } from 'fs/promises';
 import { join } from 'path';
-import type { SelectedModelContract } from './entrypoints/model-seat';
 
 // ---- Constants ----
 
@@ -18,6 +17,9 @@ export const PER_FILE_SIZE_LIMIT = 25 * 1024; // 25 KB
 
 /** Maximum total byte size of the assembled memory block. */
 export const TOTAL_BLOCK_LIMIT = 100 * 1024; // 100 KB
+
+/** Model used for semantic relevance selection. */
+export const SELECT_MODEL = 'qwen-3.6';
 
 // ---- Types ----
 
@@ -330,26 +332,20 @@ export function findRelevantMemories(
 /**
  * Uses the provided model function to select the most relevant entries for `query`.
  *
- * - Consumes the currently selected model contract (see
- *   `entrypoints/model-seat.ts::selectedModelContract`) — NOT a bare
- *   modelName string, so a caller can never inject an arbitrary model
- *   identity without it being seat-authorized.
  * - Returns entries in model-returned order (with unselected entries appended)
  * - Falls back to all entries on model error
- * - Returns all entries when `callModel` or `modelContract` is not provided
- *   (e.g. OFFLINE or a refused seat, which never produce a contract at all)
+ * - Returns all entries when `callModel` is not provided
  */
 export async function selectRelevantMemories(
   entries: MemoryFileEntry[],
   query: string,
   callModel?: SelectModelFn,
-  modelContract?: SelectedModelContract,
 ): Promise<MemoryFileEntry[]> {
-  if (!callModel || !modelContract || entries.length === 0) return entries;
+  if (!callModel || entries.length === 0) return entries;
 
   try {
     const descriptions = entries.map((e) => ({ name: e.name, description: e.description }));
-    const selected = await callModel({ model: modelContract.modelName, descriptions });
+    const selected = await callModel({ model: SELECT_MODEL, descriptions });
 
     // Build a map for fast lookup
     const byName = new Map(entries.map((e) => [e.name, e]));
@@ -382,13 +378,6 @@ export interface LoadMemoryPromptOpts {
   dir: string;
   query?: string;
   callModel?: SelectModelFn;
-  /** Fix #51 P1 repair (3): the seat-authorized identity + capability contract
-   *  (see `entrypoints/model-seat.ts::selectedModelContract`), threaded through
-   *  to `selectRelevantMemories` so semantic selection is reachable only via
-   *  the same seat-authorized identity every other consumer uses -- never a
-   *  bare modelName string. Omitted/undefined never executes selection
-   *  (falls back to returning all entries), matching `selectRelevantMemories`. */
-  modelContract?: SelectedModelContract;
 }
 
 /**
@@ -405,7 +394,7 @@ export async function loadMemoryPrompt(opts: LoadMemoryPromptOpts): Promise<stri
 
   const ranked =
     opts.query && opts.callModel
-      ? await selectRelevantMemories(entries, opts.query, opts.callModel, opts.modelContract)
+      ? await selectRelevantMemories(entries, opts.query, opts.callModel)
       : entries;
 
   // Drop trailing entries until the assembled block fits within TOTAL_BLOCK_LIMIT

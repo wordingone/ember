@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // /ultraplan — acceptance test suite
 // Spec: specs/commands/ultraplan.md
 
@@ -109,6 +113,17 @@ describe("/ultraplan", () => {
       }));
       await cmd.execute("Build", mockContext);
       expect(usedModel).toBe(ULTRAPLAN_DEFAULT_MODEL);
+    });
+
+    it("ULTRAPLAN_DEFAULT_MODEL is labeled REFERENCE_ONLY (Fix #51 fiction purge), never a bare borrowed model-name literal", () => {
+      // Prior to the #51 fiction-purge repair this was the bare literal
+      // 'qwen3-5' -- an unverified claim about which model actually serves
+      // ultraplan sessions. It must now go through the same
+      // `referenceSeatModelName` labeling every other reference-only
+      // identity in the codebase uses, so it can never be read as a
+      // verified served identity.
+      expect(ULTRAPLAN_DEFAULT_MODEL.startsWith("REFERENCE_ONLY: ")).toBe(true);
+      expect(ULTRAPLAN_DEFAULT_MODEL).not.toBe("qwen3-5");
     });
   });
 

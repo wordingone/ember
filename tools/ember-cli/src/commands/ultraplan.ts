@@ -1,12 +1,25 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // commands/ultraplan.ts — /ultraplan slash command for launching autonomous planning sessions.
 
 import type { CommandContext } from '../types/command-types.ts';
+import { referenceSeatModelName } from '../entrypoints/model-seat.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-export const ULTRAPLAN_DEFAULT_MODEL = 'qwen3-5';
+/**
+ * Fix #51 fiction purge: the prior value was a bare 'qwen3-5' literal --
+ * an unverified claim about which model actually serves ultraplan sessions
+ * when no feature-flag config supplies one. Labeled through the same
+ * `referenceSeatModelName` convention every other borrowed/unverified
+ * identity in the codebase uses, so it reads as a reference default, never
+ * a verified served identity.
+ */
+export const ULTRAPLAN_DEFAULT_MODEL = referenceSeatModelName('qwen3-5');
 
 // ---------------------------------------------------------------------------
 // Types

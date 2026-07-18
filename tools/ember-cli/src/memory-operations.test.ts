@@ -19,22 +19,10 @@ import {
   PER_FILE_LINE_LIMIT,
   PER_FILE_SIZE_LIMIT,
   TOTAL_BLOCK_LIMIT,
+  SELECT_MODEL,
   type MemoryFileEntry,
   type SelectModelFn,
 } from './memory-operations';
-import type { SelectedModelContract } from './entrypoints/model-seat';
-
-const TEST_MODEL_NAME = 'ember-owned:' + 'a'.repeat(64);
-
-// A seat-authorized contract, as `selectedModelContract` would produce for
-// an OWNED_ADMITTED seat — Fix #51 P1 repair (3): memory-operations consumes
-// the full contract, never a bare modelName string.
-const TEST_MODEL_CONTRACT: SelectedModelContract = {
-  seat: 'OWNED_ADMITTED',
-  modelName: TEST_MODEL_NAME,
-  modelConfigSha256: 'd'.repeat(64),
-  structuredOutputs: false,
-};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -242,8 +230,8 @@ describe('AC3: per-file size truncation at 25 KB', () => {
 // AC4: selectRelevantMemories uses Sonnet, not Haiku
 // ---------------------------------------------------------------------------
 
-describe('AC4: selectRelevantMemories consumes the selected model contract identity', () => {
-  test('passes the caller-supplied modelContract identity to the callModel function, never a hardcoded literal', async () => {
+describe('AC4: selectRelevantMemories uses Sonnet model', () => {
+  test('passes SELECT_MODEL (Sonnet) to the callModel function', async () => {
     let capturedModel: string | undefined;
     const mockCallModel: SelectModelFn = async ({ model, descriptions }) => {
       capturedModel = model;
@@ -255,8 +243,12 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
       makeEntry({ name: 'b', description: 'Banana info' }),
     ];
 
-    await selectRelevantMemories(entries, 'fruit', mockCallModel, TEST_MODEL_CONTRACT);
-    expect(capturedModel).toBe(TEST_MODEL_NAME);
+    await selectRelevantMemories(entries, 'fruit', mockCallModel);
+    expect(capturedModel).toBe(SELECT_MODEL);
+  });
+
+  test('SELECT_MODEL constant is qwen-3.6', () => {
+    expect(SELECT_MODEL).toBe('qwen-3.6');
   });
 
   test('returns all entries on API error (fallback)', async () => {
@@ -265,7 +257,7 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
       makeEntry({ name: 'b', description: 'b' }),
     ];
     const throwingModel: SelectModelFn = async () => { throw new Error('API error'); };
-    const result = await selectRelevantMemories(entries, 'query', throwingModel, TEST_MODEL_CONTRACT);
+    const result = await selectRelevantMemories(entries, 'query', throwingModel);
     expect(result).toHaveLength(2);
   });
 
@@ -276,7 +268,7 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
       makeEntry({ name: 'c', description: 'Gamma' }),
     ];
     const mockCallModel: SelectModelFn = async () => ['c', 'a', 'b'];
-    const result = await selectRelevantMemories(entries, 'query', mockCallModel, TEST_MODEL_CONTRACT);
+    const result = await selectRelevantMemories(entries, 'query', mockCallModel);
     expect(result[0]!.name).toBe('c');
     expect(result[1]!.name).toBe('a');
     expect(result[2]!.name).toBe('b');
@@ -285,14 +277,6 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
   test('returns all entries when no callModel provided', async () => {
     const entries = [makeEntry({ name: 'a' }), makeEntry({ name: 'b' })];
     const result = await selectRelevantMemories(entries, 'query');
-    expect(result).toHaveLength(2);
-  });
-
-  test('returns all entries when callModel is provided but no modelContract is selected (OFFLINE/refused seats never produce a callable contract)', async () => {
-    // Fix #51 P1 repair (5) negative: consumers must handle undefined.
-    const mockCallModel: SelectModelFn = async ({ descriptions }) => descriptions.map((d) => d.name);
-    const entries = [makeEntry({ name: 'a' }), makeEntry({ name: 'b' })];
-    const result = await selectRelevantMemories(entries, 'query', mockCallModel, undefined);
     expect(result).toHaveLength(2);
   });
 });
@@ -527,92 +511,5 @@ describe('loadMemoryPrompt: top-level integration', () => {
     expect(result).toContain('b');
     // 'a' is appended as a fallback since all entries are included
     // (selectRelevantMemories appends unranked entries)
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Fix #51 P1 repair (3)/(PR #948 repair): loadMemoryPrompt's PRODUCTION path
-// threads the caller's modelContract into selectRelevantMemories, and
-// semantic selection is EXECUTION-BINDING (an observable effect — the model
-// call actually happens and its ordering is honored), not just "the result
-// still contains everything" (which the untouched-entries fallback also
-// satisfies and therefore proves nothing).
-// ---------------------------------------------------------------------------
-
-describe('loadMemoryPrompt threads modelContract into selectRelevantMemories (execution-binding)', () => {
-  test('with query + callModel + modelContract, callModel is invoked exactly once and its ordering is honored', async () => {
-    const dir = makeTempDir('load-select-contract');
-    writeFileSync(
-      join(dir, 'a.md'),
-      makeValidFileContent({ name: 'a', description: 'Alpha entry', body: 'Body a.' }),
-      'utf-8',
-    );
-    writeFileSync(
-      join(dir, 'b.md'),
-      makeValidFileContent({ name: 'b', description: 'Beta entry', body: 'Body b.' }),
-      'utf-8',
-    );
-
-    let callCount = 0;
-    let receivedModel: string | undefined;
-    const mockCallModel: SelectModelFn = async ({ model, descriptions }) => {
-      callCount += 1;
-      receivedModel = model;
-      // Model ranks 'b' ahead of 'a' -- an observable ordering effect that
-      // can only appear if selectRelevantMemories actually ran.
-      return descriptions.filter((d) => d.name === 'b').map((d) => d.name);
-    };
-
-    const result = await loadMemoryPrompt({
-      dir,
-      query: 'beta',
-      callModel: mockCallModel,
-      modelContract: TEST_MODEL_CONTRACT,
-    });
-
-    expect(callCount).toBe(1);
-    expect(receivedModel).toBe(TEST_MODEL_NAME);
-    // 'b' was model-ranked first, so its entry must appear before 'a''s in
-    // the assembled block -- proves the model's selection order was
-    // honored, not merely that both entries are present. Uses the unique
-    // description text (not the bare single-char name) so the position
-    // check can't be fooled by an incidental 'a'/'b' character elsewhere.
-    expect(result.indexOf('Beta entry')).toBeLessThan(result.indexOf('Alpha entry'));
-  });
-
-  test('NEGATIVE: without modelContract, callModel is never invoked even though it is provided (no silent execution)', async () => {
-    const dir = makeTempDir('load-select-no-contract');
-    writeFileSync(
-      join(dir, 'a.md'),
-      makeValidFileContent({ name: 'a', description: 'Alpha entry', body: 'Body a.' }),
-      'utf-8',
-    );
-    writeFileSync(
-      join(dir, 'b.md'),
-      makeValidFileContent({ name: 'b', description: 'Beta entry', body: 'Body b.' }),
-      'utf-8',
-    );
-
-    let callCount = 0;
-    const mockCallModel: SelectModelFn = async ({ descriptions }) => {
-      callCount += 1;
-      // If this ran, it would rank 'b' first -- the opposite of scan order --
-      // so a leaked call would flip the ordering assertion below.
-      return descriptions.filter((d) => d.name === 'b').map((d) => d.name);
-    };
-
-    const scanned = await scanMemoryFiles(dir);
-    const scannedFirst = scanned[0]!.description;
-    const scannedSecond = scanned[1]!.description;
-
-    const result = await loadMemoryPrompt({ dir, query: 'beta', callModel: mockCallModel });
-
-    expect(callCount).toBe(0);
-    // Order must match the raw scan order exactly -- never the model's
-    // ranking (which would put 'Beta entry' first) -- proving the model
-    // was never consulted, not just that both entries are present
-    // somewhere in the block. Uses the unique description text so the
-    // position check can't be fooled by an incidental 'a'/'b' character.
-    expect(result.indexOf(scannedFirst)).toBeLessThan(result.indexOf(scannedSecond));
   });
 });
