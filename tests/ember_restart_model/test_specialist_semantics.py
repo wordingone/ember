@@ -14,7 +14,7 @@ from tokenizers import Tokenizer, models, pre_tokenizers
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
-from specialist_semantics import IMAGE_BYTES, PALETTE, image_caption, verify_image_supervision
+from specialist_semantics import IMAGE_BYTES, PALETTE, spatial_relation_caption, structural_scene_sha256, verify_image_supervision
 
 
 def _patch(rectangles: list[tuple[str, int, int]]) -> bytes:
@@ -29,23 +29,27 @@ def _patch(rectangles: list[tuple[str, int, int]]) -> bytes:
 
 
 class SpecialistSemanticTests(unittest.TestCase):
-    def test_raw_image_components_recompute_frozen_tokenizer_target(self) -> None:
-        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "image": 1, "scene": 2, "has": 3, "red": 4, "green": 5, "blue": 6, "squares": 7, "0": 8, "1": 9, "2": 10, "3": 11}, unk_token="<unk>"))
+    def test_raw_image_relation_recomputes_frozen_tokenizer_target_and_rejects_raw_swap(self) -> None:
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "red": 1, "is": 2, "left": 3, "of": 4, "green": 5, "right": 6, "above": 7, "below": 8}, unk_token="<unk>"))
         tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
-        patches = [_patch([("red", 2, 2)]), _patch([("red", 10, 10), ("blue", 20, 20)]), _patch([("green", 30, 30)]), _patch([])]
-        caption = image_caption(patches)
+        patches = [_patch([("red", 10, 10)]), _patch([("green", 10, 10)]), _patch([]), _patch([])]
+        coordinates = [[0, 0], [1, 0], [0, 1], [1, 1]]
+        caption = spatial_relation_caption(patches, coordinates)
         encoded = list(tokenizer.encode(caption).ids)
         record = {
             "token_ids": [31_998, 31_998, 31_998, 31_998, *encoded[:-1]],
             "target_ids": [31_998, 31_998, 31_998, *encoded],
             "target_text": caption,
-            "capability_evidence": {"image": {"caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "derivation": "raw_image_property_execution"}},
+            "image_coordinates": coordinates,
+            "capability_evidence": {"image": {
+                "target_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(),
+                "scene_sha256": structural_scene_sha256(patches, coordinates),
+                "derivation": "raw_image_spatial_relation_execution",
+            }},
         }
         verify_image_supervision(record, patches=patches, tokenizer=tokenizer, image_marker=31_998)
-        record["target_text"] = "fabricated label"
         with self.assertRaisesRegex(ValueError, "locally derived"):
-            verify_image_supervision(record, patches=patches, tokenizer=tokenizer, image_marker=31_998)
-
+            verify_image_supervision(record, patches=[patches[1], patches[0], patches[2], patches[3]], tokenizer=tokenizer, image_marker=31_998)
 
     def test_raw_audio_frames_require_locally_derived_signal_caption(self) -> None:
         from specialist_semantics import audio_caption, verify_audio_supervision

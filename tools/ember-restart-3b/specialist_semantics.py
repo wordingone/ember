@@ -5,8 +5,9 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
-from collections import deque
+import json
 import struct
 from typing import Mapping, Sequence
 
@@ -21,61 +22,82 @@ PALETTE = {
 }
 
 
-def _component_count(patch: bytes, rgb: tuple[int, int, int]) -> int:
-    if len(patch) != IMAGE_BYTES:
-        raise ValueError("image patch does not have the authorized 48x48x3 shape")
-    visited: set[int] = set()
-    count = 0
-    for index in range(IMAGE_WIDTH * IMAGE_HEIGHT):
-        if index in visited:
-            continue
-        offset = index * IMAGE_CHANNELS
-        if tuple(patch[offset : offset + IMAGE_CHANNELS]) != rgb:
-            continue
-        count += 1
-        queue = deque([index])
-        visited.add(index)
-        while queue:
-            current = queue.popleft()
-            x, y = current % IMAGE_WIDTH, current // IMAGE_WIDTH
-            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-                candidate = ny * IMAGE_WIDTH + nx
-                if nx < 0 or nx >= IMAGE_WIDTH or ny < 0 or ny >= IMAGE_HEIGHT or candidate in visited:
-                    continue
-                candidate_offset = candidate * IMAGE_CHANNELS
-                if tuple(patch[candidate_offset : candidate_offset + IMAGE_CHANNELS]) == rgb:
-                    visited.add(candidate)
-                    queue.append(candidate)
-    return count
+def _coordinate_pair(value: object) -> tuple[int, int]:
+    if not isinstance(value, (list, tuple)) or len(value) != 2 or any(not isinstance(axis, int) for axis in value):
+        raise ValueError("image coordinates must be integer [x, y] pairs")
+    return int(value[0]), int(value[1])
 
 
-def image_caption(patches: Sequence[bytes]) -> str:
-    if not patches:
-        raise ValueError("image supervision requires at least one raw patch")
-    counts = {name: sum(_component_count(patch, rgb) for patch in patches) for name, rgb in PALETTE.items()}
-    return "image scene has {red} red squares {green} green squares {blue} blue squares".format(**counts)
+def _color_center(patches: Sequence[bytes], coordinates: Sequence[object], rgb: tuple[int, int, int]) -> tuple[int, int]:
+    if len(patches) != len(coordinates) or not patches:
+        raise ValueError("spatial image supervision requires one coordinate per raw patch")
+    points: list[tuple[int, int]] = []
+    for patch, coordinate in zip(patches, coordinates):
+        if len(patch) != IMAGE_BYTES:
+            raise ValueError("image patch does not have the authorized 48x48x3 shape")
+        patch_x, patch_y = _coordinate_pair(coordinate)
+        for pixel in range(IMAGE_WIDTH * IMAGE_HEIGHT):
+            offset = pixel * IMAGE_CHANNELS
+            if tuple(patch[offset : offset + IMAGE_CHANNELS]) == rgb:
+                points.append((patch_x * IMAGE_WIDTH + pixel % IMAGE_WIDTH, patch_y * IMAGE_HEIGHT + pixel // IMAGE_WIDTH))
+    if len(points) != 16:
+        raise ValueError("spatial image scene must contain exactly one 4x4 object of each queried color")
+    sum_x = sum(point[0] for point in points)
+    sum_y = sum(point[1] for point in points)
+    return sum_x, sum_y
+
+
+def spatial_relation_caption(patches: Sequence[bytes], coordinates: Sequence[object]) -> str:
+    """Derive the red-versus-green relation from raw patch content and explicit 2D coordinates."""
+
+    red_x, red_y = _color_center(patches, coordinates, PALETTE["red"])
+    green_x, green_y = _color_center(patches, coordinates, PALETTE["green"])
+    if red_y == green_y and red_x != green_x:
+        relation = "left" if red_x < green_x else "right"
+    elif red_x == green_x and red_y != green_y:
+        relation = "above" if red_y < green_y else "below"
+    else:
+        raise ValueError("spatial image scene is not an unambiguous axial relation")
+    return f"red is {relation} of green" if relation in {"left", "right"} else f"red is {relation} green"
+
+
+def structural_scene_sha256(patches: Sequence[bytes], coordinates: Sequence[object]) -> str:
+    """Hash the canonical coordinate-to-patch mapping for split/dedup custody."""
+
+    if len(patches) != len(coordinates) or not patches:
+        raise ValueError("structural scene hash requires one coordinate per patch")
+    rows = []
+    for patch, coordinate in zip(patches, coordinates):
+        if len(patch) != IMAGE_BYTES:
+            raise ValueError("image patch does not have the authorized 48x48x3 shape")
+        x, y = _coordinate_pair(coordinate)
+        rows.append({"coordinate": [x, y], "patch_sha256": hashlib.sha256(patch).hexdigest()})
+    payload = json.dumps(sorted(rows, key=lambda row: tuple(row["coordinate"])), separators=(",", ":"), sort_keys=True).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def verify_image_supervision(
     record: Mapping[str, object], *, patches: Sequence[bytes], tokenizer: object, image_marker: int,
 ) -> None:
-    """Prove target IDs encode the caption recomputed from exact raw RGB patches."""
+    """Prove target IDs encode a relation recomputed from exact raw RGB patches and 2D positions."""
 
-    caption = image_caption(patches)
-    evidence = record.get("capability_evidence")
-    expected_evidence = {
-        "image": {
-            "caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(),
-            "derivation": "raw_image_property_execution",
-        }
-    }
-    if evidence != expected_evidence or record.get("target_text") != caption:
-        raise ValueError("image semantic target is not the locally derived raw-scene caption")
+    coordinates = record.get("image_coordinates")
+    if not isinstance(coordinates, list):
+        raise ValueError("image semantic record lacks explicit image coordinates")
+    caption = spatial_relation_caption(patches, coordinates)
+    expected_evidence = {"image": {
+        "target_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(),
+        "scene_sha256": structural_scene_sha256(patches, coordinates),
+        "derivation": "raw_image_spatial_relation_execution",
+    }}
+    if record.get("capability_evidence") != expected_evidence or record.get("target_text") != caption:
+        raise ValueError("image semantic target is not the locally derived raw-spatial scene relation")
     encoded = list(tokenizer.encode(caption).ids)
     token_ids = record.get("token_ids")
     target_ids = record.get("target_ids")
     if len(encoded) < 2 or target_ids != [*[image_marker] * (len(patches) - 1), *encoded] or token_ids != [*[image_marker] * len(patches), *encoded[:-1]]:
-        raise ValueError("image semantic target tokenization does not bind the frozen tokenizer and raw scene")
+        raise ValueError("image semantic target tokenization does not bind the frozen tokenizer and raw spatial scene")
+
 
 def _audio_frame_polarity(frame: bytes) -> str:
     if len(frame) != 640 * 2:

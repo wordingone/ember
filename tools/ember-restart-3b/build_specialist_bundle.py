@@ -30,7 +30,7 @@ GENERATOR_NAMES = {
     "tool": "build_owned_reasoning_tool_trajectories.py",
 }
 DERIVATIONS = {
-    "image": "raw_image_property_execution",
+    "image": "raw_image_spatial_relation_execution",
     "audio": "raw_audio_signal_execution",
     "reasoning": "local_answer_execution",
     "tool": "typed_tool_execution",

@@ -68,7 +68,7 @@ def _replay_bound_specialist_records(
         raise ValueError("specialist records do not match the bound generator replay")
 
 SPECIALIST_MINIMUMS = {
-    "image": {"records": 4096, "tokens": 24576, "derivation": "raw_image_property_execution"},
+    "image": {"records": 4096, "tokens": 24576, "derivation": "raw_image_spatial_relation_execution"},
     "audio": {"records": 4096, "tokens": 24576, "derivation": "raw_audio_signal_execution"},
     "reasoning": {"records": 4096, "tokens": 24576, "derivation": "local_answer_execution"},
     "tool": {"records": 4096, "tokens": 24576, "derivation": "typed_tool_execution"},

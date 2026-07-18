@@ -131,6 +131,22 @@ class VerticalSliceTests(unittest.TestCase):
         batch = decode_owned_batch(record, self.config, device=torch.device("cpu"))
         self.assertEqual(batch["image_patches"][0, 0, 0, 0].tolist(), [0.0, 255.0, 0.0])
 
+    def test_sample_and_generation_metadata_cannot_enter_decoder_inputs(self) -> None:
+        """Corpus bookkeeping must not become a decoder feature or target-side shortcut."""
+        first = self._record("vision")
+        second = copy.deepcopy(first)
+        second.update({"sample_id": "different-scene-id", "generation_index": 987654321, "source_row": 17})
+        first.update({"generation_index": 0, "source_row": 0})
+        left = decode_owned_batch(first, self.config, device=torch.device("cpu"))
+        right = decode_owned_batch(second, self.config, device=torch.device("cpu"))
+        self.assertEqual(set(left), {"input_ids", "target_ids", "image_patches", "audio_frames", "image_coordinates", "spans", "active_expert"})
+        for key in ("input_ids", "target_ids", "image_patches", "audio_frames", "image_coordinates", "active_expert"):
+            if isinstance(left[key], torch.Tensor):
+                self.assertTrue(torch.equal(left[key], right[key]), key)
+            else:
+                self.assertEqual(left[key], right[key], key)
+        self.assertEqual(left["spans"], right["spans"])
+
 
 if __name__ == "__main__":
     unittest.main()
