@@ -416,6 +416,54 @@ class SpecialistStreamTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "family roots"):
                 self._open_bound(manifest_path)
 
+    def test_open_rejects_shadowed_runtime_generator_callable(self) -> None:
+        from specialist_stream import build_stream_manifest
+        import specialist_stream
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            manifest_path = root / "stream.json"
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+
+            def shadowed_record_at(*_args: object, **_kwargs: object) -> dict[str, object]:
+                return {}
+
+            with mock.patch.object(specialist_stream, "vision_record_at", shadowed_record_at):
+                with self.assertRaisesRegex(ValueError, "runtime generator role"):
+                    self._open_bound(manifest_path)
+
+    def test_open_rejects_shadowed_runtime_verifier_callable(self) -> None:
+        from specialist_stream import build_stream_manifest
+        import specialist_stream
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            manifest_path = root / "stream.json"
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+
+            def shadowed_verifier(*_args: object, **_kwargs: object) -> None:
+                return None
+
+            with mock.patch.object(specialist_stream, "verify_image_supervision", shadowed_verifier):
+                with self.assertRaisesRegex(ValueError, "runtime verifier role"):
+                    self._open_bound(manifest_path)
+
     def test_open_rejects_legacy_schema_alias(self) -> None:
         from specialist_stream import build_stream_manifest
 

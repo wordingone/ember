@@ -87,6 +87,27 @@ def _canonical_path(repo_root: Path, candidate: Path) -> tuple[Path, str]:
     return resolved, relative
 
 
+def _require_runtime_callable_origins(repo_root: Path) -> None:
+    """Reject import-path shadowing before trusting bound generator bytes."""
+    callables = (
+        ("generator", "image", vision_record_at, _GENERATOR_SOURCES["image"]),
+        ("generator", "audio", audio_record_at, _GENERATOR_SOURCES["audio"]),
+        ("generator", "reasoning", trajectory_record_at, _GENERATOR_SOURCES["reasoning_tool"]),
+        ("generator", "tool", trajectory_record_at, _GENERATOR_SOURCES["reasoning_tool"]),
+        ("verifier", "image", verify_image_supervision, _VERIFIER_SOURCES["semantics"]),
+        ("verifier", "audio", verify_audio_supervision, _VERIFIER_SOURCES["semantics"]),
+        ("verifier", "reasoning", verify_capability_record, _VERIFIER_SOURCES["capability"]),
+        ("verifier", "tool", verify_capability_record, _VERIFIER_SOURCES["capability"]),
+    )
+    for kind, _capability, function, expected_relative in callables:
+        code = getattr(function, "__code__", None)
+        if code is None:
+            raise ValueError(f"invalid runtime {kind} callable")
+        _resolved, canonical = _canonical_path(repo_root, Path(code.co_filename))
+        if canonical != expected_relative:
+            raise ValueError(f"runtime {kind} role does not match production authority")
+
+
 def _source_binding(repo_root: Path, relative: str) -> dict[str, str]:
     path, canonical = _canonical_path(repo_root, repo_root / relative)
     return {"path": canonical, "sha256": _sha256(path.read_bytes())}
@@ -457,6 +478,7 @@ def open_specialist_stream(
     if manifest.get("corpus_root_sha256") != expected_corpus_root_sha256:
         raise ValueError("stream corpus root does not match caller authority")
     _require_sha256(manifest.get("corpus_root_sha256"), "stream corpus root")
+    _require_runtime_callable_origins(repo_root)
     tokenizer_bytes = _require_binding(repo_root, manifest.get("tokenizer"), "tokenizer")
     _require_binding(repo_root, manifest.get("model_config"), "model config")
     sources = manifest.get("generator_sources")
