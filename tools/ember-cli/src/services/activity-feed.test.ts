@@ -27,6 +27,12 @@ import {
   getActivityFeedState,
   RECEIPT_RETRY_DELAY_MS,
   MAX_TAIL_LINES_PER_TICK,
+  BoundedSet,
+  MAX_TRACKED_PATHS,
+  MAX_GOAL_TAIL_STATES,
+  boundRecordKeys,
+  setBoundedMapEntry,
+  createSingleFlightRunner,
   type ActivityFeedHandle,
   type WatchdogRow,
 } from "./activity-feed.ts";
@@ -36,6 +42,54 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+
+describe("issue #756 bounded activity-feed bookkeeping", () => {
+  it("declares the production bookkeeping capacities", () => {
+    expect(MAX_TRACKED_PATHS).toBe(5000);
+    expect(MAX_GOAL_TAIL_STATES).toBe(50);
+  });
+
+  it("evicts oldest dedupe keys while retaining the newest bounded window", () => {
+    const keys = new BoundedSet<string>(2);
+    keys.add("one");
+    keys.add("two");
+    keys.add("three");
+
+    expect(keys.size).toBe(2);
+    expect(keys.has("one")).toBe(false);
+    expect(keys.has("two")).toBe(true);
+    expect(keys.has("three")).toBe(true);
+  });
+
+  it("bounds durable watermark and goal-tail maps by oldest insertion", () => {
+    const watermark: Record<string, unknown> = { one: 1, two: 2, three: 3 };
+    boundRecordKeys(watermark, 2);
+    expect(watermark).toEqual({ two: 2, three: 3 });
+
+    const tails = new Map<string, number>();
+    setBoundedMapEntry(tails, "one", 1, 2);
+    setBoundedMapEntry(tails, "two", 2, 2);
+    setBoundedMapEntry(tails, "three", 3, 2);
+    expect([...tails.entries()]).toEqual([["two", 2], ["three", 3]]);
+  });
+
+  it("does not begin an overlapping tail tick until the in-flight tick settles", async () => {
+    const runSingleFlight = createSingleFlightRunner();
+    let release!: () => void;
+    const first = new Promise<void>((resolve) => { release = resolve; });
+    let runs = 0;
+
+    expect(runSingleFlight(async () => { runs += 1; await first; })).toBe(true);
+    expect(runSingleFlight(async () => { runs += 1; })).toBe(false);
+    expect(runs).toBe(1);
+
+    release();
+    await sleep(0);
+    expect(runSingleFlight(async () => { runs += 1; })).toBe(true);
+    await sleep(0);
+    expect(runs).toBe(2);
+  });
+});
 // ---------------------------------------------------------------------------
 // Pure formatters
 // ---------------------------------------------------------------------------
