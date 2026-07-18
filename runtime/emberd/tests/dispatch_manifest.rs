@@ -944,3 +944,150 @@ fn dispatch_manifest_rejects_cache_and_equals_path_escapes() {
         assert!(!root.join("custody").join("preflight.json").exists());
     }
 }
+
+// --- INFRA governor increment 1: causal PinnedHostBudget + survival floors ---
+
+#[test]
+fn dispatch_manifest_pinned_host_budget_subtracts_live_jobs_and_releases_on_exit() {
+    let root_a = sandbox("pinned-budget-a");
+    let manifest_a = write_manifest(&root_a, "dispatch-pin-a", 10_000);
+    let mut payload_a: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
+    payload_a["resource_lease"] = json!("gpu-smoke-a");
+    fs::write(&manifest_a, serde_json::to_vec(&payload_a).unwrap()).unwrap();
+
+    let daemon = Daemon::open(&root_a.join("emberd.sqlite3")).unwrap();
+    let outcome_a = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest_a,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert!(outcome_a.handle.pid > 0);
+    assert_eq!(
+        daemon.live_committed_job_memory_bytes().unwrap(),
+        MAXIMUM_JOB_MEMORY_BYTES
+    );
+
+    // A second job, on its own lease, whose own declared requirement is
+    // satisfied by the raw host probe alone but NOT once A's live declared
+    // budget is causally subtracted from it: refused.
+    let root_b = sandbox("pinned-budget-b-refused");
+    let manifest_b = write_manifest(&root_b, "dispatch-pin-b", 10_000);
+    let mut payload_b: Value = serde_json::from_slice(&fs::read(&manifest_b).unwrap()).unwrap();
+    payload_b["resource_lease"] = json!("gpu-smoke-b");
+    fs::write(&manifest_b, serde_json::to_vec(&payload_b).unwrap()).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest_b,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchPinnedHostBudgetExceeded { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(daemon.job_state("dispatch-pin-b").unwrap(), None);
+    assert_eq!(daemon.lease_owner("gpu-smoke-b").unwrap(), None);
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(root_b.join("custody").join("preflight.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_PINNED_HOST_BUDGET");
+    assert_eq!(
+        receipt["pinned_host_budget"]["live_committed_job_memory_bytes"],
+        MAXIMUM_JOB_MEMORY_BYTES
+    );
+    assert_eq!(
+        receipt["pinned_host_budget"]["residual_available_maximum_commit_bytes"],
+        DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES - MAXIMUM_JOB_MEMORY_BYTES
+    );
+
+    // Release: once A exits, its declared budget is no longer live-committed
+    // and an equivalent dispatch now clears the same causal check.
+    daemon.stop_job("dispatch-pin-a").unwrap();
+    assert_eq!(daemon.live_committed_job_memory_bytes().unwrap(), 0);
+
+    let root_b2 = sandbox("pinned-budget-b-retry");
+    let manifest_b2 = write_manifest(&root_b2, "dispatch-pin-b2", 10_000);
+    let mut payload_b2: Value = serde_json::from_slice(&fs::read(&manifest_b2).unwrap()).unwrap();
+    payload_b2["resource_lease"] = json!("gpu-smoke-b");
+    fs::write(&manifest_b2, serde_json::to_vec(&payload_b2).unwrap()).unwrap();
+    let outcome_b2 = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest_b2,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert!(outcome_b2.handle.pid > 0);
+    daemon.stop_job("dispatch-pin-b2").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_refuses_consumer_floor_violation_regardless_of_manifest() {
+    let root = sandbox("consumer-floor");
+    let manifest = write_manifest(&root, "dispatch-consumer-floor", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    // The manifest's own storage_reserves (root, minimum_free_bytes: 1) is
+    // trivially satisfied by the `free_space` probe below; the hardcoded
+    // consumer floor is a SEPARATE, non-manifest-controlled gate driven by
+    // the dedicated floor probe, which here reports far below the floor.
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(1),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchConsumerFloorViolation { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(
+        daemon.job_state("dispatch-consumer-floor").unwrap(),
+        None
+    );
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(root.join("custody").join("preflight.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_CONSUMER_FLOOR");
+    assert_eq!(receipt["consumer_floor"]["available_free_bytes"], 1);
+}
+
+#[test]
+fn dispatch_manifest_vram_provider_unavailable_never_blocks_admission() {
+    let root = sandbox("vram-unavailable");
+    let manifest = write_manifest(&root, "dispatch-vram-unavailable", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || {
+                Err(EmberdError::VramProviderUnavailable {
+                    detail: "no nvidia-smi on this host".into(),
+                })
+            },
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert!(outcome.handle.pid > 0);
+    let receipt: Value = serde_json::from_slice(&fs::read(&outcome.receipt.path).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "PREFLIGHT_PASSED");
+    assert_eq!(receipt["vram_reserve"]["provider_status"], "unavailable");
+    assert!(receipt["vram_reserve"]["available_free_bytes"].is_null());
+    daemon.stop_job("dispatch-vram-unavailable").unwrap();
+}

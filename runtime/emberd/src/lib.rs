@@ -20,6 +20,25 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub mod rpc;
 
+/// Consumer-owned host survival floors (INFRA governor increment 1).
+/// These are hardcoded, never manifest-controlled: a dispatch manifest cannot
+/// declare its way past them, and they are checked in addition to (never
+/// instead of) any manifest-declared storage_reserves.
+pub mod survival_floors {
+    pub const DRIVE_C_MINIMUM_FREE_BYTES: u64 = 150 * 1024 * 1024 * 1024;
+    pub const DRIVE_B_MINIMUM_FREE_BYTES: u64 = 250 * 1024 * 1024 * 1024;
+    /// (drive root, minimum free bytes) pairs checked at every admission.
+    /// A drive absent on this host is skipped, never blocking.
+    pub const ROOTS: [(&str, u64); 2] = [
+        ("C:\\", DRIVE_C_MINIMUM_FREE_BYTES),
+        ("B:\\", DRIVE_B_MINIMUM_FREE_BYTES),
+    ];
+}
+
+/// Job states whose declared `maximum_job_memory_bytes` is still causally
+/// owned against host capacity (not yet released back to the pool).
+const LIVE_COMMITTED_JOB_STATES: [&str; 4] = ["starting", "prepared", "running", "stopping"];
+
 pub type Result<T> = std::result::Result<T, EmberdError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
@@ -158,6 +177,22 @@ pub enum EmberdError {
         maximum_job_memory_bytes: u64,
         simulated_peak_commit_bytes: u64,
         receipt_path: PathBuf,
+    },
+    DispatchPinnedHostBudgetExceeded {
+        required_available_maximum_commit_bytes: u64,
+        observed_available_maximum_commit_bytes: u64,
+        live_committed_job_memory_bytes: u64,
+        residual_available_maximum_commit_bytes: u64,
+        receipt_path: PathBuf,
+    },
+    DispatchConsumerFloorViolation {
+        root: PathBuf,
+        minimum_free_bytes: u64,
+        available_free_bytes: u64,
+        receipt_path: PathBuf,
+    },
+    VramProviderUnavailable {
+        detail: String,
     },
     Poisoned,
 }
@@ -486,7 +521,7 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS identities(job_id TEXT PRIMARY KEY, canonical_path TEXT NOT NULL, sha256 TEXT NOT NULL, identity_blob BLOB NOT NULL, bound_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS lease_generations(resource TEXT PRIMARY KEY, generation INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS leases(resource TEXT PRIMARY KEY, owner_job_id TEXT NOT NULL, lease_epoch INTEGER NOT NULL, acquired_at_ms INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, restart_policy TEXT NOT NULL DEFAULT 'never', stdout_log_path TEXT NOT NULL, stderr_log_path TEXT NOT NULL, stdout_child_handle INTEGER NOT NULL DEFAULT 0, stderr_child_handle INTEGER NOT NULL DEFAULT 0, stdout_log_sha256 TEXT, stderr_log_sha256 TEXT, outage_event_cutoff_seq INTEGER, exit_code INTEGER, exited_at_ms INTEGER, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, restart_policy TEXT NOT NULL DEFAULT 'never', stdout_log_path TEXT NOT NULL, stderr_log_path TEXT NOT NULL, stdout_child_handle INTEGER NOT NULL DEFAULT 0, stderr_child_handle INTEGER NOT NULL DEFAULT 0, stdout_log_sha256 TEXT, stderr_log_sha256 TEXT, outage_event_cutoff_seq INTEGER, exit_code INTEGER, exited_at_ms INTEGER, maximum_job_memory_bytes INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS schedule_runs(job_id TEXT PRIMARY KEY, artifact_class TEXT NOT NULL, predicted_at_ms INTEGER NOT NULL, predicted_duration_ms INTEGER NOT NULL, predicted_tokens INTEGER NOT NULL, predicted_program_completion_ms INTEGER NOT NULL, absolute_deadline_ms INTEGER NOT NULL, prediction_daemon_binary_sha256 TEXT NOT NULL, prediction_daemon_source_sha256 TEXT NOT NULL, measured_at_ms INTEGER, measured_duration_ms INTEGER, measured_tokens INTEGER, measurement_outcome TEXT, measurement_receipt_sha256 TEXT, measurement_daemon_binary_sha256 TEXT, measurement_daemon_source_sha256 TEXT);
             CREATE TABLE IF NOT EXISTS planned_outages(outage_id INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, starts_at_ms INTEGER NOT NULL, ends_at_ms INTEGER NOT NULL, reason TEXT NOT NULL, created_at_ms INTEGER NOT NULL, cancelled_at_ms INTEGER);
             CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
@@ -519,6 +554,23 @@ impl Daemon {
         Ok(self
             .conn()?
             .query_row("PRAGMA journal_mode", [], |r| r.get(0))?)
+    }
+    /// Causal PinnedHostBudget accounting: the sum of every currently-owned
+    /// job's declared `maximum_job_memory_bytes` (starting/prepared/running/
+    /// stopping) — the budget still causally subtracted from measured host
+    /// capacity at admission, never a point-in-time resample. Released back
+    /// to the pool the instant a job reaches a terminal state.
+    pub fn live_committed_job_memory_bytes(&self) -> Result<u64> {
+        let placeholders = LIVE_COMMITTED_JOB_STATES
+            .iter()
+            .map(|state| format!("'{state}'"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "SELECT COALESCE(SUM(maximum_job_memory_bytes),0) FROM jobs WHERE state IN ({placeholders})"
+        );
+        let value: i64 = self.conn()?.query_row(&sql, [], |row| row.get(0))?;
+        Ok(value.max(0) as u64)
     }
     pub fn schedule_monitor_started_at_ms(&self) -> Result<i64> {
         Ok(self.conn()?.query_row(
@@ -1030,6 +1082,35 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        self.dispatch_manifest_at_with_probes_and_host_and_floor(
+            manifest_path,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            available_free_bytes,
+        )
+    }
+
+    /// Same as [`Daemon::dispatch_manifest_at_with_probes_and_host`], plus an
+    /// explicit probe for the hardcoded consumer survival floors
+    /// ([`survival_floors::ROOTS`]) — split out only so tests can drive the
+    /// floor probe independently of a manifest's own storage_reserves probe.
+    pub fn dispatch_manifest_at_with_probes_and_host_and_floor<F, G, H, K>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        floor_free_space: K,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+        K: FnMut(&Path) -> Result<u64>,
+    {
         let canonical = fs::canonicalize(manifest_path).map_err(|error| {
             EmberdError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest is not a canonical file: {error}"),
@@ -1043,6 +1124,7 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
+            floor_free_space,
         )
     }
 
@@ -1097,6 +1179,7 @@ impl Daemon {
                 free_space,
                 free_vram,
                 free_host_commit,
+                available_free_bytes,
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -1139,6 +1222,7 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
+            available_free_bytes,
         )
     }
 
@@ -1247,7 +1331,7 @@ impl Daemon {
         }
         validate_absolute_dispatch_args(&manifest.args, &program, &verified_bindings, &custody_root)
     }
-    fn dispatch_manifest_bytes_at_with_probes_and_host_inner<F, G, H>(
+    fn dispatch_manifest_bytes_at_with_probes_and_host_inner<F, G, H, K>(
         &self,
         manifest_bytes: &[u8],
         manifest_identity_path: &Path,
@@ -1255,11 +1339,13 @@ impl Daemon {
         mut free_space: F,
         mut free_vram: G,
         mut free_host_commit: H,
+        mut floor_free_space: K,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
+        K: FnMut(&Path) -> Result<u64>,
     {
         let manifest_path = fs::canonicalize(manifest_identity_path).map_err(|error| {
             EmberdError::InvalidDispatchManifest {
@@ -1368,6 +1454,79 @@ impl Daemon {
             });
         }
 
+        // CAUSAL PinnedHostBudget: subtract the SUM of every currently-owned
+        // job's declared maximum_job_memory_bytes from measured capacity —
+        // an admission-time accounting, never a point-in-time resample of
+        // what happens to be pinned right now.
+        let live_committed_job_memory_bytes = self.live_committed_job_memory_bytes()?;
+        let residual_available_maximum_commit_bytes =
+            observed_available_maximum_commit_bytes.saturating_sub(live_committed_job_memory_bytes);
+        if residual_available_maximum_commit_bytes < manifest.required_available_maximum_commit_bytes
+        {
+            let refusal = json!({
+                "schema_version": "emberd-dispatch-preflight-v1",
+                "result": "REFUSED_PINNED_HOST_BUDGET",
+                "job_id": &manifest.job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
+                "pinned_host_budget": {
+                    "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
+                    "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
+                    "live_committed_job_memory_bytes": live_committed_job_memory_bytes,
+                    "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
+                },
+            });
+            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            return Err(EmberdError::DispatchPinnedHostBudgetExceeded {
+                required_available_maximum_commit_bytes: manifest
+                    .required_available_maximum_commit_bytes,
+                observed_available_maximum_commit_bytes,
+                live_committed_job_memory_bytes,
+                residual_available_maximum_commit_bytes,
+                receipt_path,
+            });
+        }
+
+        // Consumer-owned survival floors (survival_floors::ROOTS): hardcoded,
+        // never manifest-controlled. Checked in addition to any manifest
+        // storage_reserves. A drive absent on this host is skipped, never
+        // blocking admission.
+        for (root_str, minimum_free_bytes) in survival_floors::ROOTS {
+            let root = PathBuf::from(root_str);
+            if !root.exists() {
+                continue;
+            }
+            let canonical_root = fs::canonicalize(&root).map_err(|error| {
+                EmberdError::InvalidDispatchManifest {
+                    detail: format!("consumer survival floor root is unavailable: {error}"),
+                }
+            })?;
+            let available = floor_free_space(&canonical_root)?;
+            if available < minimum_free_bytes {
+                let refusal = json!({
+                    "schema_version": "emberd-dispatch-preflight-v1",
+                    "result": "REFUSED_CONSUMER_FLOOR",
+                    "job_id": &manifest.job_id,
+                    "source_commit": &manifest.source_commit,
+                    "observed_at_ms": observed_at_ms,
+                    "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
+                    "consumer_floor": {
+                        "root": &canonical_root,
+                        "minimum_free_bytes": minimum_free_bytes,
+                        "available_free_bytes": available,
+                    },
+                });
+                atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                return Err(EmberdError::DispatchConsumerFloorViolation {
+                    root: canonical_root,
+                    minimum_free_bytes,
+                    available_free_bytes: available,
+                    receipt_path,
+                });
+            }
+        }
+
         let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
         let mut verified_bindings = Vec::with_capacity(manifest.bindings.len());
         let mut seen = std::collections::BTreeSet::new();
@@ -1453,12 +1612,21 @@ impl Daemon {
             }));
         }
 
-        let available_vram = free_vram()?;
-        if available_vram < manifest.minimum_free_vram_bytes {
-            return Err(EmberdError::DispatchVramReserve {
-                minimum_free_bytes: manifest.minimum_free_vram_bytes,
-                available_free_bytes: available_vram,
-            });
+        // A Driver-Locked provider reporting UNAVAILABLE (no GPU/driver on
+        // this host) never blocks admission — only a provider that answers
+        // with too little VRAM refuses.
+        let available_vram: Option<u64> = match free_vram() {
+            Ok(value) => Some(value),
+            Err(EmberdError::VramProviderUnavailable { .. }) => None,
+            Err(error) => return Err(error),
+        };
+        if let Some(available_vram) = available_vram {
+            if available_vram < manifest.minimum_free_vram_bytes {
+                return Err(EmberdError::DispatchVramReserve {
+                    minimum_free_bytes: manifest.minimum_free_vram_bytes,
+                    available_free_bytes: available_vram,
+                });
+            }
         }
 
         validate_absolute_dispatch_args(
@@ -1488,8 +1656,13 @@ impl Daemon {
             "vram_reserve": {
                 "minimum_free_bytes": manifest.minimum_free_vram_bytes,
                 "available_free_bytes": available_vram,
+                "provider_status": if available_vram.is_some() { "available" } else { "unavailable" },
             },
             "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
+            "pinned_host_budget": {
+                "live_committed_job_memory_bytes": live_committed_job_memory_bytes,
+                "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
+            },
             "host_commit": {
                 "basis": "maximum_configured_capacity",
                 "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
@@ -1763,8 +1936,8 @@ impl Daemon {
                 });
             }
             tx.execute(
-                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,'starting',?12,?12)",
-                params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), timestamp],
+                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,maximum_job_memory_bytes,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'starting',?13,?13)",
+                params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), spec.maximum_job_memory_bytes.unwrap_or(0), timestamp],
             )?;
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
@@ -3294,14 +3467,17 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
 }
 
 fn available_free_vram_bytes() -> Result<u64> {
+    // A Driver-Locked provider that is simply not present on this host (no
+    // nvidia-smi binary, or it refuses to run) is UNAVAILABLE, not invalid —
+    // admission proceeds without this reserve rather than blocking on it.
     let output = std::process::Command::new("nvidia-smi")
         .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
         .output()
-        .map_err(|error| EmberdError::InvalidDispatchManifest {
+        .map_err(|error| EmberdError::VramProviderUnavailable {
             detail: format!("nvidia-smi VRAM probe failed to start: {error}"),
         })?;
     if !output.status.success() {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberdError::VramProviderUnavailable {
             detail: format!("nvidia-smi VRAM probe failed with {}", output.status),
         });
     }
@@ -3377,6 +3553,7 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         ("outage_event_cutoff_seq", "INTEGER"),
         ("exit_code", "INTEGER"),
         ("exited_at_ms", "INTEGER"),
+        ("maximum_job_memory_bytes", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         if !columns.iter().any(|existing| existing == column) {
             conn.execute_batch(&format!(
