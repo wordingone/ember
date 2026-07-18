@@ -198,6 +198,7 @@ export async function callEmberd(options: EmberdRequestOptions): Promise<Record<
       }
       finish(responseError("response ended before one complete frame"));
     });
+    socket.once("error", (error: Error) => finish(error));
     socket.write(request);
   });
 }
