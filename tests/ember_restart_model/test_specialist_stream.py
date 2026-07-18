@@ -33,6 +33,18 @@ def _frozen_tokenizer(path: Path) -> Path:
 
 
 class SpecialistStreamTests(unittest.TestCase):
+    @staticmethod
+    def _open_bound(manifest_path: Path):
+        from specialist_stream import open_specialist_stream
+
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
+        return open_specialist_stream(
+            repo_root=ROOT,
+            manifest_path=manifest_path,
+            expected_manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+            expected_corpus_root_sha256=manifest["corpus_root_sha256"],
+        )
     def test_generators_expose_seekable_record_at_and_new_lineage_root(self) -> None:
         from build_owned_audio_frames import record_at as audio_record_at
         from build_owned_reasoning_tool_trajectories import record_at as trajectory_record_at
@@ -58,7 +70,7 @@ class SpecialistStreamTests(unittest.TestCase):
             self.assertEqual(manifest["lineage"], "NEW_PREREGISTERED_STREAM")
             self.assertEqual(manifest["data_class"], "MEASURED_RUNG")
             self.assertEqual(set(manifest["generator_sources"]), {"image", "audio", "reasoning_tool"})
-            stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+            stream = self._open_bound(manifest_path)
             records, cursor = stream.next_records(capability="tool", cursor=None, limit=2)
             self.assertEqual(cursor, {
                 "schema_version": "ember-owned-specialist-stream-cursor-v1",
@@ -77,7 +89,7 @@ class SpecialistStreamTests(unittest.TestCase):
 
         manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
         manifest = json.loads(manifest_path.read_bytes())
-        stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+        stream = self._open_bound(manifest_path)
         measured = stream.validate_full_commitment(manifest["corpus_root_sha256"])
         self.assertEqual(set(measured), {"image", "audio", "reasoning", "tool"})
         self.assertTrue(all(item["records"] == 4096 for item in measured.values()))
@@ -97,7 +109,7 @@ class SpecialistStreamTests(unittest.TestCase):
                 chunk_size=8,
                 data_class="MEASURED_RUNG",
             )
-            stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+            stream = self._open_bound(manifest_path)
             original = stream.record_at
             calls = 0
 
@@ -122,7 +134,7 @@ class SpecialistStreamTests(unittest.TestCase):
             build_stream_manifest(repo_root=ROOT, output_path=manifest_path, tokenizer_path=tokenizer, model_config_path=ROOT / "configs" / "ember-restart-3b.json", record_count=512, chunk_size=64, data_class="MEASURED_RUNG")
             tokenizer.write_bytes(tokenizer.read_bytes() + b"mutation")
             with self.assertRaisesRegex(ValueError, "tokenizer"):
-                open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+                self._open_bound(manifest_path)
 
     def test_raw_image_and_audio_targets_are_recomputed_at_consumption(self) -> None:
         from specialist_stream import SpecialistStream
@@ -151,7 +163,7 @@ class SpecialistStreamTests(unittest.TestCase):
             manifest["generator_sources"]["image"]["sha256"] = "0" * 64
             manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
             with self.assertRaisesRegex(ValueError, "generator"):
-                open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+                self._open_bound(manifest_path)
 
     def test_root_framing_rejects_reorder_duplicate_and_omission(self) -> None:
         from specialist_stream import corpus_root_sha256
@@ -170,11 +182,11 @@ class SpecialistStreamTests(unittest.TestCase):
             manifest = build_stream_manifest(repo_root=ROOT, output_path=manifest_path, tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"), model_config_path=ROOT / "configs" / "ember-restart-3b.json", record_count=512, chunk_size=64, data_class="MEASURED_RUNG")
             manifest["families"]["tool"]["chunks"][0]["sha256"] = "0" * 64
             manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
-            stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+            stream = self._open_bound(manifest_path)
             with self.assertRaisesRegex(ValueError, "chunk commitment"):
                 stream.next_records(capability="tool", cursor=None, limit=1)
             manifest = build_stream_manifest(repo_root=ROOT, output_path=manifest_path, tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"), model_config_path=ROOT / "configs" / "ember-restart-3b.json", record_count=512, chunk_size=64, data_class="MEASURED_RUNG")
-            stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+            stream = self._open_bound(manifest_path)
             measured = stream.validate_capability_commitment("tool")
             self.assertEqual(measured["records"], 512)
             self.assertGreater(measured["tokens"], 0)
@@ -189,7 +201,7 @@ class SpecialistStreamTests(unittest.TestCase):
             build_stream_manifest(repo_root=ROOT, output_path=manifest_path, tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"), model_config_path=config, record_count=512, chunk_size=64, data_class="MEASURED_RUNG")
             config.write_bytes(config.read_bytes() + b" ")
             with self.assertRaisesRegex(ValueError, "model config"):
-                open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+                self._open_bound(manifest_path)
 
     def test_chunk_layout_changes_not_corpus_root_or_record_bytes(self) -> None:
         from specialist_stream import build_stream_manifest
@@ -254,11 +266,11 @@ class SpecialistStreamTests(unittest.TestCase):
                 chunk_size=64,
                 data_class="MEASURED_RUNG",
             )
-            _records, cursor = open_specialist_stream(repo_root=ROOT, manifest_path=first_path).next_records(
+            _records, cursor = self._open_bound(first_path).next_records(
                 capability="tool", cursor=None, limit=1
             )
             with self.assertRaisesRegex(ValueError, "cursor manifest"):
-                open_specialist_stream(repo_root=ROOT, manifest_path=second_path).next_records(
+                self._open_bound(second_path).next_records(
                     capability="tool", cursor=cursor, limit=1
                 )
 
@@ -299,7 +311,7 @@ class SpecialistStreamTests(unittest.TestCase):
                 side_effect=AssertionError("hostile manifest reached chunk materialization"),
             ):
                 with self.assertRaisesRegex(ValueError, "record count bound"):
-                    specialist_stream.open_specialist_stream(repo_root=ROOT, manifest_path=root / "stream.json")
+                    self._open_bound(root / "stream.json")
             hostile["range"]["record_count_per_family"] = 512
             hostile["chunk_size"] = 1_000_000_000
             (root / "stream.json").write_bytes(
@@ -311,8 +323,98 @@ class SpecialistStreamTests(unittest.TestCase):
                 side_effect=AssertionError("hostile manifest reached chunk materialization"),
             ):
                 with self.assertRaisesRegex(ValueError, "chunk bound"):
-                    specialist_stream.open_specialist_stream(repo_root=ROOT, manifest_path=root / "stream.json")
+                    self._open_bound(root / "stream.json")
 
+
+    def test_open_requires_caller_bound_manifest_and_roots_before_consumption(self) -> None:
+        from specialist_stream import build_stream_manifest
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            manifest_path = root / "stream.json"
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            with self.assertRaisesRegex(ValueError, "expected manifest"):
+                __import__("specialist_stream").open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
+            trusted_manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            trusted_corpus_root_sha256 = manifest["corpus_root_sha256"]
+            manifest["corpus_root_sha256"] = "0" * 64
+            manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "manifest identity"):
+                __import__("specialist_stream").open_specialist_stream(
+                    repo_root=ROOT,
+                    manifest_path=manifest_path,
+                    expected_manifest_sha256=trusted_manifest_sha256,
+                    expected_corpus_root_sha256=trusted_corpus_root_sha256,
+                )
+
+    def test_open_rejects_rebound_roles_and_noncanonical_family_chunk_schema(self) -> None:
+        from specialist_stream import build_stream_manifest
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            manifest_path = root / "stream.json"
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            manifest["generator_sources"]["image"] = dict(manifest["generator_sources"]["audio"])
+            manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "generator source role"):
+                self._open_bound(manifest_path)
+
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            manifest["verifier_sources"]["semantics"] = dict(manifest["verifier_sources"]["capability"])
+            manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "verifier source role"):
+                self._open_bound(manifest_path)
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            manifest["families"]["tool"]["chunks"].pop()
+            manifest["unexpected"] = "not closed"
+            manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "stream manifest schema"):
+                self._open_bound(manifest_path)
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            manifest["families"]["tool"]["corpus_root_sha256"] = "0" * 64
+            manifest_path.write_bytes(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "family roots"):
+                self._open_bound(manifest_path)
 
 if __name__ == "__main__":
     unittest.main()

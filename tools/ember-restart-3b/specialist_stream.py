@@ -24,6 +24,7 @@ SCHEMA_VERSION = "ember-owned-specialist-stream-v1"
 CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-cursor-v1"
 MAX_RECORDS_PER_FAMILY = 65_536
 MAX_CHUNK_RECORDS = 256
+MAX_MANIFEST_BYTES = 1_048_576
 MEASURED_MIN_RECORDS = 512
 SEMANTIC_MIN_RECORDS = 4096
 _GENERATOR_SOURCES = {
@@ -91,7 +92,7 @@ def _source_binding(repo_root: Path, relative: str) -> dict[str, str]:
     return {"path": canonical, "sha256": _sha256(path.read_bytes())}
 
 
-def _require_binding(repo_root: Path, binding: object, label: str) -> bytes:
+def _require_binding(repo_root: Path, binding: object, label: str, *, expected_relative: str | None = None) -> bytes:
     if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
         raise ValueError(f"invalid {label} binding")
     relative, expected = binding["path"], binding["sha256"]
@@ -100,10 +101,46 @@ def _require_binding(repo_root: Path, binding: object, label: str) -> bytes:
     path, canonical = _canonical_path(repo_root, repo_root / relative)
     if canonical != relative:
         raise ValueError(f"noncanonical {label} path")
+    if expected_relative is not None and canonical != expected_relative:
+        raise ValueError(f"{label} role path does not match production authority")
     value = path.read_bytes()
     if _sha256(value) != expected:
         raise ValueError(f"{label} binding does not match")
     return value
+
+
+def _require_sha256(value: object, label: str) -> str:
+    if not _is_sha256(value):
+        raise ValueError(f"invalid {label}")
+    return str(value)
+
+
+def _manifest_corpus_root_sha256(families: dict[str, Any]) -> str:
+    return _sha256(b"".join(
+        _frame(capability.encode("ascii"), bytes.fromhex(_require_sha256(families[capability]["corpus_root_sha256"], "family corpus root")))
+        for capability in CAPABILITIES
+    ))
+
+def _validate_family_commitment(value: object, *, capability: str, count: int, chunk_size: int) -> None:
+    if not isinstance(value, dict) or set(value) != {"record_count", "token_count", "serialized_bytes", "corpus_root_sha256", "chunks"}:
+        raise ValueError("invalid stream manifest schema")
+    if value.get("record_count") != count or type(value.get("token_count")) is not int or value["token_count"] < 1:
+        raise ValueError("invalid stream manifest schema")
+    if type(value.get("serialized_bytes")) is not int or value["serialized_bytes"] < 1:
+        raise ValueError("invalid stream manifest schema")
+    _require_sha256(value.get("corpus_root_sha256"), "family corpus root")
+    chunks = value.get("chunks")
+    expected_chunks = (count + chunk_size - 1) // chunk_size
+    if not isinstance(chunks, list) or len(chunks) != expected_chunks:
+        raise ValueError("invalid stream manifest schema")
+    for index, chunk in enumerate(chunks):
+        start = index * chunk_size
+        expected_count = min(chunk_size, count - start)
+        if not isinstance(chunk, dict) or set(chunk) != {"start", "record_count", "sha256"}:
+            raise ValueError("invalid stream manifest schema")
+        if chunk.get("start") != start or chunk.get("record_count") != expected_count:
+            raise ValueError("invalid stream manifest schema")
+        _require_sha256(chunk.get("sha256"), f"{capability} chunk")
 
 
 class SpecialistStream:
@@ -115,6 +152,11 @@ class SpecialistStream:
         self.families = families
         self.chunk_size = chunk_size
         self.manifest_sha256 = manifest_sha256
+        self._chunk_index = {
+            capability: {int(chunk["start"]): chunk for chunk in family.get("chunks", [])}
+            for capability, family in families.items()
+            if isinstance(family, dict) and isinstance(family.get("chunks"), list)
+        }
 
     def record_at(self, capability: str, index: int) -> dict[str, Any]:
         if capability == "image":
@@ -155,7 +197,7 @@ class SpecialistStream:
         hashes: list[str] = []
         for record in records:
             hashes.append(self.verify_record(record)["record_sha256"])
-        expected = next((item for item in chunks if isinstance(item, dict) and item.get("start") == start), None)
+        expected = self._chunk_index.get(capability, {}).get(start)
         if not isinstance(expected, dict) or expected.get("record_count") != len(hashes) or expected.get("sha256") != _chunk_sha256(capability, start, hashes):
             raise ValueError("chunk commitment does not match")
         return records
@@ -358,18 +400,38 @@ def emit_stream_manifest(**kwargs: Any) -> tuple[dict[str, Any], int]:
     manifest = build_stream_manifest(**kwargs)
     return manifest, int((time.perf_counter() - started) * 1000)
 
-def open_specialist_stream(*, repo_root: Path, manifest_path: Path) -> SpecialistStream:
-    manifest_bytes = manifest_path.read_bytes()
+def open_specialist_stream(
+    *, repo_root: Path, manifest_path: Path, expected_manifest_sha256: str | None = None,
+    expected_corpus_root_sha256: str | None = None,
+) -> SpecialistStream:
+    if not _is_sha256(expected_manifest_sha256):
+        raise ValueError("expected manifest SHA-256 is required")
+    if not _is_sha256(expected_corpus_root_sha256):
+        raise ValueError("expected corpus root SHA-256 is required")
+    try:
+        if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
+            raise ValueError("stream manifest exceeds consumer byte bound")
+        manifest_bytes = manifest_path.read_bytes()
+    except OSError as error:
+        raise ValueError("stream manifest cannot be read") from error
+    if len(manifest_bytes) > MAX_MANIFEST_BYTES:
+        raise ValueError("stream manifest exceeds consumer byte bound")
+    if _sha256(manifest_bytes) != expected_manifest_sha256:
+        raise ValueError("stream manifest identity does not match caller authority")
     try:
         manifest = json.loads(manifest_bytes)
     except json.JSONDecodeError as error:
         raise ValueError("invalid stream manifest") from error
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != SCHEMA_VERSION:
+    required_top_level = {
+        "schema_version", "lineage", "legacy_materialized_compatibility", "data_class",
+        "generator_contract", "range", "chunk_size", "tokenizer", "consumer_limits",
+        "model_config", "generator_sources", "verifier_sources", "families", "corpus_root_sha256",
+    }
+    if not isinstance(manifest, dict) or set(manifest) != required_top_level:
+        raise ValueError("invalid stream manifest schema")
+    if manifest.get("schema_version") != SCHEMA_VERSION or manifest.get("lineage") != "NEW_PREREGISTERED_STREAM":
         raise ValueError("invalid stream manifest")
-    if manifest.get("lineage") != "NEW_PREREGISTERED_STREAM":
-        raise ValueError("unsupported stream lineage")
-    generator_contract = manifest.get("generator_contract")
-    if generator_contract != {"version": "owned-specialist-indexed-v1", "randomness": "INDEX_PURE_NO_PRNG", "seed": None}:
+    if manifest.get("generator_contract") != {"version": "owned-specialist-indexed-v1", "randomness": "INDEX_PURE_NO_PRNG", "seed": None}:
         raise ValueError("invalid generator contract binding")
     stream_range = manifest.get("range")
     if not isinstance(stream_range, dict) or set(stream_range) != {"start", "record_count_per_family"} or stream_range.get("start") != 0:
@@ -379,10 +441,7 @@ def open_specialist_stream(*, repo_root: Path, manifest_path: Path) -> Specialis
     data_class = manifest.get("data_class")
     if type(count) is not int or type(chunk_size) is not int or chunk_size <= 0:
         raise ValueError("invalid stream range")
-    if manifest.get("consumer_limits") != {
-        "max_records_per_family": MAX_RECORDS_PER_FAMILY,
-        "max_chunk_records": MAX_CHUNK_RECORDS,
-    }:
+    if manifest.get("consumer_limits") != {"max_records_per_family": MAX_RECORDS_PER_FAMILY, "max_chunk_records": MAX_CHUNK_RECORDS}:
         raise ValueError("invalid consumer stream limits")
     if count > MAX_RECORDS_PER_FAMILY:
         raise ValueError("stream record count bound exceeded")
@@ -394,19 +453,26 @@ def open_specialist_stream(*, repo_root: Path, manifest_path: Path) -> Specialis
         raise ValueError("MEASURED_RUNG range is too small")
     if data_class not in {"SEMANTIC_PRETRAINING", "MEASURED_RUNG"}:
         raise ValueError("unknown specialist stream data class")
+    if manifest.get("corpus_root_sha256") != expected_corpus_root_sha256:
+        raise ValueError("stream corpus root does not match caller authority")
+    _require_sha256(manifest.get("corpus_root_sha256"), "stream corpus root")
     tokenizer_bytes = _require_binding(repo_root, manifest.get("tokenizer"), "tokenizer")
     _require_binding(repo_root, manifest.get("model_config"), "model config")
     sources = manifest.get("generator_sources")
     if not isinstance(sources, dict) or set(sources) != set(_GENERATOR_SOURCES):
         raise ValueError("invalid generator source bindings")
-    for name in _GENERATOR_SOURCES:
-        _require_binding(repo_root, sources[name], "generator source")
+    for name, relative in _GENERATOR_SOURCES.items():
+        _require_binding(repo_root, sources[name], "generator source", expected_relative=relative)
     verifiers = manifest.get("verifier_sources")
     if not isinstance(verifiers, dict) or set(verifiers) != set(_VERIFIER_SOURCES):
         raise ValueError("invalid verifier source bindings")
-    for name in _VERIFIER_SOURCES:
-        _require_binding(repo_root, verifiers[name], "verifier source")
+    for name, relative in _VERIFIER_SOURCES.items():
+        _require_binding(repo_root, verifiers[name], "verifier source", expected_relative=relative)
     families = manifest.get("families")
     if not isinstance(families, dict) or set(families) != set(CAPABILITIES):
         raise ValueError("invalid family commitments")
+    for capability in CAPABILITIES:
+        _validate_family_commitment(families[capability], capability=capability, count=count, chunk_size=chunk_size)
+    if _manifest_corpus_root_sha256(families) != manifest["corpus_root_sha256"]:
+        raise ValueError("stream corpus root does not bind family roots")
     return SpecialistStream(Tokenizer.from_str(tokenizer_bytes.decode("utf-8")), count, families, chunk_size=chunk_size, manifest_sha256=_sha256(manifest_bytes))
