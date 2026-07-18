@@ -110,18 +110,18 @@ than landed against a caller that does not exist.
 ## Diff (this repair, vs the rejected `911d588b` head)
 
 ```
-tools/ember-cli/src/commands/ultraplan.test.ts     |  11 ++
-tools/ember-cli/src/commands/ultraplan.ts          |  11 +-
-tools/ember-cli/src/commands/ultrareview.test.ts   |  13 +++
-tools/ember-cli/src/commands/ultrareview.ts        |   7 +-
-tools/ember-cli/src/memory-operations.test.ts      | 129 ++-------------------
-tools/ember-cli/src/memory-operations.ts           |  29 ++---
+tools/ember-cli/src/commands/ultraplan.test.ts     |  15 +++
+tools/ember-cli/src/commands/ultraplan.ts          |  15 ++-
+tools/ember-cli/src/commands/ultrareview.test.ts   |  17 +++
+tools/ember-cli/src/commands/ultrareview.ts        |  11 +-
+tools/ember-cli/src/memory-operations.test.ts      | 125 ++-------------------
+tools/ember-cli/src/memory-operations.ts           |  25 ++---
 tools/ember-cli/src/services/api-openai-adapter.ts |   9 +-
-7 files changed, 64 insertions(+), 145 deletions(-)
+7 files changed, 80 insertions(+), 137 deletions(-)
 ```
 
 Prior head: `911d588bd9d33bb151a544c269c45f0780a0026f`
-New head: (this commit's SHA -- see commit log)
+New head: `c5cb839` (see commit log for the full 40-char SHA)
 
 ## Authority
 
