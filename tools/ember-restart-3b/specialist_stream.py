@@ -4,11 +4,15 @@
 """Seekable, content-addressed owned specialist streams without a corpus payload."""
 from __future__ import annotations
 
+import ast
+import builtins
 import base64
 import hashlib
 import json
+import sys
 import time
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from tokenizers import Tokenizer
@@ -35,6 +39,11 @@ _GENERATOR_SOURCES = {
 _VERIFIER_SOURCES = {
     "semantics": "tools/ember-restart-3b/specialist_semantics.py",
     "capability": "tools/ember-restart-3b/verify_capability_record.py",
+}
+
+_BOUND_STANDARD_IMPORTS = {
+    "__future__", "argparse", "ast", "base64", "dataclasses", "hashlib", "itertools", "json", "operator",
+    "pathlib", "re", "struct", "sys", "typing",
 }
 
 
@@ -87,26 +96,131 @@ def _canonical_path(repo_root: Path, candidate: Path) -> tuple[Path, str]:
     return resolved, relative
 
 
-def _require_runtime_callable_origins(repo_root: Path) -> None:
-    """Reject import-path shadowing before trusting bound generator bytes."""
-    callables = (
-        ("generator", "image", vision_record_at, _GENERATOR_SOURCES["image"]),
-        ("generator", "audio", audio_record_at, _GENERATOR_SOURCES["audio"]),
-        ("generator", "reasoning", trajectory_record_at, _GENERATOR_SOURCES["reasoning_tool"]),
-        ("generator", "tool", trajectory_record_at, _GENERATOR_SOURCES["reasoning_tool"]),
-        ("verifier", "image", verify_image_supervision, _VERIFIER_SOURCES["semantics"]),
-        ("verifier", "audio", verify_audio_supervision, _VERIFIER_SOURCES["semantics"]),
-        ("verifier", "reasoning", verify_capability_record, _VERIFIER_SOURCES["capability"]),
-        ("verifier", "tool", verify_capability_record, _VERIFIER_SOURCES["capability"]),
-    )
-    for kind, _capability, function, expected_relative in callables:
-        code = getattr(function, "__code__", None)
-        if code is None:
-            raise ValueError(f"invalid runtime {kind} callable")
-        _resolved, canonical = _canonical_path(repo_root, Path(code.co_filename))
-        if canonical != expected_relative:
-            raise ValueError(f"runtime {kind} role does not match production authority")
+def _reject_unbound_project_imports(
+    repo_root: Path, source_bytes: bytes, source_path: Path, *, allowed_imports: set[str], source_kind: str,
+) -> None:
+    try:
+        tree = ast.parse(source_bytes, filename=str(source_path))
+    except SyntaxError as error:
+        raise ValueError(f"bound {source_kind} source cannot be parsed") from error
+    for node in ast.walk(tree):
+        modules = []
+        if isinstance(node, ast.Import):
+            modules = [alias.name.split(".", 1)[0] for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            modules = [node.module.split(".", 1)[0]]
+        elif isinstance(node, ast.Call) and (
+            isinstance(node.func, ast.Name) and node.func.id == "__import__"
+            or isinstance(node.func, ast.Attribute) and node.func.attr == "import_module"
+        ):
+            raise ValueError(f"bound {source_kind} source uses a dynamic import")
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "builtins" and node.attr == "__import__":
+            raise ValueError(f"bound {source_kind} source accesses an unrestricted importer")
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "sys" and node.attr == "modules":
+            raise ValueError(f"bound {source_kind} source accesses an ambient module registry")
+        elif isinstance(node, ast.Name) and node.id == "__builtins__":
+            raise ValueError(f"bound {source_kind} source accesses an unrestricted importer")
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and node.slice.value == "__import__" and (
+            isinstance(node.value, ast.Name) and node.value.id == "builtins"
+            or isinstance(node.value, ast.Attribute) and isinstance(node.value.value, ast.Name) and node.value.value.id == "builtins" and node.value.attr == "__dict__"
+            or isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id == "vars" and len(node.value.args) == 1 and isinstance(node.value.args[0], ast.Name) and node.value.args[0].id == "builtins"
+        ):
+            raise ValueError(f"bound {source_kind} source accesses an unrestricted importer")
+        for module_name in modules:
+            project_module = source_path.parent / f"{module_name}.py"
+            if project_module.is_file() and module_name not in allowed_imports:
+                raise ValueError(f"bound {source_kind} source imports an unbound project module")
 
+
+def _load_bound_module(
+    repo_root: Path, source_bytes: bytes, source_path: Path, *, source_kind: str, imports: dict[str, ModuleType] | None = None,
+) -> ModuleType:
+    """Execute hash-bound bytes with per-module imports for every project-local dependency."""
+    imports = imports or {}
+    _reject_unbound_project_imports(
+        repo_root, source_bytes, source_path, allowed_imports=set(imports), source_kind=source_kind,
+    )
+
+    def controlled_import(name: str, globals: object = None, locals: object = None, fromlist: object = (), level: int = 0) -> object:
+        if level == 0:
+            top_level = name.split(".", 1)[0]
+            if top_level in imports:
+                return imports[top_level]
+            if top_level == "builtins":
+                return bound_builtins
+            if top_level == "sys":
+                return bound_sys
+            if top_level not in _BOUND_STANDARD_IMPORTS:
+                raise ValueError(f"bound {source_kind} source imports a module outside the declared dependency contract")
+            if (source_path.parent / f"{top_level}.py").is_file():
+                raise ValueError(f"bound {source_kind} source imports an unbound project module")
+        return builtins.__import__(name, globals, locals, fromlist, level)
+
+    bound_builtins = ModuleType("builtins")
+    for name, value in vars(builtins).items():
+        setattr(bound_builtins, name, value)
+    bound_builtins.__import__ = controlled_import
+    bound_sys = ModuleType("sys")
+    bound_sys.stdin = sys.stdin
+    bound_sys.stdout = sys.stdout
+    bound_sys.stderr = sys.stderr
+    module_name = "_ember_specialist_stream_" + _sha256(source_bytes)
+    if module_name in sys.modules:
+        raise ValueError(f"bound {source_kind} module namespace is already occupied")
+    module = ModuleType(module_name)
+    module.__file__ = str(source_path)
+    module.__package__ = None
+    module.__dict__["__ember_bound_source_sha256__"] = _sha256(source_bytes)
+    module.__dict__["__builtins__"] = {**vars(builtins), "__import__": controlled_import}
+    sys.modules[module_name] = module
+    try:
+        exec(compile(source_bytes, str(source_path), "exec"), module.__dict__)
+    except BaseException:
+        sys.modules.pop(module_name, None)
+        raise
+    sys.modules.pop(module_name, None)
+    return module
+
+def _bound_callable(module: ModuleType, name: str, *, source_kind: str) -> Any:
+    value = module.__dict__.get(name)
+    if not callable(value):
+        raise ValueError(f"bound {source_kind} source does not define required callable")
+    return value
+
+
+def _load_bound_runtime(
+    repo_root: Path, generator_bindings: dict[str, Any], verifier_bindings: dict[str, Any],
+) -> dict[str, Any]:
+    verifier_modules: dict[str, ModuleType] = {}
+    for name, relative in _VERIFIER_SOURCES.items():
+        source_bytes = _require_binding(
+            repo_root, verifier_bindings[name], "verifier source", expected_relative=relative,
+        )
+        source_path, _canonical = _canonical_path(repo_root, repo_root / relative)
+        verifier_modules[name] = _load_bound_module(
+            repo_root, source_bytes, source_path, source_kind="verifier",
+        )
+    generator_imports = {
+        "specialist_semantics": verifier_modules["semantics"],
+        "verify_capability_record": verifier_modules["capability"],
+    }
+    generator_modules: dict[str, ModuleType] = {}
+    for name, relative in _GENERATOR_SOURCES.items():
+        source_bytes = _require_binding(
+            repo_root, generator_bindings[name], "generator source", expected_relative=relative,
+        )
+        source_path, _canonical = _canonical_path(repo_root, repo_root / relative)
+        generator_modules[name] = _load_bound_module(
+            repo_root, source_bytes, source_path, source_kind="generator", imports=generator_imports,
+        )
+    return {
+        "image_generator": _bound_callable(generator_modules["image"], "record_at", source_kind="generator"),
+        "audio_generator": _bound_callable(generator_modules["audio"], "record_at", source_kind="generator"),
+        "trajectory_generator": _bound_callable(generator_modules["reasoning_tool"], "record_at", source_kind="generator"),
+        "image_verifier": _bound_callable(verifier_modules["semantics"], "verify_image_supervision", source_kind="verifier"),
+        "audio_verifier": _bound_callable(verifier_modules["semantics"], "verify_audio_supervision", source_kind="verifier"),
+        "capability_verifier": _bound_callable(verifier_modules["capability"], "verify_record", source_kind="verifier"),
+    }
 
 def _source_binding(repo_root: Path, relative: str) -> dict[str, str]:
     path, canonical = _canonical_path(repo_root, repo_root / relative)
@@ -165,7 +279,7 @@ def _validate_family_commitment(value: object, *, capability: str, count: int, c
 
 
 class SpecialistStream:
-    def __init__(self, tokenizer: Tokenizer, count: int, families: dict[str, Any], *, chunk_size: int | None = None, manifest_sha256: str | None = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, count: int, families: dict[str, Any], *, chunk_size: int | None = None, manifest_sha256: str | None = None, runtime: dict[str, Any] | None = None) -> None:
         if manifest_sha256 is not None and not _is_sha256(manifest_sha256):
             raise ValueError("invalid specialist stream manifest identity")
         self.tokenizer = tokenizer
@@ -173,6 +287,14 @@ class SpecialistStream:
         self.families = families
         self.chunk_size = chunk_size
         self.manifest_sha256 = manifest_sha256
+        self.runtime = runtime or {
+            "image_generator": vision_record_at,
+            "audio_generator": audio_record_at,
+            "trajectory_generator": trajectory_record_at,
+            "image_verifier": verify_image_supervision,
+            "audio_verifier": verify_audio_supervision,
+            "capability_verifier": verify_capability_record,
+        }
         self._chunk_index = {
             capability: {int(chunk["start"]): chunk for chunk in family.get("chunks", [])}
             for capability, family in families.items()
@@ -181,11 +303,11 @@ class SpecialistStream:
 
     def record_at(self, capability: str, index: int) -> dict[str, Any]:
         if capability == "image":
-            return vision_record_at(self.tokenizer, count=self.count, image_marker=31_998, index=index)
+            return self.runtime["image_generator"](self.tokenizer, count=self.count, image_marker=31_998, index=index)
         if capability == "audio":
-            return audio_record_at(self.tokenizer, count=self.count, audio_marker=31_999, index=index)
+            return self.runtime["audio_generator"](self.tokenizer, count=self.count, audio_marker=31_999, index=index)
         if capability in {"reasoning", "tool"}:
-            return trajectory_record_at(self.tokenizer, count=self.count, capability=capability, index=index)
+            return self.runtime["trajectory_generator"](self.tokenizer, count=self.count, capability=capability, index=index)
         raise ValueError("unsupported specialist capability")
 
     def verify_record(self, record: dict[str, Any]) -> dict[str, str]:
@@ -193,12 +315,12 @@ class SpecialistStream:
         capability = "image" if active_expert == "vision" else active_expert
         if capability == "image":
             patches = [base64.b64decode(value, validate=True) for value in record["image_patches_u8_base64"]]
-            verify_image_supervision(record, patches=patches, tokenizer=self.tokenizer, image_marker=31_998)
+            self.runtime["image_verifier"](record, patches=patches, tokenizer=self.tokenizer, image_marker=31_998)
         elif capability == "audio":
             frames = [base64.b64decode(value, validate=True) for value in record["audio_frames_i16le_base64"]]
-            verify_audio_supervision(record, frames=frames, tokenizer=self.tokenizer, audio_marker=31_999)
+            self.runtime["audio_verifier"](record, frames=frames, tokenizer=self.tokenizer, audio_marker=31_999)
         elif capability in {"reasoning", "tool"}:
-            verify_capability_record(record)
+            self.runtime["capability_verifier"](record)
         else:
             raise ValueError("record lacks a specialist capability")
         return {"result": "VERIFIED", "capability": str(capability), "record_sha256": _sha256(canonical_record_bytes(record))}
@@ -316,6 +438,7 @@ def _family_commitment(stream: SpecialistStream, capability: str, record_count: 
     serialized_bytes = 0
     for index in range(record_count):
         record = stream.record_at(capability, index)
+        stream.verify_record(record)
         encoded = canonical_record_bytes(record)
         record_hash = _sha256(encoded)
         hashes.append(record_hash)
@@ -348,8 +471,11 @@ def build_stream_manifest(*, repo_root: Path, output_path: Path, tokenizer_path:
         raise ValueError("unknown specialist stream data class")
     tokenizer_bytes = tokenizer_path.read_bytes()
     config_bytes = model_config_path.read_bytes()
+    generator_sources = {name: _source_binding(repo_root, relative) for name, relative in _GENERATOR_SOURCES.items()}
+    verifier_sources = {name: _source_binding(repo_root, relative) for name, relative in _VERIFIER_SOURCES.items()}
     tokenizer = Tokenizer.from_str(tokenizer_bytes.decode("utf-8"))
-    stream = SpecialistStream(tokenizer, record_count, {})
+    runtime = _load_bound_runtime(repo_root, generator_sources, verifier_sources)
+    stream = SpecialistStream(tokenizer, record_count, {}, runtime=runtime)
     families = {capability: _family_commitment(stream, capability, record_count, chunk_size) for capability in CAPABILITIES}
     root = _sha256(b"".join(_frame(capability.encode("ascii"), bytes.fromhex(str(families[capability]["corpus_root_sha256"]))) for capability in CAPABILITIES))
     tokenizer_resolved, tokenizer_relative = _canonical_path(repo_root, tokenizer_path)
@@ -369,8 +495,8 @@ def build_stream_manifest(*, repo_root: Path, output_path: Path, tokenizer_path:
         "tokenizer": {"path": tokenizer_relative, "sha256": _sha256(tokenizer_bytes)},
         "consumer_limits": {"max_records_per_family": MAX_RECORDS_PER_FAMILY, "max_chunk_records": MAX_CHUNK_RECORDS},
         "model_config": {"path": config_relative, "sha256": _sha256(config_bytes)},
-        "generator_sources": {name: _source_binding(repo_root, relative) for name, relative in _GENERATOR_SOURCES.items()},
-        "verifier_sources": {name: _source_binding(repo_root, relative) for name, relative in _VERIFIER_SOURCES.items()},
+        "generator_sources": generator_sources,
+        "verifier_sources": verifier_sources,
         "families": families,
         "corpus_root_sha256": root,
     }
@@ -478,7 +604,6 @@ def open_specialist_stream(
     if manifest.get("corpus_root_sha256") != expected_corpus_root_sha256:
         raise ValueError("stream corpus root does not match caller authority")
     _require_sha256(manifest.get("corpus_root_sha256"), "stream corpus root")
-    _require_runtime_callable_origins(repo_root)
     tokenizer_bytes = _require_binding(repo_root, manifest.get("tokenizer"), "tokenizer")
     _require_binding(repo_root, manifest.get("model_config"), "model config")
     sources = manifest.get("generator_sources")
@@ -498,4 +623,5 @@ def open_specialist_stream(
         _validate_family_commitment(families[capability], capability=capability, count=count, chunk_size=chunk_size)
     if _manifest_corpus_root_sha256(families) != manifest["corpus_root_sha256"]:
         raise ValueError("stream corpus root does not bind family roots")
-    return SpecialistStream(Tokenizer.from_str(tokenizer_bytes.decode("utf-8")), count, families, chunk_size=chunk_size, manifest_sha256=_sha256(manifest_bytes))
+    runtime = _load_bound_runtime(repo_root, sources, verifiers)
+    return SpecialistStream(Tokenizer.from_str(tokenizer_bytes.decode("utf-8")), count, families, chunk_size=chunk_size, manifest_sha256=_sha256(manifest_bytes), runtime=runtime)

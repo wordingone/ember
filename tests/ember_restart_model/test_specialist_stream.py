@@ -34,17 +34,34 @@ def _frozen_tokenizer(path: Path) -> Path:
 
 class SpecialistStreamTests(unittest.TestCase):
     @staticmethod
-    def _open_bound(manifest_path: Path):
+    def _open_bound(manifest_path: Path, *, repo_root: Path = ROOT):
         from specialist_stream import open_specialist_stream
 
         manifest_bytes = manifest_path.read_bytes()
         manifest = json.loads(manifest_bytes)
         return open_specialist_stream(
-            repo_root=ROOT,
+            repo_root=repo_root,
             manifest_path=manifest_path,
             expected_manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
             expected_corpus_root_sha256=manifest["corpus_root_sha256"],
         )
+
+    @staticmethod
+    def _bounded_stream_fixture(root: Path) -> tuple[Path, Path]:
+        for relative in (
+            "tools/ember-restart-3b/build_owned_vision_scenes.py",
+            "tools/ember-restart-3b/build_owned_audio_frames.py",
+            "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
+            "tools/ember-restart-3b/specialist_semantics.py",
+            "tools/ember-restart-3b/verify_capability_record.py",
+            "configs/ember-restart-3b.json",
+        ):
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / relative).read_bytes())
+        tokenizer_path = root / "tokenizer.json"
+        _frozen_tokenizer(tokenizer_path)
+        return tokenizer_path, root / "configs/ember-restart-3b.json"
     def test_generators_expose_seekable_record_at_and_new_lineage_root(self) -> None:
         from build_owned_audio_frames import record_at as audio_record_at
         from build_owned_reasoning_tool_trajectories import record_at as trajectory_record_at
@@ -88,7 +105,15 @@ class SpecialistStreamTests(unittest.TestCase):
         from specialist_stream import open_specialist_stream
 
         manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
-        manifest = json.loads(manifest_path.read_bytes())
+        receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        manifest_bytes = manifest_path.read_bytes()
+        receipt_bytes = receipt_path.read_bytes()
+        self.assertEqual(hashlib.sha256(manifest_bytes).hexdigest(), "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427")
+        self.assertEqual(hashlib.sha256(receipt_bytes).hexdigest(), "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e")
+        manifest = json.loads(manifest_bytes)
+        receipt = json.loads(receipt_bytes)
+        self.assertEqual(receipt["stream_manifest_sha256"], hashlib.sha256(manifest_bytes).hexdigest())
+        self.assertEqual(receipt_bytes, json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
         stream = self._open_bound(manifest_path)
         measured = stream.validate_full_commitment(manifest["corpus_root_sha256"])
         self.assertEqual(set(measured), {"image", "audio", "reasoning", "tool"})
@@ -416,54 +441,208 @@ class SpecialistStreamTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "family roots"):
                 self._open_bound(manifest_path)
 
-    def test_open_rejects_shadowed_runtime_generator_callable(self) -> None:
-        from specialist_stream import build_stream_manifest
+    def test_open_uses_bound_generator_when_loaded_callable_diverges(self) -> None:
         import specialist_stream
 
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        with mock.patch.object(specialist_stream, "vision_record_at", lambda *_args, **_kwargs: {}):
+            record = self._open_bound(manifest_path).record_at("image", 0)
+        self.assertEqual(record["active_expert"], "vision")
+        self.assertIn("image_patches_u8_base64", record)
+
+    def test_open_uses_bound_verifier_when_loaded_callable_diverges(self) -> None:
+        import specialist_stream
+
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        with mock.patch.object(specialist_stream, "verify_image_supervision", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unbound verifier"))):
+            stream = self._open_bound(manifest_path)
+            record = stream.record_at("image", 0)
+            receipt = stream.verify_record(record)
+        self.assertEqual(receipt["result"], "VERIFIED")
+
+    def test_open_uses_bound_generator_dependency_when_loaded_helper_diverges(self) -> None:
+        import specialist_semantics
+
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        with mock.patch.object(specialist_semantics, "spatial_relation_caption", return_value="loaded helper divergence"):
+            record = self._open_bound(manifest_path).record_at("image", 0)
+        self.assertNotEqual(record["target_text"], "loaded helper divergence")
+
+    def test_open_uses_bound_verifier_dependency_when_loaded_helper_diverges(self) -> None:
+        import verify_capability_record
+
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        with mock.patch.object(verify_capability_record, "expected_receipt", return_value=None):
+            stream = self._open_bound(manifest_path)
+            record = stream.record_at("tool", 0)
+            receipt = stream.verify_record(record)
+        self.assertEqual(receipt["result"], "VERIFIED")
+    def test_rebuilt_manifest_uses_exact_generator_dependency_bytes(self) -> None:
+        from specialist_stream import build_stream_manifest
+        import specialist_semantics
+
+        real_source = ROOT / "tools" / "ember-restart-3b" / "specialist_semantics.py"
+        real_sha256 = hashlib.sha256(real_source.read_bytes()).hexdigest()
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
-            root = Path(directory)
+            root = Path(directory) / "fixture"
+            tokenizer_path, config_path = self._bounded_stream_fixture(root)
+            source_path = root / "tools" / "ember-restart-3b" / "specialist_semantics.py"
+            changed = source_path.read_bytes().replace(
+                b'return f"red is {relation} of green" if relation in {"left", "right"} else f"red is {relation} green"',
+                b'return "bound-helper-only-change"',
+                1,
+            )
+            source_path.write_bytes(changed)
             manifest_path = root / "stream.json"
             manifest = build_stream_manifest(
-                repo_root=ROOT,
+                repo_root=root,
                 output_path=manifest_path,
-                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
-                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                tokenizer_path=tokenizer_path,
+                model_config_path=config_path,
                 record_count=512,
                 chunk_size=64,
                 data_class="MEASURED_RUNG",
             )
+            stream = self._open_bound(manifest_path, repo_root=root)
+            records, _cursor = stream.next_records(capability="image", cursor=None, limit=1)
+            self.assertEqual(records[0]["target_text"], "bound-helper-only-change")
+            self.assertEqual(manifest["verifier_sources"]["semantics"]["sha256"], hashlib.sha256(changed).hexdigest())
+        self.assertEqual(hashlib.sha256(real_source.read_bytes()).hexdigest(), real_sha256)
+        self.assertEqual(hashlib.sha256(Path(specialist_semantics.__file__).read_bytes()).hexdigest(), real_sha256)
 
-            def shadowed_record_at(*_args: object, **_kwargs: object) -> dict[str, object]:
-                return {}
-
-            with mock.patch.object(specialist_stream, "vision_record_at", shadowed_record_at):
-                with self.assertRaisesRegex(ValueError, "runtime generator role"):
-                    self._open_bound(manifest_path)
-
-    def test_open_rejects_shadowed_runtime_verifier_callable(self) -> None:
+    def test_rebuilt_manifest_uses_exact_verifier_dependency_bytes(self) -> None:
         from specialist_stream import build_stream_manifest
-        import specialist_stream
+        import verify_capability_record
 
+        real_source = ROOT / "tools" / "ember-restart-3b" / "verify_capability_record.py"
+        real_sha256 = hashlib.sha256(real_source.read_bytes()).hexdigest()
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
-            root = Path(directory)
+            root = Path(directory) / "fixture"
+            tokenizer_path, config_path = self._bounded_stream_fixture(root)
+            source_path = root / "tools" / "ember-restart-3b" / "verify_capability_record.py"
+            changed = source_path.read_bytes().replace(b'    return receipt\n\n\ndef verify_record', b'    return dict(receipt)\n\n\ndef verify_record', 1)
+            source_path.write_bytes(changed)
             manifest_path = root / "stream.json"
             manifest = build_stream_manifest(
-                repo_root=ROOT,
+                repo_root=root,
                 output_path=manifest_path,
-                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
-                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                tokenizer_path=tokenizer_path,
+                model_config_path=config_path,
                 record_count=512,
                 chunk_size=64,
                 data_class="MEASURED_RUNG",
             )
+            stream = self._open_bound(manifest_path, repo_root=root)
+            records, _cursor = stream.next_records(capability="tool", cursor=None, limit=1)
+            receipt = stream.verify_record(records[0])
+            self.assertEqual(receipt["result"], "VERIFIED")
+            self.assertEqual(records[0]["capability_receipt"]["verifier_sha256"], hashlib.sha256(changed).hexdigest())
+            self.assertEqual(manifest["verifier_sources"]["capability"]["sha256"], hashlib.sha256(changed).hexdigest())
+        self.assertEqual(hashlib.sha256(real_source.read_bytes()).hexdigest(), real_sha256)
+        self.assertEqual(hashlib.sha256(Path(verify_capability_record.__file__).read_bytes()).hexdigest(), real_sha256)
+    def test_bound_verifier_hash_remains_at_open_snapshot_after_source_change(self) -> None:
+        from specialist_stream import build_stream_manifest
 
-            def shadowed_verifier(*_args: object, **_kwargs: object) -> None:
-                return None
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory) / "fixture"
+            tokenizer_path, config_path = self._bounded_stream_fixture(root)
+            source_path = root / "tools" / "ember-restart-3b" / "verify_capability_record.py"
+            original = source_path.read_bytes()
+            original_sha256 = hashlib.sha256(original).hexdigest()
+            manifest_path = root / "stream.json"
+            build_stream_manifest(
+                repo_root=root,
+                output_path=manifest_path,
+                tokenizer_path=tokenizer_path,
+                model_config_path=config_path,
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            stream = self._open_bound(manifest_path, repo_root=root)
+            changed = original + b"\n# copied verifier changed after open\n"
+            source_path.write_bytes(changed)
+            record = stream.record_at("tool", 0)
+            stream.verify_record(record)
+            self.assertEqual(record["capability_receipt"]["verifier_sha256"], original_sha256)
+            rebuilt_path = root / "rebuilt.json"
+            build_stream_manifest(
+                repo_root=root,
+                output_path=rebuilt_path,
+                tokenizer_path=tokenizer_path,
+                model_config_path=config_path,
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            rebuilt = self._open_bound(rebuilt_path, repo_root=root)
+            rebuilt_record = rebuilt.record_at("tool", 0)
+            rebuilt.verify_record(rebuilt_record)
+            self.assertEqual(rebuilt_record["capability_receipt"]["verifier_sha256"], hashlib.sha256(changed).hexdigest())
+    def test_bound_module_rejects_dynamic_project_import(self) -> None:
+        import specialist_stream
 
-            with mock.patch.object(specialist_stream, "verify_image_supervision", shadowed_verifier):
-                with self.assertRaisesRegex(ValueError, "runtime verifier role"):
-                    self._open_bound(manifest_path)
+        source_path = ROOT / "tools" / "ember-restart-3b" / "build_owned_vision_scenes.py"
+        with self.assertRaisesRegex(ValueError, "dynamic import"):
+            specialist_stream._load_bound_module(
+                ROOT,
+                b"__import__('specialist_semantics')\n",
+                source_path,
+                source_kind="generator",
+            )
+    def test_bound_module_rejects_builtins_importer_access(self) -> None:
+        import specialist_stream
 
+        source_path = ROOT / "tools" / "ember-restart-3b" / "build_owned_vision_scenes.py"
+        for source in (
+            b"import builtins\nbuiltins.__import__('specialist_semantics')\n",
+            b"import builtins\nvars(builtins)['__import__']('specialist_semantics')\n",
+        ):
+            with self.assertRaisesRegex(ValueError, "unrestricted importer"):
+                specialist_stream._load_bound_module(ROOT, source, source_path, source_kind="generator")
+
+    def test_bound_module_rejects_alias_importlib_and_ambient_registry(self) -> None:
+        import specialist_stream
+
+        source_path = ROOT / "tools" / "ember-restart-3b" / "build_owned_vision_scenes.py"
+        with self.assertRaisesRegex(ValueError, "declared dependency contract"):
+            specialist_stream._load_bound_module(
+                ROOT,
+                b"from importlib import import_module as loader\nloader('specialist_semantics')\n",
+                source_path,
+                source_kind="generator",
+            )
+        with self.assertRaisesRegex(ValueError, "ambient module registry"):
+            specialist_stream._load_bound_module(
+                ROOT,
+                b"import sys\nsys.modules['specialist_semantics']\n",
+                source_path,
+                source_kind="generator",
+            )
+    def test_build_refuses_invalid_bound_record_before_manifest_or_receipt_publication(self) -> None:
+        from specialist_stream import build_stream_manifest
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory) / "fixture"
+            tokenizer_path, config_path = self._bounded_stream_fixture(root)
+            generator_path = root / "tools" / "ember-restart-3b" / "build_owned_vision_scenes.py"
+            original = generator_path.read_bytes()
+            marker = b"    return {\"schema_version\": \"ember-owned-semantic-record-v1\""
+            offset = original.rfind(marker)
+            self.assertGreaterEqual(offset, 0)
+            generator_path.write_bytes(original[:offset] + b"    return {}\n")
+            manifest_path = root / "stream.json"
+            with self.assertRaisesRegex(ValueError, "record lacks a specialist capability"):
+                build_stream_manifest(
+                    repo_root=root,
+                    output_path=manifest_path,
+                    tokenizer_path=tokenizer_path,
+                    model_config_path=config_path,
+                    record_count=512,
+                    chunk_size=64,
+                    data_class="MEASURED_RUNG",
+                )
+            self.assertFalse(manifest_path.exists())
     def test_open_rejects_legacy_schema_alias(self) -> None:
         from specialist_stream import build_stream_manifest
 
