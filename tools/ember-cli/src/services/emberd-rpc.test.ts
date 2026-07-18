@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import net from "node:net";
 
 import {
+  callEmberd,
   configuredEmberdPipe,
   pingEmberd,
 } from "./emberd-rpc.ts";
@@ -29,6 +30,55 @@ describe("configuredEmberdPipe", () => {
 
 const winTest = process.platform === "win32" ? test : test.skip;
 
+winTest("callEmberd uses one request per connection and reconnects for each call", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-reconnect-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  let connections = 0;
+  const requests: Array<{ id: string; method: string; params: unknown }> = [];
+  const server = net.createServer((socket) => {
+    connections += 1;
+    socket.setEncoding("utf8");
+    socket.once("data", (line: string) => {
+      const request = JSON.parse(line) as { id: string; method: string; params: unknown };
+      requests.push(request);
+      socket.end(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { status: "ok" } }) + "\n");
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
+
+  await expect(callEmberd({ pipeName: pipe, requestId: "first", method: "ping", params: {} })).resolves.toEqual({ status: "ok" });
+  await expect(callEmberd({ pipeName: pipe, requestId: "second", method: "ping", params: {} })).resolves.toEqual({ status: "ok" });
+  expect(connections).toBe(2);
+  expect(requests).toEqual([
+    { jsonrpc: "2.0", id: "first", method: "ping", params: {} },
+    { jsonrpc: "2.0", id: "second", method: "ping", params: {} },
+  ]);
+});
+
+winTest("callEmberd retries a transient pipe-open failure within the bounded window", async () => {
+  const pipe = `\\\\.\\pipe\\emberd-p2c-retry-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  const pending = callEmberd({ pipeName: pipe, requestId: "retry", method: "ping", params: {} });
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const server = net.createServer((socket) => {
+    socket.setEncoding("utf8");
+    socket.once("data", (line: string) => {
+      const request = JSON.parse(line) as { id: string };
+      socket.end(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { status: "ok" } }) + "\n");
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
+  await expect(pending).resolves.toEqual({ status: "ok" });
+});
+
+test("callEmberd rejects a request above the daemon 65536-byte ceiling before connecting", async () => {
+  await expect(callEmberd({
+    pipeName: "\\\\.\\pipe\\emberd-p2c-too-large",
+    requestId: "too-large",
+    method: "ping",
+    params: { padding: "x".repeat(70_000) },
+  })).rejects.toThrow("request exceeds 65536 bytes");
+});
 winTest("pingEmberd sends one exact JSON-RPC ping and accepts only its matching response id", async () => {
   const pipe = `\\\\.\\pipe\\emberd-p2c-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const requests: unknown[] = [];

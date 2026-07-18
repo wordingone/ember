@@ -7,11 +7,21 @@ import net from "node:net";
 
 const PIPE_PREFIX = "\\\\.\\pipe\\emberd-";
 const OPERATOR_PIPE_PREFIX = "\\\\.\\pipe\\ember-operator-";
-const MAX_RESPONSE_BYTES = 64 * 1024;
-const DEFAULT_TIMEOUT_MS = 5_000;
+const MAX_FRAME_BYTES = 64 * 1024;
+const DEFAULT_RESPONSE_TIMEOUT_MS = 5_000;
+const OPEN_RETRY_INTERVAL_MS = 20;
+const OPEN_RETRY_WINDOW_MS = 10_000;
 
 export interface EmberdPingOptions {
   pipeName: string;
+  requestId?: string;
+  timeoutMs?: number;
+}
+
+export interface EmberdRequestOptions {
+  pipeName: string;
+  method: string;
+  params: Record<string, unknown>;
   requestId?: string;
   timeoutMs?: number;
 }
@@ -35,37 +45,84 @@ export function configuredEmberdPipe(
 }
 
 function responseError(message: string): Error {
-  return new Error("emberd ping rejected: " + message);
+  return new Error("emberd RPC rejected: " + message);
 }
 
-export async function pingEmberd(options: EmberdPingOptions): Promise<void> {
-  const pipeName = configuredEmberdPipe({ EMBERD_PIPE: options.pipeName });
-  const requestId = options.requestId ?? crypto.randomUUID();
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > DEFAULT_TIMEOUT_MS) {
-    throw new Error("emberd ping timeout must be a positive bounded integer");
-  }
-  const request = JSON.stringify({ jsonrpc: "2.0", id: requestId, method: "ping", params: {} }) + "\n";
+function isAccessDenied(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null
+    ? (error as NodeJS.ErrnoException).code
+    : undefined;
+  return code === "EACCES" || code === "EPERM";
+}
 
-  await new Promise<void>((resolve, reject) => {
+async function openEmberdPipe(pipeName: string): Promise<net.Socket> {
+  const deadline = Date.now() + OPEN_RETRY_WINDOW_MS;
+  return new Promise<net.Socket>((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: Error, socket?: net.Socket): void => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else if (socket) resolve(socket);
+      else reject(responseError("named-pipe open failed without a socket"));
+    };
+    const attempt = (): void => {
+      const socket = net.createConnection(pipeName);
+      const onError = (error: NodeJS.ErrnoException): void => {
+        socket.destroy();
+        if (isAccessDenied(error)) {
+          finish(responseError("same-user named-pipe access denied"));
+          return;
+        }
+        if (Date.now() >= deadline) {
+          finish(responseError("named-pipe open retry window elapsed: " + error.message));
+          return;
+        }
+        setTimeout(attempt, OPEN_RETRY_INTERVAL_MS);
+      };
+      socket.once("error", onError);
+      socket.once("connect", () => {
+        socket.removeListener("error", onError);
+        finish(undefined, socket);
+      });
+    };
+    attempt();
+  });
+}
+
+export async function callEmberd(options: EmberdRequestOptions): Promise<Record<string, unknown>> {
+  const pipeName = configuredEmberdPipe({ EMBERD_PIPE: options.pipeName });
+  if (!options.method || /[\r\n\0]/.test(options.method)) {
+    throw new Error("emberd RPC method must be one nonempty framed token");
+  }
+  const requestId = options.requestId ?? crypto.randomUUID();
+  const timeoutMs = options.timeoutMs ?? DEFAULT_RESPONSE_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > DEFAULT_RESPONSE_TIMEOUT_MS) {
+    throw new Error("emberd RPC response timeout must be a positive bounded integer");
+  }
+  const request = JSON.stringify({ jsonrpc: "2.0", id: requestId, method: options.method, params: options.params }) + "\n";
+  if (Buffer.byteLength(request, "utf8") > MAX_FRAME_BYTES) {
+    throw responseError("request exceeds 65536 bytes");
+  }
+  const socket = await openEmberdPipe(pipeName);
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
     let settled = false;
     let buffer = "";
-    const socket = net.createConnection(pipeName);
-    const finish = (error?: Error): void => {
+    const finish = (error?: Error, result?: Record<string, unknown>): void => {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
       socket.destroy();
       if (error) reject(error);
-      else resolve();
+      else if (result) resolve(result);
+      else reject(responseError("response completed without a result"));
     };
-    const deadline = setTimeout(() => finish(responseError("named-pipe connect/read timeout")), timeoutMs);
+    const deadline = setTimeout(() => finish(responseError("named-pipe response timeout")), timeoutMs);
 
-    socket.once("connect", () => socket.write(request));
     socket.once("error", (error) => finish(responseError(error.message)));
     socket.on("data", (chunk: Buffer | string) => {
       buffer += chunk.toString();
-      if (Buffer.byteLength(buffer, "utf8") > MAX_RESPONSE_BYTES) {
+      if (Buffer.byteLength(buffer, "utf8") > MAX_FRAME_BYTES) {
         finish(responseError("response exceeds 65536 bytes"));
         return;
       }
@@ -97,16 +154,27 @@ export async function pingEmberd(options: EmberdPingOptions): Promise<void> {
         return;
       }
       const result = record["result"];
-      if (
-        !result || typeof result !== "object" || Array.isArray(result)
-        || (result as Record<string, unknown>)["status"] !== "ok"
-      ) {
-        finish(responseError("ping result is malformed"));
+      if (!result || typeof result !== "object" || Array.isArray(result)) {
+        finish(responseError("response result is malformed"));
         return;
       }
-      finish();
+      finish(undefined, result as Record<string, unknown>);
     });
+    socket.write(request);
   });
+}
+
+export async function pingEmberd(options: EmberdPingOptions): Promise<void> {
+  const result = await callEmberd({
+    pipeName: options.pipeName,
+    requestId: options.requestId,
+    timeoutMs: options.timeoutMs,
+    method: "ping",
+    params: {},
+  });
+  if (result["status"] !== "ok") {
+    throw responseError("ping result is malformed");
+  }
 }
 
 export async function handshakeConfiguredEmberd(): Promise<void> {
