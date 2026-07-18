@@ -104,16 +104,16 @@ class TrainingDataVerifierTests(unittest.TestCase):
             config = root / "config.json"
             config_hash = _write_json(config, {"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}})
             source = root / "source.json"
-            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "image", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_image_property_execution", "source_description": "Owned RGB scene generator with labels recomputed from raw pixels.", "minimum_record_count": 4096, "minimum_token_count": 24576, "generator": {"path": "generator.py", "sha256": generator_hash}}})
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "image", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_image_spatial_relation_execution", "source_description": "Owned RGB scene generator with labels recomputed from raw pixels.", "minimum_record_count": 4096, "minimum_token_count": 24576, "generator": {"path": "generator.py", "sha256": generator_hash}}})
             raw = base64.b64encode(bytes(48 * 48 * 3)).decode("ascii")
-            record = {"active_expert": "vision", "token_ids": [31_998, 31_998, 31_998, 31_998, 1], "target_ids": [31_998, 31_998, 31_998, 1, 2], "image_patches_u8_base64": [raw, raw, raw, raw], "image_coordinates": [[0, 0], [1, 0], [0, 1], [1, 1]], "multimodal_spans": [{"start": 0, "length": 4, "modality": "image", "attention_mode": "isolated"}], "target_text": "fabricated label", "capability_evidence": {"image": {"caption_sha256": "0" * 64, "derivation": "raw_image_property_execution"}}}
+            record = {"active_expert": "vision", "token_ids": [31_998, 31_998, 31_998, 31_998, 1], "target_ids": [31_998, 31_998, 31_998, 1, 2], "image_patches_u8_base64": [raw, raw, raw, raw], "image_coordinates": [[0, 0], [1, 0], [0, 1], [1, 1]], "multimodal_spans": [{"start": 0, "length": 4, "modality": "image", "attention_mode": "isolated"}], "target_text": "fabricated label", "capability_evidence": {"image": {"caption_sha256": "0" * 64, "derivation": "raw_image_spatial_relation_execution"}}}
             records = root / "records.json"
             records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": [record]})
             data = root / "data.json"
             _write_json(data, {"schema_version": "ember-owned-training-data-v1", "capability": "image", "data_class": "SEMANTIC_PRETRAINING", "tokenizer_sha256": tokenizer_hash, "model_mediated": False, "borrowed_labels": False, "record_count": 1, "token_count": 5, "model_config": {"path": "config.json", "sha256": config_hash}, "source_manifest": {"path": "source.json", "sha256": source_hash}, "records_artifact": {"path": "records.json", "sha256": records_hash}})
             completed = subprocess.run([sys.executable, str(VERIFIER), "--data-manifest", str(data), "--tokenizer", str(tokenizer), "--capability", "image"], cwd=root, text=True, capture_output=True, timeout=15, check=False)
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("locally derived raw-scene caption", completed.stderr)
+        self.assertIn("spatial image scene must contain exactly one 4x4 object", completed.stderr)
 
     def test_specialist_manifest_rejects_smoke_sized_or_unqualified_source(self) -> None:
         """A deterministic one-row patch is a fixture, never specialist pretraining."""
@@ -181,7 +181,7 @@ class TrainingDataVerifierTests(unittest.TestCase):
             config = root / "config.json"
             config_hash = _write_json(config, {"model": {"vocab_size": 32_000, "image_projection": {"input_shape": [48, 48, 3]}, "audio_projection": {"frame_samples": 640}}})
             source = root / "source.json"
-            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "image", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_image_property_execution", "source_description": "Owned RGB source deliberately omits a content-addressed generator binding.", "minimum_record_count": 4096, "minimum_token_count": 24576}})
+            source_hash = _write_json(source, {"schema_version": "ember-owned-source-v1", "capability": "image", "model_mediated": False, "borrowed_labels": False, "semantic_provenance": {"schema_version": "ember-owned-semantic-source-v1", "origin": "owned_raw_samples", "target_derivation": "raw_image_spatial_relation_execution", "source_description": "Owned RGB source deliberately omits a content-addressed generator binding.", "minimum_record_count": 4096, "minimum_token_count": 24576}})
             records = root / "records.json"
             records_hash = _write_json(records, {"schema_version": "ember-owned-semantic-records-v1", "records": []})
             data = root / "data.json"
