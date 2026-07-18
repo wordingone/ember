@@ -1248,6 +1248,16 @@ export function ReplScreen({
       { id: assistantId, type: "assistant", content: "" },
     ]);
 
+    // #50 sequencing seam: the exact post-applyResultEvent transcript for THIS
+    // turn, captured once from setMessages's own `prev` (never from
+    // messagesRef.current -- that ref only syncs on the next render's effect,
+    // so reading it here can still observe the PRIOR turn's transcript,
+    // missing this turn's final stop_reason/usage or showing an error/
+    // max_turns outcome as if the preceding assistant turn were still open).
+    // Both the state write and the suggestion dispatch below read this SAME
+    // value -- no second, possibly-stale, read of messagesRef.current.
+    let completedTranscript: SessionMessage[] | null = null;
+
     try {
       for await (const ev of (engineRef.current as QueryEngine).submitMessage(text)) {
         if (abortCtrl.signal.aborted) break;
@@ -1290,7 +1300,14 @@ export function ReplScreen({
         } else if (event.type === "result") {
           // #157/#49: never discard the result event -- error/max_turns carry
           // the ONLY closing text the loop will ever produce for that turn.
-          setMessages((prev) => applyResultEvent(event, prev, assistantId));
+          // #50: capture the SAME array applyResultEvent produces here as
+          // `completedTranscript` -- `prev` is React's own queued state
+          // (guaranteed current as of this update), not the lagging ref.
+          setMessages((prev) => {
+            const next = applyResultEvent(event, prev, assistantId);
+            completedTranscript = next;
+            return next;
+          });
           break;
         }
       }
@@ -1326,9 +1343,16 @@ export function ReplScreen({
       }
 
       // Fire prompt-suggestion generation after each completed turn.
+      // #50: use the exact post-applyResultEvent snapshot captured above, not
+      // messagesRef.current -- the ref only updates via a later React effect,
+      // so reading it here (same tick as the result event) can still be the
+      // PRE-result transcript, missing this turn's final stop_reason/usage
+      // or hiding an error/max_turns outcome behind the still-open pending
+      // placeholder. Fall back to the ref only if no "result" event ever
+      // arrived this turn (e.g. the stream ended without one).
       if (!abortCtrl.signal.aborted && callModelRef.current) {
         void executePromptSuggestion({
-          messages:   adaptSessionMessagesForSuggestion(messagesRef.current),
+          messages:   adaptSessionMessagesForSuggestion(completedTranscript ?? messagesRef.current),
           getAppState: () => ({} as AppState),
           setAppState: (updater) => {
             const next = updater({} as AppState);
