@@ -1760,6 +1760,25 @@ def _verify_admission(
             errors.append("cli serving manifest: identity_path must equal /v1/models")
 
 
+def _load_trusted_verifier_registry_approval(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    try:
+        raw = path.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"trusted_verifier_registry_approval: {exc}") from exc
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema_version", "trusted_verifier_registry_sha256"
+    }:
+        raise ValueError("trusted_verifier_registry_approval: closed schema required")
+    if payload.get("schema_version") != "ember-trusted-verifier-registry-approval-v1":
+        raise ValueError("trusted_verifier_registry_approval: invalid schema_version")
+    registry_sha256 = payload.get("trusted_verifier_registry_sha256")
+    if not isinstance(registry_sha256, str) or not SHA256_RE.fullmatch(registry_sha256):
+        raise ValueError("trusted_verifier_registry_approval: expected lowercase SHA-256")
+    return registry_sha256
+
 def validate_manifest(
     path: Path,
     trusted_verifier_registry: Path | None = None,
@@ -1807,9 +1826,17 @@ def main(argv: list[str] | None = None) -> int:
     validate = subparsers.add_parser("validate")
     validate.add_argument("manifest", type=Path)
     validate.add_argument("--trusted-verifier-registry", type=Path)
-    validate.add_argument("--expected-trusted-verifier-registry-sha256")
+    validate.add_argument("--trusted-verifier-registry-approval", type=Path)
     args = parser.parse_args(argv)
-    result = validate_manifest(args.manifest, args.trusted_verifier_registry, args.expected_trusted_verifier_registry_sha256)
+    try:
+        expected_registry_sha256 = _load_trusted_verifier_registry_approval(
+            args.trusted_verifier_registry_approval
+        )
+    except ValueError as exc:
+        result = {"valid": False, "stage": None, "errors": [str(exc)]}
+        print(json.dumps(result, sort_keys=True))
+        return 1
+    result = validate_manifest(args.manifest, args.trusted_verifier_registry, expected_registry_sha256)
     print(json.dumps(result, sort_keys=True))
     return 0 if result["valid"] else 1
 
