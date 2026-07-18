@@ -274,7 +274,11 @@ describe("process entry model-seat enforcement", () => {
           initCalls += 1;
         },
         getLoopDepsFn: fakeDeps,
-        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        builtinToolsFn: async () => [{ name: "clean-checkout-tool" }] as never[],
+        headlessRunner: async (_prompt, _io, tools) => {
+          expect(tools).toEqual([{ name: "clean-checkout-tool" }]);
+          return { events: [], exitCode: 0 };
+        },
         exitFn: (code: number) => {
           exitCode = code;
         },
@@ -399,7 +403,11 @@ describe("process entry model-seat enforcement", () => {
           initCalls += 1;
         },
         getLoopDepsFn: fakeDeps,
-        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        builtinToolsFn: async () => [{ name: "clean-checkout-tool" }] as never[],
+        headlessRunner: async (_prompt, _io, tools) => {
+          expect(tools).toEqual([{ name: "clean-checkout-tool" }]);
+          return { events: [], exitCode: 0 };
+        },
         exitFn: (code: number) => {
           exitCode = code;
         },
