@@ -55,6 +55,23 @@ describe("activity transcript retention window", () => {
     expect(second.messages.find((message) => message.type === "activity_compacted")?.droppedCount).toBe(225);
   });
 });
+  it("counts a feed-ring sequence gap on a cold remount without double-counting prior compaction", () => {
+    const highStartingFeed = Array.from(
+      { length: ACTIVITY_TRANSCRIPT_CAP },
+      (_, index) => line(index + 100),
+    );
+
+    const remounted = advanceActivityTranscript([], 0, highStartingFeed);
+    expect(remounted.cursor).toBe(299);
+    expect(remounted.messages.filter((message) => message.type === "activity")).toHaveLength(ACTIVITY_TRANSCRIPT_CAP);
+    expect(remounted.messages.find((message) => message.type === "activity_compacted")?.droppedCount).toBe(99);
+
+    const advanced = advanceActivityTranscript(remounted.messages, remounted.cursor, [line(500)]);
+    expect(advanced.cursor).toBe(500);
+    expect(advanced.messages.filter((message) => message.type === "activity")).toHaveLength(ACTIVITY_TRANSCRIPT_CAP);
+    expect(advanced.messages.find((message) => message.type === "activity_compacted")?.droppedCount).toBe(300);
+  });
+
 
   it("converges to the preregistered 201-message state ceiling over 50,000 new events and a repeated snapshot", () => {
     let state = advanceActivityTranscript([], 0, []);

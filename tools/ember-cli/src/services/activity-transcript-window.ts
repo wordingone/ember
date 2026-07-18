@@ -58,7 +58,8 @@ export function advanceActivityTranscript(
     .map((message, index) => (message.type === "activity" ? index : -1))
     .filter((index) => index >= 0);
   const overflow = Math.max(0, activityIndexes.length - ACTIVITY_TRANSCRIPT_CAP);
-  if (overflow === 0) return { messages: combined, cursor: nextCursor };
+  const sequenceGap = Math.max(0, fresh[0]!.sequence - cursor - 1);
+  if (overflow === 0 && sequenceGap === 0) return { messages: combined, cursor: nextCursor };
 
   const oldCursorIndex = combined.findIndex((message) => message.type === "activity_compacted");
   const removedActivityIndexes = new Set(activityIndexes.slice(0, overflow));
@@ -67,7 +68,7 @@ export function advanceActivityTranscript(
     activityIndexes[0]!,
   );
   const droppedCount =
-    combined.reduce((count, message) => count + compactedCount(message), 0) + overflow;
+    combined.reduce((count, message) => count + compactedCount(message), 0) + sequenceGap + overflow;
   const nextMessages: TranscriptMessage[] = [];
 
   for (let index = 0; index < combined.length; index += 1) {
