@@ -8,9 +8,12 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import { callEmberd } from "../services/emberd-rpc.ts";
+
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import {
   buildOwnedServerCommand,
+  dispatchManifestParams,
   ensureOwnedServer,
   probeOwnedEndpointPresence,
   validateOwnedDispatchManifest,
@@ -43,6 +46,21 @@ function identity(): OwnedModelIdentity {
   };
 }
 
+const realDaemonPipe = process.env["EMBERD_REAL_DAEMON_PIPE"];
+const realDaemonManifest = process.env["EMBERD_REAL_DAEMON_MANIFEST"];
+
+describe.skipIf(!(realDaemonPipe && realDaemonManifest))("owned server supervisor real emberd bridge", () => {
+  it("uses the production manifest_utf8 request type against the real Rust daemon", async () => {
+    const manifestBytes = readFileSync(realDaemonManifest!);
+    const result = await callEmberd({
+      pipeName: realDaemonPipe!,
+      method: "dispatch_manifest",
+      params: dispatchManifestParams(manifestBytes),
+      timeoutMs: 5_000,
+    });
+    expect(result["pid"]).toSatisfy((value) => typeof value === "number" && value > 0);
+  });
+});
 describe("owned server supervisor", () => {
   it("treats a silent occupied TCP listener as present", async () => {
     const server = createServer(() => {});
@@ -349,7 +367,7 @@ describe("owned server supervisor", () => {
     let receivedManifest: unknown;
     const server = createServer((socket) => {
       socket.once("data", (buffer) => {
-        const request = JSON.parse(buffer.toString("utf8")) as { id: string; params: { manifest_bytes: number[]; manifest_sha256: string } };
+        const request = JSON.parse(buffer.toString("utf8")) as { id: string; params: { manifest_utf8: string; manifest_sha256: string } };
         receivedManifest = request.params;
         writeFileSync(sourcePath, "{\"mutated\":true}");
         socket.end(JSON.stringify({
@@ -370,7 +388,7 @@ describe("owned server supervisor", () => {
       });
       expect(result).toMatchObject({ outcome: "dispatched", pid: 77 });
       expect(receivedManifest).toEqual({
-        manifest_bytes: Array.from(manifestBytes),
+        manifest_utf8: manifestBytes.toString("utf8"),
         manifest_sha256: new Bun.CryptoHasher("sha256").update(manifestBytes).digest("hex"),
       });
       expect(readFileSync(sourcePath, "utf8")).toBe("{\"mutated\":true}");
@@ -419,7 +437,33 @@ describe("owned server supervisor", () => {
       else process.env["EMBERD_DISPATCH_MANIFEST"] = priorManifest;
     }
   });
-  it("rejects a dispatch manifest whose server binding differs from the selected owned identity", () => {
+  it("rejects invalid UTF-8 dispatch manifest bytes before opening a daemon pipe", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-p2d-invalid-utf8-"));
+    const manifest = join(root, "dispatch.json");
+    const previousPipe = process.env["EMBERD_PIPE"];
+    const previousManifest = process.env["EMBERD_DISPATCH_MANIFEST"];
+    const previousCommit = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+    writeFileSync(manifest, Buffer.from([0xff]));
+    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-invalid-utf8";
+    process.env["EMBERD_DISPATCH_MANIFEST"] = manifest;
+    (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = "e".repeat(40);
+    let spawned = 0;
+    try {
+      await expect(ensureOwnedServer(identity(), {
+        probePresence: async () => "absent",
+        spawnServer: () => { spawned += 1; throw new Error("must not direct-spawn"); },
+      })).rejects.toThrow("cannot read dispatch manifest");
+      expect(spawned).toBe(0);
+    } finally {
+      if (previousPipe === undefined) delete process.env["EMBERD_PIPE"];
+      else process.env["EMBERD_PIPE"] = previousPipe;
+      if (previousManifest === undefined) delete process.env["EMBERD_DISPATCH_MANIFEST"];
+      else process.env["EMBERD_DISPATCH_MANIFEST"] = previousManifest;
+      if (previousCommit === undefined) delete (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+      else (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = previousCommit;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });  it("rejects a dispatch manifest whose server binding differs from the selected owned identity", () => {
     const owned = identity();
     const command = buildOwnedServerCommand(owned, "cuda");
     const launch = owned.launch;
