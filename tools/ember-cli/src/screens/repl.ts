@@ -89,6 +89,7 @@ import {
   makeSuggestionExecutor,
 } from "../services/prompt-suggestion.ts";
 import type { AppState } from "../state/app-state.ts";
+import type { EmberMessage } from "../types/message-types.ts";
 import type { CallModelParams, ModelResponse } from "../query/query-loop-support.ts";
 import { tryDispatchSlashCommand, parseSlashInput } from "../services/slash-dispatch.ts";
 import { consumePostCompaction } from "../session-state.ts";
@@ -548,6 +549,65 @@ export function applyResultEvent(
       ? { ...m, stop_reason: finalMessage.stop_reason, usage: finalMessage.usage }
       : m,
   );
+}
+
+// ---------------------------------------------------------------------------
+// adaptSessionMessagesForSuggestion — issue #50: prompt-suggestion's guard
+// chain (tryGenerateSuggestion) filters on EmberMessage's `role`/`stop_reason`
+// fields, but the REPL transcript is SessionMessage[] (`{id, type, ...}` --
+// app-shell.ts), which has never carried a `role` field. The call site papered
+// over the mismatch with `messages as any`, so Guard 2's
+// `messages.filter(m => m.role === "assistant")` always saw zero matches and
+// the feature could never fire (confirmed: the "as any" cast at the call site
+// and this filter both date to the original publish commit 2051802 -- the
+// shapes never matched in production, so the feature was never live).
+//
+// This is the one boundary adapter (per #50 scope clause 2 -- no forked
+// message type): it maps the transcript's SessionMessage[] to the
+// EmberMessage[] shape the suggestion module expects, threading the
+// stop_reason/usage fields applyResultEvent already attaches at the pending
+// message (see above). Guard-4 usage note (#52 clause 6): the adapter copies
+// each message's `usage` through UNCHANGED -- getParentCacheSuppressReason
+// (prompt-suggestion.ts) reads only the LAST assistant message's own
+// input/cache-creation/output token fields (a per-turn, uncached figure, not
+// a running cumulative total), so no aggregation belongs at this seam.
+// ---------------------------------------------------------------------------
+
+export function adaptSessionMessagesForSuggestion(
+  messages: SessionMessage[],
+): EmberMessage[] {
+  const adapted: EmberMessage[] = [];
+  for (const m of messages) {
+    // Malformed entries (missing/non-string type, or not an object) are
+    // dropped rather than crashing the adapter or the guard chain downstream.
+    if (!m || typeof m !== "object" || typeof m.type !== "string") continue;
+
+    let role: EmberMessage["role"] | null = null;
+    if (m.type === "user") role = "user";
+    else if (m.type === "assistant") role = "assistant";
+    // A transcript entry of type "error" (applyResultEvent's error/max_turns
+    // paths) replaces the pending assistant bubble for a turn that failed --
+    // it IS that turn's assistant outcome, so it maps to role "assistant"
+    // with the literal stop_reason "error" Guard 3 checks for.
+    else if (m.type === "error") role = "assistant";
+    else continue; // welcome/tool_result/compaction/command/etc. -- not a turn
+
+    const content = typeof m["content"] === "string" ? m["content"] : "";
+    const entry: EmberMessage = { role, content };
+    if (m.type === "error") {
+      entry.stop_reason = "error";
+    } else if (
+      typeof m["stop_reason"] === "string" ||
+      m["stop_reason"] === null
+    ) {
+      entry.stop_reason = m["stop_reason"] as string | null;
+    }
+    if (m["usage"] !== undefined) {
+      entry["usage"] = m["usage"];
+    }
+    adapted.push(entry);
+  }
+  return adapted;
 }
 
 // ---------------------------------------------------------------------------
@@ -1268,7 +1328,7 @@ export function ReplScreen({
       // Fire prompt-suggestion generation after each completed turn.
       if (!abortCtrl.signal.aborted && callModelRef.current) {
         void executePromptSuggestion({
-          messages:   messagesRef.current as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          messages:   adaptSessionMessagesForSuggestion(messagesRef.current),
           getAppState: () => ({} as AppState),
           setAppState: (updater) => {
             const next = updater({} as AppState);
