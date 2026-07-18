@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // model-config.ts
 // Feature capability queries for model variants available in Ember.
 // L1 leaf: no intra-ember dependencies.
@@ -5,14 +9,18 @@
 /** The local inference model identifier. */
 export const LOCAL_MODEL_ID = 'qwen-3.6';
 
-// ---- Internal helpers ----
-
-/** Strips the [1m] multi-instance suffix before capability lookup. */
-function canonicalize(modelId: string): string {
-  return modelId.replace(/\[1m\]$/, '');
-}
-
 // ---- Capability queries ----
+
+/**
+ * A capability declaration bound to a served model's exact
+ * `modelConfigSha256` (see `entrypoints/model-seat.ts::SelectedModelContract`).
+ * `modelConfigSha256` is `null` when no owned identity is selected (e.g. a
+ * REFERENCE_ONLY or OFFLINE seat) — never a hardcoded model-name literal.
+ */
+export interface ModelCapabilityDeclaration {
+  modelConfigSha256: string | null;
+  structuredOutputs: boolean;
+}
 
 /**
  * Returns true when the model supports Inline Streaming Prefill (ISP).
@@ -32,11 +40,25 @@ export function modelSupportsContextManagement(_modelId: string): boolean {
 }
 
 /**
- * Returns true when the model supports structured JSON outputs.
- * The local model supports this via llama-server grammar constraints.
+ * Returns true when the served model supports structured JSON outputs.
+ *
+ * Never inferred from a model-id string literal. Honored ONLY when the
+ * caller supplies an exact capability declaration bound to the served
+ * model's `modelConfigSha256` — an owned identity without such a
+ * declaration (or without a `modelConfigSha256` to bind it to) defaults to
+ * false.
  */
-export function modelSupportsStructuredOutputs(modelId: string): boolean {
-  return canonicalize(modelId) === LOCAL_MODEL_ID;
+export function modelSupportsStructuredOutputs(
+  declaration: ModelCapabilityDeclaration | null | undefined,
+): boolean {
+  if (declaration == null) return false;
+  if (
+    typeof declaration.modelConfigSha256 !== 'string' ||
+    declaration.modelConfigSha256.trim() === ''
+  ) {
+    return false;
+  }
+  return declaration.structuredOutputs === true;
 }
 
 /**

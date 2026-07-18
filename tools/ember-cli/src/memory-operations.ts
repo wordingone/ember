@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // memory-operations.ts — memory file scanning, prompt assembly, and relevance selection.
 
 import { readdir, readFile, stat } from 'fs/promises';
@@ -13,9 +17,6 @@ export const PER_FILE_SIZE_LIMIT = 25 * 1024; // 25 KB
 
 /** Maximum total byte size of the assembled memory block. */
 export const TOTAL_BLOCK_LIMIT = 100 * 1024; // 100 KB
-
-/** Model used for semantic relevance selection. */
-export const SELECT_MODEL = 'qwen-3.6';
 
 // ---- Types ----
 
@@ -328,20 +329,24 @@ export function findRelevantMemories(
 /**
  * Uses the provided model function to select the most relevant entries for `query`.
  *
+ * - Consumes the currently selected model contract's identity (see
+ *   `entrypoints/model-seat.ts::selectedModelContract`) via `modelName` —
+ *   never a hardcoded ordinary-fallback literal.
  * - Returns entries in model-returned order (with unselected entries appended)
  * - Falls back to all entries on model error
- * - Returns all entries when `callModel` is not provided
+ * - Returns all entries when `callModel` or `modelName` is not provided
  */
 export async function selectRelevantMemories(
   entries: MemoryFileEntry[],
   query: string,
   callModel?: SelectModelFn,
+  modelName?: string,
 ): Promise<MemoryFileEntry[]> {
-  if (!callModel || entries.length === 0) return entries;
+  if (!callModel || !modelName || entries.length === 0) return entries;
 
   try {
     const descriptions = entries.map((e) => ({ name: e.name, description: e.description }));
-    const selected = await callModel({ model: SELECT_MODEL, descriptions });
+    const selected = await callModel({ model: modelName, descriptions });
 
     // Build a map for fast lookup
     const byName = new Map(entries.map((e) => [e.name, e]));

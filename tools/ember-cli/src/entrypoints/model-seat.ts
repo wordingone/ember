@@ -46,6 +46,14 @@ export interface OwnedModelIdentity {
   serverSourceSha256: string;
   tokenizerSha256: string;
   launch?: OwnedServerLaunch;
+  /**
+   * Capability declaration bound to this identity's exact `modelConfigSha256`.
+   * Absent by default — an owned identity carries no capability unless it is
+   * explicitly declared here (see `selectedModelContract`).
+   */
+  capabilities?: {
+    structuredOutputs: boolean;
+  };
 }
 
 const MODEL_FREE_FAST_FLAGS = new Set([
@@ -86,6 +94,17 @@ export interface ModelSeatDecision {
   argv: string[];
   ownedIdentity?: OwnedModelIdentity;
   error?: string;
+}
+
+/**
+ * The truthful, currently-selected model identity + capability contract.
+ * See `selectedModelContract` for derivation rules.
+ */
+export interface SelectedModelContract {
+  seat: ModelSeat;
+  modelName: string;
+  modelConfigSha256: string | null;
+  structuredOutputs: boolean;
 }
 
 export function resolveModelSeat(
@@ -178,4 +197,61 @@ export function referenceSeatModelName(modelName: string | undefined): string {
   return subject.startsWith("REFERENCE_ONLY: ")
     ? subject
     : "REFERENCE_ONLY: " + subject;
+}
+
+/**
+ * The truthful, currently-selected model identity + capability contract,
+ * derived from a `ModelSeatDecision`. Never a hardcoded model-name literal.
+ *
+ * - A refused decision (no seat) selects no contract.
+ * - REFERENCE_ONLY (Qwen or any borrowed model) is reachable only through
+ *   this explicit seat, and its identity is always labeled via
+ *   `referenceSeatModelName` — it never carries structured-outputs
+ *   capability.
+ * - OFFLINE carries no model identity and no capability.
+ * - An owned identity (OWNED_ADMITTED / OWNED_DEVELOPMENT) reports
+ *   `structuredOutputs` true ONLY when the identity declares it AND an
+ *   exact `modelConfigSha256` is present to bind that declaration to.
+ *   An owned identity without a declaration defaults to false.
+ */
+export function selectedModelContract(
+  decision: ModelSeatDecision,
+): SelectedModelContract | null {
+  if (!decision.allowed || decision.seat === null) return null;
+
+  if (decision.seat === "REFERENCE_ONLY") {
+    return {
+      seat: "REFERENCE_ONLY",
+      modelName: referenceSeatModelName(decision.ownedIdentity?.modelName),
+      modelConfigSha256: null,
+      structuredOutputs: false,
+    };
+  }
+
+  if (decision.seat === "OFFLINE") {
+    return {
+      seat: "OFFLINE",
+      modelName: "OFFLINE",
+      modelConfigSha256: null,
+      structuredOutputs: false,
+    };
+  }
+
+  const identity = decision.ownedIdentity;
+  if (!identity) return null;
+
+  const modelConfigSha256 =
+    typeof identity.modelConfigSha256 === "string" &&
+    identity.modelConfigSha256.trim() !== ""
+      ? identity.modelConfigSha256
+      : null;
+
+  return {
+    seat: decision.seat,
+    modelName: identity.modelName,
+    modelConfigSha256,
+    structuredOutputs:
+      modelConfigSha256 !== null &&
+      identity.capabilities?.structuredOutputs === true,
+  };
 }

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import { describe, expect, test } from 'bun:test';
 import {
   modelSupportsISP,
@@ -32,12 +36,33 @@ describe('modelSupportsContextManagement', () => {
 });
 
 describe('modelSupportsStructuredOutputs', () => {
-  test('local model (qwen3.6) supports structured outputs via llama-server grammar', () => {
-    expect(modelSupportsStructuredOutputs(LOCAL_MODEL_ID)).toBe(true);
+  test('no declaration defaults to false', () => {
+    expect(modelSupportsStructuredOutputs(null)).toBe(false);
+    expect(modelSupportsStructuredOutputs(undefined)).toBe(false);
   });
 
-  test('unknown model returns false', () => {
-    expect(modelSupportsStructuredOutputs('some-unknown')).toBe(false);
+  test('a declaration without a bound modelConfigSha256 defaults to false', () => {
+    expect(
+      modelSupportsStructuredOutputs({ modelConfigSha256: null, structuredOutputs: true }),
+    ).toBe(false);
+  });
+
+  test('an exact declaration bound to modelConfigSha256 is honored', () => {
+    expect(
+      modelSupportsStructuredOutputs({
+        modelConfigSha256: 'd'.repeat(64),
+        structuredOutputs: true,
+      }),
+    ).toBe(true);
+  });
+
+  test('a bound declaration with structuredOutputs=false stays false', () => {
+    expect(
+      modelSupportsStructuredOutputs({
+        modelConfigSha256: 'd'.repeat(64),
+        structuredOutputs: false,
+      }),
+    ).toBe(false);
   });
 });
 

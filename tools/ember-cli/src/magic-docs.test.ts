@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { mkdir, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -6,9 +10,10 @@ import {
   PRIVILEGED_USER_TYPE,
   MAIN_REPL_QUERY_SOURCE,
   MAGIC_DOCS_HEADER_PATTERN,
-  MAGIC_DOCS_MODEL,
   type MagicDocsServiceOptions,
 } from './magic-docs';
+
+const TEST_MODEL_NAME = 'ember-owned:' + 'a'.repeat(64);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -36,6 +41,7 @@ function makeOptions(overrides: Partial<MagicDocsServiceOptions> = {}): MagicDoc
     },
     writeFileFn: async (p, c) => { written.set(p, c); },
     customPromptPath: join(TEST_DIR, 'prompt.md'),
+    modelName: TEST_MODEL_NAME,
     ...overrides,
   };
 }
@@ -94,8 +100,15 @@ describe('AC2: main-thread turn completion triggers update for read registered f
     expect(written.get('/my/magic.md')).toBe(updatedContent);
   });
 
-  test('model is specified as MAGIC_DOCS_MODEL constant', () => {
-    expect(MAGIC_DOCS_MODEL).toBe('qwen-3.6');
+  test('the model passed to callModel is sourced from options.modelName, never a hardcoded literal', async () => {
+    let capturedModel = '';
+    const svc = createMagicDocsService(makeOptions({
+      callModel: async ({ model }) => { capturedModel = model; return MAGIC_CONTENT; },
+    }));
+    svc.onFileRead('/my/magic.md', MAGIC_CONTENT, MAIN_REPL_QUERY_SOURCE);
+    svc.onTurnComplete(MAIN_REPL_QUERY_SOURCE, ['/my/magic.md']);
+    await new Promise<void>((r) => setTimeout(r, 50));
+    expect(capturedModel).toBe(TEST_MODEL_NAME);
   });
 });
 

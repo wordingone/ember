@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // magic-docs.ts — Auto-updating magic documentation files for privileged users.
 
 // ---------------------------------------------------------------------------
@@ -12,9 +16,6 @@ export const MAIN_REPL_QUERY_SOURCE = 'main_repl';
 
 /** Pattern that a file must match in its content to be considered a magic-docs file. */
 export const MAGIC_DOCS_HEADER_PATTERN = /<!--\s*magic-docs\s+version=\d+\s*-->/;
-
-/** Model used to regenerate magic-docs content. */
-export const MAGIC_DOCS_MODEL = 'qwen-3.6';
 
 // ---------------------------------------------------------------------------
 // Default system prompt (used when no custom prompt.md exists)
@@ -59,6 +60,14 @@ export interface MagicDocsServiceOptions {
    * `readFileFn` should throw and the built-in default prompt is used.
    */
   customPromptPath: string;
+
+  /**
+   * Model name to pass to `callModel` when regenerating a magic-docs file.
+   * Sourced from the currently selected model contract (see
+   * `entrypoints/model-seat.ts::selectedModelContract`) — never a hardcoded
+   * ordinary-fallback literal.
+   */
+  modelName: string;
 }
 
 interface MagicDocsService {
@@ -109,7 +118,7 @@ export function createMagicDocsService(options: MagicDocsServiceOptions): MagicD
 
         const updated = await options.callModel({
           prompt,
-          model: MAGIC_DOCS_MODEL,
+          model: options.modelName,
           fileContent,
         });
 

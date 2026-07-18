@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import { describe, expect, test, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
@@ -15,10 +19,11 @@ import {
   PER_FILE_LINE_LIMIT,
   PER_FILE_SIZE_LIMIT,
   TOTAL_BLOCK_LIMIT,
-  SELECT_MODEL,
   type MemoryFileEntry,
   type SelectModelFn,
 } from './memory-operations';
+
+const TEST_MODEL_NAME = 'ember-owned:' + 'a'.repeat(64);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -226,8 +231,8 @@ describe('AC3: per-file size truncation at 25 KB', () => {
 // AC4: selectRelevantMemories uses Sonnet, not Haiku
 // ---------------------------------------------------------------------------
 
-describe('AC4: selectRelevantMemories uses Sonnet model', () => {
-  test('passes SELECT_MODEL (Sonnet) to the callModel function', async () => {
+describe('AC4: selectRelevantMemories consumes the selected model contract identity', () => {
+  test('passes the caller-supplied modelName to the callModel function, never a hardcoded literal', async () => {
     let capturedModel: string | undefined;
     const mockCallModel: SelectModelFn = async ({ model, descriptions }) => {
       capturedModel = model;
@@ -239,12 +244,8 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
       makeEntry({ name: 'b', description: 'Banana info' }),
     ];
 
-    await selectRelevantMemories(entries, 'fruit', mockCallModel);
-    expect(capturedModel).toBe(SELECT_MODEL);
-  });
-
-  test('SELECT_MODEL constant is qwen-3.6', () => {
-    expect(SELECT_MODEL).toBe('qwen-3.6');
+    await selectRelevantMemories(entries, 'fruit', mockCallModel, TEST_MODEL_NAME);
+    expect(capturedModel).toBe(TEST_MODEL_NAME);
   });
 
   test('returns all entries on API error (fallback)', async () => {
@@ -253,7 +254,7 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
       makeEntry({ name: 'b', description: 'b' }),
     ];
     const throwingModel: SelectModelFn = async () => { throw new Error('API error'); };
-    const result = await selectRelevantMemories(entries, 'query', throwingModel);
+    const result = await selectRelevantMemories(entries, 'query', throwingModel, TEST_MODEL_NAME);
     expect(result).toHaveLength(2);
   });
 
@@ -264,7 +265,7 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
       makeEntry({ name: 'c', description: 'Gamma' }),
     ];
     const mockCallModel: SelectModelFn = async () => ['c', 'a', 'b'];
-    const result = await selectRelevantMemories(entries, 'query', mockCallModel);
+    const result = await selectRelevantMemories(entries, 'query', mockCallModel, TEST_MODEL_NAME);
     expect(result[0]!.name).toBe('c');
     expect(result[1]!.name).toBe('a');
     expect(result[2]!.name).toBe('b');
@@ -273,6 +274,13 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
   test('returns all entries when no callModel provided', async () => {
     const entries = [makeEntry({ name: 'a' }), makeEntry({ name: 'b' })];
     const result = await selectRelevantMemories(entries, 'query');
+    expect(result).toHaveLength(2);
+  });
+
+  test('returns all entries when callModel is provided but no modelName is selected', async () => {
+    const mockCallModel: SelectModelFn = async ({ descriptions }) => descriptions.map((d) => d.name);
+    const entries = [makeEntry({ name: 'a' }), makeEntry({ name: 'b' })];
+    const result = await selectRelevantMemories(entries, 'query', mockCallModel);
     expect(result).toHaveLength(2);
   });
 });
