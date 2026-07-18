@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/activity-transcript-window.ts — bounded REPL projection of the durable activity ledger.
 
 export const ACTIVITY_TRANSCRIPT_CAP = 200;

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/activity-feed.ts — issue #485 rung 1: the real-event engine behind the cockpit's
 // activity feed. The operator's verbatim complaint (3+ weeks up, zero activity ever seen) and
 // the board (C-PROC/C-OBS/C13 all RED) agree this is a genuine gap, not a perception problem —
