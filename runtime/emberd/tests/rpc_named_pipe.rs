@@ -230,6 +230,53 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
 }
 
 #[test]
+fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation() {
+    let root = sandbox("dispatch-bytes");
+    let db = root.join("emberd.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\emberd-dispatch-bytes-test-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "dispatch-bytes-job");
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    fs::write(&manifest, b"{\"mutated_after_cli_read\":true}").unwrap();
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 200, "ping", json!({}))["status"], "ok");
+
+    let result = rpc(
+        &pipe,
+        201,
+        "dispatch_manifest",
+        json!({"manifest_bytes": manifest_bytes, "manifest_sha256": manifest_sha256}),
+    );
+    assert!(result["pid"].as_u64().unwrap() > 0);
+    let receipt = PathBuf::from(result["preflight_receipt_path"].as_str().unwrap());
+    assert_eq!(sha256(&receipt), result["preflight_receipt_sha256"]);
+    assert_eq!(
+        rpc(
+            &pipe,
+            202,
+            "job_state",
+            json!({"job_id": "dispatch-bytes-job"})
+        )["state"],
+        "running"
+    );
+    rpc(
+        &pipe,
+        203,
+        "stop_job",
+        json!({"job_id": "dispatch-bytes-job"}),
+    );
+    rpc(&pipe, 204, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+#[test]
 fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     let root = sandbox("restart");
     let db = root.join("emberd.sqlite3");

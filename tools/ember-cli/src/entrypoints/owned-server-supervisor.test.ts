@@ -14,7 +14,7 @@ import {
   ensureOwnedServer,
   probeOwnedEndpointPresence,
   validateOwnedDispatchManifest,
-  snapshotOwnedDispatchManifest,
+  verifyDispatchReceiptCustody,
 } from "./owned-server-supervisor.ts";
 
 const CHECKPOINT = "d".repeat(64);
@@ -288,24 +288,25 @@ describe("owned server supervisor", () => {
       else process.env["EMBERD_PIPE"] = priorPipe;
     }
   });
-  it("snapshots validated dispatch manifest bytes into custody without overwriting", () => {
-    const root = mkdtempSync(join(tmpdir(), "ember-p2d-dispatch-snapshot-"));
+  it("rejects receipts outside daemon custody and rehashes their exact bytes", () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-p2d-receipt-custody-"));
+    const outside = mkdtempSync(join(tmpdir(), "ember-p2d-receipt-outside-"));
     try {
-      const payload = new TextEncoder().encode('{"schema_version":"emberd-dispatch-manifest-v2"}');
-      const manifest = { custody_root: root };
-      const snapshot = snapshotOwnedDispatchManifest(payload, manifest);
-      expect(snapshot).toContain(root);
-      expect(readFileSync(snapshot)).toEqual(payload);
-      expect(existsSync(snapshot)).toBe(true);
-      writeFileSync(snapshot, "tampered");
-      expect(() => snapshotOwnedDispatchManifest(payload, manifest))
-        .toThrow("custody snapshot conflicts");
-      expect(readFileSync(snapshot, "utf8")).toBe("tampered");
+      const receiptPath = join(root, "preflight.json");
+      writeFileSync(receiptPath, "original-receipt");
+      const digest = new Bun.CryptoHasher("sha256").update("original-receipt").digest("hex");
+      expect(verifyDispatchReceiptCustody(receiptPath, digest, root)).toEqual({ path: resolve(receiptPath), sha256: digest });
+      writeFileSync(receiptPath, "mutated-receipt");
+      expect(() => verifyDispatchReceiptCustody(receiptPath, digest, root)).toThrow("hash does not match custody bytes");
+      const outsideReceipt = join(outside, "preflight.json");
+      writeFileSync(outsideReceipt, "outside-receipt");
+      const outsideDigest = new Bun.CryptoHasher("sha256").update("outside-receipt").digest("hex");
+      expect(() => verifyDispatchReceiptCustody(outsideReceipt, outsideDigest, root)).toThrow("escapes authorized custody");
     } finally {
       rmSync(root, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
     }
-  });
-  it("sends only a custody snapshot of a bound v2 dispatch manifest to emberd", async () => {
+  });  it("sends exact bound manifest bytes to emberd without CLI custody writes", async () => {
     const root = mkdtempSync(join(tmpdir(), "ember-p2d-dispatch-bound-"));
     const sourcePath = join(root, "source-dispatch.json");
     const pipe = `\\\\.\\pipe\\emberd-p2d-dispatch-${process.pid}-${Math.random().toString(16).slice(2)}`;
@@ -342,14 +343,18 @@ describe("owned server supervisor", () => {
     };
     const manifestBytes = Buffer.from(JSON.stringify(payload));
     writeFileSync(sourcePath, manifestBytes);
+    const receiptBytes = Buffer.from("daemon-preflight-receipt");
+    const receiptPath = join(root, "preflight.json");
+    writeFileSync(receiptPath, receiptBytes);
     let receivedManifest: unknown;
     const server = createServer((socket) => {
       socket.once("data", (buffer) => {
-        const request = JSON.parse(buffer.toString("utf8")) as { id: string; params: { manifest: string } };
-        receivedManifest = request.params.manifest;
+        const request = JSON.parse(buffer.toString("utf8")) as { id: string; params: { manifest_bytes: number[]; manifest_sha256: string } };
+        receivedManifest = request.params;
+        writeFileSync(sourcePath, "{\"mutated\":true}");
         socket.end(JSON.stringify({
           jsonrpc: "2.0", id: request.id,
-          result: { pid: 77, preflight_receipt_path: join(root, "preflight.json"), preflight_receipt_sha256: "f".repeat(64) },
+          result: { pid: 77, preflight_receipt_path: receiptPath, preflight_receipt_sha256: new Bun.CryptoHasher("sha256").update(receiptBytes).digest("hex") },
         }) + "\n");
       });
     });
@@ -364,9 +369,12 @@ describe("owned server supervisor", () => {
         waitForDispatchReady: async () => {},
       });
       expect(result).toMatchObject({ outcome: "dispatched", pid: 77 });
-      expect(typeof receivedManifest).toBe("string");
-      expect(receivedManifest).not.toBe(sourcePath);
-      expect(readFileSync(receivedManifest as string)).toEqual(manifestBytes);
+      expect(receivedManifest).toEqual({
+        manifest_bytes: Array.from(manifestBytes),
+        manifest_sha256: new Bun.CryptoHasher("sha256").update(manifestBytes).digest("hex"),
+      });
+      expect(readFileSync(sourcePath, "utf8")).toBe("{\"mutated\":true}");
+      expect(existsSync(join(root, ".emberd-dispatch-manifests"))).toBeFalse();
     } finally {
       await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
       if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
@@ -443,6 +451,14 @@ describe("owned server supervisor", () => {
     expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
       .toThrow("server source binding");
     manifest.bindings[2] = { kind: "manifest", path: launch.serverPath, sha256: owned.serverSourceSha256 };
+    manifest.bindings[0] = { kind: "manifest", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 };
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
+      .toThrow("model config binding");
+    manifest.bindings[0] = { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 };
+    manifest.bindings.push({ kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 });
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
+      .toThrow("model config binding path is not unique");
+    manifest.bindings.pop();
     Object.assign(manifest, { unexpected: true });
     expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
       .toThrow("fields are not closed");

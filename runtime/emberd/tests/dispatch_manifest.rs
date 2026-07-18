@@ -504,6 +504,71 @@ fn dispatch_manifest_requires_typed_config_and_manifest_bindings() {
 }
 
 #[test]
+fn dispatch_manifest_bytes_refuses_a_conflicting_daemon_custody_snapshot_before_launch() {
+    let root = sandbox("manifest-bytes-snapshot");
+    let manifest = write_manifest(&root, "dispatch-manifest-bytes-snapshot", 10_000);
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let custody_snapshot = root
+        .join("emberd.sqlite3.logs")
+        .join("dispatch-manifests")
+        .join(format!("{manifest_sha256}.json"));
+    fs::create_dir_all(custody_snapshot.parent().unwrap()).unwrap();
+    fs::write(&custody_snapshot, b"{\"attacker\":true}").unwrap();
+
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(fs::read(&custody_snapshot).unwrap(), b"{\"attacker\":true}");
+    assert!(!root.join("custody").join("preflight.json").exists());
+    assert_eq!(
+        daemon
+            .job_state("dispatch-manifest-bytes-snapshot")
+            .unwrap(),
+        None
+    );
+}
+#[test]
+fn dispatch_manifest_bytes_never_creates_an_unapproved_candidate_custody_root() {
+    let root = sandbox("manifest-bytes-unapproved-custody");
+    let manifest = write_manifest(&root, "dispatch-manifest-bytes-unapproved-custody", 10_000);
+    let unapproved = root.join("unapproved-custody");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["custody_root"] = json!(unapproved);
+    payload["preflight_receipt"] = json!(unapproved.join("preflight.json"));
+    let manifest_bytes = serde_json::to_vec(&payload).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+
+    assert!(matches!(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert!(!unapproved.exists());
+    assert_eq!(
+        daemon
+            .job_state("dispatch-manifest-bytes-unapproved-custody")
+            .unwrap(),
+        None
+    );
+}
+#[test]
 fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     let root = sandbox("resume-registry-closure");
     let manifest = write_manifest(&root, "dispatch-resume-registry", 10_000);

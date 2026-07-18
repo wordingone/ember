@@ -521,10 +521,21 @@ impl Daemon {
     }
 
     pub fn bind_identity(&self, job_id: &str, path: &Path, expected: &str) -> Result<()> {
-        validate_hash(expected)?;
         let canonical = fs::canonicalize(path)?;
         let identity_blob = fs::read(&canonical)?;
-        let actual = hash_bytes(&identity_blob);
+        self.bind_identity_bytes(job_id, &canonical, &identity_blob, expected)
+    }
+
+    fn bind_identity_bytes(
+        &self,
+        job_id: &str,
+        path: &Path,
+        identity_blob: &[u8],
+        expected: &str,
+    ) -> Result<()> {
+        validate_hash(expected)?;
+        let canonical = fs::canonicalize(path)?;
+        let actual = hash_bytes(identity_blob);
         if actual != expected {
             return Err(EmberdError::IdentityMismatch {
                 job_id: job_id.into(),
@@ -955,6 +966,20 @@ impl Daemon {
         RestartPolicy::parse(&policy)
     }
 
+    pub fn dispatch_manifest_bytes(
+        &self,
+        manifest_bytes: &[u8],
+        expected_sha256: &str,
+    ) -> Result<DispatchOutcome> {
+        self.dispatch_manifest_bytes_at_with_probes_and_host(
+            manifest_bytes,
+            expected_sha256,
+            now_ms(),
+            available_free_bytes,
+            available_free_vram_bytes,
+            probe_host_commit_capacity,
+        )
+    }
     pub fn dispatch_manifest(&self, manifest_path: &Path) -> Result<DispatchOutcome> {
         self.dispatch_manifest_at_with_probes(
             manifest_path,
@@ -988,6 +1013,94 @@ impl Daemon {
         &self,
         manifest_path: &Path,
         observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+    {
+        let canonical = fs::canonicalize(manifest_path).map_err(|error| {
+            EmberdError::InvalidDispatchManifest {
+                detail: format!("dispatch manifest is not a canonical file: {error}"),
+            }
+        })?;
+        let manifest_bytes = fs::read(&canonical)?;
+        self.dispatch_manifest_bytes_at_with_probes_and_host_inner(
+            &manifest_bytes,
+            &canonical,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+        )
+    }
+
+    pub fn dispatch_manifest_bytes_at_with_probes_and_host<F, G, H>(
+        &self,
+        manifest_bytes: &[u8],
+        expected_sha256: &str,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+    {
+        if validate_hash(expected_sha256).is_err() || hash_bytes(manifest_bytes) != expected_sha256
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "dispatch manifest bytes do not match the supplied sha256".into(),
+            });
+        }
+        let _: DispatchManifest = serde_json::from_slice(manifest_bytes).map_err(|error| {
+            EmberdError::InvalidDispatchManifest {
+                detail: format!("dispatch manifest schema is invalid: {error}"),
+            }
+        })?;
+        // This is emberd state, not candidate-selected custody. Candidate custody is
+        // validated by the byte consumer before it writes a preflight receipt.
+        let snapshot_dir = self.log_dir.join("dispatch-manifests");
+        fs::create_dir_all(&snapshot_dir)?;
+        let snapshot = snapshot_dir.join(format!("{expected_sha256}.json"));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&snapshot)
+        {
+            Ok(mut file) => {
+                file.write_all(manifest_bytes)?;
+                file.sync_all()?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if hash_bytes(&fs::read(&snapshot)?) != expected_sha256 {
+                    return Err(EmberdError::InvalidDispatchManifest {
+                        detail: "daemon dispatch snapshot conflicts with supplied sha256".into(),
+                    });
+                }
+            }
+            Err(error) => return Err(error.into()),
+        }
+        self.dispatch_manifest_bytes_at_with_probes_and_host_inner(
+            manifest_bytes,
+            &snapshot,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+        )
+    }
+
+    fn dispatch_manifest_bytes_at_with_probes_and_host_inner<F, G, H>(
+        &self,
+        manifest_bytes: &[u8],
+        manifest_identity_path: &Path,
+        observed_at_ms: i64,
         mut free_space: F,
         mut free_vram: G,
         mut free_host_commit: H,
@@ -997,14 +1110,13 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
-        let manifest_path = fs::canonicalize(manifest_path).map_err(|error| {
+        let manifest_path = fs::canonicalize(manifest_identity_path).map_err(|error| {
             EmberdError::InvalidDispatchManifest {
-                detail: format!("dispatch manifest is not a canonical file: {error}"),
+                detail: format!("dispatch manifest identity snapshot is unavailable: {error}"),
             }
         })?;
-        let manifest_bytes = fs::read(&manifest_path)?;
         let manifest: DispatchManifest =
-            serde_json::from_slice(&manifest_bytes).map_err(|error| {
+            serde_json::from_slice(manifest_bytes).map_err(|error| {
                 EmberdError::InvalidDispatchManifest {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
@@ -1252,7 +1364,12 @@ impl Daemon {
             sha256: hash_bytes(&receipt_bytes),
         };
 
-        self.bind_identity(&manifest.job_id, &manifest_path, &manifest_sha256)?;
+        self.bind_identity_bytes(
+            &manifest.job_id,
+            &manifest_path,
+            manifest_bytes,
+            &manifest_sha256,
+        )?;
         self.acquire_lease(&manifest.resource_lease, &manifest.job_id)?;
         let mut spec = JobSpec::new(
             manifest.job_id,

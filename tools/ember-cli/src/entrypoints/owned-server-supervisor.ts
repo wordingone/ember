@@ -5,7 +5,7 @@
 import { createHash } from "crypto";
 import { spawn, type ChildProcess } from "child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { isAbsolute, join } from "path";
+import { isAbsolute, join, relative, resolve } from "path";
 import { createConnection } from "node:net";
 
 import type { OwnedModelIdentity } from "./model-seat.ts";
@@ -255,12 +255,16 @@ function manifestObject(value: unknown, label: string): Record<string, unknown> 
   return value as Record<string, unknown>;
 }
 
-function requireDispatchBinding(bindings: unknown, path: string, sha256: string, label: string): void {
-  if (!Array.isArray(bindings) || !bindings.some((value) => {
+function requireDispatchBinding(bindings: unknown, kind: string, path: string, sha256: string, label: string): void {
+  if (!Array.isArray(bindings)) throw new Error("dispatch manifest " + label + " binding does not match owned identity");
+  const samePath = bindings.filter((value) => value !== null && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>)["path"] === path);
+  if (samePath.length !== 1) throw new Error("dispatch manifest " + label + " binding path is not unique");
+  const matches = bindings.filter((value) => {
     if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
     const binding = value as Record<string, unknown>;
-    return binding["path"] === path && binding["sha256"] === sha256;
-  })) throw new Error("dispatch manifest " + label + " binding does not match owned identity");
+    return binding["kind"] === kind && binding["path"] === path && binding["sha256"] === sha256;
+  });
+  if (matches.length !== 1) throw new Error("dispatch manifest " + label + " binding does not match owned identity");
 }
 
 export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, value: unknown, expectedSourceCommit: string): void {
@@ -283,40 +287,21 @@ export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, valu
   if (program["path"] !== launch.pythonExecutable || typeof program["sha256"] !== "string" || !/^[0-9a-f]{64}$/.test(program["sha256"] as string)) throw new Error("dispatch manifest program does not match owned launch");
   const expectedCommand = buildOwnedServerCommand(identity, process.env["EMBER_OWNED_DEVICE"] === "cpu" ? "cpu" : "cuda");
   if (!Array.isArray(manifest["args"]) || JSON.stringify(manifest["args"]) !== JSON.stringify(expectedCommand.args)) throw new Error("dispatch manifest argv does not match owned launch");
-  requireDispatchBinding(manifest["bindings"], launch.modelConfigPath, identity.modelConfigSha256, "model config");
-  requireDispatchBinding(manifest["bindings"], launch.tokenizerPath, identity.tokenizerSha256, "tokenizer");
-  requireDispatchBinding(manifest["bindings"], launch.serverPath, identity.serverSourceSha256, "server source");
-  requireDispatchBinding(manifest["bindings"], join(launch.checkpointDir, "checkpoint-manifest.json"), identity.checkpointSha256, "checkpoint");
+  requireDispatchBinding(manifest["bindings"], "config", launch.modelConfigPath, identity.modelConfigSha256, "model config");
+  requireDispatchBinding(manifest["bindings"], "manifest", launch.tokenizerPath, identity.tokenizerSha256, "tokenizer");
+  requireDispatchBinding(manifest["bindings"], "manifest", launch.serverPath, identity.serverSourceSha256, "server source");
+  requireDispatchBinding(manifest["bindings"], "manifest", join(launch.checkpointDir, "checkpoint-manifest.json"), identity.checkpointSha256, "checkpoint");
   if (typeof manifest["custody_root"] !== "string" || !isAbsolute(manifest["custody_root"])) throw new Error("dispatch manifest custody root must be absolute");
   if (!Array.isArray(manifest["storage_reserves"]) || manifest["storage_reserves"].length === 0) throw new Error("dispatch manifest storage reserves are required");
 }
 
-export function snapshotOwnedDispatchManifest(
-  payload: Uint8Array,
-  manifest: Record<string, unknown>,
-): string {
-  const custodyRoot = manifest["custody_root"];
-  if (typeof custodyRoot !== "string" || !isAbsolute(custodyRoot)) {
-    throw new Error("dispatch manifest custody root must be absolute");
-  }
-  const digest = createHash("sha256").update(payload).digest("hex");
-  mkdirSync(custodyRoot, { recursive: true });
-  const snapshot = join(custodyRoot, `dispatch-manifest-${digest}.json`);
-  if (existsSync(snapshot)) {
-    if (!readFileSync(snapshot).equals(Buffer.from(payload))) {
-      throw new Error("dispatch manifest custody snapshot conflicts with bound bytes");
-    }
-    return snapshot;
-  }
-  try {
-    writeFileSync(snapshot, payload, { flag: "wx" });
-  } catch (error) {
-    if (!existsSync(snapshot)) throw error;
-    if (!readFileSync(snapshot).equals(Buffer.from(payload))) {
-      throw new Error("dispatch manifest custody snapshot conflicts with bound bytes");
-    }
-  }
-  return snapshot;
+
+export function verifyDispatchReceiptCustody(path: unknown, sha256: unknown, custodyRoot: unknown): { path: string; sha256: string } {
+  if (typeof path !== "string" || !isAbsolute(path) || typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256) || typeof custodyRoot !== "string" || !isAbsolute(custodyRoot)) throw new Error("emberd dispatch result lacks preflight receipt custody");
+  const root = resolve(custodyRoot); const receipt = resolve(path); const inside = relative(root, receipt);
+  if (inside === "" || inside === ".." || inside.startsWith("..\\") || inside.startsWith("../")) throw new Error("emberd dispatch receipt escapes authorized custody");
+  const bytes = readFileSync(receipt); if (createHash("sha256").update(bytes).digest("hex") !== sha256) throw new Error("emberd dispatch receipt hash does not match custody bytes");
+  return { path: receipt, sha256 };
 }
 
 async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<OwnedDaemonDispatch> {
@@ -333,11 +318,13 @@ async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<Ow
     manifestPayload = JSON.parse(manifestBytes.toString("utf8"));
   } catch (error) { throw new Error("cannot read dispatch manifest: " + (error instanceof Error ? error.message : String(error))); }
   validateOwnedDispatchManifest(identity, manifestPayload, sourceCommit);
-  const snapshot = snapshotOwnedDispatchManifest(manifestBytes, manifestObject(manifestPayload, "dispatch manifest"));
   const result = await callEmberd({
     pipeName: configuredEmberdPipe(),
     method: "dispatch_manifest",
-    params: { manifest: snapshot },
+    params: {
+      manifest_bytes: Array.from(manifestBytes),
+      manifest_sha256: createHash("sha256").update(manifestBytes).digest("hex"),
+    },
   });
   const pid = result["pid"];
   const preflightReceiptPath = result["preflight_receipt_path"];
@@ -345,11 +332,8 @@ async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<Ow
   if (!Number.isSafeInteger(pid) || (pid as number) < 1) {
     throw new Error("emberd dispatch result lacks a positive process id");
   }
-  if (typeof preflightReceiptPath !== "string" || !isAbsolute(preflightReceiptPath) ||
-      typeof preflightReceiptSha256 !== "string" || !/^[0-9a-f]{64}$/.test(preflightReceiptSha256)) {
-    throw new Error("emberd dispatch result lacks preflight receipt custody");
-  }
-  return { pid: pid as number, preflightReceiptPath, preflightReceiptSha256 };
+  const receipt = verifyDispatchReceiptCustody(preflightReceiptPath, preflightReceiptSha256, manifestObject(manifestPayload, "dispatch manifest")["custody_root"]);
+  return { pid: pid as number, preflightReceiptPath: receipt.path, preflightReceiptSha256: receipt.sha256 };
 }
 
 async function defaultWaitForDispatchReady(

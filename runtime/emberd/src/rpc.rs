@@ -73,7 +73,8 @@ struct StartJobParams {
 
 #[derive(Debug, Deserialize)]
 struct DispatchManifestParams {
-    manifest: PathBuf,
+    manifest_bytes: Vec<u8>,
+    manifest_sha256: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -237,7 +238,7 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 Ok(value) => value,
                 Err(response) => return (response, false),
             };
-            match daemon.dispatch_manifest(&params.manifest) {
+            match daemon.dispatch_manifest_bytes(&params.manifest_bytes, &params.manifest_sha256) {
                 Ok(outcome) => (
                     success(
                         id,
