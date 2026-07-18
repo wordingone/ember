@@ -1893,6 +1893,20 @@ impl Daemon {
     }
 
     pub fn adopt_job(&self, job_id: &str) -> Result<JobHandle> {
+        let pending_receipt_path: Option<String> = self
+            .conn()?
+            .query_row(
+                "SELECT receipt_path FROM dispatch_receipt_recovery WHERE job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(receipt_path) = pending_receipt_path {
+            return Err(EmberdError::DispatchReceiptRecoveryPending {
+                job_id: job_id.into(),
+                receipt_path: PathBuf::from(receipt_path),
+            });
+        }
         let row = self.job_process_row(job_id)?;
         if row.state != JobState::Running {
             return Err(EmberdError::InvalidTransition {

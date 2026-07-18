@@ -5,6 +5,7 @@
 #![cfg(windows)]
 
 use emberd::{Daemon, EmberdError, HostCommitCapacity, JobState};
+use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -270,7 +271,18 @@ fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_
         daemon.job_state("dispatch-receipt-recovery").unwrap(),
         Some(JobState::Running)
     );
-    let first_pid = daemon.adopt_job("dispatch-receipt-recovery").unwrap().pid;
+    assert!(matches!(
+        daemon.adopt_job("dispatch-receipt-recovery"),
+        Err(EmberdError::DispatchReceiptRecoveryPending { .. })
+    ));
+    let connection = Connection::open(root.join("emberd.sqlite3")).unwrap();
+    let first_pid: u32 = connection
+        .query_row(
+            "SELECT pid FROM jobs WHERE job_id='dispatch-receipt-recovery'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
     fs::remove_dir(&receipt_path).unwrap();
 
     let recovered = daemon
