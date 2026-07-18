@@ -67,7 +67,9 @@ class TrainingDataVerifierTests(unittest.TestCase):
         self.assertEqual(reads, {path: 1 for path in tracked})
         self.assertEqual(receipt["data_manifest_sha256"], data_sha256)
         from checkpoint_artifacts import SPECIALIST_VERIFICATION_FIELDS
+        from parameter_counter import SPECIALIST_VERIFICATION_FIELDS as COUNTER_VERIFICATION_FIELDS
 
+        self.assertIs(SPECIALIST_VERIFICATION_FIELDS, COUNTER_VERIFICATION_FIELDS)
         self.assertEqual(
             set(receipt) | {"runtime_semantic_model_contract_sha256"},
             SPECIALIST_VERIFICATION_FIELDS,
