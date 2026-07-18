@@ -529,3 +529,90 @@ describe('loadMemoryPrompt: top-level integration', () => {
     // (selectRelevantMemories appends unranked entries)
   });
 });
+
+// ---------------------------------------------------------------------------
+// Fix #51 P1 repair (3)/(PR #948 repair): loadMemoryPrompt's PRODUCTION path
+// threads the caller's modelContract into selectRelevantMemories, and
+// semantic selection is EXECUTION-BINDING (an observable effect — the model
+// call actually happens and its ordering is honored), not just "the result
+// still contains everything" (which the untouched-entries fallback also
+// satisfies and therefore proves nothing).
+// ---------------------------------------------------------------------------
+
+describe('loadMemoryPrompt threads modelContract into selectRelevantMemories (execution-binding)', () => {
+  test('with query + callModel + modelContract, callModel is invoked exactly once and its ordering is honored', async () => {
+    const dir = makeTempDir('load-select-contract');
+    writeFileSync(
+      join(dir, 'a.md'),
+      makeValidFileContent({ name: 'a', description: 'Alpha entry', body: 'Body a.' }),
+      'utf-8',
+    );
+    writeFileSync(
+      join(dir, 'b.md'),
+      makeValidFileContent({ name: 'b', description: 'Beta entry', body: 'Body b.' }),
+      'utf-8',
+    );
+
+    let callCount = 0;
+    let receivedModel: string | undefined;
+    const mockCallModel: SelectModelFn = async ({ model, descriptions }) => {
+      callCount += 1;
+      receivedModel = model;
+      // Model ranks 'b' ahead of 'a' -- an observable ordering effect that
+      // can only appear if selectRelevantMemories actually ran.
+      return descriptions.filter((d) => d.name === 'b').map((d) => d.name);
+    };
+
+    const result = await loadMemoryPrompt({
+      dir,
+      query: 'beta',
+      callModel: mockCallModel,
+      modelContract: TEST_MODEL_CONTRACT,
+    });
+
+    expect(callCount).toBe(1);
+    expect(receivedModel).toBe(TEST_MODEL_NAME);
+    // 'b' was model-ranked first, so its entry must appear before 'a''s in
+    // the assembled block -- proves the model's selection order was
+    // honored, not merely that both entries are present. Uses the unique
+    // description text (not the bare single-char name) so the position
+    // check can't be fooled by an incidental 'a'/'b' character elsewhere.
+    expect(result.indexOf('Beta entry')).toBeLessThan(result.indexOf('Alpha entry'));
+  });
+
+  test('NEGATIVE: without modelContract, callModel is never invoked even though it is provided (no silent execution)', async () => {
+    const dir = makeTempDir('load-select-no-contract');
+    writeFileSync(
+      join(dir, 'a.md'),
+      makeValidFileContent({ name: 'a', description: 'Alpha entry', body: 'Body a.' }),
+      'utf-8',
+    );
+    writeFileSync(
+      join(dir, 'b.md'),
+      makeValidFileContent({ name: 'b', description: 'Beta entry', body: 'Body b.' }),
+      'utf-8',
+    );
+
+    let callCount = 0;
+    const mockCallModel: SelectModelFn = async ({ descriptions }) => {
+      callCount += 1;
+      // If this ran, it would rank 'b' first -- the opposite of scan order --
+      // so a leaked call would flip the ordering assertion below.
+      return descriptions.filter((d) => d.name === 'b').map((d) => d.name);
+    };
+
+    const scanned = await scanMemoryFiles(dir);
+    const scannedFirst = scanned[0]!.description;
+    const scannedSecond = scanned[1]!.description;
+
+    const result = await loadMemoryPrompt({ dir, query: 'beta', callModel: mockCallModel });
+
+    expect(callCount).toBe(0);
+    // Order must match the raw scan order exactly -- never the model's
+    // ranking (which would put 'Beta entry' first) -- proving the model
+    // was never consulted, not just that both entries are present
+    // somewhere in the block. Uses the unique description text so the
+    // position check can't be fooled by an incidental 'a'/'b' character.
+    expect(result.indexOf(scannedFirst)).toBeLessThan(result.indexOf(scannedSecond));
+  });
+});

@@ -382,6 +382,13 @@ export interface LoadMemoryPromptOpts {
   dir: string;
   query?: string;
   callModel?: SelectModelFn;
+  /** Fix #51 P1 repair (3): the seat-authorized identity + capability contract
+   *  (see `entrypoints/model-seat.ts::selectedModelContract`), threaded through
+   *  to `selectRelevantMemories` so semantic selection is reachable only via
+   *  the same seat-authorized identity every other consumer uses -- never a
+   *  bare modelName string. Omitted/undefined never executes selection
+   *  (falls back to returning all entries), matching `selectRelevantMemories`. */
+  modelContract?: SelectedModelContract;
 }
 
 /**
@@ -398,7 +405,7 @@ export async function loadMemoryPrompt(opts: LoadMemoryPromptOpts): Promise<stri
 
   const ranked =
     opts.query && opts.callModel
-      ? await selectRelevantMemories(entries, opts.query, opts.callModel)
+      ? await selectRelevantMemories(entries, opts.query, opts.callModel, opts.modelContract)
       : entries;
 
   // Drop trailing entries until the assembled block fits within TOTAL_BLOCK_LIMIT
