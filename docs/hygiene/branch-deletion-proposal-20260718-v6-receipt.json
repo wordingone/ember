@@ -1,8 +1,8 @@
 {
     "schema_version":  "c1-public-branch-archive-v6-receipt",
     "artifact":  "docs/hygiene/branch-deletion-proposal-20260718-v6.json",
-    "bytes":  29066,
-    "file_sha256":  "b0d1f068bbf33b5f230d3a754c3d61e1906a32948f8c30268bc01b952188113e",
+    "bytes":  29640,
+    "file_sha256":  "3e86adc232dd4273caddac299f25df3235580061851306634ff1ce76f794ed10",
     "public_master":  "f2a8a20e972d391fd5608295f2aa3120aafcae8a",
     "candidate_count":  2,
     "archival_refs_created":  true,
@@ -17,6 +17,10 @@
     "private_scan_v2_digest_sha256":  "97f4be37f4aec9b29de4318c41f6fe2f47b5e664f9c8638e00cb430b51c30162",
     "private_manifest_v6_digest_sha256":  "d99cb457d01efdce40f9c645b04f4d8af58ac765005500aac90730e16b3977cb",
     "archive_ref_encoding":  "base64 UTF-8; decode ref_utf8_base64/tag_name_utf8_base64 to exact public ref",
+    "tags":  [
+                 "refs/tags/vera-c1-archive/20260718/pr-574-feat-485-p0b-watermark-exclusion-coalescing-af53c49f8b7e",
+                 "refs/tags/vera-c1-archive/20260718/pr-690-exp-580-corrected-rerun-39dc9e1fb073"
+             ],
     "tags_utf8_base64":  [
                              "cmVmcy90YWdzL3ZlcmEtYzEtYXJjaGl2ZS8yMDI2MDcxOC9wci01NzQtZmVhdC00ODUtcDBiLXdhdGVybWFyay1leGNsdXNpb24tY29hbGVzY2luZy1hZjUzYzQ5ZjhiN2U=",
                              "cmVmcy90YWdzL3ZlcmEtYzEtYXJjaGl2ZS8yMDI2MDcxOC9wci02OTAtZXhwLTU4MC1jb3JyZWN0ZWQtcmVydW4tMzlkYzllMWZiMDcz"
