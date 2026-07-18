@@ -1030,5 +1030,15 @@ class RunnerPreflightTests(unittest.TestCase):
     def test_bf16_contract_disables_unsupported_percentile_clipping(self) -> None:
         contract = run_vertical_slice.load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
         self.assertEqual(contract["hyperparameters"]["percentile_clipping"], 100)
+
+    def test_checked_in_four_domain_production_rung_is_receipted_and_admitted(self) -> None:
+        records, packet, integration_receipt = run_vertical_slice.load_authorized_records(ROOT)
+        identity = packet["input_identity"]
+        self.assertEqual(identity["artifact_id"], "owned-four-domain-production-rung-v1")
+        self.assertRegex(identity["admission_receipt_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual({record["active_expert"] for record in records}, {"vision", "audio", "reasoning", "tool"})
+        self.assertEqual(len(records), 4)
+        self.assertEqual(integration_receipt["launch_decision"], "ACCEPTED")
+        self.assertEqual(integration_receipt["input_admission_receipt_sha256"], identity["admission_receipt_sha256"])
 if __name__ == "__main__":
     unittest.main()
