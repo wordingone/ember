@@ -120,7 +120,22 @@ function Write-RestartLogRow {
 
 function Get-StandDownDecisionKey {
     param([Parameter(Mandatory)]$Marker)
-    return "$($Marker.target)|$($Marker.owner)|$($Marker.started)|$($Marker.expires)|$($Marker.kill_receipt_ref)"
+    $canonical = [ordered]@{
+        target = [string]$Marker.target
+        owner = [string]$Marker.owner
+        reason = [string]$Marker.reason
+        started = [string]$Marker.started
+        expires = [string]$Marker.expires
+        kill_receipt_ref = [string]$Marker.kill_receipt_ref
+    }
+    $json = $canonical | ConvertTo-Json -Compress
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return (([BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($json)))) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
 }
 
 function Write-StandDownDecision {
@@ -131,11 +146,10 @@ function Write-StandDownDecision {
         [Parameter(Mandatory)][string]$DecisionKey
     )
     if ($TargetState.standdownDecisionKey -eq $DecisionKey) { return $false }
-    $TargetState.standdownDecisionKey = $DecisionKey
     Write-RestartLogRow -Path $Path -Row $Row
+    $TargetState.standdownDecisionKey = $DecisionKey
     return $true
 }
-
 function Get-DefaultWatchdogState {
     [PSCustomObject]@{
         cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; standdownDecisionKey = $null }

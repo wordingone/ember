@@ -211,6 +211,32 @@ Describe 'Invoke-CockpitWatchdogTick' {
         @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json }).Count | Should Be 1
     }
 
+    It 'reason-only marker change emits a fresh stand-down decision row' {
+        $now = [datetime]::Parse('2026-07-08T12:05:00Z').ToUniversalTime()
+        $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }
+        ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+        $marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'cockpit'
+            started = '2026-07-08T11:00:00Z'; expires = '2026-07-08T13:00:00Z'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+
+        Invoke-CockpitWatchdogTick -Now $now -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath | Out-Null
+
+        $marker.reason = 'corrected probe'
+        ($marker | ConvertTo-Json) | Set-Content -Path $markerPath -Encoding utf8
+        Invoke-CockpitWatchdogTick -Now $now.AddSeconds(15) -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath | Out-Null
+
+        $rows = @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json })
+        $rows.Count | Should Be 2
+        $rows[0].reason | Should Be 'planned probe'
+        $rows[1].reason | Should Be 'corrected probe'
+    }
     It 'expired planned-outage marker -> resumes duty (relaunch) AND logs a marker-overrun row naming the owner' {
         $now = [datetime]::Parse('2026-07-08T14:00:00Z').ToUniversalTime()
         $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }   # very stale
@@ -445,6 +471,48 @@ Describe 'Watchdog state migration' {
     }
 }
 
+Describe 'Stand-down receipt append atomicity' {
+    BeforeEach {
+        $script:scratch = New-Scratch
+        $script:restartLogPath = Join-Path $scratch 'restart-log.jsonl'
+        $script:state = Get-DefaultWatchdogState
+        $script:marker = @{
+            owner = 'test-lane'; reason = 'planned probe'; target = 'cockpit'
+            started = '2026-07-08T11:00:00Z'; expires = '2026-07-08T13:00:00Z'
+            kill_receipt_ref = '2026-07-08T11:00:00Z'
+        }
+    }
+    AfterEach {
+        Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'does not consume dedupe state when the first receipt append fails, then retries once' {
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        $row = @{ ts = '2026-07-08T12:05:00Z'; target = 'cockpit'; event = 'standdown'; decision = 'planned-outage'; reason = $marker.reason }
+        $script:appendAttempts = 0
+        $script:originalWriteRestartLogRow = (Get-Command Write-RestartLogRow).ScriptBlock
+        Mock Write-RestartLogRow {
+            param($Path, $Row)
+            $script:appendAttempts++
+            if ($script:appendAttempts -eq 1) { throw 'simulated append failure' }
+            & $script:originalWriteRestartLogRow -Path $Path -Row $Row
+        }
+
+        $failed = $false
+        try { Write-StandDownDecision -Path $restartLogPath -Row $row -TargetState $state.cockpit -DecisionKey $decisionKey | Out-Null }
+        catch { $failed = $true }
+
+        $failed | Should Be $true
+        $state.cockpit.standdownDecisionKey | Should Be $null
+        (Test-Path $restartLogPath) | Should Be $false
+
+        (Write-StandDownDecision -Path $restartLogPath -Row $row -TargetState $state.cockpit -DecisionKey $decisionKey) | Should Be $true
+        (Write-StandDownDecision -Path $restartLogPath -Row $row -TargetState $state.cockpit -DecisionKey $decisionKey) | Should Be $false
+        $state.cockpit.standdownDecisionKey | Should Be $decisionKey
+        $script:appendAttempts | Should Be 2
+        @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json }).Count | Should Be 1
+    }
+}
 Describe 'Test-WatchdogAlreadyRunning (idempotent start)' {
     BeforeEach {
         $script:scratch = New-Scratch
