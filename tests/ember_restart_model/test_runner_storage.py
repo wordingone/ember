@@ -193,6 +193,42 @@ class RunnerStorageTests(unittest.TestCase):
             self.assertEqual(persisted["operation_id"], "concurrent-operation")
             self.assertEqual(persisted["subject"], "checkpoint")
             self.assertTrue(all(outcome == successes[0] or isinstance(outcome, BaseException) for outcome in outcomes))
+    def test_atomic_create_durable_has_one_cross_process_winner_and_no_temp(self) -> None:
+        """The kernel no-replace create leaves one receipt payload under two processes."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "operation.json"
+            start = root / "start"
+            worker = (
+                "import pathlib, sys, time\n"
+                "sys.path.insert(0, sys.argv[1])\n"
+                "from durable_io import atomic_create_durable\n"
+                "target = pathlib.Path(sys.argv[2]); start = pathlib.Path(sys.argv[3])\n"
+                "while not start.exists(): time.sleep(0.01)\n"
+                "try:\n"
+                "    atomic_create_durable(target, b'{\\\"winner\\\":true}\\n')\n"
+                "except FileExistsError:\n"
+                "    print('exists')\n"
+                "else:\n"
+                "    print('created')\n"
+            )
+            environment = os.environ.copy()
+            processes = [
+                subprocess.Popen([sys.executable, "-c", worker, str(ROOT / "tools" / "ember-restart-3b"), str(target), str(start)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
+                for _ in range(2)
+            ]
+            try:
+                start.write_text("go", encoding="utf-8")
+                results = [process.communicate(timeout=10) for process in processes]
+            finally:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=5)
+            self.assertEqual(sorted(stdout.strip() for stdout, _ in results), ["created", "exists"])
+            self.assertTrue(all(stderr == "" for _, stderr in results))
+            self.assertEqual(target.read_bytes(), b'{"winner":true}\n')
+            self.assertEqual(list(root.glob(".*.tmp")), [])
     def test_same_operation_receipt_identity_cannot_be_overwritten(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             receipt_path = Path(directory) / "operation.json"
