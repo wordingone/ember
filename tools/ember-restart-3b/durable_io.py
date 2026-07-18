@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import uuid
 from pathlib import Path
 
 
@@ -32,3 +33,28 @@ def atomic_replace_durable(source: Path, target: Path) -> None:
         return
     os.replace(source, target)
     fsync_parent_directory(target.parent)
+def atomic_create_durable(target: Path, payload: bytes) -> None:
+    """Create one new small file without replacement and durably publish its directory entry."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.parent / f".{target.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    with temporary.open("xb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    try:
+        if os.name == "nt":
+            movefile_write_through = 0x00000008
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            if not kernel32.MoveFileExW(str(temporary), str(target), movefile_write_through):
+                error = ctypes.get_last_error()
+                if error in {80, 183}:
+                    raise FileExistsError(target)
+                raise ctypes.WinError(error)
+        else:
+            os.link(temporary, target)
+            fsync_parent_directory(target.parent)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass

@@ -28,7 +28,7 @@ from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_art
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
-from durable_io import atomic_replace_durable
+from durable_io import atomic_create_durable, atomic_replace_durable
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
 from semantic_contract import semantic_model_contract_sha256
@@ -652,13 +652,9 @@ def prepare_custody_ledger_transaction(*, receipt_path: Path, old_ledger: bytes,
     if not isinstance(operation_id, str) or not operation_id or not isinstance(subject, str) or not subject:
         raise ValueError("ledger transaction requires a nonempty operation ID and subject")
     receipt = {"schema_version": _HEAD_RECEIPT_SCHEMA, "result": "PREPARED", "operation_id": operation_id, "subject": subject, "old": _ledger_binding(old_ledger), "new": _ledger_binding(new_ledger)}
-    receipt_path.parent.mkdir(parents=True, exist_ok=True)
     payload = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     try:
-        with receipt_path.open("xb") as handle:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
+        atomic_create_durable(receipt_path, payload)
     except FileExistsError:
         existing = _head_transaction(receipt_path)
         if {key: existing[key] for key in receipt if key != "result"} != {key: receipt[key] for key in receipt if key != "result"}:
@@ -679,7 +675,15 @@ def _finalize_custody_ledger_transaction_locked(canonical_parent: Path, *, recei
     receipt = _head_transaction(receipt_path)
     current, _ = _custody_ledger_snapshot(canonical_parent)
     current_binding = _ledger_binding(current)
-    if receipt["result"] == "PREPARED" and current_binding == receipt["old"]:
+    if receipt["result"] == "ABORTED":
+        if current_binding != receipt["old"]:
+            raise RuntimeError("aborted ledger transaction no longer matches its old head")
+        return receipt
+    if receipt["result"] == "COMMITTED":
+        if current_binding != receipt["new"]:
+            raise RuntimeError("committed ledger transaction no longer matches its new head")
+        return receipt
+    if current_binding == receipt["old"]:
         aborted = {**receipt, "result": "ABORTED"}
         _atomic_json(receipt_path, aborted)
         return aborted
@@ -688,7 +692,6 @@ def _finalize_custody_ledger_transaction_locked(canonical_parent: Path, *, recei
     committed = {**receipt, "result": "COMMITTED"}
     _atomic_json(receipt_path, committed)
     return committed
-
 
 def finalize_custody_ledger_transaction(parent: Path, *, receipt_path: Path) -> dict[str, object]:
     """Replay exact bytes against a pre-existing external transaction; never infer/truncate a tail."""
@@ -699,6 +702,8 @@ def _recover_parent_scoped_transactions_locked(canonical_parent: Path) -> None:
     pattern = f"custody-append-{canonical_parent.name}-*.json"
     for receipt_path in sorted(canonical_parent.parent.glob(pattern)):
         receipt = _head_transaction(receipt_path)
+        if receipt["subject"] != f"custody:{canonical_parent.name}":
+            raise RuntimeError("parent-scoped custody transaction has a foreign subject")
         if receipt["result"] == "PREPARED":
             _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=receipt_path)
         elif receipt["result"] not in {"COMMITTED", "ABORTED"}:
@@ -791,13 +796,18 @@ def migrate_legacy_custody_ledger(parent: Path, *, transaction_receipt_path: Pat
             _atomic_json(migration_receipt_path, receipt)
         return {**receipt, "migration_receipt": str(migration_receipt_path)}
 def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict[str, object], *, transaction_receipt_path: Path, operation_id: str, subject: str) -> None:
-    """Prepare the external authority before replacing a complete v4 ledger snapshot."""
+    """Prepare fresh external authority before replacing one complete v4 ledger snapshot."""
     prior, prior_events = _custody_ledger_snapshot(canonical_parent)
+    pointer = _canonical_custody_deletion_pointer(event["pointer"])
+    terminal = [row for row in prior_events if isinstance(row, dict) and row.get("schema_version") == _CUSTODY_LEDGER_SCHEMA and row.get("pointer") == pointer]
+    if terminal and terminal[-1].get("event") == "COMMITTED" and event["event"] == "COMMITTED":
+        raise RuntimeError("custody ledger transition is already committed")
     framed_event = _next_custody_ledger_frame(event, prior_events)
     new_ledger = prior + (json.dumps(framed_event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    prepare_custody_ledger_transaction(receipt_path=transaction_receipt_path, old_ledger=prior, new_ledger=new_ledger, operation_id=operation_id, subject=subject)
+    transaction = prepare_custody_ledger_transaction(receipt_path=transaction_receipt_path, old_ledger=prior, new_ledger=new_ledger, operation_id=operation_id, subject=subject)
+    if transaction["result"] != "PREPARED":
+        raise RuntimeError("ledger append requires a fresh nonterminal transaction operation ID")
     _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, new_ledger)
-
 
 def _append_custody_ledger_transition(parent: Path, event: dict[str, object], *, transaction_receipt_path: Path | None = None, operation_id: str | None = None, subject: str | None = None) -> None:
     """Durably replace only through an externally bound old/new transaction."""
@@ -1000,7 +1010,11 @@ def _recover_missing_prepared_evidence(parent: Path) -> None:
             except OSError as error:
                 raise RuntimeError("prepared evidence could not be inspected for recovery") from error
     for committed in commits:
-        _append_custody_ledger_transition(parent, committed)
+        try:
+            _append_custody_ledger_transition(parent, committed)
+        except RuntimeError as error:
+            if "already committed" not in str(error):
+                raise
     if commits:
         _custody_reconciliation(parent)
 def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:

@@ -202,6 +202,23 @@ class RunnerStorageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "collision"):
                 run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=b"", new_ledger=b"", operation_id="same-operation", subject="different-checkpoint")
             self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8"))["subject"], "checkpoint")
+    def test_aborted_receipt_cannot_be_reused_for_append(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipts:
+            parent = Path(directory)
+            receipt_path = Path(receipts) / "aborted.json"
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=b"", new_ledger=b"", operation_id="aborted-op", subject=f"custody:{parent.name}")
+            self.assertEqual(run_vertical_slice.finalize_custody_ledger_transaction(parent, receipt_path=receipt_path)["result"], "ABORTED")
+            event = {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json", "bytes": 1, "sha256": "b" * 64, "reason": "retry"}
+            with self.assertRaisesRegex(RuntimeError, "collision|fresh nonterminal"):
+                run_vertical_slice._append_custody_ledger_transition(parent, event, transaction_receipt_path=receipt_path, operation_id="aborted-op", subject=f"custody:{parent.name}")
+            self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8"))["result"], "ABORTED")
+    def test_parent_scoped_recovery_rejects_foreign_subject_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            receipt_path = parent.parent / f"custody-append-{parent.name}-foreign.json"
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=receipt_path, old_ledger=b"", new_ledger=b"", operation_id="foreign", subject="custody:another-root")
+            with self.assertRaisesRegex(RuntimeError, "foreign subject"):
+                run_vertical_slice._append_custody_ledger_transition(parent, {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 1, "sha256": "a" * 64, "reason": "foreign"})
     def test_next_append_commits_stranded_parent_scoped_prepared_transaction_first(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
