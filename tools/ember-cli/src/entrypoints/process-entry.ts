@@ -11,7 +11,7 @@ import { openSync, closeSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
-import React from "react";
+import type { ComponentType } from "react";
 import {
   REFERENCE_SEAT_FLAG,
   isModelFreeFastPath,
@@ -24,6 +24,7 @@ import {
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
 import { ensureOwnedServer } from "./owned-server-supervisor.ts";
+import { handshakeConfiguredEmberd } from "../services/emberd-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
@@ -33,7 +34,6 @@ import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
-import { App as InkApp } from "../ink/components.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -668,6 +668,8 @@ export interface MainOptions {
   loadOwnedDevelopmentIdentityFn?: typeof loadOwnedDevelopmentIdentity;
   verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
   ensureOwnedServerFn?: typeof ensureOwnedServer;
+  handshakeEmberdFn?: typeof handshakeConfiguredEmberd;
+  builtinToolsFn?: () => Promise<Tool[]>;
   initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
@@ -799,6 +801,14 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   if (didSeatGatedFastPath) return;
 
   if (seatDecision.ownedIdentity) {
+    try {
+      await (opts.handshakeEmberdFn ?? handshakeConfiguredEmberd)();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: emberd handshake failed (" + message + ")\n");
+      doExitMain(1);
+      return;
+    }
     try {
       const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
       const ensure = opts.ensureOwnedServerFn ?? ((identity) =>
@@ -1009,10 +1019,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       userSpecifiedModel: process.env["EMBER_MODEL_NAME"],
     };
 
-    // as unknown as Tool[]: BUILTIN_TOOLS satisfies the Tool interface at runtime
-    const btMod = await import("../tools/builtin-tools.ts");
-    const tools  = (btMod as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
-
+    // Keep injected and default headless execution on the same structured-tool contract.
+    const tools = opts.builtinToolsFn
+      ? await opts.builtinToolsFn()
+      : (await import("../tools/builtin-tools.ts") as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
     let exitCode: number;
     if (opts.headlessRunner) {
       const result = await opts.headlessRunner(prompt, io, tools, headlessOpts, deps);
@@ -1028,8 +1038,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     return;
   }
 
-  // Interactive TUI path
-  const frontendShell = await import("../core/frontend-shell.ts");
+  // Interactive TUI path. React and Ink are intentionally loaded only here so
+  // headless owned-seat startup remains executable from a clean source checkout.
+  const [{ default: React }, { App: InkApp }, frontendShell] = await Promise.all([
+    import("react"),
+    import("../ink/components.ts"),
+    import("../core/frontend-shell.ts"),
+  ]);
   const root          = frontendShell.createRoot();
 
   let resolveExit!: () => void;
@@ -1083,7 +1098,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
           InkApp,
           null,
           React.createElement(
-            REPLComponent as React.ComponentType<Record<string, unknown>>,
+            REPLComponent as ComponentType<Record<string, unknown>>,
             {
               config: (props as Record<string, unknown>)["config"],
               cwd:    (props as Record<string, unknown>)["cwd"],
