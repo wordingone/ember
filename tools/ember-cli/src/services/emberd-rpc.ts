@@ -56,33 +56,43 @@ function isAccessDenied(error: unknown): boolean {
 }
 
 async function openEmberdPipe(pipeName: string): Promise<net.Socket> {
-  const deadline = Date.now() + OPEN_RETRY_WINDOW_MS;
   return new Promise<net.Socket>((resolve, reject) => {
     let settled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let currentSocket: net.Socket | undefined;
+    const deadlineTimer = setTimeout(() => {
+      finish(responseError("named-pipe open retry window elapsed"));
+    }, OPEN_RETRY_WINDOW_MS);
     const finish = (error?: Error, socket?: net.Socket): void => {
       if (settled) return;
       settled = true;
+      clearTimeout(deadlineTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+      if (currentSocket && currentSocket !== socket) currentSocket.destroy();
       if (error) reject(error);
       else if (socket) resolve(socket);
       else reject(responseError("named-pipe open failed without a socket"));
     };
     const attempt = (): void => {
+      if (settled) return;
       const socket = net.createConnection(pipeName);
+      currentSocket = socket;
       const onError = (error: NodeJS.ErrnoException): void => {
         socket.destroy();
+        if (settled) return;
         if (isAccessDenied(error)) {
           finish(responseError("same-user named-pipe access denied"));
           return;
         }
-        if (Date.now() >= deadline) {
-          finish(responseError("named-pipe open retry window elapsed: " + error.message));
-          return;
-        }
-        setTimeout(attempt, OPEN_RETRY_INTERVAL_MS);
+        retryTimer = setTimeout(attempt, OPEN_RETRY_INTERVAL_MS);
       };
       socket.once("error", onError);
       socket.once("connect", () => {
         socket.removeListener("error", onError);
+        if (settled) {
+          socket.destroy();
+          return;
+        }
         finish(undefined, socket);
       });
     };
@@ -158,6 +168,7 @@ export async function callEmberd(options: EmberdRequestOptions): Promise<Record<
         finish(responseError("response result is malformed"));
         return;
       }
+      // A valid frame completes this one-request connection; delayed bytes are outside the closed connection contract.
       finish(undefined, result as Record<string, unknown>);
     });
     socket.write(request);
