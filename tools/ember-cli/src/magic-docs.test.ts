@@ -12,8 +12,19 @@ import {
   MAGIC_DOCS_HEADER_PATTERN,
   type MagicDocsServiceOptions,
 } from './magic-docs';
+import type { SelectedModelContract } from './entrypoints/model-seat';
 
 const TEST_MODEL_NAME = 'ember-owned:' + 'a'.repeat(64);
+
+// A seat-authorized contract, as `selectedModelContract` would produce for
+// an OWNED_ADMITTED seat — Fix #51 P1 repair (3): magic-docs consumes the
+// full contract, never a bare modelName string.
+const TEST_MODEL_CONTRACT: SelectedModelContract = {
+  seat: 'OWNED_ADMITTED',
+  modelName: TEST_MODEL_NAME,
+  modelConfigSha256: 'd'.repeat(64),
+  structuredOutputs: false,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,7 +52,7 @@ function makeOptions(overrides: Partial<MagicDocsServiceOptions> = {}): MagicDoc
     },
     writeFileFn: async (p, c) => { written.set(p, c); },
     customPromptPath: join(TEST_DIR, 'prompt.md'),
-    modelName: TEST_MODEL_NAME,
+    modelContract: TEST_MODEL_CONTRACT,
     ...overrides,
   };
 }
@@ -100,7 +111,7 @@ describe('AC2: main-thread turn completion triggers update for read registered f
     expect(written.get('/my/magic.md')).toBe(updatedContent);
   });
 
-  test('the model passed to callModel is sourced from options.modelName, never a hardcoded literal', async () => {
+  test('the model passed to callModel is sourced from options.modelContract, never a hardcoded literal', async () => {
     let capturedModel = '';
     const svc = createMagicDocsService(makeOptions({
       callModel: async ({ model }) => { capturedModel = model; return MAGIC_CONTENT; },
@@ -109,6 +120,15 @@ describe('AC2: main-thread turn completion triggers update for read registered f
     svc.onTurnComplete(MAIN_REPL_QUERY_SOURCE, ['/my/magic.md']);
     await new Promise<void>((r) => setTimeout(r, 50));
     expect(capturedModel).toBe(TEST_MODEL_NAME);
+  });
+
+  test('no model call occurs when modelContract is undefined (OFFLINE/refused seats never produce a callable contract)', async () => {
+    // Fix #51 P1 repair (5) negative: consumers must handle undefined.
+    const svc = createMagicDocsService(makeOptions({ modelContract: undefined }));
+    svc.onFileRead('/my/magic.md', MAGIC_CONTENT, MAIN_REPL_QUERY_SOURCE);
+    svc.onTurnComplete(MAIN_REPL_QUERY_SOURCE, ['/my/magic.md']);
+    await new Promise<void>((r) => setTimeout(r, 50));
+    expect(modelCalled).toBe(false);
   });
 });
 

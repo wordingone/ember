@@ -4,6 +4,8 @@
 
 // magic-docs.ts — Auto-updating magic documentation files for privileged users.
 
+import type { SelectedModelContract } from './entrypoints/model-seat';
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -62,12 +64,14 @@ export interface MagicDocsServiceOptions {
   customPromptPath: string;
 
   /**
-   * Model name to pass to `callModel` when regenerating a magic-docs file.
-   * Sourced from the currently selected model contract (see
-   * `entrypoints/model-seat.ts::selectedModelContract`) — never a hardcoded
-   * ordinary-fallback literal.
+   * The currently selected model identity + capability contract (see
+   * `entrypoints/model-seat.ts::selectedModelContract`) — NOT a bare
+   * modelName string, so a caller can never inject an arbitrary model
+   * identity without it being seat-authorized. `undefined` means no seat
+   * currently carries a model (e.g. OFFLINE or a refused seat); the service
+   * fails closed and makes no model call in that case.
    */
-  modelName: string;
+  modelContract: SelectedModelContract | undefined;
 }
 
 interface MagicDocsService {
@@ -97,6 +101,10 @@ export function createMagicDocsService(options: MagicDocsServiceOptions): MagicD
   }
 
   async function runUpdates(paths: string[]): Promise<void> {
+    // Fail closed: no seat-authorized model identity means no model call.
+    if (!options.modelContract) return;
+    const modelName = options.modelContract.modelName;
+
     // Resolve the prompt to use for this batch
     let prompt: string;
     try {
@@ -118,7 +126,7 @@ export function createMagicDocsService(options: MagicDocsServiceOptions): MagicD
 
         const updated = await options.callModel({
           prompt,
-          model: options.modelName,
+          model: modelName,
           fileContent,
         });
 

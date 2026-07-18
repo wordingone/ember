@@ -22,8 +22,19 @@ import {
   type MemoryFileEntry,
   type SelectModelFn,
 } from './memory-operations';
+import type { SelectedModelContract } from './entrypoints/model-seat';
 
 const TEST_MODEL_NAME = 'ember-owned:' + 'a'.repeat(64);
+
+// A seat-authorized contract, as `selectedModelContract` would produce for
+// an OWNED_ADMITTED seat — Fix #51 P1 repair (3): memory-operations consumes
+// the full contract, never a bare modelName string.
+const TEST_MODEL_CONTRACT: SelectedModelContract = {
+  seat: 'OWNED_ADMITTED',
+  modelName: TEST_MODEL_NAME,
+  modelConfigSha256: 'd'.repeat(64),
+  structuredOutputs: false,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -232,7 +243,7 @@ describe('AC3: per-file size truncation at 25 KB', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC4: selectRelevantMemories consumes the selected model contract identity', () => {
-  test('passes the caller-supplied modelName to the callModel function, never a hardcoded literal', async () => {
+  test('passes the caller-supplied modelContract identity to the callModel function, never a hardcoded literal', async () => {
     let capturedModel: string | undefined;
     const mockCallModel: SelectModelFn = async ({ model, descriptions }) => {
       capturedModel = model;
@@ -244,7 +255,7 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
       makeEntry({ name: 'b', description: 'Banana info' }),
     ];
 
-    await selectRelevantMemories(entries, 'fruit', mockCallModel, TEST_MODEL_NAME);
+    await selectRelevantMemories(entries, 'fruit', mockCallModel, TEST_MODEL_CONTRACT);
     expect(capturedModel).toBe(TEST_MODEL_NAME);
   });
 
@@ -254,7 +265,7 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
       makeEntry({ name: 'b', description: 'b' }),
     ];
     const throwingModel: SelectModelFn = async () => { throw new Error('API error'); };
-    const result = await selectRelevantMemories(entries, 'query', throwingModel, TEST_MODEL_NAME);
+    const result = await selectRelevantMemories(entries, 'query', throwingModel, TEST_MODEL_CONTRACT);
     expect(result).toHaveLength(2);
   });
 
@@ -265,7 +276,7 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
       makeEntry({ name: 'c', description: 'Gamma' }),
     ];
     const mockCallModel: SelectModelFn = async () => ['c', 'a', 'b'];
-    const result = await selectRelevantMemories(entries, 'query', mockCallModel, TEST_MODEL_NAME);
+    const result = await selectRelevantMemories(entries, 'query', mockCallModel, TEST_MODEL_CONTRACT);
     expect(result[0]!.name).toBe('c');
     expect(result[1]!.name).toBe('a');
     expect(result[2]!.name).toBe('b');
@@ -277,10 +288,11 @@ describe('AC4: selectRelevantMemories consumes the selected model contract ident
     expect(result).toHaveLength(2);
   });
 
-  test('returns all entries when callModel is provided but no modelName is selected', async () => {
+  test('returns all entries when callModel is provided but no modelContract is selected (OFFLINE/refused seats never produce a callable contract)', async () => {
+    // Fix #51 P1 repair (5) negative: consumers must handle undefined.
     const mockCallModel: SelectModelFn = async ({ descriptions }) => descriptions.map((d) => d.name);
     const entries = [makeEntry({ name: 'a' }), makeEntry({ name: 'b' })];
-    const result = await selectRelevantMemories(entries, 'query', mockCallModel);
+    const result = await selectRelevantMemories(entries, 'query', mockCallModel, undefined);
     expect(result).toHaveLength(2);
   });
 });

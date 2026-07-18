@@ -6,9 +6,6 @@
 // Feature capability queries for model variants available in Ember.
 // L1 leaf: no intra-ember dependencies.
 
-/** The local inference model identifier. */
-export const LOCAL_MODEL_ID = 'qwen-3.6';
-
 // ---- Capability queries ----
 
 /**

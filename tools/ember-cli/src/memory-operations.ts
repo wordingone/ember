@@ -6,6 +6,7 @@
 
 import { readdir, readFile, stat } from 'fs/promises';
 import { join } from 'path';
+import type { SelectedModelContract } from './entrypoints/model-seat';
 
 // ---- Constants ----
 
@@ -329,24 +330,26 @@ export function findRelevantMemories(
 /**
  * Uses the provided model function to select the most relevant entries for `query`.
  *
- * - Consumes the currently selected model contract's identity (see
- *   `entrypoints/model-seat.ts::selectedModelContract`) via `modelName` —
- *   never a hardcoded ordinary-fallback literal.
+ * - Consumes the currently selected model contract (see
+ *   `entrypoints/model-seat.ts::selectedModelContract`) — NOT a bare
+ *   modelName string, so a caller can never inject an arbitrary model
+ *   identity without it being seat-authorized.
  * - Returns entries in model-returned order (with unselected entries appended)
  * - Falls back to all entries on model error
- * - Returns all entries when `callModel` or `modelName` is not provided
+ * - Returns all entries when `callModel` or `modelContract` is not provided
+ *   (e.g. OFFLINE or a refused seat, which never produce a contract at all)
  */
 export async function selectRelevantMemories(
   entries: MemoryFileEntry[],
   query: string,
   callModel?: SelectModelFn,
-  modelName?: string,
+  modelContract?: SelectedModelContract,
 ): Promise<MemoryFileEntry[]> {
-  if (!callModel || !modelName || entries.length === 0) return entries;
+  if (!callModel || !modelContract || entries.length === 0) return entries;
 
   try {
     const descriptions = entries.map((e) => ({ name: e.name, description: e.description }));
-    const selected = await callModel({ model: modelName, descriptions });
+    const selected = await callModel({ model: modelContract.modelName, descriptions });
 
     // Build a map for fast lookup
     const byName = new Map(entries.map((e) => [e.name, e]));

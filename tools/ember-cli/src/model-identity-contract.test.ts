@@ -31,7 +31,7 @@ describe("model identity contract (Fix #51 scope)", () => {
     });
 
     expect(decision.allowed).toBe(false);
-    expect(selectedModelContract(decision)).toBeNull();
+    expect(selectedModelContract(decision)).toBeUndefined();
   });
 
   it("labels a REFERENCE_ONLY seat (Qwen or any borrowed model) truthfully and never grants structured outputs", () => {
@@ -43,11 +43,32 @@ describe("model identity contract (Fix #51 scope)", () => {
     });
 
     const contract = selectedModelContract(decision);
-    expect(contract).not.toBeNull();
+    expect(contract).not.toBeUndefined();
     expect(contract?.seat).toBe("REFERENCE_ONLY");
     expect(contract?.modelName.startsWith("REFERENCE_ONLY: ")).toBe(true);
     expect(contract?.modelConfigSha256).toBeNull();
     expect(contract?.structuredOutputs).toBe(false);
+  });
+
+  it("carries the exact reference model identity via referenceModelName, never collapsing to unidentified-model", () => {
+    // Fix #51 P1 repair (1): resolveModelSeat never attaches an ownedIdentity
+    // to a REFERENCE_ONLY decision, so selectedModelContract must read the
+    // identity from decision.referenceModelName -- an explicit closed
+    // ReferenceModelContract -- never from ownedIdentity.
+    const decision = resolveModelSeat({
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
+      explicitModelUrl: undefined,
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+      referenceModelName: "Qwen2.5-72B-Instruct",
+    });
+
+    expect(decision.ownedIdentity).toBeUndefined();
+
+    const contract = selectedModelContract(decision);
+    expect(contract?.seat).toBe("REFERENCE_ONLY");
+    expect(contract?.modelName).toBe("REFERENCE_ONLY: Qwen2.5-72B-Instruct");
+    expect(contract?.modelName).not.toContain("unidentified-model");
   });
 
   it("defaults an owned identity without a capability declaration to structuredOutputs=false", () => {
@@ -89,13 +110,39 @@ describe("model identity contract (Fix #51 scope)", () => {
         serverSourceSha256: "e".repeat(64),
         tokenizerSha256: "f".repeat(64),
         modelName: "ember-owned:b" + "b".repeat(11),
-        capabilities: { structuredOutputs: true },
+        modelConfigCapabilities: { modelConfigSha256: "d".repeat(64), structuredOutputs: true },
       },
     });
 
     const contract = selectedModelContract(decision);
     expect(contract?.structuredOutputs).toBe(true);
     expect(modelSupportsStructuredOutputs(contract)).toBe(true);
+  });
+
+  it("rejects a capability declaration whose modelConfigSha256 does not match the served identity's hash", () => {
+    // Fix #51 P1 repair (2): the declaration must carry its OWN modelConfigSha256
+    // and be granted only on exact equality with the served identity's hash.
+    const decision = resolveModelSeat({
+      argv: ["node", "ember", "-p", "hello"],
+      explicitModelUrl: undefined,
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+      ownedIdentity: {
+        checkpointSha256: "c".repeat(64),
+        endpointUrl: "http://127.0.0.1:8083",
+        identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64), // served identity's actual hash
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
+        modelName: "ember-owned:c" + "c".repeat(11),
+        modelConfigCapabilities: { modelConfigSha256: "9".repeat(64), structuredOutputs: true }, // mismatched
+      },
+    });
+
+    const contract = selectedModelContract(decision);
+    expect(contract?.modelConfigSha256).toBe("d".repeat(64));
+    expect(contract?.structuredOutputs).toBe(false);
+    expect(modelSupportsStructuredOutputs(contract)).toBe(false);
   });
 
   it("modelSupportsStructuredOutputs defaults false with no declaration and never trusts an unbound declaration", () => {
@@ -109,7 +156,9 @@ describe("model identity contract (Fix #51 scope)", () => {
     ).toBe(false);
   });
 
-  it("an OFFLINE seat carries no model identity and no structured-outputs capability", () => {
+  it("an OFFLINE seat produces no callable model contract at all", () => {
+    // Fix #51 P1 repair (5): OFFLINE must never return a callable-looking
+    // contract -- selectedModelContract returns undefined, not a stub object.
     const decision = resolveModelSeat({
       argv: ["node", "ember"],
       explicitModelUrl: undefined,
@@ -117,9 +166,31 @@ describe("model identity contract (Fix #51 scope)", () => {
       referenceSeatEnv: undefined,
     });
 
-    const contract = selectedModelContract(decision);
-    expect(contract?.seat).toBe("OFFLINE");
-    expect(contract?.structuredOutputs).toBe(false);
-    expect(contract?.modelConfigSha256).toBeNull();
+    expect(decision.seat).toBe("OFFLINE");
+    expect(selectedModelContract(decision)).toBeUndefined();
+  });
+
+  it("a refused decision and an OFFLINE seat both hand consumers undefined, never a stub contract", () => {
+    // Negative test asserting consumers handle undefined (Fix #51 P1 repair (5)).
+    const refused = resolveModelSeat({
+      argv: ["node", "ember", "-p", "hello"],
+      explicitModelUrl: undefined,
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+    });
+    const offline = resolveModelSeat({
+      argv: ["node", "ember"],
+      explicitModelUrl: undefined,
+      gpuFreeRequested: true,
+      referenceSeatEnv: undefined,
+    });
+
+    for (const decision of [refused, offline]) {
+      const contract = selectedModelContract(decision);
+      expect(contract).toBeUndefined();
+      // A consumer written as `if (!contract) { /* no model call */ }`
+      // correctly fails closed for both cases.
+      expect(Boolean(contract)).toBe(false);
+    }
   });
 });
