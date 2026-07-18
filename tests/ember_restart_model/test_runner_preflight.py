@@ -134,7 +134,7 @@ class RunnerPreflightTests(unittest.TestCase):
             (poison / "tokenizers.py").write_text(poison_module, encoding="utf-8")
             (poison / "sitecustomize.py").write_text(poison_module, encoding="utf-8")
             with patch.dict(os.environ, {"PYTHONPATH": str(poison)}, clear=False):
-                records, receipt = run_vertical_slice.load_verified_specialist_records(
+                records, receipt, _artifact_bytes = run_vertical_slice.load_verified_specialist_records(
                     root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning",
                 )
             self.assertFalse(marker.exists(), "the isolated verifier imported an ambient PYTHONPATH candidate")
@@ -156,7 +156,7 @@ class RunnerPreflightTests(unittest.TestCase):
             config = root / "config.json"
             config.write_bytes((ROOT / "configs" / "ember-restart-3b.json").read_bytes())
             manifest = emit_bundle(repo_root=ROOT, output_root=root / "bundle", tokenizer_path=tokenizer, model_config_path=config, count=4_096)["reasoning"]
-            records_out, verification = run_vertical_slice.load_verified_specialist_records(root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
+            records_out, verification, _artifact_bytes = run_vertical_slice.load_verified_specialist_records(root=ROOT, data_manifest=manifest, tokenizer_path=tokenizer, capability="reasoning")
         self.assertGreaterEqual(len(records_out), 4_096)
         self.assertEqual(verification["result"], "VERIFIED")
         self.assertEqual(verification["capability"], "reasoning")
@@ -445,6 +445,15 @@ class RunnerPreflightTests(unittest.TestCase):
         parent_manifest = parent / "checkpoint-manifest.json"
         real_read_text = Path.read_text
         genesis = {name: (index.to_bytes(1, "little") * 32).hex() for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)}
+        specialist_rows = [{"active_expert": "vision", "scene_split": "train", "token_ids": [index + 1]} for index in range(len(callback_steps or (20,))) ]
+        specialist_artifact_bytes = json.dumps({"records": specialist_rows}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        specialist_artifact_sha256 = hashlib.sha256(specialist_artifact_bytes).hexdigest()
+        _specialist_selected, specialist_selection = run_vertical_slice.select_verified_scene_split(
+            specialist_rows, capability="image", scene_split="train", full_records_artifact_sha256=specialist_artifact_sha256,
+        )
+        _specialist_slice_rows, specialist_execution_slice = run_vertical_slice.bind_specialist_execution_slice(
+            specialist_rows, start_record=0, max_records=len(specialist_rows), scene_split_record_count=len(specialist_rows),
+        )
 
         def read_text(path: Path, *args: object, **kwargs: object) -> str:
             if path.resolve() == parent_manifest.resolve():
@@ -499,9 +508,11 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="h" * 64))
             result = run_vertical_slice.run(
                 seed=84, artifact_root=Path("B:/vertical-artifacts"), resume_checkpoint=parent,
-                records_override=([{"active_expert": "vision", "token_ids": [index + 1]} for index in range(len(callback_steps or (20,)))] if specialist else None),
-                specialist_verification={"capability": "image", "data_manifest_sha256": "a" * 64} if specialist else None,
-                specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest), "execution_slice": {"start_record": 0, "records_sha256": "1" * 64}} if specialist else None,
+                records_override=specialist_rows if specialist else None,
+                scene_split_records=specialist_rows if specialist else None,
+                full_records_artifact_bytes=specialist_artifact_bytes if specialist else None,
+                specialist_verification={"capability": "image", "data_manifest_sha256": "a" * 64, "records_artifact_sha256": specialist_artifact_sha256} if specialist else None,
+                specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest), "execution_slice": specialist_execution_slice, "scene_split_selection": specialist_selection} if specialist else None,
                 checkpoint_interval=8_192 if specialist else None,
                 write_budget_bytes=100 * 1024**3 if specialist else None,
             )
@@ -648,8 +659,10 @@ class RunnerPreflightTests(unittest.TestCase):
             {"active_expert": "vision", "scene_split": "train", "token_ids": [1]},
             {"active_expert": "vision", "scene_split": "train", "token_ids": [2]},
         ]
+        artifact_bytes = json.dumps({"records": full_records}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        artifact_sha256 = hashlib.sha256(artifact_bytes).hexdigest()
         _selected, selection = run_vertical_slice.select_verified_scene_split(
-            full_records, capability="image", scene_split="train", full_records_artifact_sha256="a" * 64,
+            full_records, capability="image", scene_split="train", full_records_artifact_sha256=artifact_sha256,
         )
         for label, mutate in {
             "records-hash": lambda receipt: receipt.__setitem__("selected_records_sha256", "b" * 64),
@@ -662,14 +675,14 @@ class RunnerPreflightTests(unittest.TestCase):
             lineage = {"execution_slice": {**run_vertical_slice.specialist_execution_slice_receipt(full_records[:1], source_start_record=0, scene_split_record_count=receipt["selected_record_count"])}, "scene_split_selection": receipt}
             with self.subTest(label=label), patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
                 with self.assertRaisesRegex(ValueError, "image specialist"):
-                    run_vertical_slice.run(seed=1, artifact_root=Path("B:/artifacts"), records_override=full_records[:1], scene_split_records=full_records, specialist_verification={"capability": "image", "records_artifact_sha256": "a" * 64}, specialist_lineage=lineage, checkpoint_interval=1, write_budget_bytes=1)
+                    run_vertical_slice.run(seed=1, artifact_root=Path("B:/artifacts"), records_override=full_records[:1], scene_split_records=full_records, specialist_verification={"capability": "image", "records_artifact_sha256": artifact_sha256}, specialist_lineage=lineage, checkpoint_interval=1, write_budget_bytes=1, full_records_artifact_bytes=artifact_bytes)
                 cuda_probe.assert_not_called()
         execution = run_vertical_slice.specialist_execution_slice_receipt(
             full_records[:1], source_start_record=2, scene_split_record_count=2,
         )
         with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
             with self.assertRaisesRegex(ValueError, "selected train records"):
-                run_vertical_slice.run(seed=1, artifact_root=Path("B:/artifacts"), records_override=full_records[:1], scene_split_records=full_records, specialist_verification={"capability": "image", "records_artifact_sha256": "a" * 64}, specialist_lineage={"execution_slice": execution, "scene_split_selection": selection}, checkpoint_interval=1, write_budget_bytes=1)
+                run_vertical_slice.run(seed=1, artifact_root=Path("B:/artifacts"), records_override=full_records[:1], scene_split_records=full_records, specialist_verification={"capability": "image", "records_artifact_sha256": artifact_sha256}, specialist_lineage={"execution_slice": execution, "scene_split_selection": selection}, checkpoint_interval=1, write_budget_bytes=1, full_records_artifact_bytes=artifact_bytes)
         cuda_probe.assert_not_called()
     def test_specialist_run_rejects_nontrain_or_unknown_image_rows_before_cuda_probe(self) -> None:
         selection = {
@@ -704,7 +717,7 @@ class RunnerPreflightTests(unittest.TestCase):
         cuda_probe.assert_not_called()
     def test_specialist_dispatch_does_not_enter_cuda_runner_when_lineage_preflight_fails(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image", "records_artifact_sha256": "a" * 64}
-        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}, {"active_expert": "vision", "scene_split": "validation", "token_ids": [2]}, {"active_expert": "vision", "scene_split": "test", "token_ids": [3]}], verification)):
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}, {"active_expert": "vision", "scene_split": "validation", "token_ids": [2]}, {"active_expert": "vision", "scene_split": "test", "token_ids": [3]}], verification, b"{}")):
             with patch.object(run_vertical_slice, "specialist_lineage_request", side_effect=ValueError("parent shard hash mismatch")):
                 with patch.object(run_vertical_slice, "run") as cuda_runner:
                     with self.assertRaisesRegex(ValueError, "hash mismatch"):
@@ -716,7 +729,7 @@ class RunnerPreflightTests(unittest.TestCase):
         cuda_runner.assert_not_called()
     def test_specialist_forwards_counter_success_receipt_to_cuda_runner(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image", "records_artifact_sha256": "a" * 64}
-        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}, {"active_expert": "vision", "scene_split": "validation", "token_ids": [2]}, {"active_expert": "vision", "scene_split": "test", "token_ids": [3]}], verification)):
+        with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}, {"active_expert": "vision", "scene_split": "validation", "token_ids": [2]}, {"active_expert": "vision", "scene_split": "test", "token_ids": [3]}], verification, b"{}")):
             with patch.object(run_vertical_slice, "specialist_lineage_request", side_effect=lambda **kwargs: {"parent_manifest": "parent", "root_manifest": "root", "execution_slice": kwargs["execution_slice"], "scene_split_selection": kwargs["scene_split_selection"]}):
                 with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as cuda_runner:
                     run_vertical_slice.run_specialist(

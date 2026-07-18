@@ -86,6 +86,7 @@ def select_verified_scene_split(
 def validate_image_scene_split_execution(
     records: list[dict[str, object]], *, verification: Mapping[str, object],
     selection: Mapping[str, object], execution_slice: Mapping[str, object],
+    full_records_artifact_bytes: bytes | None = None,
 ) -> None:
     """Fail before CUDA unless a train-only execution matches its closed selection receipt."""
 
@@ -94,6 +95,21 @@ def validate_image_scene_split_execution(
         raise ValueError("image specialist scene split selection receipt is invalid")
     if selection.get("full_records_artifact_sha256") != verification.get("records_artifact_sha256"):
         raise ValueError("image specialist scene split selection does not bind the verified records artifact")
+    if records:
+        if not isinstance(full_records_artifact_bytes, bytes):
+            raise ValueError("image specialist scene split execution requires the full verified records artifact bytes")
+        derived_full_sha256 = hashlib.sha256(full_records_artifact_bytes).hexdigest()
+        if derived_full_sha256 != selection.get("full_records_artifact_sha256"):
+            raise ValueError("image specialist full records artifact hash mismatch")
+        try:
+            full_payload = json.loads(full_records_artifact_bytes)
+        except json.JSONDecodeError as error:
+            raise ValueError("image specialist full records artifact bytes are not valid JSON") from error
+        full_records = full_payload.get("records") if isinstance(full_payload, dict) else None
+        if not isinstance(full_records, list) or any(not isinstance(record, dict) for record in full_records):
+            raise ValueError("image specialist full records artifact is malformed")
+        if records != [record for record in full_records if record.get("scene_split") == "train"]:
+            raise ValueError("image specialist train records are not the train subset of the verified full records artifact")
     if any(not isinstance(selection.get(name), int) or isinstance(selection.get(name), bool) or selection[name] <= 0 for name in ("selected_record_count", "selected_token_count")):
         raise ValueError("image specialist scene split selection has invalid selected counts")
     for name in ("full_records_artifact_sha256", "selected_records_sha256", "selected_tokens_sha256"):
@@ -1399,7 +1415,7 @@ def _retain_after_success(
 
 def load_verified_specialist_records(
     *, root: Path, data_manifest: Path, tokenizer_path: Path, capability: str,
-) -> tuple[list[dict[str, object]], dict[str, object]]:
+) -> tuple[list[dict[str, object]], dict[str, object], bytes]:
     """Execute the independent manifest verifier and admit one routed expert family."""
 
     expert_for_capability = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
@@ -1462,7 +1478,7 @@ def load_verified_specialist_records(
         raise RuntimeError("verified specialist records artifact is malformed")
     if {record.get("active_expert") for record in records} != {expert_for_capability[capability]}:
         raise RuntimeError("verified specialist records do not contain exactly the requested route")
-    return records, verification
+    return records, verification, records_bytes
 
 def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
     """Consume #812 identity before reading the exact owned four-domain bytes."""
@@ -1894,6 +1910,7 @@ def run(
     resume_optimizer_transition_registry_sha256: str | None = None,
     records_override: list[dict[str, object]] | None = None,
     scene_split_records: list[dict[str, object]] | None = None,
+    full_records_artifact_bytes: bytes | None = None,
     specialist_verification: dict[str, object] | None = None,
     specialist_lineage: dict[str, object] | None = None,
     checkpoint_interval: int | None = None,
@@ -1913,6 +1930,7 @@ def run(
             raise ValueError("image specialist production run requires the complete selected train records")
         validate_image_scene_split_execution(
             scene_split_records, verification=specialist_verification, selection=selection, execution_slice=execution_slice,
+            full_records_artifact_bytes=full_records_artifact_bytes,
         )
         start, count = execution_slice.get("start_record"), execution_slice.get("record_count")
         if (type(start) is not int or type(count) is not int or start < 0 or count < 1
@@ -2222,7 +2240,7 @@ def run_specialist(
     """Run one verifier-bound specialist family through the canonical v4 lineage path."""
 
     root = Path(__file__).resolve().parents[2]
-    records, verification = load_verified_specialist_records(
+    records, verification, full_records_artifact_bytes = load_verified_specialist_records(
         root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
     )
     scene_split_selection: dict[str, object] | None = None
@@ -2247,6 +2265,7 @@ def run_specialist(
         resume_optimizer_transition_registry=resume_optimizer_transition_registry,
         resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
         records_override=selected_records, scene_split_records=records,
+        full_records_artifact_bytes=full_records_artifact_bytes if capability == "image" else None,
         specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
