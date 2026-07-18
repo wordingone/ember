@@ -157,6 +157,43 @@ function Get-DefaultWatchdogState {
         freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
     }
 }
+function Normalize-WatchdogBackoffState {
+    param($TargetState)
+    if ($null -eq $TargetState) { return }
+    $level = 0
+    $levelValid = $true
+    if ($TargetState.PSObject.Properties.Name -contains 'backoffLevel') {
+        try {
+            $parsedLevel = 0L
+            if (-not [long]::TryParse([string]$TargetState.backoffLevel, [System.Globalization.NumberStyles]::Integer, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedLevel) -or $parsedLevel -lt 0 -or $parsedLevel -gt [int64][int]::MaxValue) {
+                $levelValid = $false
+            } else {
+                $level = [int]$parsedLevel
+            }
+        } catch { $levelValid = $false }
+    }
+    $until = $null
+    $hasUntil = $TargetState.PSObject.Properties.Name -contains 'backoffUntil' -and -not [string]::IsNullOrWhiteSpace([string]$TargetState.backoffUntil)
+    $untilValid = $true
+    if ($hasUntil) {
+        try {
+            $parsedUntil = [datetime]::MinValue
+            if (-not [datetime]::TryParse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal, [ref]$parsedUntil)) {
+                $untilValid = $false
+            } else {
+                $until = $parsedUntil
+            }
+        } catch { $untilValid = $false }
+    }
+    if (-not $levelValid -or -not $untilValid) {
+        $level = 0
+        $until = $null
+        $hasUntil = $false
+    }
+    $TargetState.backoffLevel = $level
+    $TargetState.backoffUntil = if ($until) { $until.ToString('o') } else { $null }
+    $TargetState.backoffState = if ($until) { if ($level -gt 1) { 'escalated' } else { 'active' } } else { 'clear' }
+}
 function Read-WatchdogState {
     <#
     .SYNOPSIS
@@ -193,6 +230,8 @@ function Read-WatchdogState {
             $legacyHealthAt = $parsed.server.lastHealthAt
             $parsed.server | Add-Member -NotePropertyName 'lastHealthCheckAt' -NotePropertyValue $legacyHealthAt
         }
+        Normalize-WatchdogBackoffState -TargetState $parsed.cockpit
+        Normalize-WatchdogBackoffState -TargetState $parsed.server
         if (-not ($parsed.PSObject.Properties.Name -contains 'freshness')) {
             $parsed | Add-Member -NotePropertyName 'freshness' -NotePropertyValue ([PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null })
         }
@@ -307,10 +346,10 @@ function Get-HeartbeatPid {
 
 function Get-BackoffState {
     param($TargetState, [Parameter(Mandatory)][datetime]$Now)
-    $level = 0
-    if ($TargetState.PSObject.Properties.Name -contains 'backoffLevel') { $level = [int]$TargetState.backoffLevel }
+    Normalize-WatchdogBackoffState -TargetState $TargetState
+    $level = [int]$TargetState.backoffLevel
     if ($TargetState.backoffUntil) {
-        $until = [datetime]::Parse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+        $until = [datetime]::ParseExact([string]$TargetState.backoffUntil, 'o', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
         if ($Now -lt $until) {
             $state = if ($level -gt 1) { 'escalated' } else { 'active' }
             $TargetState.backoffState = $state
