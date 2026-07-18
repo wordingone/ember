@@ -542,7 +542,8 @@ def _specialist_lineage(
     if active_expert not in EXPERT_NAMES:
         raise ValueError("specialist lineage requires one specialist active expert")
     required = {"parent_manifest", "root_manifest", "trained_expert_ids", "data_verification_receipt", "execution_slice"}
-    if not isinstance(lineage, Mapping) or set(lineage) != required:
+    expected_fields = {*required, "scene_split_selection"} if active_expert == "vision" else required
+    if not isinstance(lineage, Mapping) or set(lineage) != expected_fields:
         raise ValueError("specialist lineage has an invalid shape")
     parent_source, root_source = lineage["parent_manifest"], lineage["root_manifest"]
     if not isinstance(parent_source, (str, Path)) or not isinstance(root_source, (str, Path)):
@@ -601,9 +602,24 @@ def _specialist_lineage(
         _sha256_value(verification.get(field), name=f"specialist verification {field}")
     if type(verification.get("record_count")) is not int or verification["record_count"] <= 0 or type(verification.get("token_count")) is not int or verification["token_count"] <= 0:
         raise ValueError("specialist lineage verification has no training evidence")
+    scene_selection: Mapping[str, Any] | None = None
+    if active_expert == "vision":
+        scene_selection = lineage["scene_split_selection"]
+        selection_fields = {"schema_version", "capability", "scene_split", "full_records_artifact_sha256", "selected_record_count", "selected_token_count", "selected_records_sha256", "selected_tokens_sha256"}
+        if (not isinstance(scene_selection, Mapping) or set(scene_selection) != selection_fields
+                or scene_selection.get("schema_version") != "ember-specialist-scene-split-selection-v1"
+                or scene_selection.get("capability") != "image" or scene_selection.get("scene_split") != "train"
+                or scene_selection.get("full_records_artifact_sha256") != verification.get("records_artifact_sha256")):
+            raise ValueError("vision specialist lineage lacks a closed train scene split selection")
+        for field in ("full_records_artifact_sha256", "selected_records_sha256", "selected_tokens_sha256"):
+            _sha256_value(scene_selection.get(field), name=f"vision scene split {field}")
+        for field in ("selected_record_count", "selected_token_count"):
+            if type(scene_selection.get(field)) is not int or scene_selection[field] <= 0:
+                raise ValueError("vision specialist lineage has invalid scene split selected counts")
     execution_slice = lineage["execution_slice"]
     slice_fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
-    if not isinstance(execution_slice, Mapping) or set(execution_slice) != slice_fields:
+    allowed_slice_fields = slice_fields | ({"scene_split_record_count"} if scene_selection is not None else set())
+    if not isinstance(execution_slice, Mapping) or set(execution_slice) != allowed_slice_fields:
         raise ValueError("specialist lineage execution slice has an invalid shape")
     if execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1":
         raise ValueError("specialist lineage execution slice has an unsupported schema")
@@ -614,6 +630,12 @@ def _specialist_lineage(
             raise ValueError(f"specialist lineage execution slice has an invalid {field}")
     if execution_slice["start_record"] + execution_slice["record_count"] > verification["record_count"]:
         raise ValueError("specialist lineage execution slice exceeds the verified corpus")
+    if scene_selection is not None and (
+            set(execution_slice) != {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256", "scene_split_record_count"}
+            or execution_slice["scene_split_record_count"] != scene_selection["selected_record_count"]
+            or execution_slice["record_count"] > scene_selection["selected_record_count"]
+            or execution_slice["token_count"] > scene_selection["selected_token_count"]):
+        raise ValueError("vision specialist execution slice does not bind the selected train receipt")
     for field in ("records_sha256", "tokens_sha256"):
         _sha256_value(execution_slice.get(field), name=f"specialist execution slice {field}")
     return ({
@@ -626,6 +648,7 @@ def _specialist_lineage(
             "data_verification_receipt_sha256": _canonical_sha256(verification),
             "execution_slice": dict(execution_slice),
             "execution_slice_sha256": _canonical_sha256(execution_slice),
+            **({"scene_split_selection": dict(scene_selection), "scene_split_selection_sha256": _canonical_sha256(scene_selection)} if scene_selection is not None else {}),
         },
     }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
 def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> tuple[Path, str]:

@@ -54,11 +54,14 @@ _SCENE_SPLITS = ("train", "validation", "test")
 
 def select_verified_scene_split(
     records: list[dict[str, object]], *, capability: str, scene_split: str,
+    full_records_artifact_sha256: str,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
-    """Bind one image scene split for either training or held-out evaluation."""
+    """Create a separate, closed selection receipt without changing verifier evidence."""
 
     if capability != "image" or scene_split not in _SCENE_SPLITS:
         raise ValueError("scene split selection requires image capability and a declared scene split")
+    if not isinstance(full_records_artifact_sha256, str) or len(full_records_artifact_sha256) != 64 or any(ch not in "0123456789abcdef" for ch in full_records_artifact_sha256):
+        raise ValueError("scene split selection requires the full verified records artifact hash")
     if not records or any(record.get("active_expert") != "vision" for record in records):
         raise ValueError("scene split selection requires one vision route")
     if any(record.get("scene_split") not in _SCENE_SPLITS for record in records):
@@ -72,14 +75,47 @@ def select_verified_scene_split(
         "schema_version": "ember-specialist-scene-split-selection-v1",
         "capability": capability,
         "scene_split": scene_split,
-        "record_count": len(selected),
-        "token_count": sum(len(record["token_ids"]) for record in selected),
-        "records_sha256": hashlib.sha256(encoded_records).hexdigest(),
-        "tokens_sha256": hashlib.sha256(encoded_tokens).hexdigest(),
+        "full_records_artifact_sha256": full_records_artifact_sha256,
+        "selected_record_count": len(selected),
+        "selected_token_count": sum(len(record["token_ids"]) for record in selected),
+        "selected_records_sha256": hashlib.sha256(encoded_records).hexdigest(),
+        "selected_tokens_sha256": hashlib.sha256(encoded_tokens).hexdigest(),
     }
 
+
+def validate_image_scene_split_execution(
+    records: list[dict[str, object]], *, verification: Mapping[str, object],
+    selection: Mapping[str, object], execution_slice: Mapping[str, object],
+) -> None:
+    """Fail before CUDA unless a train-only execution matches its closed selection receipt."""
+
+    fields = {"schema_version", "capability", "scene_split", "full_records_artifact_sha256", "selected_record_count", "selected_token_count", "selected_records_sha256", "selected_tokens_sha256"}
+    if set(selection) != fields or selection.get("schema_version") != "ember-specialist-scene-split-selection-v1" or selection.get("capability") != "image" or selection.get("scene_split") != "train":
+        raise ValueError("image specialist scene split selection receipt is invalid")
+    if selection.get("full_records_artifact_sha256") != verification.get("records_artifact_sha256"):
+        raise ValueError("image specialist scene split selection does not bind the verified records artifact")
+    if any(not isinstance(selection.get(name), int) or isinstance(selection.get(name), bool) or selection[name] <= 0 for name in ("selected_record_count", "selected_token_count")):
+        raise ValueError("image specialist scene split selection has invalid selected counts")
+    for name in ("full_records_artifact_sha256", "selected_records_sha256", "selected_tokens_sha256"):
+        value = selection.get(name)
+        if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
+            raise ValueError("image specialist scene split selection has an invalid hash")
+    if execution_slice.get("scene_split_record_count") != selection["selected_record_count"]:
+        raise ValueError("image specialist execution slice does not bind the selected train count")
+    if records:
+        if any(record.get("scene_split") != "train" or record.get("active_expert") != "vision" for record in records):
+            raise ValueError("image specialist scene split execution requires only train vision rows")
+        encoded_records = json.dumps(records, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        encoded_tokens = json.dumps([record.get("token_ids") for record in records], separators=(",", ":")).encode("utf-8")
+        if (selection["selected_record_count"] < len(records)
+                or selection["selected_token_count"] < sum(len(record.get("token_ids", [])) for record in records)
+                or execution_slice.get("record_count") != len(records)
+                or execution_slice.get("records_sha256") != hashlib.sha256(encoded_records).hexdigest()
+                or execution_slice.get("tokens_sha256") != hashlib.sha256(encoded_tokens).hexdigest()):
+            raise ValueError("image specialist execution slice does not match the selected train receipt")
+
 def bind_specialist_execution_slice(
-    records: list[dict[str, object]], *, start_record: int, max_records: int,
+    records: list[dict[str, object]], *, start_record: int, max_records: int, scene_split_record_count: int | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     """Bind one exact contiguous execution slice without weakening full-corpus verification."""
 
@@ -90,11 +126,11 @@ def bind_specialist_execution_slice(
     if start_record + max_records > len(records):
         raise ValueError("specialist execution slice exceeds the verified corpus")
     selected = records[start_record:start_record + max_records]
-    return selected, specialist_execution_slice_receipt(selected, source_start_record=start_record)
+    return selected, specialist_execution_slice_receipt(selected, source_start_record=start_record, scene_split_record_count=scene_split_record_count)
 
 
 def specialist_execution_slice_receipt(
-    records: list[dict[str, object]], *, source_start_record: int,
+    records: list[dict[str, object]], *, source_start_record: int, scene_split_record_count: int | None = None,
 ) -> dict[str, object]:
     """Content-address records executed since the immediate checkpoint parent."""
 
@@ -108,7 +144,7 @@ def specialist_execution_slice_receipt(
         token_rows.append(list(token_ids))
     canonical_records = json.dumps(records, sort_keys=True, separators=(",", ":")).encode("utf-8")
     canonical_tokens = json.dumps(token_rows, separators=(",", ":")).encode("utf-8")
-    return {
+    receipt: dict[str, object] = {
         "schema_version": "ember-specialist-execution-slice-v1",
         "start_record": source_start_record,
         "record_count": len(records),
@@ -116,14 +152,22 @@ def specialist_execution_slice_receipt(
         "records_sha256": hashlib.sha256(canonical_records).hexdigest(),
         "tokens_sha256": hashlib.sha256(canonical_tokens).hexdigest(),
     }
+    if scene_split_record_count is not None:
+        if type(scene_split_record_count) is not int or scene_split_record_count < len(records):
+            raise ValueError("image specialist execution slice requires the selected train count")
+        receipt["scene_split_record_count"] = scene_split_record_count
+    return receipt
 
 
 def validate_specialist_execution_slice(
     execution_slice: dict[str, object], *, verified_record_count: int,
 ) -> None:
     fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
-    if not isinstance(execution_slice, dict) or set(execution_slice) != fields:
+    permitted = {frozenset(fields), frozenset({*fields, "scene_split_record_count"})}
+    if not isinstance(execution_slice, dict) or frozenset(execution_slice) not in permitted:
         raise ValueError("specialist execution slice has an invalid shape")
+    if "scene_split_record_count" in execution_slice and (type(execution_slice["scene_split_record_count"]) is not int or execution_slice["scene_split_record_count"] < execution_slice["record_count"]):
+        raise ValueError("specialist execution slice has an invalid selected scene count")
     if execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1":
         raise ValueError("specialist execution slice has an unsupported schema")
     if type(verified_record_count) is not int or verified_record_count < 1:
@@ -1860,6 +1904,14 @@ def run(
     telemetry_run_id: str | None = None,
     model_chat_restore_not_before: str | None = None,
 ) -> dict[str, object]:
+    if records_override is not None and isinstance(specialist_verification, dict) and isinstance(specialist_lineage, dict) and specialist_verification.get("capability") == "image":
+        selection = specialist_lineage.get("scene_split_selection")
+        execution_slice = specialist_lineage.get("execution_slice")
+        if not isinstance(selection, Mapping) or not isinstance(execution_slice, Mapping):
+            raise ValueError("image specialist production run requires a separate scene split receipt")
+        validate_image_scene_split_execution(
+            records_override, verification=specialist_verification, selection=selection, execution_slice=execution_slice,
+        )
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production vertical slice")
     if not isinstance(seed, int) or seed < 0:
@@ -2093,6 +2145,7 @@ def run(
 def specialist_lineage_request(
     *, capability: str, verification: dict[str, object], resume_checkpoint: Path | None,
     parent_manifest: Path, root_manifest: Path, execution_slice: dict[str, object],
+    scene_split_selection: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Bind a specialist launch to externally supplied parent/root manifests before allocation."""
 
@@ -2100,6 +2153,14 @@ def specialist_lineage_request(
     if expected_expert is None or verification.get("capability") != capability or verification.get("result") != "VERIFIED":
         raise ValueError("specialist lineage requires a verified capability-matched data receipt")
     validate_specialist_execution_slice(execution_slice, verified_record_count=verification.get("record_count"))
+    if capability == "image":
+        if not isinstance(scene_split_selection, dict):
+            raise ValueError("image specialist lineage requires a separate scene split receipt")
+        validate_image_scene_split_execution(
+            [], verification=verification, selection=scene_split_selection, execution_slice=execution_slice,
+        )
+    elif scene_split_selection is not None:
+        raise ValueError("only image specialist lineage may carry a scene split receipt")
     if resume_checkpoint is None:
         raise ValueError("specialist v4 launch requires the parent checkpoint for resume")
     resume_manifest = resume_checkpoint.resolve() / "checkpoint-manifest.json"
@@ -2115,6 +2176,7 @@ def specialist_lineage_request(
         "trained_expert_ids": [*parent_history, *([] if expected_expert in parent_history else [expected_expert])],
         "data_verification_receipt": verification,
         "execution_slice": execution_slice,
+        **({"scene_split_selection": scene_split_selection} if scene_split_selection is not None else {}),
     }
 
 
@@ -2154,18 +2216,21 @@ def run_specialist(
     records, verification = load_verified_specialist_records(
         root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
     )
+    scene_split_selection: dict[str, object] | None = None
     if capability == "image":
         records, scene_split_selection = select_verified_scene_split(
             records, capability=capability, scene_split="train",
+            full_records_artifact_sha256=str(verification.get("records_artifact_sha256", "")),
         )
-        verification = {**verification, "scene_split_selection": scene_split_selection}
     selected_records, execution_slice = bind_specialist_execution_slice(
         records, start_record=start_record,
         max_records=(len(records) - start_record if max_records is None else max_records),
+        scene_split_record_count=(int(scene_split_selection["selected_record_count"]) if scene_split_selection is not None else None),
     )
     lineage = specialist_lineage_request(
         capability=capability, verification=verification, resume_checkpoint=resume_checkpoint,
         parent_manifest=parent_manifest, root_manifest=root_manifest, execution_slice=execution_slice,
+        scene_split_selection=scene_split_selection,
     )
     return run(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
