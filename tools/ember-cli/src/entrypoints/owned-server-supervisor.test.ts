@@ -4,15 +4,20 @@
 
 import { describe, expect, it } from "bun:test";
 import { createServer } from "node:net";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+
+import { callEmberd } from "../services/emberd-rpc.ts";
 
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import {
   buildOwnedServerCommand,
+  dispatchManifestParams,
   ensureOwnedServer,
   probeOwnedEndpointPresence,
+  validateOwnedDispatchManifest,
+  verifyDispatchReceiptCustody,
 } from "./owned-server-supervisor.ts";
 
 const CHECKPOINT = "d".repeat(64);
@@ -41,6 +46,21 @@ function identity(): OwnedModelIdentity {
   };
 }
 
+const realDaemonPipe = process.env["EMBERD_REAL_DAEMON_PIPE"];
+const realDaemonManifest = process.env["EMBERD_REAL_DAEMON_MANIFEST"];
+
+describe.skipIf(!(realDaemonPipe && realDaemonManifest))("owned server supervisor real emberd bridge", () => {
+  it("uses the production manifest_utf8 request type against the real Rust daemon", async () => {
+    const manifestBytes = readFileSync(realDaemonManifest!);
+    const result = await callEmberd({
+      pipeName: realDaemonPipe!,
+      method: "dispatch_manifest",
+      params: dispatchManifestParams(manifestBytes),
+      timeoutMs: 5_000,
+    });
+    expect(result["pid"]).toSatisfy((value) => typeof value === "number" && value > 0);
+  });
+});
 describe("owned server supervisor", () => {
   it("treats a silent occupied TCP listener as present", async () => {
     const server = createServer(() => {});
@@ -260,6 +280,247 @@ describe("owned server supervisor", () => {
     expect(waited).toBe(1);
   });
 
+  it("routes an absent connected owned endpoint through daemon dispatch without CLI spawning", async () => {
+    const priorPipe = process.env["EMBERD_PIPE"];
+    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-test";
+    try {
+      let spawned = 0;
+      let dispatched = 0;
+      const result = await ensureOwnedServer(identity(), {
+        probePresence: async () => "absent",
+        dispatchManifest: async () => {
+          dispatched += 1;
+          return { pid: 77, preflightReceiptPath: "C:\\owned\\custody\\preflight.json", preflightReceiptSha256: "f".repeat(64) };
+        },
+        spawnServer: () => {
+          spawned += 1;
+          throw new Error("CLI-owned spawn is forbidden for connected owned seats");
+        },
+        waitForDispatchReady: async () => {},
+      });
+      expect(result).toMatchObject({ outcome: "dispatched", port: 8083, pid: 77 });
+      expect(dispatched).toBe(1);
+      expect(spawned).toBe(0);
+    } finally {
+      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
+      else process.env["EMBERD_PIPE"] = priorPipe;
+    }
+  });
+  it("rejects receipts outside daemon custody and rehashes their exact bytes", () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-p2d-receipt-custody-"));
+    const outside = mkdtempSync(join(tmpdir(), "ember-p2d-receipt-outside-"));
+    try {
+      const receiptPath = join(root, "preflight.json");
+      writeFileSync(receiptPath, "original-receipt");
+      const digest = new Bun.CryptoHasher("sha256").update("original-receipt").digest("hex");
+      expect(verifyDispatchReceiptCustody(receiptPath, digest, root)).toEqual({ path: resolve(receiptPath), sha256: digest });
+      writeFileSync(receiptPath, "mutated-receipt");
+      expect(() => verifyDispatchReceiptCustody(receiptPath, digest, root)).toThrow("hash does not match custody bytes");
+      const outsideReceipt = join(outside, "preflight.json");
+      writeFileSync(outsideReceipt, "outside-receipt");
+      const outsideDigest = new Bun.CryptoHasher("sha256").update("outside-receipt").digest("hex");
+      expect(() => verifyDispatchReceiptCustody(outsideReceipt, outsideDigest, root)).toThrow("escapes authorized custody");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("sends exact bound manifest bytes to emberd without CLI custody writes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-p2d-dispatch-bound-"));
+    const sourcePath = join(root, "source-dispatch.json");
+    const pipe = `\\\\.\\pipe\\emberd-p2d-dispatch-${process.pid}-${Math.random().toString(16).slice(2)}`;
+    const priorPipe = process.env["EMBERD_PIPE"];
+    const priorManifest = process.env["EMBERD_DISPATCH_MANIFEST"];
+    const priorCommit = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+    const owned = identity();
+    const launch = owned.launch;
+    if (!launch) throw new Error("missing launch");
+    const command = buildOwnedServerCommand(owned, "cuda");
+    const payload = {
+      schema_version: "emberd-dispatch-manifest-v2",
+      job_id: "owned-interactive",
+      source_commit: "e".repeat(40),
+      not_before_ms: 1,
+      expires_at_ms: 2,
+      resource_lease: "owned-interactive",
+      program: { path: command.executable, sha256: "f".repeat(64) },
+      args: command.args,
+      env: {},
+      bindings: [
+        { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
+        { kind: "manifest", path: launch.tokenizerPath, sha256: owned.tokenizerSha256 },
+        { kind: "manifest", path: launch.serverPath, sha256: owned.serverSourceSha256 },
+        { kind: "manifest", path: join(launch.checkpointDir, "checkpoint-manifest.json"), sha256: owned.checkpointSha256 },
+      ],
+      custody_root: root,
+      storage_reserves: [{ root, minimum_free_bytes: 1 }],
+      minimum_free_vram_bytes: 1,
+      required_available_maximum_commit_bytes: 2,
+      maximum_job_memory_bytes: 1,
+      simulated_peak_commit_bytes: 1,
+      preflight_receipt: join(root, "preflight.json"),
+    };
+    const manifestBytes = Buffer.from(JSON.stringify(payload));
+    writeFileSync(sourcePath, manifestBytes);
+    const receiptBytes = Buffer.from("daemon-preflight-receipt");
+    const receiptPath = join(root, "preflight.json");
+    writeFileSync(receiptPath, receiptBytes);
+    let receivedManifest: unknown;
+    const server = createServer((socket) => {
+      socket.once("data", (buffer) => {
+        const request = JSON.parse(buffer.toString("utf8")) as { id: string; params: { manifest_utf8: string; manifest_sha256: string } };
+        receivedManifest = request.params;
+        writeFileSync(sourcePath, "{\"mutated\":true}");
+        socket.end(JSON.stringify({
+          jsonrpc: "2.0", id: request.id,
+          result: { pid: 77, preflight_receipt_path: receiptPath, preflight_receipt_sha256: new Bun.CryptoHasher("sha256").update(receiptBytes).digest("hex") },
+        }) + "\n");
+      });
+    });
+    await new Promise<void>((resolvePromise, reject) => {
+      const onError = (error: Error): void => {
+        server.removeListener("listening", onListening);
+        reject(error);
+      };
+      const onListening = (): void => {
+        server.removeListener("error", onError);
+        resolvePromise();
+      };
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen({ path: pipe });
+    });
+    process.env["EMBERD_PIPE"] = pipe;
+    process.env["EMBERD_DISPATCH_MANIFEST"] = sourcePath;
+    (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = "e".repeat(40);
+    try {
+      const result = await ensureOwnedServer(owned, {
+        probePresence: async () => "absent",
+        spawnServer: () => { throw new Error("connected mode must never direct-spawn"); },
+        waitForDispatchReady: async () => {},
+      });
+      expect(result).toMatchObject({ outcome: "dispatched", pid: 77 });
+      expect(receivedManifest).toEqual({
+        manifest_utf8: manifestBytes.toString("utf8"),
+        manifest_sha256: new Bun.CryptoHasher("sha256").update(manifestBytes).digest("hex"),
+      });
+      expect(readFileSync(sourcePath, "utf8")).toBe("{\"mutated\":true}");
+      expect(existsSync(join(root, ".emberd-dispatch-manifests"))).toBeFalse();
+    } finally {
+      await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
+      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
+      else process.env["EMBERD_PIPE"] = priorPipe;
+      if (priorManifest === undefined) delete process.env["EMBERD_DISPATCH_MANIFEST"];
+      else process.env["EMBERD_DISPATCH_MANIFEST"] = priorManifest;
+      if (priorCommit === undefined) delete (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+      else (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = priorCommit;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  it("rejects a daemon dispatch result without its preflight receipt custody", async () => {
+    const priorPipe = process.env["EMBERD_PIPE"];
+    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-missing-receipt";
+    try {
+      await expect(ensureOwnedServer(identity(), {
+        probePresence: async () => "absent",
+        dispatchManifest: async () => ({ pid: 77 }),
+        waitForDispatchReady: async () => {},
+      })).rejects.toThrow("preflight receipt custody");
+    } finally {
+      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
+      else process.env["EMBERD_PIPE"] = priorPipe;
+    }
+  });
+  it("refuses a connected owned endpoint without a dispatch manifest before direct spawn", async () => {
+    const priorPipe = process.env["EMBERD_PIPE"];
+    const priorManifest = process.env["EMBERD_DISPATCH_MANIFEST"];
+    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-missing-manifest";
+    delete process.env["EMBERD_DISPATCH_MANIFEST"];
+    let spawned = 0;
+    try {
+      await expect(ensureOwnedServer(identity(), {
+        probePresence: async () => "absent",
+        spawnServer: () => { spawned += 1; throw new Error("must not spawn"); },
+      })).rejects.toThrow("EMBERD_DISPATCH_MANIFEST");
+      expect(spawned).toBe(0);
+    } finally {
+      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
+      else process.env["EMBERD_PIPE"] = priorPipe;
+      if (priorManifest === undefined) delete process.env["EMBERD_DISPATCH_MANIFEST"];
+      else process.env["EMBERD_DISPATCH_MANIFEST"] = priorManifest;
+    }
+  });
+  it("rejects invalid UTF-8 dispatch manifest bytes before opening a daemon pipe", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-p2d-invalid-utf8-"));
+    const manifest = join(root, "dispatch.json");
+    const previousPipe = process.env["EMBERD_PIPE"];
+    const previousManifest = process.env["EMBERD_DISPATCH_MANIFEST"];
+    const previousCommit = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+    writeFileSync(manifest, Buffer.from([0xff]));
+    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-invalid-utf8";
+    process.env["EMBERD_DISPATCH_MANIFEST"] = manifest;
+    (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = "e".repeat(40);
+    let spawned = 0;
+    try {
+      await expect(ensureOwnedServer(identity(), {
+        probePresence: async () => "absent",
+        spawnServer: () => { spawned += 1; throw new Error("must not direct-spawn"); },
+      })).rejects.toThrow("cannot read dispatch manifest");
+      expect(spawned).toBe(0);
+    } finally {
+      if (previousPipe === undefined) delete process.env["EMBERD_PIPE"];
+      else process.env["EMBERD_PIPE"] = previousPipe;
+      if (previousManifest === undefined) delete process.env["EMBERD_DISPATCH_MANIFEST"];
+      else process.env["EMBERD_DISPATCH_MANIFEST"] = previousManifest;
+      if (previousCommit === undefined) delete (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+      else (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = previousCommit;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });  it("rejects a dispatch manifest whose server binding differs from the selected owned identity", () => {
+    const owned = identity();
+    const command = buildOwnedServerCommand(owned, "cuda");
+    const launch = owned.launch;
+    if (!launch) throw new Error("missing launch");
+    const manifest = {
+      schema_version: "emberd-dispatch-manifest-v2",
+      job_id: "owned-interactive",
+      source_commit: "e".repeat(40),
+      not_before_ms: 1,
+      expires_at_ms: 2,
+      resource_lease: "owned-interactive",
+      program: { path: command.executable, sha256: "f".repeat(64) },
+      args: command.args,
+      env: {},
+      bindings: [
+        { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
+        { kind: "manifest", path: launch.tokenizerPath, sha256: owned.tokenizerSha256 },
+        { kind: "manifest", path: launch.serverPath, sha256: "0".repeat(64) },
+        { kind: "manifest", path: join(launch.checkpointDir, "checkpoint-manifest.json"), sha256: owned.checkpointSha256 },
+      ],
+      custody_root: "C:\\owned\\custody",
+      storage_reserves: [{ root: "C:\\owned", minimum_free_bytes: 1 }],
+      minimum_free_vram_bytes: 1,
+      required_available_maximum_commit_bytes: 2,
+      maximum_job_memory_bytes: 1,
+      simulated_peak_commit_bytes: 1,
+      preflight_receipt: "C:\\owned\\custody\\preflight.json",
+    };
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
+      .toThrow("server source binding");
+    manifest.bindings[2] = { kind: "manifest", path: launch.serverPath, sha256: owned.serverSourceSha256 };
+    manifest.bindings[0] = { kind: "manifest", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 };
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
+      .toThrow("model config binding");
+    manifest.bindings[0] = { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 };
+    manifest.bindings.push({ kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 });
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
+      .toThrow("model config binding path is not unique");
+    manifest.bindings.pop();
+    Object.assign(manifest, { unexpected: true });
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
+      .toThrow("fields are not closed");
+  });
   it("surfaces a real asynchronous spawn error for a missing executable", async () => {
     const missingExecutable = identity();
     if (!missingExecutable.launch) throw new Error("missing launch fixture");

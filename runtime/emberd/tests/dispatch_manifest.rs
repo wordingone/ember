@@ -5,6 +5,7 @@
 #![cfg(windows)]
 
 use emberd::{Daemon, EmberdError, HostCommitCapacity, JobState};
+use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -208,6 +209,178 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     daemon.stop_job("dispatch-green").unwrap();
 }
 
+#[test]
+fn identical_dispatch_retry_reconstructs_the_existing_job_and_receipt() {
+    let root = sandbox("idempotent-retry");
+    let manifest = write_manifest(&root, "dispatch-idempotent-retry", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let first = daemon
+        .dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let second = daemon
+        .dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert_eq!(first.handle.pid, second.handle.pid);
+    assert_eq!(first.receipt.path, second.receipt.path);
+    assert_eq!(first.receipt.sha256, second.receipt.sha256);
+    assert_eq!(
+        daemon.job_state("dispatch-idempotent-retry").unwrap(),
+        Some(JobState::Running)
+    );
+    daemon.stop_job("dispatch-idempotent-retry").unwrap();
+}
+
+#[test]
+fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_a_second_start() {
+    let root = sandbox("receipt-publication-recovery");
+    let manifest = write_manifest(&root, "dispatch-receipt-recovery", 10_000);
+    let receipt_path = root.join("custody").join("preflight.json");
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+
+    let first = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        10_001,
+        |_root| Ok(1024),
+        || {
+            fs::create_dir(&receipt_path).unwrap();
+            Ok(2048)
+        },
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+    );
+    assert!(matches!(
+        first,
+        Err(EmberdError::DispatchReceiptRecoveryPending { .. })
+    ));
+    assert_eq!(
+        daemon.job_state("dispatch-receipt-recovery").unwrap(),
+        Some(JobState::Running)
+    );
+    assert!(matches!(
+        daemon.adopt_job("dispatch-receipt-recovery"),
+        Err(EmberdError::DispatchReceiptRecoveryPending { .. })
+    ));
+    let connection = Connection::open(root.join("emberd.sqlite3")).unwrap();
+    let first_pid: u32 = connection
+        .query_row(
+            "SELECT pid FROM jobs WHERE job_id='dispatch-receipt-recovery'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    fs::remove_dir(&receipt_path).unwrap();
+
+    let recovered = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert_eq!(recovered.handle.pid, first_pid);
+    assert!(recovered.receipt.path.is_file());
+    daemon.stop_job("dispatch-receipt-recovery").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_lease_conflict_leaves_no_selectable_preflight_and_retries() {
+    let root = sandbox("lease-conflict-retry");
+    let first = write_manifest(&root, "dispatch-lease-first", 10_000);
+    let second = root.join("dispatch-second.json");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&first).unwrap()).unwrap();
+    payload["job_id"] = json!("dispatch-lease-second");
+    payload["preflight_receipt"] = json!(root.join("custody").join("second-preflight.json"));
+    fs::write(&second, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &first,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &second,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberdError::LeaseConflict { .. })
+    ));
+    assert!(!root.join("custody").join("second-preflight.json").exists());
+    assert_eq!(daemon.job_state("dispatch-lease-second").unwrap(), None);
+    assert_eq!(daemon.identity_hash("dispatch-lease-second").unwrap(), None);
+    daemon.stop_job("dispatch-lease-first").unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &second,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert!(outcome.receipt.path.exists());
+    daemon.stop_job("dispatch-lease-second").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_spawn_failure_leaves_no_selectable_preflight_and_retries() {
+    let root = sandbox("spawn-failure-retry");
+    let manifest = write_manifest(&root, "dispatch-spawn-retry", 10_000);
+    let invalid_program = root.join("not-a-program.txt");
+    fs::write(&invalid_program, b"not an executable image").unwrap();
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["program"] = json!({"path": invalid_program, "sha256": sha256(&invalid_program)});
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    assert!(daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .is_err());
+    assert!(!root.join("custody").join("preflight.json").exists());
+    assert_eq!(daemon.job_state("dispatch-spawn-retry").unwrap(), None);
+    assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+    assert_eq!(daemon.identity_hash("dispatch-spawn-retry").unwrap(), None);
+    let repaired = write_manifest(&root, "dispatch-spawn-retry", 10_000);
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &repaired,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    assert!(outcome.receipt.path.exists());
+    daemon.stop_job("dispatch-spawn-retry").unwrap();
+}
 #[test]
 fn dispatch_manifest_rejects_stale_v1_host_capacity_schema() {
     let root = sandbox("stale-v1-host-capacity");
@@ -503,6 +676,147 @@ fn dispatch_manifest_requires_typed_config_and_manifest_bindings() {
     assert!(!root.join("custody").join("preflight.json").exists());
 }
 
+#[test]
+fn dispatch_manifest_bytes_refuses_a_conflicting_daemon_custody_snapshot_before_launch() {
+    let root = sandbox("manifest-bytes-snapshot");
+    let manifest = write_manifest(&root, "dispatch-manifest-bytes-snapshot", 10_000);
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let custody_snapshot = root
+        .join("emberd.sqlite3.logs")
+        .join("dispatch-manifests")
+        .join(format!("{manifest_sha256}.json"));
+    fs::create_dir_all(custody_snapshot.parent().unwrap()).unwrap();
+    fs::write(&custody_snapshot, b"{\"attacker\":true}").unwrap();
+
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(fs::read(&custody_snapshot).unwrap(), b"{\"attacker\":true}");
+    assert!(!root.join("custody").join("preflight.json").exists());
+    assert_eq!(
+        daemon
+            .job_state("dispatch-manifest-bytes-snapshot")
+            .unwrap(),
+        None
+    );
+}
+#[test]
+fn dispatch_manifest_bytes_never_creates_an_unapproved_candidate_custody_root() {
+    let root = sandbox("manifest-bytes-unapproved-custody");
+    let manifest = write_manifest(&root, "dispatch-manifest-bytes-unapproved-custody", 10_000);
+    let unapproved = root.join("unapproved-custody");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["custody_root"] = json!(unapproved);
+    payload["preflight_receipt"] = json!(unapproved.join("preflight.json"));
+    let manifest_bytes = serde_json::to_vec(&payload).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+
+    assert!(matches!(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+            &manifest_bytes,
+            &manifest_sha256,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert!(!unapproved.exists());
+    assert!(!root
+        .join("emberd.sqlite3.logs")
+        .join("dispatch-manifests")
+        .exists());
+    assert_eq!(
+        daemon
+            .job_state("dispatch-manifest-bytes-unapproved-custody")
+            .unwrap(),
+        None
+    );
+}
+#[test]
+fn dispatch_manifest_snapshots_are_bounded_after_semantic_preflight() {
+    let root = sandbox("bounded-snapshots");
+    let manifest = write_manifest(&root, "dispatch-snapshot-base", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    for index in 0..65 {
+        let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        payload["job_id"] = json!(format!("dispatch-snapshot-{index}"));
+        payload["preflight_receipt"] =
+            json!(root.join("custody").join(format!("snapshot-{index}.json")));
+        let bytes = serde_json::to_vec(&payload).unwrap();
+        let digest = format!("{:x}", Sha256::digest(&bytes));
+        assert!(matches!(
+            daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+                &bytes,
+                &digest,
+                10_001,
+                |_root| Ok(1024),
+                || Ok(2048),
+                || Ok(host_capacity(0)),
+            ),
+            Err(EmberdError::DispatchHostCommitReserve { .. })
+        ));
+    }
+    let snapshots = root.join("emberd.sqlite3.logs").join("dispatch-manifests");
+    let count = fs::read_dir(&snapshots).unwrap().count();
+    assert_eq!(count, 64);
+}
+#[test]
+fn duplicate_snapshot_at_capacity_preserves_every_unrelated_snapshot() {
+    let root = sandbox("duplicate-snapshot-capacity");
+    let manifest = write_manifest(&root, "dispatch-duplicate-snapshot", 10_000);
+    let duplicate_bytes = fs::read(&manifest).unwrap();
+    let duplicate_digest = format!("{:x}", Sha256::digest(&duplicate_bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let snapshots = root.join("emberd.sqlite3.logs").join("dispatch-manifests");
+    fs::create_dir_all(&snapshots).unwrap();
+    for index in 0..63 {
+        fs::write(
+            snapshots.join(format!("unrelated-{index:02}.json")),
+            b"{}\n",
+        )
+        .unwrap();
+    }
+    std::thread::sleep(Duration::from_millis(20));
+    fs::write(
+        snapshots.join(format!("{duplicate_digest}.json")),
+        &duplicate_bytes,
+    )
+    .unwrap();
+    let before = fs::read_dir(&snapshots)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(before.len(), 64);
+    assert!(matches!(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+            &duplicate_bytes,
+            &duplicate_digest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(0)),
+        ),
+        Err(EmberdError::DispatchHostCommitReserve { .. })
+    ));
+    let after = fs::read_dir(&snapshots)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(after, before);
+}
 #[test]
 fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     let root = sandbox("resume-registry-closure");

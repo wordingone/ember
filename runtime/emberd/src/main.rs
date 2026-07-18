@@ -2,8 +2,9 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use emberd::{rpc::serve_named_pipe, Daemon};
+use emberd::{rpc::serve_named_pipe, Daemon, MAX_DISPATCH_MANIFEST_BYTES};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -51,11 +52,21 @@ fn parse_args() -> Result<Command, String> {
 }
 
 fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Error>> {
+    let manifest_bytes = std::fs::read(manifest)?;
+    if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "dispatch manifest exceeds the UTF-8 transport ceiling",
+        )
+        .into());
+    }
+    let manifest_utf8 = String::from_utf8(manifest_bytes.clone())?;
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
     let request = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "dispatch_manifest",
-        "params": {"manifest": manifest},
+        "params": {"manifest_utf8": manifest_utf8, "manifest_sha256": manifest_sha256},
     });
     let encoded = serde_json::to_string(&request)?;
     let deadline = Instant::now() + Duration::from_secs(10);

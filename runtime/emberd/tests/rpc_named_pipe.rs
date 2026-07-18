@@ -4,7 +4,7 @@
 
 #![cfg(windows)]
 
-use emberd::probe_host_commit_capacity;
+use emberd::{probe_host_commit_capacity, MAX_DISPATCH_MANIFEST_BYTES};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -30,6 +30,23 @@ fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
 }
 
+fn bun_binary() -> PathBuf {
+    if let Some(path) = std::env::var_os("BUN") {
+        return PathBuf::from(path);
+    }
+    let output = Command::new("where.exe").arg("bun.cmd").output().unwrap();
+    assert!(
+        output.status.success(),
+        "bun is required for the production TypeScript bridge test"
+    );
+    let paths = String::from_utf8(output.stdout).unwrap();
+    let path = paths
+        .lines()
+        .next()
+        .expect("where.exe returned no bun path")
+        .trim();
+    PathBuf::from(path)
+}
 fn emberd_binary() -> PathBuf {
     option_env!("CARGO_BIN_EXE_emberd")
         .map(PathBuf::from)
@@ -167,6 +184,28 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
     manifest
 }
 
+fn pad_dispatch_manifest_to_exact_bytes(path: &Path, target_bytes: usize) {
+    let mut manifest: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    manifest["env"]
+        .as_object_mut()
+        .unwrap()
+        .insert("EMBERD_TEST_PADDING".into(), Value::String(String::new()));
+    let encoded_without_padding = serde_json::to_vec(&manifest).unwrap();
+    assert!(encoded_without_padding.len() <= target_bytes);
+    let remaining = target_bytes - encoded_without_padding.len();
+    let padding = format!(
+        "{}{}",
+        "\\".repeat(remaining / 2),
+        "x".repeat(remaining % 2)
+    );
+    manifest["env"]
+        .as_object_mut()
+        .unwrap()
+        .insert("EMBERD_TEST_PADDING".into(), Value::String(padding));
+    let encoded = serde_json::to_vec(&manifest).unwrap();
+    assert_eq!(encoded.len(), target_bytes);
+    fs::write(path, encoded).unwrap();
+}
 #[test]
 fn fixture_rpc_child_process() {
     if std::env::var("EMBERD_RPC_FIXTURE_CHILD").as_deref() == Ok("1") {
@@ -229,6 +268,113 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
     wait_for_exit(&mut server);
 }
 
+#[test]
+fn named_pipe_dispatch_accepts_the_exact_manifest_transport_ceiling() {
+    const MAX_MANIFEST_TRANSPORT_BYTES: usize = MAX_DISPATCH_MANIFEST_BYTES;
+    let root = sandbox("dispatch-transport-ceiling");
+    let db = root.join("emberd.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\emberd-dispatch-transport-ceiling-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "dispatch-transport-ceiling-job");
+    pad_dispatch_manifest_to_exact_bytes(&manifest, MAX_MANIFEST_TRANSPORT_BYTES);
+    assert_eq!(
+        fs::metadata(&manifest).unwrap().len(),
+        MAX_MANIFEST_TRANSPORT_BYTES as u64
+    );
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 180, "ping", json!({}))["status"], "ok");
+    let output = Command::new(&binary)
+        .args([
+            "dispatch",
+            "--pipe",
+            &pipe,
+            "--manifest",
+            &manifest.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "dispatch CLI failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(result["pid"].as_u64().unwrap() > 0);
+    rpc(
+        &pipe,
+        181,
+        "stop_job",
+        json!({"job_id": "dispatch-transport-ceiling-job"}),
+    );
+    rpc(&pipe, 182, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+#[test]
+fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation() {
+    let root = sandbox("dispatch-bytes");
+    let db = root.join("emberd.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\emberd-dispatch-bytes-test-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "dispatch-bytes-job");
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
+    fs::write(&manifest, b"{\"mutated_after_cli_read\":true}").unwrap();
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 200, "ping", json!({}))["status"], "ok");
+
+    let result = rpc(
+        &pipe,
+        201,
+        "dispatch_manifest",
+        json!({"manifest_utf8": manifest_utf8.clone(), "manifest_sha256": manifest_sha256.clone()}),
+    );
+    assert!(result["pid"].as_u64().unwrap() > 0);
+    let receipt = PathBuf::from(result["preflight_receipt_path"].as_str().unwrap());
+    assert_eq!(sha256(&receipt), result["preflight_receipt_sha256"]);
+    let replay = rpc(
+        &pipe,
+        202,
+        "dispatch_manifest",
+        json!({"manifest_utf8": manifest_utf8.clone(), "manifest_sha256": manifest_sha256.clone()}),
+    );
+    assert_eq!(replay["pid"], result["pid"]);
+    assert_eq!(
+        replay["preflight_receipt_sha256"],
+        result["preflight_receipt_sha256"]
+    );
+    assert_eq!(
+        rpc(
+            &pipe,
+            202,
+            "job_state",
+            json!({"job_id": "dispatch-bytes-job"})
+        )["state"],
+        "running"
+    );
+    rpc(
+        &pipe,
+        203,
+        "stop_job",
+        json!({"job_id": "dispatch-bytes-job"}),
+    );
+    rpc(&pipe, 205, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
 #[test]
 fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     let root = sandbox("restart");
@@ -407,4 +553,64 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     assert_eq!(alarm["runs"][0]["measurement_outcome"], "COMPLETED");
     rpc(&pipe, 19, "shutdown", json!({}));
     wait_for_exit(&mut second);
+}
+
+#[test]
+fn production_typescript_manifest_transport_reaches_the_real_named_pipe_daemon() {
+    let root = sandbox("typescript-production-transport");
+    let db = root.join("emberd.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\emberd-typescript-production-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "typescript-production-transport-job");
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 220, "ping", json!({}))["status"], "ok");
+
+    let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()
+        .unwrap();
+    let output = Command::new("cmd.exe")
+        .args(["/D", "/S", "/C"])
+        .arg(bun_binary())
+        .current_dir(&repository)
+        .env("EMBERD_REAL_DAEMON_PIPE", &pipe)
+        .env("EMBERD_REAL_DAEMON_MANIFEST", &manifest)
+        .args([
+            "test",
+            "tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts",
+            "--test-name-pattern",
+            "uses the production manifest_utf8 request type against the real Rust daemon",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "production TypeScript named-pipe transport failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        rpc(
+            &pipe,
+            221,
+            "job_state",
+            json!({"job_id": "typescript-production-transport-job"})
+        )["state"],
+        "running"
+    );
+    rpc(
+        &pipe,
+        222,
+        "stop_job",
+        json!({"job_id": "typescript-production-transport-job"}),
+    );
+    rpc(&pipe, 223, "shutdown", json!({}));
+    wait_for_exit(&mut server);
 }
