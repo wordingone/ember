@@ -152,12 +152,48 @@ function Write-StandDownDecision {
 }
 function Get-DefaultWatchdogState {
     [PSCustomObject]@{
-        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; standdownDecisionKey = $null }
-        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; lastHealthAt = $null; lastHealthyAt = $null; lastHealthCheckAt = $null; standdownDecisionKey = $null }
+        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; standdownDecisionKey = $null }
+        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; lastHealthAt = $null; lastHealthyAt = $null; lastHealthCheckAt = $null; standdownDecisionKey = $null }
         freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
     }
 }
-
+function Normalize-WatchdogBackoffState {
+    param($TargetState)
+    if ($null -eq $TargetState) { return }
+    $level = 0
+    $levelValid = $true
+    if ($TargetState.PSObject.Properties.Name -contains 'backoffLevel') {
+        try {
+            $parsedLevel = 0L
+            if (-not [long]::TryParse([string]$TargetState.backoffLevel, [System.Globalization.NumberStyles]::Integer, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedLevel) -or $parsedLevel -lt 0 -or $parsedLevel -gt [int64][int]::MaxValue) {
+                $levelValid = $false
+            } else {
+                $level = [int]$parsedLevel
+            }
+        } catch { $levelValid = $false }
+    }
+    $until = $null
+    $hasUntil = $TargetState.PSObject.Properties.Name -contains 'backoffUntil' -and -not [string]::IsNullOrWhiteSpace([string]$TargetState.backoffUntil)
+    $untilValid = $true
+    if ($hasUntil) {
+        try {
+            $parsedUntil = [datetime]::MinValue
+            if (-not [datetime]::TryParse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal, [ref]$parsedUntil)) {
+                $untilValid = $false
+            } else {
+                $until = $parsedUntil
+            }
+        } catch { $untilValid = $false }
+    }
+    if (-not $levelValid -or -not $untilValid) {
+        $level = 0
+        $until = $null
+        $hasUntil = $false
+    }
+    $TargetState.backoffLevel = $level
+    $TargetState.backoffUntil = if ($until) { $until.ToString('o') } else { $null }
+    $TargetState.backoffState = if ($until) { if ($level -gt 1) { 'escalated' } else { 'active' } } else { 'clear' }
+}
 function Read-WatchdogState {
     <#
     .SYNOPSIS
@@ -172,7 +208,13 @@ function Read-WatchdogState {
         $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
         foreach ($t in 'cockpit', 'server') {
             if (-not ($parsed.PSObject.Properties.Name -contains $t)) {
-                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0; standdownDecisionKey = $null })
+                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; standdownDecisionKey = $null })
+            }
+            if (-not ($parsed.$t.PSObject.Properties.Name -contains 'backoffLevel')) {
+                $parsed.$t | Add-Member -NotePropertyName 'backoffLevel' -NotePropertyValue 0
+            }
+            if (-not ($parsed.$t.PSObject.Properties.Name -contains 'backoffState')) {
+                $parsed.$t | Add-Member -NotePropertyName 'backoffState' -NotePropertyValue $(if ($parsed.$t.backoffUntil) { 'active' } else { 'clear' })
             }
             if (-not ($parsed.$t.PSObject.Properties.Name -contains 'standdownDecisionKey')) {
                 $parsed.$t | Add-Member -NotePropertyName 'standdownDecisionKey' -NotePropertyValue $null
@@ -188,6 +230,8 @@ function Read-WatchdogState {
             $legacyHealthAt = $parsed.server.lastHealthAt
             $parsed.server | Add-Member -NotePropertyName 'lastHealthCheckAt' -NotePropertyValue $legacyHealthAt
         }
+        Normalize-WatchdogBackoffState -TargetState $parsed.cockpit
+        Normalize-WatchdogBackoffState -TargetState $parsed.server
         if (-not ($parsed.PSObject.Properties.Name -contains 'freshness')) {
             $parsed | Add-Member -NotePropertyName 'freshness' -NotePropertyValue ([PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null })
         }
@@ -208,6 +252,17 @@ function Save-WatchdogState {
 # ---------------------------------------------------------------------------------------
 # Frozen planned-outage marker contract (issue #464 comment 4918207339)
 # ---------------------------------------------------------------------------------------
+
+function Convert-Iso8601Z {
+    param([Parameter(Mandatory)][string]$Value)
+    $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal
+    foreach ($format in @("yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:ss.f'Z'", "yyyy-MM-dd'T'HH:mm:ss.ff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fff'Z'", "yyyy-MM-dd'T'HH:mm:ss.ffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'")) {
+        try {
+            return [datetimeoffset]::ParseExact($Value, $format, [System.Globalization.CultureInfo]::InvariantCulture, $styles)
+        } catch { }
+    }
+    return $null
+}
 
 function Get-PlannedOutageMarker {
     <#
@@ -231,11 +286,8 @@ function Get-PlannedOutageMarker {
         if (-not $prop -or [string]::IsNullOrWhiteSpace([string]$prop.Value)) { return $null }
     }
     if ($m.target -notin @('server', 'cockpit', 'both')) { return $null }
-    try {
-        [void][datetime]::Parse($m.expires, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
-    } catch {
-        return $null
-    }
+    if ($null -eq (Convert-Iso8601Z -Value ([string]$m.started))) { return $null }
+    if ($null -eq (Convert-Iso8601Z -Value ([string]$m.expires))) { return $null }
     return $m
 }
 
@@ -294,35 +346,67 @@ function Get-HeartbeatPid {
 
 function Get-BackoffState {
     param($TargetState, [Parameter(Mandatory)][datetime]$Now)
+    Normalize-WatchdogBackoffState -TargetState $TargetState
+    $level = [int]$TargetState.backoffLevel
     if ($TargetState.backoffUntil) {
-        $until = [datetime]::Parse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
-        if ($Now -lt $until) { return [PSCustomObject]@{ InBackoff = $true; Until = $until } }
+        $until = [datetime]::ParseExact([string]$TargetState.backoffUntil, 'o', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+        if ($Now -lt $until) {
+            $state = if ($level -gt 1) { 'escalated' } else { 'active' }
+            $TargetState.backoffState = $state
+            return [PSCustomObject]@{ InBackoff = $true; Until = $until; State = $state; Level = $level }
+        }
     }
-    return [PSCustomObject]@{ InBackoff = $false; Until = $null }
+    $TargetState.backoffState = 'clear'
+    return [PSCustomObject]@{ InBackoff = $false; Until = $null; State = 'clear'; Level = $level }
 }
-
 function Add-DeathRecord {
     <#
     .SYNOPSIS
-    Appends $Now to a target's death-timestamp list (pruned to the trailing
-    $WindowMinutes), and trips backoffUntil = Now + $BackoffMinutes the instant the
-    count reaches $Threshold within the window -- a crashloop must surface as a visible
-    failure, not a silent restart storm. Returns the updated sub-state plus whether this
-    death just tripped the cooldown, so the caller can log a distinct 'crashloop-backoff'
-    row.
+    Appends a death timestamp and applies exponential crashloop backoff after each
+    threshold crossing. A quiet trailing window after the previous cooldown resets
+    escalation to level one.
     #>
     param($TargetState, [Parameter(Mandatory)][datetime]$Now, [int]$WindowMinutes = 10, [int]$Threshold = 3, [int]$BackoffMinutes = 10)
     $windowStart = $Now.AddMinutes(-$WindowMinutes)
     $existing = @($TargetState.deaths | Where-Object {
         try { ([datetime]::Parse([string]$_, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)) -ge $windowStart } catch { $false }
     })
+    $previousLevel = if ($TargetState.PSObject.Properties.Name -contains 'backoffLevel') { [int]$TargetState.backoffLevel } else { 0 }
+    $previousUntil = $null
+    if ($TargetState.backoffUntil) {
+        try { $previousUntil = [datetime]::Parse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal) } catch { $previousUntil = $null }
+    }
+    if ($previousUntil -and $Now -ge $previousUntil.AddMinutes($WindowMinutes)) {
+        $previousLevel = 0
+        $TargetState.backoffLevel = 0
+    }
     $updated = @($existing) + $Now.ToString('o')
     $tripped = $false
     if ($updated.Count -ge $Threshold) {
-        $TargetState.backoffUntil = $Now.AddMinutes($BackoffMinutes).ToString('o')
+        # Keep both the level and DateTime arithmetic inside Int32-safe minutes.
+        # Saturate at the largest representable duration instead of allowing a
+        # high-level crashloop to overflow the Int32 cast or AddMinutes call.
+        $maxMinutes = [int64][int]::MaxValue
+        $baseMinutes = [int64]$BackoffMinutes
+        if ($baseMinutes -lt 1) { $baseMinutes = 1 }
+        if ($baseMinutes -gt $maxMinutes) { $baseMinutes = $maxMinutes }
+        $desiredLevel = [int64]$previousLevel + 1
+        if ($desiredLevel -lt 1) { $desiredLevel = 1 }
+        $actualLevel = 1
+        $durationMinutes = $baseMinutes
+        while ($actualLevel -lt $desiredLevel -and $durationMinutes -le [int64]($maxMinutes / 2)) {
+            $durationMinutes *= 2
+            $actualLevel++
+        }
+        $TargetState.backoffLevel = [int]$actualLevel
+        $TargetState.backoffState = if ($actualLevel -gt 1) { 'escalated' } else { 'active' }
+        $TargetState.backoffUntil = $Now.AddMinutes($durationMinutes).ToString('o')
+        $TargetState.deaths = @()
         $tripped = $true
+    } else {
+        $TargetState.deaths = $updated
+        $TargetState.backoffState = 'clear'
     }
-    $TargetState.deaths = $updated
     return [PSCustomObject]@{ State = $TargetState; Tripped = $tripped; DeathsInWindow = $updated.Count }
 }
 
@@ -375,7 +459,7 @@ function Invoke-CockpitWatchdogTick {
             ts = $Now.ToString('o'); target = 'cockpit'; event = 'standdown'; decision = 'planned-outage'
             owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
             backoffUntil = $standdownBackoff.Until
-            backoffState = $(if ($standdownBackoff.InBackoff) { 'active' } else { 'clear' })
+            backoffState = $standdownBackoff.State
         } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
@@ -402,16 +486,17 @@ function Invoke-CockpitWatchdogTick {
 
     $deathRecord = Add-DeathRecord -TargetState $State.cockpit -Now $Now -WindowMinutes $DeathWindowMinutes -Threshold $DeathThreshold -BackoffMinutes $BackoffMinutes
     $State.cockpit = $deathRecord.State
+    $backoffNow = Get-BackoffState -TargetState $State.cockpit -Now $Now
 
     Write-RestartLogRow -Path $RestartLogPath -Row @{
         ts = $Now.ToString('o'); target = 'cockpit'; event = 'relaunch'
         deadPid = $deadPid; ageSec = $age; relaunchPid = $launch.Pid
-        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.cockpit.backoffUntil; backoffState = $(if ($State.cockpit.backoffUntil) { 'active' } else { 'clear' })
+        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
     }
     if ($deathRecord.Tripped) {
         Write-RestartLogRow -Path $RestartLogPath -Row @{
             ts = $Now.ToString('o'); target = 'cockpit'; event = 'crashloop-backoff'
-            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.cockpit.backoffUntil
+            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
         }
     }
 
@@ -511,7 +596,7 @@ function Invoke-ServerWatchdogTick {
             ts = $Now.ToString('o'); target = 'server'; event = 'standdown'; decision = 'planned-outage'
             owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
             backoffUntil = $standdownBackoff.Until
-            backoffState = $(if ($standdownBackoff.InBackoff) { 'active' } else { 'clear' })
+            backoffState = $standdownBackoff.State
         } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
@@ -567,16 +652,17 @@ function Invoke-ServerWatchdogTick {
 
     $deathRecord = Add-DeathRecord -TargetState $State.server -Now $Now -WindowMinutes $DeathWindowMinutes -Threshold $DeathThreshold -BackoffMinutes $BackoffMinutes
     $State.server = $deathRecord.State
+    $backoffNow = Get-BackoffState -TargetState $State.server -Now $Now
 
     Write-RestartLogRow -Path $RestartLogPath -Row @{
         ts = $Now.ToString('o'); target = 'server'; event = 'relaunch'
         deadPid = $(if ($proc) { [int]$proc.ProcessId } else { $null }); healthAgeSec = $healthAgeSec; relaunchPid = $launch.Pid
-        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.server.backoffUntil; backoffState = $(if ($State.server.backoffUntil) { 'active' } else { 'clear' })
+        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
     }
     if ($deathRecord.Tripped) {
         Write-RestartLogRow -Path $RestartLogPath -Row @{
             ts = $Now.ToString('o'); target = 'server'; event = 'crashloop-backoff'
-            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.server.backoffUntil
+            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
         }
     }
 
