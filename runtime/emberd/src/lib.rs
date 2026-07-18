@@ -191,8 +191,18 @@ pub enum EmberdError {
         available_free_bytes: u64,
         receipt_path: PathBuf,
     },
+    DispatchConsumerFloorProbeError {
+        root: PathBuf,
+        io_error: String,
+        receipt_path: PathBuf,
+    },
     VramProviderUnavailable {
         detail: String,
+    },
+    DispatchVramProviderUnavailable {
+        minimum_free_vram_bytes: u64,
+        detail: String,
+        receipt_path: PathBuf,
     },
     Poisoned,
 }
@@ -384,6 +394,15 @@ pub struct DispatchManifest {
 }
 
 const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+
+/// Increment-1 gate: a Driver-Locked provider (VRAM) reporting UNAVAILABLE
+/// refuses admission like any other unmet reserve — a declared nonzero
+/// `minimum_free_vram_bytes` is never waived. This flips to `true` only
+/// once increment-2/3 land their reclassification prerequisites (a
+/// UNAVAILABLE-tolerant scheduling class + receipted evidence the omission
+/// is causally safe); the reclassification code stays wired but gated off
+/// until then.
+const VRAM_PROVIDER_UNAVAILABLE_ADMITS: bool = false;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -869,6 +888,21 @@ impl Daemon {
     pub fn acquire_lease(&self, resource: &str, job_id: &str) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        Self::acquire_lease_within(&tx, resource, job_id)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Shared body of [`Daemon::acquire_lease`], run against an
+    /// already-open `tx` so a caller can fold it into a larger atomic scope
+    /// (e.g. together with the pinned-budget check + reservation, so a
+    /// lease acquired for a dispatch that is then refused on budget grounds
+    /// rolls back with the rest of the transaction instead of leaking).
+    fn acquire_lease_within(
+        tx: &rusqlite::Transaction<'_>,
+        resource: &str,
+        job_id: &str,
+    ) -> Result<()> {
         if let Some(artifact_class) = resource.strip_prefix("schedule:") {
             let predicted: bool = tx.query_row(
                 "SELECT EXISTS(SELECT 1 FROM schedule_runs WHERE job_id=?1 AND artifact_class=?2 AND measured_at_ms IS NULL)",
@@ -890,10 +924,7 @@ impl Daemon {
             )
             .optional()?;
         match owner {
-            Some(owner) if owner == job_id => {
-                tx.commit()?;
-                Ok(())
-            }
+            Some(owner) if owner == job_id => Ok(()),
             Some(owner) => Err(EmberdError::LeaseConflict {
                 resource: resource.into(),
                 owner,
@@ -923,7 +954,6 @@ impl Daemon {
                     "INSERT INTO leases(resource,owner_job_id,lease_epoch,acquired_at_ms) VALUES(?1,?2,?3,?4)",
                     params![resource, job_id, epoch, now_ms()],
                 )?;
-                tx.commit()?;
                 Ok(())
             }
         }
@@ -1454,39 +1484,12 @@ impl Daemon {
             });
         }
 
-        // CAUSAL PinnedHostBudget: subtract the SUM of every currently-owned
-        // job's declared maximum_job_memory_bytes from measured capacity —
-        // an admission-time accounting, never a point-in-time resample of
-        // what happens to be pinned right now.
-        let live_committed_job_memory_bytes = self.live_committed_job_memory_bytes()?;
-        let residual_available_maximum_commit_bytes =
-            observed_available_maximum_commit_bytes.saturating_sub(live_committed_job_memory_bytes);
-        if residual_available_maximum_commit_bytes < manifest.required_available_maximum_commit_bytes
-        {
-            let refusal = json!({
-                "schema_version": "emberd-dispatch-preflight-v1",
-                "result": "REFUSED_PINNED_HOST_BUDGET",
-                "job_id": &manifest.job_id,
-                "source_commit": &manifest.source_commit,
-                "observed_at_ms": observed_at_ms,
-                "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
-                "pinned_host_budget": {
-                    "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
-                    "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
-                    "live_committed_job_memory_bytes": live_committed_job_memory_bytes,
-                    "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
-                },
-            });
-            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
-            return Err(EmberdError::DispatchPinnedHostBudgetExceeded {
-                required_available_maximum_commit_bytes: manifest
-                    .required_available_maximum_commit_bytes,
-                observed_available_maximum_commit_bytes,
-                live_committed_job_memory_bytes,
-                residual_available_maximum_commit_bytes,
-                receipt_path,
-            });
-        }
+        // CAUSAL PinnedHostBudget: the live-budget SUM read, the residual
+        // decision, and the jobs-row INSERT that consumes it are made
+        // ATOMIC (one sqlite IMMEDIATE transaction) at the point of actual
+        // reservation — see `start_job_with_pinned_budget_admission` below.
+        // Checking it here too, non-atomically, would only add a second,
+        // racy TOCTOU window without changing the real admission outcome.
 
         // Consumer-owned survival floors (survival_floors::ROOTS): hardcoded,
         // never manifest-controlled. Checked in addition to any manifest
@@ -1494,14 +1497,30 @@ impl Daemon {
         // blocking admission.
         for (root_str, minimum_free_bytes) in survival_floors::ROOTS {
             let root = PathBuf::from(root_str);
-            if !root.exists() {
-                continue;
-            }
-            let canonical_root = fs::canonicalize(&root).map_err(|error| {
-                EmberdError::InvalidDispatchManifest {
-                    detail: format!("consumer survival floor root is unavailable: {error}"),
+            let canonical_root = match probe_survival_floor_root(&root) {
+                Ok(Some(canonical)) => canonical,
+                Ok(None) => continue,
+                Err(error) => {
+                    let refusal = json!({
+                        "schema_version": "emberd-dispatch-preflight-v1",
+                        "result": "REFUSED_CONSUMER_FLOOR_PROBE_ERROR",
+                        "job_id": &manifest.job_id,
+                        "source_commit": &manifest.source_commit,
+                        "observed_at_ms": observed_at_ms,
+                        "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
+                        "consumer_floor_probe_error": {
+                            "root": &root,
+                            "io_error": error.to_string(),
+                        },
+                    });
+                    atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                    return Err(EmberdError::DispatchConsumerFloorProbeError {
+                        root,
+                        io_error: error.to_string(),
+                        receipt_path,
+                    });
                 }
-            })?;
+            };
             let available = floor_free_space(&canonical_root)?;
             if available < minimum_free_bytes {
                 let refusal = json!({
@@ -1613,11 +1632,36 @@ impl Daemon {
         }
 
         // A Driver-Locked provider reporting UNAVAILABLE (no GPU/driver on
-        // this host) never blocks admission — only a provider that answers
-        // with too little VRAM refuses.
+        // this host): gated by VRAM_PROVIDER_UNAVAILABLE_ADMITS (increment 1:
+        // false). Until that flips, UNAVAILABLE is BLOCKING — a declared
+        // nonzero minimum_free_vram_bytes is never waived.
         let available_vram: Option<u64> = match free_vram() {
             Ok(value) => Some(value),
-            Err(EmberdError::VramProviderUnavailable { .. }) => None,
+            Err(EmberdError::VramProviderUnavailable { detail }) => {
+                if VRAM_PROVIDER_UNAVAILABLE_ADMITS {
+                    None
+                } else {
+                    let refusal = json!({
+                        "schema_version": "emberd-dispatch-preflight-v1",
+                        "result": "REFUSED_VRAM_PROVIDER_UNAVAILABLE",
+                        "job_id": &manifest.job_id,
+                        "source_commit": &manifest.source_commit,
+                        "observed_at_ms": observed_at_ms,
+                        "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
+                        "vram_reserve": {
+                            "minimum_free_bytes": manifest.minimum_free_vram_bytes,
+                            "provider_status": "unavailable",
+                            "detail": &detail,
+                        },
+                    });
+                    atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                    return Err(EmberdError::DispatchVramProviderUnavailable {
+                        minimum_free_vram_bytes: manifest.minimum_free_vram_bytes,
+                        detail,
+                        receipt_path,
+                    });
+                }
+            }
             Err(error) => return Err(error),
         };
         if let Some(available_vram) = available_vram {
@@ -1638,7 +1682,13 @@ impl Daemon {
         let manifest_sha256 = hash_bytes(&manifest_bytes);
         let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
         let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
-        let receipt_payload = json!({
+        // Success receipt payload is fully assembled here (all inputs are
+        // borrows off `manifest`, which the job-spec build below moves out
+        // of), but its `pinned_host_budget` numbers are only known once the
+        // atomic admission-and-reservation below actually runs — the
+        // receipt is a truth claim, so it is only WRITTEN to disk once that
+        // admission has genuinely succeeded (see below).
+        let mut receipt_payload = json!({
             "schema_version": "emberd-dispatch-preflight-v1",
             "result": "PREFLIGHT_PASSED",
             "job_id": &manifest.job_id,
@@ -1659,10 +1709,7 @@ impl Daemon {
                 "provider_status": if available_vram.is_some() { "available" } else { "unavailable" },
             },
             "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
-            "pinned_host_budget": {
-                "live_committed_job_memory_bytes": live_committed_job_memory_bytes,
-                "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
-            },
+            "pinned_host_budget": Value::Null,
             "host_commit": {
                 "basis": "maximum_configured_capacity",
                 "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
@@ -1683,23 +1730,21 @@ impl Daemon {
                 "source_sha256": &self.emberd_source_sha256,
             },
         });
-        let receipt_bytes = serde_json::to_vec(&receipt_payload)?;
-        if let Some(existing) = self.recover_pending_dispatch_receipt(
-            &manifest,
-            manifest_bytes,
-            &receipt_path,
-            &receipt_bytes,
-        )? {
-            return Ok(existing);
-        }
         let job_id = manifest.job_id.clone();
         let resource_lease = manifest.resource_lease.clone();
+        let source_commit_for_refusal_receipt = manifest.source_commit.clone();
+        if let Some(existing) =
+            self.recover_pending_dispatch_receipt(&manifest, manifest_bytes, &receipt_path)?
+        {
+            return Ok(existing);
+        }
         let created_identity = self.identity_hash(&job_id)?.is_none();
         self.bind_identity_bytes(&job_id, &manifest_path, manifest_bytes, &manifest_sha256)?;
-        if let Err(error) = self.acquire_lease(&resource_lease, &job_id) {
-            let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
-            return Err(error);
-        }
+        // Lease acquisition is deliberately NOT done here: it happens
+        // atomically inside start_job_with_pinned_budget_admission's own
+        // transaction, together with the budget check and the reservation
+        // insert. Acquiring it here (outside that transaction) would leak
+        // an owned-but-orphaned lease every time the budget check refuses.
         let mut spec = JobSpec::new(
             job_id.clone(),
             program.to_string_lossy().into_owned(),
@@ -1710,13 +1755,64 @@ impl Daemon {
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
-        let handle = match self.start_job(spec) {
-            Ok(handle) => handle,
-            Err(error) => {
-                let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
-                return Err(error);
-            }
-        };
+        let (handle, live_committed_job_memory_bytes, residual_available_maximum_commit_bytes) =
+            match self.start_job_with_pinned_budget_admission(
+                spec,
+                manifest.required_available_maximum_commit_bytes,
+                observed_available_maximum_commit_bytes,
+                receipt_path.clone(),
+            ) {
+                Ok(admitted) => admitted,
+                Err(EmberdError::DispatchPinnedHostBudgetExceeded {
+                    required_available_maximum_commit_bytes,
+                    observed_available_maximum_commit_bytes,
+                    live_committed_job_memory_bytes,
+                    residual_available_maximum_commit_bytes,
+                    receipt_path,
+                }) => {
+                    let _ = self.rollback_dispatch_attempt(
+                        &job_id,
+                        &resource_lease,
+                        created_identity,
+                    );
+                    let refusal = json!({
+                        "schema_version": "emberd-dispatch-preflight-v1",
+                        "result": "REFUSED_PINNED_HOST_BUDGET",
+                        "job_id": &job_id,
+                        "source_commit": &source_commit_for_refusal_receipt,
+                        "observed_at_ms": observed_at_ms,
+                        "dispatch_manifest_sha256": manifest_sha256,
+                        "pinned_host_budget": {
+                            "required_available_maximum_commit_bytes": required_available_maximum_commit_bytes,
+                            "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
+                            "live_committed_job_memory_bytes": live_committed_job_memory_bytes,
+                            "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
+                        },
+                    });
+                    atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                    return Err(EmberdError::DispatchPinnedHostBudgetExceeded {
+                        required_available_maximum_commit_bytes,
+                        observed_available_maximum_commit_bytes,
+                        live_committed_job_memory_bytes,
+                        residual_available_maximum_commit_bytes,
+                        receipt_path,
+                    });
+                }
+                Err(error) => {
+                    let _ = self.rollback_dispatch_attempt(
+                        &job_id,
+                        &resource_lease,
+                        created_identity,
+                    );
+                    return Err(error);
+                }
+            };
+
+        receipt_payload["pinned_host_budget"] = json!({
+            "live_committed_job_memory_bytes": live_committed_job_memory_bytes,
+            "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
+        });
+        let receipt_bytes = serde_json::to_vec(&receipt_payload)?;
         if atomic_replace(&receipt_path, &receipt_bytes).is_err() {
             self.persist_dispatch_receipt_recovery(
                 &job_id,
@@ -1765,7 +1861,6 @@ impl Daemon {
         manifest: &DispatchManifest,
         manifest_bytes: &[u8],
         receipt_path: &Path,
-        receipt_bytes: &[u8],
     ) -> Result<Option<DispatchOutcome>> {
         let row: Option<(String, String, String, String, Vec<u8>)> = self
             .conn()?
@@ -1780,11 +1875,13 @@ impl Daemon {
         else {
             return Ok(None);
         };
+        // The stored receipt carries post-admission pinned_host_budget numbers,
+        // so it cannot be byte-compared against a pre-admission recomputation;
+        // it is validated by its own hash plus the identity/lease/state checks.
         if resource_lease != manifest.resource_lease
             || manifest_sha256 != hash_bytes(manifest_bytes)
             || stored_path != receipt_path.to_string_lossy()
-            || receipt_sha256 != hash_bytes(receipt_bytes)
-            || stored_bytes != receipt_bytes
+            || receipt_sha256 != hash_bytes(&stored_bytes)
             || self.identity_hash(&manifest.job_id)? != Some(manifest_sha256)
             || self.lease_owner(&manifest.resource_lease)?.as_deref()
                 != Some(manifest.job_id.as_str())
@@ -1879,72 +1976,84 @@ impl Daemon {
         tx.commit()?;
         Ok(())
     }
-    pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
-        self.verify_identity(&spec.job_id)?;
-        let argv_json = serde_json::to_string(&spec.args)?;
-        let env_json = serde_json::to_string(&spec.env)?;
-        let argv_sha = hash_bytes(argv_json.as_bytes());
-        let job_object_name = job_object_name(&spec.job_id);
-        let log_key = hash_bytes(spec.job_id.as_bytes());
-        let stdout_log_path = self.log_dir.join(format!("{log_key}.stdout.log"));
-        let stderr_log_path = self.log_dir.join(format!("{log_key}.stderr.log"));
-        {
-            let mut conn = self.conn()?;
-            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let timestamp = now_ms();
-            let outage: Option<(i64, String)> = tx
-                .query_row(
-                    "SELECT ends_at_ms,reason FROM planned_outages WHERE resource=?1 AND cancelled_at_ms IS NULL AND starts_at_ms<=?2 AND ends_at_ms>?2 ORDER BY outage_id DESC LIMIT 1",
-                    params![spec.resource_lease, timestamp],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )
-                .optional()?;
-            if let Some((ends_at_ms, reason)) = outage {
-                return Err(EmberdError::PlannedOutageActive {
-                    resource: spec.resource_lease.clone(),
-                    ends_at_ms,
-                    reason,
-                });
-            }
-            let lease: Option<(String, i64)> = tx
-                .query_row(
-                    "SELECT owner_job_id,lease_epoch FROM leases WHERE resource=?1",
-                    [&spec.resource_lease],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?;
-            let (owner, lease_epoch) = lease.ok_or_else(|| EmberdError::LeaseNotOwned {
+    /// Shared budget-consuming reservation body used by both a bare
+    /// [`Daemon::start_job`] call and the pinned-budget-gated admission path
+    /// ([`Daemon::start_job_with_pinned_budget_admission`]). Runs entirely
+    /// against an already-open `tx` so a caller can wrap it in whatever
+    /// atomic scope it needs (e.g. together with the live-budget SUM read).
+    #[allow(clippy::too_many_arguments)]
+    fn insert_reserved_job_row(
+        tx: &rusqlite::Transaction<'_>,
+        spec: &JobSpec,
+        job_object_name: &str,
+        argv_json: &str,
+        env_json: &str,
+        argv_sha: &str,
+        stdout_log_path: &Path,
+        stderr_log_path: &Path,
+        timestamp: i64,
+    ) -> Result<()> {
+        let outage: Option<(i64, String)> = tx
+            .query_row(
+                "SELECT ends_at_ms,reason FROM planned_outages WHERE resource=?1 AND cancelled_at_ms IS NULL AND starts_at_ms<=?2 AND ends_at_ms>?2 ORDER BY outage_id DESC LIMIT 1",
+                params![spec.resource_lease, timestamp],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        if let Some((ends_at_ms, reason)) = outage {
+            return Err(EmberdError::PlannedOutageActive {
+                resource: spec.resource_lease.clone(),
+                ends_at_ms,
+                reason,
+            });
+        }
+        let lease: Option<(String, i64)> = tx
+            .query_row(
+                "SELECT owner_job_id,lease_epoch FROM leases WHERE resource=?1",
+                [&spec.resource_lease],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        let (owner, lease_epoch) = lease.ok_or_else(|| EmberdError::LeaseNotOwned {
+            resource: spec.resource_lease.clone(),
+            job_id: spec.job_id.clone(),
+        })?;
+        if owner != spec.job_id {
+            return Err(EmberdError::LeaseNotOwned {
                 resource: spec.resource_lease.clone(),
                 job_id: spec.job_id.clone(),
-            })?;
-            if owner != spec.job_id {
-                return Err(EmberdError::LeaseNotOwned {
-                    resource: spec.resource_lease,
-                    job_id: spec.job_id,
-                });
-            }
-            if tx
-                .query_row("SELECT 1 FROM jobs WHERE job_id=?1", [&spec.job_id], |_| {
-                    Ok(())
-                })
-                .optional()?
-                .is_some()
-            {
-                return Err(EmberdError::InvalidTransition {
-                    job_id: spec.job_id,
-                    detail: "job already exists".into(),
-                });
-            }
-            tx.execute(
-                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,maximum_job_memory_bytes,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'starting',?13,?13)",
-                params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), spec.maximum_job_memory_bytes.unwrap_or(0), timestamp],
-            )?;
-            tx.execute(
-                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
-                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name}).to_string()],
-            )?;
-            tx.commit()?;
+            });
         }
+        if tx
+            .query_row("SELECT 1 FROM jobs WHERE job_id=?1", [&spec.job_id], |_| {
+                Ok(())
+            })
+            .optional()?
+            .is_some()
+        {
+            return Err(EmberdError::InvalidTransition {
+                job_id: spec.job_id.clone(),
+                detail: "job already exists".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,maximum_job_memory_bytes,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'starting',?13,?13)",
+            params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), spec.maximum_job_memory_bytes.unwrap_or(0), timestamp],
+        )?;
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
+            params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name}).to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn spawn_and_run_reserved_job(
+        &self,
+        spec: JobSpec,
+        job_object_name: String,
+        stdout_log_path: PathBuf,
+        stderr_log_path: PathBuf,
+    ) -> Result<JobHandle> {
         let mut spawned =
             match spawn_managed(&spec, &job_object_name, &stdout_log_path, &stderr_log_path) {
                 Ok(spawned) => spawned,
@@ -2040,6 +2149,119 @@ impl Daemon {
         #[cfg(not(windows))]
         spawned.detach_reaper();
         Ok(JobHandle { pid })
+    }
+
+    pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
+        self.verify_identity(&spec.job_id)?;
+        let argv_json = serde_json::to_string(&spec.args)?;
+        let env_json = serde_json::to_string(&spec.env)?;
+        let argv_sha = hash_bytes(argv_json.as_bytes());
+        let job_object_name = job_object_name(&spec.job_id);
+        let log_key = hash_bytes(spec.job_id.as_bytes());
+        let stdout_log_path = self.log_dir.join(format!("{log_key}.stdout.log"));
+        let stderr_log_path = self.log_dir.join(format!("{log_key}.stderr.log"));
+        {
+            let mut conn = self.conn()?;
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let timestamp = now_ms();
+            Self::insert_reserved_job_row(
+                &tx,
+                &spec,
+                &job_object_name,
+                &argv_json,
+                &env_json,
+                &argv_sha,
+                &stdout_log_path,
+                &stderr_log_path,
+                timestamp,
+            )?;
+            tx.commit()?;
+        }
+        self.spawn_and_run_reserved_job(spec, job_object_name, stdout_log_path, stderr_log_path)
+    }
+
+    /// Admission-time causal PinnedHostBudget check, made ATOMIC with the
+    /// jobs-row reservation that consumes it: the live-budget SUM read, the
+    /// residual-vs-required decision, and the INSERT that changes that SUM
+    /// for the next reader all run inside ONE sqlite IMMEDIATE transaction
+    /// (held under the same `db` mutex guard for the whole span), so two
+    /// concurrent dispatches whose budgets individually fit can never both
+    /// observe a residual that admits them jointly — the second dispatch's
+    /// SUM read is guaranteed to already include the first's reservation
+    /// (or the first's rollback, if it refused).
+    fn start_job_with_pinned_budget_admission(
+        &self,
+        spec: JobSpec,
+        required_available_maximum_commit_bytes: u64,
+        observed_available_maximum_commit_bytes: u64,
+        receipt_path: PathBuf,
+    ) -> Result<(JobHandle, u64, u64)> {
+        self.verify_identity(&spec.job_id)?;
+        let argv_json = serde_json::to_string(&spec.args)?;
+        let env_json = serde_json::to_string(&spec.env)?;
+        let argv_sha = hash_bytes(argv_json.as_bytes());
+        let job_object_name = job_object_name(&spec.job_id);
+        let log_key = hash_bytes(spec.job_id.as_bytes());
+        let stdout_log_path = self.log_dir.join(format!("{log_key}.stdout.log"));
+        let stderr_log_path = self.log_dir.join(format!("{log_key}.stderr.log"));
+        let (live_committed_job_memory_bytes, residual_available_maximum_commit_bytes) = {
+            let mut conn = self.conn()?;
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            // Lease acquisition runs FIRST, inside this same transaction:
+            // a lease conflict must refuse as LeaseConflict (writing no
+            // receipt) before any budget arithmetic — a job contending for
+            // an owned lease can never be admitted regardless of budget.
+            // A later budget refusal drops the tx uncommitted, so the lease
+            // acquired here rolls back with the reservation (no leak).
+            Self::acquire_lease_within(&tx, &spec.resource_lease, &spec.job_id)?;
+            let placeholders = LIVE_COMMITTED_JOB_STATES
+                .iter()
+                .map(|state| format!("'{state}'"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql = format!(
+                "SELECT COALESCE(SUM(maximum_job_memory_bytes),0) FROM jobs WHERE state IN ({placeholders})"
+            );
+            let live_raw: i64 = tx.query_row(&sql, [], |row| row.get(0))?;
+            let live_committed_job_memory_bytes = live_raw.max(0) as u64;
+            let residual_available_maximum_commit_bytes = observed_available_maximum_commit_bytes
+                .saturating_sub(live_committed_job_memory_bytes);
+            if residual_available_maximum_commit_bytes < required_available_maximum_commit_bytes {
+                // tx is dropped here without commit -> rolled back; nothing
+                // was reserved.
+                return Err(EmberdError::DispatchPinnedHostBudgetExceeded {
+                    required_available_maximum_commit_bytes,
+                    observed_available_maximum_commit_bytes,
+                    live_committed_job_memory_bytes,
+                    residual_available_maximum_commit_bytes,
+                    receipt_path,
+                });
+            }
+            let timestamp = now_ms();
+            Self::insert_reserved_job_row(
+                &tx,
+                &spec,
+                &job_object_name,
+                &argv_json,
+                &env_json,
+                &argv_sha,
+                &stdout_log_path,
+                &stderr_log_path,
+                timestamp,
+            )?;
+            tx.commit()?;
+            (
+                live_committed_job_memory_bytes,
+                residual_available_maximum_commit_bytes,
+            )
+        };
+        let handle =
+            self.spawn_and_run_reserved_job(spec, job_object_name, stdout_log_path, stderr_log_path)?;
+        Ok((
+            handle,
+            live_committed_job_memory_bytes,
+            residual_available_maximum_commit_bytes,
+        ))
     }
 
     pub fn job_state(&self, job_id: &str) -> Result<Option<JobState>> {
@@ -3277,6 +3499,22 @@ fn validate_resume_registry_binding_closure(
         }
     }
     Ok(())
+}
+
+/// Distinguishes "root absent" (skip — never blocking) from "root exists
+/// but is inaccessible" (refuse) for a consumer survival-floor root. The
+/// `Path::exists()` skip this replaces silently swallows BOTH cases —
+/// `exists()` returns `false` on any error, including permission-denied —
+/// masking a genuinely inaccessible root as if the drive were simply not
+/// present. `Ok(None)` = absent (io::ErrorKind::NotFound), `Ok(Some(_))` =
+/// present and canonicalized, `Err(_)` = present but the probe itself
+/// failed (permission denied or any other io error) and must refuse.
+fn probe_survival_floor_root(root: &Path) -> std::io::Result<Option<PathBuf>> {
+    match fs::canonicalize(root) {
+        Ok(canonical) => Ok(Some(canonical)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(windows)]
@@ -4813,5 +5051,45 @@ mod dispatch_binding_snapshot_tests {
         ] {
             assert!(pagefile_maximum_bytes_from_entries(&invalid).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod survival_floor_probe_tests {
+    use super::*;
+
+    #[test]
+    fn absent_root_is_skipped_not_refused() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let absent = std::env::temp_dir().join(format!("emberd-absent-floor-root-{nonce}"));
+        assert!(!absent.exists());
+        assert_eq!(probe_survival_floor_root(&absent).unwrap(), None);
+    }
+
+    #[test]
+    fn present_but_inaccessible_root_refuses_with_the_io_error_preserved() {
+        // A syntactically invalid Windows path (a single component far
+        // beyond MAX_PATH, with no \\?\ prefix) fails the probe with a real
+        // io error whose kind is NOT NotFound -- exactly the class the old
+        // `Path::exists()` skip silently swallowed as if it were simply
+        // absent. The old code's `!root.exists()` returns `true` (i.e.
+        // "looks absent") for this exact path, which is the defect: an
+        // inaccessible root must REFUSE, never be skipped like a genuinely
+        // absent drive.
+        let malformed_root = std::env::temp_dir().join("a".repeat(300));
+        assert!(
+            !malformed_root.exists(),
+            "sanity: the old Path::exists() check treats this malformed root as absent, \
+             which is exactly the swallowed case this probe must distinguish"
+        );
+        let error = probe_survival_floor_root(&malformed_root).unwrap_err();
+        assert_ne!(
+            error.kind(),
+            std::io::ErrorKind::NotFound,
+            "the probe error must be preserved as a real io error, never mistaken for absence: {error:?}"
+        );
     }
 }

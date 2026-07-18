@@ -131,12 +131,13 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     let manifest = write_manifest(&root, "dispatch-green", 10_000);
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     let outcome = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert!(outcome.handle.pid > 0);
@@ -547,12 +548,13 @@ fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
@@ -613,12 +615,13 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
         }
         let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
         let error = daemon
-            .dispatch_manifest_at_with_probes_and_host(
+            .dispatch_manifest_at_with_probes_and_host_and_floor(
                 &manifest,
                 now_ms,
                 |_root| Ok(free_bytes),
                 || Ok(free_vram),
                 || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+                |_root| Ok(u64::MAX),
             )
             .unwrap_err();
         assert!(
@@ -663,12 +666,13 @@ fn dispatch_manifest_requires_typed_config_and_manifest_bindings() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX)
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -852,12 +856,13 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX)
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -881,12 +886,13 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     registry_binding["sha256"] = json!(sha256(&registry));
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX)
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -904,12 +910,13 @@ fn historical_resume_registry_requires_every_nested_authority_file_binding() {
     registry_binding["sha256"] = json!(sha256(&registry));
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(0),
             || Ok(2048),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX)
         ),
         Err(EmberdError::DispatchStorageReserve { .. })
     ));
@@ -931,12 +938,13 @@ fn dispatch_manifest_rejects_cache_and_equals_path_escapes() {
         fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
         let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
         assert!(matches!(
-            daemon.dispatch_manifest_at_with_probes_and_host(
+            daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
                 &manifest,
                 10_001,
                 |_root| Ok(1024),
                 || Ok(1024),
                 || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+                |_root| Ok(u64::MAX),
             ),
             Err(EmberdError::InvalidDispatchManifest { .. })
         ));
@@ -957,12 +965,13 @@ fn dispatch_manifest_pinned_host_budget_subtracts_live_jobs_and_releases_on_exit
 
     let daemon = Daemon::open(&root_a.join("emberd.sqlite3")).unwrap();
     let outcome_a = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest_a,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert!(outcome_a.handle.pid > 0);
@@ -980,12 +989,13 @@ fn dispatch_manifest_pinned_host_budget_subtracts_live_jobs_and_releases_on_exit
     payload_b["resource_lease"] = json!("gpu-smoke-b");
     fs::write(&manifest_b, serde_json::to_vec(&payload_b).unwrap()).unwrap();
     let error = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest_b,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap_err();
     assert!(
@@ -1019,12 +1029,13 @@ fn dispatch_manifest_pinned_host_budget_subtracts_live_jobs_and_releases_on_exit
     payload_b2["resource_lease"] = json!("gpu-smoke-b");
     fs::write(&manifest_b2, serde_json::to_vec(&payload_b2).unwrap()).unwrap();
     let outcome_b2 = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest_b2,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert!(outcome_b2.handle.pid > 0);
@@ -1067,12 +1078,16 @@ fn dispatch_manifest_refuses_consumer_floor_violation_regardless_of_manifest() {
 }
 
 #[test]
-fn dispatch_manifest_vram_provider_unavailable_never_blocks_admission() {
+fn dispatch_manifest_vram_provider_unavailable_refuses_admission() {
+    // Increment 1: a Driver-Locked provider (VRAM) reporting UNAVAILABLE is
+    // BLOCKING, not waived. A declared nonzero minimum_free_vram_bytes is
+    // never bypassed just because nvidia-smi (or an equivalent) is absent
+    // from this host.
     let root = sandbox("vram-unavailable");
     let manifest = write_manifest(&root, "dispatch-vram-unavailable", 10_000);
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
-    let outcome = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
@@ -1082,12 +1097,91 @@ fn dispatch_manifest_vram_provider_unavailable_never_blocks_admission() {
                 })
             },
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
-        .unwrap();
-    assert!(outcome.handle.pid > 0);
-    let receipt: Value = serde_json::from_slice(&fs::read(&outcome.receipt.path).unwrap()).unwrap();
-    assert_eq!(receipt["result"], "PREFLIGHT_PASSED");
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchVramProviderUnavailable { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(daemon.job_state("dispatch-vram-unavailable").unwrap(), None);
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(root.join("custody").join("preflight.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_VRAM_PROVIDER_UNAVAILABLE");
     assert_eq!(receipt["vram_reserve"]["provider_status"], "unavailable");
-    assert!(receipt["vram_reserve"]["available_free_bytes"].is_null());
-    daemon.stop_job("dispatch-vram-unavailable").unwrap();
+    assert_eq!(
+        receipt["vram_reserve"]["minimum_free_bytes"],
+        json!(1)
+    );
+}
+
+#[test]
+fn dispatch_manifest_pinned_host_budget_admits_exactly_one_of_two_concurrent_overcommitting_dispatches(
+) {
+    // Deterministic interleaving harness (no sleeps): two real OS threads,
+    // released together via a Barrier, race the SAME Daemon's admission
+    // path with manifests that individually fit but jointly overcommit the
+    // pinned host budget. The invariant this proves holds under EVERY
+    // interleaving once the SUM-read + residual-decision + jobs-row INSERT
+    // are atomic: exactly one dispatch is admitted and exactly one refuses
+    // on the typed budget error -- never both, never neither.
+    let root = sandbox("pinned-budget-concurrent");
+    let daemon = std::sync::Arc::new(Daemon::open(&root.join("emberd.sqlite3")).unwrap());
+
+    let manifest_a = write_manifest(&root, "dispatch-conc-a", 10_000);
+    let mut payload_a: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
+    payload_a["resource_lease"] = json!("gpu-conc-a");
+    fs::write(&manifest_a, serde_json::to_vec(&payload_a).unwrap()).unwrap();
+
+    let manifest_b = write_manifest(&root, "dispatch-conc-b", 10_000);
+    let mut payload_b: Value = serde_json::from_slice(&fs::read(&manifest_b).unwrap()).unwrap();
+    payload_b["resource_lease"] = json!("gpu-conc-b");
+    fs::write(&manifest_b, serde_json::to_vec(&payload_b).unwrap()).unwrap();
+
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+
+    let run = |manifest: PathBuf, daemon: std::sync::Arc<Daemon>, barrier: std::sync::Arc<std::sync::Barrier>| {
+        thread::spawn(move || {
+            barrier.wait();
+            daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
+                &manifest,
+                10_001,
+                |_root| Ok(1024),
+                || Ok(2048),
+                || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+                |_root| Ok(u64::MAX),
+            )
+        })
+    };
+    let t1 = run(manifest_a, daemon.clone(), barrier.clone());
+    let t2 = run(manifest_b, daemon.clone(), barrier.clone());
+
+    let r1 = t1.join().unwrap();
+    let r2 = t2.join().unwrap();
+    let results = [&r1, &r2];
+
+    let admitted = results.iter().filter(|r| r.is_ok()).count();
+    let refused_on_budget = results
+        .iter()
+        .filter(|r| matches!(r, Err(EmberdError::DispatchPinnedHostBudgetExceeded { .. })))
+        .count();
+    assert_eq!(
+        admitted, 1,
+        "exactly one concurrent overcommitting dispatch must be admitted: {r1:?} / {r2:?}"
+    );
+    assert_eq!(
+        refused_on_budget, 1,
+        "the other must refuse on the typed pinned-budget error: {r1:?} / {r2:?}"
+    );
+    assert_eq!(
+        daemon.live_committed_job_memory_bytes().unwrap(),
+        MAXIMUM_JOB_MEMORY_BYTES,
+        "exactly the admitted job's declared budget stays live-committed"
+    );
+
+    for job_id in ["dispatch-conc-a", "dispatch-conc-b"] {
+        let _ = daemon.stop_job(job_id);
+    }
 }
