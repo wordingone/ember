@@ -1,0 +1,111 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Deterministic, no-allocation shortcut controls for owned spatial vision records."""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import math
+from collections import Counter, defaultdict
+from statistics import NormalDist
+from typing import Mapping, Sequence
+
+from build_owned_vision_scenes import patch_permutation_class
+from specialist_semantics import spatial_relation_caption
+
+_LABELS = ("red is left of green", "red is right of green", "red is above green", "red is below green")
+_SPLITS = ("train", "validation", "test")
+
+
+def _patches(record: Mapping[str, object]) -> list[bytes]:
+    values = record.get("image_patches_u8_base64")
+    if not isinstance(values, list):
+        raise ValueError("vision control requires raw image patches")
+    return [base64.b64decode(value, validate=True) for value in values]
+
+
+def _coordinates(record: Mapping[str, object]) -> list[object]:
+    coordinates = record.get("image_coordinates")
+    if not isinstance(coordinates, list):
+        raise ValueError("vision control requires explicit image coordinates")
+    return coordinates
+
+
+def _sample_index(record: Mapping[str, object]) -> int:
+    sample_id = record.get("sample_id")
+    if not isinstance(sample_id, str) or not sample_id.startswith("owned-vision-spatial-"):
+        raise ValueError("vision control requires owned spatial sample IDs")
+    return int(sample_id.rsplit("-", 1)[1])
+
+
+def _wilson_interval(successes: int, total: int) -> list[float]:
+    if total <= 0:
+        raise ValueError("confidence interval requires positive sample count")
+    z = 1.959963984540054
+    proportion = successes / total
+    denominator = 1.0 + z * z / total
+    center = (proportion + z * z / (2.0 * total)) / denominator
+    margin = z * math.sqrt(proportion * (1.0 - proportion) / total + z * z / (4.0 * total * total)) / denominator
+    return [center - margin, center + margin]
+
+
+def _power_for_10pp_effect(total: int) -> float:
+    """Preregistered normal-approximation power for p0=0.25 versus p1=0.35, alpha=0.05."""
+    p0, p1, z_alpha = 0.25, 0.35, 1.959963984540054
+    threshold = p0 + z_alpha * math.sqrt(p0 * (1.0 - p0) / total)
+    z_under_alternative = (threshold - p1) / math.sqrt(p1 * (1.0 - p1) / total)
+    return NormalDist().cdf(-z_under_alternative)
+
+
+def evaluate_shortcut_controls(records: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    """Measure coordinate-blind shortcut availability without allocating a model or corpus artifact."""
+    if not records:
+        raise ValueError("shortcut control requires at least one record")
+    support: dict[str, set[int]] = {split: set() for split in _SPLITS}
+    by_content: dict[tuple[str, ...], Counter[str]] = defaultdict(Counter)
+    raw_mask_rejected = 0
+    paired_preserved = 0
+    unpaired_changed = 0
+    for record in records:
+        split = record.get("scene_split")
+        label = record.get("target_text")
+        if split not in support or label not in _LABELS:
+            raise ValueError("shortcut control requires declared split and owned relation label")
+        patches = _patches(record)
+        coordinates = _coordinates(record)
+        support[split].add(patch_permutation_class(_sample_index(record)))
+        by_content[tuple(sorted(hashlib.sha256(patch).hexdigest() for patch in patches))][str(label)] += 1
+        try:
+            spatial_relation_caption([bytes(len(patch)) for patch in patches], coordinates)
+        except ValueError:
+            raw_mask_rejected += 1
+        else:
+            raise ValueError("all-zero raw patch mask unexpectedly retained a spatial label")
+        reverse = tuple(reversed(range(len(patches))))
+        paired_caption = spatial_relation_caption([patches[index] for index in reverse], [coordinates[index] for index in reverse])
+        paired_preserved += int(paired_caption == label)
+        unpaired_caption = spatial_relation_caption([patches[index] for index in reverse], coordinates)
+        unpaired_changed += int(unpaired_caption != label)
+    expected_support = set(range(24))
+    if any(values != expected_support for values in support.values()):
+        raise ValueError("preregistered split lacks full 24-class permutation support")
+    oracle_correct = sum(max(labels.values()) for labels in by_content.values())
+    total = len(records)
+    return {
+        "schema_version": "ember-owned-vision-shortcut-control-v1",
+        "result": "MEASURED_NONMATERIALIZING_NONDISPATCHABLE",
+        "record_count": total,
+        "content_only_chance": 0.25,
+        "content_only_oracle_accuracy": oracle_correct / total,
+        "confidence_interval_95": _wilson_interval(oracle_correct, total),
+        "power_for_10pp_effect": _power_for_10pp_effect(total),
+        "permutation_support": {split: sorted(values) for split, values in support.items()},
+        "raw_patch_mask_rejected": raw_mask_rejected,
+        "paired_coordinate_shuffle_preserved": paired_preserved,
+        "unpaired_coordinate_shuffle_changed": unpaired_changed,
+        "model_allocation": False,
+        "corpus_materialized": False,
+        "gpu_dispatched": False,
+    }
