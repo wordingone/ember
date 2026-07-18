@@ -21,6 +21,7 @@ from verify_capability_record import verify_record as verify_capability_record
 
 CAPABILITIES = ("image", "audio", "reasoning", "tool")
 SCHEMA_VERSION = "ember-owned-specialist-stream-v1"
+CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-cursor-v1"
 MEASURED_MIN_RECORDS = 512
 SEMANTIC_MIN_RECORDS = 4096
 _GENERATOR_SOURCES = {
@@ -104,11 +105,14 @@ def _require_binding(repo_root: Path, binding: object, label: str) -> bytes:
 
 
 class SpecialistStream:
-    def __init__(self, tokenizer: Tokenizer, count: int, families: dict[str, Any], *, chunk_size: int | None = None) -> None:
+    def __init__(self, tokenizer: Tokenizer, count: int, families: dict[str, Any], *, chunk_size: int | None = None, manifest_sha256: str | None = None) -> None:
+        if manifest_sha256 is not None and not _is_sha256(manifest_sha256):
+            raise ValueError("invalid specialist stream manifest identity")
         self.tokenizer = tokenizer
         self.count = count
         self.families = families
         self.chunk_size = chunk_size
+        self.manifest_sha256 = manifest_sha256
 
     def record_at(self, capability: str, index: int) -> dict[str, Any]:
         if capability == "image":
@@ -154,11 +158,15 @@ class SpecialistStream:
     def next_records(self, *, capability: str, cursor: object, limit: int) -> tuple[list[dict[str, Any]], dict[str, object]]:
         if capability not in CAPABILITIES:
             raise ValueError("unsupported specialist capability")
+        if self.manifest_sha256 is None:
+            raise ValueError("stream cursor requires an immutable manifest identity")
         if cursor is None:
             start = 0
         else:
-            if not isinstance(cursor, dict) or set(cursor) != {"capability", "next_index"}:
+            if not isinstance(cursor, dict) or set(cursor) != {"schema_version", "manifest_sha256", "capability", "next_index"}:
                 raise ValueError("invalid stream cursor")
+            if cursor["schema_version"] != CURSOR_SCHEMA_VERSION or cursor["manifest_sha256"] != self.manifest_sha256:
+                raise ValueError("cursor manifest identity does not match requested stream")
             if cursor["capability"] != capability:
                 raise ValueError("cursor capability does not match requested route")
             start = cursor["next_index"]
@@ -168,7 +176,7 @@ class SpecialistStream:
         for offset, record in enumerate(records):
             receipt = self.verify_record(record)
             self._verify_chunk(capability, start + offset, receipt["record_sha256"])
-        return records, {"capability": capability, "next_index": start + len(records)}
+        return records, {"schema_version": CURSOR_SCHEMA_VERSION, "manifest_sha256": self.manifest_sha256, "capability": capability, "next_index": start + len(records)}
 
     def validate_capability_commitment(self, capability: str) -> dict[str, int]:
         """Recompute one route's raw records, execution targets, chunk and root commitments."""
@@ -373,4 +381,4 @@ def open_specialist_stream(*, repo_root: Path, manifest_path: Path) -> Specialis
     families = manifest.get("families")
     if not isinstance(families, dict) or set(families) != set(CAPABILITIES):
         raise ValueError("invalid family commitments")
-    return SpecialistStream(Tokenizer.from_str(tokenizer_bytes.decode("utf-8")), count, families, chunk_size=chunk_size)
+    return SpecialistStream(Tokenizer.from_str(tokenizer_bytes.decode("utf-8")), count, families, chunk_size=chunk_size, manifest_sha256=_sha256(manifest_bytes))

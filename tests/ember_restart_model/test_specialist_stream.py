@@ -59,7 +59,12 @@ class SpecialistStreamTests(unittest.TestCase):
             self.assertEqual(set(manifest["generator_sources"]), {"image", "audio", "reasoning_tool"})
             stream = open_specialist_stream(repo_root=ROOT, manifest_path=manifest_path)
             records, cursor = stream.next_records(capability="tool", cursor=None, limit=2)
-            self.assertEqual(cursor, {"capability": "tool", "next_index": 2})
+            self.assertEqual(cursor, {
+                "schema_version": "ember-owned-specialist-stream-cursor-v1",
+                "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                "capability": "tool",
+                "next_index": 2,
+            })
             self.assertEqual(stream.verify_record(records[0])["result"], "VERIFIED")
             self.assertEqual(stream.next_records(capability="tool", cursor=cursor, limit=1)[0][0]["sample_id"], stream.record_at("tool", 2)["sample_id"])
             with self.assertRaisesRegex(ValueError, "cursor capability"):
@@ -180,5 +185,39 @@ class SpecialistStreamTests(unittest.TestCase):
             for index in (0, 1, 511):
                 self.assertEqual(canonical_record_bytes(legacy_audio[index]), canonical_record_bytes(audio_record_at(tokenizer, count=512, audio_marker=31_999, index=index)))
                 self.assertEqual(canonical_record_bytes(legacy_tool[index]), canonical_record_bytes(trajectory_record_at(tokenizer, count=512, capability="tool", index=index)))
+    def test_cursor_cannot_resume_against_a_different_stream_manifest(self) -> None:
+        from specialist_stream import build_stream_manifest, open_specialist_stream
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            tokenizer = _frozen_tokenizer(root / "tokenizer.json")
+            first_path = root / "first.json"
+            second_path = root / "second.json"
+            build_stream_manifest(
+                repo_root=ROOT,
+                output_path=first_path,
+                tokenizer_path=tokenizer,
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            build_stream_manifest(
+                repo_root=ROOT,
+                output_path=second_path,
+                tokenizer_path=tokenizer,
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=1024,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            _records, cursor = open_specialist_stream(repo_root=ROOT, manifest_path=first_path).next_records(
+                capability="tool", cursor=None, limit=1
+            )
+            with self.assertRaisesRegex(ValueError, "cursor manifest"):
+                open_specialist_stream(repo_root=ROOT, manifest_path=second_path).next_records(
+                    capability="tool", cursor=cursor, limit=1
+                )
+
 if __name__ == "__main__":
     unittest.main()
