@@ -22,14 +22,24 @@ class OwnedVisionShortcutControlTests(unittest.TestCase):
         tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "red": 1, "is": 2, "left": 3, "of": 4, "green": 5, "right": 6, "above": 7, "below": 8}, unk_token="<unk>"))
         tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
         report = evaluate_shortcut_controls(build_records(tokenizer, count=512, image_marker=31_998))
-        self.assertEqual(report["schema_version"], "ember-owned-vision-shortcut-control-v1")
+        self.assertEqual(report["schema_version"], "ember-owned-vision-shortcut-control-v2")
         self.assertEqual(report["result"], "MEASURED_NONMATERIALIZING_NONDISPATCHABLE")
         self.assertEqual(report["content_only_chance"], 0.25)
         self.assertEqual(report["permutation_support"], {"train": list(range(24)), "validation": list(range(24)), "test": list(range(24))})
-        self.assertLessEqual(report["content_only_oracle_accuracy"], 0.25)
-        self.assertLess(report["confidence_interval_95"][0], 0.25)
-        self.assertGreater(report["confidence_interval_95"][1], 0.25)
-        self.assertGreaterEqual(report["power_for_10pp_effect"], 0.8)
+        self.assertEqual(report["declared_split_ratio"], {"train": 0.5, "validation": 0.25, "test": 0.25})
+        self.assertEqual(report["per_split_record_counts"], {"train": 256, "validation": 128, "test": 128})
+        for split in ("train", "validation", "test"):
+            self.assertEqual(report["per_split_content_only_oracle_accuracy"][split], 0.25)
+            self.assertLess(report["per_split_confidence_interval_95"][split][0], 0.25)
+            self.assertGreater(report["per_split_confidence_interval_95"][split][1], 0.25)
+
+    def test_control_rejects_counterfactual_group_split_across_partitions(self) -> None:
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "red": 1, "is": 2, "left": 3, "of": 4, "green": 5, "right": 6, "above": 7, "below": 8}, unk_token="<unk>"))
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        records = build_records(tokenizer, count=512, image_marker=31_998)
+        records[0] = dict(records[0], scene_split="validation")
+        with self.assertRaisesRegex(ValueError, "counterfactual group"):
+            evaluate_shortcut_controls(records)
 
 
 if __name__ == "__main__":

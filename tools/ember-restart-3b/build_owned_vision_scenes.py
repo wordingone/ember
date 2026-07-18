@@ -17,6 +17,9 @@ from specialist_semantics import IMAGE_BYTES, PALETTE, spatial_relation_caption,
 _RELATIONS = ("left", "right", "above", "below")
 _SPLITS = ("train", "validation", "test")
 _PATCH_PERMUTATIONS = tuple(itertools.permutations(range(4)))
+_DEFAULT_RECORD_COUNT = 65_536
+_SPLIT_GROUP_WEIGHTS = {"train": 2, "validation": 1, "test": 1}
+_CAPTIONS = {"red is left of green", "red is right of green", "red is above green", "red is below green"}
 
 
 def _patch(rectangles: list[tuple[str, int, int]]) -> bytes:
@@ -37,6 +40,38 @@ def patch_permutation_class(index: int) -> int:
         raise ValueError("scene index must be a nonnegative integer")
     variation = index // len(_RELATIONS)
     return (variation * 7) % len(_PATCH_PERMUTATIONS)
+
+
+def coordinate_blind_content_sha256(patches: Iterable[bytes]) -> str:
+    """Hash the exact unordered raw patch bytes while intentionally excluding coordinates."""
+
+    values = []
+    for patch in patches:
+        if not isinstance(patch, bytes) or len(patch) != IMAGE_BYTES:
+            raise ValueError("coordinate-blind content requires exact 48x48x3 raw patch bytes")
+        values.append(patch)
+    if len(values) != 4:
+        raise ValueError("coordinate-blind content requires exactly four image patches")
+    payload = b"ember-owned-vision-content-v1\\0" + len(values).to_bytes(4, "big") + b"".join(sorted(values))
+    return hashlib.sha256(payload).hexdigest()
+
+
+def declared_split_plan(*, record_count: int = _DEFAULT_RECORD_COUNT) -> dict[str, object]:
+    """Return the preregistered whole-group split plan without allocating any raw records."""
+
+    if not isinstance(record_count, int) or record_count < 512 or record_count % (len(_RELATIONS) * sum(_SPLIT_GROUP_WEIGHTS.values())):
+        raise ValueError("owned vision split plan requires a relation-balanced multiple of sixteen with at least 512 records")
+    group_count = record_count // len(_RELATIONS)
+    group_counts = {split: group_count * weight // sum(_SPLIT_GROUP_WEIGHTS.values()) for split, weight in _SPLIT_GROUP_WEIGHTS.items()}
+    return {
+        "record_count": record_count,
+        "group_count": group_count,
+        "group_counts": group_counts,
+        "record_counts": {split: groups * len(_RELATIONS) for split, groups in group_counts.items()},
+        "ratio": {split: weight / sum(_SPLIT_GROUP_WEIGHTS.values()) for split, weight in _SPLIT_GROUP_WEIGHTS.items()},
+    }
+
+
 def _scene(index: int) -> tuple[list[bytes], list[list[int]]]:
     """Build one raw-unique scene; patch order never stands in for its 2D coordinates."""
 
@@ -101,35 +136,63 @@ class SceneDescriptor:
 
 
 def group_and_split_scenes(scenes: Iterable[SceneDescriptor]) -> dict[int, str]:
-    """Reject raw duplicates/conflicting labels, then deterministically split unique structural groups."""
+    """Deduplicate exact structures, then split complete coordinate-blind four-label groups."""
 
-    groups: dict[str, SceneDescriptor] = {}
+    scenes = list(scenes)
+    structures: dict[str, SceneDescriptor] = {}
+    by_content: dict[str, list[SceneDescriptor]] = {}
     for scene in scenes:
         raw_key = structural_scene_sha256(scene.patches, scene.coordinates)
-        prior = groups.get(raw_key)
+        prior = structures.get(raw_key)
         if prior is not None:
             if prior.caption != scene.caption:
                 raise ValueError("conflicting labels for identical raw structure")
             raise ValueError("duplicate raw structure before split assignment")
         if spatial_relation_caption(scene.patches, scene.coordinates) != scene.caption:
             raise ValueError("scene caption is not derived from its exact raw structure")
-        groups[raw_key] = scene
+        structures[raw_key] = scene
+        by_content.setdefault(coordinate_blind_content_sha256(scene.patches), []).append(scene)
 
+    plan = declared_split_plan(record_count=len(scenes))
+    by_permutation: dict[int, list[tuple[str, list[SceneDescriptor]]]] = {}
+    for content_key, members in by_content.items():
+        if len(members) != len(_RELATIONS) or {member.caption for member in members} != _CAPTIONS:
+            raise ValueError("coordinate-blind counterfactual group must contain each owned relation exactly once")
+        classes = {patch_permutation_class(member.index) for member in members}
+        if len(classes) != 1:
+            raise ValueError("counterfactual group has inconsistent patch-permutation class")
+        by_permutation.setdefault(classes.pop(), []).append((content_key, members))
+
+    target_groups = dict(plan["group_counts"])
+    assigned_groups = {split: 0 for split in _SPLITS}
     split_by_index: dict[int, str] = {}
-    by_support_stratum: dict[tuple[str, int], list[tuple[str, SceneDescriptor]]] = {}
-    for raw_key, scene in groups.items():
-        permutation_class = patch_permutation_class(scene.index)
-        by_support_stratum.setdefault((scene.caption, permutation_class), []).append((raw_key, scene))
-    for _stratum, members in by_support_stratum.items():
-        for ordinal, (_raw_key, scene) in enumerate(sorted(members, key=lambda member: member[0])):
-            split_by_index[scene.index] = _SPLITS[ordinal % len(_SPLITS)]
+    remaining: list[tuple[str, list[SceneDescriptor]]] = []
+    for permutation_class in sorted(by_permutation):
+        members = sorted(by_permutation[permutation_class], key=lambda item: item[0])
+        if len(members) < len(_SPLITS):
+            raise ValueError("preregistered split lacks complete permutation-class support")
+        for split, (_content_key, group_members) in zip(_SPLITS, members[:len(_SPLITS)]):
+            for member in group_members:
+                split_by_index[member.index] = split
+            assigned_groups[split] += 1
+        remaining.extend(members[len(_SPLITS):])
+    for _content_key, group_members in sorted(remaining, key=lambda item: item[0]):
+        candidates = [split for split in _SPLITS if assigned_groups[split] < target_groups[split]]
+        if not candidates:
+            raise ValueError("counterfactual group assignment exceeded declared split ratio")
+        split = max(candidates, key=lambda name: (target_groups[name] - assigned_groups[name], -_SPLITS.index(name)))
+        for member in group_members:
+            split_by_index[member.index] = split
+        assigned_groups[split] += 1
+    if assigned_groups != target_groups or len(split_by_index) != len(scenes):
+        raise ValueError("counterfactual group assignment does not match declared split ratio")
     return split_by_index
+
 
 def build_records(tokenizer: Any, *, count: int, image_marker: int) -> list[dict[str, object]]:
     """Build balanced raw-spatial scenes whose target is recomputed from patch bytes and coordinates."""
 
-    if not isinstance(count, int) or count < 512 or count % len(_RELATIONS):
-        raise ValueError("owned vision semantic records require a relation-balanced multiple of at least 512 scenes")
+    declared_split_plan(record_count=count)
     if not isinstance(image_marker, int) or image_marker < 0:
         raise ValueError("image marker must be a nonnegative token ID")
     scenes = [

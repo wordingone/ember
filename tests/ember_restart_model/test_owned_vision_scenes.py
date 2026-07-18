@@ -160,5 +160,31 @@ class OwnedVisionSceneTests(unittest.TestCase):
         self.assertEqual(sum(len(values) for values in split_hashes.values()), len(records))
         self.assertTrue(all(len(values) > 0 for values in split_hashes.values()))
         self.assertTrue(all(len(targets) == 4 and len(set(targets.values())) == 1 for targets in split_targets.values()))
+
+    def test_coordinate_blind_counterfactual_groups_are_whole_and_ratio_stratified(self) -> None:
+        """A raw-content group contains all labels and is assigned to exactly one declared split."""
+        tokenizer = Tokenizer(models.WordLevel({"<unk>": 0, "red": 1, "is": 2, "left": 3, "of": 4, "green": 5, "right": 6, "above": 7, "below": 8}, unk_token="<unk>"))
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        records = build_records(tokenizer, count=512, image_marker=31_998)
+        groups: dict[tuple[str, ...], list[dict[str, object]]] = {}
+        for record in records:
+            key = tuple(sorted(record["image_patches_u8_base64"]))
+            groups.setdefault(key, []).append(record)
+        self.assertEqual(len(groups), 128)
+        split_counts = Counter()
+        for members in groups.values():
+            self.assertEqual(len(members), 4)
+            self.assertEqual({member["target_text"] for member in members}, {
+                "red is left of green", "red is right of green", "red is above green", "red is below green",
+            })
+            self.assertEqual({member["scene_split"] for member in members}, {members[0]["scene_split"]})
+            split_counts[members[0]["scene_split"]] += 1
+        self.assertEqual(split_counts, Counter({"train": 64, "validation": 32, "test": 32}))
+
+    def test_default_scale_split_plan_is_declared_without_materializing_records(self) -> None:
+        plan = build_owned_vision_scenes.declared_split_plan()
+        self.assertEqual(plan["record_count"], 65_536)
+        self.assertEqual(plan["group_count"], 16_384)
+        self.assertEqual(plan["group_counts"], {"train": 8192, "validation": 4096, "test": 4096})
 if __name__ == "__main__":
     unittest.main()
