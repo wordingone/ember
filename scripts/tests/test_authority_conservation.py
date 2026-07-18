@@ -286,7 +286,14 @@ def write_valid_fixture(root: Path) -> None:
 | qwen-reference | backend | model:qwen-reference | borrowed_reference | 27000000000 | unknown | qwen | none | explicit reference seat |
 | ember-target | model_target | uninstantiated:ember-target | target | 30000000001 | 0 | owned | none | GOAL.md |
 """
-    (root / "STATE.md").write_text(state, encoding="utf-8")
+    (root / "STATE.md").write_text(
+        "Current artifact identity and maturity state: [CONTINUITY.md](CONTINUITY.md), "
+        "under the migrated STATE.md artifact-state resolver section; STATE.md is a "
+        "compatibility pointer only and carries no independent authority.\n",
+        encoding="utf-8",
+    )
+    continuity = root / "CONTINUITY.md"
+    continuity.write_text(continuity.read_text(encoding="utf-8") + "\n" + state, encoding="utf-8")
 
     config = {
         "authority": {
@@ -349,6 +356,16 @@ def rewrite_policy(root: Path, mutate) -> None:
     policy = json.loads(match.group(1))
     mutate(policy)
     (root / "GOAL.md").write_text(render_goal(policy), encoding="utf-8")
+
+
+def refresh_continuity_hash(root: Path) -> None:
+    digest = hashlib.sha256((root / "CONTINUITY.md").read_bytes()).hexdigest().upper()
+    rewrite_policy(
+        root,
+        lambda policy: policy["conservation_hashes"]["governing_surfaces_sha256"].update(
+            {"CONTINUITY.md": digest}
+        ),
+    )
 
 
 def assert_rejected(root: Path, code: str, selection: Path | None = None) -> None:
@@ -561,7 +578,7 @@ def test_hash_bound_external_classification_supports_protected_control_json(
     protected = tmp_path / "configs" / "protected-control.json"
     protected.write_text("[]\n", encoding="utf-8")
     digest = hashlib.sha256(protected.read_bytes()).hexdigest()
-    with (tmp_path / "STATE.md").open("a", encoding="utf-8") as stream:
+    with (tmp_path / "CONTINUITY.md").open("a", encoding="utf-8") as stream:
         stream.write(
             "\n| path | artifact_class | execution_authority | goal_id | "
             "next_executed_outcome | sha256 |\n"
@@ -569,6 +586,7 @@ def test_hash_bound_external_classification_supports_protected_control_json(
             "| configs/protected-control.json | historical_only | denied | "
             f"EMBER-02 | authority classification only | {digest} |\n"
         )
+    refresh_continuity_hash(tmp_path)
     result = run_verifier(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -577,7 +595,7 @@ def test_external_config_classification_is_bound_to_exact_bytes(tmp_path: Path) 
     write_valid_fixture(tmp_path)
     protected = tmp_path / "configs" / "protected-control.json"
     protected.write_text("[]\n", encoding="utf-8")
-    with (tmp_path / "STATE.md").open("a", encoding="utf-8") as stream:
+    with (tmp_path / "CONTINUITY.md").open("a", encoding="utf-8") as stream:
         stream.write(
             "\n| path | artifact_class | execution_authority | goal_id | "
             "next_executed_outcome | sha256 |\n"
@@ -585,6 +603,7 @@ def test_external_config_classification_is_bound_to_exact_bytes(tmp_path: Path) 
             "| configs/protected-control.json | historical_only | denied | "
             f"EMBER-02 | authority classification only | {'0' * 64} |\n"
         )
+    refresh_continuity_hash(tmp_path)
     assert_rejected(tmp_path, "config.classification_hash_mismatch")
 
 def test_invariant_tamper_is_rejected(tmp_path: Path) -> None:
@@ -1101,10 +1120,27 @@ def test_policy_requires_exact_goal_execution_binding(
 
 def test_ambiguous_identity_is_rejected(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    state = tmp_path / "STATE.md"
+    state = tmp_path / "CONTINUITY.md"
     with state.open("a", encoding="utf-8") as stream:
         stream.write(
             "| duplicate | checkpoint | sha256:owned-rung2 | historical_only | "
             "2195000000 | 12550144 | none | none | duplicate identity |\n"
         )
+    refresh_continuity_hash(tmp_path)
     assert_rejected(tmp_path, "state.ambiguous_identity")
+
+def test_continuity_identity_rows_loss_is_rejected(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    continuity = tmp_path / "CONTINUITY.md"
+    content = continuity.read_text(encoding="utf-8")
+    markers = ("| owned-rung2 |", "| qwen-reference |", "| ember-target |")
+    content = "\n".join(line for line in content.splitlines() if not line.startswith(markers)) + "\n"
+    continuity.write_text(content, encoding="utf-8")
+    refresh_continuity_hash(tmp_path)
+    assert_rejected(tmp_path, "state.identity_rows_missing")
+
+
+def test_state_pointer_tamper_is_rejected(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    (tmp_path / "STATE.md").write_text("STATE rows moved elsewhere\n", encoding="utf-8")
+    assert_rejected(tmp_path, "state.pointer_invalid")
