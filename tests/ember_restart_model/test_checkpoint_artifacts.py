@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import checkpoint_artifacts
+import durable_io
 
 from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
 from model import RestartDecoderConfig, UnifiedDecoder
@@ -238,6 +239,20 @@ class CheckpointArtifactTests(unittest.TestCase):
                 self.assertEqual(tensor.device, source[name].device)
                 self.assertEqual(tensor.data_ptr(), source[name].data_ptr())
 
+    def test_checkpoint_atomic_write_fsyncs_parent_after_replace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            calls: list[int] = []
+            def recording_fsync(descriptor: int) -> None:
+                calls.append(descriptor)
+            with patch.object(checkpoint_artifacts.os, "name", "posix"), \
+                 patch.object(durable_io.os, "open", return_value=919) as open_directory, \
+                 patch.object(durable_io.os, "close") as close_directory, \
+                 patch.object(durable_io.os, "fsync", recording_fsync):
+                checkpoint_artifacts._write_atomic(root, "receipt.json", lambda handle: handle.write(b"{}\n"))
+            open_directory.assert_called_once_with(str(root), os.O_RDONLY)
+            close_directory.assert_called_once_with(919)
+            self.assertIn(919, calls)
     def test_preexisting_target_is_refused_before_staging_or_verifier(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=11)

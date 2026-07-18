@@ -28,6 +28,7 @@ from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_art
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
+from durable_io import atomic_replace_durable
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
 from semantic_contract import semantic_model_contract_sha256
@@ -566,44 +567,58 @@ def _custody_ledger_write_lock(parent: Path) -> object:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
             os.close(descriptor)
-def _validate_custody_ledger_frame_chain(events: list[object]) -> None:
-    """Validate every v3 frame against its predecessor before any custody decision."""
+def _canonical_frame_bytes(frame: Mapping[str, object]) -> bytes:
+    return json.dumps(dict(frame), sort_keys=True, separators=(",", ":")).encode("utf-8")
 
+
+def _validate_custody_ledger_frame_chain(events: list[object]) -> None:
+    """Validate v4 frames: content and full-frame hashes are distinct chain authority."""
     chained = [event for event in events if isinstance(event, dict) and event.get("schema_version") == _CUSTODY_LEDGER_SCHEMA]
-    ordered_legacy = [event for event in events if isinstance(event, dict) and event.get("schema_version") in {_ORDERED_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA}]
-    if chained and ordered_legacy:
-        raise RuntimeError("custody deletion ledger mixes chained and legacy ordered frames")
+    legacy = [event for event in events if isinstance(event, dict) and event.get("schema_version") in {_PREVIOUS_CHAINED_LEDGER_SCHEMA, _ORDERED_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA}]
+    if chained and legacy:
+        raise RuntimeError("custody deletion ledger mixes chained and legacy frames")
+    if legacy:
+        for event in legacy:
+            if event.get("schema_version") == _PREVIOUS_CHAINED_LEDGER_SCHEMA:
+                required_v3 = {"schema_version", "event", "pointer", "bytes", "sha256", "reason", "sequence", "previous_frame_sha256", "frame_sha256"}
+                if set(event) != required_v3 or not _is_sha256(event.get("frame_sha256")):
+                    raise RuntimeError("legacy chained custody frame has invalid shape")
     previous = "0" * 64
+    required = {"schema_version", "event", "pointer", "bytes", "sha256", "reason", "sequence", "previous_frame_sha256", "frame_content_sha256", "frame_sha256"}
     for sequence, event in enumerate(chained):
-        required = {"schema_version", "event", "pointer", "bytes", "sha256", "reason", "sequence", "previous_frame_sha256", "frame_sha256"}
-        if set(event) != required:
-            raise RuntimeError("custody deletion ledger frame has an invalid shape")
-        if event.get("sequence") != sequence or event.get("previous_frame_sha256") != previous:
+        if set(event) != required or event.get("sequence") != sequence or event.get("previous_frame_sha256") != previous:
             raise RuntimeError("custody deletion ledger frame chain sequence is invalid")
-        frame_sha256 = event.get("frame_sha256")
-        if not _is_sha256(frame_sha256):
-            raise RuntimeError("custody deletion ledger frame hash is invalid")
-        material = {key: value for key, value in event.items() if key != "frame_sha256"}
-        expected = hashlib.sha256(json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-        if frame_sha256 != expected:
-            raise RuntimeError("custody deletion ledger frame hash does not match its content")
-        previous = str(frame_sha256)
+        body = {key: value for key, value in event.items() if key not in {"frame_content_sha256", "frame_sha256"}}
+        content = hashlib.sha256(_canonical_frame_bytes(body)).hexdigest()
+        full = hashlib.sha256(_canonical_frame_bytes({**body, "frame_content_sha256": content})).hexdigest()
+        if event.get("frame_content_sha256") != content or event.get("frame_sha256") != full:
+            raise RuntimeError("custody deletion ledger frame hash does not match canonical content")
+        previous = full
 
 
 def _next_custody_ledger_frame(event: dict[str, object], prior_events: list[object]) -> dict[str, object]:
-    """Bind a new v3 transition to the exact prior framed ledger snapshot."""
-
+    """Bind a v4 transition to the prior complete canonical frame, never only its content."""
     _validate_custody_ledger_frame_chain(prior_events)
-    if any(isinstance(row, dict) and row.get("schema_version") in {_ORDERED_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA} for row in prior_events):
-        raise RuntimeError("legacy ordered ledger requires explicit migration before v3 append")
-    previous = "0" * 64
-    sequence = 0
-    for row in prior_events:
-        if isinstance(row, dict) and row.get("schema_version") == _CUSTODY_LEDGER_SCHEMA:
-            previous = str(row["frame_sha256"])
-            sequence += 1
-    material = {"schema_version": _CUSTODY_LEDGER_SCHEMA, "event": event["event"], "pointer": event["pointer"], "bytes": event["bytes"], "sha256": event["sha256"], "reason": event["reason"], "sequence": sequence, "previous_frame_sha256": previous}
-    return {**material, "frame_sha256": hashlib.sha256(json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()}
+    if any(isinstance(row, dict) and row.get("schema_version") != _CUSTODY_LEDGER_SCHEMA for row in prior_events):
+        raise RuntimeError("legacy ledger requires explicit migration before v4 append")
+    prior = [row for row in prior_events if isinstance(row, dict)]
+    body = {"schema_version": _CUSTODY_LEDGER_SCHEMA, "event": event["event"], "pointer": event["pointer"], "bytes": event["bytes"], "sha256": event["sha256"], "reason": event["reason"], "sequence": len(prior), "previous_frame_sha256": str(prior[-1]["frame_sha256"]) if prior else "0" * 64}
+    content = hashlib.sha256(_canonical_frame_bytes(body)).hexdigest()
+    full = {**body, "frame_content_sha256": content}
+    return {**full, "frame_sha256": hashlib.sha256(_canonical_frame_bytes(full)).hexdigest()}
+def _parse_custody_ledger_payload(payload: bytes) -> list[object]:
+    """Parse one complete newline-framed ledger byte snapshot without reopening it."""
+
+    if payload and not payload.endswith(b"\n"):
+        raise RuntimeError("custody deletion ledger has an unterminated or torn tail")
+    events: list[object] = []
+    for line in payload.splitlines():
+        try:
+            events.append(json.loads(line))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("custody deletion ledger is malformed") from error
+    return events
+
 
 def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
     """Read one complete newline-framed ledger snapshot, rejecting torn tails."""
@@ -615,24 +630,112 @@ def _custody_ledger_snapshot(parent: Path) -> tuple[bytes, list[object]]:
         payload = ledger.read_bytes()
     except OSError as error:
         raise RuntimeError("custody deletion ledger could not be read") from error
-    if payload and not payload.endswith(b"\n"):
-        raise RuntimeError("custody deletion ledger has an unterminated or torn tail")
-    events: list[object] = []
-    for line in payload.splitlines():
-        try:
-            events.append(json.loads(line))
-        except (UnicodeError, json.JSONDecodeError) as error:
-            raise RuntimeError("custody deletion ledger is malformed") from error
-    return payload, events
+    return payload, _parse_custody_ledger_payload(payload)
 
 
-def migrate_legacy_custody_ledger(parent: Path) -> dict[str, object]:
-    """Explicitly archive and replay a complete v2 ledger as chained v3 frames under one writer lock."""
+def _custody_chain_head(events: list[object]) -> str:
+    _validate_custody_ledger_frame_chain(events)
+    chained = [event for event in events if isinstance(event, dict) and event.get("schema_version") == _CUSTODY_LEDGER_SCHEMA]
+    return str(chained[-1]["frame_sha256"]) if chained else "0" * 64
+
+
+_HEAD_RECEIPT_SCHEMA = "ember-custody-ledger-head-transaction-v1"
+
+
+def _ledger_binding(payload: bytes) -> dict[str, object]:
+    events = _parse_custody_ledger_payload(payload)
+    return {"ledger_sha256": hashlib.sha256(payload).hexdigest(), "ledger_bytes": len(payload), "chain_head_sha256": _custody_chain_head(events), "frame_count": len(events)}
+
+
+def prepare_custody_ledger_transaction(*, receipt_path: Path, old_ledger: bytes, new_ledger: bytes, operation_id: str, subject: str) -> dict[str, object]:
+    """Exclusively create, or exactly resume, a durable external old/new transaction."""
+    if not isinstance(operation_id, str) or not operation_id or not isinstance(subject, str) or not subject:
+        raise ValueError("ledger transaction requires a nonempty operation ID and subject")
+    receipt = {"schema_version": _HEAD_RECEIPT_SCHEMA, "result": "PREPARED", "operation_id": operation_id, "subject": subject, "old": _ledger_binding(old_ledger), "new": _ledger_binding(new_ledger)}
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    try:
+        with receipt_path.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError:
+        existing = _head_transaction(receipt_path)
+        if {key: existing[key] for key in receipt if key != "result"} != {key: receipt[key] for key in receipt if key != "result"}:
+            raise RuntimeError("external custody ledger transaction identity collision")
+        return existing
+    return receipt
+def _head_transaction(path: Path) -> dict[str, object]:
+    receipt, _ = _json_snapshot(path, label="external custody ledger transaction")
+    if set(receipt) != {"schema_version", "result", "operation_id", "subject", "old", "new"} or receipt.get("schema_version") != _HEAD_RECEIPT_SCHEMA or receipt.get("result") not in {"PREPARED", "COMMITTED", "ABORTED"} or not isinstance(receipt.get("operation_id"), str) or not receipt["operation_id"] or not isinstance(receipt.get("subject"), str) or not receipt["subject"]:
+        raise RuntimeError("external custody ledger transaction has invalid shape")
+    for binding in (receipt["old"], receipt["new"]):
+        if not isinstance(binding, dict) or set(binding) != {"ledger_sha256", "ledger_bytes", "chain_head_sha256", "frame_count"} or any(not _is_sha256(binding.get(key)) for key in ("ledger_sha256", "chain_head_sha256")) or any(type(binding.get(key)) is not int or binding[key] < 0 for key in ("ledger_bytes", "frame_count")):
+            raise RuntimeError("external custody ledger transaction has invalid bindings")
+    return receipt
+
+
+def _finalize_custody_ledger_transaction_locked(canonical_parent: Path, *, receipt_path: Path) -> dict[str, object]:
+    receipt = _head_transaction(receipt_path)
+    current, _ = _custody_ledger_snapshot(canonical_parent)
+    current_binding = _ledger_binding(current)
+    if receipt["result"] == "PREPARED" and current_binding == receipt["old"]:
+        aborted = {**receipt, "result": "ABORTED"}
+        _atomic_json(receipt_path, aborted)
+        return aborted
+    if current_binding != receipt["new"]:
+        raise RuntimeError("ledger transaction refuses unbound or truncated ledger bytes")
+    committed = {**receipt, "result": "COMMITTED"}
+    _atomic_json(receipt_path, committed)
+    return committed
+
+
+def finalize_custody_ledger_transaction(parent: Path, *, receipt_path: Path) -> dict[str, object]:
+    """Replay exact bytes against a pre-existing external transaction; never infer/truncate a tail."""
+    with _custody_ledger_write_lock(parent) as canonical_parent:
+        return _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=receipt_path)
+def _recover_parent_scoped_transactions_locked(canonical_parent: Path) -> None:
+    """Resolve pending external append receipts before certifying a later head."""
+    pattern = f"custody-append-{canonical_parent.name}-*.json"
+    for receipt_path in sorted(canonical_parent.parent.glob(pattern)):
+        receipt = _head_transaction(receipt_path)
+        if receipt["result"] == "PREPARED":
+            _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=receipt_path)
+        elif receipt["result"] not in {"COMMITTED", "ABORTED"}:
+            raise RuntimeError("parent-scoped custody transaction is nonterminal")
+
+def recover_torn_custody_ledger_tail(parent: Path, *, transaction_receipt_path: Path) -> dict[str, object]:
+    """Recovery is transaction replay only; syntactically valid torn bytes are never guessed away."""
+    return finalize_custody_ledger_transaction(parent, receipt_path=transaction_receipt_path)
+def migrate_legacy_custody_ledger(parent: Path, *, transaction_receipt_path: Path | None = None) -> dict[str, object]:
+    """Explicitly archive and replay a complete legacy ledger as chained v4 frames under one writer lock."""
 
     with _custody_ledger_write_lock(parent) as canonical_parent:
+        _recover_parent_scoped_transactions_locked(canonical_parent)
+        if transaction_receipt_path is None:
+            transaction_receipt_path = canonical_parent.parent / f"custody-migration-{canonical_parent.name}.json"
+        if transaction_receipt_path.resolve().is_relative_to(canonical_parent.resolve()):
+            raise RuntimeError("migration transaction receipt must be outside custody root")
         prior, events = _custody_ledger_snapshot(canonical_parent)
         schemas = {event.get("schema_version") for event in events if isinstance(event, dict)}
-        if not events or len(schemas) != 1 or schemas not in ({_ORDERED_CUSTODY_LEDGER_SCHEMA}, {_LEGACY_CUSTODY_LEDGER_SCHEMA}) or any(not isinstance(event, dict) for event in events):
+        if schemas == {_CUSTODY_LEDGER_SCHEMA} and transaction_receipt_path.exists():
+            transaction = _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=transaction_receipt_path)
+            if transaction["result"] != "COMMITTED":
+                raise RuntimeError("migration transaction did not converge to committed v4 ledger")
+            digest = str(transaction["old"]["ledger_sha256"])
+            archive = canonical_parent / f".checkpoint-custody-ledger-legacy-{digest}.jsonl"
+            if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
+                raise RuntimeError("migration replay lacks its durable legacy archive")
+            receipt = {"schema_version": "ember-custody-ledger-migration-v2", "result": "MIGRATED", "legacy_archive": archive.name, "legacy_sha256": digest, "new_ledger_sha256": str(transaction["new"]["ledger_sha256"]), "chain_head_sha256": str(transaction["new"]["chain_head_sha256"]), "migrated_frame_count": int(transaction["new"]["frame_count"])}
+            migration_receipt_path = transaction_receipt_path.with_name(f"{transaction_receipt_path.stem}-migration-{digest}.json")
+            if migration_receipt_path.exists():
+                existing, _ = _json_snapshot(migration_receipt_path, label="external migration receipt")
+                if existing != receipt:
+                    raise RuntimeError("migration receipt identity collision")
+            else:
+                _atomic_json(migration_receipt_path, receipt)
+            return {**receipt, "migration_receipt": str(migration_receipt_path)}
+        if not events or len(schemas) != 1 or schemas not in ({_ORDERED_CUSTODY_LEDGER_SCHEMA}, {_LEGACY_CUSTODY_LEDGER_SCHEMA}, {_PREVIOUS_CHAINED_LEDGER_SCHEMA}) or any(not isinstance(event, dict) for event in events):
             raise RuntimeError("legacy migration requires one complete v1 or v2 custody ledger")
         # Validate the exact snapshot before preservation/rewrite.  This uses the
         # same reconciliation authority as normal reads, while the writer lock
@@ -644,10 +747,9 @@ def migrate_legacy_custody_ledger(parent: Path) -> dict[str, object]:
             if archive.read_bytes() != prior:
                 raise RuntimeError("legacy custody archive collision has different bytes")
         else:
-            with archive.open("xb") as handle:
-                handle.write(prior)
-                handle.flush()
-                os.fsync(handle.fileno())
+            # Shared write-through replacement is the only archive publication authority;
+            # a raw xb create has no directory-durability guarantee on Windows.
+            _atomic_bytes(archive, prior)
         replay: list[object] = []
         rewritten_rows: list[dict[str, object]] = []
         for legacy in events:
@@ -661,35 +763,57 @@ def migrate_legacy_custody_ledger(parent: Path) -> dict[str, object]:
                 replay.append(chained)
                 rewritten_rows.append(chained)
         rewritten = b"".join((json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8") for row in rewritten_rows)
+        prepare_custody_ledger_transaction(receipt_path=transaction_receipt_path, old_ledger=prior, new_ledger=rewritten, operation_id=f"migration-{digest}", subject=f"custody:{canonical_parent.name}")
         _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, rewritten)
+        _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=transaction_receipt_path)
         published, published_events = _custody_ledger_snapshot(canonical_parent)
         if published != rewritten:
             raise RuntimeError("migrated custody ledger changed after durable publication")
         _validate_custody_ledger_frame_chain(published_events)
         _custody_reconciliation(canonical_parent)
-        return {
-            "schema_version": "ember-custody-ledger-migration-v1",
+        receipt = {
+            "schema_version": "ember-custody-ledger-migration-v2",
             "result": "MIGRATED",
             "legacy_archive": archive.name,
             "legacy_sha256": digest,
+            "new_ledger_sha256": hashlib.sha256(published).hexdigest(),
+            "chain_head_sha256": _custody_chain_head(published_events),
             "migrated_frame_count": len(rewritten_rows),
         }
-
-def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict[str, object]) -> None:
-    """Append one v3 frame while the caller holds the exact custody writer lock."""
-
+        migration_receipt_path = transaction_receipt_path.with_name(f"{transaction_receipt_path.stem}-migration-{digest}.json")
+        if migration_receipt_path.resolve().is_relative_to(canonical_parent.resolve()):
+            raise RuntimeError("migration receipt must be outside custody root")
+        if migration_receipt_path.exists():
+            existing, _ = _json_snapshot(migration_receipt_path, label="external migration receipt")
+            if existing != receipt:
+                raise RuntimeError("migration receipt identity collision")
+        else:
+            _atomic_json(migration_receipt_path, receipt)
+        return {**receipt, "migration_receipt": str(migration_receipt_path)}
+def _append_custody_ledger_transition_locked(canonical_parent: Path, event: dict[str, object], *, transaction_receipt_path: Path, operation_id: str, subject: str) -> None:
+    """Prepare the external authority before replacing a complete v4 ledger snapshot."""
     prior, prior_events = _custody_ledger_snapshot(canonical_parent)
     framed_event = _next_custody_ledger_frame(event, prior_events)
-    framed = (json.dumps(framed_event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, prior + framed)
+    new_ledger = prior + (json.dumps(framed_event, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    prepare_custody_ledger_transaction(receipt_path=transaction_receipt_path, old_ledger=prior, new_ledger=new_ledger, operation_id=operation_id, subject=subject)
+    _atomic_bytes(canonical_parent / _CUSTODY_LEDGER, new_ledger)
 
 
-def _append_custody_ledger_transition(parent: Path, event: dict[str, object]) -> None:
-    """Durably replace the complete framed ledger; never append to a live tail."""
-
+def _append_custody_ledger_transition(parent: Path, event: dict[str, object], *, transaction_receipt_path: Path | None = None, operation_id: str | None = None, subject: str | None = None) -> None:
+    """Durably replace only through an externally bound old/new transaction."""
+    effective_operation_id = operation_id or f"append-{uuid.uuid4().hex}"
     with _custody_ledger_write_lock(parent) as canonical_parent:
-        _append_custody_ledger_transition_locked(canonical_parent, event)
-
+        _recover_parent_scoped_transactions_locked(canonical_parent)
+        if transaction_receipt_path is None:
+            transaction_receipt_path = canonical_parent.parent / f"custody-append-{canonical_parent.name}-{effective_operation_id}.json"
+        if transaction_receipt_path.resolve().is_relative_to(canonical_parent.resolve()):
+            raise RuntimeError("append transaction receipt must be outside custody root")
+        _append_custody_ledger_transition_locked(canonical_parent, event, transaction_receipt_path=transaction_receipt_path, operation_id=effective_operation_id, subject=subject or f"custody:{canonical_parent.name}")
+        transaction = _head_transaction(transaction_receipt_path)
+        current, _ = _custody_ledger_snapshot(canonical_parent)
+        if _ledger_binding(current) != transaction["new"]:
+            raise RuntimeError("ledger append changed before external transaction commit")
+        _atomic_json(transaction_receipt_path, {**transaction, "result": "COMMITTED"})
 def _custody_reconciliation(parent: Path) -> dict[str, object]:
     """Reconcile custody bytes with an ordered, fail-closed deletion ledger."""
 
@@ -710,7 +834,7 @@ def _custody_reconciliation(parent: Path) -> dict[str, object]:
             schema = event.get("schema_version")
             kind = event.get("event")
             raw_pointer = event.get("pointer")
-            if schema not in {_CUSTODY_LEDGER_SCHEMA, _ORDERED_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA}:
+            if schema not in {_CUSTODY_LEDGER_SCHEMA, _PREVIOUS_CHAINED_LEDGER_SCHEMA, _ORDERED_CUSTODY_LEDGER_SCHEMA, _LEGACY_CUSTODY_LEDGER_SCHEMA}:
                 raise RuntimeError("custody deletion ledger has an invalid schema")
             try:
                 pointer = _canonical_custody_deletion_pointer(raw_pointer)
@@ -788,7 +912,8 @@ _MAX_QUARANTINE_BYTES = 1024 * 1024
 _CUSTODY_LEDGER = ".checkpoint-custody-deletion-ledger.jsonl"
 _CUSTODY_LEDGER_LOCK = ".checkpoint-custody-deletion-ledger.lock"
 _LEGACY_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v1"
-_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v3"
+_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v4"
+_PREVIOUS_CHAINED_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v3"
 _ORDERED_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
 _LEDGER_THREAD_LOCKS: dict[str, threading.Lock] = {}
 _LEDGER_THREAD_LOCKS_GUARD = threading.Lock()
@@ -851,8 +976,8 @@ def _writer_is_active(root: Path) -> bool:
 
 
 def _recover_missing_prepared_evidence(parent: Path) -> None:
-    """Finish only verified PREPARED deletions while holding the exact custody writer lock."""
-
+    """Finish verified PREPARED deletions via normal externally receipted append transactions."""
+    commits: list[dict[str, object]] = []
     with _custody_ledger_write_lock(parent) as canonical_parent:
         ledger = canonical_parent / _CUSTODY_LEDGER
         if not ledger.exists():
@@ -862,10 +987,8 @@ def _recover_missing_prepared_evidence(parent: Path) -> None:
         _validate_custody_ledger_frame_chain(events)
         terminal: dict[str, dict[str, object]] = {}
         for event in events:
-            if event.get("schema_version") != _CUSTODY_LEDGER_SCHEMA:
-                continue
-            pointer = _canonical_custody_deletion_pointer(event.get("pointer"))
-            terminal[pointer] = event
+            if event.get("schema_version") == _CUSTODY_LEDGER_SCHEMA:
+                terminal[_canonical_custody_deletion_pointer(event.get("pointer"))] = event
         for pointer, event in terminal.items():
             if event.get("event") != "PREPARED":
                 continue
@@ -873,10 +996,13 @@ def _recover_missing_prepared_evidence(parent: Path) -> None:
             try:
                 target.stat()
             except FileNotFoundError:
-                committed = {"event": "COMMITTED", "pointer": pointer, "bytes": event["bytes"], "sha256": event["sha256"], "reason": event["reason"]}
-                _append_custody_ledger_transition_locked(canonical_parent, committed)
+                commits.append({"event": "COMMITTED", "pointer": pointer, "bytes": event["bytes"], "sha256": event["sha256"], "reason": event["reason"]})
             except OSError as error:
                 raise RuntimeError("prepared evidence could not be inspected for recovery") from error
+    for committed in commits:
+        _append_custody_ledger_transition(parent, committed)
+    if commits:
+        _custody_reconciliation(parent)
 def _write_bounded_quarantine_evidence(parent: Path, name: str, payload: dict[str, object]) -> Path:
     evidence_dir = parent / ".checkpoint-quarantine"
     evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -1234,28 +1360,19 @@ _COUNTER_COUNT_FIELDS = (
 
 
 def _windows_atomic_replace(source: Path, target: Path) -> None:
-    """Replace a Windows directory entry only when the kernel accepts write-through durability."""
-
-    movefile_replace_existing = 0x00000001
-    movefile_write_through = 0x00000008
+    """Windows MoveFileExW write-through wrapper retained for host-specific regression coverage."""
+    flags = 0x00000001 | 0x00000008
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    if not kernel32.MoveFileExW(str(source), str(target), movefile_replace_existing | movefile_write_through):
+    if not kernel32.MoveFileExW(str(source), str(target), flags):
         raise ctypes.WinError(ctypes.get_last_error())
 
 
 def _atomic_replace_durable(source: Path, target: Path) -> None:
-    """Atomically replace one small file and durably persist its containing metadata."""
-
+    """Compatibility wrapper around the shared small-file durability primitive."""
     if os.name == "nt":
         _windows_atomic_replace(source, target)
         return
-    os.replace(source, target)
-    descriptor = os.open(str(target.parent), os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
+    atomic_replace_durable(source, target)
 
 def _atomic_bytes(path: Path, payload: bytes) -> None:
     """Publish small custody evidence only after complete bytes are durable."""

@@ -20,6 +20,7 @@ from typing import Any, Callable, Mapping
 
 import torch
 
+from durable_io import atomic_replace_durable
 from model import EXPERT_NAMES, UnifiedDecoder
 from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_realization_receipt
 
@@ -279,7 +280,7 @@ def _write_atomic(root: Path, filename: str, writer: Callable[[Any], None]) -> P
             writer(handle)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, target)
+        atomic_replace_durable(temporary, target)
         return target
     finally:
         if temporary.exists():
