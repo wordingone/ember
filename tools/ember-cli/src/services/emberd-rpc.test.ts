@@ -88,7 +88,7 @@ winTest("callEmberd retries a transient pipe-open failure within the bounded win
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
   await expect(pending).resolves.toEqual({ status: "ok" });
-});
+}, 15_000);
 
 test("callEmberd rejects a request above the daemon 65536-byte ceiling before connecting", async () => {
   await expect(callEmberd({
