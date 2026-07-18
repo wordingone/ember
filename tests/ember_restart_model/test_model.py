@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import sys
 import tempfile
@@ -64,6 +65,31 @@ class RestartDecoderModelTests(unittest.TestCase):
             model(ids, active_expert="reasoning")
         self.assertEqual(spy.call_count, 0)
 
+    def test_gradient_checkpointing_matches_uncheckpointed_logits_and_every_gradient(self) -> None:
+        seed = 314159
+        ids = torch.tensor([[1, 2, 3, 4], [4, 3, 2, 1]])
+        torch.manual_seed(seed)
+        without_checkpointing = UnifiedDecoder(dataclasses.replace(self.config, gradient_checkpointing=False))
+        torch.manual_seed(seed)
+        with_checkpointing = UnifiedDecoder(dataclasses.replace(self.config, gradient_checkpointing=True))
+        without_checkpointing.train()
+        with_checkpointing.train()
+
+        logits_without = without_checkpointing(ids, active_expert="reasoning")
+        logits_with = with_checkpointing(ids, active_expert="reasoning")
+        torch.testing.assert_close(logits_with, logits_without, rtol=1e-6, atol=1e-6)
+        logits_without.square().mean().backward()
+        logits_with.square().mean().backward()
+
+        gradients_without = dict(without_checkpointing.named_parameters())
+        gradients_with = dict(with_checkpointing.named_parameters())
+        self.assertEqual(set(gradients_with), set(gradients_without))
+        for name in gradients_without:
+            left = gradients_without[name].grad
+            right = gradients_with[name].grad
+            self.assertEqual(left is None, right is None, name)
+            if left is not None and right is not None:
+                torch.testing.assert_close(right, left, rtol=1e-6, atol=1e-6, msg=name)
     def test_contract_rejects_lied_sparse_total(self) -> None:
         contract = json.loads(self.contract_path.read_text(encoding="utf-8"))
         contract = copy.deepcopy(contract)
