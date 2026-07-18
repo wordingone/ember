@@ -11,7 +11,7 @@ import { openSync, closeSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
-import React from "react";
+import type { ComponentType } from "react";
 import {
   REFERENCE_SEAT_FLAG,
   isModelFreeFastPath,
@@ -34,7 +34,6 @@ import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
-import { App as InkApp } from "../ink/components.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -1019,15 +1018,16 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       userSpecifiedModel: process.env["EMBER_MODEL_NAME"],
     };
 
-    // as unknown as Tool[]: BUILTIN_TOOLS satisfies the Tool interface at runtime
-    const btMod = await import("../tools/builtin-tools.ts");
-    const tools  = (btMod as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
-
     let exitCode: number;
     if (opts.headlessRunner) {
-      const result = await opts.headlessRunner(prompt, io, tools, headlessOpts, deps);
+      // Injected runners own their tool surface; avoid loading optional interactive
+      // tool dependencies during clean-checkout ownership/handshake verification.
+      const result = await opts.headlessRunner(prompt, io, [], headlessOpts, deps);
       exitCode     = result.exitCode;
     } else {
+      // as unknown as Tool[]: BUILTIN_TOOLS satisfies the Tool interface at runtime.
+      const btMod = await import("../tools/builtin-tools.ts");
+      const tools = (btMod as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
       const { runHeadlessPrompt } = await import("../cli/headless-repl.ts");
       const result = await runHeadlessPrompt(prompt, io as Parameters<typeof runHeadlessPrompt>[1], tools, headlessOpts, deps);
       exitCode     = result.exitCode;
@@ -1038,8 +1038,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     return;
   }
 
-  // Interactive TUI path
-  const frontendShell = await import("../core/frontend-shell.ts");
+  // Interactive TUI path. React and Ink are intentionally loaded only here so
+  // headless owned-seat startup remains executable from a clean source checkout.
+  const [{ default: React }, { App: InkApp }, frontendShell] = await Promise.all([
+    import("react"),
+    import("../ink/components.ts"),
+    import("../core/frontend-shell.ts"),
+  ]);
   const root          = frontendShell.createRoot();
 
   let resolveExit!: () => void;
@@ -1093,7 +1098,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
           InkApp,
           null,
           React.createElement(
-            REPLComponent as React.ComponentType<Record<string, unknown>>,
+            REPLComponent as ComponentType<Record<string, unknown>>,
             {
               config: (props as Record<string, unknown>)["config"],
               cwd:    (props as Record<string, unknown>)["cwd"],
