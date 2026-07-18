@@ -1,5 +1,9 @@
 # C1M-1 branch-deletion manifest (review-only)
 
+goal_id: EMBER-02
+workstream_id: EMBER-02C
+next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 This is a proposal, not a deletion authorization. It records the three exact
 merged candidates named by C1M-1. No remote ref may be deleted until the authorized reviewer
 accepts this manifest at an immutable PR head.
