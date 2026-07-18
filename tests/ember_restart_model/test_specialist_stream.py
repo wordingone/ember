@@ -450,5 +450,36 @@ class SpecialistStreamTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "invalid stream range"):
                 self._open_bound(manifest_path)
 
+    def test_open_reads_manifest_through_a_bounded_buffer_not_read_bytes(self) -> None:
+        from specialist_stream import build_stream_manifest, open_specialist_stream
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            manifest_path = root / "stream.json"
+            manifest = build_stream_manifest(
+                repo_root=ROOT,
+                output_path=manifest_path,
+                tokenizer_path=_frozen_tokenizer(root / "tokenizer.json"),
+                model_config_path=ROOT / "configs" / "ember-restart-3b.json",
+                record_count=512,
+                chunk_size=64,
+                data_class="MEASURED_RUNG",
+            )
+            expected_manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            original_read_bytes = Path.read_bytes
+
+            def reject_unbounded_manifest_read(path: Path) -> bytes:
+                if path == manifest_path:
+                    raise AssertionError("manifest read_bytes bypasses the bounded consumer buffer")
+                return original_read_bytes(path)
+
+            with mock.patch.object(Path, "read_bytes", autospec=True, side_effect=reject_unbounded_manifest_read):
+                stream = open_specialist_stream(
+                    repo_root=ROOT,
+                    manifest_path=manifest_path,
+                    expected_manifest_sha256=expected_manifest_sha256,
+                    expected_corpus_root_sha256=manifest["corpus_root_sha256"],
+                )
+            self.assertEqual(stream.count, 512)
 if __name__ == "__main__":
     unittest.main()

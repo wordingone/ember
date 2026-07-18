@@ -409,9 +409,8 @@ def open_specialist_stream(
     if not _is_sha256(expected_corpus_root_sha256):
         raise ValueError("expected corpus root SHA-256 is required")
     try:
-        if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
-            raise ValueError("stream manifest exceeds consumer byte bound")
-        manifest_bytes = manifest_path.read_bytes()
+        with manifest_path.open("rb") as manifest_file:
+            manifest_bytes = manifest_file.read(MAX_MANIFEST_BYTES + 1)
     except OSError as error:
         raise ValueError("stream manifest cannot be read") from error
     if len(manifest_bytes) > MAX_MANIFEST_BYTES:
