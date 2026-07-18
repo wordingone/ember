@@ -673,6 +673,8 @@ def _head_transaction(path: Path) -> dict[str, object]:
 
 def _finalize_custody_ledger_transaction_locked(canonical_parent: Path, *, receipt_path: Path) -> dict[str, object]:
     receipt = _head_transaction(receipt_path)
+    if receipt["subject"] != f"custody:{canonical_parent.name}":
+        raise RuntimeError("custody ledger transaction subject does not match canonical parent")
     current, _ = _custody_ledger_snapshot(canonical_parent)
     current_binding = _ledger_binding(current)
     if receipt["result"] == "ABORTED":

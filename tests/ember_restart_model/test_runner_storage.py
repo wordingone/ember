@@ -152,12 +152,38 @@ class RunnerStorageTests(unittest.TestCase):
             ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
             ledger.write_bytes(old)
             transaction_path = Path(receipt_directory) / "ledger-transaction.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="old-ledger-abort", subject="checkpoint-a")
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="old-ledger-abort", subject=f"custody:{parent.name}")
             receipt = run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=transaction_path)
             self.assertEqual(ledger.read_bytes(), old)
             self.assertEqual(receipt["result"], "ABORTED")
             self.assertEqual(json.loads(transaction_path.read_text(encoding="utf-8"))["result"], "ABORTED")
 
+    def test_direct_recovery_rejects_foreign_custody_subject_before_ledger_or_receipt_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+            root_a = Path(directory) / "root-a"
+            root_b = Path(directory) / "root-b"
+            root_a.mkdir()
+            root_b.mkdir()
+            prepared = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 17, "sha256": "a" * 64, "reason": "foreign-root"},
+                [],
+            )
+            new = (json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            (root_a / ".checkpoint-custody-deletion-ledger.jsonl").write_bytes(new)
+            receipt_path = Path(receipt_directory) / "cross-root.json"
+            run_vertical_slice.prepare_custody_ledger_transaction(
+                receipt_path=receipt_path,
+                old_ledger=b"",
+                new_ledger=new,
+                operation_id="cross-root",
+                subject=f"custody:{root_b.name}",
+            )
+            before_ledger = (root_a / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes()
+            before_receipt = receipt_path.read_bytes()
+            with self.assertRaisesRegex(RuntimeError, "subject"):
+                run_vertical_slice.recover_torn_custody_ledger_tail(root_a, transaction_receipt_path=receipt_path)
+            self.assertEqual((root_a / ".checkpoint-custody-deletion-ledger.jsonl").read_bytes(), before_ledger)
+            self.assertEqual(receipt_path.read_bytes(), before_receipt)
     def test_transaction_recovery_commits_only_exact_prebound_new_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
             parent = Path(directory)
@@ -167,7 +193,7 @@ class RunnerStorageTests(unittest.TestCase):
             new = (json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
             ledger.write_bytes(new)
             transaction_path = Path(receipt_directory) / "ledger-transaction.json"
-            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="new-ledger-commit", subject="checkpoint-b")
+            run_vertical_slice.prepare_custody_ledger_transaction(receipt_path=transaction_path, old_ledger=old, new_ledger=new, operation_id="new-ledger-commit", subject=f"custody:{parent.name}")
             receipt = run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=transaction_path)
             self.assertEqual(receipt["result"], "COMMITTED")
             self.assertEqual(ledger.read_bytes(), new)
