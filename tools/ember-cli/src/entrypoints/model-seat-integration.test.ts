@@ -308,6 +308,8 @@ describe("process entry model-seat enforcement", () => {
     );
     let exitCode = -1;
     let ensureCalls = 0;
+    const injectedTools = [{ name: "test-tool" }] as never[];
+    let injectedToolCount = -1;
     let verifyCalls = 0;
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
@@ -352,7 +354,8 @@ describe("process entry model-seat enforcement", () => {
         verifyOwnedEndpointFn: async () => { verifyCalls += 1; },
         initFn: async () => {},
         getLoopDepsFn: fakeDeps,
-        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        builtinToolsFn: async () => injectedTools,
+        headlessRunner: async (_prompt, _io, tools) => { expect(tools).toBe(injectedTools); injectedToolCount = tools.length; return { events: [], exitCode: 0 }; },
         exitFn: (code: number) => { exitCode = code; },
       });
     } finally {
@@ -361,6 +364,7 @@ describe("process entry model-seat enforcement", () => {
 
     expect(exitCode).toBe(0);
     expect(ensureCalls).toBe(1);
+    expect(injectedToolCount).toBeGreaterThan(0);
     expect(verifyCalls).toBe(1);
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_DEVELOPMENT");
     expect(process.env["EMBER_MODEL_NAME"]).toBe("ember-owned-development:" + "f".repeat(12));
