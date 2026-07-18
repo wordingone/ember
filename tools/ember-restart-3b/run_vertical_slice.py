@@ -1491,8 +1491,17 @@ def load_authorized_records(root: Path) -> tuple[list[dict[str, object]], dict[s
         raise RuntimeError("accepted launch packet lacks a concrete input identity")
     if identity.get("artifact_id") == "owned-clean-curriculum-128-v1" or identity.get("shard_path") == "data/ember-restart-3b/owned-curriculum-128.json":
         raise RuntimeError("retired bootstrap curriculum is mechanics-only evidence and cannot drive production training")
-    shard = root / str(packet["input_identity"]["shard_path"])
-    payload = json.loads(shard.read_text(encoding="utf-8"))
+    from input_identity import InputIdentityError, read_admitted_shard_bytes
+    try:
+        shard_bytes = read_admitted_shard_bytes(packet, repo_root=root)
+    except InputIdentityError as error:
+        raise RuntimeError(f"production shard changed after admission: {error}") from error
+    if input_receipt.get("input_artifact_sha256") != identity.get("sha256"):
+        raise RuntimeError("accepted launch receipt does not bind the consumed input hash")
+    try:
+        payload = json.loads(shard_bytes)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("admitted production shard is unreadable JSON") from error
     records = payload.get("records") if isinstance(payload, dict) else None
     if payload.get("schema_version") != "ember-owned-pretraining-shard-v1" or not isinstance(records, list) or not records:
         raise RuntimeError("production slice requires a nonempty owned four-domain shard")
