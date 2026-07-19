@@ -29,6 +29,7 @@ import { handshakeConfiguredEmberd } from "../services/emberd-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
+import type { ModelCapabilityDeclaration } from "../model-config.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
 import type { Tool } from "../core/tool-interface.ts";
 import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
@@ -671,7 +672,13 @@ export interface MainOptions {
   ensureOwnedServerFn?: typeof ensureOwnedServer;
   handshakeEmberdFn?: typeof handshakeConfiguredEmberd;
   builtinToolsFn?: () => Promise<Tool[]>;
-  initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
+  initFn?:         (opts: {
+    serverUrl?: string | null;
+    nCtx?: number;
+    nonInteractive?: boolean;
+    modelCapabilities?: ModelCapabilityDeclaration | null;
+    servedModelConfigSha256?: string | null;
+  }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
     prompt:  string,
@@ -1021,9 +1028,26 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   }
 
   // Session init
+  // PR948 round-9 repair: thread the SAME seat-produced contract derived once above
+  // (~line 782) into InitOpts, so the REAL production callModel client (built inside
+  // session-init.ts's init()) evaluates the actual served capability declaration --
+  // previously modelContract was derived here and used only for the seat banner /
+  // EMBER_MODEL_NAME, never reaching init(), so every real jsonSchema request saw an
+  // undefined declaration and was always denied regardless of what the served model
+  // actually supported.
   const sessionMod = await import("./session-init.ts");
   const doInit     = opts.initFn ?? ((o) => sessionMod.init(o));
-  await doInit({ serverUrl, nCtx: detectedNCtx });
+  await doInit({
+    serverUrl,
+    nCtx: detectedNCtx,
+    modelCapabilities: modelContract
+      ? {
+          modelConfigSha256: modelContract.modelConfigSha256,
+          structuredOutputs: modelContract.structuredOutputs,
+        }
+      : null,
+    servedModelConfigSha256: modelContract?.modelConfigSha256 ?? null,
+  });
 
   // Headless path (-p / --print)
   const headlessSpec = parseHeadlessPrint(argv);

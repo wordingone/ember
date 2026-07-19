@@ -584,6 +584,21 @@ export interface InitOpts {
   serverUrl?:      string | null;
   nCtx?:           number;
   nonInteractive?: boolean;
+  /**
+   * PR948 round-9 repair: the seat-produced capability declaration
+   * (process-entry.ts's `selectedModelContract(seatDecision)`), threaded
+   * through so the REAL production `callModel` client can evaluate
+   * `modelSupportsStructuredOutputs` -- without this, the production path
+   * always constructed `buildGuardedProductionCallModel` with no capability
+   * declaration at all, so a jsonSchema request was ALWAYS denied
+   * (round-8's positive tests only exercised the gate by calling
+   * `buildGuardedProductionCallModel`/`buildProductionCallModel` directly,
+   * bypassing this wiring). `null`/`undefined` means "no declaration bound".
+   */
+  modelCapabilities?:       ModelCapabilityDeclaration | null;
+  /** The currently served model's exact `modelConfigSha256`, from the same
+   *  seat-produced contract. Never inferred; `null`/`undefined` means none. */
+  servedModelConfigSha256?: string | null;
 }
 
 export async function init(opts: InitOpts = {}): Promise<void> {
@@ -670,7 +685,12 @@ async function _runInit(opts: InitOpts): Promise<void> {
   // GPU-free mode: serverUrl is null, so use the offline stub instead.
   _circuitBreakerHandle = !serverUrl
     ? buildOfflineCallModel()
-    : buildGuardedProductionCallModel({ serverUrl, nCtx });
+    : buildGuardedProductionCallModel({
+        serverUrl,
+        nCtx,
+        modelCapabilities:       opts.modelCapabilities ?? null,
+        servedModelConfigSha256: opts.servedModelConfigSha256 ?? null,
+      });
   const productionMicrocompact = buildProductionMicrocompact();
 
   _loopDeps = createLoopDeps({
