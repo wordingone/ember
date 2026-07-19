@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl-suggestion-boundary-real-scheduling-error.test.ts — issue #50
 // round-3 reviewer repair (reject on 8edbfa63d7366cbe29a31fc7868ae4a01ffe9e50).
 // Paired with the -success variant (see that file's header for the full
