@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import io
 import json
@@ -21,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import load_checkpoint_artifacts
+import parameter_counter
+from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, canonical_record_bytes
 from model import RestartDecoderConfig, UnifiedDecoder
 from checkpoint_fixture import write_checkpoint_artifacts
 
@@ -300,6 +303,89 @@ class CounterCliTests(unittest.TestCase):
             forged["unexpected"] = True
             with self.assertRaisesRegex(ValueError, "closed schema"):
                 validate_realization_receipt(forged)
+
+    def test_p2b_stream_episode_requires_closed_selection_identity_and_progress(self) -> None:
+        """P2B lineage is disjoint from execution-slice-v1 and binds one stream episode."""
+
+        selection = {
+            "schema_version": "ember-owned-specialist-stream-selection-receipt-v1",
+            "stream_manifest_sha256": "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427",
+            "stream_build_receipt_sha256": "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+            "corpus_root_sha256": "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab",
+            "family_root_sha256": "4" * 64,
+            "capability": "image",
+            "selection_rule_id": "image_scene_split_train_v1",
+            "selected_record_count": 8,
+            "selected_token_count": 24,
+            "selected_records_sha256": "5" * 64,
+            "selection_commitment_sha256": "6" * 64,
+        }
+        selection_sha256 = hashlib.sha256(canonical_record_bytes(selection)).hexdigest()
+        start = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": selection_sha256, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 0, "next_source_index": 0}
+        end = {**start, "selected_ordinal": 2, "next_source_index": 3}
+        episode = {
+            "schema_version": "ember-specialist-stream-episode-v1", "active_expert": "vision",
+            "selection_receipt": selection, "selection_receipt_sha256": selection_sha256,
+            "start_selection_cursor": start, "end_selection_cursor": end,
+            "completed_updates": 2, "training_token_delta": 6,
+            "stream_manifest_sha256": selection["stream_manifest_sha256"], "stream_build_receipt_sha256": selection["stream_build_receipt_sha256"],
+            "corpus_root_sha256": selection["corpus_root_sha256"], "family_root_sha256": "4" * 64,
+        }
+        validator = getattr(parameter_counter, "validate_p2b_stream_episode")
+        self.assertEqual(validator(episode, active_expert="vision"), episode)
+        for field, value in (("selection_receipt_sha256", "0" * 64), ("active_expert", "audio"), ("completed_updates", 0)):
+            with self.subTest(field=field):
+                forged = dict(episode)
+                forged[field] = value
+                with self.assertRaises(ValueError):
+                    validator(forged, active_expert="vision")
+        wrong_cursor_schema = {**episode, "start_selection_cursor": {**start, "schema_version": "ember-specialist-stream-selection-cursor-v1"}}
+        with self.assertRaises(ValueError):
+            validator(wrong_cursor_schema, active_expert="vision")
+        def refresh(item: dict[str, object]) -> None:
+            receipt = item["selection_receipt"]
+            assert isinstance(receipt, dict)
+            digest = hashlib.sha256(canonical_record_bytes(receipt)).hexdigest()
+            item["selection_receipt_sha256"] = digest
+            for key in ("start_selection_cursor", "end_selection_cursor"):
+                cursor = item[key]
+                assert isinstance(cursor, dict)
+                cursor["selection_receipt_sha256"] = digest
+
+        def reject(label: str, mutate: object, *, rehash: bool = False) -> None:
+            candidate = copy.deepcopy(episode)
+            assert callable(mutate)
+            mutate(candidate)
+            if rehash:
+                refresh(candidate)
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                validator(candidate, active_expert="vision")
+
+        reject("mixed_execution_slice", lambda item: item.__setitem__("execution_slice", {}))
+        reject("receipt_capability", lambda item: item["selection_receipt"].__setitem__("capability", "audio"), rehash=True)
+        reject("receipt_rule", lambda item: item["selection_receipt"].__setitem__("selection_rule_id", "all_records_semantic_pretraining_v1"), rehash=True)
+        reject("receipt_hash", lambda item: item.__setitem__("selection_receipt_sha256", "0" * 64))
+        reject("start_receipt", lambda item: item["start_selection_cursor"].__setitem__("selection_receipt_sha256", "0" * 64))
+        reject("end_receipt", lambda item: item["end_selection_cursor"].__setitem__("selection_receipt_sha256", "0" * 64))
+        reject("start_rule", lambda item: item["start_selection_cursor"].__setitem__("selection_rule_id", "all_records_semantic_pretraining_v1"))
+        reject("end_rule", lambda item: item["end_selection_cursor"].__setitem__("selection_rule_id", "all_records_semantic_pretraining_v1"))
+        reject("end_beyond_count", lambda item: item["end_selection_cursor"].__setitem__("selected_ordinal", 9))
+        reject("ordinal_nonadvance", lambda item: item["end_selection_cursor"].__setitem__("selected_ordinal", 0))
+        reject("source_nonadvance", lambda item: item["end_selection_cursor"].__setitem__("next_source_index", 0))
+        reject("zero_updates", lambda item: item.__setitem__("completed_updates", 0))
+        reject("delta_mismatch", lambda item: item.__setitem__("completed_updates", 1))
+        reject("zero_tokens", lambda item: item.__setitem__("training_token_delta", 0))
+        reject("wrong_expert", lambda item: item.__setitem__("active_expert", "audio"))
+        for field in ("stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256", "family_root_sha256"):
+            reject(f"duplicate_{field}", lambda item, field=field: item.__setitem__(field, "0" * 64))
+        for field in ("stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256"):
+            def noncanonical(item: dict[str, object], field: str = field) -> None:
+                receipt = item["selection_receipt"]
+                assert isinstance(receipt, dict)
+                receipt[field] = "0" * 64
+                item[field] = "0" * 64
+            reject(f"noncanonical_{field}", noncanonical, rehash=True)
+
 
 if __name__ == "__main__":
     unittest.main()

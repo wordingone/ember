@@ -15,6 +15,11 @@ import zipfile
 from pathlib import Path
 from typing import Any, Mapping
 
+from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, canonical_record_bytes
+
+_P2B_STREAM_MANIFEST_SHA256 = "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427"
+_P2B_STREAM_BUILD_RECEIPT_SHA256 = "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e"
+_P2B_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
 REALIZATION_RECEIPT_FIELDS = frozenset(
@@ -91,6 +96,66 @@ def _sha256_value(value: object, *, label: str) -> str:
     if not isinstance(value, str) or len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
         raise ValueError(f"{label} must be a lowercase SHA-256 digest")
     return value
+
+
+def validate_p2b_stream_episode(episode: Mapping[str, Any], *, active_expert: str) -> dict[str, Any]:
+    """Validate the closed stream-selection episode; legacy execution-slice episodes remain disjoint."""
+
+    fields = {
+        "schema_version", "active_expert", "selection_receipt", "selection_receipt_sha256",
+        "start_selection_cursor", "end_selection_cursor", "completed_updates", "training_token_delta",
+        "stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256", "family_root_sha256",
+    }
+    if not isinstance(episode, Mapping) or set(episode) != fields:
+        raise ValueError("P2B stream episode has an invalid closed schema")
+    if episode.get("schema_version") != "ember-specialist-stream-episode-v1" or episode.get("active_expert") != active_expert:
+        raise ValueError("P2B stream episode active expert does not match")
+    capability_for_expert = {"vision": "image", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
+    receipt_fields = {
+        "schema_version", "stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256",
+        "family_root_sha256", "capability", "selection_rule_id", "selected_record_count", "selected_token_count",
+        "selected_records_sha256", "selection_commitment_sha256",
+    }
+    receipt = episode["selection_receipt"]
+    if not isinstance(receipt, Mapping) or set(receipt) != receipt_fields or receipt.get("schema_version") != "ember-owned-specialist-stream-selection-receipt-v1":
+        raise ValueError("P2B stream episode selection receipt is invalid")
+    expected_rule = "image_scene_split_train_v1" if active_expert == "vision" else "all_records_semantic_pretraining_v1"
+    if receipt.get("capability") != capability_for_expert.get(active_expert) or receipt.get("selection_rule_id") != expected_rule:
+        raise ValueError("P2B stream episode capability or rule does not match active expert")
+    for field in ("stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256", "family_root_sha256", "selected_records_sha256", "selection_commitment_sha256"):
+        _sha256_value(receipt.get(field), label=f"P2B selection {field}")
+    if any(type(receipt.get(field)) is not int or receipt[field] < 1 for field in ("selected_record_count", "selected_token_count")):
+        raise ValueError("P2B stream episode selection counts are invalid")
+    canonical = hashlib.sha256(canonical_record_bytes(dict(receipt))).hexdigest()
+    if episode.get("selection_receipt_sha256") != canonical:
+        raise ValueError("P2B stream episode selection receipt hash does not match")
+    cursor_fields = {"schema_version", "selection_receipt_sha256", "selection_rule_id", "selected_ordinal", "next_source_index"}
+    cursors: list[dict[str, Any]] = []
+    for label in ("start_selection_cursor", "end_selection_cursor"):
+        cursor = episode[label]
+        if not isinstance(cursor, Mapping) or set(cursor) != cursor_fields or cursor.get("schema_version") != SELECTION_CURSOR_SCHEMA_VERSION:
+            raise ValueError("P2B stream episode selection cursor is invalid")
+        if cursor.get("selection_receipt_sha256") != canonical or cursor.get("selection_rule_id") != expected_rule:
+            raise ValueError("P2B stream episode selection cursor identity does not match")
+        if any(type(cursor.get(field)) is not int or cursor[field] < 0 for field in ("selected_ordinal", "next_source_index")):
+            raise ValueError("P2B stream episode selection cursor progress is invalid")
+        cursors.append(dict(cursor))
+    start, end = cursors
+    if not (0 <= start["selected_ordinal"] < end["selected_ordinal"] <= receipt["selected_record_count"]):
+        raise ValueError("P2B stream episode selected ordinal is outside the selected range")
+    if (end["selected_ordinal"] - start["selected_ordinal"] != episode.get("completed_updates")
+            or end["next_source_index"] <= start["next_source_index"]):
+        raise ValueError("P2B stream episode cursor does not advance by completed updates")
+    if type(episode.get("completed_updates")) is not int or episode["completed_updates"] < 1 or type(episode.get("training_token_delta")) is not int or episode["training_token_delta"] < 1:
+        raise ValueError("P2B stream episode counters are invalid")
+    for field in ("stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256", "family_root_sha256"):
+        if episode.get(field) != receipt.get(field):
+            raise ValueError("P2B stream episode authority does not match selection receipt")
+    if (receipt["stream_manifest_sha256"] != _P2B_STREAM_MANIFEST_SHA256
+            or receipt["stream_build_receipt_sha256"] != _P2B_STREAM_BUILD_RECEIPT_SHA256
+            or receipt["corpus_root_sha256"] != _P2B_STREAM_CORPUS_ROOT_SHA256):
+        raise ValueError("P2B stream episode does not bind the canonical stream authorities")
+    return dict(episode)
 
 
 def _read_bytes_snapshot(path: Path, *, label: str) -> tuple[bytes, str]:
