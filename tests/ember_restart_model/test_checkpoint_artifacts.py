@@ -39,6 +39,10 @@ def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> di
         "model_config_sha256": manifest_receipt["model_config_sha256"],
         "architecture_revision": manifest_receipt["architecture_revision"],
         "counter_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest(),
+        "runtime_authority": {
+            "schema_version": "ember-counter-runtime-authority-v1",
+            "kind": "NONE",
+        },
         "active_expert_ids": manifest_receipt["active_expert_ids"],
         "expert_genesis_sha256": manifest_receipt["expert_genesis_sha256"],
         "expert_parameter_sha256": manifest_receipt["expert_parameter_sha256"],

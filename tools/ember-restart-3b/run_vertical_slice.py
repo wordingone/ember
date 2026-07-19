@@ -28,7 +28,6 @@ from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_art
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
-from specialist_stream import open_specialist_stream
 from durable_io import atomic_create_durable, atomic_replace_durable
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
@@ -51,10 +50,6 @@ def _json_sha256(payload: dict[str, Any]) -> str:
 
 
 _SCENE_SPLITS = ("train", "validation", "test")
-_SPECIALIST_STREAM_MANIFEST_SHA256 = "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427"
-_SPECIALIST_STREAM_BUILD_RECEIPT_SHA256 = "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e"
-_SPECIALIST_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
-
 
 
 def select_verified_scene_split(
@@ -1923,8 +1918,6 @@ def run(
     resume_optimizer_transition_registry: Path | None = None,
     resume_optimizer_transition_registry_sha256: str | None = None,
     records_override: list[dict[str, object]] | None = None,
-    execution_selection: object | None = None,
-    stream_capability: str | None = None,
     scene_split_records: list[dict[str, object]] | None = None,
     full_records_artifact_bytes: bytes | None = None,
     specialist_verification: dict[str, object] | None = None,
@@ -1937,11 +1930,6 @@ def run(
     telemetry_run_id: str | None = None,
     model_chat_restore_not_before: str | None = None,
 ) -> dict[str, object]:
-    if execution_selection is not None:
-        if records_override is not None or stream_capability not in {"image", "audio", "reasoning", "tool"}:
-            raise ValueError("stream specialist run requires one bound capability without legacy records")
-        raise RuntimeError("stream specialist execution awaits the closed P2B lineage and cursor binding")
-
     if records_override is not None and isinstance(specialist_verification, dict) and isinstance(specialist_lineage, dict) and specialist_verification.get("capability") == "image":
         selection = specialist_lineage.get("scene_split_selection")
         execution_slice = specialist_lineage.get("execution_slice")
@@ -2261,37 +2249,33 @@ def run_specialist(
     """Run one verifier-bound specialist family through the canonical v4 lineage path."""
 
     root = Path(__file__).resolve().parents[2]
-    manifest_path = root / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
-    canonical_tokenizer_path = root / "tokenizer" / "tokenizer.json"
-    if Path(data_manifest).resolve() != manifest_path.resolve():
-        raise ValueError("specialist stream requires the canonical stream manifest path")
-    if Path(tokenizer_path).resolve() != canonical_tokenizer_path.resolve():
-        raise ValueError("specialist stream requires the canonical tokenizer path")
-    rules = {
-        "image": "image_scene_split_train_v1",
-        "audio": "all_records_semantic_pretraining_v1",
-        "reasoning": "all_records_semantic_pretraining_v1",
-        "tool": "all_records_semantic_pretraining_v1",
-    }
-    selection_rule_id = rules.get(capability)
-    if selection_rule_id is None:
-        raise ValueError("specialist stream requires one declared capability")
-    stream = open_specialist_stream(
-        repo_root=root, manifest_path=manifest_path,
-        expected_manifest_sha256=_SPECIALIST_STREAM_MANIFEST_SHA256,
-        expected_corpus_root_sha256=_SPECIALIST_STREAM_CORPUS_ROOT_SHA256,
+    records, verification, full_records_artifact_bytes = load_verified_specialist_records(
+        root=root, data_manifest=data_manifest, tokenizer_path=tokenizer_path, capability=capability,
     )
-    selection = stream.prepare_execution_selection(
-        capability=capability, selection_rule_id=selection_rule_id,
-        build_receipt_path=root / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json",
-        expected_build_receipt_sha256=_SPECIALIST_STREAM_BUILD_RECEIPT_SHA256,
+    scene_split_selection: dict[str, object] | None = None
+    if capability == "image":
+        records, scene_split_selection = select_verified_scene_split(
+            records, capability=capability, scene_split="train",
+            full_records_artifact_sha256=str(verification.get("records_artifact_sha256", "")),
+        )
+    selected_records, execution_slice = bind_specialist_execution_slice(
+        records, start_record=start_record,
+        max_records=(len(records) - start_record if max_records is None else max_records),
+        scene_split_record_count=(int(scene_split_selection["selected_record_count"]) if scene_split_selection is not None else None),
+    )
+    lineage = specialist_lineage_request(
+        capability=capability, verification=verification, resume_checkpoint=resume_checkpoint,
+        parent_manifest=parent_manifest, root_manifest=root_manifest, execution_slice=execution_slice,
+        scene_split_selection=scene_split_selection,
     )
     return run(
         seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
         resume_realization_registry=resume_realization_registry,
         resume_optimizer_transition_registry=resume_optimizer_transition_registry,
         resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
-        execution_selection=selection, stream_capability=capability,
+        records_override=selected_records, scene_split_records=records,
+        full_records_artifact_bytes=full_records_artifact_bytes if capability == "image" else None,
+        specialist_verification=verification, specialist_lineage=lineage,
         checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,

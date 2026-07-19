@@ -201,6 +201,107 @@ class CounterCliTests(unittest.TestCase):
                         self.fail("foreign tokenizer module unexpectedly entered")
         self.assertFalse(root.exists())
 
+    def test_tokenizer_runtime_lease_refuses_reachable_transient_unlisted_import(self) -> None:
+        """An unlisted private-root module cannot execute during the final import window."""
+
+        runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
+        bundle_parent = Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"]) / "bundle-transient-import"
+        bundle_parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=bundle_parent) as directory:
+            root = Path(directory)
+            bundle_root, manifest_path, _ = runtime_bundle.materialize_tokenizer_runtime_bundle(bundle_parent=root)
+            marker = root / "transient-import-executed"
+            script = (
+                "import sys\n"
+                f"sys.path.insert(0, {str(ROOT / 'tools' / 'ember-restart-3b')!r})\n"
+                "import tokenizer_runtime_bundle as runtime\n"
+                f"root = runtime.Path({str(bundle_root)!r})\n"
+                f"manifest = runtime.Path({str(manifest_path)!r})\n"
+                f"marker = runtime.Path({str(marker)!r})\n"
+                "sys.modules.pop('enum', None)\n"
+                "def seam(bundle_root):\n"
+                "    target = runtime.Path(bundle_root, 'enum.py')\n"
+                "    target.write_text(\"from pathlib import Path\\nPath(\" + repr(str(marker)) + \").write_text('executed')\\nPath(__file__).unlink()\\nraise ImportError('transient enum')\\n\", encoding='utf-8')\n"
+                "runtime._after_final_validation_before_import_for_test = seam\n"
+                "try:\n"
+                "    with runtime.lease_tokenizer_runtime_bundle(bundle_root=root, manifest_path=manifest):\n"
+                "        raise AssertionError('transient import reached runtime lease')\n"
+                "except (ImportError, ValueError):\n"
+                "    pass\n"
+                "assert not marker.exists(), 'transient unlisted module executed'\n"
+            )
+            completed = subprocess.run([sys.executable, "-I", "-B", "-c", script], check=False, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_tokenizer_runtime_lease_preserves_body_failure_when_release_fails(self) -> None:
+        """Cleanup attempts every release without replacing a consumer failure."""
+
+        runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
+        bundle_parent = Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"]) / "bundle-release-failure"
+        bundle_parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=bundle_parent) as directory:
+            root = Path(directory)
+            bundle_root, manifest_path, _ = runtime_bundle.materialize_tokenizer_runtime_bundle(bundle_parent=root)
+            script = (
+                "import sys\n"
+                f"sys.path.insert(0, {str(ROOT / 'tools' / 'ember-restart-3b')!r})\n"
+                "import tokenizer_runtime_bundle as runtime\n"
+                f"root = runtime.Path({str(bundle_root)!r})\n"
+                f"manifest = runtime.Path({str(manifest_path)!r})\n"
+                "closed = []\n"
+                "class CloseHandle:\n"
+                "    argtypes = None\n"
+                "    restype = None\n"
+                "    def __call__(self, handle):\n"
+                "        value = int(handle.value)\n"
+                "        closed.append(value)\n"
+                "        return 0 if value == 42 else 1\n"
+                "class Kernel32:\n"
+                "    def __init__(self):\n"
+                "        self.CloseHandle = CloseHandle()\n"
+                "runtime._hold_windows_read_locks = lambda paths: [41, 42, 43]\n"
+                "runtime.ctypes.WinDLL = lambda *args, **kwargs: Kernel32()\n"
+                "runtime.ctypes.get_last_error = lambda: 5\n"
+                "try:\n"
+                "    with runtime.lease_tokenizer_runtime_bundle(bundle_root=root, manifest_path=manifest):\n"
+                "        raise RuntimeError('consumer failure')\n"
+                "except RuntimeError as error:\n"
+                "    assert str(error) == 'consumer failure'\n"
+                "    assert 'handle cleanup failed' in error._tokenizer_runtime_cleanup_error\n"
+                "else:\n"
+                "    raise AssertionError('consumer failure was not preserved')\n"
+                "assert closed == [41, 42, 43], closed\n"
+            )
+            completed = subprocess.run([sys.executable, "-I", "-B", "-c", script], check=False, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_tokenizer_runtime_release_attempts_every_handle_after_a_failure(self) -> None:
+        """One CloseHandle failure does not leak later private-runtime handles."""
+
+        runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
+        closed: list[int] = []
+
+        class CloseHandle:
+            argtypes: object | None = None
+            restype: object | None = None
+
+            def __call__(self, handle: object) -> int:
+                value = getattr(handle, "value", None)
+                self_value = int(value)
+                closed.append(self_value)
+                return 0 if self_value == 42 else 1
+
+        class Kernel32:
+            def __init__(self) -> None:
+                self.CloseHandle = CloseHandle()
+
+        with patch.object(runtime_bundle.ctypes, "WinDLL", return_value=Kernel32()), \
+             patch.object(runtime_bundle.ctypes, "get_last_error", return_value=5):
+            errors = runtime_bundle._release_windows_read_locks([41, 42, 43])
+        self.assertEqual(closed, [41, 42, 43])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("unable to release", str(errors[0]))
+
     def test_counter_reads_authority_snapshots_and_each_shard_once(self) -> None:
         """A realization receipt cannot hash one checkpoint revision and inspect another."""
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
