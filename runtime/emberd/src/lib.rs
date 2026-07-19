@@ -209,6 +209,32 @@ pub enum EmberdError {
         job_id: String,
         preflight_receipt: PathBuf,
     },
+    DispatchReceiptClaimConflict {
+        receipt_path: String,
+        requesting_job_id: String,
+        claimed_by_job_id: String,
+    },
+    DispatchUnknownLegacyReceiptIdentity {
+        job_ids: Vec<String>,
+    },
+    StartJobPinnedHostBudgetExceeded {
+        job_id: String,
+        required_available_maximum_commit_bytes: u64,
+        observed_available_maximum_commit_bytes: u64,
+        live_committed_job_memory_bytes: u64,
+        residual_available_maximum_commit_bytes: u64,
+    },
+    StartJobConsumerFloorViolation {
+        job_id: String,
+        root: PathBuf,
+        minimum_free_bytes: u64,
+        available_free_bytes: u64,
+    },
+    StartJobConsumerFloorProbeError {
+        job_id: String,
+        root: PathBuf,
+        io_error: String,
+    },
     DispatchVramProviderUnavailable {
         minimum_free_vram_bytes: u64,
         detail: String,
@@ -346,7 +372,7 @@ pub struct JobSpec {
     resource_lease: String,
     env: BTreeMap<String, String>,
     restart_policy: RestartPolicy,
-    maximum_job_memory_bytes: Option<u64>,
+    maximum_job_memory_bytes: std::num::NonZeroU64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -424,8 +450,34 @@ pub struct DispatchOutcome {
     pub receipt: ReceiptArtifact,
 }
 
+/// The decision-receipt identity a reservation claims atomically with its
+/// jobs-row insert. Manifest dispatches claim their receipt path in
+/// `dispatch_receipt_claims` (any different path<->job association refuses
+/// and rolls back); bare `start_job` launches record the explicit
+/// `known-none` sentinel so their receipt identity is KNOWN-absent, never
+/// unknown (NULL is reserved for pre-upgrade rows).
+enum DispatchReceiptIdentity<'a> {
+    Manifest {
+        receipt_path: &'a str,
+        manifest_sha256: &'a str,
+    },
+    Bare,
+}
+
+pub(crate) const BARE_START_RECEIPT_SENTINEL: &str = "known-none";
+
 impl JobSpec {
-    pub fn new<J, P, I, A, R>(job_id: J, program: P, args: I, resource_lease: R) -> Self
+    /// The committed-memory ceiling is REQUIRED at construction and typed
+    /// non-zero: a JobSpec the pinned host budget cannot account for is
+    /// unrepresentable, so a zero/absent-budget launch attempt fails before
+    /// any identity bind or lease acquisition can leave side effects.
+    pub fn new<J, P, I, A, R>(
+        job_id: J,
+        program: P,
+        args: I,
+        resource_lease: R,
+        maximum_job_memory_bytes: std::num::NonZeroU64,
+    ) -> Self
     where
         J: Into<String>,
         P: Into<String>,
@@ -440,7 +492,7 @@ impl JobSpec {
             resource_lease: resource_lease.into(),
             env: BTreeMap::new(),
             restart_policy: RestartPolicy::Never,
-            maximum_job_memory_bytes: None,
+            maximum_job_memory_bytes,
         }
     }
     pub fn with_env<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
@@ -453,10 +505,6 @@ impl JobSpec {
         self
     }
 
-    pub fn with_maximum_job_memory_bytes(mut self, maximum_job_memory_bytes: u64) -> Self {
-        self.maximum_job_memory_bytes = Some(maximum_job_memory_bytes);
-        self
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -554,12 +602,13 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS identities(job_id TEXT PRIMARY KEY, canonical_path TEXT NOT NULL, sha256 TEXT NOT NULL, identity_blob BLOB NOT NULL, bound_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS lease_generations(resource TEXT PRIMARY KEY, generation INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS leases(resource TEXT PRIMARY KEY, owner_job_id TEXT NOT NULL, lease_epoch INTEGER NOT NULL, acquired_at_ms INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, restart_policy TEXT NOT NULL DEFAULT 'never', stdout_log_path TEXT NOT NULL, stderr_log_path TEXT NOT NULL, stdout_child_handle INTEGER NOT NULL DEFAULT 0, stderr_child_handle INTEGER NOT NULL DEFAULT 0, stdout_log_sha256 TEXT, stderr_log_sha256 TEXT, outage_event_cutoff_seq INTEGER, exit_code INTEGER, exited_at_ms INTEGER, maximum_job_memory_bytes INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS jobs(job_id TEXT PRIMARY KEY, program TEXT NOT NULL, args_json TEXT NOT NULL, env_json TEXT NOT NULL, resource TEXT NOT NULL, lease_epoch INTEGER NOT NULL, pid INTEGER NOT NULL DEFAULT 0, main_thread_id INTEGER NOT NULL DEFAULT 0, job_object_name TEXT NOT NULL, process_start_token TEXT NOT NULL DEFAULT '', executable_identity TEXT NOT NULL DEFAULT '', argv_sha256 TEXT NOT NULL, state TEXT NOT NULL, restart_policy TEXT NOT NULL DEFAULT 'never', stdout_log_path TEXT NOT NULL, stderr_log_path TEXT NOT NULL, stdout_child_handle INTEGER NOT NULL DEFAULT 0, stderr_child_handle INTEGER NOT NULL DEFAULT 0, stdout_log_sha256 TEXT, stderr_log_sha256 TEXT, outage_event_cutoff_seq INTEGER, exit_code INTEGER, exited_at_ms INTEGER, maximum_job_memory_bytes INTEGER NOT NULL DEFAULT 0, dispatch_receipt_path TEXT, started_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS schedule_runs(job_id TEXT PRIMARY KEY, artifact_class TEXT NOT NULL, predicted_at_ms INTEGER NOT NULL, predicted_duration_ms INTEGER NOT NULL, predicted_tokens INTEGER NOT NULL, predicted_program_completion_ms INTEGER NOT NULL, absolute_deadline_ms INTEGER NOT NULL, prediction_daemon_binary_sha256 TEXT NOT NULL, prediction_daemon_source_sha256 TEXT NOT NULL, measured_at_ms INTEGER, measured_duration_ms INTEGER, measured_tokens INTEGER, measurement_outcome TEXT, measurement_receipt_sha256 TEXT, measurement_daemon_binary_sha256 TEXT, measurement_daemon_source_sha256 TEXT);
             CREATE TABLE IF NOT EXISTS planned_outages(outage_id INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, starts_at_ms INTEGER NOT NULL, ends_at_ms INTEGER NOT NULL, reason TEXT NOT NULL, created_at_ms INTEGER NOT NULL, cancelled_at_ms INTEGER);
             CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);")?;
+            CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS dispatch_receipt_claims(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, manifest_sha256 TEXT NOT NULL, claimed_at_ms INTEGER NOT NULL);")?;
         migrate_schema(&conn, &log_dir)?;
         conn.execute(
             "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
@@ -1075,13 +1124,33 @@ impl Daemon {
         manifest_bytes: &[u8],
         expected_sha256: &str,
     ) -> Result<DispatchOutcome> {
-        self.dispatch_manifest_bytes_at_with_probes_and_host(
+        // Deterministic test-only probe fixtures for the REAL binary's
+        // named-pipe end-to-end legs (floor refusal, floors-pass, provider
+        // unavailable) — the env overrides are read ONLY at this transport
+        // entrypoint, are absent in production, and never touch the
+        // in-process unit paths (those always inject probes explicitly).
+        let floor_override = test_probe_override_u64("EMBERD_TEST_FLOOR_FREE_BYTES");
+        let vram_unavailable = std::env::var("EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE").is_ok();
+        self.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
             manifest_bytes,
             expected_sha256,
             now_ms(),
             available_free_bytes,
-            available_free_vram_bytes,
+            move || {
+                if vram_unavailable {
+                    Err(EmberdError::VramProviderUnavailable {
+                        detail: "test fixture override (EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE)"
+                            .into(),
+                    })
+                } else {
+                    available_free_vram_bytes()
+                }
+            },
             probe_host_commit_capacity,
+            move |root| match floor_override {
+                Some(value) => Ok(value),
+                None => available_free_bytes(root),
+            },
         )
     }
     pub fn dispatch_manifest(&self, manifest_path: &Path) -> Result<DispatchOutcome> {
@@ -1576,7 +1645,17 @@ impl Daemon {
             let root = PathBuf::from(root_str);
             let canonical_root = match probe_survival_floor_root(&root) {
                 Ok(Some(canonical)) => canonical,
-                Ok(None) => continue,
+                Ok(None) => {
+                    // Absent drives are disclosed, never silently skipped:
+                    // the receipt reader can distinguish "not enforced
+                    // because absent" from "not probed at all".
+                    floor_receipts.push(json!({
+                        "root": &root,
+                        "minimum_free_bytes": minimum_free_bytes,
+                        "status": "absent",
+                    }));
+                    continue;
+                }
                 Err(error) => {
                     let refusal = json!({
                         "schema_version": "emberd-dispatch-preflight-v1",
@@ -1625,6 +1704,7 @@ impl Daemon {
                 "root": &canonical_root,
                 "minimum_free_bytes": minimum_free_bytes,
                 "available_free_bytes": available,
+                "status": "available",
             }));
         }
 
@@ -1833,8 +1913,12 @@ impl Daemon {
             program.to_string_lossy().into_owned(),
             manifest.args,
             resource_lease.clone(),
-        )
-        .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes);
+            std::num::NonZeroU64::new(manifest.maximum_job_memory_bytes).ok_or_else(|| {
+                EmberdError::InvalidDispatchManifest {
+                    detail: "dispatch manifest maximum_job_memory_bytes must be positive".into(),
+                }
+            })?,
+        );
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
@@ -1844,6 +1928,7 @@ impl Daemon {
                 manifest.required_available_maximum_commit_bytes,
                 observed_available_maximum_commit_bytes,
                 receipt_path.clone(),
+                &manifest_sha256,
             ) {
                 Ok(admitted) => admitted,
                 Err(EmberdError::DispatchPinnedHostBudgetExceeded {
@@ -2065,6 +2150,49 @@ impl Daemon {
     /// against an already-open `tx` so a caller can wrap it in whatever
     /// atomic scope it needs (e.g. together with the live-budget SUM read).
     #[allow(clippy::too_many_arguments)]
+    /// Refuses when `receipt_path` is claimed by a different job, or when
+    /// `job_id` already claims a different path. Same-pair re-claims (a
+    /// retry of the same job at the same path) are allowed.
+    fn validate_receipt_claim_available(
+        tx: &rusqlite::Transaction<'_>,
+        job_id: &str,
+        receipt_path: &str,
+    ) -> Result<()> {
+        let claimed_by: Option<String> = tx
+            .query_row(
+                "SELECT job_id FROM dispatch_receipt_claims WHERE receipt_path=?1",
+                [receipt_path],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(claimed_by_job_id) = claimed_by {
+            if claimed_by_job_id != job_id {
+                return Err(EmberdError::DispatchReceiptClaimConflict {
+                    receipt_path: receipt_path.to_string(),
+                    requesting_job_id: job_id.to_string(),
+                    claimed_by_job_id,
+                });
+            }
+        }
+        let prior_path: Option<String> = tx
+            .query_row(
+                "SELECT receipt_path FROM dispatch_receipt_claims WHERE job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(existing_path) = prior_path {
+            if existing_path != receipt_path {
+                return Err(EmberdError::DispatchReceiptClaimConflict {
+                    receipt_path: existing_path,
+                    requesting_job_id: job_id.to_string(),
+                    claimed_by_job_id: job_id.to_string(),
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn insert_reserved_job_row(
         tx: &rusqlite::Transaction<'_>,
         spec: &JobSpec,
@@ -2075,13 +2203,31 @@ impl Daemon {
         stdout_log_path: &Path,
         stderr_log_path: &Path,
         timestamp: i64,
+        receipt_identity: &DispatchReceiptIdentity<'_>,
     ) -> Result<()> {
-        // Reservation boundary owns the budget requirement: EVERY admission
-        // path (bare start_job, RPC, pinned-budget dispatch) reserves a
-        // positive committed-memory ceiling or refuses — a zero/absent
-        // ceiling would silently undercount the live-committed SUM the
-        // governor admits against.
-        if spec.maximum_job_memory_bytes.unwrap_or(0) == 0 {
+        // Atomic decision-receipt identity claim, in the SAME transaction
+        // as the reservation it authorizes: a receipt path claimed by a
+        // different job, or a job claiming a second path, refuses here and
+        // the whole admission rolls back — receipt overwrite between two
+        // admitted jobs is unrepresentable in committed state.
+        let dispatch_receipt_path_value: String = match receipt_identity {
+            DispatchReceiptIdentity::Manifest {
+                receipt_path,
+                manifest_sha256,
+            } => {
+                Self::validate_receipt_claim_available(tx, &spec.job_id, receipt_path)?;
+                tx.execute(
+                    "INSERT INTO dispatch_receipt_claims(receipt_path,job_id,manifest_sha256,claimed_at_ms) VALUES(?1,?2,?3,?4)\n                     ON CONFLICT(receipt_path) DO UPDATE SET manifest_sha256=excluded.manifest_sha256, claimed_at_ms=excluded.claimed_at_ms\n                     WHERE dispatch_receipt_claims.job_id=excluded.job_id",
+                    params![receipt_path, spec.job_id, manifest_sha256, timestamp],
+                )?;
+                (*receipt_path).to_string()
+            }
+            DispatchReceiptIdentity::Bare => BARE_START_RECEIPT_SENTINEL.to_string(),
+        };
+        // The ceiling is typed non-zero at JobSpec construction; the only
+        // remaining runtime hazard is SQLite's i64 storage range, validated
+        // defensively here at the reservation boundary.
+        if i64::try_from(spec.maximum_job_memory_bytes.get()).is_err() {
             return Err(EmberdError::JobMemoryCeilingRequired {
                 job_id: spec.job_id.clone(),
             });
@@ -2130,8 +2276,8 @@ impl Daemon {
             });
         }
         tx.execute(
-            "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,maximum_job_memory_bytes,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'starting',?13,?13)",
-            params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), spec.maximum_job_memory_bytes.unwrap_or(0), timestamp],
+            "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,maximum_job_memory_bytes,dispatch_receipt_path,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,'starting',?14,?14)",
+            params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), spec.maximum_job_memory_bytes.get() as i64, dispatch_receipt_path_value, timestamp],
         )?;
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
@@ -2244,8 +2390,71 @@ impl Daemon {
         Ok(JobHandle { pid })
     }
 
+    /// Every launch-capable start routes through the governor: bare
+    /// `start_job` runs the SAME admission arithmetic as a manifest
+    /// dispatch (consumer survival floors, observed host commit capacity,
+    /// live SUM/residual vs the derived requirement) — a positive ceiling
+    /// alone never proves the host can admit it. Probes are the real host
+    /// ones; tests inject deterministic probes via
+    /// [`Daemon::start_job_governed_with_probes`].
     pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
+        // Same deterministic fixture override as dispatch_manifest_bytes —
+        // transport-level tests of the real binary need floor determinism
+        // on a host whose free space legitimately hovers near the floors.
+        let floor_override = test_probe_override_u64("EMBERD_TEST_FLOOR_FREE_BYTES");
+        self.start_job_governed_with_probes(spec, probe_host_commit_capacity, move |root| {
+            match floor_override {
+                Some(value) => Ok(value),
+                None => available_free_bytes(root),
+            }
+        })
+    }
+
+    pub fn start_job_governed_with_probes<H, K>(
+        &self,
+        spec: JobSpec,
+        mut free_host_commit: H,
+        mut floor_free_space: K,
+    ) -> Result<JobHandle>
+    where
+        H: FnMut() -> Result<HostCommitCapacity>,
+        K: FnMut(&Path) -> Result<u64>,
+    {
         self.verify_identity(&spec.job_id)?;
+        // Consumer survival floors bind every admission path, bare included.
+        for (root_str, minimum_free_bytes) in survival_floors::ROOTS {
+            let root = PathBuf::from(root_str);
+            let canonical_root = match probe_survival_floor_root(&root) {
+                Ok(Some(canonical)) => canonical,
+                Ok(None) => continue,
+                Err(error) => {
+                    return Err(EmberdError::StartJobConsumerFloorProbeError {
+                        job_id: spec.job_id.clone(),
+                        root,
+                        io_error: error.to_string(),
+                    });
+                }
+            };
+            let available = floor_free_space(&canonical_root)?;
+            if available < minimum_free_bytes {
+                return Err(EmberdError::StartJobConsumerFloorViolation {
+                    job_id: spec.job_id.clone(),
+                    root: canonical_root,
+                    minimum_free_bytes,
+                    available_free_bytes: available,
+                });
+            }
+        }
+        let host_commit = free_host_commit()?;
+        let observed_available_maximum_commit_bytes = host_commit.available_maximum_commit_bytes;
+        let required_available_maximum_commit_bytes = spec
+            .maximum_job_memory_bytes
+            .get()
+            .checked_add(DISPATCH_HOST_COMMIT_RESERVE_BYTES)
+            .ok_or_else(|| EmberdError::InvalidTransition {
+                job_id: spec.job_id.clone(),
+                detail: "maximum_job_memory_bytes overflows the host commit requirement".into(),
+            })?;
         let argv_json = serde_json::to_string(&spec.args)?;
         let env_json = serde_json::to_string(&spec.env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
@@ -2256,6 +2465,42 @@ impl Daemon {
         {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let placeholders = LIVE_COMMITTED_JOB_STATES
+                .iter()
+                .map(|state| format!("'{state}'"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let legacy_sql = format!(
+                "SELECT job_id FROM jobs WHERE state IN ({placeholders}) AND maximum_job_memory_bytes=0"
+            );
+            let legacy_job_ids = {
+                let mut stmt = tx.prepare(&legacy_sql)?;
+                let ids = stmt
+                    .query_map([], |row| row.get::<_, String>(0))?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                ids
+            };
+            if !legacy_job_ids.is_empty() {
+                return Err(EmberdError::DispatchUnknownLegacyLiveBudget {
+                    job_ids: legacy_job_ids,
+                });
+            }
+            let sql = format!(
+                "SELECT COALESCE(SUM(maximum_job_memory_bytes),0) FROM jobs WHERE state IN ({placeholders})"
+            );
+            let live_raw: i64 = tx.query_row(&sql, [], |row| row.get(0))?;
+            let live_committed_job_memory_bytes = live_raw.max(0) as u64;
+            let residual_available_maximum_commit_bytes = observed_available_maximum_commit_bytes
+                .saturating_sub(live_committed_job_memory_bytes);
+            if residual_available_maximum_commit_bytes < required_available_maximum_commit_bytes {
+                return Err(EmberdError::StartJobPinnedHostBudgetExceeded {
+                    job_id: spec.job_id.clone(),
+                    required_available_maximum_commit_bytes,
+                    observed_available_maximum_commit_bytes,
+                    live_committed_job_memory_bytes,
+                    residual_available_maximum_commit_bytes,
+                });
+            }
             let timestamp = now_ms();
             Self::insert_reserved_job_row(
                 &tx,
@@ -2267,6 +2512,7 @@ impl Daemon {
                 &stdout_log_path,
                 &stderr_log_path,
                 timestamp,
+                &DispatchReceiptIdentity::Bare,
             )?;
             tx.commit()?;
         }
@@ -2288,6 +2534,7 @@ impl Daemon {
         required_available_maximum_commit_bytes: u64,
         observed_available_maximum_commit_bytes: u64,
         receipt_path: PathBuf,
+        manifest_sha256: &str,
     ) -> Result<(JobHandle, u64, u64)> {
         self.verify_identity(&spec.job_id)?;
         let argv_json = serde_json::to_string(&spec.args)?;
@@ -2297,6 +2544,7 @@ impl Daemon {
         let log_key = hash_bytes(spec.job_id.as_bytes());
         let stdout_log_path = self.log_dir.join(format!("{log_key}.stdout.log"));
         let stderr_log_path = self.log_dir.join(format!("{log_key}.stderr.log"));
+        let receipt_path_text_early = receipt_path.to_string_lossy().into_owned();
         let (live_committed_job_memory_bytes, residual_available_maximum_commit_bytes) = {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -2307,6 +2555,11 @@ impl Daemon {
             // A later budget refusal drops the tx uncommitted, so the lease
             // acquired here rolls back with the reservation (no leak).
             Self::acquire_lease_within(&tx, &spec.resource_lease, &spec.job_id)?;
+            // Receipt-claim conflict refuses BEFORE any budget arithmetic:
+            // a budget refusal writes a refusal receipt at this path, and a
+            // path claimed by a DIFFERENT job must never be written to —
+            // not even by a truthful refusal.
+            Self::validate_receipt_claim_available(&tx, &spec.job_id, &receipt_path_text_early)?;
             let placeholders = LIVE_COMMITTED_JOB_STATES
                 .iter()
                 .map(|state| format!("'{state}'"))
@@ -2333,6 +2586,27 @@ impl Daemon {
                     job_ids: legacy_job_ids,
                 });
             }
+            // A pre-upgrade live row with NULL dispatch_receipt_path has an
+            // UNKNOWN receipt identity: it may hold ANY receipt path,
+            // including this manifest's. Manifest admission fails CLOSED
+            // (typed, naming the jobs) until every such row exits; bare
+            // rows are unaffected (their identity is the known-none
+            // sentinel, never NULL).
+            let unknown_receipt_sql = format!(
+                "SELECT job_id FROM jobs WHERE state IN ({placeholders}) AND dispatch_receipt_path IS NULL"
+            );
+            let unknown_receipt_job_ids = {
+                let mut stmt = tx.prepare(&unknown_receipt_sql)?;
+                let ids = stmt
+                    .query_map([], |row| row.get::<_, String>(0))?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                ids
+            };
+            if !unknown_receipt_job_ids.is_empty() {
+                return Err(EmberdError::DispatchUnknownLegacyReceiptIdentity {
+                    job_ids: unknown_receipt_job_ids,
+                });
+            }
             let sql = format!(
                 "SELECT COALESCE(SUM(maximum_job_memory_bytes),0) FROM jobs WHERE state IN ({placeholders})"
             );
@@ -2352,6 +2626,7 @@ impl Daemon {
                 });
             }
             let timestamp = now_ms();
+            let receipt_path_text = receipt_path.to_string_lossy().into_owned();
             Self::insert_reserved_job_row(
                 &tx,
                 &spec,
@@ -2362,6 +2637,10 @@ impl Daemon {
                 &stdout_log_path,
                 &stderr_log_path,
                 timestamp,
+                &DispatchReceiptIdentity::Manifest {
+                    receipt_path: &receipt_path_text,
+                    manifest_sha256,
+                },
             )?;
             tx.commit()?;
             (
@@ -3623,6 +3902,10 @@ fn validate_resume_registry_binding_closure(
 /// present. `Ok(None)` = absent (io::ErrorKind::NotFound), `Ok(Some(_))` =
 /// present and canonicalized, `Err(_)` = present but the probe itself
 /// failed (permission denied or any other io error) and must refuse.
+fn test_probe_override_u64(name: &str) -> Option<u64> {
+    std::env::var(name).ok()?.parse().ok()
+}
+
 fn probe_survival_floor_root(root: &Path) -> std::io::Result<Option<PathBuf>> {
     match fs::canonicalize(root) {
         Ok(canonical) => Ok(Some(canonical)),
@@ -3906,6 +4189,10 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         ("exit_code", "INTEGER"),
         ("exited_at_ms", "INTEGER"),
         ("maximum_job_memory_bytes", "INTEGER NOT NULL DEFAULT 0"),
+        // Nullable by design: a pre-upgrade row's receipt identity is
+        // UNKNOWN (NULL) — new manifest admissions refuse while such a row
+        // is live. New rows always set a path or the 'known-none' sentinel.
+        ("dispatch_receipt_path", "TEXT"),
     ] {
         if !columns.iter().any(|existing| existing == column) {
             conn.execute_batch(&format!(
@@ -3934,8 +4221,11 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         "UPDATE jobs SET outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events) WHERE outage_event_cutoff_seq IS NULL AND state IN ('stopped','exited','failed')",
         [],
     )?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS dispatch_receipt_claims(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, manifest_sha256 TEXT NOT NULL, claimed_at_ms INTEGER NOT NULL);",
+    )?;
     conn.execute(
-        "UPDATE metadata SET value='3' WHERE key='schema_version'",
+        "UPDATE metadata SET value='4' WHERE key='schema_version'",
         [],
     )?;
     Ok(())
@@ -4330,13 +4620,13 @@ fn spawn_managed(
         PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
     };
 
-    let maximum_job_memory = spec
-        .maximum_job_memory_bytes
-        .map(usize::try_from)
-        .transpose()
-        .map_err(|_| EmberdError::InvalidDispatchManifest {
-            detail: "maximum job memory does not fit the current Windows address space".into(),
-        })?;
+    let maximum_job_memory = Some(
+        usize::try_from(spec.maximum_job_memory_bytes.get()).map_err(|_| {
+            EmberdError::InvalidDispatchManifest {
+                detail: "maximum job memory does not fit the current Windows address space".into(),
+            }
+        })?,
+    );
 
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
     let name = wide(job_name);

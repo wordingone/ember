@@ -1232,10 +1232,169 @@ fn dispatch_manifest_pinned_host_budget_admits_exactly_one_of_two_concurrent_ove
         admitted_receipt["result"], "PREFLIGHT_PASSED",
         "the admitted dispatch's own receipt must be the passing one"
     );
+    // The loser leaves a truthful refusal receipt and ZERO committed state:
+    // no job row, no lease, no bound identity survive its rollback.
+    let (loser_job, loser_lease) = if r1.is_err() {
+        ("dispatch-conc-a", "gpu-conc-a")
+    } else {
+        ("dispatch-conc-b", "gpu-conc-b")
+    };
+    let loser_receipt_path = root
+        .join("custody")
+        .join(format!("{loser_job}-preflight.json"));
+    let loser_receipt: Value =
+        serde_json::from_slice(&fs::read(&loser_receipt_path).unwrap()).unwrap();
+    assert_eq!(loser_receipt["result"], "REFUSED_PINNED_HOST_BUDGET");
+    assert_eq!(daemon.job_state(loser_job).unwrap(), None);
+    assert_eq!(daemon.lease_owner(loser_lease).unwrap(), None);
+    assert_eq!(daemon.identity_hash(loser_job).unwrap(), None);
 
     for job_id in ["dispatch-conc-a", "dispatch-conc-b"] {
         let _ = daemon.stop_job(job_id);
     }
+}
+
+#[test]
+fn dispatch_manifest_refuses_a_receipt_path_already_claimed_by_another_job() {
+    // Intentional same-path collision: job-id containment is non-injective
+    // ("collide-a" is a substring of "collide-ab-preflight.json"), so two
+    // DISTINCT jobs can both pass the filename scoping check with the same
+    // receipt path. The atomic dispatch_receipt_claims row is what actually
+    // refuses the second claim — and the winner's receipt bytes survive.
+    let root = sandbox("receipt-claim-collision");
+    let shared_receipt = root.join("custody").join("collide-ab-preflight.json");
+
+    let manifest_ab = write_manifest(&root, "collide-ab", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_ab,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap();
+    assert_eq!(
+        outcome.receipt.path.file_name(),
+        shared_receipt.file_name()
+    );
+    let winner_bytes = fs::read(&shared_receipt).unwrap();
+
+    // Second, DISTINCT job declares the SAME receipt path (its job_id
+    // "collide-a" is contained in the filename, so scoping alone passes).
+    let manifest_a = write_manifest(&root, "collide-a", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
+    payload["preflight_receipt"] = json!(&shared_receipt);
+    payload["resource_lease"] = json!("gpu-collide-a");
+    fs::write(&manifest_a, serde_json::to_vec(&payload).unwrap()).unwrap();
+    // With the winner's receipt file on disk, the fast pre-admission
+    // exists-check refuses first — and the winner's bytes are untouched.
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_a,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::ReceiptAlreadyExists { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(daemon.job_state("collide-a").unwrap(), None);
+    assert_eq!(fs::read(&shared_receipt).unwrap(), winner_bytes);
+
+    // The exists-check alone is NOT the authority: simulate its blind spot
+    // (receipt file gone — crash cleanup, tampering, or a race that passed
+    // the check before the winner's write) and the atomic claims row in
+    // the admission transaction must still refuse the foreign job.
+    fs::remove_file(&shared_receipt).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_a,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchReceiptClaimConflict { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(daemon.job_state("collide-a").unwrap(), None);
+    assert!(
+        !shared_receipt.exists(),
+        "the refused collision must write nothing at the claimed path"
+    );
+    daemon.stop_job("collide-ab").unwrap();
+}
+
+#[test]
+fn dispatch_refuses_while_a_pre_upgrade_live_job_has_unknown_receipt_identity() {
+    // A live row persisted before dispatch_receipt_path existed is NULL —
+    // an UNKNOWN receipt identity that may collide with any manifest's
+    // path. Manifest admission fails closed (typed, naming the job) until
+    // it exits; new rows always carry a path or the known-none sentinel.
+    let root = sandbox("legacy-receipt-identity");
+    let manifest = write_manifest(&root, "dispatch-post-receipt-upgrade", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    {
+        let connection = rusqlite::Connection::open(root.join("emberd.sqlite3")).unwrap();
+        connection
+            .execute(
+                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,maximum_job_memory_bytes,dispatch_receipt_path,state,started_at_ms,updated_at_ms) VALUES('legacy-receipt-unknown','x','[]','{}','legacy-receipt-lease',1,'obj','deadbeef','never','out.log','err.log',1048576,NULL,'running',1,1)",
+                [],
+            )
+            .unwrap();
+    }
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap_err();
+    match error {
+        EmberdError::DispatchUnknownLegacyReceiptIdentity { job_ids } => {
+            assert_eq!(job_ids, vec!["legacy-receipt-unknown".to_string()]);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+    assert_eq!(
+        daemon.job_state("dispatch-post-receipt-upgrade").unwrap(),
+        None
+    );
+    // Once the unknown-identity row exits, admission proceeds.
+    {
+        let connection = rusqlite::Connection::open(root.join("emberd.sqlite3")).unwrap();
+        connection
+            .execute(
+                "UPDATE jobs SET state='exited' WHERE job_id='legacy-receipt-unknown'",
+                [],
+            )
+            .unwrap();
+    }
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap();
+    assert!(outcome.receipt.path.exists());
+    daemon.stop_job("dispatch-post-receipt-upgrade").unwrap();
 }
 
 

@@ -222,22 +222,26 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 Ok(value) => value,
                 Err(response) => return (response, false),
             };
-            if params.maximum_job_memory_bytes == 0 {
-                return (
-                    invalid_params(
-                        id,
-                        "start_job requires a positive maximum_job_memory_bytes",
-                    ),
-                    false,
-                );
-            }
+            let maximum_job_memory_bytes =
+                match std::num::NonZeroU64::new(params.maximum_job_memory_bytes) {
+                    Some(value) => value,
+                    None => {
+                        return (
+                            invalid_params(
+                                id,
+                                "start_job requires a positive maximum_job_memory_bytes",
+                            ),
+                            false,
+                        );
+                    }
+                };
             let mut spec = JobSpec::new(
                 params.job_id,
                 params.program,
                 params.args,
                 params.resource_lease,
+                maximum_job_memory_bytes,
             );
-            spec = spec.with_maximum_job_memory_bytes(params.maximum_job_memory_bytes);
             spec = spec.with_restart_policy(params.restart_policy);
             for (key, value) in params.env {
                 spec = spec.with_env(key, value);

@@ -63,15 +63,50 @@ impl Drop for ServerGuard {
 }
 
 fn start_server(binary: &Path, db: &Path, pipe: &str) -> ServerGuard {
-    ServerGuard(
-        Command::new(binary)
-            .args(["serve", "--db", &db.to_string_lossy(), "--pipe", pipe])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .unwrap(),
+    // Default pipe-test servers pin the survival-floor probe to a passing
+    // deterministic value: these legs test transport/adoption/admission
+    // semantics, and must not flake when the host's real free space hovers
+    // near the consumer floors. Floor ENFORCEMENT has its own dedicated
+    // deterministic legs (refusal + disclosure) below.
+    start_server_with_env(
+        binary,
+        db,
+        pipe,
+        &[("EMBERD_TEST_FLOOR_FREE_BYTES", "18446744073709551615")],
     )
+}
+
+fn rpc_error(pipe: &str, id: u64, method: &str, params: Value) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match OpenOptions::new().read(true).write(true).open(pipe) {
+            Ok(mut stream) => {
+                let request = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "method": method,
+                    "params": params,
+                });
+                writeln!(stream, "{}", serde_json::to_string(&request).unwrap()).unwrap();
+                stream.flush().unwrap();
+                let mut response = String::new();
+                BufReader::new(stream).read_line(&mut response).unwrap();
+                let response: Value = serde_json::from_str(&response).unwrap();
+                assert_eq!(response["jsonrpc"], "2.0");
+                assert_eq!(response["id"], id);
+                assert!(
+                    response.get("error").is_some(),
+                    "RPC {method} unexpectedly succeeded: {response}"
+                );
+                return response["error"].clone();
+            }
+            Err(error) if Instant::now() < deadline => {
+                let _ = error;
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => panic!("timed out connecting to {pipe}: {error}"),
+        }
+    }
 }
 
 fn rpc(pipe: &str, id: u64, method: &str, params: Value) -> Value {
@@ -639,5 +674,210 @@ fn production_typescript_manifest_transport_reaches_the_real_named_pipe_daemon()
         json!({"job_id": "typescript-production-transport-job"}),
     );
     rpc(&pipe, 223, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+
+// ---- Deterministic probe-fixture legs (reviewer-required): the REAL
+// binary, driven over the real named pipe, with floor/provider probes made
+// deterministic via transport-entrypoint-only env overrides. These exist
+// because the host's real free space legitimately hovers near the consumer
+// floors — a floor leg must not flake with the disk.
+
+fn start_server_with_env(
+    binary: &Path,
+    db: &Path,
+    pipe: &str,
+    envs: &[(&str, &str)],
+) -> ServerGuard {
+    let mut command = Command::new(binary);
+    command
+        .args(["serve", "--db", &db.to_string_lossy(), "--pipe", pipe])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit());
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    ServerGuard(command.spawn().unwrap())
+}
+
+fn fixture_pipe(name: &str) -> String {
+    format!(
+        r"\\.\pipe\emberd-{name}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )
+}
+
+#[test]
+fn named_pipe_dispatch_refuses_on_consumer_floor_with_receipt_through_real_binary() {
+    let root = sandbox("pipe-floor-refusal");
+    let db = root.join("emberd.sqlite3");
+    let pipe = fixture_pipe("floor-refusal");
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "pipe-floor-job");
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
+    // 1024 free bytes is below every configured survival floor.
+    let mut server = start_server_with_env(
+        &binary,
+        &db,
+        &pipe,
+        &[("EMBERD_TEST_FLOOR_FREE_BYTES", "1024")],
+    );
+    assert_eq!(rpc(&pipe, 300, "ping", json!({}))["status"], "ok");
+    let error = rpc_error(
+        &pipe,
+        301,
+        "dispatch_manifest",
+        json!({"manifest_utf8": manifest_utf8, "manifest_sha256": manifest_sha256}),
+    );
+    assert!(
+        error["data"]
+            .as_str()
+            .unwrap()
+            .contains("DispatchConsumerFloorViolation"),
+        "floor-refused dispatch must surface the typed violation: {error}"
+    );
+    let receipt_path = root.join("custody").join("pipe-floor-job-preflight.json");
+    let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "REFUSED_CONSUMER_FLOOR");
+    assert_eq!(
+        rpc(&pipe, 302, "job_state", json!({"job_id": "pipe-floor-job"}))["state"],
+        Value::Null,
+    );
+    rpc(&pipe, 303, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+
+#[test]
+fn named_pipe_dispatch_admits_under_passing_floors_with_both_roots_disclosed() {
+    let root = sandbox("pipe-floor-pass");
+    let db = root.join("emberd.sqlite3");
+    let pipe = fixture_pipe("floor-pass");
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "pipe-floor-pass-job");
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
+    let mut server = start_server_with_env(
+        &binary,
+        &db,
+        &pipe,
+        &[("EMBERD_TEST_FLOOR_FREE_BYTES", "18446744073709551615")],
+    );
+    assert_eq!(rpc(&pipe, 310, "ping", json!({}))["status"], "ok");
+    let result = rpc(
+        &pipe,
+        311,
+        "dispatch_manifest",
+        json!({"manifest_utf8": manifest_utf8, "manifest_sha256": manifest_sha256}),
+    );
+    assert!(result["pid"].as_u64().unwrap() > 0);
+    let receipt = PathBuf::from(result["preflight_receipt_path"].as_str().unwrap());
+    let receipt_json: Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
+    assert_eq!(receipt_json["result"], "PREFLIGHT_PASSED");
+    // Both configured roots are disclosed, present or not: an absent drive
+    // reads status=absent, a present one status=available. Nothing is
+    // silently omitted from the pass evidence.
+    let floors = receipt_json["consumer_floor"].as_array().unwrap();
+    assert_eq!(
+        floors.len(),
+        2,
+        "both configured roots disclosed: {receipt_json}"
+    );
+    for floor in floors {
+        let status = floor["status"].as_str().unwrap();
+        assert!(status == "available" || status == "absent");
+        assert!(floor["minimum_free_bytes"].as_u64().unwrap() > 0);
+        if status == "available" {
+            assert!(
+                floor["available_free_bytes"].as_u64().unwrap()
+                    >= floor["minimum_free_bytes"].as_u64().unwrap()
+            );
+        }
+    }
+    rpc(&pipe, 312, "stop_job", json!({"job_id": "pipe-floor-pass-job"}));
+    rpc(&pipe, 313, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+
+#[test]
+fn named_pipe_dispatch_admits_with_unavailable_provider_disclosed_through_real_binary() {
+    let root = sandbox("pipe-provider-unavailable");
+    let db = root.join("emberd.sqlite3");
+    let pipe = fixture_pipe("provider-unavailable");
+    let binary = emberd_binary();
+    let manifest = write_dispatch_manifest(&root, "pipe-provider-job");
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
+    let mut server = start_server_with_env(
+        &binary,
+        &db,
+        &pipe,
+        &[
+            ("EMBERD_TEST_FLOOR_FREE_BYTES", "18446744073709551615"),
+            ("EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE", "1"),
+        ],
+    );
+    assert_eq!(rpc(&pipe, 320, "ping", json!({}))["status"], "ok");
+    let result = rpc(
+        &pipe,
+        321,
+        "dispatch_manifest",
+        json!({"manifest_utf8": manifest_utf8, "manifest_sha256": manifest_sha256}),
+    );
+    assert!(result["pid"].as_u64().unwrap() > 0);
+    let receipt = PathBuf::from(result["preflight_receipt_path"].as_str().unwrap());
+    let receipt_json: Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
+    assert_eq!(receipt_json["result"], "PREFLIGHT_PASSED");
+    assert_eq!(
+        receipt_json["vram_reserve"]["provider_status"],
+        "unavailable"
+    );
+    assert_eq!(
+        receipt_json["vram_reserve"]["available_free_bytes"],
+        Value::Null
+    );
+    assert_eq!(
+        rpc(&pipe, 322, "job_state", json!({"job_id": "pipe-provider-job"}))["state"],
+        "running"
+    );
+    rpc(&pipe, 323, "stop_job", json!({"job_id": "pipe-provider-job"}));
+    rpc(&pipe, 324, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+
+#[test]
+fn named_pipe_start_job_rejects_missing_or_zero_memory_ceiling_as_invalid_params() {
+    let root = sandbox("pipe-start-invalid-params");
+    let db = root.join("emberd.sqlite3");
+    let pipe = fixture_pipe("start-invalid-params");
+    let binary = emberd_binary();
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 330, "ping", json!({}))["status"], "ok");
+    for (id, payload) in [
+        (
+            331u64,
+            json!({"job_id": "pipe-no-ceiling", "program": "x", "args": [], "resource_lease": "cpu-x", "env": {}, "restart_policy": "never"}),
+        ),
+        (
+            332u64,
+            json!({"job_id": "pipe-zero-ceiling", "program": "x", "args": [], "resource_lease": "cpu-x", "env": {}, "restart_policy": "never", "maximum_job_memory_bytes": 0}),
+        ),
+    ] {
+        let error = rpc_error(&pipe, id, "start_job", payload);
+        assert_eq!(
+            error["code"].as_i64().unwrap(),
+            -32602,
+            "missing/zero ceiling must be invalid params: {error}"
+        );
+    }
+    rpc(&pipe, 333, "shutdown", json!({}));
     wait_for_exit(&mut server);
 }
