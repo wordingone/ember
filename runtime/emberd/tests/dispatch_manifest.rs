@@ -254,7 +254,7 @@ fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_
     let receipt_path = root.join("custody").join("preflight.json");
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
 
-    let first = daemon.dispatch_manifest_at_with_probes_and_host(
+    let first = daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
         &manifest,
         10_001,
         |_root| Ok(1024),
@@ -263,6 +263,7 @@ fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_
             Ok(2048)
         },
         || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        |_root| Ok(u64::MAX),
     );
     assert!(matches!(
         first,
@@ -287,12 +288,13 @@ fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_
     fs::remove_dir(&receipt_path).unwrap();
 
     let recovered = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert_eq!(recovered.handle.pid, first_pid);
@@ -311,21 +313,23 @@ fn dispatch_manifest_lease_conflict_leaves_no_selectable_preflight_and_retries()
     fs::write(&second, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &first,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &second,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         ),
         Err(EmberdError::LeaseConflict { .. })
     ));
@@ -334,12 +338,13 @@ fn dispatch_manifest_lease_conflict_leaves_no_selectable_preflight_and_retries()
     assert_eq!(daemon.identity_hash("dispatch-lease-second").unwrap(), None);
     daemon.stop_job("dispatch-lease-first").unwrap();
     let outcome = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &second,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert!(outcome.receipt.path.exists());
@@ -357,12 +362,13 @@ fn dispatch_manifest_spawn_failure_leaves_no_selectable_preflight_and_retries() 
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .is_err());
     assert!(!root.join("custody").join("preflight.json").exists());
@@ -371,12 +377,13 @@ fn dispatch_manifest_spawn_failure_leaves_no_selectable_preflight_and_retries() 
     assert_eq!(daemon.identity_hash("dispatch-spawn-retry").unwrap(), None);
     let repaired = write_manifest(&root, "dispatch-spawn-retry", 10_000);
     let outcome = daemon
-        .dispatch_manifest_at_with_probes_and_host(
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
             &repaired,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert!(outcome.receipt.path.exists());
@@ -391,12 +398,13 @@ fn dispatch_manifest_rejects_stale_v1_host_capacity_schema() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -432,7 +440,7 @@ fn dispatch_manifest_refuses_physical_pagefile_and_commit_drift() {
         let observed_available = maximum - commit_total;
         let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
         let error = daemon
-            .dispatch_manifest_at_with_probes_and_host(
+            .dispatch_manifest_at_with_probes_and_host_and_floor(
                 &manifest,
                 10_001,
                 |_root| Ok(1024),
@@ -449,6 +457,7 @@ fn dispatch_manifest_refuses_physical_pagefile_and_commit_drift() {
                         available_maximum_commit_bytes: observed_available,
                     })
                 },
+                |_root| Ok(u64::MAX),
             )
             .unwrap_err();
         assert!(format!("{error:?}").contains("DispatchHostCommitReserve"));
@@ -503,12 +512,13 @@ fn dispatch_manifest_refuses_unsafe_host_commit_cap_with_receipt_before_spawn() 
         fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
         let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
         let error = daemon
-            .dispatch_manifest_at_with_probes_and_host(
+            .dispatch_manifest_at_with_probes_and_host_and_floor(
                 &manifest,
                 10_001,
                 |_root| Ok(1024),
                 || Ok(2048),
                 || Ok(host_capacity(observed_free)),
+                |_root| Ok(u64::MAX),
             )
             .unwrap_err();
         assert!(
@@ -587,12 +597,13 @@ fn dispatch_manifest_rejects_a_missing_job_memory_ceiling() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -643,12 +654,13 @@ fn dispatch_manifest_rejects_unknown_fields_and_cache_escape() {
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_at_with_probes_and_host(
+        daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
