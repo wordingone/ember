@@ -20,6 +20,27 @@
 // the real Daemon end-to-end and assert the post-termination invariant: the
 // receipt path is free for a DIFFERENT job_id once the prior job has reached
 // any terminal state.
+//
+// Reviewer amendment (durability-before-release + escaped-receipt guard +
+// legacy-state convergence): every terminal-transition site above writes its
+// terminal event/state FIRST and releases the claim SECOND, but both live in
+// ONE transaction (open -> commit), so there is no crash point between them
+// -- a crash before commit rolls back the whole transaction (neither write
+// lands); a crash after commit lands both. Per-site tx open/claim-delete/
+// commit line citations (this round's lib.rs):
+//   rollback_dispatch_attempt:  tx lib.rs:2224 .. delete lib.rs:2272 .. commit lib.rs:2273
+//   finalize_stopped:           tx lib.rs:3568 .. event lib.rs:3602 .. delete lib.rs:3612 .. commit lib.rs:3613
+//   reclaim_starting_job:       tx lib.rs:3619 .. event lib.rs:3659 .. delete lib.rs:3662 .. commit lib.rs:3663
+//   mark_exited_unknown:        tx lib.rs:3707 .. event lib.rs:3732 .. delete lib.rs:3740 .. commit lib.rs:3741
+//   mark_dead:                  tx lib.rs:3747 .. event lib.rs:3772 .. delete lib.rs:3775 .. commit lib.rs:3776
+//   record_natural_exit:        tx lib.rs:5101 .. event lib.rs:5151 .. delete lib.rs:5158 .. commit lib.rs:5159
+// rollback_dispatch_attempt also gained an escaped-receipt guard (lib.rs
+// ~2297-2330): validate_receipt_claim_available now checks, on a claim
+// conflict, whether the claimed owner's job row is gone or terminal; if so
+// it self-heals the stale claim in the SAME reservation transaction instead
+// of refusing forever -- this closes the remaining gap where a claim row
+// predates this fix (or any future release-site gap) and would otherwise
+// wedge a receipt path permanently even though its owner is long dead.
 
 #![cfg(windows)]
 
@@ -460,4 +481,92 @@ fn running_job_whose_process_already_exited_keeps_its_claim_until_reconcile_then
          evidence for the crashed job: {result:?}"
     );
     reopened.stop_job("claimsmid-a").unwrap();
+}
+
+/// Legacy/inconsistent-state convergence (reviewer amendment, point 3b): a
+/// claim row can in principle exist whose owning job is ALREADY terminal --
+/// e.g. a row written before this fix existed, or any future gap in the
+/// write-time release set this file doesn't yet cover. Direct SQL injection
+/// reproduces that inconsistency without depending on any particular
+/// history. The invariant: the NEXT admission attempt at that receipt path
+/// by a different job_id must converge -- self-heal the stale claim, since
+/// its owner is provably gone -- rather than wedge the path forever.
+#[test]
+fn admission_self_heals_a_legacy_claim_whose_owner_is_already_terminal() {
+    let root = sandbox("legacy-claim-self-heal");
+    let db = root.join("emberd.sqlite3");
+    let shared_receipt = root.join("custody").join("claimslegacy-ab-preflight.json");
+
+    let manifest_ab = write_manifest(&root, "claimslegacy-ab", "gpu-claimslegacy-ab", &shared_receipt);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = dispatch_ok(&daemon, &manifest_ab);
+    assert_eq!(outcome.receipt.path.file_name(), shared_receipt.file_name());
+
+    // Capture the EXACT receipt_path string production stored for this
+    // claim (it is canonicalized at manifest-parse time, e.g. a Windows
+    // `\\?\` prefix, so it will not textually match a freshly-built PathBuf
+    // -- read it back rather than reconstructing it, or the re-injected row
+    // below would silently target a different string and never collide).
+    let canonical_receipt_path: String = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT receipt_path FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["claimslegacy-ab"],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    // Reach a genuine terminal state the normal way (finalize_stopped
+    // releases the claim in its own atomic tx, lib.rs:3568-3613). Then
+    // re-inject the pre-fix inconsistency directly via raw SQL, using the
+    // SAME canonical string, as if this job's terminal transition had run
+    // under code that never released it.
+    daemon.stop_job("claimslegacy-ab").unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "INSERT INTO dispatch_receipt_claims(receipt_path,job_id,manifest_sha256,claimed_at_ms) VALUES(?1,?2,?3,?4)",
+            rusqlite::params![canonical_receipt_path, "claimslegacy-ab", "legacy-sha", 1_i64],
+        )
+        .unwrap();
+    fs::remove_file(&shared_receipt).unwrap();
+
+    // A DIFFERENT job_id dispatches at the same path. The claim's owner
+    // ("claimslegacy-ab") is terminal ('stopped'), so
+    // validate_receipt_claim_available must self-heal the stale claim
+    // rather than refuse forever.
+    let manifest_b = write_manifest(&root, "claimslegacy-a", "gpu-claimslegacy-a", &shared_receipt);
+    let result = dispatch(&daemon, &manifest_b);
+    assert!(
+        result.is_ok(),
+        "PERMANENT ORPHAN: a legacy claim row for an already-terminal owner was never \
+         self-healed at the next admission attempt: {result:?}"
+    );
+    daemon.stop_job("claimslegacy-a").unwrap();
+}
+
+/// Companion negative control for the self-heal above: a claim whose owner
+/// is genuinely still live must NOT be healed away -- self-healing must be
+/// scoped strictly to gone/terminal owners, never to a live one.
+#[test]
+fn admission_still_conflicts_when_the_claim_owner_is_genuinely_live() {
+    let root = sandbox("legacy-claim-live-owner");
+    let shared_receipt = root.join("custody").join("claimslive-ab-preflight.json");
+
+    let manifest_ab = write_manifest(&root, "claimslive-ab", "gpu-claimslive-ab", &shared_receipt);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let outcome = dispatch_ok(&daemon, &manifest_ab);
+    assert_eq!(outcome.receipt.path.file_name(), shared_receipt.file_name());
+
+    // Owner is still 'running' -- a different job_id must still be refused,
+    // never silently self-healed.
+    let manifest_b = write_manifest(&root, "claimslive-a", "gpu-claimslive-a", &shared_receipt);
+    let result = dispatch(&daemon, &manifest_b);
+    let error = result.expect_err("a genuinely live owner must still refuse a different job");
+    let debug = format!("{error:?}");
+    assert!(
+        debug.contains("DispatchReceiptClaimConflict") || debug.contains("ReceiptAlreadyExists"),
+        "expected a live-owner conflict, got: {debug}"
+    );
+    daemon.stop_job("claimslive-ab").unwrap();
 }

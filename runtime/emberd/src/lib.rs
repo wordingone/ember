@@ -2296,11 +2296,40 @@ impl Daemon {
             .optional()?;
         if let Some(claimed_by_job_id) = claimed_by {
             if claimed_by_job_id != job_id {
-                return Err(EmberdError::DispatchReceiptClaimConflict {
-                    receipt_path: receipt_path.to_string(),
-                    requesting_job_id: job_id.to_string(),
-                    claimed_by_job_id,
-                });
+                // Self-heal: a claim whose owning job is already gone (no
+                // row in `jobs` at all) or already terminal
+                // (failed/stopped/exited) is a STALE claim that no
+                // write-time terminal-transition release ever reached --
+                // e.g. a legacy row written before this fix existed, or any
+                // future gap in the write-time release set. Converge here
+                // instead of wedging the path forever: release it in this
+                // same transaction and fall through as if it were never
+                // claimed. A claim whose owner is genuinely still live
+                // (starting/prepared/running/stopping) is a real conflict
+                // and still refuses.
+                let owner_state: Option<String> = tx
+                    .query_row(
+                        "SELECT state FROM jobs WHERE job_id=?1",
+                        [&claimed_by_job_id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                let owner_is_gone_or_terminal = match owner_state.as_deref() {
+                    None => true,
+                    Some(state) => matches!(state, "failed" | "stopped" | "exited"),
+                };
+                if owner_is_gone_or_terminal {
+                    tx.execute(
+                        "DELETE FROM dispatch_receipt_claims WHERE receipt_path=?1",
+                        [receipt_path],
+                    )?;
+                } else {
+                    return Err(EmberdError::DispatchReceiptClaimConflict {
+                        receipt_path: receipt_path.to_string(),
+                        requesting_job_id: job_id.to_string(),
+                        claimed_by_job_id,
+                    });
+                }
             }
         }
         let prior_path: Option<String> = tx
