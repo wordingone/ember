@@ -717,6 +717,85 @@ class RunnerPreflightTests(unittest.TestCase):
                         checkpoint_interval=1, write_budget_bytes=1,
                     )
         cuda_probe.assert_not_called()
+
+    def test_specialist_preflight_opens_bound_stream_once_without_legacy_materialization(self) -> None:
+        """P2B dispatch passes one four-route selection to run before any CUDA boundary."""
+
+        root = Path(run_vertical_slice.__file__).resolve().parents[2]
+        manifest_path = root / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        build_receipt_path = root / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        routes = {
+            "image": "image_scene_split_train_v1",
+            "audio": "all_records_semantic_pretraining_v1",
+            "reasoning": "all_records_semantic_pretraining_v1",
+            "tool": "all_records_semantic_pretraining_v1",
+        }
+        for capability, rule in routes.items():
+            with self.subTest(capability=capability):
+                events: list[str] = []
+                selection = object()
+                stream = MagicMock()
+
+                def open_stream(**kwargs: object) -> MagicMock:
+                    events.append("open")
+                    self.assertEqual(kwargs, {
+                        "repo_root": root, "manifest_path": manifest_path,
+                        "expected_manifest_sha256": "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427",
+                        "expected_corpus_root_sha256": "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab",
+                    })
+                    return stream
+
+                def prepare(**kwargs: object) -> object:
+                    events.append("prepare")
+                    self.assertEqual(kwargs, {
+                        "capability": capability, "selection_rule_id": rule,
+                        "build_receipt_path": build_receipt_path,
+                        "expected_build_receipt_sha256": "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                    })
+                    return selection
+
+                def cuda_runner(**kwargs: object) -> dict[str, object]:
+                    events.append("run")
+                    self.assertIs(kwargs["execution_selection"], selection)
+                    self.assertEqual(kwargs["stream_capability"], capability)
+                    self.assertNotIn("records_override", kwargs)
+                    self.assertNotIn("scene_split_records", kwargs)
+                    self.assertNotIn("full_records_artifact_bytes", kwargs)
+                    return {"steps": 1}
+
+                stream.prepare_execution_selection.side_effect = prepare
+                with patch.object(run_vertical_slice, "open_specialist_stream", create=True, side_effect=open_stream) as opened:
+                    with patch.object(run_vertical_slice, "load_verified_specialist_records", side_effect=AssertionError("legacy specialist records loader reached")) as legacy_loader:
+                        with patch.object(run_vertical_slice, "run", side_effect=cuda_runner) as runner:
+                            run_vertical_slice.run_specialist(
+                                seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=manifest_path,
+                                tokenizer_path=root / "tokenizer" / "tokenizer.json", capability=capability,
+                                parent_manifest=Path("B:/parent/checkpoint-manifest.json"),
+                                root_manifest=Path("B:/root/checkpoint-manifest.json"),
+                                checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3,
+                            )
+                self.assertEqual(events, ["open", "prepare", "run"])
+                opened.assert_called_once()
+                legacy_loader.assert_not_called()
+                stream.prepare_execution_selection.assert_called_once()
+                runner.assert_called_once()
+
+    def test_specialist_preflight_rejects_noncanonical_legacy_manifest_before_stream_open(self) -> None:
+        root = Path(run_vertical_slice.__file__).resolve().parents[2]
+        with patch.object(run_vertical_slice, "open_specialist_stream", create=True) as open_stream:
+            with patch.object(run_vertical_slice, "run") as cuda_runner:
+                with self.assertRaisesRegex(ValueError, "canonical stream manifest path"):
+                    run_vertical_slice.run_specialist(
+                        seed=84, artifact_root=Path("B:/ember-artifacts"),
+                        data_manifest=Path("data/legacy-specialist.json"),
+                        tokenizer_path=root / "tokenizer" / "tokenizer.json", capability="image",
+                        parent_manifest=Path("B:/parent/checkpoint-manifest.json"),
+                        root_manifest=Path("B:/root/checkpoint-manifest.json"),
+                        checkpoint_interval=8_192, write_budget_bytes=120 * 1024**3,
+                    )
+        open_stream.assert_not_called()
+        cuda_runner.assert_not_called()
+
     def test_specialist_dispatch_does_not_enter_cuda_runner_when_lineage_preflight_fails(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image", "records_artifact_sha256": "a" * 64}
         with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=([{"active_expert": "vision", "scene_split": "train", "token_ids": [1]}, {"active_expert": "vision", "scene_split": "validation", "token_ids": [2]}, {"active_expert": "vision", "scene_split": "test", "token_ids": [3]}], verification, b"{}")):
