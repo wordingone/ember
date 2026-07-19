@@ -310,13 +310,13 @@ describe("owned server supervisor", () => {
     const root = mkdtempSync(join(tmpdir(), "ember-p2d-receipt-custody-"));
     const outside = mkdtempSync(join(tmpdir(), "ember-p2d-receipt-outside-"));
     try {
-      const receiptPath = join(root, "preflight.json");
+      const receiptPath = join(root, "owned-interactive-preflight.json");
       writeFileSync(receiptPath, "original-receipt");
       const digest = new Bun.CryptoHasher("sha256").update("original-receipt").digest("hex");
       expect(verifyDispatchReceiptCustody(receiptPath, digest, root)).toEqual({ path: resolve(receiptPath), sha256: digest });
       writeFileSync(receiptPath, "mutated-receipt");
       expect(() => verifyDispatchReceiptCustody(receiptPath, digest, root)).toThrow("hash does not match custody bytes");
-      const outsideReceipt = join(outside, "preflight.json");
+      const outsideReceipt = join(outside, "owned-interactive-preflight.json");
       writeFileSync(outsideReceipt, "outside-receipt");
       const outsideDigest = new Bun.CryptoHasher("sha256").update("outside-receipt").digest("hex");
       expect(() => verifyDispatchReceiptCustody(outsideReceipt, outsideDigest, root)).toThrow("escapes authorized custody");
@@ -359,12 +359,12 @@ describe("owned server supervisor", () => {
       required_available_maximum_commit_bytes: 2,
       maximum_job_memory_bytes: 1,
       simulated_peak_commit_bytes: 1,
-      preflight_receipt: join(root, "preflight.json"),
+      preflight_receipt: join(root, "owned-interactive-preflight.json"),
     };
     const manifestBytes = Buffer.from(JSON.stringify(payload));
     writeFileSync(sourcePath, manifestBytes);
     const receiptBytes = Buffer.from("daemon-preflight-receipt");
-    const receiptPath = join(root, "preflight.json");
+    const receiptPath = join(root, "owned-interactive-preflight.json");
     writeFileSync(receiptPath, receiptBytes);
     let receivedManifest: unknown;
     const server = createServer((socket) => {

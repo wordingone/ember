@@ -159,7 +159,7 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
         fixture.to_string_lossy(),
         ["--exact", "fixture_child_process", "--nocapture"],
         "cpu-fixture",
-    )
+    ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
     .with_env("EMBERD_FIXTURE_CHILD", "1")
     .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000");
     let started = daemon.start_job(spec).unwrap();
@@ -372,7 +372,7 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
                 fixture.to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
         )
@@ -428,7 +428,7 @@ fn failed_launch_exports_stable_receipt_without_blessing_unsealed_logs() {
             root.join("does-not-exist.exe").to_string_lossy(),
             std::iter::empty::<String>(),
             "cpu-fixture",
-        ))
+        ).with_maximum_job_memory_bytes(64 * 1024 * 1024))
         .is_err());
     assert_eq!(
         daemon.job_state("failed-launch").unwrap(),
@@ -481,7 +481,7 @@ fn stopping_job_terminates_its_entire_process_cohort() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000")
             .with_env("EMBERD_FIXTURE_SPAWN_CHILD", "1")
@@ -525,7 +525,7 @@ fn failed_job_started_event_is_not_committed_and_child_is_cleaned_up() {
             std::env::current_exe().unwrap().to_string_lossy(),
             ["--exact", "fixture_child_process", "--nocapture"],
             "cpu-fixture",
-        )
+        ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
         .with_env("EMBERD_FIXTURE_CHILD", "1")
         .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
     );
@@ -555,7 +555,7 @@ fn receipt_publication_never_replaces_an_existing_file() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -604,7 +604,7 @@ fn lifetime_handle_cannot_escape_from_root_to_descendant() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "25")
             .with_env("EMBERD_FIXTURE_SPAWN_CHILD", "1")
@@ -654,7 +654,7 @@ fn adoption_cannot_commit_after_a_newer_stopped_transition() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -725,7 +725,7 @@ fn stale_uncertain_reconciliation_cannot_overwrite_stopped_state() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -801,7 +801,7 @@ fn stale_dead_reconciliation_cannot_overwrite_stopped_state() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
         )
@@ -874,7 +874,7 @@ fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -938,7 +938,7 @@ fn resident_daemon_reaps_natural_exit_records_status_and_releases_lease() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
         )
@@ -996,7 +996,7 @@ fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "250"),
         )
@@ -1054,7 +1054,7 @@ fn planned_outage_blocks_launch_and_receipt_is_content_addressed() {
             std::env::current_exe().unwrap().to_string_lossy(),
             ["--exact", "fixture_child_process", "--nocapture"],
             "cpu-fixture",
-        )
+        ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
         .with_env("EMBERD_FIXTURE_CHILD", "1")
         .with_env("EMBERD_FIXTURE_SLEEP_MS", "25")
     };
@@ -1108,7 +1108,7 @@ fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_LOG_MESSAGE", "durable-output")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
@@ -1157,7 +1157,7 @@ fn nonterminal_job_cannot_publish_a_content_addressed_receipt() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -1188,7 +1188,7 @@ fn sealed_log_tampering_is_detected_instead_of_blessed() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_LOG_MESSAGE", "sealed")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
@@ -1232,7 +1232,7 @@ fn terminal_receipt_ignores_outage_events_after_its_persisted_cutoff() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
         )
@@ -1282,7 +1282,7 @@ fn prepared_recovery_defers_resume_while_outage_is_active() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -1352,7 +1352,7 @@ fn prepared_recovery_terminates_process_when_running_commit_fails() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -1422,7 +1422,7 @@ fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
                 std::env::current_exe().unwrap().to_string_lossy(),
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
-            )
+            ).with_maximum_job_memory_bytes(64 * 1024 * 1024)
             .with_env("EMBERD_FIXTURE_CHILD", "1")
             .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
         )
@@ -1543,4 +1543,32 @@ fn pre_log_schema_migrates_without_reinterpreting_existing_job_identity() {
         .export_content_addressed_receipt("legacy-job", &receipts)
         .unwrap();
     assert_eq!(first, second);
+}
+
+#[test]
+fn start_job_without_a_declared_memory_ceiling_is_refused_at_the_reservation_boundary() {
+    // The budget requirement lives at the reservation boundary itself
+    // (insert_reserved_job_row), so no entrypoint — dispatch, RPC, or a
+    // bare start_job — can admit a job the pinned host budget cannot see.
+    let root = sandbox("ceiling-required");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    daemon
+        .bind_identity("no-ceiling-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-ceiling", "no-ceiling-job").unwrap();
+    let fixture = std::env::current_exe().unwrap();
+    let spec = JobSpec::new(
+        "no-ceiling-job",
+        fixture.to_string_lossy(),
+        ["--exact", "fixture_child_process", "--nocapture"],
+        "cpu-ceiling",
+    )
+    .with_env("EMBERD_FIXTURE_CHILD", "1");
+    let error = daemon.start_job(spec).unwrap_err();
+    assert!(
+        matches!(error, EmberdError::JobMemoryCeilingRequired { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(daemon.job_state("no-ceiling-job").unwrap(), None);
 }

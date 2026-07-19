@@ -202,6 +202,13 @@ pub enum EmberdError {
     DispatchUnknownLegacyLiveBudget {
         job_ids: Vec<String>,
     },
+    JobMemoryCeilingRequired {
+        job_id: String,
+    },
+    DispatchReceiptPathNotJobScoped {
+        job_id: String,
+        preflight_receipt: PathBuf,
+    },
     DispatchVramProviderUnavailable {
         minimum_free_vram_bytes: u64,
         detail: String,
@@ -1330,7 +1337,22 @@ impl Daemon {
                 detail: "dispatch custody root is not a directory".into(),
             });
         }
-        let _receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
+        let receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
+        // Per-job collision-refusing receipt identity: two DISTINCT jobs can
+        // never select the same receipt path by construction — the receipt
+        // filename must embed the job_id. Without this, a concurrent
+        // distinct-manifest dispatch could pass a non-atomic exists-check
+        // and later overwrite the other job's decision evidence.
+        let receipt_file_name = receipt_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if !receipt_file_name.contains(manifest.job_id.as_str()) {
+            return Err(EmberdError::DispatchReceiptPathNotJobScoped {
+                job_id: manifest.job_id.clone(),
+                preflight_receipt: manifest.preflight_receipt.clone(),
+            });
+        }
         let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
         let mut verified_bindings = Vec::with_capacity(manifest.bindings.len());
         let mut seen = std::collections::BTreeSet::new();
@@ -1472,6 +1494,21 @@ impl Daemon {
             });
         }
         let receipt_path = absolute_under_root(&manifest.preflight_receipt, &custody_root)?;
+        // Per-job collision-refusing receipt identity: two DISTINCT jobs can
+        // never select the same receipt path by construction — the receipt
+        // filename must embed the job_id. Enforced here in the shared inner
+        // path so both the path-based and bytes-based entrypoints refuse
+        // before any receipt or job row exists.
+        let receipt_file_name = receipt_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if !receipt_file_name.contains(manifest.job_id.as_str()) {
+            return Err(EmberdError::DispatchReceiptPathNotJobScoped {
+                job_id: manifest.job_id.clone(),
+                preflight_receipt: manifest.preflight_receipt.clone(),
+            });
+        }
         if let Some(existing) =
             self.reconstruct_existing_dispatch(&manifest, manifest_bytes, &receipt_path)?
         {
@@ -1534,6 +1571,7 @@ impl Daemon {
         // never manifest-controlled. Checked in addition to any manifest
         // storage_reserves. A drive absent on this host is skipped, never
         // blocking admission.
+        let mut floor_receipts: Vec<Value> = Vec::new();
         for (root_str, minimum_free_bytes) in survival_floors::ROOTS {
             let root = PathBuf::from(root_str);
             let canonical_root = match probe_survival_floor_root(&root) {
@@ -1583,6 +1621,11 @@ impl Daemon {
                     receipt_path,
                 });
             }
+            floor_receipts.push(json!({
+                "root": &canonical_root,
+                "minimum_free_bytes": minimum_free_bytes,
+                "available_free_bytes": available,
+            }));
         }
 
         let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
@@ -1742,6 +1785,7 @@ impl Daemon {
             "env_sha256": env_sha256,
             "custody_root": &custody_root,
             "storage_reserves": reserve_receipts,
+            "consumer_floor": floor_receipts,
             "vram_reserve": {
                 "minimum_free_bytes": manifest.minimum_free_vram_bytes,
                 "available_free_bytes": available_vram,
@@ -2032,6 +2076,16 @@ impl Daemon {
         stderr_log_path: &Path,
         timestamp: i64,
     ) -> Result<()> {
+        // Reservation boundary owns the budget requirement: EVERY admission
+        // path (bare start_job, RPC, pinned-budget dispatch) reserves a
+        // positive committed-memory ceiling or refuses — a zero/absent
+        // ceiling would silently undercount the live-committed SUM the
+        // governor admits against.
+        if spec.maximum_job_memory_bytes.unwrap_or(0) == 0 {
+            return Err(EmberdError::JobMemoryCeilingRequired {
+                job_id: spec.job_id.clone(),
+            });
+        }
         let outage: Option<(i64, String)> = tx
             .query_row(
                 "SELECT ends_at_ms,reason FROM planned_outages WHERE resource=?1 AND cancelled_at_ms IS NULL AND starts_at_ms<=?2 AND ends_at_ms>?2 ORDER BY outage_id DESC LIMIT 1",

@@ -94,7 +94,7 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
     let data_manifest = root.join("data-manifest.json");
     fs::write(&data_manifest, b"{\"records\":4096}").unwrap();
     let program = std::env::current_exe().unwrap();
-    let manifest = root.join("dispatch.json");
+    let manifest = root.join(format!("{job_id}-dispatch.json"));
     fs::write(
         &manifest,
         serde_json::to_vec(&json!({
@@ -117,7 +117,7 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
         "required_available_maximum_commit_bytes": DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
         "maximum_job_memory_bytes": MAXIMUM_JOB_MEMORY_BYTES,
         "simulated_peak_commit_bytes": SIMULATED_PEAK_COMMIT_BYTES,
-        "preflight_receipt": root.join("custody").join("preflight.json")
+        "preflight_receipt": root.join("custody").join(format!("{job_id}-preflight.json"))
         }))
         .unwrap(),
     )
@@ -253,7 +253,7 @@ fn identical_dispatch_retry_reconstructs_the_existing_job_and_receipt() {
 fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_a_second_start() {
     let root = sandbox("receipt-publication-recovery");
     let manifest = write_manifest(&root, "dispatch-receipt-recovery", 10_000);
-    let receipt_path = root.join("custody").join("preflight.json");
+    let receipt_path = root.join("custody").join("dispatch-receipt-recovery-preflight.json");
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
 
     let first = daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
@@ -311,7 +311,7 @@ fn dispatch_manifest_lease_conflict_leaves_no_selectable_preflight_and_retries()
     let second = root.join("dispatch-second.json");
     let mut payload: Value = serde_json::from_slice(&fs::read(&first).unwrap()).unwrap();
     payload["job_id"] = json!("dispatch-lease-second");
-    payload["preflight_receipt"] = json!(root.join("custody").join("second-preflight.json"));
+    payload["preflight_receipt"] = json!(root.join("custody").join("dispatch-lease-second-preflight.json"));
     fs::write(&second, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     daemon
@@ -335,7 +335,7 @@ fn dispatch_manifest_lease_conflict_leaves_no_selectable_preflight_and_retries()
         ),
         Err(EmberdError::LeaseConflict { .. })
     ));
-    assert!(!root.join("custody").join("second-preflight.json").exists());
+    assert!(!root.join("custody").join("dispatch-lease-second-preflight.json").exists());
     assert_eq!(daemon.job_state("dispatch-lease-second").unwrap(), None);
     assert_eq!(daemon.identity_hash("dispatch-lease-second").unwrap(), None);
     daemon.stop_job("dispatch-lease-first").unwrap();
@@ -373,7 +373,7 @@ fn dispatch_manifest_spawn_failure_leaves_no_selectable_preflight_and_retries() 
             |_root| Ok(u64::MAX),
         )
         .is_err());
-    assert!(!root.join("custody").join("preflight.json").exists());
+    assert!(!root.join("custody").join("dispatch-spawn-retry-preflight.json").exists());
     assert_eq!(daemon.job_state("dispatch-spawn-retry").unwrap(), None);
     assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
     assert_eq!(daemon.identity_hash("dispatch-spawn-retry").unwrap(), None);
@@ -411,7 +411,7 @@ fn dispatch_manifest_rejects_stale_v1_host_capacity_schema() {
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(daemon.job_state("dispatch-stale-v1").unwrap(), None);
-    assert!(!root.join("custody").join("preflight.json").exists());
+    assert!(!root.join("custody").join("dispatch-stale-v1-preflight.json").exists());
 }
 
 #[test]
@@ -464,7 +464,7 @@ fn dispatch_manifest_refuses_physical_pagefile_and_commit_drift() {
             .unwrap_err();
         assert!(format!("{error:?}").contains("DispatchHostCommitReserve"));
         let receipt: Value =
-            serde_json::from_slice(&fs::read(root.join("custody").join("preflight.json")).unwrap())
+            serde_json::from_slice(&fs::read(root.join("custody").join(format!("dispatch-{name}-preflight.json"))).unwrap())
                 .unwrap();
         assert_eq!(receipt["result"], "REFUSED_HOST_COMMIT_CAP");
         assert_eq!(receipt["host_commit"]["physical_ram_bytes"], physical);
@@ -528,7 +528,7 @@ fn dispatch_manifest_refuses_unsafe_host_commit_cap_with_receipt_before_spawn() 
             "unexpected error: {error:?}"
         );
         assert_eq!(daemon.job_state(&format!("dispatch-{name}")).unwrap(), None);
-        let receipt_path = root.join("custody").join("preflight.json");
+        let receipt_path = root.join("custody").join(format!("dispatch-{name}-preflight.json"));
         let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
         assert_eq!(receipt["result"], "REFUSED_HOST_COMMIT_CAP");
         assert_eq!(
@@ -610,7 +610,7 @@ fn dispatch_manifest_rejects_a_missing_job_memory_ceiling() {
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(daemon.job_state("dispatch-missing-memory").unwrap(), None);
-    assert!(!root.join("custody").join("preflight.json").exists());
+    assert!(!root.join("custody").join("dispatch-missing-memory-preflight.json").exists());
 }
 
 #[test]
@@ -643,8 +643,38 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
         );
         assert_eq!(daemon.job_state(&format!("dispatch-{name}")).unwrap(), None);
         assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
-        assert!(!root.join("custody").join("preflight.json").exists());
+        assert!(!root.join("custody").join(format!("dispatch-{name}-preflight.json")).exists());
     }
+}
+
+#[test]
+fn dispatch_manifest_refuses_receipt_path_not_scoped_to_job() {
+    // Per-job collision-refusing receipt paths: a manifest whose declared
+    // preflight_receipt filename does not carry its own job_id is refused
+    // before any receipt or job row is produced — two jobs can never race
+    // one shared receipt file.
+    let root = sandbox("receipt-not-job-scoped");
+    let manifest = write_manifest(&root, "dispatch-unscoped-receipt", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["preflight_receipt"] = json!(root.join("custody").join("shared-preflight.json"));
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchReceiptPathNotJobScoped { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(daemon.job_state("dispatch-unscoped-receipt").unwrap(), None);
+    assert!(!root.join("custody").join("shared-preflight.json").exists());
 }
 
 #[test]
@@ -691,7 +721,7 @@ fn dispatch_manifest_requires_typed_config_and_manifest_bindings() {
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(daemon.job_state("dispatch-binding-classes").unwrap(), None);
-    assert!(!root.join("custody").join("preflight.json").exists());
+    assert!(!root.join("custody").join("dispatch-binding-classes-preflight.json").exists());
 }
 
 #[test]
@@ -721,7 +751,7 @@ fn dispatch_manifest_bytes_refuses_a_conflicting_daemon_custody_snapshot_before_
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(fs::read(&custody_snapshot).unwrap(), b"{\"attacker\":true}");
-    assert!(!root.join("custody").join("preflight.json").exists());
+    assert!(!root.join("custody").join("dispatch-manifest-bytes-snapshot-preflight.json").exists());
     assert_eq!(
         daemon
             .job_state("dispatch-manifest-bytes-snapshot")
@@ -736,7 +766,7 @@ fn dispatch_manifest_bytes_never_creates_an_unapproved_candidate_custody_root() 
     let unapproved = root.join("unapproved-custody");
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
     payload["custody_root"] = json!(unapproved);
-    payload["preflight_receipt"] = json!(unapproved.join("preflight.json"));
+    payload["preflight_receipt"] = json!(unapproved.join("dispatch-manifest-bytes-unapproved-custody-preflight.json"));
     let manifest_bytes = serde_json::to_vec(&payload).unwrap();
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
@@ -774,7 +804,7 @@ fn dispatch_manifest_snapshots_are_bounded_after_semantic_preflight() {
         let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
         payload["job_id"] = json!(format!("dispatch-snapshot-{index}"));
         payload["preflight_receipt"] =
-            json!(root.join("custody").join(format!("snapshot-{index}.json")));
+            json!(root.join("custody").join(format!("dispatch-snapshot-{index}-preflight.json")));
         let bytes = serde_json::to_vec(&payload).unwrap();
         let digest = format!("{:x}", Sha256::digest(&bytes));
         assert!(matches!(
@@ -967,7 +997,7 @@ fn dispatch_manifest_rejects_cache_and_equals_path_escapes() {
             Err(EmberdError::InvalidDispatchManifest { .. })
         ));
         assert_eq!(daemon.job_state(&format!("dispatch-{name}")).unwrap(), None);
-        assert!(!root.join("custody").join("preflight.json").exists());
+        assert!(!root.join("custody").join("dispatch-resume-registry-preflight.json").exists());
     }
 }
 
@@ -1023,7 +1053,7 @@ fn dispatch_manifest_pinned_host_budget_subtracts_live_jobs_and_releases_on_exit
     assert_eq!(daemon.job_state("dispatch-pin-b").unwrap(), None);
     assert_eq!(daemon.lease_owner("gpu-smoke-b").unwrap(), None);
     let receipt: Value = serde_json::from_slice(
-        &fs::read(root_b.join("custody").join("preflight.json")).unwrap(),
+        &fs::read(root_b.join("custody").join("dispatch-pin-b-preflight.json")).unwrap(),
     )
     .unwrap();
     assert_eq!(receipt["result"], "REFUSED_PINNED_HOST_BUDGET");
@@ -1088,7 +1118,7 @@ fn dispatch_manifest_refuses_consumer_floor_violation_regardless_of_manifest() {
         None
     );
     let receipt: Value = serde_json::from_slice(
-        &fs::read(root.join("custody").join("preflight.json")).unwrap(),
+        &fs::read(root.join("custody").join("dispatch-consumer-floor-preflight.json")).unwrap(),
     )
     .unwrap();
     assert_eq!(receipt["result"], "REFUSED_CONSUMER_FLOOR");
@@ -1194,6 +1224,13 @@ fn dispatch_manifest_pinned_host_budget_admits_exactly_one_of_two_concurrent_ove
         daemon.live_committed_job_memory_bytes().unwrap(),
         MAXIMUM_JOB_MEMORY_BYTES,
         "exactly the admitted job's declared budget stays live-committed"
+    );
+    let admitted_outcome = results.iter().find_map(|r| r.as_ref().ok()).unwrap();
+    let admitted_receipt: Value =
+        serde_json::from_slice(&fs::read(&admitted_outcome.receipt.path).unwrap()).unwrap();
+    assert_eq!(
+        admitted_receipt["result"], "PREFLIGHT_PASSED",
+        "the admitted dispatch's own receipt must be the passing one"
     );
 
     for job_id in ["dispatch-conc-a", "dispatch-conc-b"] {

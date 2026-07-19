@@ -176,7 +176,7 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
             "required_available_maximum_commit_bytes": declared_available_maximum_commit_bytes,
             "maximum_job_memory_bytes": maximum_job_memory_bytes,
             "simulated_peak_commit_bytes": 536_870_912u64,
-            "preflight_receipt": root.join("custody").join("preflight.json")
+            "preflight_receipt": root.join("custody").join(format!("{job_id}-preflight.json"))
         }))
         .unwrap(),
     )
@@ -249,6 +249,32 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
     assert!(result["pid"].as_u64().unwrap() > 0);
     let receipt = PathBuf::from(result["preflight_receipt_path"].as_str().unwrap());
     assert_eq!(sha256(&receipt), result["preflight_receipt_sha256"]);
+    // The REAL binary's receipt must disclose the increment-1 admission
+    // evidence end-to-end: the consumer survival-floor probes and the VRAM
+    // provider status ("unavailable" admits with truthful disclosure under
+    // the provider-availability law; "available" enforces the minimum).
+    let receipt_json: Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
+    assert_eq!(receipt_json["result"], "PREFLIGHT_PASSED");
+    let floors = receipt_json["consumer_floor"].as_array().unwrap();
+    assert!(
+        !floors.is_empty(),
+        "receipt must carry per-root consumer floor evidence: {receipt_json}"
+    );
+    for floor in floors {
+        assert!(floor["root"].is_string());
+        assert!(floor["minimum_free_bytes"].as_u64().unwrap() > 0);
+        assert!(
+            floor["available_free_bytes"].as_u64().unwrap()
+                >= floor["minimum_free_bytes"].as_u64().unwrap()
+        );
+    }
+    let provider_status = receipt_json["vram_reserve"]["provider_status"]
+        .as_str()
+        .unwrap();
+    assert!(
+        provider_status == "available" || provider_status == "unavailable",
+        "provider_status must be disclosed truthfully: {receipt_json}"
+    );
     assert_eq!(
         rpc(
             &pipe,
