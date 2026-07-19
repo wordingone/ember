@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_run_controls_receipt_test.py -- TDD tests for the PR955 round-2 repair:
 run_controls.py (the canonical chk_controls driver) must itself execute the
 gh #715 C-MANIFEST/C-TALLY denominator regression (reviewer defect P1), with
