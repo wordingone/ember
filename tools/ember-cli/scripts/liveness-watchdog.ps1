@@ -132,10 +132,37 @@ function Get-SingleGitdirRecord {
     return $m.Groups[1].Value
 }
 
+function Get-DotGitItemState {
+    <#
+    .SYNOPSIS
+    PR954 round 4 repair: classifies $Path strictly under TERMINATING-error semantics via
+    Get-Item, never Test-Path. `Test-Path -PathType Leaf` swallows access errors internally
+    and returns $false on anything it can't classify (permission-denied, locked, or
+    otherwise unclassifiable) -- Resolve-CanonicalRepoRoot then read that $false as
+    "definitely absent" and fell open to the worktree-local heartbeat path, exactly the
+    silent-wrong-root failure issue #666 exists to kill. This classifier returns EXACTLY
+    'Absent' (a genuine ItemNotFoundException) or 'Directory'/'File' (Get-Item succeeded);
+    any OTHER failure -- access denied, locked, or any unclassifiable stat error -- throws,
+    same fail-closed contract as the unreadable-content path below.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        return 'Absent'
+    } catch {
+        throw "could not classify $Path (permission-denied, locked, or otherwise unclassifiable -- neither confirmed absent nor confirmed present): $($_.Exception.Message). Refusing to guess whether this is a worktree gitdir pointer file (issue #666 strict resolver, PR954 round 4)."
+    }
+    if ($item.PSIsContainer) { return 'Directory' }
+    return 'File'
+}
+
 function Resolve-CanonicalRepoRoot {
     param([Parameter(Mandatory)][string]$Root)
     $dotGit = Join-Path $Root '.git'
-    if (-not (Test-Path $dotGit -PathType Leaf)) { return $Root }
+    $dotGitState = Get-DotGitItemState -Path $dotGit
+    if ($dotGitState -eq 'Absent') { return $Root } # no .git at all -- standalone/git-less deployment.
+    if ($dotGitState -eq 'Directory') { return $Root } # main checkout.
 
     try {
         $raw = Get-Content -Path $dotGit -Raw -ErrorAction Stop

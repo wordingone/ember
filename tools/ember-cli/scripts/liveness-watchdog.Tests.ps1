@@ -995,3 +995,152 @@ Describe 'PR954 round 2 -- watchdog script fails closed before HeartbeatPath con
         }
     }
 }
+
+# ---------------------------------------------------------------------------------------
+# PR954 round 4 -- reviewer reject of round 3 (811dd9d2):
+#   P1: Test-Path -PathType Leaf swallows access errors and returns $false on anything it
+#       can't classify (permission-denied, locked, unclassifiable) -- Resolve-CanonicalRepoRoot
+#       then read that $false as "definitely absent" and fell open to the worktree-local
+#       heartbeat path. Repaired via Get-DotGitItemState (Get-Item + terminating errors,
+#       above): only a genuine ItemNotFoundException resolves to 'Absent'; every other
+#       failure throws.
+#   Coverage gaps closed as fixtures at the WATCHDOG-INVOCATION level (full `. $scriptPath
+#   -RepoRoot $root`, never just the isolated Resolve-CanonicalRepoRoot function):
+#     (1) a RELATIVE gitdir pointer resolves correctly (never silently mis-resolves or
+#         throws) -- proves the relative-path Join-Path-against-$Root logic is exercised
+#         end-to-end, not just at the function level.
+#     (2) a DANGLING gitdir pointer target throws at full invocation (round 3 already
+#         covers this at the Resolve-CanonicalRepoRoot function level; this closes the
+#         same gap one layer up, at script boot).
+#     (3) a genuinely UNREADABLE .git pointer file (real ACL deny, not just malformed
+#         content) throws at full invocation, never silently falls through.
+# ---------------------------------------------------------------------------------------
+
+Describe 'PR954 round 4 -- P1 repair: Get-Item terminating-error classification never falls open on an unclassifiable .git' {
+    BeforeEach {
+        $script:scratch = New-Scratch
+    }
+    AfterEach {
+        Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    function New-MarkerRoot4 {
+        param([Parameter(Mandatory)][string]$Root)
+        New-Item -ItemType Directory -Path (Join-Path $Root 'tools\ember-cli') -Force | Out-Null
+        Set-Content -Path (Join-Path $Root 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+    }
+
+    It 'an unclassifiable .git (Get-Item throws access-denied, the Test-Path fail-open repro) THROWS, never silently falls through to the worktree-local root' {
+        # The gitdir target is a VALID <main>/.git/worktrees/<name> shape pointing at a
+        # marker-valid main root -- so this test discriminates the P1 defect specifically:
+        # old code (Test-Path -PathType Leaf, unaffected by mocking Get-Item) resolves
+        # this fixture successfully with NO throw, while new code (Get-Item-based
+        # classification) throws because Get-Item is mocked to fail. A gitdir target that
+        # was invalid on its own would throw under BOTH old and new code for an unrelated
+        # reason (wrong gitdir shape), which would not actually prove this repair.
+        $mainRoot = Join-Path $scratch 'unclassifiable-main'
+        $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+        New-MarkerRoot4 -Root $mainRoot
+
+        $root = Join-Path $scratch 'unclassifiable-gitfile'
+        New-MarkerRoot4 -Root $root
+        # NOTE: named $script:p1TargetDotGit (never bare $dotGit) deliberately -- Mock's
+        # -ParameterFilter scriptblock is invoked dynamically from INSIDE
+        # Resolve-CanonicalRepoRoot's own call frame (which has ITS OWN local $dotGit), so
+        # a filter referencing a bare $dotGit resolves to the CALLEE's variable (trivially
+        # always equal to itself) rather than this test's fixture path -- a real defect
+        # hit while writing this fixture, not a hypothetical.
+        $script:p1TargetDotGit = Join-Path $root '.git'
+        [System.IO.File]::WriteAllText($script:p1TargetDotGit, "gitdir: $gitdirTarget`n")
+
+        # Reproduces the exact P1 defect deterministically: a Get-Item failure that is
+        # NEITHER a genuine ItemNotFoundException NOR a successful stat -- the shape
+        # Test-Path used to swallow and silently report as "absent".
+        Mock Get-Item { throw [System.UnauthorizedAccessException]::new("Access to the path '$($script:p1TargetDotGit)' is denied.") } -ParameterFilter { $LiteralPath -eq $script:p1TargetDotGit }
+
+        { Resolve-CanonicalRepoRoot -Root $root } | Should Throw
+    }
+
+    It 'control: a genuinely absent .git (no mock) still resolves to $Root unchanged -- the P1 repair does not regress the standalone-deployment case' {
+        $root = Join-Path $scratch 'standalone-p1-control'
+        New-MarkerRoot4 -Root $root
+        Test-Path (Join-Path $root '.git') | Should Be $false
+
+        Resolve-CanonicalRepoRoot -Root $root | Should Be $root
+    }
+}
+
+Describe 'PR954 round 4 -- watchdog-invocation-level fixtures: relative gitdir, dangling target, unreadable .git' {
+    function New-MarkerRoot4Boot {
+        param([Parameter(Mandatory)][string]$Root)
+        New-Item -ItemType Directory -Path (Join-Path $Root 'tools\ember-cli') -Force | Out-Null
+        Set-Content -Path (Join-Path $Root 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+    }
+
+    It 'a RELATIVE gitdir pointer (relative to the .git FILE''s own directory) resolves to the marker-valid main root at full script boot' {
+        $scratch = New-Scratch
+        try {
+            $mainRoot = Join-Path $scratch 'relative-main'
+            $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+            New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+            New-MarkerRoot4Boot -Root $mainRoot
+
+            $worktreeRoot = Join-Path $scratch 'relative-wt'
+            New-MarkerRoot4Boot -Root $worktreeRoot
+            # Relative to the directory CONTAINING the .git file (the worktree root
+            # itself) -- the real on-disk shape `git worktree add` produces when the
+            # main checkout and the worktree share a common parent.
+            Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: ..\relative-main\.git\worktrees\lane" -Encoding utf8
+
+            $resolved = & {
+                . $scriptPath -RepoRoot $worktreeRoot
+                return $RepoRoot
+            }
+            $resolved | Should Be $mainRoot
+        } finally {
+            Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'a DANGLING gitdir pointer (target directory absent) throws at full script boot, never silently proceeds' {
+        $scratch = New-Scratch
+        try {
+            $mainRoot = Join-Path $scratch 'dangling-boot-main'
+            New-Item -ItemType Directory -Path $mainRoot -Force | Out-Null
+            New-MarkerRoot4Boot -Root $mainRoot
+            $danglingTarget = Join-Path $mainRoot '.git\worktrees\lane'
+            Test-Path $danglingTarget | Should Be $false
+
+            $worktreeRoot = Join-Path $scratch 'dangling-boot-wt'
+            New-MarkerRoot4Boot -Root $worktreeRoot
+            Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: $danglingTarget`n" -Encoding utf8
+
+            { . $scriptPath -RepoRoot $worktreeRoot } | Should Throw
+        } finally {
+            Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'a genuinely UNREADABLE .git pointer file (real ACL deny, not just malformed content) throws at full script boot, never silently falls through' {
+        $scratch = New-Scratch
+        try {
+            $root = Join-Path $scratch 'unreadable-boot'
+            New-MarkerRoot4Boot -Root $root
+            $dotGit = Join-Path $root '.git'
+            Set-Content -Path $dotGit -Value 'gitdir: somewhere' -Encoding utf8
+            $user = "$env:USERDOMAIN\$env:USERNAME"
+            icacls $dotGit /deny "${user}:(R)" | Out-Null
+
+            try {
+                { . $scriptPath -RepoRoot $root } | Should Throw
+            } finally {
+                # Reset the deny ACE BEFORE the outer scratch cleanup, or the recursive
+                # delete below can itself fail/leave the ACL-denied file behind.
+                icacls $dotGit /reset | Out-Null
+            }
+        } finally {
+            Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

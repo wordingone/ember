@@ -7,6 +7,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import {
   createLivenessHeartbeatWriter,
   heartbeatAge,
@@ -279,5 +280,99 @@ describe("PR954 round 2 — inert writer on strict-resolver failure", () => {
     expect(writer.filePath).not.toBeNull();
     writer.write(Date.UTC(2026, 6, 7, 12, 0, 0));
     expect(fs.existsSync(requireFilePath(writer.filePath))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// PR954 round 4 — reviewer coverage gaps closed at the WRITER level (createLivenessHeartbeatWriter
+// via the real resolution chain — cwd + .git FILE — never a repoRoot override): a RELATIVE
+// gitdir pointer resolves to a live writer at the correct main root, and a genuinely
+// UNREADABLE .git FILE (real ACL deny, not just malformed content) produces an inert writer,
+// never a silent fall-through to the worktree-local path.
+// ---------------------------------------------------------------------------------------
+
+describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely unreadable .git", () => {
+  test("a RELATIVE gitdir pointer (relative to the .git FILE's own directory) resolves to a live writer at the main checkout", () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-r4-rel-"));
+    const savedCwd = process.cwd();
+    const savedEnv = process.env["EMBER_REPO_ROOT"];
+    try {
+      const mainRoot = path.join(scratch, "relative-main");
+      fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
+      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
+
+      const worktreeRoot = path.join(scratch, "relative-wt");
+      fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
+      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      // Relative to the directory CONTAINING the .git file (the worktree root itself) --
+      // the real on-disk shape when the main checkout and worktree share a common parent.
+      fs.writeFileSync(path.join(worktreeRoot, ".git"), "gitdir: ../relative-main/.git/worktrees/lane\n");
+
+      delete process.env["EMBER_REPO_ROOT"];
+      process.chdir(path.join(worktreeRoot, "tools", "ember-cli"));
+
+      const writer = createLivenessHeartbeatWriter({ pid: 5252, version: "rel" });
+      const expected = path.join(path.resolve(mainRoot), "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+      expect(writer.filePath).toBe(expected);
+
+      writer.write();
+      expect(readHeartbeatRow(expected)?.pid).toBe(5252);
+    } finally {
+      process.chdir(savedCwd);
+      if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedEnv;
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("a genuinely UNREADABLE .git FILE (real ACL deny, not just malformed content) produces an inert writer, never a silent fall-through", () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-r4-unreadable-"));
+    const savedCwd = process.cwd();
+    const savedEnv = process.env["EMBER_REPO_ROOT"];
+    const dotGit = path.join(scratch, ".git");
+    let denied = false;
+    try {
+      fs.writeFileSync(path.join(scratch, "GOAL.md"), "# fixture\n");
+      fs.mkdirSync(path.join(scratch, "tools", "ember-cli"), { recursive: true });
+      fs.writeFileSync(dotGit, "gitdir: somewhere\n");
+
+      const user = `${process.env["USERDOMAIN"]}\\${process.env["USERNAME"]}`;
+      execSync(`icacls "${dotGit}" /deny "${user}:(R)"`, { stdio: "pipe" });
+      denied = true;
+
+      delete process.env["EMBER_REPO_ROOT"];
+      process.chdir(scratch);
+
+      const warnCalls: unknown[][] = [];
+      const originalWarn = console.warn;
+      console.warn = (...args: unknown[]) => {
+        warnCalls.push(args);
+      };
+      let writer: ReturnType<typeof createLivenessHeartbeatWriter>;
+      try {
+        writer = createLivenessHeartbeatWriter({ pid: 7373, version: "unreadable" });
+      } finally {
+        console.warn = originalWarn;
+      }
+
+      expect(writer.filePath).toBeNull();
+      expect(warnCalls.length).toBe(1);
+      expect(String(warnCalls[0]?.[0])).toMatch(/repo root/i);
+      // The true no-op contract: nothing landed anywhere under scratch.
+      expect(fs.existsSync(path.join(scratch, "tools", "ember-cli", "state"))).toBe(false);
+    } finally {
+      if (denied) {
+        try {
+          execSync(`icacls "${dotGit}" /reset`, { stdio: "pipe" });
+        } catch {
+          // best-effort ACL reset -- never let cleanup mask the test's own result.
+        }
+      }
+      process.chdir(savedCwd);
+      if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedEnv;
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });
