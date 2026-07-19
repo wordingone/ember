@@ -23,6 +23,10 @@ def fixture_counter_receipt(candidate: Path, manifest: dict[str, Any]) -> dict[s
         "active_expert_ids": manifest["active_expert_ids"],
         "expert_genesis_sha256": manifest["expert_genesis_sha256"],
         "expert_parameter_sha256": manifest["expert_parameter_sha256"],
+        "runtime_authority": {
+            "schema_version": "ember-counter-runtime-authority-v1",
+            "kind": "NONE",
+        },
     }
     for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
         payload[field] = architecture[field]
