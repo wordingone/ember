@@ -1,15 +1,22 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import { describe, expect, test } from 'bun:test';
 import {
   modelSupportsISP,
   modelSupportsContextManagement,
   modelSupportsStructuredOutputs,
   getAllModelBetas,
-  LOCAL_MODEL_ID,
 } from './model-config';
 
+// Neutral test identifier -- no hardcoded fallback model-id literal
+// (Fix #51 P1 repair (4): the old local-model constant was removed entirely).
+const TEST_MODEL_ID = 'test-model-a';
+
 describe('modelSupportsISP', () => {
-  test('AC1: local model (qwen3.6) does not support ISP (cloud-only feature)', () => {
-    expect(modelSupportsISP(LOCAL_MODEL_ID)).toBe(false);
+  test('AC1: any given model id does not support ISP (cloud-only feature)', () => {
+    expect(modelSupportsISP(TEST_MODEL_ID)).toBe(false);
   });
 
   test('AC2: unknown model returns false for ISP', () => {
@@ -22,8 +29,8 @@ describe('modelSupportsISP', () => {
 });
 
 describe('modelSupportsContextManagement', () => {
-  test('local model does not support context management (cloud-only feature)', () => {
-    expect(modelSupportsContextManagement(LOCAL_MODEL_ID)).toBe(false);
+  test('any given model id does not support context management (cloud-only feature)', () => {
+    expect(modelSupportsContextManagement(TEST_MODEL_ID)).toBe(false);
   });
 
   test('unknown model returns false', () => {
@@ -32,18 +39,68 @@ describe('modelSupportsContextManagement', () => {
 });
 
 describe('modelSupportsStructuredOutputs', () => {
-  test('local model (qwen3.6) supports structured outputs via llama-server grammar', () => {
-    expect(modelSupportsStructuredOutputs(LOCAL_MODEL_ID)).toBe(true);
+  const SERVED = 'd'.repeat(64);
+
+  test('no declaration defaults to false', () => {
+    expect(modelSupportsStructuredOutputs(null, SERVED)).toBe(false);
+    expect(modelSupportsStructuredOutputs(undefined, SERVED)).toBe(false);
   });
 
-  test('unknown model returns false', () => {
-    expect(modelSupportsStructuredOutputs('some-unknown')).toBe(false);
+  test('a declaration without a bound modelConfigSha256 defaults to false', () => {
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: null, structuredOutputs: true },
+        SERVED,
+      ),
+    ).toBe(false);
+  });
+
+  test('a declaration matching the exact served modelConfigSha256 is honored', () => {
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: true },
+        SERVED,
+      ),
+    ).toBe(true);
+  });
+
+  test('NEGATIVE: a fabricated/mismatched hash is denied even with structuredOutputs=true', () => {
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: 'e'.repeat(64), structuredOutputs: true },
+        SERVED,
+      ),
+    ).toBe(false);
+  });
+
+  test('NEGATIVE: a missing served hash denies capability regardless of declaration', () => {
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: true },
+        null,
+      ),
+    ).toBe(false);
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: true },
+        '',
+      ),
+    ).toBe(false);
+  });
+
+  test('a bound declaration with structuredOutputs=false stays false', () => {
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: false },
+        SERVED,
+      ),
+    ).toBe(false);
   });
 });
 
 describe('getAllModelBetas', () => {
-  test('AC3: local model returns no betas (local server has no provider beta headers)', () => {
-    const betas = getAllModelBetas(LOCAL_MODEL_ID, { ispEnabled: true });
+  test('AC3: any given model id returns no betas (local server has no provider beta headers)', () => {
+    const betas = getAllModelBetas(TEST_MODEL_ID, { ispEnabled: true });
     expect(betas).toEqual([]);
   });
 
@@ -51,8 +108,8 @@ describe('getAllModelBetas', () => {
     expect(getAllModelBetas('totally-unknown-model-xyz', {})).toEqual([]);
   });
 
-  test('AC5: beta list is always empty for local model (deduplicated)', () => {
-    const betas = getAllModelBetas(LOCAL_MODEL_ID, {
+  test('AC5: beta list is always empty for any given model id (deduplicated)', () => {
+    const betas = getAllModelBetas(TEST_MODEL_ID, {
       ispEnabled: true,
       tokenEfficientTools: true,
       extendedContext: true,
@@ -62,7 +119,7 @@ describe('getAllModelBetas', () => {
   });
 
   test('result is sorted lexicographically (deterministic order)', () => {
-    const betas = getAllModelBetas(LOCAL_MODEL_ID, {
+    const betas = getAllModelBetas(TEST_MODEL_ID, {
       ispEnabled: true,
       tokenEfficientTools: true,
       extendedContext: true,
@@ -72,8 +129,8 @@ describe('getAllModelBetas', () => {
   });
 
   test('[1m] suffix is stripped before lookup', () => {
-    const withSuffix = getAllModelBetas(`${LOCAL_MODEL_ID}[1m]`, { ispEnabled: true });
-    const without = getAllModelBetas(LOCAL_MODEL_ID, { ispEnabled: true });
+    const withSuffix = getAllModelBetas(`${TEST_MODEL_ID}[1m]`, { ispEnabled: true });
+    const without = getAllModelBetas(TEST_MODEL_ID, { ispEnabled: true });
     expect(withSuffix).toEqual(without);
   });
 });

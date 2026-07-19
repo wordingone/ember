@@ -1,4 +1,10 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // magic-docs.ts — Auto-updating magic documentation files for privileged users.
+
+import type { SelectedModelContract } from './entrypoints/model-seat';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -12,9 +18,6 @@ export const MAIN_REPL_QUERY_SOURCE = 'main_repl';
 
 /** Pattern that a file must match in its content to be considered a magic-docs file. */
 export const MAGIC_DOCS_HEADER_PATTERN = /<!--\s*magic-docs\s+version=\d+\s*-->/;
-
-/** Model used to regenerate magic-docs content. */
-export const MAGIC_DOCS_MODEL = 'qwen-3.6';
 
 // ---------------------------------------------------------------------------
 // Default system prompt (used when no custom prompt.md exists)
@@ -59,6 +62,16 @@ export interface MagicDocsServiceOptions {
    * `readFileFn` should throw and the built-in default prompt is used.
    */
   customPromptPath: string;
+
+  /**
+   * The currently selected model identity + capability contract (see
+   * `entrypoints/model-seat.ts::selectedModelContract`) — NOT a bare
+   * modelName string, so a caller can never inject an arbitrary model
+   * identity without it being seat-authorized. `undefined` means no seat
+   * currently carries a model (e.g. OFFLINE or a refused seat); the service
+   * fails closed and makes no model call in that case.
+   */
+  modelContract: SelectedModelContract | undefined;
 }
 
 interface MagicDocsService {
@@ -88,6 +101,10 @@ export function createMagicDocsService(options: MagicDocsServiceOptions): MagicD
   }
 
   async function runUpdates(paths: string[]): Promise<void> {
+    // Fail closed: no seat-authorized model identity means no model call.
+    if (!options.modelContract) return;
+    const modelName = options.modelContract.modelName;
+
     // Resolve the prompt to use for this batch
     let prompt: string;
     try {
@@ -109,7 +126,7 @@ export function createMagicDocsService(options: MagicDocsServiceOptions): MagicD
 
         const updated = await options.callModel({
           prompt,
-          model: MAGIC_DOCS_MODEL,
+          model: modelName,
           fileContent,
         });
 

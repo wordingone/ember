@@ -15,9 +15,10 @@ import type { ComponentType } from "react";
 import {
   REFERENCE_SEAT_FLAG,
   isModelFreeFastPath,
-  referenceSeatModelName,
   resolveModelSeat,
+  selectedModelContract,
 } from "./model-seat.ts";
+import type { ModelSeatDecision, SelectedModelContract } from "./model-seat.ts";
 import {
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
@@ -28,6 +29,7 @@ import { handshakeConfiguredEmberd } from "../services/emberd-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
+import type { ModelCapabilityDeclaration } from "../model-config.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
 import type { Tool } from "../core/tool-interface.ts";
 import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
@@ -670,7 +672,13 @@ export interface MainOptions {
   ensureOwnedServerFn?: typeof ensureOwnedServer;
   handshakeEmberdFn?: typeof handshakeConfiguredEmberd;
   builtinToolsFn?: () => Promise<Tool[]>;
-  initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
+  initFn?:         (opts: {
+    serverUrl?: string | null;
+    nCtx?: number;
+    nonInteractive?: boolean;
+    modelCapabilities?: ModelCapabilityDeclaration | null;
+    servedModelConfigSha256?: string | null;
+  }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
     prompt:  string,
@@ -680,6 +688,10 @@ export interface MainOptions {
     deps:    LoopDeps,
   ) => Promise<{ events: unknown[]; exitCode: number }>;
   exitFn?: (code: number) => void;
+  /** Fix #51 repair: injection point for `selectedModelContract` so tests can
+   *  spy on production seat-construction (call-count assertions) and force
+   *  a missing-contract path without hand-building a ModelSeatDecision. */
+  selectedModelContractFn?: (decision: ModelSeatDecision) => SelectedModelContract | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -717,6 +729,11 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     explicitModelUrl: envModelUrlBeforeConfigApply,
     gpuFreeRequested,
     referenceSeatEnv: process.env["EMBER_REFERENCE_SEAT"],
+    // Fix #51 P1 repair: carried through so a REFERENCE_ONLY decision's
+    // `referenceModelName` is populated BEFORE `selectedModelContract` ever
+    // reads it -- otherwise the contract always collapses to
+    // "unidentified-model" even when the caller knows the identity.
+    referenceModelName: process.env["EMBER_MODEL_NAME"] ?? modelsCfg?.modelName ?? modelsCfg?.model,
   };
   let seatDecision = resolveModelSeat(seatInput);
   if (!seatDecision.allowed) {
@@ -763,10 +780,23 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   }
 
   process.env["EMBER_MODEL_SEAT"] = seatDecision.seat;
+  // Fix #51 P1 repair (PR #948): the seat-authorized identity + capability
+  // contract is derived exactly ONCE per seat construction, here -- never
+  // re-derived ad-hoc per branch below. `EMBER_MODEL_NAME` for a seat that
+  // is supposed to carry a real model identity (REFERENCE_ONLY, OWNED_*)
+  // comes ONLY from this contract; a missing contract for those seats is a
+  // bug and fails loudly rather than silently falling back to a raw name.
+  const contractFn = opts.selectedModelContractFn ?? selectedModelContract;
+  const modelContract = contractFn(seatDecision);
   if (seatDecision.seat === "REFERENCE_ONLY") {
-    process.env["EMBER_MODEL_NAME"] = referenceSeatModelName(
-      process.env["EMBER_MODEL_NAME"] ?? modelsCfg?.modelName ?? modelsCfg?.model,
-    );
+    if (!modelContract) {
+      process.stderr.write(
+        "[ember] ERROR: model seat construction produced no contract for a REFERENCE_ONLY seat\n",
+      );
+      doExitMain(1);
+      return;
+    }
+    process.env["EMBER_MODEL_NAME"] = modelContract.modelName;
     seatBannerStream.write(
       "[ember] model seat: REFERENCE_ONLY (" +
         seatDecision.source +
@@ -774,8 +804,15 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     );
   } else if (seatDecision.ownedIdentity) {
     const ownedIdentity = seatDecision.ownedIdentity;
+    if (!modelContract) {
+      process.stderr.write(
+        "[ember] ERROR: model seat construction produced no contract for an owned identity\n",
+      );
+      doExitMain(1);
+      return;
+    }
     process.env["EMBER_MODEL_URL"] = ownedIdentity.endpointUrl;
-    process.env["EMBER_MODEL_NAME"] = ownedIdentity.modelName;
+    process.env["EMBER_MODEL_NAME"] = modelContract.modelName;
     if (seatDecision.seat === "OWNED_DEVELOPMENT") {
       seatBannerStream.write(
         "[ember] model seat: OWNED_DEVELOPMENT (checkpoint " +
@@ -991,9 +1028,26 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   }
 
   // Session init
+  // PR948 round-9 repair: thread the SAME seat-produced contract derived once above
+  // (~line 782) into InitOpts, so the REAL production callModel client (built inside
+  // session-init.ts's init()) evaluates the actual served capability declaration --
+  // previously modelContract was derived here and used only for the seat banner /
+  // EMBER_MODEL_NAME, never reaching init(), so every real jsonSchema request saw an
+  // undefined declaration and was always denied regardless of what the served model
+  // actually supported.
   const sessionMod = await import("./session-init.ts");
   const doInit     = opts.initFn ?? ((o) => sessionMod.init(o));
-  await doInit({ serverUrl, nCtx: detectedNCtx });
+  await doInit({
+    serverUrl,
+    nCtx: detectedNCtx,
+    modelCapabilities: modelContract
+      ? {
+          modelConfigSha256: modelContract.modelConfigSha256,
+          structuredOutputs: modelContract.structuredOutputs,
+        }
+      : null,
+    servedModelConfigSha256: modelContract?.modelConfigSha256 ?? null,
+  });
 
   // Headless path (-p / --print)
   const headlessSpec = parseHeadlessPrint(argv);
