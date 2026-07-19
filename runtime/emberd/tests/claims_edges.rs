@@ -825,6 +825,113 @@ fn admission_refuses_conflict_with_pre_existing_identity_preserved() {
     assert_eq!(evidence_escaped, 1);
 }
 
+/// Round-11 reviewer REJECT: identity creation, receipt-claim validation,
+/// and the jobs-row reservation used to run as three SEPARATELY-lockable
+/// steps (`identity_hash` read + `bind_identity_bytes`'s own commit, then
+/// `start_job_with_pinned_budget_admission`'s own transaction, then --
+/// on a claim conflict -- a manual `DELETE FROM identities`). Two concurrent
+/// dispatch attempts for the SAME job_id could interleave across those
+/// steps: both observe "no identity yet", one wins the bind, the other's
+/// STALE `created_identity=true` (captured before the winner's bind
+/// committed) then survived into that manual cleanup and could delete the
+/// identity the winner's now-running job depends on.
+///
+/// This test drives the race deterministically rather than hoping a real
+/// race lands: `EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS` (round-11's new
+/// hook, mirroring the existing P1-3 `EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS`
+/// pattern) pauses `bind_identity_within` for 300ms WHILE STILL HOLDING the
+/// connection mutex, immediately after observing no identity row exists --
+/// i.e. exactly the moment a concurrent second attempt could, on the old
+/// three-step design, race in and observe the same "absent" state. Thread A
+/// starts first and lands inside that pause; thread B (spawned after a
+/// short deterministic head start, same technique as the P1-3 test) then
+/// attempts to dispatch the IDENTICAL job_id at the IDENTICAL manifest/path
+/// concurrently. On the fixed, single-transaction design this is not
+/// actually a race at all: B cannot even begin its OWN reservation
+/// transaction (which must also acquire the same connection mutex) until
+/// A's transaction has fully committed or rolled back, so B can never
+/// observe "absent" while A's insert is in flight. B's own attempt is then
+/// correctly refused (the job_id already exists) with NOTHING to clean up --
+/// there is no longer a separate identity-erasure code path for a refusal
+/// to run at all. The regression proves the surviving (A) attempt's
+/// identity, lease, and running state are completely unaffected by B's
+/// refused attempt, and that B was genuinely serialized behind A's paused
+/// transaction (elapsed-time assertion) rather than racing past it.
+#[test]
+fn concurrent_same_job_id_dispatch_cannot_let_a_refused_attempt_delete_the_winners_identity() {
+    let root = sandbox("round11-concurrent-identity-ownership");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("race-job-preflight.json");
+    let manifest = write_manifest(&root, "race-job", "gpu-race-job", &receipt_path);
+    let expected_identity_sha256 = sha256(&manifest);
+
+    let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
+
+    std::env::set_var("EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS", "300");
+    let daemon_a = daemon.clone();
+    let manifest_a = manifest.clone();
+    let thread_a = thread::spawn(move || {
+        let started = std::time::Instant::now();
+        let result = dispatch(&daemon_a, &manifest_a);
+        (result, started.elapsed())
+    });
+    // Short, deliberate head start: thread A's own pre-mutex work (probe
+    // calls, JSON parsing) is sub-millisecond, so 60ms is ample time for it
+    // to be inside the mutex-held pause in `bind_identity_within` before
+    // thread B even starts -- deterministic ordering without needing a
+    // Barrier to hit a narrow window (same technique as the existing P1-3
+    // refusal-race test in dispatch_manifest.rs).
+    thread::sleep(Duration::from_millis(60));
+
+    let b_started = std::time::Instant::now();
+    let result_b = dispatch(&daemon, &manifest);
+    let b_elapsed = b_started.elapsed();
+    std::env::remove_var("EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS");
+
+    let (result_a, _a_elapsed) = thread_a.join().unwrap();
+
+    assert!(
+        b_elapsed >= Duration::from_millis(250),
+        "TOCTOU REOPENED: thread B's dispatch attempt for the SAME job_id must be blocked by \
+         the daemon's connection mutex for (nearly) the whole 300ms identity-bind pause -- it \
+         returned after only {b_elapsed:?}, meaning it was never serialized behind thread A's \
+         held transaction and could have observed the identity as absent"
+    );
+
+    // Exactly one of the two identical-job_id attempts is admitted; the
+    // other is refused (as "job already exists", since both target the
+    // same job_id and the winner's reservation already committed).
+    assert!(
+        result_a.is_ok() && result_b.is_err(),
+        "expected thread A (head start, wins the mutex first) to be admitted and thread B to be \
+         refused; got a={result_a:?} b={result_b:?}"
+    );
+
+    // The identity thread A created must survive completely untouched by
+    // thread B's refused attempt -- never deleted, never a different hash.
+    assert_eq!(
+        daemon.identity_hash("race-job").unwrap(),
+        Some(expected_identity_sha256),
+        "IDENTITY DESTROYED: a refused concurrent attempt for the SAME job_id deleted (or \
+         corrupted) the identity the admitted attempt now depends on"
+    );
+
+    // The admitted job's own state and lease are unaffected by the refused
+    // concurrent attempt.
+    assert_eq!(
+        daemon.job_state("race-job").unwrap(),
+        Some(emberd::JobState::Running),
+        "the winning attempt's job must still be running after the refused concurrent attempt"
+    );
+    assert_eq!(
+        daemon.lease_owner("gpu-race-job").unwrap().as_deref(),
+        Some("race-job"),
+        "the winning attempt's lease must be unaffected by the refused concurrent attempt"
+    );
+
+    daemon.stop_job("race-job").unwrap();
+}
+
 /// Round-9 reviewer REJECT: the `dispatch_receipt_rollback_evidence` UPSERT
 /// used a bare `ON CONFLICT DO UPDATE SET escaped=excluded.escaped`, so a
 /// later, ORDINARY clean rollback (escaped=0) landing on the same

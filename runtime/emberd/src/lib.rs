@@ -684,6 +684,32 @@ impl Daemon {
         identity_blob: &[u8],
         expected: &str,
     ) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        Self::bind_identity_within(&tx, job_id, path, identity_blob, expected)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Shared body of [`Daemon::bind_identity_bytes`], run against an
+    /// already-open `tx` so a caller can fold identity binding into a
+    /// larger atomic scope — e.g. the dispatch reservation transaction, so
+    /// that identity creation, the receipt-claim validation it authorizes,
+    /// and the reservation insert it precedes are one atomic decision
+    /// rather than three separately-lockable steps. Returns `true` when
+    /// this call inserted a NEW identity row, `false` when an existing
+    /// binding for this exact (path, hash) already satisfied it — the
+    /// caller uses this to decide whether a later, POST-COMMIT failure
+    /// (e.g. a spawn failure) should remove the identity it just created,
+    /// without ever needing a second transaction to make that decision
+    /// while it could still race a concurrent attempt.
+    fn bind_identity_within(
+        tx: &rusqlite::Transaction<'_>,
+        job_id: &str,
+        path: &Path,
+        identity_blob: &[u8],
+        expected: &str,
+    ) -> Result<bool> {
         validate_hash(expected)?;
         let canonical = fs::canonicalize(path)?;
         let actual = hash_bytes(identity_blob);
@@ -694,8 +720,6 @@ impl Daemon {
                 actual,
             });
         }
-        let mut conn = self.conn()?;
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let existing: Option<(String, String)> = tx
             .query_row(
                 "SELECT canonical_path,sha256 FROM identities WHERE job_id=?1",
@@ -705,18 +729,21 @@ impl Daemon {
             .optional()?;
         if let Some((old_path, old_hash)) = existing {
             if old_path == canonical.to_string_lossy() && old_hash == expected {
-                return Ok(());
+                return Ok(false);
             }
             return Err(EmberdError::IdentityAlreadyBound {
                 job_id: job_id.into(),
             });
         }
+        // Test-only race window (inert in production) -- see
+        // `identity_bind_race_test_hook`'s doc comment. Still holding `tx`'s
+        // connection mutex here is the entire point of round-11.
+        identity_bind_race_test_hook();
         tx.execute(
             "INSERT INTO identities(job_id,canonical_path,sha256,identity_blob,bound_at_ms) VALUES(?1,?2,?3,?4,?5)",
             params![job_id, canonical.to_string_lossy(), expected, identity_blob, now_ms()],
         )?;
-        tx.commit()?;
-        Ok(())
+        Ok(true)
     }
 
     pub fn verify_identity(&self, job_id: &str) -> Result<()> {
@@ -1996,13 +2023,24 @@ impl Daemon {
         {
             return Ok(existing);
         }
-        let created_identity = self.identity_hash(&job_id)?.is_none();
-        self.bind_identity_bytes(&job_id, &manifest_path, manifest_bytes, &manifest_sha256)?;
         // Lease acquisition is deliberately NOT done here: it happens
         // atomically inside start_job_with_pinned_budget_admission's own
         // transaction, together with the budget check and the reservation
         // insert. Acquiring it here (outside that transaction) would leak
         // an owned-but-orphaned lease every time the budget check refuses.
+        //
+        // Identity binding is likewise NOT done here (round-11): it used to
+        // run as its own separately-lockable transaction — a check-then-
+        // bind-then-delete ownership gap that let two concurrent attempts
+        // for the same job_id interleave (both observe absent, one binds,
+        // the other adopts it; a stale `created_identity=true` on the loser
+        // could then delete an identity the winner now relies on). Identity
+        // creation now happens INSIDE start_job_with_pinned_budget_admission's
+        // own atomic reservation transaction, via `bind_identity_within`, so
+        // any refusal in that transaction (claim conflict included) rolls
+        // the identity insert back automatically with everything else —
+        // there is no longer a window where an identity can exist without
+        // the reservation that authorized it, or vice versa.
         let mut spec = JobSpec::new(
             job_id.clone(),
             program.to_string_lossy().into_owned(),
@@ -2024,6 +2062,8 @@ impl Daemon {
                 observed_available_maximum_commit_bytes,
                 receipt_path.clone(),
                 &manifest_sha256,
+                &manifest_path,
+                manifest_bytes,
             ) {
                 Ok(admitted) => admitted,
                 Err(EmberdError::DispatchPinnedHostBudgetExceeded {
@@ -2038,8 +2078,17 @@ impl Daemon {
                     // surfaces its own typed error — that takes priority over
                     // the budget refusal below, since it names a genuine
                     // anomaly the operator must see rather than paper over.
+                    //
+                    // `created_identity` is always `false` here (round-11):
+                    // the budget check that produced this refusal ran INSIDE
+                    // the same atomic transaction as identity binding, so a
+                    // freshly-created identity for this attempt already
+                    // rolled back with the reservation before this arm ever
+                    // runs — there is nothing of THIS attempt's left to
+                    // remove, and a pre-existing identity from an earlier,
+                    // unrelated binding must never be deleted here.
                     if let Err(escaped @ EmberdError::DispatchReceiptEscapedRollback { .. }) =
-                        self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity)
+                        self.rollback_dispatch_attempt(&job_id, &resource_lease, false)
                     {
                         return Err(escaped);
                     }
@@ -2070,31 +2119,33 @@ impl Daemon {
                         receipt_path,
                     });
                 }
-                // Round-9: a `DispatchReceiptClaimConflict` refusal from
-                // `validate_receipt_claim_available` runs BEFORE any
-                // jobs-row insert (in the SAME transaction inside
-                // `start_job_with_pinned_budget_admission`), so this attempt
-                // reserved no lease. However, identity binding happens
-                // BEFORE this call (line 2000), so if this attempt created
-                // an identity row (created_identity=true), we must clean it
-                // up now to prevent residue. We do NOT call
-                // rollback_dispatch_attempt, because that would act on a
-                // claim that predates this attempt (the already-escaped
-                // tombstone in same-job_id replays), and its probe-and-
-                // release logic would DELETE that claim, reopening the
-                // tombstone. Instead, we remove only the identity row if
-                // this attempt created one, leaving the pre-existing claim
-                // and evidence untouched.
+                // Round-11: a `DispatchReceiptClaimConflict` refusal from
+                // `validate_receipt_claim_available` now runs in the SAME
+                // transaction as identity binding (both inside
+                // `start_job_with_pinned_budget_admission`), so this arm no
+                // longer needs its own cleanup: the whole transaction —
+                // identity insert included, if this attempt created one —
+                // has already rolled back by the time this error reaches
+                // here. We still do NOT call rollback_dispatch_attempt,
+                // because that would act on a claim that predates this
+                // attempt (the already-escaped tombstone in same-job_id
+                // replays), and its probe-and-release logic would DELETE
+                // that claim, reopening the tombstone.
                 Err(error @ EmberdError::DispatchReceiptClaimConflict { .. }) => {
-                    if created_identity {
-                        let conn = self.conn()?;
-                        conn.execute("DELETE FROM identities WHERE job_id=?1", [&job_id])?;
-                    }
                     return Err(error);
                 }
                 Err(error) => {
+                    // `created_identity` is `false` here too: the one case
+                    // where a freshly-created identity survives a failed
+                    // attempt (a post-commit spawn failure) is handled
+                    // inside `start_job_with_pinned_budget_admission` itself,
+                    // where the atomic transaction's real answer is known;
+                    // by the time an error reaches this generic arm, either
+                    // that inner handling already ran (spawn failure) or the
+                    // failing transaction rolled back on its own (every
+                    // other error), so there is nothing left here to remove.
                     if let Err(escaped @ EmberdError::DispatchReceiptEscapedRollback { .. }) =
-                        self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity)
+                        self.rollback_dispatch_attempt(&job_id, &resource_lease, false)
                     {
                         return Err(escaped);
                     }
@@ -2900,8 +2951,9 @@ impl Daemon {
         observed_available_maximum_commit_bytes: u64,
         receipt_path: PathBuf,
         manifest_sha256: &str,
+        manifest_path: &Path,
+        manifest_identity_blob: &[u8],
     ) -> Result<(JobHandle, u64, u64)> {
-        self.verify_identity(&spec.job_id)?;
         let argv_json = serde_json::to_string(&spec.args)?;
         let env_json = serde_json::to_string(&spec.env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
@@ -2910,11 +2962,35 @@ impl Daemon {
         let stdout_log_path = self.log_dir.join(format!("{log_key}.stdout.log"));
         let stderr_log_path = self.log_dir.join(format!("{log_key}.stderr.log"));
         let receipt_path_text_early = receipt_path.to_string_lossy().into_owned();
-        let (live_committed_job_memory_bytes, residual_available_maximum_commit_bytes) = {
+        let (created_identity, live_committed_job_memory_bytes, residual_available_maximum_commit_bytes) = {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            // Lease acquisition runs FIRST, inside this same transaction:
-            // a lease conflict must refuse as LeaseConflict (writing no
+            // Round-11: identity binding runs FIRST, inside the exact same
+            // transaction as the lease acquisition, receipt-claim
+            // validation, and reservation insert it precedes — not as three
+            // separately-lockable steps (identity_hash read + its own
+            // commit, then this transaction, then a possible manual DELETE
+            // on refusal). It must precede lease acquisition specifically:
+            // `acquire_lease_within`'s first-owner branch itself requires an
+            // existing identity row (`IdentityNotFound` otherwise), so a
+            // fresh dispatch's lease grant depends on this bind having
+            // already happened in the SAME transaction. Any refusal below
+            // (lease conflict, claim conflict, legacy-budget guard, budget
+            // exceeded, reservation insert failure) drops this tx
+            // uncommitted, which undoes the identity insert automatically —
+            // there is no window where a concurrent attempt for the same
+            // job_id can observe or adopt an identity that this attempt's
+            // own refusal is about to erase, because there is no longer a
+            // separate erasure step at all.
+            let created_identity = Self::bind_identity_within(
+                &tx,
+                &spec.job_id,
+                manifest_path,
+                manifest_identity_blob,
+                manifest_sha256,
+            )?;
+            // Lease acquisition runs next, inside this same transaction: a
+            // lease conflict must refuse as LeaseConflict (writing no
             // receipt) before any budget arithmetic — a job contending for
             // an owned lease can never be admitted regardless of budget.
             // A later budget refusal drops the tx uncommitted, so the lease
@@ -3009,17 +3085,40 @@ impl Daemon {
             )?;
             tx.commit()?;
             (
+                created_identity,
                 live_committed_job_memory_bytes,
                 residual_available_maximum_commit_bytes,
             )
         };
-        let handle =
-            self.spawn_and_run_reserved_job(spec, job_object_name, stdout_log_path, stderr_log_path)?;
-        Ok((
-            handle,
-            live_committed_job_memory_bytes,
-            residual_available_maximum_commit_bytes,
-        ))
+        // The reservation (identity included, if this attempt created one)
+        // is now durably committed. A spawn failure from here on is the ONE
+        // remaining case where a freshly-created identity can outlive a
+        // failed attempt — every earlier refusal above rolled its own
+        // identity insert back automatically. Roll back right here, where
+        // `created_identity` is the atomically-decided truth for THIS
+        // attempt, rather than recomputing (and re-racing) it later.
+        let job_id_for_rollback = spec.job_id.clone();
+        let resource_lease_for_rollback = spec.resource_lease.clone();
+        match self.spawn_and_run_reserved_job(spec, job_object_name, stdout_log_path, stderr_log_path)
+        {
+            Ok(handle) => Ok((
+                handle,
+                live_committed_job_memory_bytes,
+                residual_available_maximum_commit_bytes,
+            )),
+            Err(error) => {
+                if let Err(escaped @ EmberdError::DispatchReceiptEscapedRollback { .. }) = self
+                    .rollback_dispatch_attempt(
+                        &job_id_for_rollback,
+                        &resource_lease_for_rollback,
+                        created_identity,
+                    )
+                {
+                    return Err(escaped);
+                }
+                Err(error)
+            }
+        }
     }
 
     pub fn job_state(&self, job_id: &str) -> Result<Option<JobState>> {
@@ -4401,6 +4500,31 @@ fn receipt_refusal_race_test_hook() {
 
 #[cfg(not(feature = "test-fixtures"))]
 fn receipt_refusal_race_test_hook() {}
+
+/// Round-11 test-only race window: `bind_identity_within` calls this
+/// immediately after observing that no identity row exists yet for this
+/// `job_id`, WHILE STILL HOLDING the daemon's connection mutex guard inside
+/// the SAME atomic reservation transaction that will go on to validate the
+/// receipt claim and insert the jobs row. Under `test-fixtures`, an
+/// integration test can force a deterministic pause right there via
+/// `EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS` -- since the guard is held
+/// across the sleep, a concurrent thread racing to dispatch the SAME job_id
+/// (which must also acquire the same mutex to even read whether an identity
+/// exists) is provably blocked from observing "absent" until this
+/// transaction has either committed or rolled back, closing exactly the
+/// check-then-separately-bind gap that the old design left open across two
+/// independently-lockable steps. In production this is an inert no-op.
+#[cfg(feature = "test-fixtures")]
+fn identity_bind_race_test_hook() {
+    if let Ok(ms) = std::env::var("EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS") {
+        if let Ok(ms) = ms.parse::<u64>() {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
+}
+
+#[cfg(not(feature = "test-fixtures"))]
+fn identity_bind_race_test_hook() {}
 
 fn probe_survival_floor_root(root: &Path) -> std::io::Result<Option<PathBuf>> {
     match fs::canonicalize(root) {
