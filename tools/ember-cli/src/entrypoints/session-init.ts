@@ -29,6 +29,10 @@ import {
 import { createMicrocompact } from "../services/compaction.ts";
 import { wrapModelClientWithCircuitBreaker } from "../services/model-circuit-breaker-client.ts";
 import type { CircuitBreakerState } from "../services/model-circuit-breaker.ts";
+import {
+  modelSupportsStructuredOutputs,
+  type ModelCapabilityDeclaration,
+} from "../model-config.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level state (singletons)
@@ -142,10 +146,42 @@ function createCombinedSignal(a: AbortSignal, b: AbortSignal): AbortSignal {
 // buildProductionCallModel — wires the local model server to LoopDeps.callModel
 // ---------------------------------------------------------------------------
 
+/**
+ * Thrown when a caller requests `jsonSchema` (structured JSON output) but
+ * `modelSupportsStructuredOutputs` does not grant the capability for the
+ * currently served model -- issue #51 P2: this gate is the only real
+ * production consumer of that capability declaration; without it, a bound
+ * `modelConfigCapabilities.structuredOutputs` flag was decorative and every
+ * `jsonSchema` request got a `response_format` regardless of whether the
+ * served model actually supported it. Thrown BEFORE any network call, same
+ * fail-closed shape as `PrefillOverflowError` above.
+ */
+export class StructuredOutputsNotSupportedError extends Error {
+  constructor() {
+    super(
+      "jsonSchema was requested but the served model's capability contract " +
+        "does not grant structured outputs (modelSupportsStructuredOutputs " +
+        "returned false) -- refusing to send response_format rather than " +
+        "silently hoping the server honors an unsupported/unverified schema.",
+    );
+    this.name = "StructuredOutputsNotSupportedError";
+  }
+}
+
 export interface ProductionCallModelOpts {
   serverUrl:  string;
   nCtx?:      number;
   timeoutMs?: number;
+  /**
+   * Capability declaration bound to a specific `modelConfigSha256` (see
+   * `entrypoints/model-seat.ts::ModelConfigCapabilities`). Never a bare
+   * boolean flag -- `modelSupportsStructuredOutputs` only honors it when
+   * this hash equals `servedModelConfigSha256` exactly.
+   */
+  modelCapabilities?: ModelCapabilityDeclaration | null;
+  /** The currently served model's exact `modelConfigSha256`, from the
+   *  seat-produced `SelectedModelContract`. Never inferred. */
+  servedModelConfigSha256?: string | null;
 }
 
 export function buildProductionCallModel(
@@ -206,6 +242,16 @@ export function buildProductionCallModel(
     reqBody["cache_prompt"] = false;
 
     if (jsonSchema) {
+      // issue #51 P2: gate response_format construction on the seat-bound
+      // capability declaration -- never assume a served model honors
+      // structured outputs just because a caller asked for jsonSchema.
+      const capabilityGranted = modelSupportsStructuredOutputs(
+        opts.modelCapabilities ?? null,
+        opts.servedModelConfigSha256 ?? null,
+      );
+      if (!capabilityGranted) {
+        throw new StructuredOutputsNotSupportedError();
+      }
       reqBody["response_format"] = {
         type:        "json_schema",
         json_schema: { name: "output", schema: jsonSchema },

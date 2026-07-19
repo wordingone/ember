@@ -14,6 +14,19 @@ import {
 } from "./ultraplan.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import type { UltraplanDeps, UltraplanLaunchResult } from "./ultraplan.ts";
+import type { SelectedModelContract } from "../entrypoints/model-seat.ts";
+
+// PR948 round-8 (P1): the default test seat contract -- an explicit
+// REFERENCE_ONLY seat decision. This is what authorizes
+// ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID as a fallback; without a resolved seat
+// contract at all, execute() must fail closed and never call
+// launchRemoteSession (see the "no model seat contract" describe block below).
+const REFERENCE_ONLY_CONTRACT: SelectedModelContract = {
+  seat: "REFERENCE_ONLY",
+  modelName: ULTRAPLAN_DEFAULT_MODEL_LABEL,
+  modelConfigSha256: null,
+  structuredOutputs: false,
+};
 
 const mockContext: CommandContext = {
   sessionId: "test-session",
@@ -32,6 +45,10 @@ function makeDefaultDeps(overrides?: Partial<UltraplanDeps>): UltraplanDeps {
   return {
     isUltraplanEligible: () => true,
     getUltraplanModel: () => null, // use default
+    // Default test seat: an explicit REFERENCE_ONLY decision, matching what
+    // ultraplan's whole purpose is (launching a borrowed reference model
+    // session) -- see REFERENCE_ONLY_CONTRACT above.
+    getModelContract: () => REFERENCE_ONLY_CONTRACT,
     getUltraplanSessionUrl: () => sessionUrl,
     setUltraplanSessionUrl: (url) => { sessionUrl = url; },
     setUltraplanLaunching: (v) => { launching = v; },
@@ -250,6 +267,92 @@ describe("/ultraplan", () => {
         makeDefaultDeps({ isUltraplanEligible: () => false })
       );
       expect(cmd.isEnabled()).toBe(false);
+    });
+  });
+
+  // PR948 round-8 (P1): reviewer reject on 28187c0 -- with ordinary unset
+  // config, ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID (a raw module constant) was
+  // selected and sent straight to launchRemoteSession as `model`, with no
+  // seat authorization at all. A REFERENCE_ONLY display label is not a
+  // routing authorization. Fix: execute() now requires a seat-produced
+  // SelectedModelContract (getModelContract) and fails closed -- no
+  // launchRemoteSession call, no session-pending state left dangling --
+  // when no contract is available, or when a contract IS available but is
+  // not an explicit REFERENCE_ONLY decision (the only decision shape that
+  // authorizes the hardcoded fallback routing id).
+  describe("PR948 round-8 (P1): model routing requires a seat-produced contract, never a bare fallback constant", () => {
+    it("fails closed and never calls launchRemoteSession when no model seat contract is available at all", async () => {
+      let launched = false;
+      const cmd = createUltraplanCommand(makeDefaultDeps({
+        getModelContract: () => undefined,
+        launchRemoteSession: async () => { launched = true; return null; },
+      }));
+      const result = await cmd.execute("Build something", mockContext);
+      expect(launched).toBe(false);
+      expect((result as { message: string }).message.length).toBeGreaterThan(0);
+    });
+
+    it("clears launchPending/launching state on the no-contract fail-closed path (never leaves the UI stuck mid-launch)", async () => {
+      let launchPendingEverSet = false;
+      let launchPendingFinal: unknown = "unset";
+      let launchingFinal: unknown = "unset";
+      const cmd = createUltraplanCommand(makeDefaultDeps({
+        getModelContract: () => undefined,
+        setUltraplanLaunchPending: (p) => {
+          if (p !== null) launchPendingEverSet = true;
+          launchPendingFinal = p;
+        },
+        setUltraplanLaunching: (v) => { launchingFinal = v; },
+      }));
+      await cmd.execute("Build something", mockContext);
+      expect(launchPendingEverSet).toBe(true);
+      expect(launchPendingFinal).toBeNull();
+      expect(launchingFinal).not.toBe(true);
+    });
+
+    it("fails closed and never calls launchRemoteSession when the seat resolved to an OWNED identity (not an explicit REFERENCE_ONLY decision) and no config is set", async () => {
+      let launched = false;
+      const cmd = createUltraplanCommand(makeDefaultDeps({
+        getUltraplanModel: () => null,
+        getModelContract: () => ({
+          seat: "OWNED_ADMITTED",
+          modelName: "ember-owned:abc123",
+          modelConfigSha256: "e".repeat(64),
+          structuredOutputs: false,
+        }),
+        launchRemoteSession: async (opts) => { launched = true; return { sessionUrl: "https://x", executionTarget: "remote" }; },
+      }));
+      const result = await cmd.execute("Build something", mockContext);
+      expect(launched).toBe(false);
+      expect((result as { message: string }).message.length).toBeGreaterThan(0);
+    });
+
+    it("still uses ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID when config is unset AND the seat contract is an explicit REFERENCE_ONLY decision", async () => {
+      let usedModel = "";
+      const cmd = createUltraplanCommand(makeDefaultDeps({
+        getUltraplanModel: () => null,
+        getModelContract: () => REFERENCE_ONLY_CONTRACT,
+        launchRemoteSession: async (opts) => {
+          usedModel = opts.model;
+          return { sessionUrl: "https://x", executionTarget: "remote" };
+        },
+      }));
+      await cmd.execute("Build", mockContext);
+      expect(usedModel).toBe(ULTRAPLAN_DEFAULT_MODEL_ROUTING_ID);
+    });
+
+    it("configured model still wins even when the seat contract is REFERENCE_ONLY", async () => {
+      let usedModel = "";
+      const cmd = createUltraplanCommand(makeDefaultDeps({
+        getUltraplanModel: () => "qwen3.6-fast",
+        getModelContract: () => REFERENCE_ONLY_CONTRACT,
+        launchRemoteSession: async (opts) => {
+          usedModel = opts.model;
+          return { sessionUrl: "https://x", executionTarget: "remote" };
+        },
+      }));
+      await cmd.execute("Build", mockContext);
+      expect(usedModel).toBe("qwen3.6-fast");
     });
   });
 });
