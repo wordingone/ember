@@ -1,10 +1,24 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+//
+// These legs spawn the REAL `emberd` binary out-of-process (CARGO_BIN_EXE_emberd)
+// and drive it purely over the named-pipe RPC transport, then use
+// EMBERD_TEST_FLOOR_FREE_BYTES / EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE env
+// overrides for deterministic floor/VRAM fixtures. Both the daemon's
+// env-override code paths AND the `emberd` binary itself are compiled ONLY
+// under the `test-fixtures` Cargo feature (see `[features]` in Cargo.toml) —
+// a plain `cargo build`/`cargo test` never contains this code, so it can
+// never leak into a production binary. Run this suite with
+// `cargo test --features test-fixtures`: Cargo's per-package feature
+// unification rebuilds `[[bin]] emberd` (the same package as this lib) with
+// the feature enabled for that invocation, so CARGO_BIN_EXE_emberd points at
+// a feature-enabled binary automatically — no separate build step needed.
 
 #![cfg(windows)]
 
 use emberd::{probe_host_commit_capacity, MAX_DISPATCH_MANIFEST_BYTES};
+use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -861,13 +875,15 @@ fn named_pipe_start_job_rejects_missing_or_zero_memory_ceiling_as_invalid_params
     let binary = emberd_binary();
     let mut server = start_server(&binary, &db, &pipe);
     assert_eq!(rpc(&pipe, 330, "ping", json!({}))["status"], "ok");
-    for (id, payload) in [
+    for (id, job_id, payload) in [
         (
             331u64,
+            "pipe-no-ceiling",
             json!({"job_id": "pipe-no-ceiling", "program": "x", "args": [], "resource_lease": "cpu-x", "env": {}, "restart_policy": "never"}),
         ),
         (
             332u64,
+            "pipe-zero-ceiling",
             json!({"job_id": "pipe-zero-ceiling", "program": "x", "args": [], "resource_lease": "cpu-x", "env": {}, "restart_policy": "never", "maximum_job_memory_bytes": 0}),
         ),
     ] {
@@ -877,6 +893,40 @@ fn named_pipe_start_job_rejects_missing_or_zero_memory_ceiling_as_invalid_params
             -32602,
             "missing/zero ceiling must be invalid params: {error}"
         );
+        // -32602 must be a pure validation refusal: zero durable side
+        // effects. No job_state, no jobs/leases/dispatch_receipt_claims
+        // row, no receipt file — a rejected-params call must be as if it
+        // never happened.
+        assert_eq!(
+            rpc(&pipe, id + 1000, "job_state", json!({"job_id": job_id})),
+            Value::Null,
+            "invalid-params start_job must leave no job_state for {job_id}"
+        );
+        let connection = Connection::open(&db).unwrap();
+        let jobs_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM jobs WHERE job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(jobs_count, 0, "no jobs row for {job_id}");
+        let leases_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM leases WHERE owner_job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(leases_count, 0, "no lease row for {job_id}");
+        let claims_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM dispatch_receipt_claims WHERE job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(claims_count, 0, "no dispatch_receipt_claims row for {job_id}");
     }
     rpc(&pipe, 333, "shutdown", json!({}));
     wait_for_exit(&mut server);

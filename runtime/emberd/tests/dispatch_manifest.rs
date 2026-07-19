@@ -1335,6 +1335,154 @@ fn dispatch_manifest_refuses_a_receipt_path_already_claimed_by_another_job() {
     daemon.stop_job("collide-ab").unwrap();
 }
 
+/// Shared assertion body for the two "deleted-winner collision through an
+/// EARLY refusal probe" tests below: after the colliding loser dispatch
+/// returns, the receipt-claim guard must have fired BEFORE the early
+/// probe's own refusal was ever written — so the typed error is the claim
+/// conflict (never the probe's own refusal variant), the receipt path
+/// stays absent (the loser wrote nothing over it), and the loser leaves
+/// zero durable rows behind (job/lease/claims all absent for its job_id).
+fn assert_loser_wrote_nothing(daemon: &Daemon, loser_job_id: &str, shared_receipt: &Path, db: &Path) {
+    assert_eq!(daemon.job_state(loser_job_id).unwrap(), None);
+    assert!(
+        !shared_receipt.exists(),
+        "the refused collision must write nothing at the claimed path"
+    );
+    let connection = Connection::open(db).unwrap();
+    let jobs_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM jobs WHERE job_id=?1",
+            [loser_job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(jobs_count, 0, "no jobs row for {loser_job_id}");
+    let leases_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM leases WHERE owner_job_id=?1",
+            [loser_job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(leases_count, 0, "no lease row for {loser_job_id}");
+    let claims_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM dispatch_receipt_claims WHERE job_id=?1",
+            [loser_job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        claims_count, 0,
+        "no dispatch_receipt_claims row for {loser_job_id}"
+    );
+}
+
+#[test]
+fn dispatch_manifest_gross_cap_refusal_never_overwrites_a_deleted_winner_receipt() {
+    // Winner admits and claims `shared_receipt`, then its receipt FILE is
+    // deleted (crash cleanup, tampering, or any post-admission loss) while
+    // `dispatch_receipt_claims` still durably owns the path for the winner.
+    // A colliding loser job that then fails the GROSS-CAP (host commit)
+    // probe — the very first refusal site in the dispatch flow — must
+    // refuse via the claim-conflict guard, not silently write its refusal
+    // onto the path the winner still owns.
+    let root = sandbox("gross-cap-deleted-winner");
+    let db = root.join("emberd.sqlite3");
+    let shared_receipt = root.join("custody").join("gcap-ab-preflight.json");
+
+    let manifest_ab = write_manifest(&root, "gcap-ab", 10_000);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_ab,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap();
+    assert_eq!(outcome.receipt.path.file_name(), shared_receipt.file_name());
+    fs::remove_file(&shared_receipt).unwrap();
+
+    // "gcap-a" is a substring of "gcap-ab-preflight.json", so the loser
+    // passes the filename job-scoping check while claiming the SAME path.
+    let manifest_a = write_manifest(&root, "gcap-a", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
+    payload["preflight_receipt"] = json!(&shared_receipt);
+    payload["resource_lease"] = json!("gpu-gcap-a");
+    fs::write(&manifest_a, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    // A failing host-commit probe drives the loser into REFUSED_HOST_COMMIT_CAP
+    // — the earliest refusal site in the dispatch flow, upstream of the
+    // atomic pinned-budget admission transaction.
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_a,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(0)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchReceiptClaimConflict { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_loser_wrote_nothing(&daemon, "gcap-a", &shared_receipt, &db);
+    daemon.stop_job("gcap-ab").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_floor_refusal_never_overwrites_a_deleted_winner_receipt() {
+    // Same collision shape as the gross-cap variant above, but the loser's
+    // early probe failure is the CONSUMER FLOOR check instead.
+    let root = sandbox("floor-deleted-winner");
+    let db = root.join("emberd.sqlite3");
+    let shared_receipt = root.join("custody").join("gfloor-ab-preflight.json");
+
+    let manifest_ab = write_manifest(&root, "gfloor-ab", 10_000);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_ab,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap();
+    assert_eq!(outcome.receipt.path.file_name(), shared_receipt.file_name());
+    fs::remove_file(&shared_receipt).unwrap();
+
+    // "gfloor-a" is a substring of "gfloor-ab-preflight.json".
+    let manifest_a = write_manifest(&root, "gfloor-a", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
+    payload["preflight_receipt"] = json!(&shared_receipt);
+    payload["resource_lease"] = json!("gpu-gfloor-a");
+    fs::write(&manifest_a, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_a,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(1),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchReceiptClaimConflict { .. }),
+        "unexpected error: {error:?}"
+    );
+    assert_loser_wrote_nothing(&daemon, "gfloor-a", &shared_receipt, &db);
+    daemon.stop_job("gfloor-ab").unwrap();
+}
+
 #[test]
 fn dispatch_refuses_while_a_pre_upgrade_live_job_has_unknown_receipt_identity() {
     // A live row persisted before dispatch_receipt_path existed is NULL —

@@ -380,7 +380,7 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "short-job").unwrap();
     let fixture = std::env::current_exe().unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "short-job",
                 fixture.to_string_lossy(),
@@ -487,7 +487,7 @@ fn stopping_job_terminates_its_entire_process_cohort() {
         .bind_identity("cohort-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "cohort-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "cohort-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -531,7 +531,7 @@ fn failed_job_started_event_is_not_committed_and_child_is_cleaned_up() {
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "event-job").unwrap();
     rusqlite::Connection::open(&db).unwrap().execute_batch("CREATE TRIGGER reject_job_started BEFORE INSERT ON events WHEN NEW.kind='job_started' BEGIN SELECT RAISE(ABORT, 'fixture rejects job_started'); END;").unwrap();
-    let result = start_job_for_test(&daemon, 
+    let result = start_job_for_test(&daemon,
         JobSpec::new(
             "event-job",
             std::env::current_exe().unwrap().to_string_lossy(),
@@ -560,7 +560,7 @@ fn receipt_publication_never_replaces_an_existing_file() {
         .bind_identity("receipt-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "receipt-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "receipt-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -608,7 +608,7 @@ fn lifetime_handle_cannot_escape_from_root_to_descendant() {
         .bind_identity("lifetime-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "lifetime-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "lifetime-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -657,7 +657,7 @@ fn adoption_cannot_commit_after_a_newer_stopped_transition() {
         .bind_identity("race-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "race-job").unwrap();
-    let started = start_job_for_test(&daemon, 
+    let started = start_job_for_test(&daemon,
             JobSpec::new(
                 "race-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -727,7 +727,7 @@ fn stale_uncertain_reconciliation_cannot_overwrite_stopped_state() {
     daemon
         .acquire_lease("cpu-fixture", "uncertain-race")
         .unwrap();
-    let started = start_job_for_test(&daemon, 
+    let started = start_job_for_test(&daemon,
             JobSpec::new(
                 "uncertain-race",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -802,7 +802,7 @@ fn stale_dead_reconciliation_cannot_overwrite_stopped_state() {
         .bind_identity("dead-race", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "dead-race").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "dead-race",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -874,7 +874,7 @@ fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
     daemon
         .acquire_lease("cpu-fixture", "starting-race")
         .unwrap();
-    let started = start_job_for_test(&daemon, 
+    let started = start_job_for_test(&daemon,
             JobSpec::new(
                 "starting-race",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -937,7 +937,7 @@ fn resident_daemon_reaps_natural_exit_records_status_and_releases_lease() {
         .bind_identity("finite-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "finite-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "finite-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -994,7 +994,7 @@ fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
         .bind_identity("handoff-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "handoff-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "handoff-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -1105,7 +1105,7 @@ fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
         .bind_identity("logged-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "logged-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "logged-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -1153,7 +1153,7 @@ fn nonterminal_job_cannot_publish_a_content_addressed_receipt() {
         .bind_identity("running-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "running-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "running-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -1183,7 +1183,7 @@ fn sealed_log_tampering_is_detected_instead_of_blessed() {
         .bind_identity("tamper-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "tamper-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "tamper-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -1226,7 +1226,7 @@ fn terminal_receipt_ignores_outage_events_after_its_persisted_cutoff() {
         .bind_identity("cutoff-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "cutoff-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "cutoff-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -1275,7 +1275,7 @@ fn prepared_recovery_defers_resume_while_outage_is_active() {
         .bind_identity("prepared-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "prepared-job").unwrap();
-    start_job_for_test(&daemon, 
+    start_job_for_test(&daemon,
             JobSpec::new(
                 "prepared-job",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -1344,7 +1344,7 @@ fn prepared_recovery_terminates_process_when_running_commit_fails() {
     daemon
         .acquire_lease("cpu-fixture", "prepared-failure")
         .unwrap();
-    let handle = start_job_for_test(&daemon, 
+    let handle = start_job_for_test(&daemon,
             JobSpec::new(
                 "prepared-failure",
                 std::env::current_exe().unwrap().to_string_lossy(),
@@ -1413,7 +1413,7 @@ fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
     daemon
         .acquire_lease("cpu-fixture", "pre-resume-failure")
         .unwrap();
-    let handle = start_job_for_test(&daemon, 
+    let handle = start_job_for_test(&daemon,
             JobSpec::new(
                 "pre-resume-failure",
                 std::env::current_exe().unwrap().to_string_lossy(),

@@ -13,6 +13,13 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 sha2 = "0.10.9"
 
+[features]
+# Deterministic test-only probe fixtures (EMBERD_TEST_* env overrides) and
+# the pub surface of the *_with_probes launch methods used by integration
+# tests. OFF by default: a plain `cargo build`/production binary carries no
+# env-override code path at all, so no env var can bypass a survival floor.
+test-fixtures = []
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [
     "Win32_Foundation",

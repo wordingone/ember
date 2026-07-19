@@ -1127,24 +1127,21 @@ impl Daemon {
         // Deterministic test-only probe fixtures for the REAL binary's
         // named-pipe end-to-end legs (floor refusal, floors-pass, provider
         // unavailable) — the env overrides are read ONLY at this transport
-        // entrypoint, are absent in production, and never touch the
+        // entrypoint, compiled ONLY under the `test-fixtures` feature (never
+        // in a plain `cargo build` production binary), and never touch the
         // in-process unit paths (those always inject probes explicitly).
+        #[cfg(feature = "test-fixtures")]
         let floor_override = test_probe_override_u64("EMBERD_TEST_FLOOR_FREE_BYTES");
-        let vram_unavailable = std::env::var("EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE").is_ok();
-        self.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
+        #[cfg(not(feature = "test-fixtures"))]
+        let floor_override: Option<u64> = None;
+        self.dispatch_manifest_bytes_at_with_probes_and_host_and_floor_impl(
             manifest_bytes,
             expected_sha256,
             now_ms(),
             available_free_bytes,
-            move || {
-                if vram_unavailable {
-                    Err(EmberdError::VramProviderUnavailable {
-                        detail: "test fixture override (EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE)"
-                            .into(),
-                    })
-                } else {
-                    available_free_vram_bytes()
-                }
+            move || match vram_test_override_error() {
+                Some(error) => Err(error),
+                None => available_free_vram_bytes(),
             },
             probe_host_commit_capacity,
             move |root| match floor_override {
@@ -1162,7 +1159,10 @@ impl Daemon {
         )
     }
 
-    pub fn dispatch_manifest_at_with_probes<F, G>(
+    // Internal launch layers only (never called directly by external
+    // integration tests) — pub(crate) keeps them out of the crate's public
+    // API without any feature gating.
+    pub(crate) fn dispatch_manifest_at_with_probes<F, G>(
         &self,
         manifest_path: &Path,
         observed_at_ms: i64,
@@ -1182,7 +1182,7 @@ impl Daemon {
         )
     }
 
-    pub fn dispatch_manifest_at_with_probes_and_host<F, G, H>(
+    pub(crate) fn dispatch_manifest_at_with_probes_and_host<F, G, H>(
         &self,
         manifest_path: &Path,
         observed_at_ms: i64,
@@ -1195,7 +1195,7 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
-        self.dispatch_manifest_at_with_probes_and_host_and_floor(
+        self.dispatch_manifest_at_with_probes_and_host_and_floor_impl(
             manifest_path,
             observed_at_ms,
             free_space,
@@ -1205,11 +1205,42 @@ impl Daemon {
         )
     }
 
+    /// Test-only public entrypoint for [`Daemon::dispatch_manifest_at_with_probes_and_host_and_floor_impl`]
+    /// — exists ONLY under `test-fixtures` (or the crate's own unit tests),
+    /// so a production `cargo build` never exposes a probe-injectable
+    /// launch method that could bypass a real survival-floor/VRAM/host-commit
+    /// probe with a fabricated closure.
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn dispatch_manifest_at_with_probes_and_host_and_floor<F, G, H, K>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        floor_free_space: K,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+        K: FnMut(&Path) -> Result<u64>,
+    {
+        self.dispatch_manifest_at_with_probes_and_host_and_floor_impl(
+            manifest_path,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            floor_free_space,
+        )
+    }
+
     /// Same as [`Daemon::dispatch_manifest_at_with_probes_and_host`], plus an
     /// explicit probe for the hardcoded consumer survival floors
     /// ([`survival_floors::ROOTS`]) — split out only so tests can drive the
     /// floor probe independently of a manifest's own storage_reserves probe.
-    pub fn dispatch_manifest_at_with_probes_and_host_and_floor<F, G, H, K>(
+    fn dispatch_manifest_at_with_probes_and_host_and_floor_impl<F, G, H, K>(
         &self,
         manifest_path: &Path,
         observed_at_ms: i64,
@@ -1241,7 +1272,11 @@ impl Daemon {
         )
     }
 
-    pub fn dispatch_manifest_bytes_at_with_probes_and_host<F, G, H>(
+    // Pre-existing internal layer with no current caller (dispatch_manifest_bytes
+    // calls the *_and_floor variant directly); kept for API symmetry with
+    // dispatch_manifest_at_with_probes_and_host, allowed dead rather than removed.
+    #[allow(dead_code)]
+    pub(crate) fn dispatch_manifest_bytes_at_with_probes_and_host<F, G, H>(
         &self,
         manifest_bytes: &[u8],
         expected_sha256: &str,
@@ -1255,7 +1290,7 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
-        self.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
+        self.dispatch_manifest_bytes_at_with_probes_and_host_and_floor_impl(
             manifest_bytes,
             expected_sha256,
             observed_at_ms,
@@ -1266,12 +1301,47 @@ impl Daemon {
         )
     }
 
+    /// Test-only public entrypoint for
+    /// [`Daemon::dispatch_manifest_bytes_at_with_probes_and_host_and_floor_impl`]
+    /// — exists ONLY under `test-fixtures` (or the crate's own unit tests);
+    /// a production `cargo build` never exposes a probe-injectable launch
+    /// method that could bypass a real floor/VRAM/host-commit probe with a
+    /// fabricated closure.
+    #[allow(clippy::too_many_arguments)]
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn dispatch_manifest_bytes_at_with_probes_and_host_and_floor<F, G, H, K>(
+        &self,
+        manifest_bytes: &[u8],
+        expected_sha256: &str,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        floor_free_space: K,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+        K: FnMut(&Path) -> Result<u64>,
+    {
+        self.dispatch_manifest_bytes_at_with_probes_and_host_and_floor_impl(
+            manifest_bytes,
+            expected_sha256,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            floor_free_space,
+        )
+    }
+
     /// Same as [`Daemon::dispatch_manifest_bytes_at_with_probes_and_host`],
     /// plus an explicit probe for the hardcoded consumer survival floors
     /// ([`survival_floors::ROOTS`]) — split out only so tests can drive the
     /// floor probe independently of the host's real drives.
     #[allow(clippy::too_many_arguments)]
-    pub fn dispatch_manifest_bytes_at_with_probes_and_host_and_floor<F, G, H, K>(
+    fn dispatch_manifest_bytes_at_with_probes_and_host_and_floor_impl<F, G, H, K>(
         &self,
         manifest_bytes: &[u8],
         expected_sha256: &str,
@@ -1617,6 +1687,7 @@ impl Daemon {
                     "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
                 },
             });
+            self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
             atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
             return Err(EmberdError::DispatchHostCommitReserve {
                 required_available_maximum_commit_bytes: manifest
@@ -1669,6 +1740,7 @@ impl Daemon {
                             "io_error": error.to_string(),
                         },
                     });
+                    self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
                     atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
                     return Err(EmberdError::DispatchConsumerFloorProbeError {
                         root,
@@ -1692,6 +1764,7 @@ impl Daemon {
                         "available_free_bytes": available,
                     },
                 });
+                self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
                 atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
                 return Err(EmberdError::DispatchConsumerFloorViolation {
                     root: canonical_root,
@@ -1816,6 +1889,7 @@ impl Daemon {
                             "detail": &detail,
                         },
                     });
+                    self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
                     atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
                     return Err(EmberdError::DispatchVramProviderUnavailable {
                         minimum_free_vram_bytes: manifest.minimum_free_vram_bytes,
@@ -1957,6 +2031,7 @@ impl Daemon {
                             "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
                         },
                     });
+                    self.check_receipt_claim_conflict(&job_id, &receipt_path)?;
                     atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
                     return Err(EmberdError::DispatchPinnedHostBudgetExceeded {
                         required_available_maximum_commit_bytes,
@@ -2193,6 +2268,42 @@ impl Daemon {
         Ok(())
     }
 
+    /// Read-only guard shared by every refusal-receipt write site in the
+    /// dispatch flow (called BEFORE `atomic_replace` on any refusal
+    /// payload): if `receipt_path` is currently claimed by a DIFFERENT
+    /// job_id in `dispatch_receipt_claims`, refuses with the typed conflict
+    /// error and writes nothing. Without this, an early-probe refusal
+    /// (gross-cap, floor, provider-unavailable, ...) for job B could
+    /// overwrite a receipt still owned by an already-admitted job A whose
+    /// receipt file happened to be deleted out from under it. This is a
+    /// pre-write CHECK, not a claim — the transactional claim INSERT still
+    /// lives only inside `start_job_with_pinned_budget_admission`'s
+    /// reservation transaction (via `validate_receipt_claim_available`), so
+    /// it carries no atomicity guarantee against a claim written
+    /// concurrently with this check; it closes the deleted-receipt/stale-DB
+    /// collision, which is the scenario these refusal sites can actually hit.
+    fn check_receipt_claim_conflict(&self, job_id: &str, receipt_path: &Path) -> Result<()> {
+        let receipt_path_text = receipt_path.to_string_lossy().into_owned();
+        let claimed_by: Option<String> = self
+            .conn()?
+            .query_row(
+                "SELECT job_id FROM dispatch_receipt_claims WHERE receipt_path=?1",
+                [&receipt_path_text],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(claimed_by_job_id) = claimed_by {
+            if claimed_by_job_id != job_id {
+                return Err(EmberdError::DispatchReceiptClaimConflict {
+                    receipt_path: receipt_path_text,
+                    requesting_job_id: job_id.to_string(),
+                    claimed_by_job_id,
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn insert_reserved_job_row(
         tx: &rusqlite::Transaction<'_>,
         spec: &JobSpec,
@@ -2401,8 +2512,13 @@ impl Daemon {
         // Same deterministic fixture override as dispatch_manifest_bytes —
         // transport-level tests of the real binary need floor determinism
         // on a host whose free space legitimately hovers near the floors.
+        // Compiled ONLY under the `test-fixtures` feature; a plain `cargo
+        // build` production binary carries no env-override code at all.
+        #[cfg(feature = "test-fixtures")]
         let floor_override = test_probe_override_u64("EMBERD_TEST_FLOOR_FREE_BYTES");
-        self.start_job_governed_with_probes(spec, probe_host_commit_capacity, move |root| {
+        #[cfg(not(feature = "test-fixtures"))]
+        let floor_override: Option<u64> = None;
+        self.start_job_governed_with_probes_impl(spec, probe_host_commit_capacity, move |root| {
             match floor_override {
                 Some(value) => Ok(value),
                 None => available_free_bytes(root),
@@ -2410,7 +2526,26 @@ impl Daemon {
         })
     }
 
+    /// Test-only public entrypoint for
+    /// [`Daemon::start_job_governed_with_probes_impl`] — exists ONLY under
+    /// `test-fixtures` (or the crate's own unit tests); a production `cargo
+    /// build` never exposes a probe-injectable launch method that could
+    /// bypass a real floor/host-commit probe with a fabricated closure.
+    #[cfg(any(test, feature = "test-fixtures"))]
     pub fn start_job_governed_with_probes<H, K>(
+        &self,
+        spec: JobSpec,
+        free_host_commit: H,
+        floor_free_space: K,
+    ) -> Result<JobHandle>
+    where
+        H: FnMut() -> Result<HostCommitCapacity>,
+        K: FnMut(&Path) -> Result<u64>,
+    {
+        self.start_job_governed_with_probes_impl(spec, free_host_commit, floor_free_space)
+    }
+
+    fn start_job_governed_with_probes_impl<H, K>(
         &self,
         spec: JobSpec,
         mut free_host_commit: H,
@@ -3902,8 +4037,30 @@ fn validate_resume_registry_binding_closure(
 /// present. `Ok(None)` = absent (io::ErrorKind::NotFound), `Ok(Some(_))` =
 /// present and canonicalized, `Err(_)` = present but the probe itself
 /// failed (permission denied or any other io error) and must refuse.
+#[cfg(feature = "test-fixtures")]
 fn test_probe_override_u64(name: &str) -> Option<u64> {
     std::env::var(name).ok()?.parse().ok()
+}
+
+/// Deterministic VRAM-provider-unavailable fixture for the real binary's
+/// named-pipe legs. The EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE env var name
+/// and the override error itself exist ONLY under `test-fixtures` — a
+/// plain `cargo build` production binary carries neither the string nor
+/// the code path.
+#[cfg(feature = "test-fixtures")]
+fn vram_test_override_error() -> Option<EmberdError> {
+    if std::env::var("EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE").is_ok() {
+        Some(EmberdError::VramProviderUnavailable {
+            detail: "test fixture override (EMBERD_TEST_VRAM_PROVIDER_UNAVAILABLE)".into(),
+        })
+    } else {
+        None
+    }
+}
+
+#[cfg(not(feature = "test-fixtures"))]
+fn vram_test_override_error() -> Option<EmberdError> {
+    None
 }
 
 fn probe_survival_floor_root(root: &Path) -> std::io::Result<Option<PathBuf>> {
@@ -5495,5 +5652,155 @@ mod survival_floor_probe_tests {
             std::io::ErrorKind::NotFound,
             "the probe error must be preserved as a real io error, never mistaken for absence: {error:?}"
         );
+    }
+}
+
+/// P1-B proof: a plain `cargo test` (no `--features test-fixtures`) compiles
+/// this module WITHOUT the feature, so `fixture_p1b_env_override_inert`
+/// running successfully is direct evidence that EMBERD_TEST_FLOOR_FREE_BYTES
+/// has NO reachable code path in a production build — the production
+/// `Daemon::start_job` entrypoint used here reads it only under the feature.
+#[cfg(test)]
+mod p1b_env_override_tests {
+    use super::*;
+
+    #[test]
+    fn fixture_p1b_child() {
+        if std::env::var("EMBERD_P1B_FIXTURE_CHILD").as_deref() == Ok("1") {
+            std::thread::sleep(Duration::from_secs(30));
+        }
+    }
+
+    /// Runs ONLY under a plain `cargo test` (no `test-fixtures` feature):
+    /// the companion `fixture_p1b_env_override_honored_under_feature` below
+    /// asserts the opposite outcome and runs only WITH the feature, so the
+    /// two together prove the override is real (feature) vs. genuinely
+    /// absent (no feature), never just "this test happens to pass".
+    #[cfg(not(feature = "test-fixtures"))]
+    #[test]
+    fn fixture_p1b_env_override_inert() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("emberd-p1b-no-override-{nonce}"));
+        fs::create_dir_all(&root).unwrap();
+        let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+        let job_id = format!("p1b-no-override-{nonce}");
+        let resource_lease = format!("p1b-lease-{nonce}");
+        let program = std::env::current_exe().unwrap();
+        daemon
+            .bind_identity(&job_id, &program, &hash_bytes(&fs::read(&program).unwrap()))
+            .unwrap();
+        daemon.acquire_lease(&resource_lease, &job_id).unwrap();
+
+        // A deliberately absurd "almost nothing free" override (the literal
+        // value "1") which, if honored, would surface as
+        // `available_free_bytes: 1` in a StartJobConsumerFloorViolation.
+        // Under a plain `cargo test` build (no `test-fixtures` feature),
+        // `Daemon::start_job` never reads this env var at all, so whatever
+        // the outcome (this host's real free space may itself be above or
+        // below the floor at run time — that's a live, operator-maintained
+        // number, not something this test controls), the REAL probe result
+        // governs and must never equal the fake override.
+        std::env::set_var("EMBERD_TEST_FLOOR_FREE_BYTES", "1");
+        let spec = JobSpec::new(
+            job_id.clone(),
+            program.to_string_lossy().into_owned(),
+            [
+                "--exact",
+                "p1b_env_override_tests::fixture_p1b_child",
+                "--nocapture",
+            ],
+            resource_lease.clone(),
+            std::num::NonZeroU64::new(64 * 1024 * 1024).unwrap(),
+        )
+        .with_env("EMBERD_P1B_FIXTURE_CHILD", "1");
+        let result = daemon.start_job(spec);
+        std::env::remove_var("EMBERD_TEST_FLOOR_FREE_BYTES");
+        match &result {
+            Err(EmberdError::StartJobConsumerFloorViolation {
+                available_free_bytes,
+                ..
+            }) => {
+                // The host's REAL free space governs the refusal, never the
+                // fake override — proof the override has no reachable code
+                // path in this (feature-less) build.
+                assert_ne!(
+                    *available_free_bytes, 1,
+                    "the refusal's disclosed available_free_bytes must be the REAL \
+                     probe result, never the inert EMBERD_TEST_FLOOR_FREE_BYTES=1 override"
+                );
+                assert!(
+                    *available_free_bytes > 1_000_000_000,
+                    "a real disk's free-space probe should read in the GiB range, \
+                     not the fake override's byte-scale value: {available_free_bytes}"
+                );
+            }
+            Ok(_) => {
+                // Real free space is comfortably above both floors: no
+                // refusal at all, which the fake "1 byte free" override
+                // would never have permitted if it had been honored.
+            }
+            other => panic!("unexpected start_job outcome: {other:?}"),
+        }
+        let _ = daemon.stop_job(&job_id);
+    }
+
+    /// Mirror of `fixture_p1b_env_override_inert` above, but asserting the
+    /// OPPOSITE: compiled ONLY under `test-fixtures`, so
+    /// `cargo test --features test-fixtures` proves the override genuinely
+    /// engages (REFUSED with `available_free_bytes == 1`) when the feature
+    /// is present — establishing that the no-feature test's green result is
+    /// a real absence, not a fixture that never worked in the first place.
+    #[cfg(feature = "test-fixtures")]
+    #[test]
+    fn fixture_p1b_env_override_honored_under_feature() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("emberd-p1b-honored-{nonce}"));
+        fs::create_dir_all(&root).unwrap();
+        let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+        let job_id = format!("p1b-honored-{nonce}");
+        let resource_lease = format!("p1b-honored-lease-{nonce}");
+        let program = std::env::current_exe().unwrap();
+        daemon
+            .bind_identity(&job_id, &program, &hash_bytes(&fs::read(&program).unwrap()))
+            .unwrap();
+        daemon.acquire_lease(&resource_lease, &job_id).unwrap();
+
+        std::env::set_var("EMBERD_TEST_FLOOR_FREE_BYTES", "1");
+        let spec = JobSpec::new(
+            job_id.clone(),
+            program.to_string_lossy().into_owned(),
+            [
+                "--exact",
+                "p1b_env_override_tests::fixture_p1b_child",
+                "--nocapture",
+            ],
+            resource_lease.clone(),
+            std::num::NonZeroU64::new(64 * 1024 * 1024).unwrap(),
+        )
+        .with_env("EMBERD_P1B_FIXTURE_CHILD", "1");
+        let result = daemon.start_job(spec);
+        std::env::remove_var("EMBERD_TEST_FLOOR_FREE_BYTES");
+        match result {
+            Err(EmberdError::StartJobConsumerFloorViolation {
+                available_free_bytes,
+                ..
+            }) => {
+                assert_eq!(
+                    available_free_bytes, 1,
+                    "with the test-fixtures feature enabled, the override MUST be honored"
+                );
+            }
+            other => panic!(
+                "expected StartJobConsumerFloorViolation with the test-fixtures \
+                 feature enabled, got: {other:?}"
+            ),
+        }
+        let _ = daemon.stop_job(&job_id);
     }
 }
