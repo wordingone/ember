@@ -242,15 +242,26 @@ class PretrainingSegmentTests(unittest.TestCase):
 
         self.assertEqual(uninterrupted.yielded, ["selection-0", "selection-1", "selection-2"])
         self.assertEqual(interrupted.yielded, uninterrupted.yielded)
-        self.assertEqual([step for step, _state in uninterrupted_callbacks], [1, 2, 3])
-        self.assertEqual([step for step, _state in first_callbacks], [1, 2])
-        self.assertEqual([step for step, _state in resumed_callbacks], [3])
-        for step, state in uninterrupted_callbacks:
-            cursor = state["data_cursor"]
-            self.assertEqual(cursor["global_step"], step)
-            self.assertEqual(cursor["tokens_seen"], step * 3)
-            self.assertEqual(cursor["selection_cursor"]["selected_ordinal"], step)
-            self.assertEqual(cursor["selection_cursor"]["next_source_index"], step)
+        def assert_completed_callbacks(callbacks: list[tuple[int, dict[str, object]]], expected_steps: list[int]) -> None:
+            self.assertEqual([step for step, _state in callbacks], expected_steps)
+            for step, state in callbacks:
+                cursor = state["data_cursor"]
+                self.assertEqual(cursor["global_step"], step)
+                self.assertEqual(cursor["tokens_seen"], step * 3)
+                self.assertEqual(cursor["selection_cursor"], {
+                    "schema_version": "ember-specialist-stream-selection-cursor-v1",
+                    "selection_receipt_sha256": "a" * 64,
+                    "selection_rule_id": "image_scene_split_train_v1",
+                    "selected_ordinal": step,
+                    "next_source_index": step,
+                })
+
+        assert_completed_callbacks(uninterrupted_callbacks, [1, 2, 3])
+        assert_completed_callbacks(first_callbacks, [1, 2])
+        assert_completed_callbacks(resumed_callbacks, [3])
+        self.assertEqual(resumed_callbacks[0][0], uninterrupted_callbacks[2][0])
+        self.assertEqual(resumed_callbacks[0][1]["global_step"], uninterrupted_callbacks[2][1]["global_step"])
+        self.assertEqual(resumed_callbacks[0][1]["data_cursor"], uninterrupted_callbacks[2][1]["data_cursor"])
         self.assertEqual(first["global_step"], 2)
         self.assertEqual(first["tokens_seen"], 6)
         self.assertEqual(first["data_cursor"]["selection_cursor"], {
