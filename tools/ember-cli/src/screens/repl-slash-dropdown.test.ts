@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl-slash-dropdown.test.ts — integration receipt for the slash-command completion
 // dropdown wired into the real ReplScreen (issue b22 item 1, ledgered since b14 as
 // ember-cli-slash-dropdown). Mounts the REAL ReplScreen via mountInk with a capture stream (no

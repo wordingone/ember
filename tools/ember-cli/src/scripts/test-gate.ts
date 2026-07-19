@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // scripts/test-gate.ts — a trustworthy `bun test` gate for tools/ember-cli/src.
 //
 // Problem this solves (see BUNPANIC_TRIAGE.md): a plain `bun test` can exit non-zero for two

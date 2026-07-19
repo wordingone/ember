@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // scripts/quarantine-list.ts — files that are allowed to hit a Bun-internal
 // teardown panic without failing the gate, because the panic is a Bun bug we
 // trigger via the custom Ink reconciler's process-exit path, not a product
