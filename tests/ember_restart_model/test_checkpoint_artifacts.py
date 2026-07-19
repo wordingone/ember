@@ -27,6 +27,7 @@ from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realiza
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
+from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
 
 def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> dict[str, object]:
     architecture = manifest_receipt["architecture"]
@@ -38,6 +39,10 @@ def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> di
         "model_config_sha256": manifest_receipt["model_config_sha256"],
         "architecture_revision": manifest_receipt["architecture_revision"],
         "counter_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest(),
+        "runtime_authority": {
+            "schema_version": "ember-counter-runtime-authority-v1",
+            "kind": "NONE",
+        },
         "active_expert_ids": manifest_receipt["active_expert_ids"],
         "expert_genesis_sha256": manifest_receipt["expert_genesis_sha256"],
         "expert_parameter_sha256": manifest_receipt["expert_parameter_sha256"],
@@ -833,6 +838,119 @@ class CheckpointArtifactTests(unittest.TestCase):
                 )
             self.assertEqual(outside.read_bytes(), b"external")
             self.assertFalse(target.exists())
+
+    def test_p2b_training_cursor_is_closed_and_disjoint_from_legacy_replay_cursor(self) -> None:
+        selection_cursor = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": "a" * 64, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 2, "next_source_index": 5}
+        cursor = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": selection_cursor, "global_step": 7, "tokens_seen": 42}
+        kwargs = {"launch_seed": 1, "rng_state": {"cpu": torch.tensor([1], dtype=torch.uint8), "cuda": torch.tensor([2], dtype=torch.uint8)}, "data_cursor": cursor, "model_config_sha256": "c" * 64, "contract_sha256": "d" * 64, "expert_genesis_sha256": {name: "e" * 64 for name in ("vision", "audio", "reasoning", "tool")}}
+        checkpoint_artifacts._validate_replay_bindings(**kwargs)
+        for label, forged in (("legacy_mixed", {**cursor, "shard": "legacy", "record_index": 0}), ("missing_selection", {key: value for key, value in cursor.items() if key != "selection_cursor"}), ("negative_step", {**cursor, "global_step": -1}), ("negative_tokens", {**cursor, "tokens_seen": -1})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                checkpoint_artifacts._validate_replay_bindings(**{**kwargs, "data_cursor": forged})
+
+        for label, forged in (("wrong_training_schema", {**cursor, "schema_version": "wrong"}), ("outer_extra", {**cursor, "extra": 1}), ("selection_not_mapping", {**cursor, "selection_cursor": []}), ("wrong_selection_schema", {**cursor, "selection_cursor": {**selection_cursor, "schema_version": "wrong"}}), ("selection_missing", {**cursor, "selection_cursor": {key: value for key, value in selection_cursor.items() if key != "next_source_index"}}), ("selection_extra", {**cursor, "selection_cursor": {**selection_cursor, "extra": 1}}), ("negative_ordinal", {**cursor, "selection_cursor": {**selection_cursor, "selected_ordinal": -1}}), ("negative_source", {**cursor, "selection_cursor": {**selection_cursor, "next_source_index": -1}})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                checkpoint_artifacts._validate_replay_bindings(**{**kwargs, "data_cursor": forged})
+
+        for label, forged in (("step_bool", {**cursor, "global_step": True}), ("tokens_bool", {**cursor, "tokens_seen": True}), ("ordinal_bool", {**cursor, "selection_cursor": {**selection_cursor, "selected_ordinal": True}}), ("source_bool", {**cursor, "selection_cursor": {**selection_cursor, "next_source_index": True}}), ("hash_empty", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": ""}}), ("hash_nonstring", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": 1}}), ("hash_upper", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": "A" * 64}}), ("hash_short", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": "a" * 63}}), ("rule_empty", {**cursor, "selection_cursor": {**selection_cursor, "selection_rule_id": ""}}), ("rule_nonstring", {**cursor, "selection_cursor": {**selection_cursor, "selection_rule_id": 1}})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                checkpoint_artifacts._validate_replay_bindings(**{**kwargs, "data_cursor": forged})
+
+    def test_p2b_checkpoint_progress_binds_episode_end_to_outer_training_cursor(self) -> None:
+        end = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": "a" * 64, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 2, "next_source_index": 5}
+        episode = {"end_selection_cursor": end, "completed_updates": 2, "training_token_delta": 12}
+        parent = {"global_step": 3, "tokens_seen": 18}
+        candidate = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": end, "global_step": 5, "tokens_seen": 30}
+        validate = getattr(checkpoint_artifacts, "_validate_p2b_checkpoint_progress")
+        self.assertEqual(validate(episode, candidate, parent), candidate)
+        for label, forged in (("end_mismatch", {**candidate, "selection_cursor": {**end, "selected_ordinal": 1}}), ("global_regression", {**candidate, "global_step": 2}), ("global_delta", {**candidate, "global_step": 4}), ("token_regression", {**candidate, "tokens_seen": 17}), ("token_delta", {**candidate, "tokens_seen": 29}), ("legacy_mixed", {**candidate, "shard": "legacy"}), ("wrong_schema", {**candidate, "schema_version": "wrong"})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                validate(episode, forged, parent)
+        for malformed_parent in ({"global_step": -1, "tokens_seen": 0}, {"global_step": 3}, {"global_step": "3", "tokens_seen": 18}):
+            with self.assertRaises(ValueError):
+                validate(episode, candidate, malformed_parent)
+
+        for forged_episode in ({**episode, "completed_updates": 0}, {**episode, "completed_updates": "2"}, {**episode, "training_token_delta": 0}, {**episode, "training_token_delta": "12"}):
+            with self.assertRaises(ValueError):
+                validate(forged_episode, candidate, parent)
+
+        for bad_episode, bad_candidate, bad_parent in (({**episode, "completed_updates": True}, candidate, parent), ({**episode, "training_token_delta": True}, candidate, parent), (episode, {**candidate, "global_step": True}, parent), (episode, {**candidate, "tokens_seen": True}, parent), (episode, candidate, {"global_step": True, "tokens_seen": 18}), (episode, candidate, {"global_step": 3, "tokens_seen": True})):
+            with self.assertRaises(ValueError):
+                validate(bad_episode, bad_candidate, bad_parent)
+
+    def test_specialist_lineage_binds_p2b_episode_to_candidate_and_parent_cursor(self) -> None:
+        genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
+        receipt = {
+            "schema_version": "ember-owned-specialist-stream-selection-receipt-v1",
+            "stream_manifest_sha256": "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427",
+            "stream_build_receipt_sha256": "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+            "corpus_root_sha256": "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab",
+            "family_root_sha256": "e" * 64, "capability": "image", "selection_rule_id": "image_scene_split_train_v1",
+            "selected_record_count": 3, "selected_token_count": 12, "selected_records_sha256": "f" * 64,
+            "selection_commitment_sha256": "0" * 64,
+        }
+        receipt_sha256 = checkpoint_artifacts._canonical_sha256(receipt)
+        start = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": receipt_sha256, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 0, "next_source_index": 0}
+        end = {**start, "selected_ordinal": 2, "next_source_index": 5}
+        episode = {
+            "schema_version": "ember-specialist-stream-episode-v1", "active_expert": "vision", "selection_receipt": receipt,
+            "selection_receipt_sha256": receipt_sha256, "start_selection_cursor": start, "end_selection_cursor": end,
+            "completed_updates": 2, "training_token_delta": 12,
+            "stream_manifest_sha256": receipt["stream_manifest_sha256"], "stream_build_receipt_sha256": receipt["stream_build_receipt_sha256"],
+            "corpus_root_sha256": receipt["corpus_root_sha256"], "family_root_sha256": receipt["family_root_sha256"],
+        }
+        candidate_cursor = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": end, "global_step": 5, "tokens_seen": 30}
+        parent = {"schema_version": "ember-sparse-checkpoint-v3", "expert_checkpoint_sha256": genesis, "expert_genesis_sha256": genesis, "data_cursor": {"shard": "legacy-parent", "record_index": 7, "global_step": 3, "tokens_seen": 18}}
+        lineage = {"parent_manifest": "parent/checkpoint-manifest.json", "root_manifest": "root/checkpoint-manifest.json", "trained_expert_ids": ["vision"], "episode": episode}
+        candidate_parameters = {**genesis, "vision": "1" * 64}
+        with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))):
+            normalized, _, _, _ = checkpoint_artifacts._specialist_lineage(
+                lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters,
+                data_cursor=candidate_cursor,
+            )
+        self.assertEqual(normalized["episode"], episode)
+        root_parent = {"schema_version": "ember-sparse-checkpoint-v3", "expert_checkpoint_sha256": genesis, "expert_genesis_sha256": genesis, "data_cursor": {"shard": "root-parent", "record_index": 0, "global_step": 3, "tokens_seen": 18}}
+        p2b_receipt = {**receipt, "selected_record_count": 4, "selected_token_count": 24}
+        p2b_receipt_sha256 = checkpoint_artifacts._canonical_sha256(p2b_receipt)
+        p2b_start = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": p2b_receipt_sha256, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 0, "next_source_index": 0}
+        p2b_end = {**p2b_start, "selected_ordinal": 2, "next_source_index": 5}
+        p2b_parent_episode = {**episode, "selection_receipt": p2b_receipt, "selection_receipt_sha256": p2b_receipt_sha256, "start_selection_cursor": p2b_start, "end_selection_cursor": p2b_end}
+        chained_start = p2b_end
+        chained_end = {**p2b_end, "selected_ordinal": 3, "next_source_index": 6}
+        chained_episode = {**p2b_parent_episode, "start_selection_cursor": chained_start, "end_selection_cursor": chained_end, "completed_updates": 1, "training_token_delta": 12}
+        chained_cursor = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": chained_end, "global_step": 6, "tokens_seen": 42}
+        chained_lineage = {"parent_manifest": "parent/checkpoint-manifest.json", "root_manifest": "root/checkpoint-manifest.json", "trained_expert_ids": ["vision"], "episode": chained_episode}
+        p2b_parent = {
+            "schema_version": "ember-sparse-checkpoint-v4", "expert_checkpoint_sha256": {**genesis, "vision": "0" * 64},
+            "expert_parameter_sha256": {**genesis, "vision": "0" * 64}, "expert_genesis_sha256": genesis,
+            "lineage": {"parent_checkpoint_sha256": "7" * 64, "root_genesis_checkpoint_sha256": "8" * 64, "trained_expert_ids": ["vision"], "episode": p2b_parent_episode},
+            "data_cursor": {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": p2b_end, "global_step": 5, "tokens_seen": 30},
+        }
+        with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((p2b_parent, "9" * 64), (root_parent, "8" * 64))):
+            normalized, _, _, _ = checkpoint_artifacts._specialist_lineage(
+                chained_lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters,
+                data_cursor=chained_cursor,
+            )
+        self.assertEqual(normalized["episode"], chained_episode)
+        legacy_lineage = {"parent_manifest": "parent/checkpoint-manifest.json", "root_manifest": "root/checkpoint-manifest.json", "trained_expert_ids": ["vision"], "data_verification_receipt": {}, "execution_slice": {}, "scene_split_selection": {}}
+        with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))), self.assertRaisesRegex(ValueError, "P2B training cursor requires P2B specialist lineage"):
+            checkpoint_artifacts._specialist_lineage(legacy_lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters, data_cursor=candidate_cursor)
+        for label, forged_lineage, forged_cursor in (
+            ("mixed_shape", {**lineage, "execution_slice": {}}, candidate_cursor),
+            ("legacy_cursor", lineage, {"shard": "legacy", "record_index": 0, "global_step": 5, "tokens_seen": 30}),
+            ("end_mismatch", lineage, {**candidate_cursor, "selection_cursor": {**end, "selected_ordinal": 1}}),
+            ("global_delta", lineage, {**candidate_cursor, "global_step": 4}),
+            ("token_delta", lineage, {**candidate_cursor, "tokens_seen": 29}),
+            ("forged_nested", lineage, {**candidate_cursor, "selection_cursor": {**end, "selection_receipt_sha256": "1" * 64}}),
+        ):
+            with self.subTest(label=label), patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))), self.assertRaises(ValueError):
+                checkpoint_artifacts._specialist_lineage(forged_lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters, data_cursor=forged_cursor)
+        for label, forged_parameters in (
+            ("active_unchanged", {**genesis}),
+            ("inactive_changed", {**candidate_parameters, "audio": "2" * 64}),
+        ):
+            with self.subTest(label=label), patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))), self.assertRaises(ValueError):
+                checkpoint_artifacts._specialist_lineage(lineage, active_expert="vision", candidate_parameter_sha256=forged_parameters, data_cursor=candidate_cursor)
 
 if __name__ == "__main__":
     unittest.main()

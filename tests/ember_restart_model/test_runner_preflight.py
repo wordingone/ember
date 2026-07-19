@@ -822,6 +822,10 @@ class RunnerPreflightTests(unittest.TestCase):
                     "architecture_revision": manifest["architecture_revision"],
                     "active_expert_ids": manifest["active_expert_ids"],
                     "counter_sha256": run_vertical_slice._sha256(ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py"),
+                    "runtime_authority": {
+                        "schema_version": "ember-counter-runtime-authority-v1",
+                        "kind": "NONE",
+                    },
                     "expert_genesis_sha256": manifest["expert_genesis_sha256"],
                     "expert_parameter_sha256": manifest["expert_parameter_sha256"],
                     **manifest["architecture"],
