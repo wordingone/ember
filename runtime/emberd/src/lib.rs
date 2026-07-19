@@ -2216,6 +2216,11 @@ impl Daemon {
         if remove_identity {
             tx.execute("DELETE FROM identities WHERE job_id=?1", [job_id])?;
         }
+        // A claim commits (insert_reserved_job_row) BEFORE the process ever
+        // spawns; a spawn failure (or any other post-reservation error) that
+        // routes here must release it too, or the receipt path stays
+        // permanently claimed by a job that no longer exists anywhere else.
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.commit()?;
         Ok(())
     }
@@ -3509,6 +3514,11 @@ impl Daemon {
                 detail: "stop finalization lost its lease epoch".into(),
             });
         }
+        // Terminal transition: release any dispatch receipt claim this job
+        // held, or the receipt path stays wedged against any future
+        // different-job dispatch forever (dispatch_receipt_claims has no
+        // other release path).
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stopped',?3)",
             params![
@@ -3555,6 +3565,10 @@ impl Daemon {
                 detail: "starting reconciliation lost its lease epoch".into(),
             });
         }
+        // Terminal transition (starting -> failed): release any dispatch
+        // receipt claim, or a crash-orphaned post-commit/pre-spawn job
+        // wedges its receipt path against re-dispatch even after reconcile.
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
             params![job_id, now_ms(), kind],
@@ -3624,6 +3638,8 @@ impl Daemon {
                 detail: "unknown-exit reconciliation lost its lease epoch".into(),
             });
         }
+        // Terminal transition: release any dispatch receipt claim.
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
             params![
@@ -3660,6 +3676,8 @@ impl Daemon {
                 detail: "dead reconciliation lost its lease epoch".into(),
             });
         }
+        // Terminal transition: release any dispatch receipt claim.
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
             params![job_id, now_ms(), kind],
@@ -5032,6 +5050,10 @@ fn record_natural_exit(
             detail: "natural-exit monitor lost its lease epoch".into(),
         });
     }
+    // Terminal transition (the default clean-exit path): release any
+    // dispatch receipt claim, or a re-dispatch of the same receipt slot
+    // under a fresh job_id is refused forever.
+    tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
     tx.execute(
         "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_exited',?3)",
         params![
