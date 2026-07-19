@@ -720,6 +720,23 @@ impl Daemon {
                 actual,
             });
         }
+        // Read the canonical path's current on-disk bytes exactly once,
+        // inside this same atomic bind scope, and require them to equal
+        // the supplied snapshot -- for BOTH a brand-new binding and a
+        // would-be-reused existing binding. Without this, an atomic
+        // replacement of the file after the snapshot was read (and after
+        // any earlier binding recorded that path/hash) could leave the
+        // stored canonical path pointing at bytes different from the
+        // identity_blob/hash actually admitted, since neither branch
+        // below previously reread the file at all.
+        let on_disk_hash = hash_file(&canonical)?;
+        if on_disk_hash != expected {
+            return Err(EmberdError::IdentityMismatch {
+                job_id: job_id.into(),
+                expected: expected.into(),
+                actual: on_disk_hash,
+            });
+        }
         let existing: Option<(String, String)> = tx
             .query_row(
                 "SELECT canonical_path,sha256 FROM identities WHERE job_id=?1",
@@ -1297,6 +1314,13 @@ impl Daemon {
             }
         })?;
         let manifest_bytes = fs::read(&canonical)?;
+        // P1-1 test-only race window: pauses here, WITH THE SNAPSHOT ALREADY
+        // TAKEN but before it is ever used for identity binding, so a test
+        // can atomically replace `canonical`'s on-disk bytes during the
+        // pause and prove the STALE `manifest_bytes` snapshot is refused
+        // downstream by `bind_identity_within`'s on-disk reread rather than
+        // silently admitted. In production this is an inert no-op.
+        identity_snapshot_race_test_hook();
         self.dispatch_manifest_bytes_at_with_probes_and_host_inner(
             &manifest_bytes,
             &canonical,
@@ -4514,8 +4538,27 @@ fn receipt_refusal_race_test_hook() {}
 /// transaction has either committed or rolled back, closing exactly the
 /// check-then-separately-bind gap that the old design left open across two
 /// independently-lockable steps. In production this is an inert no-op.
+///
+/// Round-12 reviewer REJECT (test determinism): a fixed head-start sleep
+/// before starting the racing thread only ASSUMES it lands inside this
+/// pause; it proves nothing about actual entry. `IDENTITY_BIND_RACE_ENTRY`
+/// below is positive synchronization: this hook flips the flag and notifies
+/// the condvar the INSTANT it is entered (still holding the connection
+/// mutex), and `wait_for_identity_bind_race_entry_test_hook` lets the test
+/// block until it has OBSERVED that signal before spawning the second
+/// thread -- no timing assumption, no narrow window to get unlucky on.
+#[cfg(feature = "test-fixtures")]
+static IDENTITY_BIND_RACE_ENTRY: (Mutex<bool>, std::sync::Condvar) =
+    (Mutex::new(false), std::sync::Condvar::new());
+
 #[cfg(feature = "test-fixtures")]
 fn identity_bind_race_test_hook() {
+    {
+        let (lock, cvar) = &IDENTITY_BIND_RACE_ENTRY;
+        let mut entered = lock.lock().unwrap();
+        *entered = true;
+        cvar.notify_all();
+    }
     if let Ok(ms) = std::env::var("EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS") {
         if let Ok(ms) = ms.parse::<u64>() {
             std::thread::sleep(std::time::Duration::from_millis(ms));
@@ -4525,6 +4568,55 @@ fn identity_bind_race_test_hook() {
 
 #[cfg(not(feature = "test-fixtures"))]
 fn identity_bind_race_test_hook() {}
+
+/// Test-only: reset the round-12 identity-bind-race entry signal to
+/// unsignaled. Must be called before arming a fresh race attempt (the flag
+/// is a static and would otherwise still read "entered" from a prior test).
+#[cfg(feature = "test-fixtures")]
+pub fn reset_identity_bind_race_entry_test_hook() {
+    let (lock, _cvar) = &IDENTITY_BIND_RACE_ENTRY;
+    *lock.lock().unwrap() = false;
+}
+
+/// P1-1 test-only race window: `dispatch_manifest_at_with_probes_and_host_and_floor_impl`
+/// calls this immediately after reading the manifest's snapshot bytes off
+/// disk, before that snapshot is ever passed down to `bind_identity_within`.
+/// Under `test-fixtures`, an integration test can force a deterministic
+/// pause right there via `EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS` and
+/// atomically replace the manifest file's on-disk bytes during the pause --
+/// reproducing the exact window the P1-1 fix closes: a caller's snapshot
+/// read racing an out-of-band atomic replacement of the same canonical
+/// file. In production this is an inert no-op.
+#[cfg(feature = "test-fixtures")]
+fn identity_snapshot_race_test_hook() {
+    if let Ok(ms) = std::env::var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS") {
+        if let Ok(ms) = ms.parse::<u64>() {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
+}
+
+#[cfg(not(feature = "test-fixtures"))]
+fn identity_snapshot_race_test_hook() {}
+
+/// Test-only: block the calling thread until `identity_bind_race_test_hook`
+/// has been entered by some other thread (i.e. until a concurrent
+/// `bind_identity_within` call is provably inside its mutex-held pause), or
+/// until `timeout` elapses. Returns `true` if the signal was observed,
+/// `false` on timeout -- a `false` return means the racing thread never
+/// entered the hook at all within the budget, which the caller should treat
+/// as a hard test failure rather than silently racing ahead.
+#[cfg(feature = "test-fixtures")]
+pub fn wait_for_identity_bind_race_entry_test_hook(timeout: std::time::Duration) -> bool {
+    let (lock, cvar) = &IDENTITY_BIND_RACE_ENTRY;
+    let guard = lock.lock().unwrap();
+    if *guard {
+        return true;
+    }
+    let (guard, result) = cvar.wait_timeout_while(guard, timeout, |entered| !*entered).unwrap();
+    drop(guard);
+    !result.timed_out()
+}
 
 fn probe_survival_floor_root(root: &Path) -> std::io::Result<Option<PathBuf>> {
     match fs::canonicalize(root) {

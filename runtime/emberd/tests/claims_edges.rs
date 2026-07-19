@@ -44,7 +44,10 @@
 
 #![cfg(windows)]
 
-use emberd::{Daemon, HostCommitCapacity};
+use emberd::{
+    reset_identity_bind_race_entry_test_hook, wait_for_identity_bind_race_entry_test_hook, Daemon,
+    HostCommitCapacity,
+};
 use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -837,26 +840,36 @@ fn admission_refuses_conflict_with_pre_existing_identity_preserved() {
 /// identity the winner's now-running job depends on.
 ///
 /// This test drives the race deterministically rather than hoping a real
-/// race lands: `EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS` (round-11's new
-/// hook, mirroring the existing P1-3 `EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS`
+/// race lands: `EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS` (round-11's hook,
+/// mirroring the existing P1-3 `EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS`
 /// pattern) pauses `bind_identity_within` for 300ms WHILE STILL HOLDING the
 /// connection mutex, immediately after observing no identity row exists --
 /// i.e. exactly the moment a concurrent second attempt could, on the old
-/// three-step design, race in and observe the same "absent" state. Thread A
-/// starts first and lands inside that pause; thread B (spawned after a
-/// short deterministic head start, same technique as the P1-3 test) then
-/// attempts to dispatch the IDENTICAL job_id at the IDENTICAL manifest/path
-/// concurrently. On the fixed, single-transaction design this is not
-/// actually a race at all: B cannot even begin its OWN reservation
+/// three-step design, race in and observe the same "absent" state.
+///
+/// Round-12 reviewer REJECT (test determinism): a fixed head-start sleep
+/// before starting thread B only ASSUMED thread A had entered that pause --
+/// it never proved it. This version uses POSITIVE synchronization instead:
+/// `wait_for_identity_bind_race_entry_test_hook` blocks until thread A has
+/// actually signaled entry into `identity_bind_race_test_hook` (still
+/// holding the connection mutex), and only then is thread B spawned. There
+/// is no timing assumption left to get unlucky on -- either the signal is
+/// observed (and B is provably racing a live, mutex-held pause) or the test
+/// fails loudly on the wait timeout rather than silently proceeding.
+///
+/// Thread B then attempts to dispatch the IDENTICAL job_id at the IDENTICAL
+/// manifest/path concurrently. On the fixed, single-transaction design this
+/// is not actually a race at all: B cannot even begin its OWN reservation
 /// transaction (which must also acquire the same connection mutex) until
 /// A's transaction has fully committed or rolled back, so B can never
 /// observe "absent" while A's insert is in flight. B's own attempt is then
-/// correctly refused (the job_id already exists) with NOTHING to clean up --
-/// there is no longer a separate identity-erasure code path for a refusal
-/// to run at all. The regression proves the surviving (A) attempt's
-/// identity, lease, and running state are completely unaffected by B's
-/// refused attempt, and that B was genuinely serialized behind A's paused
-/// transaction (elapsed-time assertion) rather than racing past it.
+/// correctly refused with NOTHING to clean up -- there is no longer a
+/// separate identity-erasure code path for a refusal to run at all. The
+/// regression proves the surviving (A) attempt's identity, lease, and
+/// running state are completely unaffected by B's refused attempt, that B
+/// was genuinely serialized behind A's paused transaction (elapsed-time
+/// assertion), and that B's refusal is the EXACT expected error variant
+/// (`InvalidTransition` / "job already exists") rather than merely `is_err`.
 #[test]
 fn concurrent_same_job_id_dispatch_cannot_let_a_refused_attempt_delete_the_winners_identity() {
     let root = sandbox("round11-concurrent-identity-ownership");
@@ -867,6 +880,7 @@ fn concurrent_same_job_id_dispatch_cannot_let_a_refused_attempt_delete_the_winne
 
     let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
 
+    reset_identity_bind_race_entry_test_hook();
     std::env::set_var("EMBERD_TEST_IDENTITY_BIND_RACE_DELAY_MS", "300");
     let daemon_a = daemon.clone();
     let manifest_a = manifest.clone();
@@ -875,13 +889,15 @@ fn concurrent_same_job_id_dispatch_cannot_let_a_refused_attempt_delete_the_winne
         let result = dispatch(&daemon_a, &manifest_a);
         (result, started.elapsed())
     });
-    // Short, deliberate head start: thread A's own pre-mutex work (probe
-    // calls, JSON parsing) is sub-millisecond, so 60ms is ample time for it
-    // to be inside the mutex-held pause in `bind_identity_within` before
-    // thread B even starts -- deterministic ordering without needing a
-    // Barrier to hit a narrow window (same technique as the existing P1-3
-    // refusal-race test in dispatch_manifest.rs).
-    thread::sleep(Duration::from_millis(60));
+
+    // Block until thread A has PROVABLY entered the mutex-held pause --
+    // positive synchronization, not a timing guess.
+    let entered = wait_for_identity_bind_race_entry_test_hook(Duration::from_secs(5));
+    assert!(
+        entered,
+        "thread A never signaled entry into identity_bind_race_test_hook within 5s -- the race \
+         window this test targets was never armed at all"
+    );
 
     let b_started = std::time::Instant::now();
     let result_b = dispatch(&daemon, &manifest);
@@ -899,12 +915,22 @@ fn concurrent_same_job_id_dispatch_cannot_let_a_refused_attempt_delete_the_winne
     );
 
     // Exactly one of the two identical-job_id attempts is admitted; the
-    // other is refused (as "job already exists", since both target the
-    // same job_id and the winner's reservation already committed).
+    // other is refused. Assert the EXACT error variant, not merely is_err():
+    // both attempts share the same job_id/lease/receipt path (B's own
+    // `bind_identity_within` and `acquire_lease_within` and receipt-claim
+    // checks all pass, since they're the SAME job reattempting), so B's
+    // reservation is refused by the budget arithmetic -- A's own reservation
+    // (already committed by the time B's transaction opens) counts A's
+    // `MAXIMUM_JOB_MEMORY_BYTES` as live, leaving too little residual budget
+    // for B's identical reservation on top of it. A DIFFERENT refusal
+    // variant here (e.g. an identity or lease conflict) would mean the two
+    // attempts diverged on identity, which is exactly what round-11 fixed.
+    assert!(result_a.is_ok(), "expected thread A to be admitted, got {result_a:?}");
+    let error_b = result_b.expect_err("expected thread B to be refused");
     assert!(
-        result_a.is_ok() && result_b.is_err(),
-        "expected thread A (head start, wins the mutex first) to be admitted and thread B to be \
-         refused; got a={result_a:?} b={result_b:?}"
+        matches!(error_b, emberd::EmberdError::DispatchPinnedHostBudgetExceeded { .. }),
+        "expected thread B to be refused with DispatchPinnedHostBudgetExceeded (A's own \
+         reservation already consumes the budget B's identical reservation needs), got: {error_b:?}"
     );
 
     // The identity thread A created must survive completely untouched by
@@ -930,6 +956,106 @@ fn concurrent_same_job_id_dispatch_cannot_let_a_refused_attempt_delete_the_winne
     );
 
     daemon.stop_job("race-job").unwrap();
+}
+
+/// P1-1 reviewer REJECT: `bind_identity_within` validated the CALLER-SUPPLIED
+/// `identity_blob` against `expected` (self-consistency only), and, for an
+/// EXISTING binding, only the STORED (path,hash) pair against `expected` --
+/// it never reread the canonical file's CURRENT on-disk bytes. An atomic
+/// replacement of the canonical file after a caller's snapshot read (here:
+/// right after `dispatch_manifest_at_with_probes_and_host_and_floor_impl`
+/// reads `manifest_bytes` off disk, before that snapshot is ever passed down
+/// to `bind_identity_within`) could leave the identities row pointing at
+/// bytes different from what is now actually on disk. This test drives that
+/// race deterministically via the P1-1 test-only hook
+/// `EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS`, which pauses the
+/// dispatching thread immediately after its manifest snapshot read; a second
+/// thread atomically replaces the manifest file's bytes during that pause
+/// (rename onto the same path is atomic on the same volume). The dispatch
+/// must refuse with a typed `IdentityMismatch` -- and BEFORE any lease,
+/// claim, or job mutation, proven by asserting none of those rows, nor a
+/// receipt file, exist for the job_id afterward.
+#[test]
+fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapshot() {
+    let root = sandbox("identity-bind-snapshot-replacement");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("snap-replace-preflight.json");
+    let manifest = write_manifest(&root, "snap-replace", "gpu-snap-replace", &receipt_path);
+    let original_bytes = fs::read(&manifest).unwrap();
+
+    let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
+
+    std::env::set_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS", "300");
+    let daemon_a = daemon.clone();
+    let manifest_a = manifest.clone();
+    let thread_a = thread::spawn(move || dispatch(&daemon_a, &manifest_a));
+
+    // The dispatching thread's snapshot read is the very first thing its
+    // impl function does, so 60ms is ample time for it to be inside the
+    // post-read pause before this thread performs the out-of-band
+    // replacement below -- this race is over wall-clock file bytes rather
+    // than the in-process connection mutex, so there is no positive-signal
+    // condvar available the way there is for the round-11/round-12
+    // identity-bind-mutex race; the 300ms pause budget dwarfs realistic
+    // scheduling jitter for this sub-millisecond head start.
+    thread::sleep(Duration::from_millis(60));
+
+    // Atomically replace the manifest's bytes out-of-band with DIFFERENT
+    // content (same job_id/schema shape, one field changed so its hash
+    // differs) while the dispatching thread is paused holding the STALE
+    // snapshot it already read.
+    let mut replaced: Value = serde_json::from_slice(&original_bytes).unwrap();
+    replaced["not_before_ms"] = json!(999);
+    let tmp = manifest.with_extension("json.tmp");
+    fs::write(&tmp, serde_json::to_vec(&replaced).unwrap()).unwrap();
+    fs::rename(&tmp, &manifest).unwrap();
+
+    let result = thread_a.join().unwrap();
+    std::env::remove_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS");
+
+    let error = result.expect_err(
+        "REGRESSION: a manifest atomically replaced after the dispatching thread's own \
+         snapshot read must be refused, never silently admitted with stale bytes",
+    );
+    assert!(
+        format!("{error:?}").contains("IdentityMismatch"),
+        "expected IdentityMismatch (on-disk bytes now differ from the stale snapshot), got: {error:?}"
+    );
+
+    // Nothing from the refused attempt may have landed: no identity, no
+    // lease, no job row, no receipt claim, no receipt file for this job_id.
+    assert_eq!(
+        daemon.identity_hash("snap-replace").unwrap(),
+        None,
+        "refused attempt must not have created an identity row"
+    );
+    assert_eq!(
+        daemon.lease_owner("gpu-snap-replace").unwrap(),
+        None,
+        "refused attempt must not have created a lease row"
+    );
+    assert_eq!(
+        daemon.job_state("snap-replace").unwrap(),
+        None,
+        "refused attempt must not have created a job row"
+    );
+    let claim_owner: Option<String> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["snap-replace"],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap();
+    assert_eq!(
+        claim_owner, None,
+        "refused attempt must not have created a receipt claim row"
+    );
+    assert!(
+        !receipt_path.exists(),
+        "refused attempt must not have written a receipt"
+    );
 }
 
 /// Round-9 reviewer REJECT: the `dispatch_receipt_rollback_evidence` UPSERT
