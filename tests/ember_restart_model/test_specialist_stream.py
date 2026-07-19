@@ -777,6 +777,14 @@ class SpecialistStreamTests(unittest.TestCase):
 
 
 
+        with self.assertRaisesRegex(ValueError, "selection cursor"):
+            stream.open_execution_selection(
+                receipt=selection.receipt, cursor={**cursor, "schema_version": "ember-specialist-stream-selection-cursor-v1"},
+                build_receipt_path=build_receipt_path,
+                expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                expected_selection_receipt_sha256=cursor["selection_receipt_sha256"],
+            )
+
     def test_execution_selection_supports_only_closed_capability_rules(self) -> None:
         manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
         build_receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
