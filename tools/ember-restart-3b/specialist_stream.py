@@ -26,6 +26,8 @@ from verify_capability_record import verify_record as verify_capability_record
 CAPABILITIES = ("image", "audio", "reasoning", "tool")
 SCHEMA_VERSION = "ember-owned-specialist-stream-v1"
 CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-cursor-v1"
+SELECTION_RECEIPT_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-receipt-v1"
+SELECTION_CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-cursor-v1"
 MAX_RECORDS_PER_FAMILY = 65_536
 MAX_CHUNK_RECORDS = 256
 MAX_MANIFEST_BYTES = 1_048_576
@@ -278,6 +280,100 @@ def _validate_family_commitment(value: object, *, capability: str, count: int, c
         _require_sha256(chunk.get("sha256"), f"{capability} chunk")
 
 
+class ExecutionSelection:
+    """Sequential route/split iterator backed by at most one verified chunk."""
+
+    def __init__(self, stream: "SpecialistStream", receipt: dict[str, object]) -> None:
+        self._stream = stream
+        self.receipt = receipt
+        self._chunk_cache: dict[int, list[dict[str, Any]]] = {}
+
+    def _record_at_source_index(self, source_index: int) -> dict[str, Any]:
+        if type(source_index) is not int or not 0 <= source_index < self._stream.count:
+            raise ValueError("invalid execution selection source index")
+        if self._stream.chunk_size is None:
+            raise ValueError("stream chunk size is required")
+        capability = self.receipt["capability"]
+        if not isinstance(capability, str):
+            raise ValueError("invalid execution selection capability")
+        start = (source_index // self._stream.chunk_size) * self._stream.chunk_size
+        chunk = self._chunk_cache.get(start)
+        if chunk is None:
+            chunk = self._stream._materialize_verified_chunk(capability, start)
+            self._chunk_cache = {start: chunk}
+        return chunk[source_index - start]
+
+    def _initial_cursor(self) -> dict[str, object]:
+        return {
+            "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+            "selection_receipt_sha256": _sha256(canonical_record_bytes(self.receipt)),
+            "selection_rule_id": self.receipt["selection_rule_id"],
+            "selected_ordinal": 0,
+            "next_source_index": 0,
+            "global_step": 0,
+            "tokens_seen": 0,
+        }
+
+    def _validated_cursor(self, cursor: object) -> dict[str, object]:
+        if cursor is None:
+            return self._initial_cursor()
+        expected_fields = {"schema_version", "selection_receipt_sha256", "selection_rule_id", "selected_ordinal", "next_source_index", "global_step", "tokens_seen"}
+        if not isinstance(cursor, dict) or set(cursor) != expected_fields:
+            raise ValueError("invalid selection cursor")
+        if cursor.get("schema_version") != SELECTION_CURSOR_SCHEMA_VERSION or cursor.get("selection_receipt_sha256") != _sha256(canonical_record_bytes(self.receipt)):
+            raise ValueError("selection cursor does not match receipt")
+        if cursor.get("selection_rule_id") != self.receipt["selection_rule_id"]:
+            raise ValueError("selection cursor does not match rule")
+        for field in ("selected_ordinal", "next_source_index", "global_step", "tokens_seen"):
+            if type(cursor.get(field)) is not int or cursor[field] < 0:
+                raise ValueError("invalid selection cursor")
+        if cursor["selected_ordinal"] > self.receipt["selected_record_count"] or cursor["next_source_index"] > self._stream.count:
+            raise ValueError("invalid selection cursor")
+        return dict(cursor)
+
+    def _validate_cursor_progress(self, cursor: object) -> dict[str, object]:
+        """Prove the resumable cursor names exactly the generated selection prefix."""
+        state = self._validated_cursor(cursor)
+        capability = self.receipt["capability"]
+        rule = self.receipt["selection_rule_id"]
+        if not isinstance(capability, str) or not isinstance(rule, str):
+            raise ValueError("invalid execution selection receipt")
+        selected = 0
+        for source_index in range(state["next_source_index"]):
+            if self._stream._selection_rule_matches(capability, rule, self._record_at_source_index(source_index)):
+                selected += 1
+        if selected != state["selected_ordinal"]:
+            raise ValueError("selection cursor progress does not match source prefix")
+        if state["next_source_index"] and not self._stream._selection_rule_matches(
+            capability, rule, self._record_at_source_index(state["next_source_index"] - 1),
+        ):
+            raise ValueError("selection cursor progress does not end after a selected record")
+        if state["next_source_index"] == self._stream.count and selected != self.receipt["selected_record_count"]:
+            raise ValueError("selection cursor progress does not reach selection end")
+        return state
+
+    def iter_from(self, cursor: object = None):
+        """Yield records and the exact resume cursor without retaining a family list."""
+        state = self._validate_cursor_progress(cursor)
+        capability = self.receipt["capability"]
+        rule = self.receipt["selection_rule_id"]
+        if not isinstance(capability, str) or not isinstance(rule, str):
+            raise ValueError("invalid execution selection receipt")
+        for source_index in range(state["next_source_index"], self._stream.count):
+            record = self._record_at_source_index(source_index)
+            if not self._stream._selection_rule_matches(capability, rule, record):
+                continue
+            next_state = dict(state)
+            next_state["selected_ordinal"] += 1
+            next_state["next_source_index"] = source_index + 1
+            yield record, next_state
+            state = next_state
+
+    def __iter__(self):
+        for record, _cursor in self.iter_from():
+            yield record
+
+
 class SpecialistStream:
     def __init__(self, tokenizer: Tokenizer, count: int, families: dict[str, Any], *, chunk_size: int | None = None, manifest_sha256: str | None = None, runtime: dict[str, Any] | None = None) -> None:
         if manifest_sha256 is not None and not _is_sha256(manifest_sha256):
@@ -374,6 +470,163 @@ class SpecialistStream:
             records.extend(chunk[first:last])
             chunk_start += self.chunk_size
         return records, {"schema_version": CURSOR_SCHEMA_VERSION, "manifest_sha256": self.manifest_sha256, "capability": capability, "next_index": start + len(records)}
+
+    @staticmethod
+    def _read_bound_build_receipt(path: Path, expected_sha256: str) -> dict[str, object]:
+        if not _is_sha256(expected_sha256):
+            raise ValueError("expected stream build receipt SHA-256 is required")
+        try:
+            with path.open("rb") as receipt_file:
+                receipt_bytes = receipt_file.read(MAX_MANIFEST_BYTES + 1)
+        except OSError as error:
+            raise ValueError("stream build receipt cannot be read") from error
+        if len(receipt_bytes) > MAX_MANIFEST_BYTES or _sha256(receipt_bytes) != expected_sha256:
+            raise ValueError("stream build receipt does not match caller authority")
+        try:
+            receipt = json.loads(receipt_bytes)
+        except json.JSONDecodeError as error:
+            raise ValueError("invalid stream build receipt") from error
+        required = {"schema_version", "result", "boundary", "stream_manifest_sha256", "lineage", "data_class", "corpus_root_sha256", "record_count_per_family", "families", "elapsed_ms"}
+        if not isinstance(receipt, dict) or set(receipt) != required:
+            raise ValueError("invalid stream build receipt")
+        if receipt.get("schema_version") != "ember-owned-specialist-stream-build-receipt-v1" or receipt.get("result") != "MEASURED":
+            raise ValueError("invalid stream build receipt")
+        if receipt.get("data_class") != "SEMANTIC_PRETRAINING":
+            raise ValueError("invalid stream build receipt data class")
+        if receipt.get("lineage") != "NEW_PREREGISTERED_STREAM" or receipt.get("boundary") != "STREAM_CONSTRUCTION_NOT_SUFFICIENT_PRETRAINING_OR_CAPABILITY":
+            raise ValueError("invalid stream build receipt authority")
+        if not _is_sha256(receipt.get("stream_manifest_sha256")) or not _is_sha256(receipt.get("corpus_root_sha256")):
+            raise ValueError("invalid stream build receipt binding")
+        if type(receipt.get("record_count_per_family")) is not int or type(receipt.get("elapsed_ms")) is not int or receipt["elapsed_ms"] < 0:
+            raise ValueError("invalid stream build receipt")
+        families = receipt.get("families")
+        if not isinstance(families, dict) or set(families) != set(CAPABILITIES):
+            raise ValueError("invalid stream build receipt families")
+        for capability in CAPABILITIES:
+            family = families[capability]
+            if not isinstance(family, dict) or set(family) != {"records", "tokens", "serialized_bytes_not_materialized"}:
+                raise ValueError("invalid stream build receipt families")
+            if any(type(family[field]) is not int or family[field] < 1 for field in family):
+                raise ValueError("invalid stream build receipt families")
+        return receipt
+
+    @staticmethod
+    def _validate_selection_rule(capability: str, selection_rule_id: str) -> None:
+        if capability == "image" and selection_rule_id == "image_scene_split_train_v1":
+            return
+        if capability in {"audio", "reasoning", "tool"} and selection_rule_id == "all_records_semantic_pretraining_v1":
+            return
+        raise ValueError("unsupported execution selection rule")
+
+    @classmethod
+    def _selection_rule_matches(cls, capability: str, selection_rule_id: str, record: dict[str, Any]) -> bool:
+        cls._validate_selection_rule(capability, selection_rule_id)
+        if capability == "image":
+            return record.get("active_expert") == "vision" and record.get("scene_split") == "train"
+        return record.get("active_expert") == capability
+
+    def _derive_execution_selection(self, *, capability: str, selection_rule_id: str, build_receipt_sha256: str) -> ExecutionSelection:
+        if capability not in CAPABILITIES or self.manifest_sha256 is None or self.chunk_size is None:
+            raise ValueError("execution selection requires an immutable stream")
+        self._validate_selection_rule(capability, selection_rule_id)
+        family = self.families.get(capability)
+        if not isinstance(family, dict) or not _is_sha256(family.get("corpus_root_sha256")):
+            raise ValueError("execution selection requires family commitment")
+        selected_records = hashlib.sha256(_frame(b"schema", SELECTION_RECEIPT_SCHEMA_VERSION.encode("ascii")))
+        commitment = hashlib.sha256(
+            _frame(b"schema", SELECTION_RECEIPT_SCHEMA_VERSION.encode("ascii"))
+            + _frame(b"manifest", bytes.fromhex(self.manifest_sha256))
+            + _frame(b"stream_build_receipt", bytes.fromhex(build_receipt_sha256))
+            + _frame(b"corpus", bytes.fromhex(_manifest_corpus_root_sha256(self.families)))
+            + _frame(b"family", bytes.fromhex(str(family["corpus_root_sha256"])))
+            + _frame(b"capability", capability.encode("ascii"))
+            + _frame(b"rule", selection_rule_id.encode("ascii"))
+        )
+        count = 0
+        tokens = 0
+        for start in range(0, self.count, self.chunk_size):
+            for offset, record in enumerate(self._materialize_verified_chunk(capability, start)):
+                if not self._selection_rule_matches(capability, selection_rule_id, record):
+                    continue
+                source_index = start + offset
+                record_sha256 = _sha256(canonical_record_bytes(record))
+                selected_records.update(_frame(b"ordinal", count.to_bytes(8, "big")))
+                selected_records.update(_frame(b"record", bytes.fromhex(record_sha256)))
+                commitment.update(_frame(b"ordinal", count.to_bytes(8, "big")))
+                commitment.update(_frame(b"source", source_index.to_bytes(8, "big")))
+                commitment.update(_frame(b"record", bytes.fromhex(record_sha256)))
+                token_ids = record.get("token_ids")
+                if not isinstance(token_ids, list):
+                    raise ValueError("execution selection record lacks token ids")
+                count += 1
+                tokens += len(token_ids)
+        if count < 1:
+            raise ValueError("execution selection has no records")
+        if selection_rule_id == "all_records_semantic_pretraining_v1" and count != self.count:
+            raise ValueError("all-record execution selection is incomplete")
+        receipt: dict[str, object] = {
+            "schema_version": SELECTION_RECEIPT_SCHEMA_VERSION,
+            "stream_manifest_sha256": self.manifest_sha256,
+            "stream_build_receipt_sha256": build_receipt_sha256,
+            "corpus_root_sha256": _manifest_corpus_root_sha256(self.families),
+            "family_root_sha256": family["corpus_root_sha256"],
+            "capability": capability,
+            "selection_rule_id": selection_rule_id,
+            "selected_record_count": count,
+            "selected_token_count": tokens,
+            "selected_records_sha256": selected_records.hexdigest(),
+            "selection_commitment_sha256": commitment.hexdigest(),
+        }
+        return ExecutionSelection(self, receipt)
+
+    def prepare_execution_selection(
+        self, *, capability: str, selection_rule_id: str, build_receipt_path: Path,
+        expected_build_receipt_sha256: str,
+    ) -> ExecutionSelection:
+        receipt = self._read_bound_build_receipt(build_receipt_path, expected_build_receipt_sha256)
+        if self.manifest_sha256 is None or receipt.get("stream_manifest_sha256") != self.manifest_sha256:
+            raise ValueError("stream build receipt manifest binding does not match")
+        if receipt.get("corpus_root_sha256") != _manifest_corpus_root_sha256(self.families):
+            raise ValueError("stream build receipt corpus binding does not match")
+        if receipt.get("record_count_per_family") != self.count or not isinstance(receipt.get("families"), dict):
+            raise ValueError("stream build receipt family binding does not match")
+        for family_capability in CAPABILITIES:
+            expected_family = self.families.get(family_capability)
+            actual_family = receipt["families"].get(family_capability)
+            if not isinstance(expected_family, dict) or not isinstance(actual_family, dict):
+                raise ValueError("stream build receipt family binding does not match")
+            if actual_family != {
+                "records": expected_family.get("record_count"),
+                "tokens": expected_family.get("token_count"),
+                "serialized_bytes_not_materialized": expected_family.get("serialized_bytes"),
+            }:
+                raise ValueError("stream build receipt family binding does not match")
+        return self._derive_execution_selection(
+            capability=capability,
+            selection_rule_id=selection_rule_id,
+            build_receipt_sha256=expected_build_receipt_sha256,
+        )
+
+    def open_execution_selection(self, *, receipt: object, cursor: object) -> ExecutionSelection:
+        expected_fields = {
+            "schema_version", "stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256",
+            "family_root_sha256", "capability", "selection_rule_id", "selected_record_count", "selected_token_count",
+            "selected_records_sha256", "selection_commitment_sha256",
+        }
+        if not isinstance(receipt, dict) or set(receipt) != expected_fields:
+            raise ValueError("invalid execution selection receipt")
+        if receipt.get("schema_version") != SELECTION_RECEIPT_SCHEMA_VERSION or receipt.get("stream_manifest_sha256") != self.manifest_sha256:
+            raise ValueError("invalid execution selection receipt")
+        capability = receipt.get("capability")
+        selection_rule_id = receipt.get("selection_rule_id")
+        build_sha256 = receipt.get("stream_build_receipt_sha256")
+        if not isinstance(capability, str) or not isinstance(selection_rule_id, str) or not _is_sha256(build_sha256):
+            raise ValueError("invalid execution selection receipt")
+        derived = self._derive_execution_selection(capability=capability, selection_rule_id=selection_rule_id, build_receipt_sha256=build_sha256)
+        if canonical_record_bytes(derived.receipt) != canonical_record_bytes(receipt):
+            raise ValueError("execution selection receipt does not match stream")
+        derived._validate_cursor_progress(cursor)
+        return derived
 
     def validate_capability_commitment(self, capability: str) -> dict[str, int]:
         """Recompute one route's raw records, execution targets, chunk and root commitments."""
