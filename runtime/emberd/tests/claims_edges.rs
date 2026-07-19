@@ -1285,12 +1285,28 @@ fn running_job_whose_process_already_exited_keeps_its_claim_until_reconcile_then
     let db = root.join("emberd.sqlite3");
     let shared_receipt = root.join("custody").join("claimsmid-ab-preflight.json");
 
+    // 750ms (was 25ms): this test's setup invariant below depends on winning
+    // a real-time race against `spawn_exit_monitor`'s background thread --
+    // `dispatch_ok` must return and `drop(daemon)` must run (flipping
+    // `monitor_ownership` and signaling `monitor_shutdown`) BEFORE the real
+    // child process here has actually exited, or the still-live monitor
+    // thread observes the natural exit via `WaitForMultipleObjects` and
+    // writes `record_natural_exit` itself, racing ahead of this test's own
+    // explicit `reconcile()` call below. At 25ms this margin depends on
+    // `dispatch_ok`'s several DB writes (synchronous=FULL) plus the child's
+    // own process-creation/binary-load overhead both finishing faster than
+    // 25ms -- true on a quiet host, not guaranteed under real contention
+    // (this machine runs many concurrent builds/jobs). 750ms makes
+    // `dispatch_ok` + `drop`'s completion time (low tens of ms even under
+    // heavy load) overwhelmingly dominant, independent of host load; the
+    // post-drop wait below is widened to match so the child has certainly
+    // exited before `reconcile()` runs.
     let manifest_ab = write_manifest_with_sleep_ms(
         &root,
         "claimsmid-ab",
         "gpu-claimsmid-ab",
         &shared_receipt,
-        25,
+        750,
     );
     let daemon = Daemon::open(&db).unwrap();
     let outcome = dispatch_ok(&daemon, &manifest_ab);
@@ -1300,7 +1316,7 @@ fn running_job_whose_process_already_exited_keeps_its_claim_until_reconcile_then
     // later -- the exact "process gone, row still says running" crash window
     // (same technique as control_plane.rs's dead_persisted_running_job_*).
     drop(daemon);
-    thread::sleep(Duration::from_millis(300));
+    thread::sleep(Duration::from_millis(1500));
 
     let reopened = Daemon::open(&db).unwrap();
     assert_eq!(
