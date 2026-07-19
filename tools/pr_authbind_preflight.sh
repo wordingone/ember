@@ -16,25 +16,39 @@
 # This script instead:
 #   1. resolves the PUBLIC PR head OID via `gh api` and REJECTS if the local
 #      ref does not match it exactly (no silent proceed on a stale/wrong ref),
-#   2. fetches the guarded merge ref (`refs/pull/<N>/merge`), verifying its
-#      parents are exactly {origin/master tip, public head OID} — falling
-#      back to constructing the same merge deterministically only if the
-#      merge ref is unavailable, and failing loud if that merge does not
-#      apply cleanly (what GitHub means by mergeable=false/unknown),
-#   3. runs both CI steps inside a clean temporary worktree checked out at
-#      that merge commit, against a freshly fetched origin/master,
-#   4. pulls the LIVE PR body via `gh api` (CI's github.event.pull_request.body
+#   2. requires the PR's PUBLIC base to be `master`, and AUTHENTICATES the
+#      base by comparing the freshly fetched `origin/master` tip against the
+#      API's own `.base.sha` — a locally-fetched `origin/master` is never
+#      trusted as "the public base" until it is proven equal to what the API
+#      itself reports as the PR's base at query time,
+#   3. reads `.mergeable`/`.mergeable_state` and gates on them: false exits
+#      2 immediately; unknown (still computing) is retried a few times, and
+#      still-unknown after retries exits 2 — synthetic merge construction is
+#      only ever a fallback for a true mergeable PR whose merge ref happens
+#      to be momentarily unavailable, never a way to paper over a real
+#      conflict or an unresolved GitHub computation,
+#   4. fetches the guarded merge ref (`refs/pull/<N>/merge`), verifying its
+#      parents are exactly {authenticated base SHA, public head OID} —
+#      falling back to constructing the same merge deterministically only
+#      if the merge ref is unavailable, and failing loud if that merge does
+#      not apply cleanly,
+#   5. runs both CI steps inside a clean temporary worktree checked out at
+#      that merge commit, against the authenticated base,
+#   6. pulls the LIVE PR body via `gh api` (CI's github.event.pull_request.body
 #      is a webhook-payload SNAPSHOT; `gh run rerun` replays it, so a body
 #      edit only lands via a fresh event — this script always reads the
-#      current body).
+#      current body) and refuses to proceed on any API failure or an empty
+#      body — never a silent pass-through.
 #
 # Usage:
 #   bash tools/pr_authbind_preflight.sh <PR_NUMBER> [<LOCAL_HEAD_REF>]
 # Exit 0 only if BOTH Step A (repo-guard structural kernel) and Step B
 # (PR-body + changed-artifact authority binding) pass against the merge ref.
-# Exit 2 on any preflight-validity failure (head mismatch, unresolvable/stale
-# merge ref, non-clean merge) — these are never guard verdicts; they mean the
-# preflight cannot yet speak for the public job.
+# Exit 2 on any preflight-validity failure (head mismatch, non-master base,
+# unauthenticated/stale base, mergeable=false or persistently unknown,
+# unresolvable/stale merge ref, non-clean merge, API failure, empty body) —
+# these are never guard verdicts; they mean the preflight cannot yet speak
+# for the public job, and it never proceeds past one to find out anyway.
 
 set -u
 ROOT="$(git rev-parse --show-toplevel)" || { echo "not in a git repo"; exit 2; }
@@ -42,6 +56,8 @@ cd "$ROOT"
 
 PR="${1:?usage: pr_authbind_preflight.sh <PR_NUMBER> [<HEAD_REF>]}"
 HEAD_REF="${2:-HEAD}"
+MERGEABLE_RETRIES="${PR_AUTHBIND_PREFLIGHT_MERGEABLE_RETRIES:-3}"
+MERGEABLE_RETRY_SLEEP="${PR_AUTHBIND_PREFLIGHT_MERGEABLE_RETRY_SLEEP:-2}"
 
 command -v gh >/dev/null 2>&1 || { echo "FAIL: gh CLI not available"; exit 2; }
 
@@ -51,18 +67,45 @@ SLUG="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)"
 
 echo "== preflight: PR #$PR  head=$HEAD_REF  repo=$SLUG =="
 
-# -- (1) fresh public tip -----------------------------------------------------
-echo "-- fetching fresh origin/master"
-git fetch --quiet origin master || { echo "FAIL: git fetch origin master"; exit 2; }
-MASTER_TIP="$(git rev-parse origin/master)"
+# -- (1) public PR head/base/mergeable, retrying while mergeable is unknown --
+fetch_pr_info() {
+  gh api "repos/${SLUG}/pulls/${PR}" \
+    --jq '[.head.sha, .base.ref, .base.sha, (.mergeable|tostring), (.mergeable_state // "unknown")] | @tsv' \
+    2>/dev/null
+}
 
-# -- (2) public PR head OID; reject a local ref that doesn't match it --------
-PR_INFO="$(gh api "repos/${SLUG}/pulls/${PR}" --jq '[.head.sha, .base.ref, (.mergeable|tostring), (.mergeable_state // "unknown")] | @tsv' 2>/dev/null)" \
-  || { echo "FAIL: gh api pulls/$PR"; exit 2; }
-IFS=$'\t' read -r PUBLIC_HEAD BASE_REF MERGEABLE MERGEABLE_STATE <<<"$PR_INFO"
+PR_INFO="$(fetch_pr_info)" || { echo "FAIL: gh api pulls/$PR"; exit 2; }
+[ -z "$PR_INFO" ] && { echo "FAIL: gh api pulls/$PR returned no data"; exit 2; }
+IFS=$'\t' read -r PUBLIC_HEAD BASE_REF PUBLIC_BASE_SHA MERGEABLE MERGEABLE_STATE <<<"$PR_INFO"
+
+ATTEMPT=0
+while [ "$MERGEABLE" = "null" ] && [ "$ATTEMPT" -lt "$MERGEABLE_RETRIES" ]; do
+  ATTEMPT=$((ATTEMPT + 1))
+  echo "   mergeable still computing (attempt $ATTEMPT/$MERGEABLE_RETRIES) — retrying after ${MERGEABLE_RETRY_SLEEP}s"
+  sleep "$MERGEABLE_RETRY_SLEEP"
+  PR_INFO="$(fetch_pr_info)" || { echo "FAIL: gh api pulls/$PR (retry $ATTEMPT)"; exit 2; }
+  [ -z "$PR_INFO" ] && { echo "FAIL: gh api pulls/$PR returned no data (retry $ATTEMPT)"; exit 2; }
+  IFS=$'\t' read -r PUBLIC_HEAD BASE_REF PUBLIC_BASE_SHA MERGEABLE MERGEABLE_STATE <<<"$PR_INFO"
+done
+
 [ -z "$PUBLIC_HEAD" ] && { echo "FAIL: could not resolve public head OID for PR #$PR"; exit 2; }
-echo "   public PR #$PR: head=$PUBLIC_HEAD base=$BASE_REF mergeable=$MERGEABLE ($MERGEABLE_STATE)"
+echo "   public PR #$PR: head=$PUBLIC_HEAD base=$BASE_REF($PUBLIC_BASE_SHA) mergeable=$MERGEABLE ($MERGEABLE_STATE)"
 
+if [ "$BASE_REF" != "master" ]; then
+  echo "FAIL: PR #$PR base branch is '$BASE_REF', not master — this preflight only predicts the master repo-guard job"
+  exit 2
+fi
+
+if [ "$MERGEABLE" = "false" ]; then
+  echo "FAIL: PR #$PR mergeable=false — GitHub cannot merge the head into the base cleanly; fix the conflict upstream, don't preflight around it"
+  exit 2
+fi
+if [ "$MERGEABLE" != "true" ]; then
+  echo "FAIL: PR #$PR mergeable is still '$MERGEABLE' after $MERGEABLE_RETRIES retries (state=$MERGEABLE_STATE) — cannot predict a verdict for an unresolved merge computation"
+  exit 2
+fi
+
+# -- (2) local head must be the exact public head, no silent proceed --------
 LOCAL_HEAD_OID="$(git rev-parse "${HEAD_REF}^{commit}" 2>/dev/null)" \
   || { echo "FAIL: cannot resolve local ref '$HEAD_REF' to a commit"; exit 2; }
 if [ "$LOCAL_HEAD_OID" != "$PUBLIC_HEAD" ]; then
@@ -72,7 +115,20 @@ if [ "$LOCAL_HEAD_OID" != "$PUBLIC_HEAD" ]; then
 fi
 echo "   local head confirmed == public PR head ($PUBLIC_HEAD)"
 
-# -- (3) resolve the guarded merge ref, falling back to constructing it ------
+# -- (3) authenticate the base: a fetched origin/master is only trustworthy
+#        once proven equal to the API's own .base.sha at query time ---------
+echo "-- fetching fresh origin/master"
+git fetch --quiet origin master || { echo "FAIL: git fetch origin master"; exit 2; }
+MASTER_TIP="$(git rev-parse origin/master)"
+if [ "$MASTER_TIP" != "$PUBLIC_BASE_SHA" ]; then
+  echo "FAIL: fetched origin/master ($MASTER_TIP) != public PR #$PR base sha ($PUBLIC_BASE_SHA)"
+  echo "      local base is stale or has diverged from the public base since the API was queried — refetch and retry, never assume they match"
+  exit 2
+fi
+AUTH_BASE_SHA="$MASTER_TIP"
+echo "   fetched origin/master confirmed == public base sha ($AUTH_BASE_SHA)"
+
+# -- (4) resolve the guarded merge ref, falling back to constructing it ------
 TMPWT="$(mktemp -d)"
 BODY_FILE=""
 cleanup() {
@@ -93,9 +149,9 @@ if git fetch --quiet origin "refs/pull/${PR}/merge" 2>/dev/null; then
     exit 2
   fi
   ACTUAL_SORTED="$(printf '%s\n' $PARENTS | sort)"
-  EXPECTED_SORTED="$(printf '%s\n' "$MASTER_TIP" "$PUBLIC_HEAD" | sort)"
+  EXPECTED_SORTED="$(printf '%s\n' "$AUTH_BASE_SHA" "$PUBLIC_HEAD" | sort)"
   if [ "$ACTUAL_SORTED" != "$EXPECTED_SORTED" ]; then
-    echo "FAIL: stale refs/pull/${PR}/merge — parents ($ACTUAL_SORTED) != expected (origin/master tip + public head: $EXPECTED_SORTED)"
+    echo "FAIL: stale refs/pull/${PR}/merge — parents ($ACTUAL_SORTED) != expected (authenticated base + public head: $EXPECTED_SORTED)"
     echo "      GitHub has not recomputed the merge ref against the current base; do not trust it yet"
     exit 2
   fi
@@ -103,17 +159,17 @@ if git fetch --quiet origin "refs/pull/${PR}/merge" 2>/dev/null; then
   MERGE_OID="$CANDIDATE"
 else
   echo "   refs/pull/${PR}/merge unavailable — constructing the merge deterministically"
-  git worktree add --detach --quiet "$TMPWT" "$MASTER_TIP" || { echo "FAIL: worktree add at origin/master tip"; exit 2; }
+  git worktree add --detach --quiet "$TMPWT" "$AUTH_BASE_SHA" || { echo "FAIL: worktree add at authenticated base"; exit 2; }
   WORKTREE_MADE=1
   if ! git -C "$TMPWT" merge --no-ff --no-commit "$PUBLIC_HEAD" >/dev/null 2>&1; then
-    echo "FAIL: PR #$PR head ($PUBLIC_HEAD) does not merge cleanly onto origin/master ($MASTER_TIP)"
-    echo "      (this is what GitHub means by mergeable=false/unknown — fix the conflict upstream, don't preflight around it)"
+    echo "FAIL: PR #$PR head ($PUBLIC_HEAD) does not merge cleanly onto the authenticated base ($AUTH_BASE_SHA)"
+    echo "      (this contradicts mergeable=true from the API — fail loud rather than guess)"
     exit 2
   fi
-  git -C "$TMPWT" commit --no-edit -m "preflight: synthetic merge PR #$PR ($PUBLIC_HEAD) into origin/master ($MASTER_TIP)" >/dev/null \
+  git -C "$TMPWT" commit --no-edit -m "preflight: synthetic merge PR #$PR ($PUBLIC_HEAD) into base ($AUTH_BASE_SHA)" >/dev/null \
     || { echo "FAIL: could not commit constructed merge"; exit 2; }
   MERGE_OID="$(git -C "$TMPWT" rev-parse HEAD)"
-  echo "   constructed merge commit $MERGE_OID (parents: $MASTER_TIP $PUBLIC_HEAD)"
+  echo "   constructed merge commit $MERGE_OID (parents: $AUTH_BASE_SHA $PUBLIC_HEAD)"
 fi
 
 # If the merge-ref path was taken (worktree not yet materialized), check it out now.
@@ -121,10 +177,15 @@ if [ "$WORKTREE_MADE" -eq 0 ]; then
   git worktree add --detach --quiet "$TMPWT" "$MERGE_OID" || { echo "FAIL: worktree add at merge ref $MERGE_OID"; exit 2; }
 fi
 
-# -- (4) LIVE body (never the event snapshot) --------------------------------
+# -- (5) LIVE body (never the event snapshot); fail closed on any API hiccup
+#        or an empty body — never a silent proceed --------------------------
 BODY_FILE="$(mktemp -t pr_body.XXXXXX)"
 gh api "repos/${SLUG}/pulls/${PR}" --jq '.body // ""' > "$BODY_FILE" 2>/dev/null \
   || { echo "FAIL: gh api pulls/$PR (body)"; exit 2; }
+if ! grep -q '[^[:space:]]' "$BODY_FILE"; then
+  echo "FAIL: live PR body for #$PR is empty — cannot bind authority against an empty body, refusing to proceed"
+  exit 2
+fi
 echo "   live body: $(wc -l < "$BODY_FILE") lines"
 
 RC=0
