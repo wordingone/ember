@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import io
 import json
@@ -13,9 +14,15 @@ import pickle
 import sys
 import zipfile
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
-from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, canonical_record_bytes
+# ``python -I tools/ember-restart-3b/parameter_counter.py`` intentionally
+# ignores ambient import configuration.  The counter's declared stream
+# consumer is a sibling module, so resolve that sibling from this executable's
+# own directory rather than relying on PYTHONPATH or site packages.
+_COUNTER_MODULE_DIRECTORY = Path(__file__).resolve().parent
+if str(_COUNTER_MODULE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_COUNTER_MODULE_DIRECTORY))
 
 _P2B_STREAM_MANIFEST_SHA256 = "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427"
 _P2B_STREAM_BUILD_RECEIPT_SHA256 = "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e"
@@ -29,8 +36,68 @@ REALIZATION_RECEIPT_FIELDS = frozenset(
         "allocated_parameters", "unique_parameters", "trainable_parameters",
         "served_parameters", "active_parameters", "episode_trainable_parameters",
         "active_expert_ids", "expert_genesis_sha256", "expert_parameter_sha256",
+        "runtime_authority",
     }
 )
+
+_RUNTIME_AUTHORITY_NONE = {
+    "schema_version": "ember-counter-runtime-authority-v1",
+    "kind": "NONE",
+}
+
+
+def _runtime_authority_from_bundle(bundle: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a path-free, closed runtime witness into a measured receipt."""
+    files = bundle.get("files")
+    distribution = bundle.get("distribution")
+    if not isinstance(files, list) or not files or not isinstance(distribution, Mapping):
+        raise ValueError("tokenizer runtime authority is invalid")
+    total_bytes = 0
+    for item in files:
+        if not isinstance(item, Mapping) or type(item.get("bytes")) is not int or item["bytes"] < 0:
+            raise ValueError("tokenizer runtime authority is invalid")
+        total_bytes += item["bytes"]
+    return {
+        "schema_version": "ember-counter-runtime-authority-v1",
+        "kind": "P2B_TOKENIZERS_RECORD_V1",
+        "runtime_schema_version": bundle.get("schema_version"),
+        "distribution": {"name": distribution.get("name"), "version": distribution.get("version")},
+        "record_sha256": bundle.get("record_sha256"),
+        "compatibility": bundle.get("compatibility"),
+        "file_count": len(files),
+        "total_bytes": total_bytes,
+        "root_sha256": bundle.get("root_sha256"),
+        "runtime_manifest_sha256": bundle.get("manifest_sha256"),
+    }
+
+
+def _validate_runtime_authority(value: Any) -> dict[str, Any]:
+    if value == _RUNTIME_AUTHORITY_NONE:
+        return dict(_RUNTIME_AUTHORITY_NONE)
+    fields = {
+        "schema_version", "kind", "runtime_schema_version", "distribution",
+        "record_sha256", "compatibility", "file_count", "total_bytes",
+        "root_sha256", "runtime_manifest_sha256",
+    }
+    if not isinstance(value, Mapping) or set(value) != fields:
+        raise ValueError("realization receipt runtime authority is invalid")
+    if value.get("schema_version") != "ember-counter-runtime-authority-v1" or value.get("kind") != "P2B_TOKENIZERS_RECORD_V1":
+        raise ValueError("realization receipt runtime authority is invalid")
+    if value.get("runtime_schema_version") != "ember-p2b-tokenizer-runtime-bundle-v1":
+        raise ValueError("realization receipt runtime authority is invalid")
+    distribution = value.get("distribution")
+    if not isinstance(distribution, Mapping) or set(distribution) != {"name", "version"} or distribution.get("name") != "tokenizers" or not isinstance(distribution.get("version"), str) or not distribution["version"]:
+        raise ValueError("realization receipt runtime authority is invalid")
+    compatibility = value.get("compatibility")
+    if not isinstance(compatibility, Mapping) or set(compatibility) != {"python_version", "cache_tag", "abi_tag", "platform_tag"} or not all(isinstance(item, str) for item in compatibility.values()):
+        raise ValueError("realization receipt runtime authority is invalid")
+    for field in ("record_sha256", "root_sha256", "runtime_manifest_sha256"):
+        candidate = value.get(field)
+        if not isinstance(candidate, str) or len(candidate) != 64 or any(character not in "0123456789abcdef" for character in candidate):
+            raise ValueError("realization receipt runtime authority is invalid")
+    if type(value.get("file_count")) is not int or value["file_count"] < 1 or type(value.get("total_bytes")) is not int or value["total_bytes"] < 0:
+        raise ValueError("realization receipt runtime authority is invalid")
+    return dict(value)
 SPECIALIST_VERIFICATION_FIELDS = frozenset(
     {
         "schema_version",
@@ -52,6 +119,37 @@ SPECIALIST_VERIFICATION_FIELDS = frozenset(
     }
 )
 
+# Deliberately uninitialized until the P2B branch is selected.  Keeping this
+# named seam allows in-process authority tests to substitute only the stream
+# opener without forcing an optional stream dependency into the legacy CLI.
+open_specialist_stream: Any | None = None
+
+
+def _specialist_stream_api() -> tuple[Any, str, str, Any]:
+    """Load the P2B-only stream consumer after legacy admission is selected."""
+    from specialist_stream import (
+        SELECTION_CURSOR_SCHEMA_VERSION,
+        TRAINING_CURSOR_SCHEMA_VERSION,
+        canonical_record_bytes,
+        open_specialist_stream,
+    )
+
+    return (
+        canonical_record_bytes,
+        SELECTION_CURSOR_SCHEMA_VERSION,
+        TRAINING_CURSOR_SCHEMA_VERSION,
+        globals().get("open_specialist_stream") or open_specialist_stream,
+    )
+
+
+@contextmanager
+def _lease_p2b_tokenizer_runtime(*, bundle_root: Path, manifest_path: Path) -> Iterator[dict[str, Any]]:
+    """Keep bound tokenizer bytes immutable through real P2B stream validation."""
+    from tokenizer_runtime_bundle import lease_tokenizer_runtime_bundle
+
+    with lease_tokenizer_runtime_bundle(bundle_root=bundle_root, manifest_path=manifest_path) as authority:
+        yield authority
+
 
 def validate_realization_receipt(receipt: Mapping[str, Any]) -> dict[str, Any]:
     """Validate the one closed receipt schema emitted by the counter."""
@@ -63,6 +161,7 @@ def validate_realization_receipt(receipt: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("realization receipt is not measured evidence")
     if receipt["architecture_revision"] != ARCHITECTURE_REVISION:
         raise ValueError("realization receipt architecture revision drifted")
+    _validate_runtime_authority(receipt["runtime_authority"])
     for field in ("model_config_sha256", "subject_checkpoint_sha256", "counter_sha256"):
         value = receipt[field]
         if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
@@ -101,6 +200,8 @@ def _sha256_value(value: object, *, label: str) -> str:
 def validate_p2b_stream_episode(episode: Mapping[str, Any], *, active_expert: str) -> dict[str, Any]:
     """Validate the closed stream-selection episode; legacy execution-slice episodes remain disjoint."""
 
+    canonical_record_bytes, selection_cursor_schema_version, _training_cursor_schema_version, _open_specialist_stream = _specialist_stream_api()
+
     fields = {
         "schema_version", "active_expert", "selection_receipt", "selection_receipt_sha256",
         "start_selection_cursor", "end_selection_cursor", "completed_updates", "training_token_delta",
@@ -133,7 +234,7 @@ def validate_p2b_stream_episode(episode: Mapping[str, Any], *, active_expert: st
     cursors: list[dict[str, Any]] = []
     for label in ("start_selection_cursor", "end_selection_cursor"):
         cursor = episode[label]
-        if not isinstance(cursor, Mapping) or set(cursor) != cursor_fields or cursor.get("schema_version") != SELECTION_CURSOR_SCHEMA_VERSION:
+        if not isinstance(cursor, Mapping) or set(cursor) != cursor_fields or cursor.get("schema_version") != selection_cursor_schema_version:
             raise ValueError("P2B stream episode selection cursor is invalid")
         if cursor.get("selection_receipt_sha256") != canonical or cursor.get("selection_rule_id") != expected_rule:
             raise ValueError("P2B stream episode selection cursor identity does not match")
@@ -156,6 +257,149 @@ def validate_p2b_stream_episode(episode: Mapping[str, Any], *, active_expert: st
             or receipt["corpus_root_sha256"] != _P2B_STREAM_CORPUS_ROOT_SHA256):
         raise ValueError("P2B stream episode does not bind the canonical stream authorities")
     return dict(episode)
+
+
+def validate_p2b_counter_stream_authority(
+    episode: Mapping[str, Any], *, active_expert: str, repo_root: Path,
+    stream_manifest_path: Path, stream_build_receipt_path: Path,
+    stream_manifest_bytes: bytes, stream_build_receipt_bytes: bytes,
+) -> dict[str, Any]:
+    """Require caller-bound stream artifacts before counter admission of a P2B episode."""
+    _canonical_record_bytes, _selection_cursor_schema_version, _training_cursor_schema_version, open_specialist_stream = _specialist_stream_api()
+    normalized = validate_p2b_stream_episode(episode, active_expert=active_expert)
+    if not isinstance(stream_manifest_bytes, bytes) or not isinstance(stream_build_receipt_bytes, bytes):
+        raise ValueError("P2B stream authority bytes are required")
+    root = Path(repo_root).resolve()
+    manifest_path = Path(stream_manifest_path).resolve()
+    build_path = Path(stream_build_receipt_path).resolve()
+    if hashlib.sha256(stream_manifest_bytes).hexdigest() != normalized["stream_manifest_sha256"]:
+        raise ValueError("P2B stream manifest authority mismatch")
+    if hashlib.sha256(stream_build_receipt_bytes).hexdigest() != normalized["stream_build_receipt_sha256"]:
+        raise ValueError("P2B stream build receipt authority mismatch")
+    stream = open_specialist_stream(
+        repo_root=root, manifest_path=manifest_path,
+        expected_manifest_sha256=normalized["stream_manifest_sha256"],
+        expected_corpus_root_sha256=normalized["corpus_root_sha256"],
+        manifest_bytes=stream_manifest_bytes,
+    )
+    receipt = normalized["selection_receipt"]
+    family = stream.families.get(str(receipt["capability"]))
+    if not isinstance(family, Mapping) or family.get("corpus_root_sha256") != normalized["family_root_sha256"]:
+        raise ValueError("P2B stream family authority mismatch")
+    stream.open_execution_selection(
+        receipt=receipt,
+        cursor=normalized["end_selection_cursor"],
+        build_receipt_path=build_path,
+        expected_build_receipt_sha256=normalized["stream_build_receipt_sha256"],
+        expected_selection_receipt_sha256=normalized["selection_receipt_sha256"],
+        build_receipt_bytes=stream_build_receipt_bytes,
+    )
+    return normalized
+
+
+def validate_p2b_counter_checkpoint_progress(
+    episode: Mapping[str, Any], candidate_data_cursor: Mapping[str, Any], parent_data_cursor: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Revalidate stream-episode progress against candidate and parent checkpoint cursors."""
+    _canonical_record_bytes, _selection_cursor_schema_version, training_cursor_schema_version, _open_specialist_stream = _specialist_stream_api()
+    required = {"schema_version", "selection_cursor", "global_step", "tokens_seen"}
+    if not isinstance(candidate_data_cursor, Mapping) or set(candidate_data_cursor) != required:
+        raise ValueError("P2B counter candidate training cursor is invalid")
+    if candidate_data_cursor.get("schema_version") != training_cursor_schema_version:
+        raise ValueError("P2B counter candidate training cursor schema is invalid")
+    if not isinstance(episode, Mapping) or not isinstance(parent_data_cursor, Mapping):
+        raise ValueError("P2B counter progress bindings are invalid")
+    end = episode.get("end_selection_cursor")
+    if candidate_data_cursor.get("selection_cursor") != end:
+        raise ValueError("P2B counter candidate cursor does not match episode end")
+    for label, value in (("parent global step", parent_data_cursor.get("global_step")), ("parent tokens", parent_data_cursor.get("tokens_seen")), ("candidate global step", candidate_data_cursor.get("global_step")), ("candidate tokens", candidate_data_cursor.get("tokens_seen")), ("completed updates", episode.get("completed_updates")), ("training token delta", episode.get("training_token_delta"))):
+        if type(value) is not int or value < 0:
+            raise ValueError(f"P2B counter {label} is invalid")
+    if episode["completed_updates"] <= 0 or episode["training_token_delta"] <= 0:
+        raise ValueError("P2B counter episode progress is invalid")
+    if candidate_data_cursor["global_step"] - parent_data_cursor["global_step"] != episode["completed_updates"]:
+        raise ValueError("P2B counter global-step delta does not match episode")
+    if candidate_data_cursor["tokens_seen"] - parent_data_cursor["tokens_seen"] != episode["training_token_delta"]:
+        raise ValueError("P2B counter token delta does not match episode")
+    return dict(candidate_data_cursor)
+
+
+def _validate_specialist_counter_episode(
+    lineage: Mapping[str, Any], *, active_expert: str, repo_root: Path,
+    stream_manifest_path: Path, stream_build_receipt_path: Path,
+    stream_manifest_bytes: bytes, stream_build_receipt_bytes: bytes,
+) -> dict[str, Any] | None:
+    """Dispatch only the closed P2B episode shape to canonical stream reopening."""
+    episode = lineage.get("episode")
+    if not isinstance(episode, Mapping) or episode.get("schema_version") != "ember-specialist-stream-episode-v1":
+        return None
+    return validate_p2b_counter_stream_authority(
+        episode,
+        active_expert=active_expert,
+        repo_root=repo_root,
+        stream_manifest_path=stream_manifest_path,
+        stream_build_receipt_path=stream_build_receipt_path,
+        stream_manifest_bytes=stream_manifest_bytes,
+        stream_build_receipt_bytes=stream_build_receipt_bytes,
+    )
+
+
+def _validate_legacy_specialist_counter_episode(episode: object, *, active_expert: str) -> None:
+    """Preserve the established v4 data-verification/execution-slice episode contract."""
+    capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
+    episode_fields = {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256", "execution_slice", "execution_slice_sha256"}
+    if active_expert == "vision":
+        episode_fields |= {"scene_split_selection", "scene_split_selection_sha256"}
+    if (not isinstance(episode, Mapping) or set(episode) != episode_fields
+            or episode.get("active_expert") != active_expert or not isinstance(episode.get("data_verification_receipt"), Mapping)):
+        raise ValueError("specialist v4 lineage lacks a closed active episode")
+    verification = episode["data_verification_receipt"]
+    if (set(verification) != SPECIALIST_VERIFICATION_FIELDS or verification.get("schema_version") != "ember-training-data-verification-v1"
+            or verification.get("result") != "VERIFIED" or verification.get("data_class") != "SEMANTIC_PRETRAINING"
+            or verification.get("generator_replay_verified") is not True
+            or verification.get("admission") != "ADMISSIBLE_SEMANTIC_CONTRACT"
+            or verification.get("semantic_model_contract_sha256") != verification.get("runtime_semantic_model_contract_sha256")
+            or capability_experts.get(verification.get("capability")) != active_expert):
+        raise ValueError("specialist v4 lineage has an invalid data verification receipt")
+    for field in ("semantic_model_contract_sha256", "runtime_semantic_model_contract_sha256"):
+        _sha256_value(verification.get(field), label=f"specialist verification {field}")
+    canonical = hashlib.sha256(json.dumps(dict(verification), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    if episode.get("data_verification_receipt_sha256") != canonical:
+        raise ValueError("specialist v4 lineage data verification receipt hash does not match")
+    execution_slice = episode.get("execution_slice")
+    slice_fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
+    if active_expert == "vision":
+        slice_fields |= {"scene_split_record_count"}
+    if (not isinstance(execution_slice, Mapping) or set(execution_slice) != slice_fields
+            or execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1"
+            or type(execution_slice.get("start_record")) is not int or execution_slice["start_record"] < 0
+            or type(execution_slice.get("record_count")) is not int or execution_slice["record_count"] <= 0
+            or type(execution_slice.get("token_count")) is not int or execution_slice["token_count"] <= 0
+            or execution_slice["start_record"] + execution_slice["record_count"] > verification["record_count"]):
+        raise ValueError("specialist v4 lineage has an invalid execution slice")
+    for field in ("records_sha256", "tokens_sha256"):
+        _sha256_value(execution_slice.get(field), label=f"specialist execution slice {field}")
+    slice_canonical = hashlib.sha256(json.dumps(dict(execution_slice), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    if episode.get("execution_slice_sha256") != slice_canonical:
+        raise ValueError("specialist v4 lineage execution slice hash does not match")
+    if active_expert == "vision":
+        selection = episode.get("scene_split_selection")
+        selection_fields = {"schema_version", "capability", "scene_split", "full_records_artifact_sha256", "selected_record_count", "selected_token_count", "selected_records_sha256", "selected_tokens_sha256"}
+        if (not isinstance(selection, Mapping) or set(selection) != selection_fields
+                or selection.get("schema_version") != "ember-specialist-scene-split-selection-v1"
+                or selection.get("capability") != "image" or selection.get("scene_split") != "train"
+                or selection.get("full_records_artifact_sha256") != verification.get("records_artifact_sha256")
+                or selection.get("selected_record_count") != execution_slice.get("scene_split_record_count")
+                or execution_slice["start_record"] + execution_slice["record_count"] > selection.get("selected_record_count", 0)
+                or execution_slice["token_count"] > selection.get("selected_token_count", 0)):
+            raise ValueError("specialist v4 lineage has an invalid train scene split selection")
+        for field in ("full_records_artifact_sha256", "selected_records_sha256", "selected_tokens_sha256"):
+            _sha256_value(selection.get(field), label=f"scene split {field}")
+        if any(type(selection.get(field)) is not int or selection[field] <= 0 for field in ("selected_record_count", "selected_token_count")):
+            raise ValueError("specialist v4 lineage has invalid scene split counts")
+        selection_canonical = hashlib.sha256(json.dumps(dict(selection), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if episode.get("scene_split_selection_sha256") != selection_canonical:
+            raise ValueError("specialist v4 lineage scene split selection hash does not match")
 
 
 def _read_bytes_snapshot(path: Path, *, label: str) -> tuple[bytes, str]:
@@ -440,7 +684,13 @@ def _counts(shape: Mapping[str, int], *, active_expert: str) -> dict[str, int]:
     }
 
 
-def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_expert: str, parent_manifest: Path | None = None, root_manifest: Path | None = None) -> dict[str, Any]:
+def execute_counter(
+    *, model_config: Path, checkpoint_manifest: Path, active_expert: str,
+    parent_manifest: Path | None = None, root_manifest: Path | None = None,
+    p2b_repo_root: Path | None = None, p2b_stream_manifest: Path | None = None,
+    p2b_stream_build_receipt: Path | None = None, p2b_tokenizer_runtime_root: Path | None = None,
+    p2b_tokenizer_runtime_manifest: Path | None = None,
+) -> dict[str, Any]:
     if active_expert not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("active expert must be shared or one of the four authorized banks")
     config, config_sha256 = _read_json_snapshot(model_config, label="model config")
@@ -449,6 +699,10 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
     shape = _model_shape(config)
     manifest_snapshot, subject_checkpoint_sha256 = _read_json_snapshot(checkpoint_manifest, label="checkpoint manifest")
     manifest = _inspect_realization(checkpoint_manifest, manifest_snapshot, active_expert=active_expert, shape=shape)
+    p2b_inputs = (p2b_repo_root, p2b_stream_manifest, p2b_stream_build_receipt, p2b_tokenizer_runtime_root, p2b_tokenizer_runtime_manifest)
+    runtime_authority: dict[str, Any] = dict(_RUNTIME_AUTHORITY_NONE)
+    if active_expert == "shared" and any(value is not None for value in p2b_inputs):
+        raise ValueError("legacy counter call must not include P2B stream authority")
     if active_expert != "shared" and (parent_manifest is None or root_manifest is None):
         raise ValueError("specialist-active realization requires external parent and root manifests")
     if active_expert != "shared":
@@ -490,60 +744,35 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
             raise ValueError("external parent has invalid trained expert history")
         expected_history = [*parent_history, *([] if active_expert in parent_history else [active_expert])]
         episode = lineage.get("episode")
-        capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
-        episode_fields = {"active_expert", "data_verification_receipt", "data_verification_receipt_sha256", "execution_slice", "execution_slice_sha256"}
-        if active_expert == "vision":
-            episode_fields |= {"scene_split_selection", "scene_split_selection_sha256"}
-        if (not isinstance(episode, Mapping) or set(episode) != episode_fields
-                or episode.get("active_expert") != active_expert or not isinstance(episode.get("data_verification_receipt"), Mapping)):
-            raise ValueError("specialist v4 lineage lacks a closed active episode")
-        verification = episode["data_verification_receipt"]
-        if (set(verification) != SPECIALIST_VERIFICATION_FIELDS or verification.get("schema_version") != "ember-training-data-verification-v1"
-                or verification.get("result") != "VERIFIED" or verification.get("data_class") != "SEMANTIC_PRETRAINING"
-                or verification.get("generator_replay_verified") is not True
-                or verification.get("admission") != "ADMISSIBLE_SEMANTIC_CONTRACT"
-                or verification.get("semantic_model_contract_sha256") != verification.get("runtime_semantic_model_contract_sha256")
-                or capability_experts.get(verification.get("capability")) != active_expert):
-            raise ValueError("specialist v4 lineage has an invalid data verification receipt")
-        for field in ("semantic_model_contract_sha256", "runtime_semantic_model_contract_sha256"):
-            _sha256_value(verification.get(field), label=f"specialist verification {field}")
-        canonical = hashlib.sha256(json.dumps(dict(verification), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-        if episode.get("data_verification_receipt_sha256") != canonical:
-            raise ValueError("specialist v4 lineage data verification receipt hash does not match")
-        execution_slice = episode.get("execution_slice")
-        slice_fields = {"schema_version", "start_record", "record_count", "token_count", "records_sha256", "tokens_sha256"}
-        if active_expert == "vision":
-            slice_fields |= {"scene_split_record_count"}
-        if (not isinstance(execution_slice, Mapping) or set(execution_slice) != slice_fields
-                or execution_slice.get("schema_version") != "ember-specialist-execution-slice-v1"
-                or type(execution_slice.get("start_record")) is not int or execution_slice["start_record"] < 0
-                or type(execution_slice.get("record_count")) is not int or execution_slice["record_count"] <= 0
-                or type(execution_slice.get("token_count")) is not int or execution_slice["token_count"] <= 0
-                or execution_slice["start_record"] + execution_slice["record_count"] > verification["record_count"]):
-            raise ValueError("specialist v4 lineage has an invalid execution slice")
-        for field in ("records_sha256", "tokens_sha256"):
-            _sha256_value(execution_slice.get(field), label=f"specialist execution slice {field}")
-        slice_canonical = hashlib.sha256(json.dumps(dict(execution_slice), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-        if episode.get("execution_slice_sha256") != slice_canonical:
-            raise ValueError("specialist v4 lineage execution slice hash does not match")
-        if active_expert == "vision":
-            selection = episode.get("scene_split_selection")
-            selection_fields = {"schema_version", "capability", "scene_split", "full_records_artifact_sha256", "selected_record_count", "selected_token_count", "selected_records_sha256", "selected_tokens_sha256"}
-            if (not isinstance(selection, Mapping) or set(selection) != selection_fields
-                    or selection.get("schema_version") != "ember-specialist-scene-split-selection-v1"
-                    or selection.get("capability") != "image" or selection.get("scene_split") != "train"
-                    or selection.get("full_records_artifact_sha256") != verification.get("records_artifact_sha256")
-                    or selection.get("selected_record_count") != execution_slice.get("scene_split_record_count")
-                    or execution_slice["start_record"] + execution_slice["record_count"] > selection.get("selected_record_count", 0)
-                    or execution_slice["token_count"] > selection.get("selected_token_count", 0)):
-                raise ValueError("specialist v4 lineage has an invalid train scene split selection")
-            for field in ("full_records_artifact_sha256", "selected_records_sha256", "selected_tokens_sha256"):
-                _sha256_value(selection.get(field), label=f"scene split {field}")
-            if any(type(selection.get(field)) is not int or selection[field] <= 0 for field in ("selected_record_count", "selected_token_count")):
-                raise ValueError("specialist v4 lineage has invalid scene split counts")
-            selection_canonical = hashlib.sha256(json.dumps(dict(selection), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-            if episode.get("scene_split_selection_sha256") != selection_canonical:
-                raise ValueError("specialist v4 lineage scene split selection hash does not match")
+        if isinstance(episode, Mapping) and episode.get("schema_version") == "ember-specialist-stream-episode-v1":
+            if any(value is None for value in p2b_inputs):
+                raise ValueError("P2B counter requires explicit stream authority inputs")
+            assert p2b_repo_root is not None and p2b_stream_manifest is not None and p2b_stream_build_receipt is not None and p2b_tokenizer_runtime_root is not None and p2b_tokenizer_runtime_manifest is not None
+            stream_manifest_bytes, _ = _read_bytes_snapshot(Path(p2b_stream_manifest), label="P2B stream manifest")
+            stream_build_receipt_bytes, _ = _read_bytes_snapshot(Path(p2b_stream_build_receipt), label="P2B stream build receipt")
+            with _lease_p2b_tokenizer_runtime(
+                bundle_root=Path(p2b_tokenizer_runtime_root),
+                manifest_path=Path(p2b_tokenizer_runtime_manifest),
+            ) as p2b_tokenizer_runtime:
+                runtime_authority = _runtime_authority_from_bundle(p2b_tokenizer_runtime)
+                p2b_episode = _validate_specialist_counter_episode(
+                    lineage,
+                    active_expert=active_expert,
+                    repo_root=Path(p2b_repo_root),
+                    stream_manifest_path=Path(p2b_stream_manifest),
+                    stream_build_receipt_path=Path(p2b_stream_build_receipt),
+                    stream_manifest_bytes=stream_manifest_bytes,
+                    stream_build_receipt_bytes=stream_build_receipt_bytes,
+                )
+            validate_p2b_counter_checkpoint_progress(
+                p2b_episode,
+                manifest.get("data_cursor"),
+                parent_external.get("data_cursor"),
+            )
+        else:
+            if any(value is not None for value in p2b_inputs):
+                raise ValueError("legacy counter call must not include P2B stream authority")
+            _validate_legacy_specialist_counter_episode(lineage.get("episode"), active_expert=active_expert)
         candidate_parameters = manifest.get("expert_parameter_sha256")
         parent_parameters = parent_external.get("expert_parameter_sha256", parent_external.get("expert_genesis_sha256"))
         root_parameters = root_external.get("expert_parameter_sha256", root_external.get("expert_genesis_sha256"))
@@ -584,6 +813,7 @@ def execute_counter(*, model_config: Path, checkpoint_manifest: Path, active_exp
         "active_expert_ids": [active_expert],
         "expert_genesis_sha256": dict(manifest["expert_genesis_sha256"]),
         "expert_parameter_sha256": dict(manifest.get("expert_parameter_sha256", manifest["expert_genesis_sha256"])),
+        "runtime_authority": runtime_authority,
     })
 
 
@@ -631,6 +861,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--active-expert", required=True)
     parser.add_argument("--parent-manifest", type=Path)
     parser.add_argument("--root-manifest", type=Path)
+    parser.add_argument("--p2b-repo-root", type=Path)
+    parser.add_argument("--p2b-stream-manifest", type=Path)
+    parser.add_argument("--p2b-stream-build-receipt", type=Path)
+    parser.add_argument("--p2b-tokenizer-runtime-root", type=Path)
+    parser.add_argument("--p2b-tokenizer-runtime-manifest", type=Path)
     args = parser.parse_args(argv)
     try:
         print(json.dumps(execute_counter(
@@ -639,6 +874,11 @@ def main(argv: list[str] | None = None) -> int:
             active_expert=args.active_expert,
             parent_manifest=args.parent_manifest,
             root_manifest=args.root_manifest,
+            p2b_repo_root=args.p2b_repo_root,
+            p2b_stream_manifest=args.p2b_stream_manifest,
+            p2b_stream_build_receipt=args.p2b_stream_build_receipt,
+            p2b_tokenizer_runtime_root=args.p2b_tokenizer_runtime_root,
+            p2b_tokenizer_runtime_manifest=args.p2b_tokenizer_runtime_manifest,
         ), sort_keys=True))
     except Exception as error:
         print(f"parameter realization failed: {error}", file=sys.stderr)

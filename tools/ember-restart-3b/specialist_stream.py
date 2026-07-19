@@ -485,14 +485,19 @@ class SpecialistStream:
         return records, {"schema_version": CURSOR_SCHEMA_VERSION, "manifest_sha256": self.manifest_sha256, "capability": capability, "next_index": start + len(records)}
 
     @staticmethod
-    def _read_bound_build_receipt(path: Path, expected_sha256: str) -> dict[str, object]:
+    def _read_bound_build_receipt(
+        path: Path, expected_sha256: str, *, receipt_bytes: bytes | None = None,
+    ) -> dict[str, object]:
         if not _is_sha256(expected_sha256):
             raise ValueError("expected stream build receipt SHA-256 is required")
-        try:
-            with path.open("rb") as receipt_file:
-                receipt_bytes = receipt_file.read(MAX_MANIFEST_BYTES + 1)
-        except OSError as error:
-            raise ValueError("stream build receipt cannot be read") from error
+        if receipt_bytes is None:
+            try:
+                with path.open("rb") as receipt_file:
+                    receipt_bytes = receipt_file.read(MAX_MANIFEST_BYTES + 1)
+            except OSError as error:
+                raise ValueError("stream build receipt cannot be read") from error
+        elif not isinstance(receipt_bytes, bytes):
+            raise ValueError("stream build receipt bytes are invalid")
         if len(receipt_bytes) > MAX_MANIFEST_BYTES or _sha256(receipt_bytes) != expected_sha256:
             raise ValueError("stream build receipt does not match caller authority")
         try:
@@ -594,9 +599,11 @@ class SpecialistStream:
 
     def prepare_execution_selection(
         self, *, capability: str, selection_rule_id: str, build_receipt_path: Path,
-        expected_build_receipt_sha256: str,
+        expected_build_receipt_sha256: str, build_receipt_bytes: bytes | None = None,
     ) -> ExecutionSelection:
-        receipt = self._read_bound_build_receipt(build_receipt_path, expected_build_receipt_sha256)
+        receipt = self._read_bound_build_receipt(
+            build_receipt_path, expected_build_receipt_sha256, receipt_bytes=build_receipt_bytes,
+        )
         if self.manifest_sha256 is None or receipt.get("stream_manifest_sha256") != self.manifest_sha256:
             raise ValueError("stream build receipt manifest binding does not match")
         if receipt.get("corpus_root_sha256") != _manifest_corpus_root_sha256(self.families):
@@ -623,6 +630,7 @@ class SpecialistStream:
     def open_execution_selection(
         self, *, receipt: object, cursor: object, build_receipt_path: Path,
         expected_build_receipt_sha256: str, expected_selection_receipt_sha256: str,
+        build_receipt_bytes: bytes | None = None,
     ) -> ExecutionSelection:
         expected_fields = {
             "schema_version", "stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256",
@@ -633,7 +641,9 @@ class SpecialistStream:
             raise ValueError("invalid execution selection receipt")
         if not _is_sha256(expected_selection_receipt_sha256) or _sha256(canonical_record_bytes(receipt)) != expected_selection_receipt_sha256:
             raise ValueError("execution selection receipt does not match caller authority")
-        build = self._read_bound_build_receipt(build_receipt_path, expected_build_receipt_sha256)
+        build = self._read_bound_build_receipt(
+            build_receipt_path, expected_build_receipt_sha256, receipt_bytes=build_receipt_bytes,
+        )
         if (
             self.manifest_sha256 is None or build.get("stream_manifest_sha256") != self.manifest_sha256
             or receipt.get("stream_manifest_sha256") != self.manifest_sha256
@@ -831,17 +841,20 @@ def emit_stream_manifest(**kwargs: Any) -> tuple[dict[str, Any], int]:
 
 def open_specialist_stream(
     *, repo_root: Path, manifest_path: Path, expected_manifest_sha256: str | None = None,
-    expected_corpus_root_sha256: str | None = None,
+    expected_corpus_root_sha256: str | None = None, manifest_bytes: bytes | None = None,
 ) -> SpecialistStream:
     if not _is_sha256(expected_manifest_sha256):
         raise ValueError("expected manifest SHA-256 is required")
     if not _is_sha256(expected_corpus_root_sha256):
         raise ValueError("expected corpus root SHA-256 is required")
-    try:
-        with manifest_path.open("rb") as manifest_file:
-            manifest_bytes = manifest_file.read(MAX_MANIFEST_BYTES + 1)
-    except OSError as error:
-        raise ValueError("stream manifest cannot be read") from error
+    if manifest_bytes is None:
+        try:
+            with manifest_path.open("rb") as manifest_file:
+                manifest_bytes = manifest_file.read(MAX_MANIFEST_BYTES + 1)
+        except OSError as error:
+            raise ValueError("stream manifest cannot be read") from error
+    elif not isinstance(manifest_bytes, bytes):
+        raise ValueError("stream manifest bytes are invalid")
     if len(manifest_bytes) > MAX_MANIFEST_BYTES:
         raise ValueError("stream manifest exceeds consumer byte bound")
     if _sha256(manifest_bytes) != expected_manifest_sha256:
