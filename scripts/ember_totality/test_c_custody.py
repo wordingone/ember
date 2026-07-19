@@ -92,6 +92,7 @@ attestation; see that doc's dated addendum for the current tree's
 per-row disposition.
 """
 
+import fnmatch
 import glob
 import json
 import os
@@ -412,10 +413,31 @@ def _load_all_spend_annex_rows(root):
 
 
 ALLOWLIST_AUTHORITY_REL = "scripts/ember_totality/custody-allowlist.json"
+ALLOWLIST_SCHEMA_VERSION = "ember-c-custody-allowlist-v1"
+
+# This probe is bound to exactly one goal/workstream (see the file header).
+# An allowlist authority file is honored ONLY when its declared identity
+# matches this binding exactly -- a copied/mismatched allowlist (wrong
+# workstream, or missing one of the three identity fields) grants NO
+# authority, even if its schema_version and patterns are otherwise valid.
+ALLOWLIST_BOUND_GOAL_ID = "EMBER-02"
+ALLOWLIST_BOUND_WORKSTREAM_ID = "EMBER-02A"
+ALLOWLIST_BOUND_NEXT_EXECUTED_OUTCOME = (
+    "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+)
 
 
 def _get_allowlist_from_tracked_authority(root, tracked_files):
-    """Load basename patterns only from the separately tracked authority file."""
+    """Load basename patterns only from the separately tracked authority file.
+
+    Fail-closed on ANY schema deviation: wrong/missing schema_version, any of
+    the three required identity fields (goal_id, workstream_id,
+    next_executed_outcome) missing or not matching this probe's own bound
+    workstream, or a non-list/non-string pattern set. Round-2 repair
+    (PR951): the prior version validated only schema_version + pattern
+    string-ness, so an allowlist authored for a DIFFERENT workstream (or one
+    missing an identity field) was silently honored here.
+    """
     if ALLOWLIST_AUTHORITY_REL not in tracked_files:
         return set()
     authority_path = os.path.join(root, *ALLOWLIST_AUTHORITY_REL.split("/"))
@@ -423,7 +445,15 @@ def _get_allowlist_from_tracked_authority(root, tracked_files):
         data, _ = _load_json_with_fallback(authority_path)
     except Exception:
         return set()
-    if not isinstance(data, dict) or data.get("schema_version") != "ember-c-custody-allowlist-v1":
+    if not isinstance(data, dict):
+        return set()
+    if data.get("schema_version") != ALLOWLIST_SCHEMA_VERSION:
+        return set()
+    if data.get("goal_id") != ALLOWLIST_BOUND_GOAL_ID:
+        return set()
+    if data.get("workstream_id") != ALLOWLIST_BOUND_WORKSTREAM_ID:
+        return set()
+    if data.get("next_executed_outcome") != ALLOWLIST_BOUND_NEXT_EXECUTED_OUTCOME:
         return set()
     patterns = data.get("allowed_receipt_basenames", [])
     if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
@@ -432,15 +462,20 @@ def _get_allowlist_from_tracked_authority(root, tracked_files):
 
 
 def _is_match_pattern(basename, patterns):
-    """Check if basename matches any pattern in patterns (simple glob support)."""
-    for pattern in patterns:
-        if "*" in pattern or "?" in pattern:
-            # Glob-style pattern
-            if re.match(pattern.replace(".", r"\.").replace("*", ".*").replace("?", "."), basename):
-                return True
-        elif basename == pattern:
-            return True
-    return False
+    """Check if basename matches any pattern in patterns, using glob
+    semantics (fnmatch, case-sensitive).
+
+    Round-2 repair (PR951): the prior version hand-translated patterns
+    containing "*"/"?" into a regex via naive string substitution and fed
+    them to re.match -- a malformed pattern (e.g. an unbalanced "[") produced
+    an invalid regex that raised uncaught, crashing main(). fnmatch.translate
+    never raises on malformed glob input (an unterminated "[" degrades to a
+    literal bracket rather than an open character class), so matching is
+    fail-closed by construction: a malformed pattern simply fails to match
+    anything it wasn't exactly meant to, it never crashes the probe and it
+    never silently authorizes an unrelated receipt.
+    """
+    return any(fnmatch.fnmatchcase(basename, pattern) for pattern in patterns)
 
 
 def _get_last_landing_time(root):

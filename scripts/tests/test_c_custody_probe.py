@@ -149,6 +149,130 @@ def test_self_allowlist_cannot_authorize_itself():
         assert "untracked=1" in output, f"Expected explicit untracked failure, got: {output}"
         print("self-allowlist negative: PASS")
 
+def test_allowlist_wrong_workstream_not_honored():
+    """An allowlist authority file bound to a DIFFERENT goal/workstream must
+    grant no authority here -- a copied/mismatched allowlist should never
+    silently launder an untracked receipt into GREEN (round-2 repair, PR951)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+
+        # Untracked receipt whose basename the (wrong-workstream) allowlist claims to permit.
+        receipt_file = os.path.join(receipts_dir, "staging-untracked.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-WRONG-WORKSTREAM", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "goal_id": "OTHER-99",
+                "workstream_id": "OTHER-99Z",
+                "next_executed_outcome": "unrelated outcome string",
+                "schema_version": "ember-c-custody-allowlist-v1",
+                "allowed_receipt_basenames": ["staging-untracked.json"],
+            }, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init wrong-workstream allowlist"], cwd=tmpdir, capture_output=True)
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"Probe must never crash, got rc={rc}: {output}"
+        assert "RED" in output, (
+            "A wrong-workstream allowlist must not authorize the untracked "
+            f"receipt, got: {output}"
+        )
+        print("wrong-workstream allowlist negative: PASS")
+
+
+def test_allowlist_missing_identity_field_not_honored():
+    """An allowlist missing one of the three bound identity fields is
+    schema-invalid and grants no authority, even with a correct schema_version
+    and a pattern that would otherwise match (round-2 repair, PR951)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+
+        receipt_file = os.path.join(receipts_dir, "staging-untracked2.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-MISSING-FIELD", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            # workstream_id missing entirely -- goal_id/next_executed_outcome/
+            # schema_version all correct.
+            json.dump({
+                "goal_id": "EMBER-02",
+                "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+                "schema_version": "ember-c-custody-allowlist-v1",
+                "allowed_receipt_basenames": ["staging-untracked2.json"],
+            }, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init missing-field allowlist"], cwd=tmpdir, capture_output=True)
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"Probe must never crash, got rc={rc}: {output}"
+        assert "RED" in output, (
+            "An allowlist missing a required identity field must not "
+            f"authorize the untracked receipt, got: {output}"
+        )
+        print("missing-identity-field allowlist negative: PASS")
+
+
+def test_allowlist_malformed_pattern_no_crash():
+    """A malformed allowlist pattern (invalid regex metacharacters, e.g. an
+    unbalanced bracket) must never crash the probe and must never silently
+    authorize an unrelated untracked receipt (round-2 repair, PR951)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+
+        # Untracked receipt that does NOT match the malformed pattern below.
+        receipt_file = os.path.join(receipts_dir, "not-matching-anything.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-MALFORMED-PATTERN", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "goal_id": "EMBER-02",
+                "workstream_id": "EMBER-02A",
+                "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+                "schema_version": "ember-c-custody-allowlist-v1",
+                # Unbalanced bracket combined with a wildcard -- invalid
+                # regex when naively translated by string substitution (the
+                # pre-repair matcher only regex-compiles patterns containing
+                # "*" or "?").
+                "allowed_receipt_basenames": ["staging-[unbalanced*.json"],
+            }, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init malformed-pattern allowlist"], cwd=tmpdir, capture_output=True)
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"A malformed allowlist pattern must never crash the probe, got rc={rc}: {output}"
+        assert "RED" in output, (
+            "The unrelated untracked receipt must still be flagged; a "
+            f"malformed pattern must never silently authorize it, got: {output}"
+        )
+        print("malformed-pattern allowlist negative: PASS")
+
+
 def test_shape_b_unparseable():
     """Shape (b): unparseable — file with invalid JSON."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -316,6 +440,9 @@ def main():
         test_shape_a_untracked()
         test_post_landing_untracked_is_red()
         test_self_allowlist_cannot_authorize_itself()
+        test_allowlist_wrong_workstream_not_honored()
+        test_allowlist_missing_identity_field_not_honored()
+        test_allowlist_malformed_pattern_no_crash()
         test_shape_b_unparseable()
         test_shape_c_cited_missing()
         test_clean_pass()
