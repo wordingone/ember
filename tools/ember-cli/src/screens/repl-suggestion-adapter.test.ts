@@ -131,4 +131,163 @@ describe("adaptSessionMessagesForSuggestion — issue #50 boundary adapter", () 
     expect(adapted).toHaveLength(1);
     expect(adapted[0]).toMatchObject({ role: "user", content: "actual user turn" });
   });
+
+  // issue #52 reviewer spec: the two negative tests above stop at the adapter's output
+  // shape. Neither drives the adapted array through tryGenerateSuggestion, so neither
+  // proves the guard the shape is supposed to trip actually fires on production-shaped
+  // input. These two close that gap: real applyResultEvent output (the same machinery
+  // repl-result-event.test.ts exercises), through the real adapter, through the real
+  // guard chain -- no hand-built EmberMessage or usage object anywhere in the chain.
+
+  it("guard-3 end-to-end: a real applyResultEvent error turn suppresses tryGenerateSuggestion (no manually constructed EmberMessage)", async () => {
+    // Turn 1: completes successfully. Content arrives via the streaming "assistant"
+    // event (already on the SessionMessage, per the repl-result-event.test.ts pattern);
+    // applyResultEvent's success path only threads stop_reason/usage onto it.
+    const afterTurn1 = applyResultEvent(
+      {
+        type: "result",
+        subtype: "success",
+        durationMs: 5,
+        finalMessage: {
+          role: "assistant",
+          content: [],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 50, output_tokens: 20 },
+        },
+      } as any,
+      [
+        { id: "u1", type: "user", content: "first question" },
+        { id: "a1", type: "assistant", content: "first reply" },
+      ],
+      "a1",
+    );
+
+    // Turn 2: the submit loop appends a user entry and an empty pending placeholder,
+    // then the engine's for-await ends on a transport-level "result" event of
+    // subtype "error" -- applyResultEvent drops the placeholder and appends the one
+    // styled error entry (the exact #49 path repl-result-event.test.ts covers).
+    const withPendingTurn2: SessionMessage[] = [
+      ...afterTurn1,
+      { id: "u2", type: "user", content: "second question" },
+      { id: "a2", type: "assistant", content: "" },
+    ];
+    const afterTurn2 = applyResultEvent(
+      {
+        type: "result",
+        subtype: "error",
+        durationMs: 12,
+        errorMessage: "fetch failed: connect ECONNREFUSED 127.0.0.1:1",
+      },
+      withPendingTurn2,
+      "a2",
+    );
+
+    const adapted = adaptSessionMessagesForSuggestion(afterTurn2);
+    // Sanity: the adapter really produced 2 assistant-role entries, the second
+    // carrying stop_reason "error" -- otherwise this test would pass for the
+    // wrong reason (guard 2's too-few-turns, not guard 3).
+    const assistantEntries = adapted.filter((m) => m.role === "assistant");
+    expect(assistantEntries).toHaveLength(2);
+    expect(assistantEntries[1]).toMatchObject({ stop_reason: "error" });
+
+    let executorInvoked = false;
+    const spyExecutor: ForkedAgentExecutor = async () => {
+      executorInvoked = true;
+      return [{ role: "assistant", content: "predicted next input" }];
+    };
+
+    const result = await tryGenerateSuggestion(
+      new AbortController(),
+      adapted,
+      () => ({}) as AppState,
+      {},
+      undefined,
+      spyExecutor,
+    );
+
+    // Guard 3 must suppress before generation is ever attempted.
+    expect(result).toBeNull();
+    expect(executorInvoked).toBe(false);
+  });
+
+  it("guard-4 end-to-end: real applyResultEvent-threaded usage over the cache budget suppresses tryGenerateSuggestion (no hand-built usage object)", async () => {
+    // Turn 1: completes successfully, well within the cache budget.
+    const afterTurn1 = applyResultEvent(
+      {
+        type: "result",
+        subtype: "success",
+        durationMs: 5,
+        finalMessage: {
+          role: "assistant",
+          content: [],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 100, output_tokens: 20 },
+        },
+      } as any,
+      [
+        { id: "u1", type: "user", content: "first question" },
+        { id: "a1", type: "assistant", content: "first reply" },
+      ],
+      "a1",
+    );
+
+    // Turn 2: also completes successfully, but the engine's finalMessage.usage
+    // for this turn sums past MAX_PARENT_UNCACHED_TOKENS (10_000) -- the exact
+    // field getParentCacheSuppressReason reads off the last assistant message.
+    const withPendingTurn2: SessionMessage[] = [
+      ...afterTurn1,
+      { id: "u2", type: "user", content: "second question" },
+      { id: "a2", type: "assistant", content: "second reply" },
+    ];
+    const afterTurn2 = applyResultEvent(
+      {
+        type: "result",
+        subtype: "success",
+        durationMs: 5,
+        finalMessage: {
+          role: "assistant",
+          content: [],
+          stop_reason: "end_turn",
+          usage: {
+            input_tokens: 9000,
+            cache_creation_input_tokens: 2000,
+            output_tokens: 500,
+          }, // sum = 11 500 > 10 000
+        },
+      } as any,
+      withPendingTurn2,
+      "a2",
+    );
+
+    const adapted = adaptSessionMessagesForSuggestion(afterTurn2);
+    const assistantEntries = adapted.filter((m) => m.role === "assistant");
+    // Sanity: the real usage landed on the adapted last-assistant entry unmodified --
+    // otherwise this would pass on guard 2 or 3, not guard 4.
+    expect(assistantEntries).toHaveLength(2);
+    expect(assistantEntries[1]).toMatchObject({ stop_reason: "end_turn" });
+    expect((assistantEntries[1] as any).usage).toEqual({
+      input_tokens: 9000,
+      cache_creation_input_tokens: 2000,
+      output_tokens: 500,
+    });
+
+    let executorInvoked = false;
+    const spyExecutor: ForkedAgentExecutor = async () => {
+      executorInvoked = true;
+      return [{ role: "assistant", content: "predicted next input" }];
+    };
+
+    const result = await tryGenerateSuggestion(
+      new AbortController(),
+      adapted,
+      () => ({}) as AppState,
+      {},
+      undefined,
+      spyExecutor,
+    );
+
+    // Guard 4 must suppress before generation is ever attempted.
+    expect(result).toBeNull();
+    expect(executorInvoked).toBe(false);
+  });
 });
