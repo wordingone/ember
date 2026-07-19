@@ -20,6 +20,7 @@ import torch.nn.functional as F
 
 from batch import DOMAIN_MODALITIES, decode_owned_batch
 from model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
+from specialist_stream import TRAINING_CURSOR_SCHEMA_VERSION
 from semantic_stream import ManifestBoundTokenStream
 
 CheckpointCallback = Callable[[int, dict[str, Any]], None]
@@ -222,7 +223,7 @@ def run_selection_pretraining_segment(
         global_step = initial_global_step + completed
         last_cursor = next_selection_cursor
         training_cursor = {
-            "schema_version": "ember-specialist-stream-training-cursor-v1",
+            "schema_version": TRAINING_CURSOR_SCHEMA_VERSION,
             "selection_cursor": dict(last_cursor),
             "global_step": global_step,
             "tokens_seen": tokens_seen,

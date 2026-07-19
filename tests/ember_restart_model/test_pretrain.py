@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 from model import RestartDecoderConfig, UnifiedDecoder
 import pretrain
 from pretrain import run_pretraining_segment
+from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, SELECTION_RECEIPT_SCHEMA_VERSION
 from verify_capability_record import expected_receipt
 
 
@@ -193,7 +194,7 @@ class PretrainingSegmentTests(unittest.TestCase):
         records = [self._record(config, expert="vision", sample_id=f"selection-{index}") for index in range(3)]
 
         class NoSequenceSelection:
-            receipt = {"schema_version": "ember-specialist-stream-selection-receipt-v1", "capability": "image"}
+            receipt = {"schema_version": SELECTION_RECEIPT_SCHEMA_VERSION, "capability": "image"}
 
             def __init__(self, values: list[dict[str, object]]) -> None:
                 self.values = values
@@ -210,7 +211,7 @@ class PretrainingSegmentTests(unittest.TestCase):
                 for index in range(start, len(self.values)):
                     self.yielded.append(str(self.values[index]["sample_id"]))
                     yield self.values[index], {
-                        "schema_version": "ember-specialist-stream-selection-cursor-v1",
+                        "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
                         "selection_receipt_sha256": "a" * 64,
                         "selection_rule_id": "image_scene_split_train_v1",
                         "selected_ordinal": index + 1,
@@ -249,7 +250,7 @@ class PretrainingSegmentTests(unittest.TestCase):
                 self.assertEqual(cursor["global_step"], step)
                 self.assertEqual(cursor["tokens_seen"], step * 3)
                 self.assertEqual(cursor["selection_cursor"], {
-                    "schema_version": "ember-specialist-stream-selection-cursor-v1",
+                    "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
                     "selection_receipt_sha256": "a" * 64,
                     "selection_rule_id": "image_scene_split_train_v1",
                     "selected_ordinal": step,
@@ -265,7 +266,7 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(first["global_step"], 2)
         self.assertEqual(first["tokens_seen"], 6)
         self.assertEqual(first["data_cursor"]["selection_cursor"], {
-            "schema_version": "ember-specialist-stream-selection-cursor-v1",
+            "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
             "selection_receipt_sha256": "a" * 64,
             "selection_rule_id": "image_scene_split_train_v1",
             "selected_ordinal": 2,

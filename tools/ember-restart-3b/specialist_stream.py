@@ -28,6 +28,7 @@ SCHEMA_VERSION = "ember-owned-specialist-stream-v1"
 CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-cursor-v1"
 SELECTION_RECEIPT_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-receipt-v1"
 SELECTION_CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-cursor-v1"
+TRAINING_CURSOR_SCHEMA_VERSION = "ember-specialist-stream-training-cursor-v1"
 MAX_RECORDS_PER_FAMILY = 65_536
 MAX_CHUNK_RECORDS = 256
 MAX_MANIFEST_BYTES = 1_048_576
