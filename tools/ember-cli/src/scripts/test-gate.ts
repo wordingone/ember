@@ -113,11 +113,14 @@ async function main(): Promise<void> {
 
   // Exclude quarantined files via bun test's own discovery + --path-ignore-patterns, rather than
   // enumerating every test file as a CLI arg -- with 380+ files that arg list exceeds the Windows
-  // command-line length limit ("The command line is too long").
-  const ignoreGlobs = QUARANTINE.map((f) => `**/${f.split("/").pop()}`).join(",");
-  console.log("test-gate: main suite (quarantine excluded via --path-ignore-patterns)");
+  // command-line length limit ("The command line is too long"). IMPORTANT: bun does NOT support a
+  // comma-separated pattern list here (verified: "--path-ignore-patterns=a,b" silently excludes
+  // NEITHER -- file count stayed unchanged); it takes exactly one glob per flag occurrence, so the
+  // flag must be repeated once per quarantined file.
+  const ignoreArgs = QUARANTINE.map((f) => `--path-ignore-patterns=**/${f.split("/").pop()}`);
+  console.log("test-gate: main suite (quarantine excluded via repeated --path-ignore-patterns)");
   const mainResult = await runOne(
-    [`--path-ignore-patterns=${ignoreGlobs}`],
+    ignoreArgs,
     "main-suite",
     Math.max(timeoutMs * 20, 300_000),
   );
