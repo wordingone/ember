@@ -5,7 +5,7 @@
 #![cfg(windows)]
 
 use emberd::{Daemon, EmberdError, HostCommitCapacity, JobState};
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -677,6 +677,92 @@ fn dispatch_manifest_refuses_receipt_path_not_scoped_to_job() {
     assert!(!root.join("custody").join("shared-preflight.json").exists());
 }
 
+/// AUDIT-B: job_id "run7" is a bare prefix of the UNRELATED job_id "run77"
+/// with no delimiter between them ("run7" + "7" = "run77") -- a naive
+/// `.contains()` scoping check would incorrectly treat "run77"'s own
+/// receipt filename as scoped to "run7" too. Bounded matching must refuse
+/// this (the character right after the match, '7', is an identifier char,
+/// so the match is not boundary-clean); each job is admitted only at its
+/// own, distinct, properly-scoped receipt path.
+#[test]
+fn dispatch_manifest_refuses_a_bare_prefix_job_id_against_an_unrelated_jobs_receipt() {
+    let root = sandbox("run7-run77-scoping");
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+
+    // "run77" dispatches at its own naturally-scoped receipt path
+    // ("run77-preflight.json", the write_manifest default) and is admitted.
+    let manifest_run77 = write_manifest(&root, "run77", 10_000);
+    let run77_receipt = root.join("custody").join("run77-preflight.json");
+    let outcome77 = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_run77,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap();
+    assert_eq!(outcome77.receipt.path.file_name(), run77_receipt.file_name());
+    let run77_receipt_bytes = fs::read(&run77_receipt).unwrap();
+
+    // "run7" tries to target that SAME "run77-preflight.json" path -- a bare
+    // prefix, never a bounded match -- and must be refused at the
+    // job-scoping check, before ever reaching the claims table.
+    let manifest_run7 = write_manifest(&root, "run7", 10_000);
+    let mut payload7: Value = serde_json::from_slice(&fs::read(&manifest_run7).unwrap()).unwrap();
+    payload7["preflight_receipt"] = json!(&run77_receipt);
+    payload7["resource_lease"] = json!("gpu-run7");
+    fs::write(&manifest_run7, serde_json::to_vec(&payload7).unwrap()).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_run7,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberdError::DispatchReceiptPathNotJobScoped { .. }),
+        "run77's receipt scope must never match its unrelated prefix job \"run7\": {error:?}"
+    );
+    assert_eq!(daemon.job_state("run7").unwrap(), None);
+    assert_eq!(
+        fs::read(&run77_receipt).unwrap(),
+        run77_receipt_bytes,
+        "run77's receipt must be untouched by the refused collision"
+    );
+
+    // Free run77's pinned-budget headroom before admitting a second job.
+    daemon.stop_job("run77").unwrap();
+
+    // "run7" dispatched at its OWN, properly-scoped, DISTINCT receipt path
+    // ("run7-preflight.json", write_manifest's default) is admitted
+    // normally -- both jobs coexist at genuinely distinct paths.
+    let manifest_run7_own = write_manifest(&root, "run7", 10_000);
+    let mut payload7_own: Value =
+        serde_json::from_slice(&fs::read(&manifest_run7_own).unwrap()).unwrap();
+    payload7_own["resource_lease"] = json!("gpu-run7");
+    fs::write(&manifest_run7_own, serde_json::to_vec(&payload7_own).unwrap()).unwrap();
+    let run7_receipt = root.join("custody").join("run7-preflight.json");
+    let outcome7 = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest_run7_own,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap();
+    assert_eq!(outcome7.receipt.path.file_name(), run7_receipt.file_name());
+    assert_ne!(outcome7.receipt.path, outcome77.receipt.path);
+
+    daemon.stop_job("run7").unwrap();
+}
+
 #[test]
 fn dispatch_manifest_rejects_unknown_fields_and_cache_escape() {
     let root = sandbox("closed");
@@ -1257,7 +1343,7 @@ fn dispatch_manifest_pinned_host_budget_admits_exactly_one_of_two_concurrent_ove
 #[test]
 fn dispatch_manifest_refuses_a_receipt_path_already_claimed_by_another_job() {
     // Intentional same-path collision: job-id containment is non-injective
-    // ("collide-a" is a substring of "collide-ab-preflight.json"), so two
+    // ("ab" is its own delimiter-bounded segment inside "collide-ab-preflight.json"), so two
     // DISTINCT jobs can both pass the filename scoping check with the same
     // receipt path. The atomic dispatch_receipt_claims row is what actually
     // refuses the second claim — and the winner's receipt bytes survive.
@@ -1283,11 +1369,11 @@ fn dispatch_manifest_refuses_a_receipt_path_already_claimed_by_another_job() {
     let winner_bytes = fs::read(&shared_receipt).unwrap();
 
     // Second, DISTINCT job declares the SAME receipt path (its job_id
-    // "collide-a" is contained in the filename, so scoping alone passes).
-    let manifest_a = write_manifest(&root, "collide-a", 10_000);
+    // "ab" is bounded by hyphens in the filename, so scoping passes).
+    let manifest_a = write_manifest(&root, "ab", 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
     payload["preflight_receipt"] = json!(&shared_receipt);
-    payload["resource_lease"] = json!("gpu-collide-a");
+    payload["resource_lease"] = json!("gpu-ab");
     fs::write(&manifest_a, serde_json::to_vec(&payload).unwrap()).unwrap();
     // With the winner's receipt file on disk, the fast pre-admission
     // exists-check refuses first — and the winner's bytes are untouched.
@@ -1305,7 +1391,7 @@ fn dispatch_manifest_refuses_a_receipt_path_already_claimed_by_another_job() {
         matches!(error, EmberdError::ReceiptAlreadyExists { .. }),
         "unexpected error: {error:?}"
     );
-    assert_eq!(daemon.job_state("collide-a").unwrap(), None);
+    assert_eq!(daemon.job_state("ab").unwrap(), None);
     assert_eq!(fs::read(&shared_receipt).unwrap(), winner_bytes);
 
     // The exists-check alone is NOT the authority: simulate its blind spot
@@ -1327,7 +1413,7 @@ fn dispatch_manifest_refuses_a_receipt_path_already_claimed_by_another_job() {
         matches!(error, EmberdError::DispatchReceiptClaimConflict { .. }),
         "unexpected error: {error:?}"
     );
-    assert_eq!(daemon.job_state("collide-a").unwrap(), None);
+    assert_eq!(daemon.job_state("ab").unwrap(), None);
     assert!(
         !shared_receipt.exists(),
         "the refused collision must write nothing at the claimed path"
@@ -1406,12 +1492,12 @@ fn dispatch_manifest_gross_cap_refusal_never_overwrites_a_deleted_winner_receipt
     assert_eq!(outcome.receipt.path.file_name(), shared_receipt.file_name());
     fs::remove_file(&shared_receipt).unwrap();
 
-    // "gcap-a" is a substring of "gcap-ab-preflight.json", so the loser
+    // "ab" is its own bounded segment inside "gcap-ab-preflight.json", so the loser
     // passes the filename job-scoping check while claiming the SAME path.
-    let manifest_a = write_manifest(&root, "gcap-a", 10_000);
+    let manifest_a = write_manifest(&root, "ab", 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
     payload["preflight_receipt"] = json!(&shared_receipt);
-    payload["resource_lease"] = json!("gpu-gcap-a");
+    payload["resource_lease"] = json!("gpu-ab");
     fs::write(&manifest_a, serde_json::to_vec(&payload).unwrap()).unwrap();
 
     // A failing host-commit probe drives the loser into REFUSED_HOST_COMMIT_CAP
@@ -1431,7 +1517,7 @@ fn dispatch_manifest_gross_cap_refusal_never_overwrites_a_deleted_winner_receipt
         matches!(error, EmberdError::DispatchReceiptClaimConflict { .. }),
         "unexpected error: {error:?}"
     );
-    assert_loser_wrote_nothing(&daemon, "gcap-a", &shared_receipt, &db);
+    assert_loser_wrote_nothing(&daemon, "ab", &shared_receipt, &db);
     daemon.stop_job("gcap-ab").unwrap();
 }
 
@@ -1458,11 +1544,11 @@ fn dispatch_manifest_floor_refusal_never_overwrites_a_deleted_winner_receipt() {
     assert_eq!(outcome.receipt.path.file_name(), shared_receipt.file_name());
     fs::remove_file(&shared_receipt).unwrap();
 
-    // "gfloor-a" is a substring of "gfloor-ab-preflight.json".
-    let manifest_a = write_manifest(&root, "gfloor-a", 10_000);
+    // "ab" is its own bounded segment inside "gfloor-ab-preflight.json".
+    let manifest_a = write_manifest(&root, "ab", 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest_a).unwrap()).unwrap();
     payload["preflight_receipt"] = json!(&shared_receipt);
-    payload["resource_lease"] = json!("gpu-gfloor-a");
+    payload["resource_lease"] = json!("gpu-ab");
     fs::write(&manifest_a, serde_json::to_vec(&payload).unwrap()).unwrap();
 
     let error = daemon
@@ -1479,8 +1565,121 @@ fn dispatch_manifest_floor_refusal_never_overwrites_a_deleted_winner_receipt() {
         matches!(error, EmberdError::DispatchReceiptClaimConflict { .. }),
         "unexpected error: {error:?}"
     );
-    assert_loser_wrote_nothing(&daemon, "gfloor-a", &shared_receipt, &db);
+    assert_loser_wrote_nothing(&daemon, "ab", &shared_receipt, &db);
     daemon.stop_job("gfloor-ab").unwrap();
+}
+
+/// Round-8 P1-3: `check_receipt_claim_conflict` used to be a plain read-only
+/// SELECT, dropped its connection-mutex guard, and only THEN did a
+/// completely separate `atomic_replace` call with no lock held at all --
+/// a concurrent reservation transaction (which needs the SAME mutex) could
+/// claim `shared_receipt` in that gap, and the refusal write would land on
+/// top of it with no conflict ever observed. `EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS`
+/// forces a deterministic pause exactly at that boundary, still holding
+/// `check_receipt_claim_conflict_and_write_refusal`'s guard: a concurrent
+/// dispatch racing for the SAME receipt path must be BLOCKED for the whole
+/// pause (it needs the same mutex to even start its own reservation), never
+/// slip its claim in during the window.
+#[test]
+fn dispatch_manifest_refusal_write_blocks_a_concurrent_winners_claim_for_the_whole_check_and_write(
+) {
+    let root = sandbox("p13-refusal-race");
+    let db = root.join("emberd.sqlite3");
+    // "p13" and "ab" are both hyphen-delimited, boundary-clean segments of
+    // the shared filename "p13-ab-preflight.json" -- the same
+    // delimiter-bounded-segment technique used throughout this suite
+    // post-AUDIT-B, so both distinct job_ids legitimately pass the bounded
+    // filename job-scoping check against this one receipt path.
+    let shared_receipt = root.join("custody").join("p13-ab-preflight.json");
+
+    let manifest_loser = write_manifest(&root, "p13", 10_000);
+    let mut payload_loser: Value =
+        serde_json::from_slice(&fs::read(&manifest_loser).unwrap()).unwrap();
+    payload_loser["preflight_receipt"] = json!(&shared_receipt);
+    payload_loser["resource_lease"] = json!("gpu-p13");
+    fs::write(&manifest_loser, serde_json::to_vec(&payload_loser).unwrap()).unwrap();
+
+    let manifest_winner = write_manifest(&root, "ab", 10_000);
+    let mut payload_winner: Value =
+        serde_json::from_slice(&fs::read(&manifest_winner).unwrap()).unwrap();
+    payload_winner["preflight_receipt"] = json!(&shared_receipt);
+    payload_winner["resource_lease"] = json!("gpu-ab");
+    fs::write(&manifest_winner, serde_json::to_vec(&payload_winner).unwrap()).unwrap();
+
+    let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
+
+    std::env::set_var("EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS", "300");
+    let loser_daemon = daemon.clone();
+    let loser_manifest = manifest_loser.clone();
+    let loser_thread = thread::spawn(move || {
+        // Fails the gross-cap (host commit) probe unconditionally, driving
+        // this dispatch into the refusal-write path where the race-window
+        // hook sleeps for 300ms while still holding the connection mutex.
+        loser_daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
+            &loser_manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(0)),
+            |_root| Ok(u64::MAX),
+        )
+    });
+    // A short, deliberate head start: the loser's own pre-mutex work (a host
+    // commit probe call, JSON construction) is sub-millisecond, so 60ms is
+    // ample time for it to be inside the mutex-held sleep before the winner
+    // even starts -- this makes the ordering deterministic without needing
+    // a Barrier to hit a narrow window.
+    thread::sleep(Duration::from_millis(60));
+
+    let winner_started = std::time::Instant::now();
+    let winner_result = daemon.dispatch_manifest_at_with_probes_and_host_and_floor(
+        &manifest_winner,
+        10_001,
+        |_root| Ok(1024),
+        || Ok(2048),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        |_root| Ok(u64::MAX),
+    );
+    let winner_elapsed = winner_started.elapsed();
+    std::env::remove_var("EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS");
+
+    let loser_result = loser_thread.join().unwrap();
+    assert!(
+        matches!(loser_result, Err(EmberdError::DispatchHostCommitReserve { .. })),
+        "unexpected loser outcome: {loser_result:?}"
+    );
+    let winner_outcome = winner_result.expect("the winner must still be admitted");
+
+    assert!(
+        winner_elapsed >= Duration::from_millis(250),
+        "TOCTOU REOPENED: the winner's dispatch must be blocked by the daemon's connection \
+         mutex for (nearly) the whole 300ms race-window sleep -- it returned after only \
+         {winner_elapsed:?}, meaning it was never serialized against the loser's \
+         check-and-write critical section"
+    );
+
+    // Final-state consistency: whichever job holds the claim, its OWN
+    // receipt content must be what's on disk -- never a stale refusal for
+    // a different job_id landing on top of (or under) the real claimant.
+    let claim_owner: Option<String> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["ab"],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap();
+    assert_eq!(claim_owner.as_deref(), Some("ab"));
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(&winner_outcome.receipt.path).unwrap()).unwrap();
+    assert_eq!(
+        receipt["result"], "PREFLIGHT_PASSED",
+        "the receipt on disk at the claimed path must be the winner's own PASS receipt"
+    );
+    assert_eq!(receipt["job_id"], "ab");
+
+    daemon.stop_job("ab").unwrap();
 }
 
 #[test]

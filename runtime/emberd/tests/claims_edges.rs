@@ -205,9 +205,13 @@ fn dispatch(daemon: &Daemon, manifest: &Path) -> emberd::Result<emberd::Dispatch
 /// D2 (default re-run path, HIGH): a job that reaches a clean terminal state
 /// (here: stopped, via `stop_job`) must release its receipt claim so a later
 /// dispatch of the SAME receipt path under a DIFFERENT job_id is admitted.
-/// "claims-ab" / "claims-a" is the same substring-collision trick used
-/// elsewhere in this suite: two DISTINCT job_ids can both pass the filename
-/// job-scoping check against the same receipt path.
+/// "claims-ab" / "ab" is the same delimiter-bounded-segment trick used
+/// elsewhere in this suite: "ab" is its own hyphen-delimited segment inside
+/// "claims-ab-preflight.json" (bounded on both sides), so two DISTINCT
+/// job_ids can each legitimately pass the (post-AUDIT-B, bounded) filename
+/// job-scoping check against the same receipt path -- unlike a bare prefix
+/// collision (e.g. "run7" against "run77-preflight.json"), which the
+/// bounded check now correctly refuses (see the AUDIT-B negative test).
 #[test]
 fn redispatch_same_receipt_path_by_a_new_job_succeeds_after_clean_stop() {
     let root = sandbox("redispatch-after-stop");
@@ -225,17 +229,18 @@ fn redispatch_same_receipt_path_by_a_new_job_succeeds_after_clean_stop() {
     // and we reach the actual claims-table guard this test targets.
     fs::remove_file(&shared_receipt).unwrap();
 
-    // A DIFFERENT job_id ("claims-a" collides via substring) re-dispatches
-    // the SAME receipt path. Before the fix this refuses forever with
+    // A DIFFERENT job_id ("ab", its own bounded segment in the shared
+    // filename) re-dispatches the SAME receipt path. Before the fix this
+    // refuses forever with
     // DispatchReceiptClaimConflict; after the fix it must be admitted.
-    let manifest_a = write_manifest(&root, "claims-a", "gpu-claims-a", &shared_receipt);
+    let manifest_a = write_manifest(&root, "ab", "gpu-ab", &shared_receipt);
     let result = dispatch(&daemon, &manifest_a);
     assert!(
         result.is_ok(),
         "WEDGE: receipt path still claimed after the prior job's clean stop \
          (dispatch_receipt_claims never released on terminal transition): {result:?}"
     );
-    daemon.stop_job("claims-a").unwrap();
+    daemon.stop_job("ab").unwrap();
 }
 
 /// D1 (HIGH): the claim commits (insert_reserved_job_row, inside the pinned-
@@ -275,14 +280,14 @@ fn redispatch_same_receipt_path_by_a_new_job_succeeds_after_spawn_failure_rollba
     // A DIFFERENT job_id re-dispatches the SAME receipt path. Before the fix
     // the orphaned claim (committed pre-spawn, never released on rollback)
     // refuses this forever; after the fix it must be admitted.
-    let manifest_b = write_manifest(&root, "claimsfail-a", "gpu-claimsfail-a", &shared_receipt);
+    let manifest_b = write_manifest(&root, "ab", "gpu-ab", &shared_receipt);
     let result = dispatch(&daemon, &manifest_b);
     assert!(
         result.is_ok(),
         "ORPHAN: receipt path still claimed after spawn-failure rollback deleted \
          the job from every other table: {result:?}"
     );
-    daemon.stop_job("claimsfail-a").unwrap();
+    daemon.stop_job("ab").unwrap();
 }
 
 /// D3 (MED): a crash between the admission commit and the process resume
@@ -326,14 +331,14 @@ fn crash_orphaned_starting_job_releases_its_claim_after_reconcile() {
     // A DIFFERENT job_id re-dispatches the SAME receipt path. Before the fix
     // reconcile's starting->failed transition never released the claim, so
     // this refuses forever; after the fix it must be admitted.
-    let manifest_b = write_manifest(&root, "claimscrash-a", "gpu-claimscrash-a", &shared_receipt);
+    let manifest_b = write_manifest(&root, "ab", "gpu-ab", &shared_receipt);
     let result = dispatch(&daemon, &manifest_b);
     assert!(
         result.is_ok(),
         "WEDGE-AFTER-RECONCILE: receipt path still claimed by the crash-orphaned \
          'starting' job after reconcile marked it failed: {result:?}"
     );
-    daemon.stop_job("claimscrash-a").unwrap();
+    daemon.stop_job("ab").unwrap();
 }
 
 /// Reviewer amendment (durability-before-release, point 2): rollback must
@@ -407,6 +412,205 @@ fn rollback_refuses_to_release_a_claim_when_a_receipt_escaped_to_disk() {
     assert!(receipt_path.exists());
 }
 
+/// Round-8 P1-1: a rollback that releases a claim cleanly (receipt genuinely
+/// absent, the ordinary spawn-failure path) must still leave a DURABLE
+/// evidence row behind. Before this fix, `rollback_dispatch_attempt` deleted
+/// `events`, `jobs`, and the claim itself with nothing surviving anywhere
+/// job-scoped to explain why this receipt_path was ever touched -- a later
+/// audit of the same path has no record a rollback happened at all.
+#[test]
+fn rollback_writes_durable_evidence_before_releasing_a_clean_claim() {
+    let root = sandbox("rollback-durable-evidence");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("p11ab-preflight.json");
+
+    let manifest = write_manifest(&root, "p11ab", "gpu-p11ab", &receipt_path);
+    let daemon = Daemon::open(&db).unwrap();
+
+    // Reserve the claim without ever letting the real receipt land on disk:
+    // force the job terminal BEFORE dispatch would write the receipt is not
+    // possible via the public path (dispatch writes the receipt as part of
+    // admission), so model the "spawn failed before anything escaped" case
+    // the same way the existing escaped-receipt test models its own
+    // precondition -- reserve via a real admission, then delete the receipt
+    // file out-of-band before rollback runs, proving rollback's OWN probe
+    // (not a cached assumption) drives the evidence content.
+    let outcome = dispatch_ok(&daemon, &manifest);
+    assert_eq!(outcome.receipt.path.file_name(), receipt_path.file_name());
+    fs::remove_file(&receipt_path).unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute("UPDATE jobs SET state='failed' WHERE job_id='p11ab'", [])
+        .unwrap();
+
+    daemon
+        .test_rollback_dispatch_attempt("p11ab", "gpu-p11ab", false)
+        .expect("rollback must succeed when the receipt is confirmed absent");
+
+    let row: (String, i64, String) = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id, escaped, reason FROM dispatch_receipt_rollback_evidence WHERE job_id=?1",
+            ["p11ab"],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("NO EVIDENCE: a clean rollback release must leave a durable row behind");
+    assert_eq!(row.0, "p11ab");
+    assert_eq!(row.1, 0, "a confirmed-absent rollback must record escaped=0");
+    assert_eq!(row.2, "dispatch_rollback");
+
+    // And the claim itself is gone -- the ordinary release still happens.
+    let claim_owner: Option<String> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["p11ab"],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap();
+    assert_eq!(claim_owner, None);
+}
+
+/// Round-8 P1-2: the escaped-receipt guard must fail CLOSED when the
+/// existence probe itself errors (permission denied, inaccessible path,
+/// etc), never collapse that into "confirmed absent" the way
+/// `Path::exists()` does. `EMBERD_TEST_ROLLBACK_RECEIPT_PROBE_ERROR`
+/// deterministically forces the probe's `Err` arm without needing a real
+/// ACL/UNC trick.
+#[test]
+fn rollback_fails_closed_when_the_receipt_existence_probe_errors() {
+    let root = sandbox("rollback-probe-error");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("p12ab-preflight.json");
+
+    let manifest = write_manifest(&root, "p12ab", "gpu-p12ab", &receipt_path);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = dispatch_ok(&daemon, &manifest);
+    assert_eq!(outcome.receipt.path.file_name(), receipt_path.file_name());
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute("UPDATE jobs SET state='failed' WHERE job_id='p12ab'", [])
+        .unwrap();
+
+    std::env::set_var("EMBERD_TEST_ROLLBACK_RECEIPT_PROBE_ERROR", "1");
+    let error = daemon.test_rollback_dispatch_attempt("p12ab", "gpu-p12ab", false);
+    std::env::remove_var("EMBERD_TEST_ROLLBACK_RECEIPT_PROBE_ERROR");
+    let error = error.expect_err("a probe error must fail CLOSED, never silently release");
+    let debug = format!("{error:?}");
+    assert!(
+        debug.contains("DispatchReceiptEscapedRollback"),
+        "FAIL-OPEN: a probe error must surface the escaped-receipt guard, got: {debug}"
+    );
+
+    let row: (i64, String) = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT escaped, reason FROM dispatch_receipt_rollback_evidence WHERE job_id=?1",
+            ["p12ab"],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("a fail-closed rollback must still leave durable evidence");
+    assert_eq!(row.0, 1, "a probe-error rollback must record escaped=1 (fail-closed)");
+    assert!(
+        row.1.contains("receipt_existence_probe_failed"),
+        "reason must disclose the probe failure, got: {}",
+        row.1
+    );
+
+    // The claim must survive: fail-closed preserves it exactly like a
+    // confirmed escape does.
+    let claim_owner: Option<String> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["p12ab"],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap();
+    assert_eq!(claim_owner.as_deref(), Some("p12ab"));
+
+    // The receipt file itself was never touched by rollback (untouched by
+    // the probe-error path -- it was already going to be preserved anyway).
+    assert!(receipt_path.exists());
+}
+
+/// AUDIT-A: `rollback_dispatch_attempt` deletes the `jobs` row for a
+/// terminal job BEFORE the escaped-receipt guard decides whether the claim
+/// survives, so a preserved-escaped claim has owner=None in `jobs` -- the
+/// exact same shape self-heal treats as "owner is gone, safe to reclaim".
+/// If the escaped FILE is later removed out-of-band (the operator cleans it
+/// up, a retention sweep, etc), self-heal must NOT silently admit a foreign
+/// job at that path: the durable `escaped=1` evidence row (P1-1/P1-2) is the
+/// last surviving signal that this path had an unresolved escape, and it
+/// must be consulted before any owner=None claim is treated as stale.
+#[test]
+fn admission_refuses_to_reclaim_an_escaped_tombstone_after_the_file_is_removed_out_of_band() {
+    let root = sandbox("audita-tombstone-reclaim");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("tombstone-ab-preflight.json");
+
+    // "ab" and "tombstone" are both hyphen-delimited, boundary-clean
+    // segments of the shared filename "tombstone-ab-preflight.json" (the
+    // same delimiter-bounded-segment technique the rest of this suite uses
+    // post-AUDIT-B), so both distinct job_ids legitimately pass the bounded
+    // filename job-scoping check against this one receipt path.
+    let manifest_a = write_manifest(&root, "ab", "gpu-ab", &receipt_path);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = dispatch_ok(&daemon, &manifest_a);
+    assert_eq!(outcome.receipt.path.file_name(), receipt_path.file_name());
+    assert!(receipt_path.exists());
+
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute("UPDATE jobs SET state='failed' WHERE job_id='ab'", [])
+        .unwrap();
+
+    // Rollback sees the receipt still on disk -> escaped, claim preserved,
+    // durable evidence written, `jobs` row deleted (terminal-job branch runs
+    // unconditionally before the escape decision) -- owner=None from here on.
+    let rollback_error = daemon
+        .test_rollback_dispatch_attempt("ab", "gpu-ab", false)
+        .expect_err("setup invariant: rollback must refuse on a genuinely escaped receipt");
+    assert!(format!("{rollback_error:?}").contains("DispatchReceiptEscapedRollback"));
+    assert_eq!(
+        daemon.job_state("ab").unwrap(),
+        None,
+        "setup invariant: the jobs row must be gone after this rollback (owner=None going forward)"
+    );
+
+    // Now the escaped file itself disappears out-of-band -- nothing left
+    // anywhere except the durable evidence row.
+    fs::remove_file(&receipt_path).unwrap();
+
+    // A different job targeting the same receipt path must be REFUSED, not
+    // silently admitted as if the stale claim were an ordinary orphan.
+    let manifest_foreign = write_manifest(&root, "tombstone", "gpu-tombstone", &receipt_path);
+    let foreign = dispatch(&daemon, &manifest_foreign);
+    let foreign_error = foreign.expect_err(
+        "TOMBSTONE ERASED: a foreign job was admitted at a path whose only owner-gone signal \
+         was the escape marker -- self-heal treated the escape tombstone as an ordinary stale claim"
+    );
+    assert!(
+        format!("{foreign_error:?}").contains("DispatchReceiptClaimConflict"),
+        "expected DispatchReceiptClaimConflict, got: {foreign_error:?}"
+    );
+
+    // The original claim must still belong to the escaped job, not the
+    // foreign one.
+    let claim_owner: Option<String> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["ab"],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap();
+    assert_eq!(claim_owner.as_deref(), Some("ab"));
+}
+
 /// Crash-point coverage (reviewer amendment, point 3): a job whose real
 /// process has already exited, but whose row still says 'running' because
 /// no monitor observed the exit yet, is the exact pre-reconcile crash
@@ -448,7 +652,7 @@ fn running_job_whose_process_already_exited_keeps_its_claim_until_reconcile_then
 
     // Pre-reconcile: no terminal evidence exists yet for the crashed job. A
     // different job_id must be refused, not silently admitted.
-    let manifest_premature = write_manifest(&root, "claimsmid-a", "gpu-claimsmid-a", &shared_receipt);
+    let manifest_premature = write_manifest(&root, "ab", "gpu-ab", &shared_receipt);
     let premature = dispatch(&reopened, &manifest_premature);
     let premature_error = premature.expect_err(
         "PREMATURE FREE: a different job claimed the path before any terminal evidence \
@@ -470,7 +674,7 @@ fn running_job_whose_process_already_exited_keeps_its_claim_until_reconcile_then
     fs::remove_file(&shared_receipt).unwrap();
 
     // The slot is now safely reusable -- never a permanent orphan. Retry the
-    // SAME substring-colliding job_id ("claimsmid-a") that was correctly
+    // SAME bounded-segment-colliding job_id ("ab") that was correctly
     // refused above: the prior refusal left no row for it (the guard fired
     // before any admission write), so this is a clean, distinct-job retry
     // now that terminal evidence for "claimsmid-ab" has landed.
@@ -480,7 +684,7 @@ fn running_job_whose_process_already_exited_keeps_its_claim_until_reconcile_then
         "PERMANENT ORPHAN: receipt path still claimed after reconcile recorded terminal \
          evidence for the crashed job: {result:?}"
     );
-    reopened.stop_job("claimsmid-a").unwrap();
+    reopened.stop_job("ab").unwrap();
 }
 
 /// Legacy/inconsistent-state convergence (reviewer amendment, point 3b): a
@@ -535,14 +739,14 @@ fn admission_self_heals_a_legacy_claim_whose_owner_is_already_terminal() {
     // ("claimslegacy-ab") is terminal ('stopped'), so
     // validate_receipt_claim_available must self-heal the stale claim
     // rather than refuse forever.
-    let manifest_b = write_manifest(&root, "claimslegacy-a", "gpu-claimslegacy-a", &shared_receipt);
+    let manifest_b = write_manifest(&root, "ab", "gpu-ab", &shared_receipt);
     let result = dispatch(&daemon, &manifest_b);
     assert!(
         result.is_ok(),
         "PERMANENT ORPHAN: a legacy claim row for an already-terminal owner was never \
          self-healed at the next admission attempt: {result:?}"
     );
-    daemon.stop_job("claimslegacy-a").unwrap();
+    daemon.stop_job("ab").unwrap();
 }
 
 /// Companion negative control for the self-heal above: a claim whose owner
@@ -560,7 +764,7 @@ fn admission_still_conflicts_when_the_claim_owner_is_genuinely_live() {
 
     // Owner is still 'running' -- a different job_id must still be refused,
     // never silently self-healed.
-    let manifest_b = write_manifest(&root, "claimslive-a", "gpu-claimslive-a", &shared_receipt);
+    let manifest_b = write_manifest(&root, "ab", "gpu-ab", &shared_receipt);
     let result = dispatch(&daemon, &manifest_b);
     let error = result.expect_err("a genuinely live owner must still refuse a different job");
     let debug = format!("{error:?}");

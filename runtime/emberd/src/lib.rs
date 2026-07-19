@@ -616,7 +616,8 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS dispatch_receipt_claims(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, manifest_sha256 TEXT NOT NULL, claimed_at_ms INTEGER NOT NULL);")?;
+            CREATE TABLE IF NOT EXISTS dispatch_receipt_claims(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, manifest_sha256 TEXT NOT NULL, claimed_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS dispatch_receipt_rollback_evidence(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL, escaped INTEGER NOT NULL, reason TEXT NOT NULL, ts_ms INTEGER NOT NULL);")?;
         migrate_schema(&conn, &log_dir)?;
         conn.execute(
             "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
@@ -1494,7 +1495,7 @@ impl Daemon {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        if !receipt_file_name.contains(manifest.job_id.as_str()) {
+        if !receipt_name_bounded_contains(&receipt_file_name, manifest.job_id.as_str()) {
             return Err(EmberdError::DispatchReceiptPathNotJobScoped {
                 job_id: manifest.job_id.clone(),
                 preflight_receipt: manifest.preflight_receipt.clone(),
@@ -1650,7 +1651,7 @@ impl Daemon {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        if !receipt_file_name.contains(manifest.job_id.as_str()) {
+        if !receipt_name_bounded_contains(&receipt_file_name, manifest.job_id.as_str()) {
             return Err(EmberdError::DispatchReceiptPathNotJobScoped {
                 job_id: manifest.job_id.clone(),
                 preflight_receipt: manifest.preflight_receipt.clone(),
@@ -1695,8 +1696,11 @@ impl Daemon {
                     "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
                 },
             });
-            self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
-            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            self.check_receipt_claim_conflict_and_write_refusal(
+                &manifest.job_id,
+                &receipt_path,
+                &serde_json::to_vec(&refusal)?,
+            )?;
             return Err(EmberdError::DispatchHostCommitReserve {
                 required_available_maximum_commit_bytes: manifest
                     .required_available_maximum_commit_bytes,
@@ -1748,8 +1752,11 @@ impl Daemon {
                             "io_error": error.to_string(),
                         },
                     });
-                    self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
-                    atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                    self.check_receipt_claim_conflict_and_write_refusal(
+                        &manifest.job_id,
+                        &receipt_path,
+                        &serde_json::to_vec(&refusal)?,
+                    )?;
                     return Err(EmberdError::DispatchConsumerFloorProbeError {
                         root,
                         io_error: error.to_string(),
@@ -1772,8 +1779,11 @@ impl Daemon {
                         "available_free_bytes": available,
                     },
                 });
-                self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
-                atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                self.check_receipt_claim_conflict_and_write_refusal(
+                    &manifest.job_id,
+                    &receipt_path,
+                    &serde_json::to_vec(&refusal)?,
+                )?;
                 return Err(EmberdError::DispatchConsumerFloorViolation {
                     root: canonical_root,
                     minimum_free_bytes,
@@ -1897,8 +1907,11 @@ impl Daemon {
                             "detail": &detail,
                         },
                     });
-                    self.check_receipt_claim_conflict(&manifest.job_id, &receipt_path)?;
-                    atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                    self.check_receipt_claim_conflict_and_write_refusal(
+                        &manifest.job_id,
+                        &receipt_path,
+                        &serde_json::to_vec(&refusal)?,
+                    )?;
                     return Err(EmberdError::DispatchVramProviderUnavailable {
                         minimum_free_vram_bytes: manifest.minimum_free_vram_bytes,
                         detail,
@@ -2044,8 +2057,11 @@ impl Daemon {
                             "residual_available_maximum_commit_bytes": residual_available_maximum_commit_bytes,
                         },
                     });
-                    self.check_receipt_claim_conflict(&job_id, &receipt_path)?;
-                    atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                    self.check_receipt_claim_conflict_and_write_refusal(
+                        &job_id,
+                        &receipt_path,
+                        &serde_json::to_vec(&refusal)?,
+                    )?;
                     return Err(EmberdError::DispatchPinnedHostBudgetExceeded {
                         required_available_maximum_commit_bytes,
                         observed_available_maximum_commit_bytes,
@@ -2250,10 +2266,12 @@ impl Daemon {
         // permanently claimed by a job that no longer exists anywhere else.
         //
         // But a silent release is only correct when NOTHING externally
-        // visible escaped for this job. If a receipt file already landed on
-        // disk at the claimed path, this was not a clean internal-only
-        // failure — surface the typed error instead of quietly freeing the
-        // slot (reviewer amendment: prove no receipt escaped before release).
+        // visible escaped for this job, AND every rollback -- escaped or not
+        // -- must leave DURABLE evidence that it happened (P1-1): the
+        // `jobs`/`events` rows for this job_id are deleted above, so nothing
+        // job-scoped survives to explain later why this receipt_path was
+        // ever touched. `dispatch_receipt_rollback_evidence` is that record,
+        // written BEFORE the claim decision below, in the SAME transaction.
         let claimed_receipt_path: Option<String> = tx
             .query_row(
                 "SELECT receipt_path FROM dispatch_receipt_claims WHERE job_id=?1",
@@ -2262,14 +2280,41 @@ impl Daemon {
             )
             .optional()?;
         if let Some(receipt_path) = claimed_receipt_path {
-            if Path::new(&receipt_path).exists() {
+            // P1-2: `Path::exists()` collapses "genuinely absent" and "the
+            // probe itself failed" (permission denied, inaccessible path)
+            // into the same `false` -- silently releasing the claim in the
+            // error case would let an inaccessible-but-present receipt take
+            // the destructive path. Fail CLOSED on any probe error: treat it
+            // exactly like a confirmed escape (preserve claim + evidence,
+            // typed error), never like confirmed absence.
+            let (escaped, reason) = match rollback_receipt_escape_probe(&receipt_path) {
+                Ok(true) => (true, "receipt_escaped_to_disk".to_string()),
+                Ok(false) => (false, "dispatch_rollback".to_string()),
+                Err(probe_error) => (
+                    true,
+                    format!("receipt_existence_probe_failed: {probe_error}"),
+                ),
+            };
+            tx.execute(
+                "INSERT INTO dispatch_receipt_rollback_evidence(receipt_path,job_id,escaped,reason,ts_ms) VALUES(?1,?2,?3,?4,?5)\n                 ON CONFLICT(receipt_path) DO UPDATE SET job_id=excluded.job_id, escaped=excluded.escaped, reason=excluded.reason, ts_ms=excluded.ts_ms",
+                params![receipt_path, job_id, escaped as i64, reason, now_ms()],
+            )?;
+            if escaped {
+                // Evidence is committed even though the claim itself is left
+                // untouched: the row above IS the durable record that this
+                // path was rolled back with an unresolved escape, and it is
+                // what AUDIT-A's self-heal check consults so a later,
+                // out-of-band deletion of the escaped file can never erase
+                // that signal by making the owner look like an ordinary gone
+                // job.
+                tx.commit()?;
                 return Err(EmberdError::DispatchReceiptEscapedRollback {
                     job_id: job_id.into(),
                     receipt_path: PathBuf::from(receipt_path),
                 });
             }
+            tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         }
-        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.commit()?;
         Ok(())
     }
@@ -2315,7 +2360,30 @@ impl Daemon {
                     )
                     .optional()?;
                 let owner_is_gone_or_terminal = match owner_state.as_deref() {
-                    None => true,
+                    None => {
+                        // AUDIT-A: `rollback_dispatch_attempt` deletes the
+                        // `jobs` row BEFORE the escaped-receipt guard runs
+                        // (a terminal job's job/event rows are removed
+                        // unconditionally, then the escape probe decides
+                        // whether the CLAIM survives) -- so an owner=None
+                        // claim is not proof the claim is stale; it is
+                        // exactly the shape a genuinely-escaped, preserved
+                        // claim takes once its job row is gone. Consult the
+                        // durable rollback-evidence row (P1-1/P1-2) before
+                        // healing: an `escaped=1` marker for this exact
+                        // receipt_path means the last escape signal must
+                        // survive even if the escaped FILE is later removed
+                        // out-of-band -- refuse instead of silently freeing
+                        // the path for a foreign dispatch.
+                        let escape_marker: Option<i64> = tx
+                            .query_row(
+                                "SELECT escaped FROM dispatch_receipt_rollback_evidence WHERE receipt_path=?1 AND escaped=1",
+                                [receipt_path],
+                                |row| row.get(0),
+                            )
+                            .optional()?;
+                        escape_marker.is_none()
+                    }
                     Some(state) => matches!(state, "failed" | "stopped" | "exited"),
                 };
                 if owner_is_gone_or_terminal {
@@ -2351,24 +2419,36 @@ impl Daemon {
         Ok(())
     }
 
-    /// Read-only guard shared by every refusal-receipt write site in the
-    /// dispatch flow (called BEFORE `atomic_replace` on any refusal
-    /// payload): if `receipt_path` is currently claimed by a DIFFERENT
-    /// job_id in `dispatch_receipt_claims`, refuses with the typed conflict
-    /// error and writes nothing. Without this, an early-probe refusal
-    /// (gross-cap, floor, provider-unavailable, ...) for job B could
-    /// overwrite a receipt still owned by an already-admitted job A whose
-    /// receipt file happened to be deleted out from under it. This is a
-    /// pre-write CHECK, not a claim — the transactional claim INSERT still
-    /// lives only inside `start_job_with_pinned_budget_admission`'s
-    /// reservation transaction (via `validate_receipt_claim_available`), so
-    /// it carries no atomicity guarantee against a claim written
-    /// concurrently with this check; it closes the deleted-receipt/stale-DB
-    /// collision, which is the scenario these refusal sites can actually hit.
-    fn check_receipt_claim_conflict(&self, job_id: &str, receipt_path: &Path) -> Result<()> {
+    /// Guard + write, ONE critical section, shared by every refusal-receipt
+    /// write site in the dispatch flow: if `receipt_path` is currently
+    /// claimed by a DIFFERENT job_id in `dispatch_receipt_claims`, refuses
+    /// with the typed conflict error and writes nothing; otherwise writes
+    /// `refusal_bytes` to `receipt_path` via `atomic_replace` and returns.
+    ///
+    /// P1-3: the daemon's ENTIRE sqlite connection lives behind one
+    /// `Mutex<Connection>` (`self.conn()`) — the same mutex
+    /// `insert_reserved_job_row`'s reservation transaction locks for its
+    /// whole open-to-commit span. The prior split (a separate
+    /// `check_receipt_claim_conflict` read that dropped the guard, THEN a
+    /// standalone `atomic_replace` call with no lock held at all) left a
+    /// TOCTOU window between the two: a concurrent reservation could insert
+    /// a claim for this exact receipt_path in the gap, and this refusal
+    /// write would land on top of it with no conflict ever observed. Holding
+    /// the SAME `MutexGuard` across both the check and the file write closes
+    /// that window — a concurrent reservation attempt cannot even begin
+    /// (`self.conn()` blocks on the same mutex) until this function returns
+    /// and the guard drops, so the check and the write are now as atomic
+    /// with respect to every OTHER claim-writing path as the reservation
+    /// transaction itself is.
+    fn check_receipt_claim_conflict_and_write_refusal(
+        &self,
+        job_id: &str,
+        receipt_path: &Path,
+        refusal_bytes: &[u8],
+    ) -> Result<()> {
+        let guard = self.conn()?;
         let receipt_path_text = receipt_path.to_string_lossy().into_owned();
-        let claimed_by: Option<String> = self
-            .conn()?
+        let claimed_by: Option<String> = guard
             .query_row(
                 "SELECT job_id FROM dispatch_receipt_claims WHERE receipt_path=?1",
                 [&receipt_path_text],
@@ -2384,6 +2464,12 @@ impl Daemon {
                 });
             }
         }
+        // Test-only race window (inert in production) -- see
+        // `receipt_refusal_race_test_hook`'s doc comment. Still holding
+        // `guard` here is the entire point of P1-3.
+        receipt_refusal_race_test_hook();
+        atomic_replace(receipt_path, refusal_bytes)?;
+        drop(guard);
         Ok(())
     }
 
@@ -3939,6 +4025,39 @@ fn read_verified_json_snapshot(path: &Path, expected_sha256: &str) -> Result<Val
     Ok(serde_json::from_slice(&bytes)?)
 }
 
+/// True if `needle` occurs in `haystack` bounded by non-identifier
+/// characters (ASCII alphanumeric or `_` count as identifier characters;
+/// anything else, or the string start/end, is a boundary). A bare
+/// `.contains()` job-scoping check is non-injective: a shorter job_id that
+/// is a raw prefix of a longer, unrelated job_id's receipt filename (e.g.
+/// `"run7"` against `"run77-preflight.json"`) passes it even though the two
+/// jobs are genuinely distinct and neither derived the other's filename.
+/// Bounded matching requires the character immediately before and after the
+/// match (if any) to be a non-identifier character, closing that hole while
+/// still admitting a job_id that appears as its own delimited segment
+/// (e.g. `"ab"` inside `"claims-ab-preflight.json"`).
+fn receipt_name_bounded_contains(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
+    let is_identifier = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let hay_len = haystack.len();
+    haystack.match_indices(needle).any(|(start, matched)| {
+        let end = start + matched.len();
+        let left_ok = start == 0
+            || haystack[..start]
+                .chars()
+                .next_back()
+                .is_none_or(|c| !is_identifier(c));
+        let right_ok = end == hay_len
+            || haystack[end..]
+                .chars()
+                .next()
+                .is_none_or(|c| !is_identifier(c));
+        left_ok && right_ok
+    })
+}
+
 fn absolute_under_root(path: &Path, root: &Path) -> Result<PathBuf> {
     if !path.is_absolute() {
         return Err(EmberdError::InvalidDispatchManifest {
@@ -4171,6 +4290,56 @@ fn vram_test_override_error() -> Option<EmberdError> {
 fn vram_test_override_error() -> Option<EmberdError> {
     None
 }
+
+/// Rollback's escaped-receipt guard must distinguish "the receipt path is
+/// genuinely absent" from "the probe itself failed" (permission denied, an
+/// inaccessible UNC segment, or any other io error) -- `Path::exists()`
+/// collapses BOTH into `false`, which would let an existing-but-inaccessible
+/// receipt take the destructive (silently release the claim) path. This
+/// uses `Path::try_exists()` semantics: `Ok(false)` = confirmed absent,
+/// `Ok(true)` = confirmed present, `Err(_)` = the probe failed and the
+/// caller must fail CLOSED (preserve the claim, typed error) rather than
+/// assume absence. The `test-fixtures` override lets an integration test
+/// force the `Err(_)` arm deterministically without needing a real ACL or
+/// UNC trick.
+#[cfg(feature = "test-fixtures")]
+fn rollback_receipt_escape_probe(receipt_path: &str) -> std::io::Result<bool> {
+    if std::env::var("EMBERD_TEST_ROLLBACK_RECEIPT_PROBE_ERROR").is_ok() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "test fixture override (EMBERD_TEST_ROLLBACK_RECEIPT_PROBE_ERROR)",
+        ));
+    }
+    Path::new(receipt_path).try_exists()
+}
+
+#[cfg(not(feature = "test-fixtures"))]
+fn rollback_receipt_escape_probe(receipt_path: &str) -> std::io::Result<bool> {
+    Path::new(receipt_path).try_exists()
+}
+
+/// P1-3 test-only race window: `check_receipt_claim_conflict_and_write_refusal`
+/// calls this immediately after the claim-conflict check and immediately
+/// before `atomic_replace`, WHILE STILL HOLDING the daemon's connection
+/// mutex guard. Under `test-fixtures`, an integration test can force a
+/// deterministic pause right there via `EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS`
+/// -- since the guard is held across the sleep, a concurrent thread racing
+/// for the SAME receipt_path (which must also acquire the same mutex to
+/// attempt its own reservation) is provably blocked from landing a claim
+/// during the window, closing exactly the TOCTOU gap the old
+/// check-then-separately-write shape left open. In production this is an
+/// inert no-op.
+#[cfg(feature = "test-fixtures")]
+fn receipt_refusal_race_test_hook() {
+    if let Ok(ms) = std::env::var("EMBERD_TEST_RECEIPT_REFUSAL_RACE_DELAY_MS") {
+        if let Ok(ms) = ms.parse::<u64>() {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
+}
+
+#[cfg(not(feature = "test-fixtures"))]
+fn receipt_refusal_race_test_hook() {}
 
 fn probe_survival_floor_root(root: &Path) -> std::io::Result<Option<PathBuf>> {
     match fs::canonicalize(root) {
@@ -4488,7 +4657,8 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         [],
     )?;
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS dispatch_receipt_claims(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, manifest_sha256 TEXT NOT NULL, claimed_at_ms INTEGER NOT NULL);",
+        "CREATE TABLE IF NOT EXISTS dispatch_receipt_claims(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, manifest_sha256 TEXT NOT NULL, claimed_at_ms INTEGER NOT NULL);
+         CREATE TABLE IF NOT EXISTS dispatch_receipt_rollback_evidence(receipt_path TEXT PRIMARY KEY, job_id TEXT NOT NULL, escaped INTEGER NOT NULL, reason TEXT NOT NULL, ts_ms INTEGER NOT NULL);",
     )?;
     conn.execute(
         "UPDATE metadata SET value='4' WHERE key='schema_version'",
