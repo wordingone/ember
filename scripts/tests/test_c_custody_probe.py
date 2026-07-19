@@ -48,6 +48,29 @@ def run_probe(root_dir):
         return f"ERROR: {e}", 1
 
 
+def run_probe_full(root_dir):
+    """Same as run_probe but also returns stderr -- needed to assert on the
+    disclosed-rejection line the pattern validator prints there.
+    Returns (stdout_first_line, stderr_text, returncode)."""
+    probe_path = os.path.join(
+        os.path.dirname(__file__), "..", "ember_totality", "test_c_custody.py"
+    )
+    try:
+        result = subprocess.run(
+            [sys.executable, probe_path],
+            cwd=root_dir,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "EMBER_TOTALITY_ROOT": root_dir},
+        )
+        lines = result.stdout.strip().split("\n")
+        first_line = lines[0] if lines else ""
+        return first_line, result.stderr, result.returncode
+    except Exception as e:
+        return f"ERROR: {e}", "", 1
+
+
 def test_shape_a_untracked():
     """Shape (a): untracked-in-canonical — untracked file in receipts/."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -432,13 +455,77 @@ def test_separator_pattern_not_honored():
         subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "init separator-pattern allowlist"], cwd=tmpdir, capture_output=True)
 
-        output, rc = run_probe(tmpdir)
+        output, stderr, rc = run_probe_full(tmpdir)
         assert rc == 0, f"Probe must never crash, got rc={rc}: {output}"
         assert "RED" in output, (
             "A path-separator pattern must not authorize the untracked "
             f"receipt, got: {output}"
         )
+        assert "rejecting unsafe allowlist pattern" in stderr and "a/b*" in stderr, (
+            "Expected the validator's disclosed-rejection line for the "
+            f"separator pattern on stderr, got stderr: {stderr!r}"
+        )
         print("separator-pattern negative: PASS")
+
+
+def test_matching_committed_authority_grants_authority_sibling_stays_red():
+    """Discriminating GREEN-direction test: a correctly bound, COMMITTED,
+    non-empty authority fixture (right goal_id/workstream_id/
+    next_executed_outcome, one valid safe pattern) actually grants
+    authority for the ONE untracked receipt whose basename matches --
+    while a sibling untracked receipt in the SAME run, whose basename does
+    NOT match, stays RED. This is the positive-authority-path test: every
+    other authority test in this suite is RED-only, so a `return set()`
+    stub for _get_allowlist_from_tracked_authority would satisfy them all
+    without actually granting anything. This test fails against that stub
+    (see RED evidence) and only passes when authority is genuinely honored
+    for the matching basename."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+
+        # Permitted: basename matches the committed allowlist pattern exactly.
+        permitted_file = os.path.join(receipts_dir, "staging-permitted-001.json")
+        with open(permitted_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-PERMITTED", "status": "test"}, f)
+
+        # Sibling, same run, untracked, but basename does NOT match the
+        # allowlist pattern -- must stay a custody violation.
+        unrelated_file = os.path.join(receipts_dir, "unrelated-not-allowlisted.json")
+        with open(unrelated_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-UNRELATED", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "goal_id": "EMBER-02",
+                "workstream_id": "EMBER-02A",
+                "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+                "schema_version": "ember-c-custody-allowlist-v1",
+                "allowed_receipt_basenames": ["staging-permitted-*.json"],
+            }, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        # Commit the allowlist authority file (and nothing else) so it is
+        # tracked at HEAD -- the two receipts stay deliberately untracked.
+        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "commit permissive, correctly-bound allowlist"], cwd=tmpdir, capture_output=True)
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"Probe must never crash, got rc={rc}: {output}"
+        assert "RED" in output, (
+            "The sibling non-matching untracked receipt must still be a "
+            f"custody violation, got: {output}"
+        )
+        assert "untracked=1" in output, (
+            "Exactly one untracked violation expected (the non-matching "
+            f"sibling); the matching receipt must be authorized, got: {output}"
+        )
+        print("matching-committed-authority positive grant: PASS")
 
 
 def test_shape_b_unparseable():
@@ -615,6 +702,7 @@ def main():
         test_dirty_authority_file_committed_content_governs()
         test_bracket_and_regex_patterns_bounded_red_no_crash()
         test_separator_pattern_not_honored()
+        test_matching_committed_authority_grants_authority_sibling_stays_red()
         test_shape_b_unparseable()
         test_shape_c_cited_missing()
         test_clean_pass()
