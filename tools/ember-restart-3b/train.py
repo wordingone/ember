@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from input_identity import build_launch_packet, emit_integration_receipt, validate_launch_packet
+from text_lab_corpus import validate_authority_index
 
 
 def _code_commit(repo_root: Path) -> str:
@@ -51,11 +52,26 @@ def run_launch(
     return packet, validation, receipt
 
 
+def run_text_lab_preflight(*, repo_root: Path | None = None) -> dict[str, Any]:
+    """Validate exact checked-in shared-text authority before a CUDA-facing route."""
+    root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
+    authority = validate_authority_index(root)
+    return {
+        "schema_version": "ember-text-lab-preflight-receipt-v1",
+        **authority,
+        "live_head": _code_commit(root),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate the owned input identity for an Ember launch.")
     parser.add_argument("--input-identity", default=None, help="Repository-relative identity manifest; omit for the contract default.")
     parser.add_argument("--print-receipt", action="store_true", help="Print the path-free receipt JSON.")
+    parser.add_argument("--text-lab-preflight", action="store_true")
     args = parser.parse_args(argv)
+    if args.text_lab_preflight:
+        print(json.dumps(run_text_lab_preflight(), sort_keys=True))
+        return 0
     _, validation, receipt = run_launch(input_identity_arg=args.input_identity)
     print(json.dumps(receipt if args.print_receipt else validation, sort_keys=True))
     return 0
