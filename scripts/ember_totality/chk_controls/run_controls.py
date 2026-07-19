@@ -25,19 +25,34 @@ Isolation (anti-gaming S2 CHK-adequacy lane / R8 audit instructions):
 Run:  python run_controls.py
 """
 
+import argparse
+import datetime
 import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
 import sys
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))                    # .../scripts/ember_totality/chk_controls
 PROBES_DIR = os.path.dirname(HERE)                                    # .../scripts/ember_totality
 REPO_ROOT = os.path.abspath(os.path.join(PROBES_DIR, "..", ".."))
 FIXTURES_DIR = os.path.join(HERE, "fixtures")
+
+# PR955 round-2 repair (reviewer defect P1): the gh #715 C-MANIFEST/C-TALLY
+# denominator regression previously lived ONLY as a standalone script under
+# chk_controls/ -- neither ember_totality_spec.discover_tests (direct
+# test_*.py only) nor this canonical driver ever invoked it, so it had no
+# canonical row and no finalization proof. Importing it here (same
+# directory, no sys.path surgery needed for a direct `python run_controls.py`
+# invocation) reuses its production-shaped fixture builders and its
+# structured parse_missing_condition_ids() (P2 fix) rather than duplicating
+# either.
+import test_issue_715_denominator_regression as issue715  # noqa: E402
 
 SYNTHETIC_MARKER = {
     "_synthetic_control_fixture": True,
@@ -149,12 +164,30 @@ def run_probe(probe_name, fixture_root, env_var="EMBER_TOTALITY_ROOT"):
 RESULTS = []  # rows for the final table
 
 
-def record(hardening, control, probe, fixture_root, expected, env_var="EMBER_TOTALITY_ROOT"):
+def record(hardening, control, probe, fixture_root, expected, env_var="EMBER_TOTALITY_ROOT",
+           expected_missing_ids=None):
+    """Run one control and append its row to RESULTS.
+
+    `expected_missing_ids`, when not None (reviewer defect P2 -- structured
+    ids, never a substring guess), asserts the EXACT parsed
+    missing_condition_ids list from the probe's own "missing=..." segment
+    (via issue715.parse_missing_condition_ids) equals the given list; a
+    mismatch fails the row even if the status token alone matched. The
+    parsed list is always recorded under row["details"]["missing_condition_ids"]
+    when requested, so a --receipt-out receipt carries it structurally.
+    """
     status, line, err = run_probe(probe, fixture_root, env_var=env_var)
     ok = (status == expected)
+    details = {}
+    if expected_missing_ids is not None:
+        actual_missing_ids = issue715.parse_missing_condition_ids(line)
+        details["missing_condition_ids"] = actual_missing_ids
+        if actual_missing_ids != expected_missing_ids:
+            ok = False
     RESULTS.append({
         "hardening": hardening, "control": control, "probe": probe,
         "expected": expected, "actual": status, "ok": ok, "line": line, "stderr": err,
+        "details": details,
     })
     return ok
 
@@ -720,6 +753,29 @@ def build_c_manifest():
             fh.write(_c_manifest_rows_text(ids))
 
     return pos_root, neg_root
+
+
+# --- (23) gh #715 C-MANIFEST/C-TALLY denominator, PRODUCTION-SHAPED fixtures --
+# (lane-14/PR955 round-2 repair, reviewer defect P1: the regression must be
+# executed by the canonical driver itself, not left as a standalone script).
+# Deliberately reuses issue715's own seeding/removal helpers against the
+# REAL docs/spec/conditions-v1.md + docs/ember-completeness.md bytes --
+# never a re-typed synthetic shape like build_c_manifest() above, because
+# issue #715's own audit finding was specifically about the production
+# file's literal separator characters.
+
+def build_issue715_pos():
+    root = fresh_dir(os.path.join(FIXTURES_DIR, "issue715_pos"))
+    issue715._seed_production_fixture(Path(root))
+    return root
+
+
+def build_issue715_neg(condition_id):
+    slug = condition_id.lower().replace("-", "_").replace("(", "").replace(")", "")
+    root = fresh_dir(os.path.join(FIXTURES_DIR, f"issue715_neg_{slug}"))
+    _spec_dst, manifest_dst = issue715._seed_production_fixture(Path(root))
+    issue715._delete_manifest_row(manifest_dst, condition_id)
+    return root
 
 
 # --- (9) C-IND: five IND receipt classes + fail-closed [A] script-authorship --
@@ -2327,7 +2383,158 @@ def preflight_check_probe_files():
         sys.exit(1)
 
 
-def main():
+_CHK_RECEIPT_RE = re.compile(r"^chk-controls-(\d{8}T\d{6}Z)\.json$")
+
+
+def _sha256_file(path):
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def _list_chk_receipts(receipts_dir):
+    """Sorted (name, path) tuples for every chk-controls-*.json receipt in
+    receipts_dir, ordered by the canonical timestamp in the filename."""
+    if not os.path.isdir(receipts_dir):
+        return []
+    items = []
+    for name in os.listdir(receipts_dir):
+        m = _CHK_RECEIPT_RE.match(name)
+        if m:
+            items.append((m.group(1), name, os.path.join(receipts_dir, name)))
+    items.sort(key=lambda x: x[0])
+    return [(name, path) for _, name, path in items]
+
+
+def _chk_chain_verify(receipts_dir):
+    """Chain-continuity check for this driver's OWN chk-controls-*.json
+    receipts (a genuinely separate artifact family from the totality
+    board's receipts-totality/ chain -- never touches or reuses that
+    directory or filename pattern). Mirrors receipt_chain_verify.py's
+    chain_ok/chain_break contract: walks every receipt currently in
+    receipts_dir (including ones written by earlier runs) and reports
+    chain_ok=False on the FIRST detected break, so a pre-existing broken
+    chain blocks this run's finalization too (reviewer defect P1-second:
+    a chain problem must never be silently absorbed)."""
+    receipts_list = _list_chk_receipts(receipts_dir)
+    breaks = []
+    for idx, (name, path) in enumerate(receipts_list):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError) as e:
+            breaks.append(f"{name}: cannot parse ({e})")
+            continue
+        prev_field = data.get("prev_totality_receipt_sha256")
+        if prev_field is None:
+            continue  # pre-chain epoch boundary, not a break
+        if idx == 0:
+            if prev_field != "0" * 64:
+                breaks.append(f"{name}: first receipt must reference 0*64, got {prev_field[:16]}...")
+            continue
+        prev_name, prev_path = receipts_list[idx - 1]
+        try:
+            prev_actual = _sha256_file(prev_path)
+        except OSError as e:
+            breaks.append(f"{name}: cannot hash predecessor {prev_name}: {e}")
+            continue
+        if prev_field != prev_actual:
+            breaks.append(
+                f"{name}: prev sha mismatch against {prev_name} "
+                f"(expected {prev_field[:16]}..., actual {prev_actual[:16]}...)"
+            )
+    chain_ok = not breaks
+    detail = "; ".join(breaks) if breaks else f"{len(receipts_list)} receipt(s), chain intact"
+    return {"chain_ok": chain_ok, "summary": {"details": detail}}
+
+
+def _finalize_receipt(receipt_out_dir, results, controls_ok):
+    """Write a hermetic, chain-linked chk-controls receipt to receipt_out_dir.
+
+    Transactional / fail-closed (reviewer defect P1-second, the exact
+    anti-pattern found in ember_totality_spec.py's own finalization: that
+    driver writes its receipt, calls add_chain_verification_to_receipt,
+    gets chain_ok=False back, and STILL leaves the file on disk and prints
+    the board regardless -- a broken chain "publishes" exactly as if
+    nothing were wrong). Here, on EITHER a final-write failure (unwritable
+    destination) OR a chain-verification failure: the just-written bytes
+    (if any made it to disk) are removed, NOTHING is printed claiming a
+    receipt exists, and this function returns False so main() exits
+    nonzero. Only a durably-written, chain-verified-GREEN receipt is ever
+    allowed to survive and be reported.
+
+    Returns True iff a receipt was durably written and chain-verified GREEN.
+    """
+    ts = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    receipt_name = f"chk-controls-{ts}.json"
+
+    try:
+        os.makedirs(receipt_out_dir, exist_ok=True)
+    except OSError as e:
+        print(f"RECEIPT FINALIZE FAILED: cannot create receipt directory {receipt_out_dir}: {e}")
+        return False
+
+    receipt_path = os.path.join(receipt_out_dir, receipt_name)
+
+    prior = _list_chk_receipts(receipt_out_dir)
+    try:
+        prev_sha = _sha256_file(prior[-1][1]) if prior else ("0" * 64)
+    except OSError as e:
+        print(f"RECEIPT FINALIZE FAILED: cannot hash predecessor receipt: {e}")
+        return False
+
+    receipt = {
+        "schema": "chk-controls/v1",
+        "ts": ts,
+        "controls_ok": controls_ok,
+        "n_ok": sum(1 for r in results if r["ok"]),
+        "n_total": len(results),
+        "rows": [
+            {
+                "hardening": r["hardening"], "control": r["control"], "probe": r["probe"],
+                "expected": r["expected"], "actual": r["actual"], "ok": r["ok"],
+                "details": r.get("details", {}),
+            }
+            for r in results
+        ],
+        "prev_totality_receipt_sha256": prev_sha,
+    }
+
+    try:
+        with open(receipt_path, "w", encoding="utf-8") as fh:
+            json.dump(receipt, fh, indent=2)
+            fh.write("\n")
+    except OSError as e:
+        print(f"RECEIPT FINALIZE FAILED: cannot write {receipt_path}: {e}")
+        try:
+            if os.path.isfile(receipt_path):
+                os.remove(receipt_path)
+        except OSError:
+            pass
+        return False
+
+    chain = _chk_chain_verify(receipt_out_dir)
+    if not chain["chain_ok"]:
+        try:
+            os.remove(receipt_path)
+        except OSError:
+            pass
+        print(f"RECEIPT FINALIZE FAILED: chain verification broken -- {chain['summary']['details']}")
+        return False
+
+    print(f"receipt written: {receipt_path} (chain_ok=True)")
+    return True
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="lane-14 CHK control battery driver")
+    ap.add_argument(
+        "--receipt-out", default=None,
+        help="Directory to write a hermetic, chain-linked chk-controls-<ts>.json "
+             "receipt to (chain-links against any prior receipts already in that "
+             "directory). Omit to skip receipt finalization entirely.",
+    )
+    args = ap.parse_args(argv)
+
     os.makedirs(FIXTURES_DIR, exist_ok=True)
     preflight_check_probe_files()
 
@@ -2464,6 +2671,27 @@ def main():
     auto_fresh_rev = build_c_auto_fresh_reversion_climb()
     record("22 C-AUTO CURE-3 fresh reversion climb", "POS claimed rung above reversion target with fresh claim ts (after reversion ts, legitimate re-climb)", "test_c_auto.py", auto_fresh_rev, "GREEN")
 
+    # --- gh #715 wiring (PR955 round-2 repair, reviewer defect P1) -----------
+    # Executed by THIS canonical driver, through its own record()/RESULTS
+    # bookkeeping, against byte-for-byte production-shaped inputs -- never a
+    # standalone script neither ember_totality_spec.discover_tests nor this
+    # driver ever ran. Structured missing_condition_ids (P2) asserted via
+    # issue715.parse_missing_condition_ids(), not substring matching.
+    issue715_pos = build_issue715_pos()
+    record("23 ISSUE#715 C-MANIFEST/C-TALLY denominator (production-shaped)",
+           "POS unmodified production docs/spec+completeness -> GREEN, no missing ids",
+           "test_c_manifest.py", issue715_pos, "GREEN", expected_missing_ids=[])
+
+    issue715_neg_manifest = build_issue715_neg("C-MANIFEST")
+    record("23 ISSUE#715 C-MANIFEST/C-TALLY denominator (production-shaped)",
+           "NEG production manifest with C-MANIFEST row deleted -> RED naming only C-MANIFEST",
+           "test_c_manifest.py", issue715_neg_manifest, "RED", expected_missing_ids=["C-MANIFEST"])
+
+    issue715_neg_tally = build_issue715_neg("C-TALLY")
+    record("23 ISSUE#715 C-MANIFEST/C-TALLY denominator (production-shaped)",
+           "NEG production manifest with C-TALLY row deleted -> RED naming only C-TALLY",
+           "test_c_manifest.py", issue715_neg_tally, "RED", expected_missing_ids=["C-TALLY"])
+
     # --- report --------------------------------------------------------------
     print("=" * 100)
     print("LANE-14 CHK HARDENING -- POS/NEG CONTROL RESULTS")
@@ -2483,7 +2711,13 @@ def main():
     print(f"{n_ok}/{len(RESULTS)} controls PASSED")
     print("=" * 100)
 
-    return 0 if n_ok == len(RESULTS) else 1
+    controls_ok = (n_ok == len(RESULTS))
+
+    if args.receipt_out:
+        finalize_ok = _finalize_receipt(args.receipt_out, RESULTS, controls_ok)
+        return 0 if (controls_ok and finalize_ok) else 1
+
+    return 0 if controls_ok else 1
 
 
 if __name__ == "__main__":

@@ -54,6 +54,7 @@ Run (Git Bash / native Windows python, repo root or any cwd):
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -76,6 +77,28 @@ def check(label: str, cond: bool) -> None:
     print(f"[{status}] {label}")
     if not cond:
         failures.append(label)
+
+
+# PR955 round-2 repair (reviewer defect P2): the two removal cases used to
+# assert absence of a substring ("missing=C-TALLY" not in line / not
+# line.endswith(",C-TALLY")) instead of the actual parsed id set -- fragile
+# against reordering, additional missing ids, or any cosmetic reason-string
+# change in test_c_manifest.py's RED line. This helper extracts the exact
+# structured missing_condition_ids list from the probe's own "missing=..."
+# segment so every caller (this file AND run_controls.py, which wires this
+# regression into the canonical control battery) asserts SET EQUALITY
+# against real parsed data, never a substring guess.
+_MISSING_RE = re.compile(r"missing=([^\s;]+)")
+
+
+def parse_missing_condition_ids(line: str) -> list[str]:
+    """Return the exact list of condition ids test_c_manifest.py's RED line
+    names as missing (empty list for a GREEN line, which has no `missing=`
+    segment)."""
+    m = _MISSING_RE.search(line)
+    if not m:
+        return []
+    return [cid for cid in m.group(1).split(",") if cid]
 
 
 def _run_probe(fixture_root: Path) -> tuple[str, str]:
@@ -165,6 +188,9 @@ def test_positive_denominator_floor_and_rollups_counted() -> None:
         status, line = _run_probe(root)
         check(f"positive: real probe against unmodified production-shaped fixture emits GREEN (got: {line!r})",
               status == "GREEN")
+        missing_ids = parse_missing_condition_ids(line)
+        check(f"positive: structured missing_condition_ids is empty (got {missing_ids!r})",
+              missing_ids == [])
 
 
 # --- (2) INDEPENDENT removal: C-MANIFEST row deleted -> RED naming C-MANIFEST ---
@@ -177,13 +203,12 @@ def test_red_on_c_manifest_row_removed() -> None:
 
         status, line = _run_probe(root)
         check(f"C-MANIFEST removal: probe turns RED (got: {line!r})", status == "RED")
-        check("C-MANIFEST removal: RED reason names C-MANIFEST as missing",
-              "C-MANIFEST" in line)
-        # independence: C-TALLY (untouched) must NOT itself be named missing
-        # by this same run -- proves the failure is specific to the removed
-        # row, not a wholesale denominator collapse.
-        check("C-MANIFEST removal: C-TALLY (untouched row) is not also reported missing",
-              "missing=C-TALLY" not in line and not line.rstrip().endswith(",C-TALLY"))
+        missing_ids = parse_missing_condition_ids(line)
+        # structured equality (not substring): the removed row is the ONLY
+        # missing id -- independence from C-TALLY (untouched) is proven by
+        # the exact list, not by absence of a guessed substring.
+        check(f"C-MANIFEST removal: structured missing_condition_ids == ['C-MANIFEST'] (got {missing_ids!r})",
+              missing_ids == ["C-MANIFEST"])
 
 
 # --- (3) INDEPENDENT removal: C-TALLY row deleted -> RED naming C-TALLY ---
@@ -196,10 +221,9 @@ def test_red_on_c_tally_row_removed() -> None:
 
         status, line = _run_probe(root)
         check(f"C-TALLY removal: probe turns RED (got: {line!r})", status == "RED")
-        check("C-TALLY removal: RED reason names C-TALLY as missing",
-              "C-TALLY" in line)
-        check("C-TALLY removal: C-MANIFEST (untouched row) is not also reported missing",
-              "missing=C-MANIFEST" not in line and not line.rstrip().endswith(",C-MANIFEST"))
+        missing_ids = parse_missing_condition_ids(line)
+        check(f"C-TALLY removal: structured missing_condition_ids == ['C-TALLY'] (got {missing_ids!r})",
+              missing_ids == ["C-TALLY"])
 
 
 def main() -> int:
