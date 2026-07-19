@@ -28,6 +28,42 @@ function requireFilePath(filePath: string | null): string {
   return filePath;
 }
 
+/** PR954 round 5 (reviewer reject P1-B): probed ONCE, synchronously, at module load --
+ *  whether a real `icacls /deny "...:(R)"` actually blocks `fs.readFileSync` in THIS
+ *  process. An elevated/inherited token can silently bypass a deny ACE (observed on this
+ *  box: `Get-Item`/`Test-Path` stayed readable under a full deny even though
+ *  `Get-Content`/`fs.readFileSync` did not) -- the real-ACL test below is `skipIf`'d when
+ *  this probe shows the deny doesn't bite, so it never passes vacuously; the deterministic
+ *  monkeypatched-`fs.readFileSync` leg further down always runs regardless. */
+const realAclDenialEffective: boolean = (() => {
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-acl-probe-"));
+  const probeFile = path.join(probeDir, "probe.txt");
+  fs.writeFileSync(probeFile, "probe");
+  const user = `${process.env["USERDOMAIN"]}\\${process.env["USERNAME"]}`;
+  let effective = true;
+  try {
+    execSync(`icacls "${probeFile}" /deny "${user}:(R)"`, { stdio: "pipe" });
+    try {
+      fs.readFileSync(probeFile, "utf8");
+      effective = false;
+    } catch {
+      effective = true;
+    }
+    execSync(`icacls "${probeFile}" /reset`, { stdio: "pipe" });
+  } catch {
+    effective = false;
+  }
+  fs.rmSync(probeDir, { recursive: true, force: true });
+  if (!effective) {
+    console.warn(
+      "[PR954 round 5] icacls /deny does NOT block fs.readFileSync in this process " +
+        "(elevated/inherited token bypass) -- the real-ACL test will be SKIPPED; the " +
+        "deterministic monkeypatched-fs.readFileSync leg covers this regardless.",
+    );
+  }
+  return effective;
+})();
+
 beforeEach(() => {
   scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-liveness-heartbeat-"));
 });
@@ -326,23 +362,123 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
     }
   });
 
-  test("a genuinely UNREADABLE .git FILE (real ACL deny, not just malformed content) produces an inert writer, never a silent fall-through", () => {
-    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-r4-unreadable-"));
+  // PR954 round 5 (reviewer reject P1-B): the real-ACL fixture below used to write an
+  // INVALID pointer (`gitdir: somewhere`). If the ACL deny didn't actually bite in this
+  // process (elevated/inherited token bypass), the invalid pointer alone would still
+  // produce an inert writer -- for the WRONG reason -- and the test never discriminated
+  // unreadability at all. Repaired: (1) the fixture now points at a VALID, marker-valid
+  // worktrees/<name> target that WOULD resolve successfully absent the deny; (2) denial
+  // effectiveness is proven in-process (module-level probe above, `skipIf`'d loudly when
+  // not effective, plus a per-fixture re-check right before asserting); (3) a separate,
+  // fully deterministic monkeypatched-fs.readFileSync leg (below) always runs regardless
+  // of ACL bypass.
+  test.skipIf(!realAclDenialEffective)(
+    "a genuinely UNREADABLE .git FILE (real ACL deny of a VALID worktree-shape pointer) produces an inert writer, never a silent fall-through",
+    () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-r5-unreadable-real-"));
+      const savedCwd = process.cwd();
+      const savedEnv = process.env["EMBER_REPO_ROOT"];
+      const dotGit = path.join(scratch, "worktree", ".git");
+      let denied = false;
+      try {
+        const mainRoot = path.join(scratch, "main");
+        fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
+        fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+        fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
+
+        const worktreeRoot = path.join(scratch, "worktree");
+        fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
+        fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+        // VALID worktree-shape pointer -- this WOULD resolve successfully (to mainRoot)
+        // if the deny below did not take effect, so an inert result can only be
+        // attributed to the read denial, never an invalid-pointer red herring.
+        fs.writeFileSync(dotGit, `gitdir: ${path.join(mainRoot, ".git", "worktrees", "lane")}\n`);
+
+        const user = `${process.env["USERDOMAIN"]}\\${process.env["USERNAME"]}`;
+        execSync(`icacls "${dotGit}" /deny "${user}:(R)"`, { stdio: "pipe" });
+        denied = true;
+
+        // Re-prove denial effectiveness against THIS exact fixture file right before
+        // asserting -- the module-level probe covers the general case; this covers any
+        // per-file surprise. A failure here means the skipIf guard above was wrong for
+        // this specific file, and the test fails loudly rather than passing vacuously.
+        let thisFileDenied = true;
+        try {
+          fs.readFileSync(dotGit, "utf8");
+          thisFileDenied = false;
+        } catch {
+          thisFileDenied = true;
+        }
+        expect(thisFileDenied).toBe(true);
+
+        delete process.env["EMBER_REPO_ROOT"];
+        process.chdir(worktreeRoot);
+
+        const warnCalls: unknown[][] = [];
+        const originalWarn = console.warn;
+        console.warn = (...args: unknown[]) => {
+          warnCalls.push(args);
+        };
+        let writer: ReturnType<typeof createLivenessHeartbeatWriter>;
+        try {
+          writer = createLivenessHeartbeatWriter({ pid: 7373, version: "unreadable" });
+        } finally {
+          console.warn = originalWarn;
+        }
+
+        expect(writer.filePath).toBeNull();
+        expect(warnCalls.length).toBe(1);
+        expect(String(warnCalls[0]?.[0])).toMatch(/repo root/i);
+        expect(fs.existsSync(path.join(mainRoot, "tools", "ember-cli", "state"))).toBe(false);
+      } finally {
+        if (denied) {
+          try {
+            execSync(`icacls "${dotGit}" /reset`, { stdio: "pipe" });
+          } catch {
+            // best-effort ACL reset -- never let cleanup mask the test's own result.
+          }
+        }
+        process.chdir(savedCwd);
+        if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
+        else process.env["EMBER_REPO_ROOT"] = savedEnv;
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test("deterministic leg: fs.readFileSync monkeypatched to throw an EACCES-shaped error for a VALID worktree-shape pointer produces an inert writer, regardless of real-ACL bypass", () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-r5-unreadable-mock-"));
     const savedCwd = process.cwd();
     const savedEnv = process.env["EMBER_REPO_ROOT"];
-    const dotGit = path.join(scratch, ".git");
-    let denied = false;
+    const originalReadFileSync = fs.readFileSync;
     try {
-      fs.writeFileSync(path.join(scratch, "GOAL.md"), "# fixture\n");
-      fs.mkdirSync(path.join(scratch, "tools", "ember-cli"), { recursive: true });
-      fs.writeFileSync(dotGit, "gitdir: somewhere\n");
+      const mainRoot = path.join(scratch, "main");
+      fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
+      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
 
-      const user = `${process.env["USERDOMAIN"]}\\${process.env["USERNAME"]}`;
-      execSync(`icacls "${dotGit}" /deny "${user}:(R)"`, { stdio: "pipe" });
-      denied = true;
+      const worktreeRoot = path.join(scratch, "worktree");
+      fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
+      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      const dotGit = path.join(worktreeRoot, ".git");
+      // Same VALID worktree-shape-pointer discipline as the real-ACL leg above -- this
+      // fixture would ALSO resolve successfully absent the monkeypatch.
+      fs.writeFileSync(dotGit, `gitdir: ${path.join(mainRoot, ".git", "worktrees", "lane")}\n`);
+
+      // @ts-expect-error -- deliberate monkeypatch of the shared fs module object;
+      // repo-root.ts imports the SAME `fs` default export, so this is visible to it.
+      fs.readFileSync = (targetPath: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
+        if (targetPath === dotGit) {
+          const err = new Error(`EACCES: permission denied, open '${dotGit}' (simulated)`) as NodeJS.ErrnoException;
+          err.code = "EACCES";
+          throw err;
+        }
+        // @ts-expect-error -- forwarding to the real implementation for every other path.
+        return originalReadFileSync.apply(fs, [targetPath, ...rest]);
+      };
 
       delete process.env["EMBER_REPO_ROOT"];
-      process.chdir(scratch);
+      process.chdir(worktreeRoot);
 
       const warnCalls: unknown[][] = [];
       const originalWarn = console.warn;
@@ -351,7 +487,7 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
       };
       let writer: ReturnType<typeof createLivenessHeartbeatWriter>;
       try {
-        writer = createLivenessHeartbeatWriter({ pid: 7373, version: "unreadable" });
+        writer = createLivenessHeartbeatWriter({ pid: 8484, version: "mocked-unreadable" });
       } finally {
         console.warn = originalWarn;
       }
@@ -359,16 +495,65 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
       expect(writer.filePath).toBeNull();
       expect(warnCalls.length).toBe(1);
       expect(String(warnCalls[0]?.[0])).toMatch(/repo root/i);
-      // The true no-op contract: nothing landed anywhere under scratch.
-      expect(fs.existsSync(path.join(scratch, "tools", "ember-cli", "state"))).toBe(false);
+      expect(fs.existsSync(path.join(mainRoot, "tools", "ember-cli", "state"))).toBe(false);
     } finally {
-      if (denied) {
-        try {
-          execSync(`icacls "${dotGit}" /reset`, { stdio: "pipe" });
-        } catch {
-          // best-effort ACL reset -- never let cleanup mask the test's own result.
-        }
+      fs.readFileSync = originalReadFileSync;
+      process.chdir(savedCwd);
+      if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedEnv;
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  // PR954 round 5 (reviewer reject P1-A): dangling gitdir target was previously covered
+  // only at the repo-root.test.ts resolver level and the PS watchdog-invocation level --
+  // never at the WRITER level (createLivenessHeartbeatWriter itself). Closes that gap:
+  // the writer must go inert (filePath === null, no writes) when the worktree's gitdir
+  // pointer targets a directory that does not exist on disk.
+  test("a DANGLING gitdir pointer (target directory absent) produces an inert writer, never a silent fall-through to the worktree-local path", () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-r5-dangling-"));
+    const savedCwd = process.cwd();
+    const savedEnv = process.env["EMBER_REPO_ROOT"];
+    try {
+      const mainRoot = path.join(scratch, "main");
+      fs.mkdirSync(mainRoot, { recursive: true });
+      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
+      // Deliberately do NOT create <mainRoot>/.git/worktrees/lane -- the pointer target
+      // must not exist for this test.
+      const danglingTarget = path.join(mainRoot, ".git", "worktrees", "lane");
+      expect(fs.existsSync(danglingTarget)).toBe(false);
+
+      const worktreeRoot = path.join(scratch, "worktree");
+      fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
+      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(worktreeRoot, ".git"), `gitdir: ${danglingTarget}\n`);
+
+      delete process.env["EMBER_REPO_ROOT"];
+      process.chdir(worktreeRoot);
+
+      const warnCalls: unknown[][] = [];
+      const originalWarn = console.warn;
+      console.warn = (...args: unknown[]) => {
+        warnCalls.push(args);
+      };
+      let writer: ReturnType<typeof createLivenessHeartbeatWriter>;
+      try {
+        writer = createLivenessHeartbeatWriter({ pid: 9595, version: "dangling" });
+      } finally {
+        console.warn = originalWarn;
       }
+
+      expect(writer.filePath).toBeNull();
+      expect(warnCalls.length).toBe(1);
+      expect(String(warnCalls[0]?.[0])).toMatch(/repo root/i);
+      expect(fs.existsSync(path.join(mainRoot, "tools", "ember-cli", "state"))).toBe(false);
+      expect(fs.existsSync(path.join(worktreeRoot, "tools", "ember-cli", "state"))).toBe(false);
+
+      // The true no-op contract: write() is a no-op too.
+      expect(() => writer.write()).not.toThrow();
+      expect(fs.existsSync(path.join(mainRoot, "tools", "ember-cli", "state"))).toBe(false);
+    } finally {
       process.chdir(savedCwd);
       if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
       else process.env["EMBER_REPO_ROOT"] = savedEnv;

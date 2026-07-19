@@ -1122,23 +1122,124 @@ Describe 'PR954 round 4 -- watchdog-invocation-level fixtures: relative gitdir, 
         }
     }
 
-    It 'a genuinely UNREADABLE .git pointer file (real ACL deny, not just malformed content) throws at full script boot, never silently falls through' {
+    # PR954 round 5 (reviewer reject P1-B): this used to have its own "genuinely
+    # UNREADABLE .git pointer file" It here, but it wrote an INVALID pointer
+    # (`gitdir: somewhere`) under the deny -- if the ACL deny didn't actually bite in
+    # this process (elevated/inherited token bypass, observed on this box for
+    # Get-Item/Test-Path), the invalid pointer alone would still throw, and the test
+    # never discriminated "denied" from "malformed". Replaced by the two Describe
+    # blocks below: a real-ACL leg over a VALID worktree-shape pointer that explicitly
+    # proves denial effectiveness before asserting (Skipped loudly if the deny doesn't
+    # bite), plus a deterministic Mock-based leg that is environment-independent.
+}
+
+# ---------------------------------------------------------------------------------------
+# PR954 round 5 -- P1-B repair: the round-4 "genuinely unreadable .git" fixtures wrote an
+# INVALID pointer (`gitdir: somewhere`) under the ACL deny. If the deny didn't actually
+# bite in this process (an elevated/inherited token can silently bypass a deny ACE -- we
+# verified this on this box: Get-Item/Test-Path stayed readable under a full deny even
+# though Get-Content did not), the invalid pointer alone would produce the expected
+# throw for the WRONG reason, and the test never discriminated unreadability at all.
+#
+# Repair, both legs:
+#   (1) the ACL fixture now uses a VALID, resolvable worktree-shape pointer (a
+#       marker-valid main root with a real worktrees/<name> directory) -- this WOULD
+#       succeed if the deny didn't take effect, so a throw can only be attributed to
+#       the read denial.
+#   (2) denial effectiveness is explicitly PROVEN in-process (both at Describe-body
+#       execution time as a general probe, and again against the exact fixture file
+#       right before asserting) -- if it's not effective, the real-ACL It is Skipped
+#       with a loud Write-Warning reason, never a silently-vacuous pass.
+#   (3) a separate, fully deterministic Mock-Get-Content leg (simulating an
+#       EACCES-shaped UnauthorizedAccessException) always runs regardless of ACL
+#       bypass, so at least one denial test is environment-independent.
+# ---------------------------------------------------------------------------------------
+
+Describe 'PR954 round 5 -- real-ACL unreadable .git (valid pointer, denial-effectiveness proven, Skip-if-bypassed)' {
+    # Probe ONCE, at Describe-body execution time (Pester discovery, before any It
+    # runs) whether icacls /deny actually blocks Get-Content in THIS process.
+    $script:r5AclProbeDir = Join-Path ([System.IO.Path]::GetTempPath()) ('ember-acl-probe-' + [guid]::NewGuid())
+    New-Item -ItemType Directory -Path $script:r5AclProbeDir -Force | Out-Null
+    $script:r5AclProbeFile = Join-Path $script:r5AclProbeDir 'probe.txt'
+    Set-Content -Path $script:r5AclProbeFile -Value 'probe' -Encoding utf8
+    $r5User = "$env:USERDOMAIN\$env:USERNAME"
+    icacls $script:r5AclProbeFile /deny "${r5User}:(R)" | Out-Null
+    $script:r5AclDenialEffective = $true
+    try {
+        Get-Content -Path $script:r5AclProbeFile -Raw -ErrorAction Stop | Out-Null
+        $script:r5AclDenialEffective = $false
+    } catch { }
+    icacls $script:r5AclProbeFile /reset | Out-Null
+    Remove-Item -Path $script:r5AclProbeDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not $script:r5AclDenialEffective) {
+        Write-Warning "[PR954 round 5] icacls /deny does NOT block Get-Content in this process (elevated/inherited token bypass) -- the real-ACL It below will be SKIPPED; the deterministic Mock-Get-Content leg (separate Describe) covers this regardless."
+    }
+
+    It 'a genuinely UNREADABLE .git pointer file (real ACL deny of a VALID worktree-shape pointer) throws at full script boot' -Skip:(-not $script:r5AclDenialEffective) {
         $scratch = New-Scratch
         try {
-            $root = Join-Path $scratch 'unreadable-boot'
-            New-MarkerRoot4Boot -Root $root
+            $mainRoot = Join-Path $scratch 'unreadable-real-main'
+            $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+            New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $mainRoot 'tools\ember-cli') -Force | Out-Null
+            Set-Content -Path (Join-Path $mainRoot 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+
+            $root = Join-Path $scratch 'unreadable-real'
+            New-Item -ItemType Directory -Path (Join-Path $root 'tools\ember-cli') -Force | Out-Null
+            Set-Content -Path (Join-Path $root 'GOAL.md') -Value "# fixture`n" -Encoding utf8
             $dotGit = Join-Path $root '.git'
-            Set-Content -Path $dotGit -Value 'gitdir: somewhere' -Encoding utf8
+            # VALID worktree-shape pointer -- this WOULD resolve successfully (to
+            # $mainRoot) if the deny below did not take effect, so a throw here can only
+            # be attributed to the read denial, never an invalid-pointer red herring.
+            [System.IO.File]::WriteAllText($dotGit, "gitdir: $gitdirTarget`n")
+
             $user = "$env:USERDOMAIN\$env:USERNAME"
             icacls $dotGit /deny "${user}:(R)" | Out-Null
-
             try {
+                # Re-prove denial effectiveness against THIS exact fixture file right
+                # before asserting -- the Describe-level probe covers the general case;
+                # this covers any per-file surprise (e.g. a differing parent-folder ACL
+                # inheritance). A failure here means the -Skip guard above was wrong for
+                # this specific file, and the test fails loudly rather than passing
+                # vacuously.
+                $thisFileDenied = $true
+                try { Get-Content -Path $dotGit -Raw -ErrorAction Stop | Out-Null; $thisFileDenied = $false } catch { }
+                $thisFileDenied | Should Be $true
+
                 { . $scriptPath -RepoRoot $root } | Should Throw
             } finally {
                 # Reset the deny ACE BEFORE the outer scratch cleanup, or the recursive
                 # delete below can itself fail/leave the ACL-denied file behind.
                 icacls $dotGit /reset | Out-Null
             }
+        } finally {
+            Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe 'PR954 round 5 -- deterministic Mock-Get-Content unreadable .git leg (environment-independent, always runs)' {
+    It 'Get-Content mocked to throw an EACCES-shaped UnauthorizedAccessException for a VALID worktree-shape pointer throws at full script boot, regardless of real-ACL bypass' {
+        $scratch = New-Scratch
+        try {
+            $mainRoot = Join-Path $scratch 'unreadable-mock-main'
+            $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+            New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $mainRoot 'tools\ember-cli') -Force | Out-Null
+            Set-Content -Path (Join-Path $mainRoot 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+
+            $root = Join-Path $scratch 'unreadable-mock'
+            New-Item -ItemType Directory -Path (Join-Path $root 'tools\ember-cli') -Force | Out-Null
+            Set-Content -Path (Join-Path $root 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+            $dotGit = Join-Path $root '.git'
+            # Same VALID worktree-shape-pointer discipline as the real-ACL leg above --
+            # this fixture would ALSO resolve successfully absent the mock.
+            [System.IO.File]::WriteAllText($dotGit, "gitdir: $gitdirTarget`n")
+
+            $script:r5MockDotGit = $dotGit
+            Mock Get-Content { throw [System.UnauthorizedAccessException]::new("Access to the path '$($script:r5MockDotGit)' is denied. (EACCES, simulated)") } -ParameterFilter { $Path -eq $script:r5MockDotGit }
+
+            { . $scriptPath -RepoRoot $root } | Should Throw
         } finally {
             Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
         }
