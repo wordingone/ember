@@ -89,6 +89,7 @@ import {
   makeSuggestionExecutor,
 } from "../services/prompt-suggestion.ts";
 import type { AppState } from "../state/app-state.ts";
+import type { EmberMessage } from "../types/message-types.ts";
 import type { CallModelParams, ModelResponse } from "../query/query-loop-support.ts";
 import { tryDispatchSlashCommand, parseSlashInput } from "../services/slash-dispatch.ts";
 import { consumePostCompaction } from "../session-state.ts";
@@ -551,6 +552,65 @@ export function applyResultEvent(
 }
 
 // ---------------------------------------------------------------------------
+// adaptSessionMessagesForSuggestion — issue #50: prompt-suggestion's guard
+// chain (tryGenerateSuggestion) filters on EmberMessage's `role`/`stop_reason`
+// fields, but the REPL transcript is SessionMessage[] (`{id, type, ...}` --
+// app-shell.ts), which has never carried a `role` field. The call site papered
+// over the mismatch with `messages as any`, so Guard 2's
+// `messages.filter(m => m.role === "assistant")` always saw zero matches and
+// the feature could never fire (confirmed: the "as any" cast at the call site
+// and this filter both date to the original publish commit 2051802 -- the
+// shapes never matched in production, so the feature was never live).
+//
+// This is the one boundary adapter (per #50 scope clause 2 -- no forked
+// message type): it maps the transcript's SessionMessage[] to the
+// EmberMessage[] shape the suggestion module expects, threading the
+// stop_reason/usage fields applyResultEvent already attaches at the pending
+// message (see above). Guard-4 usage note (#52 clause 6): the adapter copies
+// each message's `usage` through UNCHANGED -- getParentCacheSuppressReason
+// (prompt-suggestion.ts) reads only the LAST assistant message's own
+// input/cache-creation/output token fields (a per-turn, uncached figure, not
+// a running cumulative total), so no aggregation belongs at this seam.
+// ---------------------------------------------------------------------------
+
+export function adaptSessionMessagesForSuggestion(
+  messages: SessionMessage[],
+): EmberMessage[] {
+  const adapted: EmberMessage[] = [];
+  for (const m of messages) {
+    // Malformed entries (missing/non-string type, or not an object) are
+    // dropped rather than crashing the adapter or the guard chain downstream.
+    if (!m || typeof m !== "object" || typeof m.type !== "string") continue;
+
+    let role: EmberMessage["role"] | null = null;
+    if (m.type === "user") role = "user";
+    else if (m.type === "assistant") role = "assistant";
+    // A transcript entry of type "error" (applyResultEvent's error/max_turns
+    // paths) replaces the pending assistant bubble for a turn that failed --
+    // it IS that turn's assistant outcome, so it maps to role "assistant"
+    // with the literal stop_reason "error" Guard 3 checks for.
+    else if (m.type === "error") role = "assistant";
+    else continue; // welcome/tool_result/compaction/command/etc. -- not a turn
+
+    const content = typeof m["content"] === "string" ? m["content"] : "";
+    const entry: EmberMessage = { role, content };
+    if (m.type === "error") {
+      entry.stop_reason = "error";
+    } else if (
+      typeof m["stop_reason"] === "string" ||
+      m["stop_reason"] === null
+    ) {
+      entry.stop_reason = m["stop_reason"] as string | null;
+    }
+    if (m["usage"] !== undefined) {
+      entry["usage"] = m["usage"];
+    }
+    adapted.push(entry);
+  }
+  return adapted;
+}
+
+// ---------------------------------------------------------------------------
 // ReplScreen — full-screen interactive REPL
 // ---------------------------------------------------------------------------
 
@@ -584,6 +644,19 @@ export function ReplScreen({
   // away" report). It is now an always-mounted, top-locked region (see the render tree below),
   // rendered directly from `config`/`cwd`/`boardSummary`/`dataRoot` -- `messages` starts empty.
   const [messages, setMessages] = useState<SessionMessage[]>([]);
+
+  // #50 round-3 repair: the exact post-applyResultEvent transcript for the
+  // in-flight turn, threaded through a DEDICATED React state slot rather than
+  // a plain local variable assigned from inside setMessages's own updater and
+  // read back synchronously right after (round-2's shape) -- React gives no
+  // ordering guarantee that an updater passed to setState has actually run by
+  // the time the call site's next line executes, so that read could observe
+  // a stale (pre-turn) value. Setting a SECOND piece of state from within the
+  // first updater is well-defined (LegacyRoot, no Strict-mode double-invoke
+  // here), and the effect below only ever fires once React has committed the
+  // exact value written -- never a same-tick, ordering-dependent read.
+  const [completedTranscript, setCompletedTranscript] =
+    useState<SessionMessage[] | null>(null);
 
   const mountRef  = useRef(Date.now());
   const engineRef = useRef<QueryEngine | null>(null);
@@ -714,6 +787,33 @@ export function ReplScreen({
 
   // Keep messagesRef in sync with React state for use inside async callbacks.
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // #50 round-3 repair: fires prompt-suggestion generation once React has
+  // actually committed `completedTranscript` (set from inside the "result"
+  // event's setMessages updater in submitPrompt, below) -- a deterministic
+  // post-commit effect keyed to the completed turn, never a same-tick read of
+  // a value whose write-timing setState does not guarantee. Runs at most once
+  // per turn: it clears the slot immediately so a later unrelated `messages`
+  // change (e.g. the activity-feed poller above) can never re-trigger it.
+  useEffect(() => {
+    if (completedTranscript === null) return;
+    const snapshot = completedTranscript;
+    setCompletedTranscript(null);
+    if (!callModelRef.current) return;
+    void executePromptSuggestion({
+      messages:   adaptSessionMessagesForSuggestion(snapshot),
+      getAppState: () => ({} as AppState),
+      setAppState: (updater) => {
+        const next = updater({} as AppState);
+        // executePromptSuggestion casts the state to `any` when writing
+        // currentSuggestion; extract it safely via unknown.
+        const sugg = (next as unknown as Record<string, unknown>)["currentSuggestion"];
+        if (typeof sugg === "string") setCurrentSuggestion(sugg);
+        else if (sugg === null)        setCurrentSuggestion(null);
+      },
+      forkedAgentExecutor: makeSuggestionExecutor(callModelRef.current),
+    });
+  }, [completedTranscript]);
 
   // #561/#565: boardSummary/dataRoot no longer need syncing INTO a messages[0] welcome entry --
   // the banner region (render tree below) reads this component-scope state directly.
@@ -1188,6 +1288,11 @@ export function ReplScreen({
       { id: assistantId, type: "assistant", content: "" },
     ]);
 
+    // #50 round-3: whether a "result" event landed this turn (gates the
+    // fallback dispatch below). Plain per-invocation flag, not read across
+    // any React scheduling boundary -- safe.
+    let sawResultEvent = false;
+
     try {
       for await (const ev of (engineRef.current as QueryEngine).submitMessage(text)) {
         if (abortCtrl.signal.aborted) break;
@@ -1230,7 +1335,22 @@ export function ReplScreen({
         } else if (event.type === "result") {
           // #157/#49: never discard the result event -- error/max_turns carry
           // the ONLY closing text the loop will ever produce for that turn.
-          setMessages((prev) => applyResultEvent(event, prev, assistantId));
+          // #50 round-3: thread the SAME array applyResultEvent produces into
+          // the dedicated `completedTranscript` state slot (never a local
+          // variable read back synchronously right after this call -- see
+          // that state's declaration above for why). Skipped when this turn
+          // was aborted: the abort happened strictly before this branch could
+          // run (the loop's own top-of-iteration check would have broken out
+          // first), so this only guards the dispatch against a signal that
+          // flips true during the awaits still pending below (compaction
+          // read, operator-receipt check).
+          sawResultEvent = true;
+          const aborted = abortCtrl.signal.aborted;
+          setMessages((prev) => {
+            const next = applyResultEvent(event, prev, assistantId);
+            if (!aborted) setCompletedTranscript(next);
+            return next;
+          });
           break;
         }
       }
@@ -1265,10 +1385,19 @@ export function ReplScreen({
         ]);
       }
 
-      // Fire prompt-suggestion generation after each completed turn.
-      if (!abortCtrl.signal.aborted && callModelRef.current) {
+      // #50 round-3: the primary dispatch now happens from the
+      // `completedTranscript`-keyed effect above (fired once React commits
+      // that state, never from a same-tick read here). This is only the
+      // fallback for the one case that effect can never cover: no "result"
+      // event arrived this turn at all (stream ended some other way), so
+      // `completedTranscript` was never set. messagesRef.current's usual
+      // one-render lag is immaterial here -- by this point in the function
+      // several awaited turn-exit steps (operator receipt, compaction) have
+      // already run, so any pending render/effect flush from this turn's own
+      // last setMessages call has long since committed.
+      if (!sawResultEvent && !abortCtrl.signal.aborted && callModelRef.current) {
         void executePromptSuggestion({
-          messages:   messagesRef.current as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          messages:   adaptSessionMessagesForSuggestion(messagesRef.current),
           getAppState: () => ({} as AppState),
           setAppState: (updater) => {
             const next = updater({} as AppState);
