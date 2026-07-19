@@ -151,6 +151,114 @@ def run_pretraining_segment(
         "data_cursor": {"shard": data_shard_id, "record_index": data_cursor, "global_step": initial_global_step + len(remaining_records), "tokens_seen": tokens_seen},
         "modality_examples": modality_examples, "expert_examples": expert_examples,
     }
+
+
+def run_selection_pretraining_segment(
+    *,
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    selection: object,
+    config: RestartDecoderConfig,
+    device: torch.device,
+    checkpoint_every: int,
+    checkpoint_callback: CheckpointCallback,
+    progress_callback: ProgressCallback | None = None,
+    initial_selection_cursor: Mapping[str, object] | None = None,
+    initial_global_step: int = 0,
+    initial_tokens_seen: int = 0,
+    max_records: int | None = None,
+    require_complete_coverage: bool = True,
+) -> dict[str, Any]:
+    """Train a bounded specialist selection through its sequential cursor interface only."""
+
+    if checkpoint_every <= 0:
+        raise ValueError("checkpoint_every must be positive")
+    if min(initial_global_step, initial_tokens_seen) < 0:
+        raise ValueError("resume counters must be nonnegative")
+    if max_records is not None and (type(max_records) is not int or max_records <= 0):
+        raise ValueError("max_records must be a positive integer when supplied")
+    if not isinstance(getattr(selection, "receipt", None), Mapping):
+        raise ValueError("selection consumer requires a bound selection receipt")
+    iter_from = getattr(selection, "iter_from", None)
+    if not callable(iter_from):
+        raise ValueError("selection consumer requires sequential iter_from")
+
+    model.train()
+    losses: list[float] = []
+    modality_examples = {"text": 0, "image": 0, "audio": 0, "reasoning": 0, "tool": 0}
+    expert_examples = {expert: 0 for expert in EXPERT_NAMES}
+    tokens_seen = initial_tokens_seen
+    completed = 0
+    last_cursor: dict[str, object] | None = None
+    last_result: dict[str, Any] | None = None
+    last_checkpoint_step: int | None = None
+    for item in iter_from(initial_selection_cursor):
+        if not isinstance(item, tuple) or len(item) != 2 or not isinstance(item[0], Mapping) or not isinstance(item[1], Mapping):
+            raise ValueError("selection iterator must yield a record and exact next cursor")
+        record = dict(item[0])
+        next_selection_cursor = dict(item[1])
+        step_started = time.perf_counter()
+        batch = decode_owned_batch(record, config, device=device)
+        active_expert = batch["active_expert"]
+        capabilities = _verified_capabilities(record, active_expert=active_expert)
+        optimizer.zero_grad(set_to_none=True)
+        logits = model(
+            batch["input_ids"], image_patches=batch["image_patches"], audio_frames=batch["audio_frames"],
+            image_coordinates=batch["image_coordinates"], spans=batch["spans"], active_expert=active_expert,
+        )
+        loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
+        if not torch.isfinite(loss):
+            raise RuntimeError(f"pretraining selection stopped on non-finite loss at step {initial_global_step + completed + 1}")
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        completed += 1
+        tokens_seen += int(batch["input_ids"].numel())
+        losses.append(float(loss.detach().cpu()))
+        if active_expert in EXPERT_NAMES:
+            expert_examples[active_expert] += 1
+        for capability in capabilities:
+            modality_examples[capability] += 1
+        global_step = initial_global_step + completed
+        last_cursor = next_selection_cursor
+        training_cursor = {
+            "schema_version": "ember-specialist-stream-training-cursor-v1",
+            "selection_cursor": dict(last_cursor),
+            "global_step": global_step,
+            "tokens_seen": tokens_seen,
+        }
+        last_result = {
+            "step": global_step, "global_step": global_step, "losses": list(losses), "tokens_seen": tokens_seen,
+            "data_cursor": training_cursor, "modality_examples": dict(modality_examples),
+            "expert_examples": dict(expert_examples), "active_expert": active_expert,
+        }
+        if progress_callback is not None:
+            progress_callback({
+                "step": global_step, "total_steps": None, "loss": losses[-1],
+                "step_ms": float((time.perf_counter() - step_started) * 1000.0),
+            })
+        if global_step % checkpoint_every == 0:
+            checkpoint_callback(global_step, last_result)
+            last_checkpoint_step = global_step
+        if max_records is not None and completed >= max_records:
+            break
+    if last_result is None or last_cursor is None:
+        raise ValueError("selection consumer requires at least one selected record")
+    if last_checkpoint_step != last_result["global_step"]:
+        checkpoint_callback(int(last_result["global_step"]), last_result)
+    if require_complete_coverage:
+        missing_capabilities = [name for name, value in modality_examples.items() if value <= 0]
+        missing_experts = [name for name, value in expert_examples.items() if value <= 0]
+        if missing_capabilities or missing_experts:
+            raise RuntimeError(
+                "pretraining selection stopped because required exposure is missing: "
+                f"capabilities={missing_capabilities}, experts={missing_experts}"
+            )
+    return {
+        "steps": completed, "global_step": int(last_result["global_step"]), "losses": losses,
+        "tokens_seen": tokens_seen, "data_cursor": dict(last_result["data_cursor"]),
+        "modality_examples": modality_examples, "expert_examples": expert_examples,
+    }
 def run_manifest_bound_semantic_segment(
     *,
     model: UnifiedDecoder,

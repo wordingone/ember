@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from model import RestartDecoderConfig, UnifiedDecoder
+import pretrain
 from pretrain import run_pretraining_segment
 from verify_capability_record import expected_receipt
 
@@ -185,6 +186,85 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual([(span.start, span.length, span.modality) for span in calls[1][1]], [(1, 1, "audio")])
         self.assertEqual(calls[2][1], [])
         self.assertEqual(calls[3][1], [])
+    def test_selection_consumer_is_sequential_and_resume_cursor_matches_uninterrupted_updates(self) -> None:
+        """P2B consumes an iterable selection without Sequence access or record replay."""
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="vision", sample_id=f"selection-{index}") for index in range(3)]
+
+        class NoSequenceSelection:
+            receipt = {"schema_version": "ember-specialist-stream-selection-receipt-v1", "capability": "image"}
+
+            def __init__(self, values: list[dict[str, object]]) -> None:
+                self.values = values
+                self.yielded: list[str] = []
+
+            def __len__(self) -> int:
+                raise AssertionError("selection consumer must not call __len__")
+
+            def __getitem__(self, _index: object) -> dict[str, object]:
+                raise AssertionError("selection consumer must not call __getitem__")
+
+            def iter_from(self, cursor: object = None):
+                start = 0 if cursor is None else int(cursor["next_source_index"])
+                for index in range(start, len(self.values)):
+                    self.yielded.append(str(self.values[index]["sample_id"]))
+                    yield self.values[index], {
+                        "schema_version": "ember-specialist-stream-selection-cursor-v1",
+                        "selection_receipt_sha256": "a" * 64,
+                        "selection_rule_id": "image_scene_split_train_v1",
+                        "selected_ordinal": index + 1,
+                        "next_source_index": index + 1,
+                    }
+
+        def run_segment(selection: NoSequenceSelection, *, max_records: int | None, initial_cursor: dict[str, object] | None = None, initial_step: int = 0, initial_tokens: int = 0) -> tuple[dict[str, object], list[tuple[int, dict[str, object]]]]:
+            model = UnifiedDecoder(config, genesis_seed=43)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            callbacks: list[tuple[int, dict[str, object]]] = []
+            result = getattr(pretrain, "run_selection_pretraining_segment")(
+                model=model, optimizer=optimizer, selection=selection, config=config, device=torch.device("cpu"),
+                checkpoint_every=1, checkpoint_callback=lambda step, state: callbacks.append((step, state)),
+                initial_selection_cursor=initial_cursor, initial_global_step=initial_step,
+                initial_tokens_seen=initial_tokens, max_records=max_records,
+                require_complete_coverage=False,
+            )
+            return result, callbacks
+
+        uninterrupted = NoSequenceSelection(records)
+        uninterrupted_result, uninterrupted_callbacks = run_segment(uninterrupted, max_records=None)
+        interrupted = NoSequenceSelection(records)
+        first, first_callbacks = run_segment(interrupted, max_records=2)
+        resumed, resumed_callbacks = run_segment(
+            interrupted, max_records=None,
+            initial_cursor=first["data_cursor"]["selection_cursor"],
+            initial_step=first["global_step"], initial_tokens=first["tokens_seen"],
+        )
+
+        self.assertEqual(uninterrupted.yielded, ["selection-0", "selection-1", "selection-2"])
+        self.assertEqual(interrupted.yielded, uninterrupted.yielded)
+        self.assertEqual([step for step, _state in uninterrupted_callbacks], [1, 2, 3])
+        self.assertEqual([step for step, _state in first_callbacks], [1, 2])
+        self.assertEqual([step for step, _state in resumed_callbacks], [3])
+        for step, state in uninterrupted_callbacks:
+            cursor = state["data_cursor"]
+            self.assertEqual(cursor["global_step"], step)
+            self.assertEqual(cursor["tokens_seen"], step * 3)
+            self.assertEqual(cursor["selection_cursor"]["selected_ordinal"], step)
+            self.assertEqual(cursor["selection_cursor"]["next_source_index"], step)
+        self.assertEqual(first["global_step"], 2)
+        self.assertEqual(first["tokens_seen"], 6)
+        self.assertEqual(first["data_cursor"]["selection_cursor"], {
+            "schema_version": "ember-specialist-stream-selection-cursor-v1",
+            "selection_receipt_sha256": "a" * 64,
+            "selection_rule_id": "image_scene_split_train_v1",
+            "selected_ordinal": 2,
+            "next_source_index": 2,
+        })
+        self.assertEqual(resumed["data_cursor"]["selection_cursor"], uninterrupted_result["data_cursor"]["selection_cursor"])
+        self.assertEqual(resumed["global_step"], uninterrupted_result["global_step"])
+        self.assertEqual(resumed["tokens_seen"], uninterrupted_result["tokens_seen"])
+
+
 
 
 if __name__ == "__main__":
