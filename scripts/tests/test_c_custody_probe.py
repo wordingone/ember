@@ -273,6 +273,174 @@ def test_allowlist_malformed_pattern_no_crash():
         print("malformed-pattern allowlist negative: PASS")
 
 
+def test_authority_file_untracked_not_honored():
+    """An untracked custody-allowlist.json file (present on disk but never
+    git-added) must grant no authority -- only a git-tracked, committed
+    authority surface can waive custody (round-2 repair, PR951 clause 1)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+        receipt_file = os.path.join(receipts_dir, "staging-untracked3.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-UNTRACKED-AUTHORITY", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "goal_id": "EMBER-02",
+                "workstream_id": "EMBER-02A",
+                "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+                "schema_version": "ember-c-custody-allowlist-v1",
+                "allowed_receipt_basenames": ["staging-untracked3.json"],
+            }, f)
+        # allowlist_path is deliberately never `git add`ed -- stays untracked.
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        Path(os.path.join(tmpdir, ".gitkeep")).touch()
+        subprocess.run(["git", "add", ".gitkeep"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init, no allowlist tracked"], cwd=tmpdir, capture_output=True)
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"Probe must never crash, got rc={rc}: {output}"
+        assert "RED" in output, f"An untracked authority file must not authorize, got: {output}"
+        print("untracked authority file negative: PASS")
+
+
+def test_dirty_authority_file_committed_content_governs():
+    """A tracked custody-allowlist.json committed with a NON-permissive
+    pattern set, then modified in the working tree to a permissive version
+    that WOULD authorize the untracked receipt -- the uncommitted edit must
+    never grant authority; only the committed HEAD blob governs (round-2
+    repair, PR951 clause 1)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+        receipt_file = os.path.join(receipts_dir, "staging-untracked4.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-DIRTY-AUTHORITY", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+
+        committed_allowlist = {
+            "goal_id": "EMBER-02",
+            "workstream_id": "EMBER-02A",
+            "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+            "schema_version": "ember-c-custody-allowlist-v1",
+            "allowed_receipt_basenames": [],  # committed version authorizes nothing
+        }
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump(committed_allowlist, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "commit non-permissive allowlist"], cwd=tmpdir, capture_output=True)
+
+        # Dirty edit: working tree now grants the exact permissive pattern.
+        permissive_allowlist = dict(committed_allowlist)
+        permissive_allowlist["allowed_receipt_basenames"] = ["staging-untracked4.json"]
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump(permissive_allowlist, f)
+
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--", "scripts/ember_totality/custody-allowlist.json"],
+            cwd=tmpdir, capture_output=True, text=True,
+        ).stdout
+        assert status.strip(), "test setup bug: authority file is not actually dirty"
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"Probe must never crash, got rc={rc}: {output}"
+        assert "RED" in output, (
+            "The uncommitted permissive edit to the authority file must not "
+            f"authorize the untracked receipt; committed content must govern, got: {output}"
+        )
+        print("dirty authority file negative: PASS")
+
+
+def test_bracket_and_regex_patterns_bounded_red_no_crash():
+    """A '[*'-style unbalanced-bracket pattern and a regex-active '(.*)'
+    pattern must both be bounded to RED (no crash, no authorization) --
+    neither construct is supported basename-glob syntax here (round-2
+    repair, PR951 clause 2)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+        receipt_file = os.path.join(receipts_dir, "not-matching-anything2.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-BRACKET-REGEX", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "goal_id": "EMBER-02",
+                "workstream_id": "EMBER-02A",
+                "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+                "schema_version": "ember-c-custody-allowlist-v1",
+                "allowed_receipt_basenames": ["staging-[unbalanced*.json", "(.*)"],
+            }, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init bracket+regex allowlist"], cwd=tmpdir, capture_output=True)
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"Bracket/regex patterns must never crash the probe, got rc={rc}: {output}"
+        assert "RED" in output, (
+            "Neither the unbalanced-bracket nor the regex-active pattern "
+            f"must authorize the unrelated untracked receipt, got: {output}"
+        )
+        print("bracket+regex pattern negative: PASS")
+
+
+def test_separator_pattern_not_honored():
+    """A pattern containing a path separator (e.g. 'a/b*') is not a basename
+    glob -- reject it outright, granting no authority (round-2 repair,
+    PR951 clause 2)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        receipts_dir = os.path.join(tmpdir, "receipts")
+        os.makedirs(receipts_dir)
+        receipt_file = os.path.join(receipts_dir, "a-something.json")
+        with open(receipt_file, "w", encoding="utf-8") as f:
+            json.dump({"ticket": "TEST-SEPARATOR-PATTERN", "status": "test"}, f)
+
+        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        os.makedirs(allowlist_dir, exist_ok=True)
+        allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
+        with open(allowlist_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "goal_id": "EMBER-02",
+                "workstream_id": "EMBER-02A",
+                "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+                "schema_version": "ember-c-custody-allowlist-v1",
+                "allowed_receipt_basenames": ["a/b*"],
+            }, f)
+
+        subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init separator-pattern allowlist"], cwd=tmpdir, capture_output=True)
+
+        output, rc = run_probe(tmpdir)
+        assert rc == 0, f"Probe must never crash, got rc={rc}: {output}"
+        assert "RED" in output, (
+            "A path-separator pattern must not authorize the untracked "
+            f"receipt, got: {output}"
+        )
+        print("separator-pattern negative: PASS")
+
+
 def test_shape_b_unparseable():
     """Shape (b): unparseable — file with invalid JSON."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -443,6 +611,10 @@ def main():
         test_allowlist_wrong_workstream_not_honored()
         test_allowlist_missing_identity_field_not_honored()
         test_allowlist_malformed_pattern_no_crash()
+        test_authority_file_untracked_not_honored()
+        test_dirty_authority_file_committed_content_governs()
+        test_bracket_and_regex_patterns_bounded_red_no_crash()
+        test_separator_pattern_not_honored()
         test_shape_b_unparseable()
         test_shape_c_cited_missing()
         test_clean_pass()

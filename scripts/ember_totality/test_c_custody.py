@@ -427,8 +427,45 @@ ALLOWLIST_BOUND_NEXT_EXECUTED_OUTCOME = (
 )
 
 
+def _read_committed_blob(root, rel_path):
+    """Return the raw bytes of rel_path as recorded in the HEAD commit (via
+    `git show HEAD:<path>`), or None if it cannot be read there (not tracked
+    at HEAD, no HEAD yet, etc). This bypasses the mutable working tree
+    entirely -- an uncommitted edit to a tracked authority file can never
+    change what this probe reads, since `git show` reads the committed blob
+    regardless of working-tree state (round-2 repair, PR951 clause 1: the
+    prior version read the working-tree file after only checking `git
+    ls-files`, so an uncommitted edit could authorize receipts)."""
+    try:
+        result = subprocess.run(
+            ["git", "show", f"HEAD:{rel_path}"],
+            cwd=root,
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return result.stdout
+    except Exception:
+        pass
+    return None
+
+
+def _parse_json_bytes_with_fallback(raw_bytes):
+    """Same fallback contract as _load_json_with_fallback but for bytes
+    already read (e.g. from `git show`) rather than a file path."""
+    for encoding in ["utf-8", "utf-8-sig"]:
+        try:
+            return json.loads(raw_bytes.decode(encoding)), None
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            if encoding == "utf-8-sig":
+                return None, str(e)
+            continue
+    return None, "Failed both utf-8 and utf-8-sig"
+
+
 def _get_allowlist_from_tracked_authority(root, tracked_files):
-    """Load basename patterns only from the separately tracked authority file.
+    """Load basename patterns only from the separately tracked authority file,
+    read at its COMMITTED HEAD blob -- never the working-tree bytes.
 
     Fail-closed on ANY schema deviation: wrong/missing schema_version, any of
     the three required identity fields (goal_id, workstream_id,
@@ -440,9 +477,11 @@ def _get_allowlist_from_tracked_authority(root, tracked_files):
     """
     if ALLOWLIST_AUTHORITY_REL not in tracked_files:
         return set()
-    authority_path = os.path.join(root, *ALLOWLIST_AUTHORITY_REL.split("/"))
+    raw = _read_committed_blob(root, ALLOWLIST_AUTHORITY_REL)
+    if raw is None:
+        return set()
     try:
-        data, _ = _load_json_with_fallback(authority_path)
+        data, _ = _parse_json_bytes_with_fallback(raw)
     except Exception:
         return set()
     if not isinstance(data, dict):
@@ -461,9 +500,32 @@ def _get_allowlist_from_tracked_authority(root, tracked_files):
     return set(patterns)
 
 
+def _validate_allowlist_pattern(pattern):
+    """Fail-closed pre-match validation of a single allowlist pattern
+    (round-2 repair, PR951 clause 2). This allowlist only ever needs to
+    express a basename glob using "*"/"?" wildcards -- path separators,
+    parent-directory traversal, and bracket/brace constructs are not
+    supported syntax here, so a pattern using any of them is rejected
+    outright (grants no authority) rather than falling through to
+    fnmatch with an ambiguous or surprising interpretation.
+
+    Returns True iff pattern is safe to hand to fnmatch."""
+    if not isinstance(pattern, str) or not pattern:
+        return False
+    if "/" in pattern or "\\" in pattern:
+        return False
+    if ".." in pattern:
+        return False
+    if "[" in pattern or "]" in pattern or "{" in pattern or "}" in pattern:
+        return False
+    return True
+
+
 def _is_match_pattern(basename, patterns):
     """Check if basename matches any pattern in patterns, using glob
-    semantics (fnmatch, case-sensitive).
+    semantics (fnmatch, case-sensitive) -- but only after each pattern
+    passes _validate_allowlist_pattern. An invalid pattern is dropped
+    before matching and disclosed on stderr; it grants no authority.
 
     Round-2 repair (PR951): the prior version hand-translated patterns
     containing "*"/"?" into a regex via naive string substitution and fed
@@ -473,9 +535,21 @@ def _is_match_pattern(basename, patterns):
     literal bracket rather than an open character class), so matching is
     fail-closed by construction: a malformed pattern simply fails to match
     anything it wasn't exactly meant to, it never crashes the probe and it
-    never silently authorizes an unrelated receipt.
+    never silently authorizes an unrelated receipt. The pre-match validation
+    above adds a second, independent fail-closed layer: separator/traversal/
+    bracket-or-brace patterns are rejected before fnmatch ever sees them.
     """
-    return any(fnmatch.fnmatchcase(basename, pattern) for pattern in patterns)
+    safe_patterns = []
+    for pattern in patterns:
+        if _validate_allowlist_pattern(pattern):
+            safe_patterns.append(pattern)
+        else:
+            print(
+                f"C-CUSTODY: rejecting unsafe allowlist pattern (no authority "
+                f"granted): {pattern!r}",
+                file=sys.stderr,
+            )
+    return any(fnmatch.fnmatchcase(basename, pattern) for pattern in safe_patterns)
 
 
 def _get_last_landing_time(root):
