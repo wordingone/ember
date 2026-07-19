@@ -214,6 +214,14 @@ pub enum EmberdError {
         requesting_job_id: String,
         claimed_by_job_id: String,
     },
+    /// Rollback refuses to silently free a claim when a receipt file already
+    /// exists on disk for that job's claimed path — a receipt that escaped
+    /// to disk is externally-visible evidence the dispatch was not purely
+    /// internal, so it must not be treated as if it never happened.
+    DispatchReceiptEscapedRollback {
+        job_id: String,
+        receipt_path: PathBuf,
+    },
     DispatchUnknownLegacyReceiptIdentity {
         job_ids: Vec<String>,
     },
@@ -2012,11 +2020,16 @@ impl Daemon {
                     residual_available_maximum_commit_bytes,
                     receipt_path,
                 }) => {
-                    let _ = self.rollback_dispatch_attempt(
-                        &job_id,
-                        &resource_lease,
-                        created_identity,
-                    );
+                    // A rollback that finds a receipt already escaped to disk
+                    // for this job refuses to silently free the claim and
+                    // surfaces its own typed error — that takes priority over
+                    // the budget refusal below, since it names a genuine
+                    // anomaly the operator must see rather than paper over.
+                    if let Err(escaped @ EmberdError::DispatchReceiptEscapedRollback { .. }) =
+                        self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity)
+                    {
+                        return Err(escaped);
+                    }
                     let refusal = json!({
                         "schema_version": "emberd-dispatch-preflight-v1",
                         "result": "REFUSED_PINNED_HOST_BUDGET",
@@ -2042,11 +2055,11 @@ impl Daemon {
                     });
                 }
                 Err(error) => {
-                    let _ = self.rollback_dispatch_attempt(
-                        &job_id,
-                        &resource_lease,
-                        created_identity,
-                    );
+                    if let Err(escaped @ EmberdError::DispatchReceiptEscapedRollback { .. }) =
+                        self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity)
+                    {
+                        return Err(escaped);
+                    }
                     return Err(error);
                 }
             };
@@ -2186,6 +2199,21 @@ impl Daemon {
             },
         }))
     }
+    /// Test-only public entrypoint for [`Daemon::rollback_dispatch_attempt`]
+    /// — exists ONLY under `test-fixtures` (or the crate's own unit tests),
+    /// so an integration test can drive the escaped-receipt guard directly
+    /// against an exact, deterministically-injected precondition instead of
+    /// racing the real spawn-failure timing.
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn test_rollback_dispatch_attempt(
+        &self,
+        job_id: &str,
+        resource_lease: &str,
+        remove_identity: bool,
+    ) -> Result<()> {
+        self.rollback_dispatch_attempt(job_id, resource_lease, remove_identity)
+    }
+
     fn rollback_dispatch_attempt(
         &self,
         job_id: &str,
@@ -2220,6 +2248,27 @@ impl Daemon {
         // spawns; a spawn failure (or any other post-reservation error) that
         // routes here must release it too, or the receipt path stays
         // permanently claimed by a job that no longer exists anywhere else.
+        //
+        // But a silent release is only correct when NOTHING externally
+        // visible escaped for this job. If a receipt file already landed on
+        // disk at the claimed path, this was not a clean internal-only
+        // failure — surface the typed error instead of quietly freeing the
+        // slot (reviewer amendment: prove no receipt escaped before release).
+        let claimed_receipt_path: Option<String> = tx
+            .query_row(
+                "SELECT receipt_path FROM dispatch_receipt_claims WHERE job_id=?1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(receipt_path) = claimed_receipt_path {
+            if Path::new(&receipt_path).exists() {
+                return Err(EmberdError::DispatchReceiptEscapedRollback {
+                    job_id: job_id.into(),
+                    receipt_path: PathBuf::from(receipt_path),
+                });
+            }
+        }
         tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.commit()?;
         Ok(())
@@ -3514,11 +3563,12 @@ impl Daemon {
                 detail: "stop finalization lost its lease epoch".into(),
             });
         }
-        // Terminal transition: release any dispatch receipt claim this job
-        // held, or the receipt path stays wedged against any future
-        // different-job dispatch forever (dispatch_receipt_claims has no
-        // other release path).
-        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
+        // Terminal transition: the 'stopped' state write above and this
+        // job_stopped event are the durable terminal evidence for this job.
+        // The claim release must never precede that evidence within the tx
+        // (durability-before-release, reviewer amendment) — write the event
+        // first, then release, and commit both together so a crash never
+        // observes a freed slot without the terminal event that justified it.
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stopped',?3)",
             params![
@@ -3527,6 +3577,10 @@ impl Daemon {
                 json!({"pid":row.pid,"lease_epoch":row.lease_epoch}).to_string()
             ],
         )?;
+        // Release any dispatch receipt claim this job held, or the receipt
+        // path stays wedged against any future different-job dispatch
+        // forever (dispatch_receipt_claims has no other release path).
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.commit()?;
         Ok(())
     }
@@ -3565,14 +3619,18 @@ impl Daemon {
                 detail: "starting reconciliation lost its lease epoch".into(),
             });
         }
-        // Terminal transition (starting -> failed): release any dispatch
-        // receipt claim, or a crash-orphaned post-commit/pre-spawn job
-        // wedges its receipt path against re-dispatch even after reconcile.
-        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
+        // Terminal transition (starting -> failed): the failed-state UPDATE
+        // above plus this event are the durable evidence the job is gone.
+        // Write the event first, release the claim after (durability-before-
+        // release), same tx, committed together — a crash-orphaned post-
+        // commit/pre-spawn job must never free its receipt path without
+        // this terminal evidence landing, or re-dispatch after reconcile
+        // wedges forever with no record of why the slot was ever claimed.
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
             params![job_id, now_ms(), kind],
         )?;
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.commit()?;
         Ok(())
     }
@@ -3638,8 +3696,9 @@ impl Daemon {
                 detail: "unknown-exit reconciliation lost its lease epoch".into(),
             });
         }
-        // Terminal transition: release any dispatch receipt claim.
-        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
+        // Terminal transition: write the terminal event first (durable
+        // evidence), release the claim after, same tx, committed together
+        // (durability-before-release).
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
             params![
@@ -3649,6 +3708,7 @@ impl Daemon {
                 json!({"pid":row.pid,"exit_code":"unknown"}).to_string(),
             ],
         )?;
+                tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.commit()?;
         Ok(())
     }
@@ -3676,12 +3736,14 @@ impl Daemon {
                 detail: "dead reconciliation lost its lease epoch".into(),
             });
         }
-        // Terminal transition: release any dispatch receipt claim.
-        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
+        // Terminal transition: write the terminal event first (durable
+        // evidence), release the claim after, same tx, committed together
+        // (durability-before-release).
         tx.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
             params![job_id, now_ms(), kind],
         )?;
+        tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
         tx.commit()?;
         Ok(())
     }
@@ -5050,10 +5112,12 @@ fn record_natural_exit(
             detail: "natural-exit monitor lost its lease epoch".into(),
         });
     }
-    // Terminal transition (the default clean-exit path): release any
-    // dispatch receipt claim, or a re-dispatch of the same receipt slot
-    // under a fresh job_id is refused forever.
-    tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
+    // Terminal transition (the default clean-exit path): the job_exited
+    // event is the durable evidence this job is gone. Write it first, then
+    // release the claim, same tx, committed together (durability-before-
+    // release) — otherwise a re-dispatch of the same receipt slot under a
+    // fresh job_id is refused forever with no terminal-event ordering
+    // guarantee for a mid-tx crash.
     tx.execute(
         "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_exited',?3)",
         params![
@@ -5062,6 +5126,7 @@ fn record_natural_exit(
             json!({"pid":pid,"exit_code":exit_code}).to_string()
         ],
     )?;
+    tx.execute("DELETE FROM dispatch_receipt_claims WHERE job_id=?1", [job_id])?;
     tx.commit()?;
     Ok(())
 }
