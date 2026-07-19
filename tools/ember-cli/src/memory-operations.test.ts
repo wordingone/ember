@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import { describe, expect, test, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
@@ -15,10 +19,17 @@ import {
   PER_FILE_LINE_LIMIT,
   PER_FILE_SIZE_LIMIT,
   TOTAL_BLOCK_LIMIT,
-  SELECT_MODEL,
   type MemoryFileEntry,
   type SelectModelFn,
 } from './memory-operations';
+import type { SelectedModelContract } from './entrypoints/model-seat.ts';
+
+const TEST_CONTRACT: SelectedModelContract = {
+  seat: 'REFERENCE_ONLY',
+  modelName: 'REFERENCE_ONLY: test-selector',
+  modelConfigSha256: null,
+  structuredOutputs: false,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -226,8 +237,8 @@ describe('AC3: per-file size truncation at 25 KB', () => {
 // AC4: selectRelevantMemories uses Sonnet, not Haiku
 // ---------------------------------------------------------------------------
 
-describe('AC4: selectRelevantMemories uses Sonnet model', () => {
-  test('passes SELECT_MODEL (Sonnet) to the callModel function', async () => {
+describe('AC4: selectRelevantMemories routes through the selected model contract', () => {
+  test('passes the contract modelName to the callModel function — never a hardcoded id', async () => {
     let capturedModel: string | undefined;
     const mockCallModel: SelectModelFn = async ({ model, descriptions }) => {
       capturedModel = model;
@@ -239,12 +250,20 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
       makeEntry({ name: 'b', description: 'Banana info' }),
     ];
 
-    await selectRelevantMemories(entries, 'fruit', mockCallModel);
-    expect(capturedModel).toBe(SELECT_MODEL);
+    await selectRelevantMemories(entries, 'fruit', TEST_CONTRACT, mockCallModel);
+    expect(capturedModel).toBe(TEST_CONTRACT.modelName);
   });
 
-  test('SELECT_MODEL constant is qwen-3.6', () => {
-    expect(SELECT_MODEL).toBe('qwen-3.6');
+  test('no model contract → selection is skipped and the model is never called', async () => {
+    let called = false;
+    const mockCallModel: SelectModelFn = async ({ descriptions }) => {
+      called = true;
+      return descriptions.map((d) => d.name);
+    };
+    const entries = [makeEntry({ name: 'a' }), makeEntry({ name: 'b' })];
+    const result = await selectRelevantMemories(entries, 'query', undefined, mockCallModel);
+    expect(result).toHaveLength(2);
+    expect(called).toBe(false);
   });
 
   test('returns all entries on API error (fallback)', async () => {
@@ -253,7 +272,7 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
       makeEntry({ name: 'b', description: 'b' }),
     ];
     const throwingModel: SelectModelFn = async () => { throw new Error('API error'); };
-    const result = await selectRelevantMemories(entries, 'query', throwingModel);
+    const result = await selectRelevantMemories(entries, 'query', TEST_CONTRACT, throwingModel);
     expect(result).toHaveLength(2);
   });
 
@@ -264,7 +283,7 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
       makeEntry({ name: 'c', description: 'Gamma' }),
     ];
     const mockCallModel: SelectModelFn = async () => ['c', 'a', 'b'];
-    const result = await selectRelevantMemories(entries, 'query', mockCallModel);
+    const result = await selectRelevantMemories(entries, 'query', TEST_CONTRACT, mockCallModel);
     expect(result[0]!.name).toBe('c');
     expect(result[1]!.name).toBe('a');
     expect(result[2]!.name).toBe('b');
@@ -272,7 +291,7 @@ describe('AC4: selectRelevantMemories uses Sonnet model', () => {
 
   test('returns all entries when no callModel provided', async () => {
     const entries = [makeEntry({ name: 'a' }), makeEntry({ name: 'b' })];
-    const result = await selectRelevantMemories(entries, 'query');
+    const result = await selectRelevantMemories(entries, 'query', TEST_CONTRACT);
     expect(result).toHaveLength(2);
   });
 });
