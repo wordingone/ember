@@ -2071,23 +2071,25 @@ impl Daemon {
                     });
                 }
                 // Round-9: a `DispatchReceiptClaimConflict` refusal from
-                // `validate_receipt_claim_available` NEVER creates or
-                // touches a reservation -- every call site (the pinned-
-                // budget precheck above, and `insert_reserved_job_row`'s own
-                // internal call) runs it BEFORE any jobs-row insert, in the
-                // SAME transaction, so this attempt reserved nothing. The
-                // generic catch-all below calls `rollback_dispatch_attempt`
-                // on ANY OTHER error to release whatever this attempt itself
-                // reserved -- but calling it here would act on a claim that
-                // predates this attempt entirely (this exact job_id's own
-                // already-escaped tombstone, in the same-job_id replay
-                // case), and its own probe-and-release logic would find the
-                // now-out-of-band-removed receipt file confirmed-absent and
-                // silently DELETE that claim, reopening the tombstone this
-                // refusal just enforced for a THIRD dispatch attempt. Return
-                // the refusal untouched -- there is nothing this attempt
-                // reserved to roll back.
+                // `validate_receipt_claim_available` runs BEFORE any
+                // jobs-row insert (in the SAME transaction inside
+                // `start_job_with_pinned_budget_admission`), so this attempt
+                // reserved no lease. However, identity binding happens
+                // BEFORE this call (line 2000), so if this attempt created
+                // an identity row (created_identity=true), we must clean it
+                // up now to prevent residue. We do NOT call
+                // rollback_dispatch_attempt, because that would act on a
+                // claim that predates this attempt (the already-escaped
+                // tombstone in same-job_id replays), and its probe-and-
+                // release logic would DELETE that claim, reopening the
+                // tombstone. Instead, we remove only the identity row if
+                // this attempt created one, leaving the pre-existing claim
+                // and evidence untouched.
                 Err(error @ EmberdError::DispatchReceiptClaimConflict { .. }) => {
+                    if created_identity {
+                        let conn = self.conn()?;
+                        conn.execute("DELETE FROM identities WHERE job_id=?1", [&job_id])?;
+                    }
                     return Err(error);
                 }
                 Err(error) => {

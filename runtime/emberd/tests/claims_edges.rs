@@ -713,6 +713,116 @@ fn admission_refuses_a_same_job_id_replay_of_an_escaped_tombstone_after_the_file
         )
         .unwrap();
     assert_eq!(evidence_escaped, 1);
+
+    // Round-10: the conflict refusal must clean up the identity row that was
+    // created at the start of this replay attempt. The identity was created
+    // before validate_receipt_claim_available ran, so when that validation
+    // refuses, the identity residue must be removed (but the original claim
+    // and evidence stay intact).
+    assert_eq!(
+        daemon.identity_hash("ab").unwrap(),
+        None,
+        "the refused replay attempt must have cleaned up its created identity row"
+    );
+}
+
+/// Round-10: complementary regression for conflict cleanup — a pre-existing
+/// identity from a prior successful dispatch must be preserved when a
+/// conflict refusal happens on a replay. The conflict refusal removes only
+/// the identity row created by THIS attempt (created_identity=true), but
+/// must leave untouched any pre-existing identity (created_identity=false).
+#[test]
+fn admission_refuses_conflict_with_pre_existing_identity_preserved() {
+    let root = sandbox("audita-preexisting-identity-preserved");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("preexist-ef-preflight.json");
+
+    // First dispatch of "ef" succeeds and creates an identity binding.
+    let manifest_ef = write_manifest(&root, "ef", "gpu-ef", &receipt_path);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = dispatch_ok(&daemon, &manifest_ef);
+    assert!(receipt_path.exists());
+
+    // Capture the identity that was created for "ef".
+    let original_identity = daemon
+        .identity_hash("ef")
+        .unwrap()
+        .expect("first dispatch must have created an identity");
+
+    // Store the manifest bytes for use in the replay below.
+    let manifest_bytes = fs::read(&manifest_ef).unwrap();
+
+    // Clean up the job exactly like before: drop daemon, wait for process
+    // exit, reopen, mark as failed, rollback to escape the receipt.
+    drop(daemon);
+    thread::sleep(Duration::from_millis(500));
+    let daemon = Daemon::open(&db).unwrap();
+
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute("UPDATE jobs SET state='failed' WHERE job_id='ef'", [])
+        .unwrap();
+
+    // Rollback with remove_identity=false (the pre-existing identity should
+    // NOT be removed in the rollback — only escape markers should be set).
+    let rollback_error = daemon
+        .test_rollback_dispatch_attempt("ef", "gpu-ef", false)
+        .expect_err("setup invariant: rollback must refuse on a genuinely escaped receipt");
+    assert!(format!("{rollback_error:?}").contains("DispatchReceiptEscapedRollback"));
+
+    // Verify the identity is still there after rollback.
+    assert_eq!(
+        daemon.identity_hash("ef").unwrap(),
+        Some(original_identity.clone()),
+        "rollback with remove_identity=false must preserve the identity"
+    );
+
+    // The escaped file disappears out-of-band.
+    fs::remove_file(&receipt_path).unwrap();
+
+    // Replay the IDENTICAL job_id ("ef") at the IDENTICAL receipt_path, using
+    // the IDENTICAL manifest bytes from the first dispatch. This will fail with
+    // DispatchReceiptClaimConflict. The conflict refusal must recognize that
+    // created_identity=false (the identity pre-existed and bind_identity_bytes
+    // recognized the identical bytes at line 708), so it must NOT remove the
+    // identity row when refusing.
+    let replay = dispatch(&daemon, &manifest_ef);
+    let replay_error = replay.expect_err(
+        "replay with pre-existing identity must refuse on tombstone conflict"
+    );
+    assert!(
+        format!("{replay_error:?}").contains("DispatchReceiptClaimConflict"),
+        "expected DispatchReceiptClaimConflict, got: {replay_error:?}"
+    );
+
+    // The pre-existing identity MUST still exist after the conflict refusal.
+    assert_eq!(
+        daemon.identity_hash("ef").unwrap(),
+        Some(original_identity),
+        "conflict refusal with pre-existing identity must preserve it"
+    );
+
+    // The claim and evidence rows must be untouched.
+    let claim_owner: Option<String> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["ef"],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap();
+    assert_eq!(claim_owner.as_deref(), Some("ef"));
+
+    let evidence_escaped: i64 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT escaped FROM dispatch_receipt_rollback_evidence WHERE job_id='ef'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(evidence_escaped, 1);
 }
 
 /// Round-9 reviewer REJECT: the `dispatch_receipt_rollback_evidence` UPSERT
