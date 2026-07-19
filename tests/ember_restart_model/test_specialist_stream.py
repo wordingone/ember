@@ -708,5 +708,105 @@ class SpecialistStreamTests(unittest.TestCase):
                     expected_corpus_root_sha256=manifest["corpus_root_sha256"],
                 )
             self.assertEqual(stream.count, 512)
+    def test_prepare_execution_selection_binds_closed_receipt_cursor_and_one_chunk_cache(self) -> None:
+        """P2B derives an exact selection incrementally and opens it lazily."""
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        build_receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        stream = self._open_bound(manifest_path)
+        materialized: list[int] = []
+        original = stream._materialize_verified_chunk
+
+        def counted(capability: str, start: int):
+            materialized.append(start)
+            return original(capability, start)
+
+        stream._materialize_verified_chunk = counted  # type: ignore[method-assign]
+        selection = stream.prepare_execution_selection(
+            capability="image", selection_rule_id="image_scene_split_train_v1",
+            build_receipt_path=build_receipt_path,
+            expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+        )
+        self.assertEqual(selection.receipt["stream_manifest_sha256"], "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427")
+        self.assertEqual(selection.receipt["stream_build_receipt_sha256"], "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e")
+        self.assertEqual(selection.receipt["family_root_sha256"], stream.families["image"]["corpus_root_sha256"])
+        self.assertEqual(selection.receipt["selection_rule_id"], "image_scene_split_train_v1")
+        self.assertGreater(selection.receipt["selected_record_count"], 0)
+        self.assertGreater(selection.receipt["selected_token_count"], 0)
+        self.assertEqual(len(selection.receipt["selection_commitment_sha256"]), 64)
+        self.assertGreaterEqual(len(materialized), 16)
+        self.assertLessEqual(len(selection._chunk_cache), 1)
+        self.assertFalse(hasattr(selection, "records"))
+        materialized.clear()
+        uninterrupted = selection.iter_from()
+        first, cursor = next(uninterrupted)
+        self.assertEqual(first["scene_split"], "train")
+        self.assertLessEqual(len(materialized), 1)
+        self.assertEqual(
+            set(cursor),
+            {"schema_version", "selection_receipt_sha256", "selection_rule_id", "selected_ordinal", "next_source_index", "global_step", "tokens_seen"},
+        )
+        self.assertEqual(cursor["selection_receipt_sha256"], hashlib.sha256(json.dumps(selection.receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest())
+        self.assertEqual(cursor["selected_ordinal"], 1)
+        self.assertGreater(cursor["next_source_index"], 0)
+        selection._validate_cursor_progress(cursor)
+        with self.assertRaisesRegex(ValueError, "selection cursor progress"):
+            selection._validate_cursor_progress({**cursor, "selected_ordinal": 0})
+        with self.assertRaisesRegex(ValueError, "selection cursor progress"):
+            next(selection.iter_from({**cursor, "selected_ordinal": 0}))
+        end_cursor = {**cursor, "selected_ordinal": selection.receipt["selected_record_count"], "next_source_index": stream.count}
+        selection._validate_cursor_progress(end_cursor)
+        with self.assertRaisesRegex(ValueError, "selection cursor progress"):
+            selection._validate_cursor_progress({**end_cursor, "selected_ordinal": end_cursor["selected_ordinal"] - 1})
+        uninterrupted_tail = [next(uninterrupted)[0]["sample_id"] for _ in range(3)]
+        resumed = stream.open_execution_selection(receipt=selection.receipt, cursor=cursor)
+        resumed_iterator = resumed.iter_from(cursor)
+        resumed_tail = [next(resumed_iterator)[0]["sample_id"] for _ in range(3)]
+        self.assertEqual(resumed_tail, uninterrupted_tail)
+        with self.assertRaisesRegex(ValueError, "build receipt"):
+            stream.prepare_execution_selection(capability="image", selection_rule_id="image_scene_split_train_v1", build_receipt_path=build_receipt_path, expected_build_receipt_sha256="0" * 64)
+        with self.assertRaisesRegex(ValueError, "selection cursor"):
+            stream.open_execution_selection(receipt=selection.receipt, cursor={**cursor, "selection_receipt_sha256": "0" * 64})
+
+
+
+    def test_execution_selection_supports_only_closed_capability_rules(self) -> None:
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        build_receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        stream = self._open_bound(manifest_path)
+        for capability in ("audio", "reasoning", "tool"):
+            selection = stream.prepare_execution_selection(
+                capability=capability,
+                selection_rule_id="all_records_semantic_pretraining_v1",
+                build_receipt_path=build_receipt_path,
+                expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+            )
+            self.assertEqual(selection.receipt["capability"], capability)
+            self.assertEqual(selection.receipt["selection_rule_id"], "all_records_semantic_pretraining_v1")
+            self.assertEqual(selection.receipt["selected_record_count"], 4096)
+            record, _cursor = next(selection.iter_from())
+            self.assertEqual(record["active_expert"], capability)
+        for capability, rule in (("image", "all_records_semantic_pretraining_v1"), ("audio", "image_scene_split_train_v1"), ("tool", "unknown")):
+            with self.assertRaisesRegex(ValueError, "selection rule"):
+                stream.prepare_execution_selection(
+                    capability=capability,
+                    selection_rule_id=rule,
+                    build_receipt_path=build_receipt_path,
+                    expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                )
+
+    def test_build_receipt_rejects_rehashed_internal_semantic_drift(self) -> None:
+        from specialist_stream import SpecialistStream
+
+        receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            candidate = Path(directory) / "receipt.json"
+            receipt = json.loads(receipt_path.read_bytes())
+            receipt["data_class"] = "MEASURED_RUNG"
+            candidate.write_bytes(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n")
+            with self.assertRaisesRegex(ValueError, "data class"):
+                SpecialistStream._read_bound_build_receipt(
+                    candidate, hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                )
+
 if __name__ == "__main__":
     unittest.main()
