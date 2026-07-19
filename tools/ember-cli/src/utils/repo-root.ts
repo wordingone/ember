@@ -46,6 +46,23 @@ export class CanonicalRootError extends Error {
   }
 }
 
+/** PR954 round 3: parses a `.git` FILE's raw content as EXACTLY ONE `gitdir: <path>`
+ *  record, optionally followed by a single trailing newline (`\n` or `\r\n`). Returns the
+ *  captured path, or `null` if the content is not exactly one such record -- e.g. a junk
+ *  line before/after the record, a second record, or any other embedded newline. Round 2's
+ *  `raw.match(/^gitdir:\s*(.+?)\s*$/m)` used the multiline flag, so `^`/`$` matched at ANY
+ *  line boundary and a shape like `"junk\ngitdir: valid\n"` silently validated against the
+ *  junk-prefixed line -- exactly the kind of malformed shape this resolver must reject, not
+ *  paper over. */
+function parseSingleGitdirRecord(raw: string): string | null {
+  let content = raw;
+  if (content.endsWith("\r\n")) content = content.slice(0, -2);
+  else if (content.endsWith("\n")) content = content.slice(0, -1);
+  if (content.includes("\n")) return null; // more than one line remains -- not a single record.
+  const m = content.match(/^gitdir:\s*(.+?)\s*$/);
+  return m ? m[1]! : null;
+}
+
 /** Issue #666 / PR954 round 2 — a git WORKTREE checkout carries the marker files too
  *  (GOAL.md + tools/ember-cli are regular checked-out files), so a marker walk started
  *  inside a worktree validates the WORKTREE root — and state paths derived from it (the
@@ -89,15 +106,14 @@ function canonicalizeThroughWorktree(root: string): string {
         "to an unverified root (issue #666 strict resolver).",
     );
   }
-  const m = raw.match(/^gitdir:\s*(.+?)\s*$/m);
-  if (!m) {
+  const gitdir = parseSingleGitdirRecord(raw);
+  if (gitdir === null) {
     throw new CanonicalRootError(
-      `.git file at ${dotGit} does not contain a gitdir: pointer (malformed or unsupported ` +
-        ".git file shape). Refusing to bind state paths to an unverified root (issue #666 " +
-        "strict resolver).",
+      `.git file at ${dotGit} does not contain exactly one gitdir: record (malformed, ` +
+        "junk-prefixed, multi-line, or otherwise unsupported .git file shape). Refusing to " +
+        "bind state paths to an unverified root (issue #666 strict resolver).",
     );
   }
-  const gitdir = m[1]!;
   // <main>/.git/worktrees/<name> -> <main>. A gitdir of any other shape (e.g. a
   // submodule's .git/modules path) is unsupported by this resolver.
   const resolvedGitdir = path.resolve(root, gitdir);
@@ -107,6 +123,23 @@ function canonicalizeThroughWorktree(root: string): string {
       `.git file at ${dotGit} points to ${resolvedGitdir}, which is not a ` +
         "<main>/.git/worktrees/<name> path (unsupported gitdir shape, e.g. a submodule). " +
         "Refusing to bind state paths to an unverified root (issue #666 strict resolver).",
+    );
+  }
+  // PR954 round 3: a worktree gitdir pointer whose target directory doesn't exist on disk
+  // (main checkout pruned/moved, or the pointer is simply stale) must reject rather than
+  // resolve through it as if it were live -- a dangling pointer is unverifiable, the same
+  // failure class as an unreadable or malformed .git file.
+  let gitdirStat: fs.Stats | undefined;
+  try {
+    gitdirStat = fs.statSync(resolvedGitdir);
+  } catch {
+    gitdirStat = undefined;
+  }
+  if (!gitdirStat || !gitdirStat.isDirectory()) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} points to ${resolvedGitdir}, which does not exist as a ` +
+        "directory (dangling worktree gitdir pointer). Refusing to bind state paths to an " +
+        "unverified root (issue #666 strict resolver).",
     );
   }
   const mainRoot = path.resolve(wtMatch[1]!);

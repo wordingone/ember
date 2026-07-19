@@ -834,7 +834,12 @@ Describe 'Resolve-CanonicalRepoRoot (PR954 round 2 -- strict resolver, same cont
 
         $worktreeRoot = Join-Path $scratch 'wt\lane'
         New-MarkerRoot -Root $worktreeRoot
-        Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: $gitdirTarget`n" -Encoding utf8
+        # PR954 round 3: Set-Content -Value "...`n" appends ITS OWN trailing `r`n on top
+        # of the literal `n already in the string, producing a real on-disk double
+        # newline that the round-3 exact-single-record parser correctly rejects (a real
+        # git-worktree .git file has exactly one trailing newline, written by git itself,
+        # never through Set-Content) -- WriteAllText gives byte-exact control instead.
+        [System.IO.File]::WriteAllText((Join-Path $worktreeRoot '.git'), "gitdir: $gitdirTarget`n")
 
         Resolve-CanonicalRepoRoot -Root $worktreeRoot | Should Be $mainRoot
     }
@@ -868,6 +873,110 @@ Describe 'Resolve-CanonicalRepoRoot (PR954 round 2 -- strict resolver, same cont
         Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: $gitdirTarget`n" -Encoding utf8
 
         { Resolve-CanonicalRepoRoot -Root $worktreeRoot } | Should Throw 'worktree'
+    }
+}
+
+Describe 'Resolve-CanonicalRepoRoot (PR954 round 3 -- exact single-record parser + dangling-target check)' {
+    BeforeEach {
+        $script:scratch = New-Scratch
+    }
+    AfterEach {
+        Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    function New-MarkerRoot3 {
+        param([Parameter(Mandatory)][string]$Root)
+        New-Item -ItemType Directory -Path (Join-Path $Root 'tools\ember-cli') -Force | Out-Null
+        Set-Content -Path (Join-Path $Root 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+    }
+
+    It 'junk-prefixed content (a valid gitdir: line preceded by garbage) is REJECTED, not silently matched' {
+        # Main root VALIDATES and the worktrees/lane target EXISTS, so the only possible
+        # cause of a throw here is the exact-single-record parser rejecting the junk
+        # prefix -- isolates this from the "main doesn't validate" / dangling-target paths.
+        $mainRoot = Join-Path $scratch 'main-for-junk'
+        $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+        New-MarkerRoot3 -Root $mainRoot
+
+        $root = Join-Path $scratch 'junk-prefixed'
+        New-MarkerRoot3 -Root $root
+        Set-Content -Path (Join-Path $root '.git') -Value "junk`ngitdir: $gitdirTarget`n" -Encoding utf8
+
+        { Resolve-CanonicalRepoRoot -Root $root } | Should Throw
+    }
+
+    It 'a trailing junk line AFTER the gitdir: record is also REJECTED' {
+        $mainRoot = Join-Path $scratch 'main-for-junk2'
+        $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+        New-MarkerRoot3 -Root $mainRoot
+
+        $root = Join-Path $scratch 'junk-suffixed'
+        New-MarkerRoot3 -Root $root
+        Set-Content -Path (Join-Path $root '.git') -Value "gitdir: $gitdirTarget`nextra junk`n" -Encoding utf8
+
+        { Resolve-CanonicalRepoRoot -Root $root } | Should Throw
+    }
+
+    It 'a single gitdir: record with exactly one trailing newline is ACCEPTED (the common on-disk shape)' {
+        $mainRoot = Join-Path $scratch 'single-record-main'
+        $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+        New-MarkerRoot3 -Root $mainRoot
+
+        $worktreeRoot = Join-Path $scratch 'single-record-wt'
+        New-MarkerRoot3 -Root $worktreeRoot
+        # WriteAllText (not Set-Content, which appends its OWN trailing `r`n on top of
+        # the literal `n already in the string) for byte-exact single-trailing-newline
+        # content -- the real on-disk shape `git worktree add` produces.
+        [System.IO.File]::WriteAllText((Join-Path $worktreeRoot '.git'), "gitdir: $gitdirTarget`n")
+
+        Resolve-CanonicalRepoRoot -Root $worktreeRoot | Should Be $mainRoot
+    }
+
+    It 'a single gitdir: record with NO trailing newline is also ACCEPTED' {
+        $mainRoot = Join-Path $scratch 'no-newline-main'
+        $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+        New-MarkerRoot3 -Root $mainRoot
+
+        $worktreeRoot = Join-Path $scratch 'no-newline-wt'
+        New-MarkerRoot3 -Root $worktreeRoot
+        # Set-Content always appends the host's newline; use WriteAllText for a truly
+        # newline-free file.
+        [System.IO.File]::WriteAllText((Join-Path $worktreeRoot '.git'), "gitdir: $gitdirTarget")
+
+        Resolve-CanonicalRepoRoot -Root $worktreeRoot | Should Be $mainRoot
+    }
+
+    It 'a gitdir: pointer whose target directory does not exist on disk is REJECTED (dangling pointer)' {
+        $mainRoot = Join-Path $scratch 'dangling-main'
+        New-Item -ItemType Directory -Path $mainRoot -Force | Out-Null
+        New-MarkerRoot3 -Root $mainRoot
+        # Deliberately do NOT create <mainRoot>/.git/worktrees/lane.
+        $danglingTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        Test-Path $danglingTarget | Should Be $false
+
+        $worktreeRoot = Join-Path $scratch 'dangling-wt'
+        New-MarkerRoot3 -Root $worktreeRoot
+        Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: $danglingTarget`n" -Encoding utf8
+
+        { Resolve-CanonicalRepoRoot -Root $worktreeRoot } | Should Throw
+    }
+
+    It 'a gitdir: pointer whose target exists but is a FILE, not a directory, is also REJECTED' {
+        $mainRoot = Join-Path $scratch 'file-target-main'
+        New-Item -ItemType Directory -Path (Join-Path $mainRoot '.git\worktrees') -Force | Out-Null
+        New-MarkerRoot3 -Root $mainRoot
+        $fileNotDir = Join-Path $mainRoot '.git\worktrees\lane'
+        Set-Content -Path $fileNotDir -Value 'not a directory' -Encoding utf8
+
+        $worktreeRoot = Join-Path $scratch 'file-target-wt'
+        New-MarkerRoot3 -Root $worktreeRoot
+        Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: $fileNotDir`n" -Encoding utf8
+
+        { Resolve-CanonicalRepoRoot -Root $worktreeRoot } | Should Throw
     }
 }
 

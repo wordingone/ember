@@ -15,6 +15,18 @@ import {
 
 let scratchDir: string;
 
+/** PR954 round 3: `writer.filePath` is `string | null` (inert-writer contract), but every
+ *  test here constructs its writer with a known-resolvable `repoRoot`, so the writer is
+ *  never actually inert. Narrows loud-and-explicit at each call site instead of an
+ *  `as string` cast -- an unexpected `null` here means a real regression in the writer's
+ *  resolution, and should fail the test, not be papered over. */
+function requireFilePath(filePath: string | null): string {
+  if (filePath === null) {
+    throw new Error("expected a live (non-inert) heartbeat writer, got filePath === null");
+  }
+  return filePath;
+}
+
 beforeEach(() => {
   scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-liveness-heartbeat-"));
 });
@@ -30,29 +42,29 @@ describe("createLivenessHeartbeatWriter", () => {
     expect(writer.filePath).toBe(
       path.join(scratchDir, "tools", "ember-cli", "state", "cockpit-heartbeat.json"),
     );
-    expect(fs.existsSync(path.dirname(writer.filePath))).toBe(true);
+    expect(fs.existsSync(path.dirname(requireFilePath(writer.filePath)))).toBe(true);
   });
 
   test("write() overwrites the file with a fresh {ts, pid, version} row", () => {
     const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 4242, version: "abc123" });
 
     writer.write(Date.UTC(2026, 6, 7, 12, 0, 0));
-    const first = JSON.parse(fs.readFileSync(writer.filePath, "utf8"));
+    const first = JSON.parse(fs.readFileSync(requireFilePath(writer.filePath), "utf8"));
     expect(first.pid).toBe(4242);
     expect(first.version).toBe("abc123");
     expect(first.ts).toBe(new Date(Date.UTC(2026, 6, 7, 12, 0, 0)).toISOString());
 
     writer.write(Date.UTC(2026, 6, 7, 12, 0, 5));
-    const second = JSON.parse(fs.readFileSync(writer.filePath, "utf8"));
+    const second = JSON.parse(fs.readFileSync(requireFilePath(writer.filePath), "utf8"));
     expect(second.ts).toBe(new Date(Date.UTC(2026, 6, 7, 12, 0, 5)).toISOString());
     // Overwritten in place, never appended -- one row, not a growing log.
-    expect(fs.readFileSync(writer.filePath, "utf8").trim().split("\n").length).toBe(1);
+    expect(fs.readFileSync(requireFilePath(writer.filePath), "utf8").trim().split("\n").length).toBe(1);
   });
 
   test("defaults pid to process.pid and version to \"unknown\" when not supplied", () => {
     const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir });
     writer.write();
-    const row = JSON.parse(fs.readFileSync(writer.filePath, "utf8"));
+    const row = JSON.parse(fs.readFileSync(requireFilePath(writer.filePath), "utf8"));
     expect(row.pid).toBe(process.pid);
     expect(row.version).toBe("unknown");
   });
@@ -76,7 +88,7 @@ describe("heartbeatAge", () => {
     const writtenAt = Date.UTC(2026, 6, 7, 12, 0, 0);
     writer.write(writtenAt);
 
-    const age = heartbeatAge(writer.filePath, writtenAt + 5_000);
+    const age = heartbeatAge(requireFilePath(writer.filePath), writtenAt + 5_000);
     expect(age).toBe(5_000);
   });
 
@@ -108,7 +120,7 @@ describe("readHeartbeatRow", () => {
     const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 777, version: "v1" });
     writer.write(Date.UTC(2026, 6, 7, 12, 0, 0));
 
-    const row = readHeartbeatRow(writer.filePath);
+    const row = readHeartbeatRow(requireFilePath(writer.filePath));
     expect(row).toEqual({
       ts: new Date(Date.UTC(2026, 6, 7, 12, 0, 0)).toISOString(),
       pid: 777,
@@ -266,6 +278,6 @@ describe("PR954 round 2 — inert writer on strict-resolver failure", () => {
     const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 99, version: "v" });
     expect(writer.filePath).not.toBeNull();
     writer.write(Date.UTC(2026, 6, 7, 12, 0, 0));
-    expect(fs.existsSync(writer.filePath as string)).toBe(true);
+    expect(fs.existsSync(requireFilePath(writer.filePath))).toBe(true);
   });
 });

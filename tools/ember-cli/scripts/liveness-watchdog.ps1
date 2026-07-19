@@ -110,6 +110,28 @@ param(
 # silently return an unverified root, because that root feeds directly into
 # $HeartbeatPath below and a wrong root here means the watchdog polls a file nobody
 # writes.
+function Get-SingleGitdirRecord {
+    <#
+    .SYNOPSIS
+    PR954 round 3: parses a .git FILE's raw content as EXACTLY ONE `gitdir: <path>` record,
+    optionally followed by a single trailing newline (`\n` or `\r\n`). Returns the captured
+    path, or $null if the content is not exactly one such record -- e.g. a junk line
+    before/after the record, a second record, or any other embedded newline. Same contract
+    as repo-root.ts's parseSingleGitdirRecord: round 2's `(?m)^gitdir:\s*(.+?)\s*$` used
+    the multiline flag, so `^`/`$` matched at ANY line boundary and a shape like
+    "junk`ngitdir: valid`n" silently validated against the junk-prefixed line -- exactly
+    the malformed shape this resolver must reject, not paper over.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Raw)
+    $content = $Raw
+    if ($content.EndsWith("`r`n")) { $content = $content.Substring(0, $content.Length - 2) }
+    elseif ($content.EndsWith("`n")) { $content = $content.Substring(0, $content.Length - 1) }
+    if ($content.Contains("`n")) { return $null }
+    $m = [regex]::Match($content, '^gitdir:\s*(.+?)\s*$')
+    if (-not $m.Success) { return $null }
+    return $m.Groups[1].Value
+}
+
 function Resolve-CanonicalRepoRoot {
     param([Parameter(Mandatory)][string]$Root)
     $dotGit = Join-Path $Root '.git'
@@ -121,16 +143,21 @@ function Resolve-CanonicalRepoRoot {
         throw "repo root $Root has a .git file at $dotGit that could not be read: $($_.Exception.Message) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
     }
 
-    $m = [regex]::Match($raw, '(?m)^gitdir:\s*(.+?)\s*$')
-    if (-not $m.Success) {
-        throw "repo root $Root has a .git file at $dotGit that does not contain a gitdir: pointer (malformed or unsupported .git file shape) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    $gitdir = Get-SingleGitdirRecord -Raw $raw
+    if ($null -eq $gitdir) {
+        throw "repo root $Root has a .git file at $dotGit that does not contain exactly one gitdir: record (malformed, junk-prefixed, multi-line, or otherwise unsupported .git file shape) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
     }
-    $gitdir = $m.Groups[1].Value
     if (-not [System.IO.Path]::IsPathRooted($gitdir)) { $gitdir = Join-Path $Root $gitdir }
     $resolvedGitdir = [System.IO.Path]::GetFullPath($gitdir)
     $wt = [regex]::Match($resolvedGitdir, '^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$')
     if (-not $wt.Success) {
         throw "repo root $Root's .git file points to $resolvedGitdir, which is not a <main>/.git/worktrees/<name> path (unsupported gitdir shape, e.g. a submodule) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    # PR954 round 3: a dangling gitdir pointer (target directory absent, or present but not
+    # a directory) must reject -- unverifiable is the same failure class as unreadable or
+    # malformed.
+    if (-not (Test-Path $resolvedGitdir -PathType Container)) {
+        throw "repo root $Root's .git file points to $resolvedGitdir, which does not exist as a directory (dangling worktree gitdir pointer) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
     }
     $mainRoot = $wt.Groups[1].Value
     if ((Test-Path (Join-Path $mainRoot 'GOAL.md')) -and (Test-Path (Join-Path $mainRoot 'tools\ember-cli'))) {

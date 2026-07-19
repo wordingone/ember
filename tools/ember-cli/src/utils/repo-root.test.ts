@@ -241,3 +241,145 @@ describe("PR954 round 2 — strict resolver: typed throws on malformed/unreadabl
     ).toThrow(CanonicalRootError);
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// PR954 round 3 — reviewer reject on round 2: an exact single-record parser (a junk-
+// prefixed or otherwise multi-line `.git` FILE must reject, not validate against whichever
+// line happens to match `gitdir:`) and a dangling-target check (the resolved
+// `<main>/.git/worktrees/<name>` directory must actually exist).
+// ---------------------------------------------------------------------------------------
+
+describe("PR954 round 3 — exact single-record .git FILE parser", () => {
+  test("junk-prefixed content (a valid gitdir: line preceded by garbage) is REJECTED, not silently matched", () => {
+    // Main root VALIDATES and the worktrees/lane target EXISTS, so the only possible
+    // cause of a throw here is the exact-single-record parser rejecting the junk prefix
+    // -- isolates this from the "main doesn't validate" / "dangling target" throw paths.
+    const mainRoot = path.join(scratchDir, "main-for-junk");
+    const worktreesDir = path.join(mainRoot, ".git", "worktrees", "lane");
+    fs.mkdirSync(worktreesDir, { recursive: true });
+    makeRepoMarker(mainRoot);
+
+    const root = path.join(scratchDir, "junk-prefixed");
+    fs.mkdirSync(root, { recursive: true });
+    makeRepoMarker(root);
+    fs.writeFileSync(root + "/.git", `junk\ngitdir: ${worktreesDir}\n`);
+
+    expect(() =>
+      resolveEmberRepoRoot({
+        startDir: root,
+        envRepoRoot: "",
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      }),
+    ).toThrow(CanonicalRootError);
+  });
+
+  test("a trailing junk line AFTER the gitdir: record is also REJECTED", () => {
+    const mainRoot = path.join(scratchDir, "main-for-junk2");
+    const worktreesDir = path.join(mainRoot, ".git", "worktrees", "lane");
+    fs.mkdirSync(worktreesDir, { recursive: true });
+    makeRepoMarker(mainRoot);
+
+    const root = path.join(scratchDir, "junk-suffixed");
+    fs.mkdirSync(root, { recursive: true });
+    makeRepoMarker(root);
+    fs.writeFileSync(root + "/.git", `gitdir: ${worktreesDir}\nextra junk\n`);
+
+    expect(() =>
+      resolveEmberRepoRoot({
+        startDir: root,
+        envRepoRoot: "",
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      }),
+    ).toThrow(CanonicalRootError);
+  });
+
+  test("a single gitdir: record with exactly one trailing newline is ACCEPTED (the common on-disk shape)", () => {
+    const mainRoot = path.join(scratchDir, "single-record-main");
+    const worktreesDir = path.join(mainRoot, ".git", "worktrees", "lane");
+    fs.mkdirSync(worktreesDir, { recursive: true });
+    makeRepoMarker(mainRoot);
+    const worktreeRoot = path.join(scratchDir, "single-record-wt");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    makeRepoMarker(worktreeRoot);
+    fs.writeFileSync(path.join(worktreeRoot, ".git"), `gitdir: ${worktreesDir}\n`);
+
+    const resolved = resolveEmberRepoRoot({
+      startDir: worktreeRoot,
+      envRepoRoot: "",
+      execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+    });
+    expect(resolved).toBe(path.resolve(mainRoot));
+  });
+
+  test("a single gitdir: record with NO trailing newline is also ACCEPTED", () => {
+    const mainRoot = path.join(scratchDir, "no-newline-main");
+    const worktreesDir = path.join(mainRoot, ".git", "worktrees", "lane");
+    fs.mkdirSync(worktreesDir, { recursive: true });
+    makeRepoMarker(mainRoot);
+    const worktreeRoot = path.join(scratchDir, "no-newline-wt");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    makeRepoMarker(worktreeRoot);
+    fs.writeFileSync(path.join(worktreeRoot, ".git"), `gitdir: ${worktreesDir}`);
+
+    const resolved = resolveEmberRepoRoot({
+      startDir: worktreeRoot,
+      envRepoRoot: "",
+      execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+    });
+    expect(resolved).toBe(path.resolve(mainRoot));
+  });
+});
+
+describe("PR954 round 3 — dangling worktree gitdir target", () => {
+  test("a gitdir: pointer whose target directory does not exist on disk is REJECTED (dangling pointer)", () => {
+    const mainRoot = path.join(scratchDir, "dangling-main");
+    fs.mkdirSync(mainRoot, { recursive: true });
+    makeRepoMarker(mainRoot);
+    // Deliberately do NOT create <mainRoot>/.git/worktrees/lane -- the pointer target
+    // must not exist for this test.
+    const danglingTarget = path.join(mainRoot, ".git", "worktrees", "lane");
+    expect(fs.existsSync(danglingTarget)).toBe(false);
+
+    const worktreeRoot = path.join(scratchDir, "dangling-wt");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    makeRepoMarker(worktreeRoot);
+    fs.writeFileSync(path.join(worktreeRoot, ".git"), `gitdir: ${danglingTarget}\n`);
+
+    expect(() =>
+      resolveEmberRepoRoot({
+        startDir: worktreeRoot,
+        envRepoRoot: "",
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      }),
+    ).toThrow(CanonicalRootError);
+  });
+
+  test("a gitdir: pointer whose target exists but is a FILE, not a directory, is also REJECTED", () => {
+    const mainRoot = path.join(scratchDir, "file-target-main");
+    fs.mkdirSync(path.join(mainRoot, ".git"), { recursive: true });
+    makeRepoMarker(mainRoot);
+    const fileTarget = path.join(mainRoot, ".git", "worktrees-lane-file");
+    fs.writeFileSync(fileTarget, "not a directory");
+
+    const worktreeRoot = path.join(scratchDir, "file-target-wt");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    makeRepoMarker(worktreeRoot);
+    // Shape the pointer as <main>/.git/worktrees/<name> textually so the regex still
+    // matches the worktree shape, but point it at a path where "worktrees/<name>" itself
+    // resolves to a FILE (not a directory) -- exercises the isDirectory() check, not just
+    // existsSync().
+    const fakeWorktreesDir = path.join(mainRoot, ".git", "worktrees");
+    fs.mkdirSync(fakeWorktreesDir, { recursive: true });
+    const fileNotDir = path.join(fakeWorktreesDir, "lane");
+    fs.writeFileSync(fileNotDir, "not a directory");
+    fs.writeFileSync(path.join(worktreeRoot, ".git"), `gitdir: ${fileNotDir}\n`);
+
+    expect(() =>
+      resolveEmberRepoRoot({
+        startDir: worktreeRoot,
+        envRepoRoot: "",
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      }),
+    ).toThrow(CanonicalRootError);
+  });
+});
