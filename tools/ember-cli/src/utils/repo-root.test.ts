@@ -7,7 +7,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resolveEmberRepoRoot } from "./repo-root.ts";
+import { resolveEmberRepoRoot, CanonicalRootError } from "./repo-root.ts";
 
 let scratchDir: string;
 
@@ -174,5 +174,70 @@ describe("issue #666 — worktree-vs-main-checkout convergence", () => {
     const { mainRoot } = makeMainAndWorktree();
     const resolved = resolveEmberRepoRoot({ startDir: mainRoot, envRepoRoot: "", execPath: path.join(scratchDir, "nowhere", "bin.exe") });
     expect(resolved).toBe(path.resolve(mainRoot));
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// PR954 round 2 — strict resolver: a marker-valid standalone root with NO .git at all is
+// accepted as-is (git-less deployment / plain copy). Every OTHER `.git`-FILE shape that
+// fails to fully resolve to a marker-valid main checkout now THROWS a typed
+// CanonicalRootError instead of silently falling back to the (possibly wrong) worktree
+// root -- the old canonicalizeThroughWorktree swallowed unreadable/malformed/unsupported
+// gitdir shapes and returned `root`, which is exactly the silent divergence issue #666
+// exists to kill.
+// ---------------------------------------------------------------------------------------
+
+describe("PR954 round 2 — strict resolver: typed throws on malformed/unreadable/unsupported .git FILE shapes", () => {
+  test("standalone root with no .git at all is accepted (git-less deployment)", () => {
+    const root = path.join(scratchDir, "standalone-repo");
+    fs.mkdirSync(root, { recursive: true });
+    makeRepoMarker(root);
+    expect(fs.existsSync(path.join(root, ".git"))).toBe(false);
+
+    const resolved = resolveEmberRepoRoot({
+      startDir: root,
+      execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+    });
+    expect(resolved).toBe(path.resolve(root));
+  });
+
+  test("`.git` FILE with a gitdir: line that isn't the worktrees/<name> shape (e.g. a submodule) throws CanonicalRootError, never silently returns the root", () => {
+    const root = path.join(scratchDir, "submodule-like");
+    fs.mkdirSync(root, { recursive: true });
+    makeRepoMarker(root);
+    const modulesDir = path.join(scratchDir, "parent-repo", ".git", "modules", "sub");
+    fs.mkdirSync(modulesDir, { recursive: true });
+    fs.writeFileSync(path.join(root, ".git"), `gitdir: ${modulesDir}\n`);
+
+    expect(() =>
+      resolveEmberRepoRoot({
+        startDir: root,
+        envRepoRoot: "",
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      }),
+    ).toThrow(CanonicalRootError);
+  });
+
+  test("`.git` FILE with content that does not match the `gitdir:` shape at all throws CanonicalRootError", () => {
+    const root = path.join(scratchDir, "malformed-gitfile");
+    fs.mkdirSync(root, { recursive: true });
+    makeRepoMarker(root);
+    fs.writeFileSync(path.join(root, ".git"), "not a gitdir pointer at all\n");
+
+    expect(() =>
+      resolveEmberRepoRoot({
+        startDir: root,
+        envRepoRoot: "",
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      }),
+    ).toThrow(CanonicalRootError);
+  });
+
+  test("resolveEmberRepoRoot's existing worktree->non-marker-main throw is still CanonicalRootError (typed, not a bare Error)", () => {
+    const { mainRoot, worktreeRoot } = makeMainAndWorktree();
+    fs.rmSync(path.join(mainRoot, "GOAL.md"));
+    expect(() =>
+      resolveEmberRepoRoot({ startDir: worktreeRoot, envRepoRoot: "", execPath: path.join(scratchDir, "nowhere", "bin.exe") }),
+    ).toThrow(CanonicalRootError);
   });
 });

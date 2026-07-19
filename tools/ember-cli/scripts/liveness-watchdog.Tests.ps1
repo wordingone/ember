@@ -795,3 +795,94 @@ Describe 'Marker-expiry enforcement leg (issue #464 receipt fix)' {
         $archivedPath | Should Match '20260709T123045Z'
     }
 }
+
+Describe 'Resolve-CanonicalRepoRoot (PR954 round 2 -- strict resolver, same contract as repo-root.ts)' {
+    BeforeEach {
+        $script:scratch = New-Scratch
+    }
+    AfterEach {
+        Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    function New-MarkerRoot {
+        param([Parameter(Mandatory)][string]$Root)
+        New-Item -ItemType Directory -Path (Join-Path $Root 'tools\ember-cli') -Force | Out-Null
+        Set-Content -Path (Join-Path $Root 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+    }
+
+    It 'a standalone marker-valid root with no .git at all is accepted as-is (git-less deployment)' {
+        $root = Join-Path $scratch 'standalone-repo'
+        New-MarkerRoot -Root $root
+        Test-Path (Join-Path $root '.git') | Should Be $false
+
+        Resolve-CanonicalRepoRoot -Root $root | Should Be $root
+    }
+
+    It 'a plain main checkout (.git is a directory) is returned unchanged' {
+        $root = Join-Path $scratch 'main-checkout'
+        New-MarkerRoot -Root $root
+        New-Item -ItemType Directory -Path (Join-Path $root '.git') -Force | Out-Null
+
+        Resolve-CanonicalRepoRoot -Root $root | Should Be $root
+    }
+
+    It 'a worktree .git FILE pointing at <main>/.git/worktrees/<name> canonicalizes to the marker-valid main root' {
+        $mainRoot = Join-Path $scratch 'main-checkout'
+        New-MarkerRoot -Root $mainRoot
+        $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        New-Item -ItemType Directory -Path $gitdirTarget -Force | Out-Null
+
+        $worktreeRoot = Join-Path $scratch 'wt\lane'
+        New-MarkerRoot -Root $worktreeRoot
+        Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: $gitdirTarget`n" -Encoding utf8
+
+        Resolve-CanonicalRepoRoot -Root $worktreeRoot | Should Be $mainRoot
+    }
+
+    It 'a .git FILE whose content does not match the gitdir: shape at all THROWS (never silently returns the worktree root)' {
+        $root = Join-Path $scratch 'malformed-gitfile'
+        New-MarkerRoot -Root $root
+        Set-Content -Path (Join-Path $root '.git') -Value "not a gitdir pointer at all`n" -Encoding utf8
+
+        { Resolve-CanonicalRepoRoot -Root $root } | Should Throw
+    }
+
+    It 'a .git FILE whose gitdir does not match <main>/.git/worktrees/<name> (e.g. a submodule) THROWS' {
+        $root = Join-Path $scratch 'submodule-like'
+        New-MarkerRoot -Root $root
+        $modulesDir = Join-Path $scratch 'parent-repo\.git\modules\sub'
+        New-Item -ItemType Directory -Path $modulesDir -Force | Out-Null
+        Set-Content -Path (Join-Path $root '.git') -Value "gitdir: $modulesDir`n" -Encoding utf8
+
+        { Resolve-CanonicalRepoRoot -Root $root } | Should Throw
+    }
+
+    It 'a worktree .git FILE resolving to a main checkout that fails the marker check THROWS naming "worktree"' {
+        $mainRoot = Join-Path $scratch 'main-checkout'
+        New-Item -ItemType Directory -Path (Join-Path $mainRoot '.git\worktrees\lane') -Force | Out-Null
+        # Deliberately NOT calling New-MarkerRoot on $mainRoot -- it never validates.
+
+        $worktreeRoot = Join-Path $scratch 'wt\lane'
+        New-MarkerRoot -Root $worktreeRoot
+        $gitdirTarget = Join-Path $mainRoot '.git\worktrees\lane'
+        Set-Content -Path (Join-Path $worktreeRoot '.git') -Value "gitdir: $gitdirTarget`n" -Encoding utf8
+
+        { Resolve-CanonicalRepoRoot -Root $worktreeRoot } | Should Throw 'worktree'
+    }
+}
+
+Describe 'PR954 round 2 -- watchdog script fails closed before HeartbeatPath construction on an unresolvable repo root' {
+    It 'invoking the script with -RepoRoot pointed at a malformed worktree .git FILE throws, never silently proceeds' {
+        $scratch = New-Scratch
+        try {
+            $root = Join-Path $scratch 'malformed-gitfile'
+            New-Item -ItemType Directory -Path (Join-Path $root 'tools\ember-cli') -Force | Out-Null
+            Set-Content -Path (Join-Path $root 'GOAL.md') -Value "# fixture`n" -Encoding utf8
+            Set-Content -Path (Join-Path $root '.git') -Value "not a gitdir pointer at all`n" -Encoding utf8
+
+            { . $scriptPath -RepoRoot $root } | Should Throw
+        } finally {
+            Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

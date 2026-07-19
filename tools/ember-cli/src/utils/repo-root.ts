@@ -34,41 +34,84 @@ function isRepoRoot(candidate: string): boolean {
   );
 }
 
-/** Issue #666: a git WORKTREE checkout carries the marker files too (GOAL.md +
- *  tools/ember-cli are regular checked-out files), so a marker walk started inside a
- *  worktree validates the WORKTREE root — and state paths derived from it (the liveness
- *  heartbeat) silently diverge from a watchdog anchored at the main checkout. This
- *  canonicalizes any marker-validated root through the worktree's `.git` FILE
+/** PR954 round 2: the typed error the strict canonical-root resolver throws for every
+ *  malformed/unreadable/unsupported `.git` FILE shape, and for a worktree whose main
+ *  checkout does not validate. Named + typed (never a bare Error) so a caller that must
+ *  degrade instead of crash (the heartbeat writer's inert-writer contract) can catch
+ *  precisely this failure class rather than swallowing unrelated bugs. */
+export class CanonicalRootError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CanonicalRootError";
+  }
+}
+
+/** Issue #666 / PR954 round 2 — a git WORKTREE checkout carries the marker files too
+ *  (GOAL.md + tools/ember-cli are regular checked-out files), so a marker walk started
+ *  inside a worktree validates the WORKTREE root — and state paths derived from it (the
+ *  liveness heartbeat) silently diverge from a watchdog anchored at the main checkout.
+ *  This canonicalizes any marker-validated root through the worktree's `.git` FILE
  *  (`gitdir: <main>/.git/worktrees/<name>`) to the main checkout root, so every launch
- *  location converges on ONE root. A worktree whose main checkout cannot be resolved or
- *  fails the marker check THROWS — writing state to a root the watchdog will never poll
- *  is exactly the silent divergence this exists to kill. */
+ *  location converges on ONE root.
+ *
+ *  Strict contract (round 2 repair of the reviewer's reject): a marker-valid standalone
+ *  root with NO `.git` at all is accepted as-is (git-less deployment / plain copy — the
+ *  ONLY case that returns a root unequal to a validated main checkout without a `.git`
+ *  FILE). Every OTHER shape that fails to fully resolve to a marker-valid main checkout —
+ *  an unreadable `.git` FILE, one whose content doesn't match `gitdir:` at all, one whose
+ *  gitdir doesn't match the `<main>/.git/worktrees/<name>` shape (e.g. a submodule), or a
+ *  worktree pointer whose resolved main checkout fails the marker check — THROWS a typed
+ *  CanonicalRootError. The old behavior silently returned `root` (the worktree root) for
+ *  unreadable/malformed/unsupported shapes, which is exactly the silent divergence issue
+ *  #666 exists to kill: a caller must never bind state paths to an unverified root. */
 function canonicalizeThroughWorktree(root: string): string {
   const dotGit = path.join(root, ".git");
   let stat: fs.Stats;
   try {
     stat = fs.statSync(dotGit);
-  } catch {
-    return root; // git-less deployment (plain copy/archive) — marker root stands as-is.
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return root; // no .git at all — standalone/git-less deployment.
+    throw new CanonicalRootError(
+      `Could not stat ${dotGit} while canonicalizing repo root ${root}: ` +
+        `${err instanceof Error ? err.message : String(err)} (issue #666 strict resolver).`,
+    );
   }
   if (stat.isDirectory()) return root; // main checkout.
 
-  let gitdir: string;
+  let raw: string;
   try {
-    const m = fs.readFileSync(dotGit, "utf8").match(/^gitdir:\s*(.+?)\s*$/m);
-    if (!m) return root; // not the worktree pointer shape — leave it alone.
-    gitdir = m[1]!;
-  } catch {
-    return root;
+    raw = fs.readFileSync(dotGit, "utf8");
+  } catch (err) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} exists but could not be read: ` +
+        `${err instanceof Error ? err.message : String(err)}. Refusing to bind state paths ` +
+        "to an unverified root (issue #666 strict resolver).",
+    );
   }
+  const m = raw.match(/^gitdir:\s*(.+?)\s*$/m);
+  if (!m) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} does not contain a gitdir: pointer (malformed or unsupported ` +
+        ".git file shape). Refusing to bind state paths to an unverified root (issue #666 " +
+        "strict resolver).",
+    );
+  }
+  const gitdir = m[1]!;
   // <main>/.git/worktrees/<name> -> <main>. A gitdir of any other shape (e.g. a
-  // submodule's .git/modules path) is not the worktree divergence — leave it alone.
+  // submodule's .git/modules path) is unsupported by this resolver.
   const resolvedGitdir = path.resolve(root, gitdir);
   const wtMatch = resolvedGitdir.match(/^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$/);
-  if (!wtMatch) return root;
+  if (!wtMatch) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} points to ${resolvedGitdir}, which is not a ` +
+        "<main>/.git/worktrees/<name> path (unsupported gitdir shape, e.g. a submodule). " +
+        "Refusing to bind state paths to an unverified root (issue #666 strict resolver).",
+    );
+  }
   const mainRoot = path.resolve(wtMatch[1]!);
   if (!isRepoRoot(mainRoot)) {
-    throw new Error(
+    throw new CanonicalRootError(
       `Resolved root ${root} is a git worktree of ${mainRoot}, but that main checkout ` +
         "does not validate as the ember repo root (missing GOAL.md + tools/ember-cli). " +
         "Refusing to bind state paths to a worktree root the watchdog will never poll " +

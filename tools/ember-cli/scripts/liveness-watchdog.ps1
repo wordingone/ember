@@ -90,29 +90,53 @@ param(
     [switch]$WhatIf = $false
 )
 
-# Issue #666: if this script's checkout is itself a git WORKTREE (`.git` is a FILE with a
-# `gitdir: <main>/.git/worktrees/<name>` pointer), state paths derived from it would
-# diverge from the main-tree paths the cockpit writer resolves to. Canonicalize to the
-# main checkout so writer and watchdog provably bind the SAME heartbeat file.
+# Issue #666 / PR954 round 2: if this script's checkout is itself a git WORKTREE (`.git`
+# is a FILE with a `gitdir: <main>/.git/worktrees/<name>` pointer), state paths derived
+# from it would diverge from the main-tree paths the cockpit writer resolves to.
+# Canonicalize to the main checkout so writer and watchdog provably bind the SAME
+# heartbeat file.
+#
+# Strict contract (round 2 repair of the reviewer's reject, same contract as
+# repo-root.ts's canonicalizeThroughWorktree/CanonicalRootError): a marker-valid
+# standalone root with NO `.git` at all is accepted as-is (git-less deployment / plain
+# copy -- the only case Test-Path's Leaf check returns false without a validated `.git`
+# FILE also covers "`.git` is a directory", i.e. an ordinary main checkout, which is
+# likewise returned unchanged). Every OTHER shape that fails to fully resolve to a
+# marker-valid main checkout -- an unreadable `.git` FILE, one whose content doesn't
+# match `gitdir:` at all, one whose gitdir doesn't match the
+# `<main>/.git/worktrees/<name>` shape (e.g. a submodule), or a worktree pointer whose
+# resolved main checkout fails the marker check -- THROWS. The old fallback-to-$Root
+# cases for the malformed/unreadable shapes are REMOVED: this function must never
+# silently return an unverified root, because that root feeds directly into
+# $HeartbeatPath below and a wrong root here means the watchdog polls a file nobody
+# writes.
 function Resolve-CanonicalRepoRoot {
     param([Parameter(Mandatory)][string]$Root)
     $dotGit = Join-Path $Root '.git'
     if (-not (Test-Path $dotGit -PathType Leaf)) { return $Root }
+
     try {
-        $m = [regex]::Match((Get-Content -Path $dotGit -Raw -ErrorAction Stop), '(?m)^gitdir:\s*(.+?)\s*$')
-        if (-not $m.Success) { return $Root }
-        $gitdir = $m.Groups[1].Value
-        if (-not [System.IO.Path]::IsPathRooted($gitdir)) { $gitdir = Join-Path $Root $gitdir }
-        $wt = [regex]::Match([System.IO.Path]::GetFullPath($gitdir), '^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$')
-        if (-not $wt.Success) { return $Root }
-        $mainRoot = $wt.Groups[1].Value
-        if ((Test-Path (Join-Path $mainRoot 'GOAL.md')) -and (Test-Path (Join-Path $mainRoot 'tools\ember-cli'))) {
-            return $mainRoot
-        }
-        throw "repo root $Root is a git worktree of $mainRoot, but that main checkout does not validate as the ember repo root (issue #666) -- refusing to poll a worktree-scoped heartbeat path."
-    } catch [System.Management.Automation.ItemNotFoundException] {
-        return $Root
+        $raw = Get-Content -Path $dotGit -Raw -ErrorAction Stop
+    } catch {
+        throw "repo root $Root has a .git file at $dotGit that could not be read: $($_.Exception.Message) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
     }
+
+    $m = [regex]::Match($raw, '(?m)^gitdir:\s*(.+?)\s*$')
+    if (-not $m.Success) {
+        throw "repo root $Root has a .git file at $dotGit that does not contain a gitdir: pointer (malformed or unsupported .git file shape) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    $gitdir = $m.Groups[1].Value
+    if (-not [System.IO.Path]::IsPathRooted($gitdir)) { $gitdir = Join-Path $Root $gitdir }
+    $resolvedGitdir = [System.IO.Path]::GetFullPath($gitdir)
+    $wt = [regex]::Match($resolvedGitdir, '^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$')
+    if (-not $wt.Success) {
+        throw "repo root $Root's .git file points to $resolvedGitdir, which is not a <main>/.git/worktrees/<name> path (unsupported gitdir shape, e.g. a submodule) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    $mainRoot = $wt.Groups[1].Value
+    if ((Test-Path (Join-Path $mainRoot 'GOAL.md')) -and (Test-Path (Join-Path $mainRoot 'tools\ember-cli'))) {
+        return $mainRoot
+    }
+    throw "repo root $Root is a git worktree of $mainRoot, but that main checkout does not validate as the ember repo root (issue #666) -- refusing to poll a worktree-scoped heartbeat path."
 }
 $RepoRoot = Resolve-CanonicalRepoRoot -Root $RepoRoot
 

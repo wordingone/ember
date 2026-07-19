@@ -186,3 +186,86 @@ describe("issue #666 — writer launched from a worktree cwd", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// PR954 round 2 — createLivenessHeartbeatWriter must use the STRICT resolver
+// (resolveEmberRepoRoot, never resolveEmberRepoRootOrCwd's silent cwd fallback). On
+// resolution failure it returns an INERT writer: filePath=null, a no-op write, exactly
+// one explicit warning, and zero mkdir/zero writes anywhere on disk. A heartbeat file
+// written to the wrong (unverified) root is worse than no heartbeat at all — an inert
+// writer is honest about "I could not establish where to write", where the old
+// resolveEmberRepoRootOrCwd fallback silently wrote to cwd instead.
+// ---------------------------------------------------------------------------------------
+
+describe("PR954 round 2 — inert writer on strict-resolver failure", () => {
+  test("no repoRoot override + unresolvable repo root -> inert writer: filePath is null", () => {
+    const arbitraryCwd = path.join(scratchDir, "no-repo-here");
+    fs.mkdirSync(arbitraryCwd, { recursive: true });
+    const savedCwd = process.cwd();
+    const savedEnv = process.env["EMBER_REPO_ROOT"];
+    try {
+      delete process.env["EMBER_REPO_ROOT"];
+      process.chdir(arbitraryCwd);
+
+      const warnCalls: unknown[][] = [];
+      const originalWarn = console.warn;
+      console.warn = (...args: unknown[]) => {
+        warnCalls.push(args);
+      };
+      let writer: ReturnType<typeof createLivenessHeartbeatWriter>;
+      try {
+        writer = createLivenessHeartbeatWriter({});
+      } finally {
+        console.warn = originalWarn;
+      }
+
+      expect(writer.filePath).toBeNull();
+      // Exactly one explicit warning on construction.
+      expect(warnCalls.length).toBe(1);
+      expect(String(warnCalls[0]?.[0])).toMatch(/repo root/i);
+    } finally {
+      process.chdir(savedCwd);
+      if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedEnv;
+    }
+  });
+
+  test("inert writer's write() is a true no-op: never throws, never creates a directory, never writes a file", () => {
+    const arbitraryCwd = path.join(scratchDir, "no-repo-here-2");
+    fs.mkdirSync(arbitraryCwd, { recursive: true });
+    const savedCwd = process.cwd();
+    const savedEnv = process.env["EMBER_REPO_ROOT"];
+    try {
+      delete process.env["EMBER_REPO_ROOT"];
+      process.chdir(arbitraryCwd);
+
+      const originalWarn = console.warn;
+      console.warn = () => {};
+      let writer: ReturnType<typeof createLivenessHeartbeatWriter>;
+      try {
+        writer = createLivenessHeartbeatWriter({});
+      } finally {
+        console.warn = originalWarn;
+      }
+
+      // Snapshot the scratch tree before write(); it must be byte-for-byte unchanged
+      // after -- no mkdir, no file.
+      const before = fs.readdirSync(scratchDir, { recursive: true } as never);
+      expect(() => writer.write()).not.toThrow();
+      const after = fs.readdirSync(scratchDir, { recursive: true } as never);
+      expect(after).toEqual(before);
+      expect(fs.existsSync(path.join(arbitraryCwd, "tools"))).toBe(false);
+    } finally {
+      process.chdir(savedCwd);
+      if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedEnv;
+    }
+  });
+
+  test("a resolvable repo root still produces a live (non-inert) writer, unaffected by the inert path", () => {
+    const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 99, version: "v" });
+    expect(writer.filePath).not.toBeNull();
+    writer.write(Date.UTC(2026, 6, 7, 12, 0, 0));
+    expect(fs.existsSync(writer.filePath as string)).toBe(true);
+  });
+});
