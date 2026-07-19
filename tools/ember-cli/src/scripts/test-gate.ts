@@ -15,48 +15,42 @@
 //
 // This gate runs the quarantined files in their own one-file-per-process invocations, so a
 // teardown panic in one can never contaminate another file's result, then classifies every run
-// (quarantined or not) purely from its printed summary line — never from exit code alone:
-//   - no summary line printed (crashed/timed out before "Ran N tests...") -> RED, no exceptions.
-//   - summary line printed with fail > 0                                  -> RED, no exceptions.
-//   - summary line printed with fail === 0, exit code 0                   -> GREEN.
-//   - summary line printed with fail === 0, exit code !== 0, AND the file
-//     is on the quarantine list                                          -> QUARANTINE-PASS
-//     (logged loudly, does not fail the gate).
-//   - summary line printed with fail === 0, exit code !== 0, NOT quarantined
-//     -> RED (an un-quarantined file must never get the panic's benefit of the doubt).
+// (quarantined or not) purely from its printed summary line — never from exit code alone. See
+// gate-classifier.ts's verdict() for the exact decision table (unit-tested there, including the
+// P1-1 recurrence regression: an unlisted file with a clean-summary-then-nonzero-exit run must
+// be RED, never QUARANTINE-PASS).
 //
 // Usage: bun run scripts/test-gate.ts [--timeout-ms=30000]
+//
+// Test-only overrides (set by scripts/test-gate.e2e.test.ts, never by a real invocation):
+//   GATE_SRC_ROOT       — run against this directory instead of the real repo tree.
+//   GATE_QUARANTINE_JSON — a JSON string array replacing the real quarantine-list.ts contents.
 
-import { QUARANTINE } from "./quarantine-list.ts";
+import { QUARANTINE as REAL_QUARANTINE } from "./quarantine-list.ts";
+import { parseSummary, verdict, type ClassifyInput } from "./gate-classifier.ts";
+import { drainAvailable } from "./drain-stream.ts";
 
-const SRC_ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+// Forward-slashed, always -- verified empirically (2026-07-19) that Bun.spawn's executable-path
+// resolution on Windows breaks specifically when `cwd` is a backslash-style path (ENOENT from
+// uv_spawn on an exe that demonstrably exists at that exact path), regardless of drive letter or
+// whether the exe itself is given bare ("bun") or fully qualified. import.meta.url already
+// yields forward slashes, so this only bites when GATE_SRC_ROOT is supplied externally (e.g. the
+// e2e test's mkdtempSync()/tmpdir(), which return backslash paths on Windows).
+const SRC_ROOT = (
+  process.env["GATE_SRC_ROOT"]
+  ?? new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")
+).replaceAll("\\", "/");
 
-interface RunResult {
+const QUARANTINE: readonly string[] = process.env["GATE_QUARANTINE_JSON"]
+  ? (JSON.parse(process.env["GATE_QUARANTINE_JSON"]) as string[])
+  : REAL_QUARANTINE;
+
+interface RunResult extends ClassifyInput {
   label: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  hasSummary: boolean;
-  passCount: number | null;
-  failCount: number | null;
   tail: string;
 }
 
-function parseSummary(output: string): Pick<RunResult, "hasSummary" | "passCount" | "failCount"> {
-  const failMatch = output.match(/^\s*(\d+)\s+fail\s*$/m);
-  const passMatch = output.match(/^\s*(\d+)\s+pass\s*$/m);
-  const ranMatch = output.match(/Ran\s+\d+\s+tests?\s+across\s+\d+\s+files?/);
-  if (!failMatch || !ranMatch) {
-    // A summary is only trustworthy if BOTH the "N fail" line and the trailing "Ran N tests
-    // across M files" line printed -- a panic mid-summary (rare, but possible) could print one
-    // without the other, and that partial state must not be read as a clean pass.
-    return { hasSummary: false, passCount: null, failCount: null };
-  }
-  return {
-    hasSummary: true,
-    passCount: passMatch ? Number(passMatch[1]) : null,
-    failCount: Number(failMatch[1]),
-  };
-}
+const DRAIN_IDLE_MS = 1_000;
 
 async function runOne(args: string[], label: string, timeoutMs: number): Promise<RunResult> {
   const proc = Bun.spawn(["bun", "test", ...args], {
@@ -71,12 +65,17 @@ async function runOne(args: string[], label: string, timeoutMs: number): Promise
     proc.kill();
   }, timeoutMs);
 
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
+  // Wait for the actual process exit FIRST, then drain -- draining concurrently with a hung
+  // child risks the classic pipe-buffer deadlock (child blocks writing once the OS pipe fills,
+  // because nothing not-yet-called is reading); waiting on `proc.exited` costs nothing extra in
+  // the normal case since the streams close at essentially the same moment the process does.
   const exitCode = await proc.exited;
   clearTimeout(killer);
+
+  const [stdout, stderr] = await Promise.all([
+    drainAvailable(proc.stdout, DRAIN_IDLE_MS),
+    drainAvailable(proc.stderr, DRAIN_IDLE_MS),
+  ]);
 
   const combined = stdout + "\n" + stderr;
   const summary = parseSummary(combined);
@@ -87,16 +86,6 @@ async function runOne(args: string[], label: string, timeoutMs: number): Promise
     ...summary,
     tail: combined.trim().split("\n").slice(-6).join("\n"),
   };
-}
-
-function verdict(r: RunResult, quarantined: boolean): "RED" | "GREEN" | "QUARANTINE-PASS" {
-  if (r.timedOut) return "RED";
-  if (!r.hasSummary) return "RED";
-  if ((r.failCount ?? 1) > 0) return "RED";
-  if (r.exitCode === 0) return "GREEN";
-  // fail === 0, exit code non-zero (the post-summary panic shape) -- only spendable if the
-  // file is on the quarantine list; otherwise this is a NEW gate-worthy defect.
-  return quarantined ? "QUARANTINE-PASS" : "RED";
 }
 
 async function main(): Promise<void> {
@@ -147,4 +136,12 @@ async function main(): Promise<void> {
   process.exitCode = red ? 1 : 0;
 }
 
-await main();
+if (import.meta.main) {
+  await main();
+  // A killed quarantined child can leave a dangling OS handle behind even after its own process
+  // has exited (see drainWithGrace's comment) -- that can keep bun's own event loop alive
+  // indefinitely waiting for a handle that will never close. process.exitCode is already set
+  // correctly above; force the actual exit rather than let a foreign process's leftover handle
+  // hang this one.
+  process.exit(process.exitCode ?? 0);
+}
