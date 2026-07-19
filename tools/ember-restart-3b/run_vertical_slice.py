@@ -34,7 +34,7 @@ from semantic_stream import ManifestBoundTokenStream
 from semantic_contract import semantic_model_contract_sha256
 from optimizer_transition import validate_optimizer_transition_registry
 from step2_realization_registry import validate_step2_realization_registry_bundle
-from train import run_launch
+from train import run_launch, run_text_lab_preflight
 
 
 def _sha256(path: Path) -> str:
@@ -2292,6 +2292,10 @@ def run_semantic(
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
+    # Shared-text authority must be complete before even a CUDA availability probe.
+    text_lab_preflight = run_text_lab_preflight(repo_root=Path(__file__).resolve().parents[2])
+    if text_lab_preflight.get("result") != "VERIFIED":
+        raise ValueError(str(text_lab_preflight.get("result", "text-lab authority was not admitted")))
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production semantic runner")
     if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
