@@ -4604,6 +4604,17 @@ pub fn reset_identity_bind_race_entry_test_hook() {
 /// env-var delay, used here as a timeout rather than a blind sleep, capped
 /// at 5s) so the replacement is guaranteed to land before the dispatching
 /// thread proceeds -- no timing assumption on either side of the race.
+///
+/// Round-14 reviewer REJECT (silent continuation on timeout): the round-13
+/// version discarded `wait_timeout_while`'s result -- if the release wait
+/// expired, dispatch would silently proceed with NO proof the out-of-band
+/// replacement had actually completed first, undermining the very
+/// determinism the entry/release handshake exists to guarantee. The wait
+/// result is now inspected: on timeout this test-only hook `panic!`s with a
+/// distinct, named message rather than ever falling through silently. A
+/// panic here is acceptable and unambiguous -- this code path is
+/// `cfg(feature = "test-fixtures")` only and can never build into a
+/// production binary.
 #[cfg(feature = "test-fixtures")]
 static IDENTITY_SNAPSHOT_RACE_ENTRY: (Mutex<bool>, std::sync::Condvar) =
     (Mutex::new(false), std::sync::Condvar::new());
@@ -4633,13 +4644,20 @@ fn identity_snapshot_race_test_hook() {
     }
     let (lock, cvar) = &IDENTITY_SNAPSHOT_RACE_RELEASE;
     let released = lock.lock().unwrap();
-    let _ = cvar
+    let (_guard, wait_result) = cvar
         .wait_timeout_while(
             released,
             std::time::Duration::from_millis(timeout_ms),
             |released| !*released,
         )
         .unwrap();
+    if wait_result.timed_out() {
+        panic!(
+            "identity_snapshot_race_test_hook: release signal never observed within \
+             {timeout_ms}ms -- refusing to silently proceed without proof the out-of-band \
+             replacement completed before this dispatch resumes"
+        );
+    }
 }
 
 #[cfg(not(feature = "test-fixtures"))]

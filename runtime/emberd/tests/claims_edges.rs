@@ -1065,6 +1065,69 @@ fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapsh
     );
 }
 
+/// Round-14 reviewer REJECT: `identity_snapshot_race_test_hook` discarded
+/// its release-wait's timeout result, so if the release signal never
+/// arrived the dispatching thread would silently proceed with no proof the
+/// out-of-band replacement had completed -- exactly the silent-continuation
+/// failure the entry/release handshake exists to rule out. This test proves
+/// the hook now hard-fails instead: it arms the hook, spawns the
+/// dispatching thread, blocks on positive entry (proving the thread is
+/// genuinely paused inside the hook), and then deliberately NEVER releases
+/// it. The dispatching thread must panic with the hook's distinct timeout
+/// message once its (short, 200ms) budget elapses, and that panic must
+/// surface through `thread::join`'s `Err` -- proving silent continuation
+/// past an unobserved release is no longer possible.
+#[test]
+fn identity_snapshot_race_test_hook_hard_fails_when_release_is_never_observed() {
+    let root = sandbox("identity-snapshot-race-hook-timeout");
+    let receipt_path = root.join("custody").join("snap-timeout-preflight.json");
+    let manifest = write_manifest(&root, "snap-timeout", "gpu-snap-timeout", &receipt_path);
+    let db = root.join("emberd.sqlite3");
+    let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
+
+    reset_identity_snapshot_race_entry_test_hook();
+    // Short budget: this test intentionally lets the hook's wait expire, so
+    // it must stay fast rather than paying the full 5s cap.
+    std::env::set_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS", "200");
+    let daemon_a = daemon.clone();
+    let manifest_a = manifest.clone();
+
+    // Suppress the default panic-to-stderr hook for this expected panic so
+    // the test's own output stays clean; restored unconditionally below.
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let thread_a = thread::spawn(move || dispatch(&daemon_a, &manifest_a));
+
+    // Positive entry handshake: prove the dispatching thread is genuinely
+    // paused inside the hook before we deliberately withhold release.
+    assert!(
+        wait_for_identity_snapshot_race_entry_test_hook(Duration::from_secs(5)),
+        "dispatching thread never entered its post-snapshot-read pause \
+         within the budget -- the race window was never armed"
+    );
+
+    // Deliberately never call release_identity_snapshot_race_test_hook --
+    // the hook's release wait must time out and hard-fail on its own.
+    let join_result = thread_a.join();
+    std::panic::set_hook(previous_hook);
+    std::env::remove_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS");
+
+    let panic_payload = join_result.expect_err(
+        "REGRESSION: the dispatching thread must panic (hard-fail) when the release signal \
+         is never observed, never silently proceed past an unobserved release",
+    );
+    let message = panic_payload
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| panic_payload.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_default();
+    assert!(
+        message.contains("identity_snapshot_race_test_hook")
+            && message.contains("release signal never observed"),
+        "expected the hook's distinct timeout panic message, got: {message:?}"
+    );
+}
+
 /// Round-9 reviewer REJECT: the `dispatch_receipt_rollback_evidence` UPSERT
 /// used a bare `ON CONFLICT DO UPDATE SET escaped=excluded.escaped`, so a
 /// later, ORDINARY clean rollback (escaped=0) landing on the same
