@@ -433,6 +433,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
             "program": fixture,
             "args": ["--exact", "fixture_rpc_child_process", "--nocapture"],
             "resource_lease": "cpu-fixture",
+            "maximum_job_memory_bytes": 64 * 1024 * 1024,
             "env": env,
             "restart_policy": "never",
         }),

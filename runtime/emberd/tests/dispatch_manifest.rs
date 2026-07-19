@@ -218,23 +218,25 @@ fn identical_dispatch_retry_reconstructs_the_existing_job_and_receipt() {
     let manifest_bytes = fs::read(&manifest).unwrap();
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
     let first = daemon
-        .dispatch_manifest_bytes_at_with_probes_and_host(
+        .dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
             &manifest_bytes,
             &manifest_sha256,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     let second = daemon
-        .dispatch_manifest_bytes_at_with_probes_and_host(
+        .dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
             &manifest_bytes,
             &manifest_sha256,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         )
         .unwrap();
     assert_eq!(first.handle.pid, second.handle.pid);
@@ -707,13 +709,14 @@ fn dispatch_manifest_bytes_refuses_a_conflicting_daemon_custody_snapshot_before_
 
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
     assert!(matches!(
-        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
             &manifest_bytes,
             &manifest_sha256,
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -739,13 +742,14 @@ fn dispatch_manifest_bytes_never_creates_an_unapproved_candidate_custody_root() 
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
 
     assert!(matches!(
-        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
             &manifest_bytes,
             &manifest_sha256,
             10_001,
             |_root| Ok(1024),
             || Ok(1024),
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
         ),
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
@@ -774,13 +778,14 @@ fn dispatch_manifest_snapshots_are_bounded_after_semantic_preflight() {
         let bytes = serde_json::to_vec(&payload).unwrap();
         let digest = format!("{:x}", Sha256::digest(&bytes));
         assert!(matches!(
-            daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+            daemon.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
                 &bytes,
                 &digest,
                 10_001,
                 |_root| Ok(1024),
                 || Ok(2048),
                 || Ok(host_capacity(0)),
+                |_root| Ok(u64::MAX),
             ),
             Err(EmberdError::DispatchHostCommitReserve { .. })
         ));
@@ -817,13 +822,14 @@ fn duplicate_snapshot_at_capacity_preserves_every_unrelated_snapshot() {
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(before.len(), 64);
     assert!(matches!(
-        daemon.dispatch_manifest_bytes_at_with_probes_and_host(
+        daemon.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
             &duplicate_bytes,
             &duplicate_digest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
             || Ok(host_capacity(0)),
+            |_root| Ok(u64::MAX),
         ),
         Err(EmberdError::DispatchHostCommitReserve { .. })
     ));
@@ -1090,15 +1096,17 @@ fn dispatch_manifest_refuses_consumer_floor_violation_regardless_of_manifest() {
 }
 
 #[test]
-fn dispatch_manifest_vram_provider_unavailable_refuses_admission() {
-    // Increment 1: a Driver-Locked provider (VRAM) reporting UNAVAILABLE is
-    // BLOCKING, not waived. A declared nonzero minimum_free_vram_bytes is
-    // never bypassed just because nvidia-smi (or an equivalent) is absent
-    // from this host.
+fn dispatch_manifest_vram_provider_unavailable_admits_with_disclosure() {
+    // Continuation/resource law (reviewer correction 2026-07-18): no
+    // numerical runtime provider may be REQUIRED until a direct named
+    // source exists. A Driver-Locked provider (VRAM) reporting UNAVAILABLE
+    // therefore does not block admission; safety is carried by the causal
+    // owned-budget admission + Job wall + survival floors, and the receipt
+    // truthfully discloses provider_status = "unavailable".
     let root = sandbox("vram-unavailable");
     let manifest = write_manifest(&root, "dispatch-vram-unavailable", 10_000);
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
-    let error = daemon
+    let outcome = daemon
         .dispatch_manifest_at_with_probes_and_host_and_floor(
             &manifest,
             10_001,
@@ -1111,22 +1119,17 @@ fn dispatch_manifest_vram_provider_unavailable_refuses_admission() {
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
             |_root| Ok(u64::MAX),
         )
-        .unwrap_err();
-    assert!(
-        matches!(error, EmberdError::DispatchVramProviderUnavailable { .. }),
-        "unexpected error: {error:?}"
-    );
-    assert_eq!(daemon.job_state("dispatch-vram-unavailable").unwrap(), None);
-    let receipt: Value = serde_json::from_slice(
-        &fs::read(root.join("custody").join("preflight.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(receipt["result"], "REFUSED_VRAM_PROVIDER_UNAVAILABLE");
+        .unwrap();
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(&outcome.receipt.path).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "PREFLIGHT_PASSED");
     assert_eq!(receipt["vram_reserve"]["provider_status"], "unavailable");
+    assert_eq!(receipt["vram_reserve"]["available_free_bytes"], Value::Null);
     assert_eq!(
-        receipt["vram_reserve"]["minimum_free_bytes"],
-        json!(1)
+        daemon.job_state("dispatch-vram-unavailable").unwrap(),
+        Some(JobState::Running)
     );
+    daemon.stop_job("dispatch-vram-unavailable").unwrap();
 }
 
 #[test]
@@ -1196,4 +1199,63 @@ fn dispatch_manifest_pinned_host_budget_admits_exactly_one_of_two_concurrent_ove
     for job_id in ["dispatch-conc-a", "dispatch-conc-b"] {
         let _ = daemon.stop_job(job_id);
     }
+}
+
+
+#[test]
+fn dispatch_refuses_while_a_pre_upgrade_live_job_has_unknown_budget() {
+    // Upgrade-state reconciliation: a live job persisted BEFORE the
+    // maximum_job_memory_bytes column existed carries the migration default
+    // 0 (an UNKNOWN budget). Admission must fail CLOSED, naming the job,
+    // until that job exits — counting it as zero would over-reserve.
+    let root = sandbox("legacy-live-budget");
+    let manifest = write_manifest(&root, "dispatch-post-upgrade", 10_000);
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    {
+        let connection = rusqlite::Connection::open(root.join("emberd.sqlite3")).unwrap();
+        connection
+            .execute(
+                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,maximum_job_memory_bytes,state,started_at_ms,updated_at_ms) VALUES('legacy-pre-upgrade','x','[]','{}','legacy-lease',1,'obj','deadbeef','never','out.log','err.log',0,'running',1,1)",
+                [],
+            )
+            .unwrap();
+    }
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap_err();
+    match error {
+        EmberdError::DispatchUnknownLegacyLiveBudget { job_ids } => {
+            assert_eq!(job_ids, vec!["legacy-pre-upgrade".to_string()]);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+    // The legacy job exiting clears the reconciliation block.
+    {
+        let connection = rusqlite::Connection::open(root.join("emberd.sqlite3")).unwrap();
+        connection
+            .execute(
+                "UPDATE jobs SET state='exited' WHERE job_id='legacy-pre-upgrade'",
+                [],
+            )
+            .unwrap();
+    }
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host_and_floor(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| Ok(u64::MAX),
+        )
+        .unwrap();
+    assert!(outcome.receipt.path.is_file());
+    daemon.stop_job("dispatch-post-upgrade").unwrap();
 }

@@ -199,6 +199,9 @@ pub enum EmberdError {
     VramProviderUnavailable {
         detail: String,
     },
+    DispatchUnknownLegacyLiveBudget {
+        job_ids: Vec<String>,
+    },
     DispatchVramProviderUnavailable {
         minimum_free_vram_bytes: u64,
         detail: String,
@@ -395,14 +398,18 @@ pub struct DispatchManifest {
 
 const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
-/// Increment-1 gate: a Driver-Locked provider (VRAM) reporting UNAVAILABLE
-/// refuses admission like any other unmet reserve — a declared nonzero
-/// `minimum_free_vram_bytes` is never waived. This flips to `true` only
-/// once increment-2/3 land their reclassification prerequisites (a
-/// UNAVAILABLE-tolerant scheduling class + receipted evidence the omission
-/// is causally safe); the reclassification code stays wired but gated off
-/// until then.
-const VRAM_PROVIDER_UNAVAILABLE_ADMITS: bool = false;
+/// Provider-availability law (program-director continuation/resource law,
+/// reviewer correction 2026-07-18): no numerical runtime provider may be
+/// invented or REQUIRED until a direct named source exists; a Driver-Locked
+/// provider (VRAM) reporting UNAVAILABLE therefore does NOT itself block
+/// admission — safety is carried by the causal owned-budget admission, the
+/// Job wall, and the consumer survival floors. Admission under an
+/// unavailable provider is truthfully disclosed in the preflight receipt
+/// (`vram_reserve.provider_status = "unavailable"`); a provider that IS
+/// available still enforces `minimum_free_vram_bytes`. The blocking arm
+/// stays wired but gated off, for a future increment that earns a named
+/// source.
+const VRAM_PROVIDER_UNAVAILABLE_ADMITS: bool = true;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -1172,6 +1179,38 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        self.dispatch_manifest_bytes_at_with_probes_and_host_and_floor(
+            manifest_bytes,
+            expected_sha256,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            available_free_bytes,
+        )
+    }
+
+    /// Same as [`Daemon::dispatch_manifest_bytes_at_with_probes_and_host`],
+    /// plus an explicit probe for the hardcoded consumer survival floors
+    /// ([`survival_floors::ROOTS`]) — split out only so tests can drive the
+    /// floor probe independently of the host's real drives.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_manifest_bytes_at_with_probes_and_host_and_floor<F, G, H, K>(
+        &self,
+        manifest_bytes: &[u8],
+        expected_sha256: &str,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        floor_free_space: K,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+        K: FnMut(&Path) -> Result<u64>,
+    {
         if validate_hash(expected_sha256).is_err() || hash_bytes(manifest_bytes) != expected_sha256
         {
             return Err(EmberdError::InvalidDispatchManifest {
@@ -1209,7 +1248,7 @@ impl Daemon {
                 free_space,
                 free_vram,
                 free_host_commit,
-                available_free_bytes,
+                floor_free_space,
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -1252,7 +1291,7 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
-            available_free_bytes,
+            floor_free_space,
         )
     }
 
@@ -1632,9 +1671,9 @@ impl Daemon {
         }
 
         // A Driver-Locked provider reporting UNAVAILABLE (no GPU/driver on
-        // this host): gated by VRAM_PROVIDER_UNAVAILABLE_ADMITS (increment 1:
-        // false). Until that flips, UNAVAILABLE is BLOCKING — a declared
-        // nonzero minimum_free_vram_bytes is never waived.
+        // this host): non-blocking under the continuation/resource law —
+        // see VRAM_PROVIDER_UNAVAILABLE_ADMITS. The receipt discloses
+        // provider_status truthfully either way.
         let available_vram: Option<u64> = match free_vram() {
             Ok(value) => Some(value),
             Err(EmberdError::VramProviderUnavailable { detail }) => {
@@ -2219,6 +2258,27 @@ impl Daemon {
                 .map(|state| format!("'{state}'"))
                 .collect::<Vec<_>>()
                 .join(",");
+            // Upgrade-state reconciliation: a live job persisted before the
+            // budget column existed carries the migration default 0 — an
+            // UNKNOWN budget, not a zero one. Counting it as zero would let
+            // this admission over-reserve against memory that job actually
+            // holds, so admission fails CLOSED (typed, naming the jobs)
+            // until every unknown-budget live job exits.
+            let legacy_sql = format!(
+                "SELECT job_id FROM jobs WHERE state IN ({placeholders}) AND maximum_job_memory_bytes=0"
+            );
+            let legacy_job_ids = {
+                let mut stmt = tx.prepare(&legacy_sql)?;
+                let ids = stmt
+                    .query_map([], |row| row.get::<_, String>(0))?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                ids
+            };
+            if !legacy_job_ids.is_empty() {
+                return Err(EmberdError::DispatchUnknownLegacyLiveBudget {
+                    job_ids: legacy_job_ids,
+                });
+            }
             let sql = format!(
                 "SELECT COALESCE(SUM(maximum_job_memory_bytes),0) FROM jobs WHERE state IN ({placeholders})"
             );

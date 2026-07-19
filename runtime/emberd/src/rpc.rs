@@ -65,6 +65,10 @@ struct StartJobParams {
     program: String,
     args: Vec<String>,
     resource_lease: String,
+    // Required, no serde default: the generic start path must never admit a
+    // job with an unknown (zero) committed-memory budget — the pinned host
+    // budget SUM would silently undercount it (governor increment 1).
+    maximum_job_memory_bytes: u64,
     #[serde(default)]
     env: BTreeMap<String, String>,
     #[serde(default)]
@@ -218,12 +222,22 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 Ok(value) => value,
                 Err(response) => return (response, false),
             };
+            if params.maximum_job_memory_bytes == 0 {
+                return (
+                    invalid_params(
+                        id,
+                        "start_job requires a positive maximum_job_memory_bytes",
+                    ),
+                    false,
+                );
+            }
             let mut spec = JobSpec::new(
                 params.job_id,
                 params.program,
                 params.args,
                 params.resource_lease,
             );
+            spec = spec.with_maximum_job_memory_bytes(params.maximum_job_memory_bytes);
             spec = spec.with_restart_policy(params.restart_policy);
             for (key, value) in params.env {
                 spec = spec.with_env(key, value);
