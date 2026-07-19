@@ -1,5 +1,6 @@
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """repo_guard_selftest.py — hermetic fixture-repo selftests for tools/repo-guard.sh
 and tools/check_names_hashed.py (issue #91).
 
@@ -130,9 +131,9 @@ def test_red_name_via_hash_match():
 
 
 # ---------------------------------------------------------------------------
-# RED: absolute local path
+# RED: ordinary backslash absolute local path
 # ---------------------------------------------------------------------------
-def test_red_absolute_path():
+def test_red_absolute_path_single_separator():
     tmp = make_fixture("fix/selftest-red-path")
     try:
         (tmp / "docs").mkdir(exist_ok=True)
@@ -152,6 +153,31 @@ def test_red_absolute_path():
     finally:
         cleanup(tmp)
 
+
+
+# ---------------------------------------------------------------------------
+# RED: JSON-escaped backslash absolute local path
+# ---------------------------------------------------------------------------
+def test_red_absolute_path_doubled_json_escape():
+    tmp = make_fixture("fix/selftest-red-path-json-escaped")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        # A JSON/Python serialized Windows path contains two backslashes per
+        # separator on disk. Build it at runtime so this selftest source does
+        # not trip the repository-wide path scan itself.
+        slash = chr(92) * 2
+        bad_path = "C" + ":" + slash + slash.join(["Users", "someone", "notes.txt"])
+        (tmp / "docs" / "note.md").write_text(
+            "See " + bad_path + " for the escaped local copy.\n",
+            encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [paths]" in out, out
+        assert "docs/note.md:1" in out, out
+    finally:
+        cleanup(tmp)
 
 # ---------------------------------------------------------------------------
 # GREEN: clean fixture, no denylist needed at all
@@ -291,7 +317,8 @@ def test_ci_fail_closed_empty_hashed_denylist():
 
 ALL_TESTS = [
     test_red_name_via_hash_match,
-    test_red_absolute_path,
+    test_red_absolute_path_single_separator,
+    test_red_absolute_path_doubled_json_escape,
     test_green_clean_fixture,
     test_green_hashed_denylist_no_match,
     test_ci_fail_closed_no_denylist,
