@@ -266,6 +266,14 @@ RC5B=$?
 assert_eq "empty live PR body exits non-zero" "2" "$RC5B"
 assert_contains "empty body message is explicit" "$OUT5B" "live PR body for #999 is empty"
 
+OUT5C="$(cd "$WORK" && PATH="$FAKEBIN:$PATH" env "${FAST_RETRY_ENV[@]}" \
+  FAKE_PR_HEAD="$PR_HEAD_SHA" FAKE_PR_BASE_REF="master" FAKE_PR_BASE_SHA="$REAL_MASTER_TIP" \
+  FAKE_MERGEABLE="true" FAKE_BODY_API_FAIL="1" \
+  bash "$PREFLIGHT" 999 "$PR_HEAD_SHA" 2>&1)"
+RC5C=$?
+assert_eq "gh api failure (body query) exits non-zero" "2" "$RC5C"
+assert_contains "body-query api failure message names the failed call" "$OUT5C" "gh api pulls/999 (body)"
+
 # ---------------------------------------------------------------------------
 # Part 6 (P1-A/P1-B negative continued): a stale refs/pull/<N>/merge — parents
 # built against an OLD base — is rejected even though head/base/mergeable are
