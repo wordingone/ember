@@ -11,6 +11,7 @@ import ctypes
 from contextlib import contextmanager
 import hashlib
 import importlib
+import importlib.machinery
 import importlib.metadata
 import json
 import os
@@ -58,14 +59,38 @@ def _hold_windows_read_locks(paths: list[Path]) -> list[int]:
     return handles
 
 
-def _release_windows_read_locks(handles: list[int]) -> None:
+def _release_windows_read_locks(handles: list[int]) -> list[OSError]:
+    errors: list[OSError] = []
     if os.name == "nt":
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
         kernel32.CloseHandle.restype = ctypes.c_int
         for handle in handles:
             if not kernel32.CloseHandle(ctypes.c_void_p(handle)):
-                raise OSError(ctypes.get_last_error(), "unable to release tokenizer runtime byte")
+                errors.append(OSError(ctypes.get_last_error(), "unable to release tokenizer runtime byte"))
+    return errors
+
+
+class _BoundRuntimeFinder:
+    """Reject private-root imports whose byte is outside the admitted manifest."""
+
+    def __init__(self, *, root: Path, allowed_files: set[Path]) -> None:
+        self._root = root
+        self._allowed_files = allowed_files
+
+    def find_spec(self, fullname: str, path: object = None, target: object = None) -> object:
+        spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
+        origin = getattr(spec, "origin", None)
+        if not isinstance(origin, str) or origin in {"built-in", "frozen"}:
+            return spec
+        candidate = Path(origin).resolve()
+        try:
+            candidate.relative_to(self._root)
+        except ValueError:
+            return spec
+        if candidate not in self._allowed_files:
+            raise ImportError("tokenizer runtime import resolved an unlisted private byte")
+        return spec
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -347,13 +372,16 @@ def lease_tokenizer_runtime_bundle(*, bundle_root: Path, manifest_path: Path) ->
     root = Path(bundle_root).resolve()
     if any(name == "tokenizers" or name.startswith("tokenizers.") for name in sys.modules):
         raise ValueError("tokenizer runtime refuses a preloaded module")
-    bound_paths = [Path(manifest_path).resolve(), *[
+    bound_files = [Path(manifest_path).resolve(), *[
         root.joinpath(*PurePosixPath(str(record["path"])).parts)
         for record in manifest["files"]
     ]]
+    bound_paths = bound_files
     handles: list[int] = []
     inserted = False
+    finder: _BoundRuntimeFinder | None = None
     previous_dont_write_bytecode = sys.dont_write_bytecode
+    body_error: BaseException | None = None
     try:
         handles = _hold_windows_read_locks(bound_paths)
         # Re-read all bytes while Windows denies writes/deletes, then retain
@@ -363,6 +391,8 @@ def lease_tokenizer_runtime_bundle(*, bundle_root: Path, manifest_path: Path) ->
         _after_final_validation_before_import_for_test(root)
         sys.path.insert(0, str(root))
         inserted = True
+        finder = _BoundRuntimeFinder(root=root, allowed_files=set(bound_files))
+        sys.meta_path.insert(0, finder)
         module = importlib.import_module("tokenizers")
         native = importlib.import_module("tokenizers.tokenizers")
         for candidate in (module, native):
@@ -375,9 +405,15 @@ def lease_tokenizer_runtime_bundle(*, bundle_root: Path, manifest_path: Path) ->
         if post_import_manifest != manifest:
             raise ValueError("tokenizer runtime authority changed during import")
         yield manifest
-    except Exception:
+    except BaseException as error:
+        body_error = error
         raise
     finally:
+        if finder is not None:
+            try:
+                sys.meta_path.remove(finder)
+            except ValueError:
+                pass
         if inserted:
             try:
                 sys.path.remove(str(root))
@@ -392,4 +428,18 @@ def lease_tokenizer_runtime_bundle(*, bundle_root: Path, manifest_path: Path) ->
                 except OSError:
                     sys.modules.pop(name, None)
         sys.dont_write_bytecode = previous_dont_write_bytecode
-        _release_windows_read_locks(handles)
+        try:
+            release_errors = _release_windows_read_locks(handles)
+        except BaseException as error:
+            release_errors = [OSError(str(error))]
+        if release_errors:
+            message = "; ".join(str(error) for error in release_errors)
+            cleanup_error = RuntimeError(f"tokenizer runtime handle cleanup failed: {message}")
+            if body_error is not None:
+                body_error._tokenizer_runtime_cleanup_error = str(cleanup_error)
+                try:
+                    sys.stderr.write(f"{cleanup_error}\n")
+                except Exception:
+                    pass
+            else:
+                raise cleanup_error
