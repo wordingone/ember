@@ -22,7 +22,7 @@ import torch
 
 from durable_io import atomic_replace_durable
 from model import EXPERT_NAMES, UnifiedDecoder
-from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_realization_receipt
+from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_p2b_stream_episode, validate_realization_receipt
 from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
 
 
@@ -582,14 +582,24 @@ def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest
 
 def _specialist_lineage(
     lineage: Mapping[str, Any], *, active_expert: str, candidate_parameter_sha256: Mapping[str, str],
-) -> tuple[dict[str, Any], dict[str, str]]:
+    data_cursor: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, str], dict[str, str], Path]:
     """Close one-family accretion against independently supplied parent/root bundles."""
 
     if active_expert not in EXPERT_NAMES:
         raise ValueError("specialist lineage requires one specialist active expert")
+    p2b_fields = {"parent_manifest", "root_manifest", "trained_expert_ids", "episode"}
+    p2b_cursor = isinstance(data_cursor, Mapping) and (
+        "selection_cursor" in data_cursor or data_cursor.get("schema_version") == TRAINING_CURSOR_SCHEMA_VERSION
+    )
+    is_p2b = isinstance(lineage, Mapping) and set(lineage) == p2b_fields
+    if p2b_cursor and not is_p2b:
+        raise ValueError("P2B training cursor requires P2B specialist lineage")
+    if is_p2b and not p2b_cursor:
+        raise ValueError("P2B specialist lineage requires a P2B training cursor")
     required = {"parent_manifest", "root_manifest", "trained_expert_ids", "data_verification_receipt", "execution_slice"}
     expected_fields = {*required, "scene_split_selection"} if active_expert == "vision" else required
-    if not isinstance(lineage, Mapping) or set(lineage) != expected_fields:
+    if not is_p2b and (not isinstance(lineage, Mapping) or set(lineage) != expected_fields):
         raise ValueError("specialist lineage has an invalid shape")
     parent_source, root_source = lineage["parent_manifest"], lineage["root_manifest"]
     if not isinstance(parent_source, (str, Path)) or not isinstance(root_source, (str, Path)):
@@ -627,6 +637,22 @@ def _specialist_lineage(
             raise ValueError(f"inactive expert parameter content changed from parent: {name}")
         if name not in trained and candidate_parameter_sha256[name] != root_parameters[name]:
             raise ValueError(f"not-yet-trained expert must remain equal to root genesis: {name}")
+    if is_p2b:
+        episode = validate_p2b_stream_episode(lineage["episode"], active_expert=active_expert)
+        parent_cursor = parent.get("data_cursor")
+        if not isinstance(parent_cursor, Mapping):
+            raise ValueError("P2B specialist lineage parent lacks a replay cursor")
+        _validate_p2b_checkpoint_progress(
+            episode,
+            data_cursor,
+            {"global_step": parent_cursor.get("global_step"), "tokens_seen": parent_cursor.get("tokens_seen")},
+        )
+        return ({
+            "parent_checkpoint_sha256": parent_sha256,
+            "root_genesis_checkpoint_sha256": root_sha256,
+            "trained_expert_ids": list(trained),
+            "episode": episode,
+        }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
     verification = lineage["data_verification_receipt"]
     capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
     if not isinstance(verification, Mapping) or set(verification) != SPECIALIST_VERIFICATION_FIELDS:
@@ -911,7 +937,7 @@ def _write_checkpoint_artifacts_impl(
     preflight_lineage = None
     preflight_genesis = None
     if specialist_lineage is not None:
-        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256)
+        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256, data_cursor=data_cursor)
     published_root = root
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
