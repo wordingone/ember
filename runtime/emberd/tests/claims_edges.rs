@@ -46,8 +46,9 @@
 
 use emberd::{
     release_identity_snapshot_race_test_hook, reset_identity_bind_race_entry_test_hook,
-    reset_identity_snapshot_race_entry_test_hook, wait_for_identity_bind_race_entry_test_hook,
-    wait_for_identity_snapshot_race_entry_test_hook, Daemon, HostCommitCapacity,
+    reset_identity_snapshot_race_entry_test_hook, set_identity_snapshot_race_delay_ms_test_hook,
+    wait_for_identity_bind_race_entry_test_hook, wait_for_identity_snapshot_race_entry_test_hook,
+    Daemon, HostCommitCapacity,
 };
 use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
@@ -55,8 +56,33 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// Round-15 reviewer REJECT: the round-13 positive test and the round-14
+/// negative test both mutate the SAME `IDENTITY_SNAPSHOT_RACE_ENTRY`/
+/// `IDENTITY_SNAPSHOT_RACE_RELEASE` statics in `emberd`, with no
+/// serialization guard between them -- under cargo's default parallel test
+/// execution, one test's condvar-reset could interleave with the other's
+/// in-flight race window, and repeated green runs under `--test-threads=1`
+/// would never expose it. (Separately, the delay used to be a
+/// process-global env var; that cross-test-contamination defect is fixed
+/// at the source in `emberd` itself -- see
+/// `set_identity_snapshot_race_delay_ms_test_hook`'s doc comment -- by
+/// switching to a per-thread override, so unrelated tests' dispatch calls
+/// can no longer observe it at all. This lock remains necessary because
+/// these two tests still share the same entry/release statics.) Every test
+/// that touches the snapshot-race fixture acquires this lock FIRST and
+/// holds it for its entire body (reset, thread-local arm inside the spawned
+/// closure, dispatch spawn, entry/release-or-timeout, join, condvar
+/// cleanup), making the two tests mutually exclusive regardless of cargo's
+/// scheduling. `lock().unwrap_or_else(|e|
+/// e.into_inner())` tolerates poisoning: the round-14 negative's expected
+/// panic happens on the spawned WORKER thread, never on the thread holding
+/// this lock, but a poisoned mutex must never cascade into an unrelated
+/// test failing to acquire it at all.
+static SNAPSHOT_FIXTURE_LOCK: Mutex<()> = Mutex::new(());
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const HOST_COMMIT_RESERVE_BYTES: u64 = 10 * GIB;
@@ -978,6 +1004,13 @@ fn concurrent_same_job_id_dispatch_cannot_let_a_refused_attempt_delete_the_winne
 /// receipt file, exist for the job_id afterward.
 #[test]
 fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapshot() {
+    // Serialize against every other test that touches the snapshot-race
+    // fixture (shared entry/release statics in emberd) -- see
+    // `SNAPSHOT_FIXTURE_LOCK`'s doc comment. Held for the whole test body.
+    let _fixture_guard = SNAPSHOT_FIXTURE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
     let root = sandbox("identity-bind-snapshot-replacement");
     let db = root.join("emberd.sqlite3");
     let receipt_path = root.join("custody").join("snap-replace-preflight.json");
@@ -987,10 +1020,16 @@ fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapsh
     let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
 
     reset_identity_snapshot_race_entry_test_hook();
-    std::env::set_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS", "5000");
     let daemon_a = daemon.clone();
     let manifest_a = manifest.clone();
-    let thread_a = thread::spawn(move || dispatch(&daemon_a, &manifest_a));
+    let thread_a = thread::spawn(move || {
+        // Arm the race window for THIS thread only, as the very first
+        // statement -- a per-thread override, never a process-global env
+        // var, so no other concurrently-running test's dispatch call can
+        // ever observe or be affected by this.
+        set_identity_snapshot_race_delay_ms_test_hook(Some(5000));
+        dispatch(&daemon_a, &manifest_a)
+    });
 
     // Positive entry handshake: block until the dispatching thread has
     // PROVABLY entered its post-snapshot-read pause, rather than assuming a
@@ -1018,7 +1057,6 @@ fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapsh
     release_identity_snapshot_race_test_hook();
 
     let result = thread_a.join().unwrap();
-    std::env::remove_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS");
 
     let error = result.expect_err(
         "REGRESSION: a manifest atomically replaced after the dispatching thread's own \
@@ -1079,6 +1117,18 @@ fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapsh
 /// past an unobserved release is no longer possible.
 #[test]
 fn identity_snapshot_race_test_hook_hard_fails_when_release_is_never_observed() {
+    // Serialize against every other test that touches the snapshot-race
+    // fixture (shared entry/release statics in emberd) -- see
+    // `SNAPSHOT_FIXTURE_LOCK`'s doc comment. Held for the whole test body.
+    // A poisoned lock is expected and tolerated here: THIS test's own
+    // expected panic happens on the spawned worker thread, never on this
+    // (the lock-holding) thread, but `unwrap_or_else` guards against any
+    // poisoning regardless of source so it can never cascade into a
+    // different test failing to acquire the lock at all.
+    let _fixture_guard = SNAPSHOT_FIXTURE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
     let root = sandbox("identity-snapshot-race-hook-timeout");
     let receipt_path = root.join("custody").join("snap-timeout-preflight.json");
     let manifest = write_manifest(&root, "snap-timeout", "gpu-snap-timeout", &receipt_path);
@@ -1086,17 +1136,24 @@ fn identity_snapshot_race_test_hook_hard_fails_when_release_is_never_observed() 
     let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
 
     reset_identity_snapshot_race_entry_test_hook();
-    // Short budget: this test intentionally lets the hook's wait expire, so
-    // it must stay fast rather than paying the full 5s cap.
-    std::env::set_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS", "200");
     let daemon_a = daemon.clone();
     let manifest_a = manifest.clone();
 
-    // Suppress the default panic-to-stderr hook for this expected panic so
-    // the test's own output stays clean; restored unconditionally below.
-    let previous_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let thread_a = thread::spawn(move || dispatch(&daemon_a, &manifest_a));
+    // The dispatching thread's expected panic is allowed to print to
+    // stderr -- determinism of the fixture (via SNAPSHOT_FIXTURE_LOCK)
+    // matters here, not quiet test output. No panic-hook mutation: the
+    // default hook is process-global and cargo runs tests in parallel by
+    // default, so silencing it here would silence every OTHER concurrently
+    // running test's real panics too.
+    let thread_a = thread::spawn(move || {
+        // Arm the race window for THIS thread only, as the very first
+        // statement -- a per-thread override, never a process-global env
+        // var. Short (200ms) budget: this test intentionally lets the
+        // hook's wait expire, so it must stay fast rather than paying the
+        // full 5s cap.
+        set_identity_snapshot_race_delay_ms_test_hook(Some(200));
+        dispatch(&daemon_a, &manifest_a)
+    });
 
     // Positive entry handshake: prove the dispatching thread is genuinely
     // paused inside the hook before we deliberately withhold release.
@@ -1109,8 +1166,6 @@ fn identity_snapshot_race_test_hook_hard_fails_when_release_is_never_observed() 
     // Deliberately never call release_identity_snapshot_race_test_hook --
     // the hook's release wait must time out and hard-fail on its own.
     let join_result = thread_a.join();
-    std::panic::set_hook(previous_hook);
-    std::env::remove_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS");
 
     let panic_payload = join_result.expect_err(
         "REGRESSION: the dispatching thread must panic (hard-fail) when the release signal \
