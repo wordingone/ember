@@ -743,7 +743,7 @@ class SpecialistStreamTests(unittest.TestCase):
         self.assertLessEqual(len(materialized), 1)
         self.assertEqual(
             set(cursor),
-            {"schema_version", "selection_receipt_sha256", "selection_rule_id", "selected_ordinal", "next_source_index", "global_step", "tokens_seen"},
+            {"schema_version", "selection_receipt_sha256", "selection_rule_id", "selected_ordinal", "next_source_index"},
         )
         self.assertEqual(cursor["selection_receipt_sha256"], hashlib.sha256(json.dumps(selection.receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest())
         self.assertEqual(cursor["selected_ordinal"], 1)
@@ -758,14 +758,22 @@ class SpecialistStreamTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "selection cursor progress"):
             selection._validate_cursor_progress({**end_cursor, "selected_ordinal": end_cursor["selected_ordinal"] - 1})
         uninterrupted_tail = [next(uninterrupted)[0]["sample_id"] for _ in range(3)]
-        resumed = stream.open_execution_selection(receipt=selection.receipt, cursor=cursor)
+        resumed = stream.open_execution_selection(
+            receipt=selection.receipt, cursor=cursor, build_receipt_path=build_receipt_path,
+            expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+            expected_selection_receipt_sha256=cursor["selection_receipt_sha256"],
+        )
         resumed_iterator = resumed.iter_from(cursor)
         resumed_tail = [next(resumed_iterator)[0]["sample_id"] for _ in range(3)]
         self.assertEqual(resumed_tail, uninterrupted_tail)
         with self.assertRaisesRegex(ValueError, "build receipt"):
             stream.prepare_execution_selection(capability="image", selection_rule_id="image_scene_split_train_v1", build_receipt_path=build_receipt_path, expected_build_receipt_sha256="0" * 64)
         with self.assertRaisesRegex(ValueError, "selection cursor"):
-            stream.open_execution_selection(receipt=selection.receipt, cursor={**cursor, "selection_receipt_sha256": "0" * 64})
+            stream.open_execution_selection(
+                receipt=selection.receipt, cursor={**cursor, "selection_receipt_sha256": "0" * 64}, build_receipt_path=build_receipt_path,
+                expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                expected_selection_receipt_sha256=cursor["selection_receipt_sha256"],
+            )
 
 
 
@@ -807,6 +815,70 @@ class SpecialistStreamTests(unittest.TestCase):
                 SpecialistStream._read_bound_build_receipt(
                     candidate, hashlib.sha256(candidate.read_bytes()).hexdigest(),
                 )
+
+    def test_open_execution_selection_requires_canonical_build_authority_and_closed_cursor(self) -> None:
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        build_receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        build_receipt_sha256 = "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e"
+        stream = self._open_bound(manifest_path)
+        selection = stream.prepare_execution_selection(
+            capability="image", selection_rule_id="image_scene_split_train_v1",
+            build_receipt_path=build_receipt_path, expected_build_receipt_sha256=build_receipt_sha256,
+        )
+        cursor = selection._initial_cursor()
+        self.assertEqual(
+            set(cursor),
+            {"schema_version", "selection_receipt_sha256", "selection_rule_id", "selected_ordinal", "next_source_index"},
+        )
+        forged = stream._derive_execution_selection(
+            capability="image", selection_rule_id="image_scene_split_train_v1", build_receipt_sha256="f" * 64,
+        )
+        with self.assertRaisesRegex(ValueError, "build receipt"):
+            stream.open_execution_selection(
+                receipt=forged.receipt, cursor=forged._initial_cursor(), build_receipt_path=build_receipt_path,
+                expected_build_receipt_sha256=build_receipt_sha256,
+                expected_selection_receipt_sha256=hashlib.sha256(
+                    json.dumps(forged.receipt, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                ).hexdigest(),
+            )
+        with mock.patch.object(stream, "_derive_execution_selection", side_effect=AssertionError("whole selection rederivation")):
+            opened = stream.open_execution_selection(
+                receipt=selection.receipt, cursor=cursor, build_receipt_path=build_receipt_path,
+                expected_build_receipt_sha256=build_receipt_sha256,
+                expected_selection_receipt_sha256=hashlib.sha256(
+                    json.dumps(selection.receipt, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                ).hexdigest(),
+            )
+        self.assertEqual(opened.receipt, selection.receipt)
+
+    def test_open_execution_selection_validates_nonzero_prefix_once_before_iteration(self) -> None:
+        from specialist_stream import ExecutionSelection
+        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
+        build_receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        build_receipt_sha256 = "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e"
+        stream = self._open_bound(manifest_path)
+        selection = stream.prepare_execution_selection(
+            capability="image", selection_rule_id="image_scene_split_train_v1",
+            build_receipt_path=build_receipt_path, expected_build_receipt_sha256=build_receipt_sha256,
+        )
+        iterator = selection.iter_from()
+        _record, cursor = next(iterator)
+        receipt_sha256 = hashlib.sha256(json.dumps(selection.receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        calls: list[dict[str, object]] = []
+        original = ExecutionSelection._validate_cursor_progress
+
+        def counted(instance: object, state: object) -> dict[str, object]:
+            calls.append(dict(state) if isinstance(state, dict) else {})
+            return original(instance, state)  # type: ignore[arg-type]
+
+        with mock.patch.object(ExecutionSelection, "_validate_cursor_progress", autospec=True, side_effect=counted):
+            opened = stream.open_execution_selection(
+                receipt=selection.receipt, cursor=cursor, build_receipt_path=build_receipt_path,
+                expected_build_receipt_sha256=build_receipt_sha256, expected_selection_receipt_sha256=receipt_sha256,
+            )
+            next(opened.iter_from(cursor))
+        self.assertEqual(calls, [cursor])
+        self.assertLessEqual(len(opened._chunk_cache), 1)
 
 if __name__ == "__main__":
     unittest.main()
