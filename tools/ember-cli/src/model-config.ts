@@ -40,18 +40,26 @@ export function modelSupportsContextManagement(_modelId: string): boolean {
  * Returns true when the served model supports structured JSON outputs.
  *
  * Never inferred from a model-id string literal. Honored ONLY when the
- * caller supplies an exact capability declaration bound to the served
- * model's `modelConfigSha256` — an owned identity without such a
- * declaration (or without a `modelConfigSha256` to bind it to) defaults to
- * false.
+ * caller supplies a capability declaration whose `modelConfigSha256` equals
+ * EXACTLY the served identity's `modelConfigSha256` (pass the hash from the
+ * seat-produced `SelectedModelContract`). A missing declaration, a missing
+ * served hash, or a fabricated/mismatched hash all default to false.
  */
 export function modelSupportsStructuredOutputs(
   declaration: ModelCapabilityDeclaration | null | undefined,
+  servedModelConfigSha256: string | null | undefined,
 ): boolean {
   if (declaration == null) return false;
   if (
     typeof declaration.modelConfigSha256 !== 'string' ||
     declaration.modelConfigSha256.trim() === ''
+  ) {
+    return false;
+  }
+  if (
+    typeof servedModelConfigSha256 !== 'string' ||
+    servedModelConfigSha256.trim() === '' ||
+    declaration.modelConfigSha256 !== servedModelConfigSha256
   ) {
     return false;
   }

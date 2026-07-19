@@ -8,7 +8,11 @@ import { tmpdir } from "os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { spawnSync } from "child_process";
 
-import type { OwnedModelIdentity, OwnedServerLaunch } from "./model-seat.ts";
+import type {
+  ModelConfigCapabilities,
+  OwnedModelIdentity,
+  OwnedServerLaunch,
+} from "./model-seat.ts";
 
 interface ResolverResult {
   status: number | null;
@@ -286,6 +290,42 @@ export function captureDevelopmentResolver(
   };
 }
 
+/**
+ * Parses the optional `model_config_capabilities` declaration from a seat
+ * resolver payload. Absent → undefined (no capability). Present → must be a
+ * closed object whose `model_config_sha256` equals EXACTLY the served
+ * identity's `model_config_sha256`; anything else fails closed.
+ */
+function parseModelConfigCapabilities(
+  payload: Record<string, unknown>,
+  servedModelConfigSha256: string,
+): ModelConfigCapabilities | undefined {
+  const raw = payload["model_config_capabilities"];
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("owned seat capability declaration is invalid");
+  }
+  const record = raw as Record<string, unknown>;
+  requireExactFields(
+    record,
+    ["model_config_sha256", "structured_outputs"],
+    "owned seat capability declaration",
+  );
+  const sha = record["model_config_sha256"];
+  const structuredOutputs = record["structured_outputs"];
+  if (
+    typeof sha !== "string" ||
+    !/^[0-9a-f]{64}$/.test(sha) ||
+    sha !== servedModelConfigSha256 ||
+    typeof structuredOutputs !== "boolean"
+  ) {
+    throw new Error(
+      "owned seat capability declaration is not bound to the served model config",
+    );
+  }
+  return { modelConfigSha256: sha, structuredOutputs };
+}
+
 function resolverError(result: ResolverResult): string {
   try {
     const payload = JSON.parse(result.stdout) as { errors?: unknown };
@@ -508,6 +548,7 @@ export function loadOwnedModelIdentity(
   ) {
     throw new Error("owned seat resolver returned an invalid launch descriptor");
   }
+  const modelConfigCapabilities = parseModelConfigCapabilities(payload, modelConfigSha256);
   const launch = parseOwnedLaunch(
     payload["launch"],
     { manifestPath, registryPath, pythonExecutable: input.pythonExecutable ?? "python" },
@@ -523,6 +564,7 @@ export function loadOwnedModelIdentity(
     modelName,
     serverSourceSha256,
     tokenizerSha256,
+    ...(modelConfigCapabilities !== undefined ? { modelConfigCapabilities } : {}),
   };
 }
 
@@ -619,6 +661,13 @@ export function loadOwnedDevelopmentIdentity(
     bootstrap.cleanup();
     throw new Error("development seat resolver returned an invalid non-claiming identity");
   }
+  let modelConfigCapabilities: ModelConfigCapabilities | undefined;
+  try {
+    modelConfigCapabilities = parseModelConfigCapabilities(payload, modelConfigSha256);
+  } catch (error) {
+    bootstrap.cleanup();
+    throw error;
+  }
   let launch: OwnedServerLaunch;
   try {
     launch = parseDevelopmentLaunch(
@@ -653,6 +702,7 @@ export function loadOwnedDevelopmentIdentity(
     modelName,
     serverSourceSha256,
     tokenizerSha256,
+    ...(modelConfigCapabilities !== undefined ? { modelConfigCapabilities } : {}),
   };
 }
 

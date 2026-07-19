@@ -39,32 +39,61 @@ describe('modelSupportsContextManagement', () => {
 });
 
 describe('modelSupportsStructuredOutputs', () => {
+  const SERVED = 'd'.repeat(64);
+
   test('no declaration defaults to false', () => {
-    expect(modelSupportsStructuredOutputs(null)).toBe(false);
-    expect(modelSupportsStructuredOutputs(undefined)).toBe(false);
+    expect(modelSupportsStructuredOutputs(null, SERVED)).toBe(false);
+    expect(modelSupportsStructuredOutputs(undefined, SERVED)).toBe(false);
   });
 
   test('a declaration without a bound modelConfigSha256 defaults to false', () => {
     expect(
-      modelSupportsStructuredOutputs({ modelConfigSha256: null, structuredOutputs: true }),
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: null, structuredOutputs: true },
+        SERVED,
+      ),
     ).toBe(false);
   });
 
-  test('an exact declaration bound to modelConfigSha256 is honored', () => {
+  test('a declaration matching the exact served modelConfigSha256 is honored', () => {
     expect(
-      modelSupportsStructuredOutputs({
-        modelConfigSha256: 'd'.repeat(64),
-        structuredOutputs: true,
-      }),
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: true },
+        SERVED,
+      ),
     ).toBe(true);
+  });
+
+  test('NEGATIVE: a fabricated/mismatched hash is denied even with structuredOutputs=true', () => {
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: 'e'.repeat(64), structuredOutputs: true },
+        SERVED,
+      ),
+    ).toBe(false);
+  });
+
+  test('NEGATIVE: a missing served hash denies capability regardless of declaration', () => {
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: true },
+        null,
+      ),
+    ).toBe(false);
+    expect(
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: true },
+        '',
+      ),
+    ).toBe(false);
   });
 
   test('a bound declaration with structuredOutputs=false stays false', () => {
     expect(
-      modelSupportsStructuredOutputs({
-        modelConfigSha256: 'd'.repeat(64),
-        structuredOutputs: false,
-      }),
+      modelSupportsStructuredOutputs(
+        { modelConfigSha256: SERVED, structuredOutputs: false },
+        SERVED,
+      ),
     ).toBe(false);
   });
 });

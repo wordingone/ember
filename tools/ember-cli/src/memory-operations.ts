@@ -7,6 +7,8 @@
 import { readdir, readFile, stat } from 'fs/promises';
 import { join } from 'path';
 
+import type { SelectedModelContract } from './entrypoints/model-seat.ts';
+
 // ---- Constants ----
 
 /** Maximum number of lines to include from a single memory file. */
@@ -17,9 +19,6 @@ export const PER_FILE_SIZE_LIMIT = 25 * 1024; // 25 KB
 
 /** Maximum total byte size of the assembled memory block. */
 export const TOTAL_BLOCK_LIMIT = 100 * 1024; // 100 KB
-
-/** Model used for semantic relevance selection. */
-export const SELECT_MODEL = 'qwen-3.6';
 
 // ---- Types ----
 
@@ -334,18 +333,24 @@ export function findRelevantMemories(
  *
  * - Returns entries in model-returned order (with unselected entries appended)
  * - Falls back to all entries on model error
- * - Returns all entries when `callModel` is not provided
+ * - Returns all entries when `callModel` or `modelContract` is not provided
+ *
+ * The model identity comes ONLY from the seat-produced `SelectedModelContract`
+ * (see `entrypoints/model-seat.ts::selectedModelContract`) — never a hardcoded
+ * model-id literal. No contract selected (refused/OFFLINE seat) means no
+ * semantic selection at all.
  */
 export async function selectRelevantMemories(
   entries: MemoryFileEntry[],
   query: string,
+  modelContract?: SelectedModelContract,
   callModel?: SelectModelFn,
 ): Promise<MemoryFileEntry[]> {
-  if (!callModel || entries.length === 0) return entries;
+  if (!callModel || !modelContract || entries.length === 0) return entries;
 
   try {
     const descriptions = entries.map((e) => ({ name: e.name, description: e.description }));
-    const selected = await callModel({ model: SELECT_MODEL, descriptions });
+    const selected = await callModel({ model: modelContract.modelName, descriptions });
 
     // Build a map for fast lookup
     const byName = new Map(entries.map((e) => [e.name, e]));
@@ -377,6 +382,8 @@ export async function selectRelevantMemories(
 export interface LoadMemoryPromptOpts {
   dir: string;
   query?: string;
+  /** Seat-produced model identity; semantic selection is skipped without it. */
+  modelContract?: SelectedModelContract;
   callModel?: SelectModelFn;
 }
 
@@ -393,8 +400,8 @@ export async function loadMemoryPrompt(opts: LoadMemoryPromptOpts): Promise<stri
   if (entries.length === 0) return '';
 
   const ranked =
-    opts.query && opts.callModel
-      ? await selectRelevantMemories(entries, opts.query, opts.callModel)
+    opts.query && opts.callModel && opts.modelContract
+      ? await selectRelevantMemories(entries, opts.query, opts.modelContract, opts.callModel)
       : entries;
 
   // Drop trailing entries until the assembled block fits within TOTAL_BLOCK_LIMIT

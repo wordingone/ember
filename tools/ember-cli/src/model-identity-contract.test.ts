@@ -93,7 +93,7 @@ describe("model identity contract (Fix #51 scope)", () => {
     expect(contract?.modelName).toBe("ember-owned:a" + "a".repeat(11));
     expect(contract?.modelConfigSha256).toBe("d".repeat(64));
     expect(contract?.structuredOutputs).toBe(false);
-    expect(modelSupportsStructuredOutputs(contract)).toBe(false);
+    expect(modelSupportsStructuredOutputs(contract, contract?.modelConfigSha256)).toBe(false);
   });
 
   it("honors structuredOutputs only when declared and bound to the exact modelConfigSha256", () => {
@@ -116,7 +116,7 @@ describe("model identity contract (Fix #51 scope)", () => {
 
     const contract = selectedModelContract(decision);
     expect(contract?.structuredOutputs).toBe(true);
-    expect(modelSupportsStructuredOutputs(contract)).toBe(true);
+    expect(modelSupportsStructuredOutputs(contract, "d".repeat(64))).toBe(true);
   });
 
   it("rejects a capability declaration whose modelConfigSha256 does not match the served identity's hash", () => {
@@ -142,17 +142,20 @@ describe("model identity contract (Fix #51 scope)", () => {
     const contract = selectedModelContract(decision);
     expect(contract?.modelConfigSha256).toBe("d".repeat(64));
     expect(contract?.structuredOutputs).toBe(false);
-    expect(modelSupportsStructuredOutputs(contract)).toBe(false);
+    expect(modelSupportsStructuredOutputs(contract, contract?.modelConfigSha256)).toBe(false);
   });
 
   it("modelSupportsStructuredOutputs defaults false with no declaration and never trusts an unbound declaration", () => {
-    expect(modelSupportsStructuredOutputs(null)).toBe(false);
-    expect(modelSupportsStructuredOutputs(undefined)).toBe(false);
+    expect(modelSupportsStructuredOutputs(null, "d".repeat(64))).toBe(false);
+    expect(modelSupportsStructuredOutputs(undefined, "d".repeat(64))).toBe(false);
     expect(
-      modelSupportsStructuredOutputs({
-        modelConfigSha256: null,
-        structuredOutputs: true,
-      }),
+      modelSupportsStructuredOutputs(
+        {
+          modelConfigSha256: null,
+          structuredOutputs: true,
+        },
+        "d".repeat(64),
+      ),
     ).toBe(false);
   });
 
