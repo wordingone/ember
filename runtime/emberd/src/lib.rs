@@ -4587,17 +4587,106 @@ pub fn reset_identity_bind_race_entry_test_hook() {
 /// reproducing the exact window the P1-1 fix closes: a caller's snapshot
 /// read racing an out-of-band atomic replacement of the same canonical
 /// file. In production this is an inert no-op.
+///
+/// Round-13 reviewer REJECT (test determinism): the original test drove
+/// this race with a fixed 60ms head-start sleep before performing the
+/// out-of-band replacement, which only ASSUMES the dispatching thread has
+/// reached this pause by then -- a loaded scheduler could replace the
+/// bytes before the snapshot read ever happens, exercising a different
+/// path or flaking. `IDENTITY_SNAPSHOT_RACE_ENTRY` below is a SEPARATE
+/// positive-entry signal from the round-11/12 `IDENTITY_BIND_RACE_ENTRY`
+/// (never aliased -- this hook fires before the snapshot is even handed to
+/// `bind_identity_within`, a different call site entirely): this hook
+/// flips the entry flag and notifies the moment it is entered, and
+/// `wait_for_identity_snapshot_race_entry_test_hook` lets the test block
+/// until it has OBSERVED that signal before performing the replacement.
+/// The hook then blocks on a second, release signal (bounded by the same
+/// env-var delay, used here as a timeout rather than a blind sleep, capped
+/// at 5s) so the replacement is guaranteed to land before the dispatching
+/// thread proceeds -- no timing assumption on either side of the race.
+#[cfg(feature = "test-fixtures")]
+static IDENTITY_SNAPSHOT_RACE_ENTRY: (Mutex<bool>, std::sync::Condvar) =
+    (Mutex::new(false), std::sync::Condvar::new());
+
+#[cfg(feature = "test-fixtures")]
+static IDENTITY_SNAPSHOT_RACE_RELEASE: (Mutex<bool>, std::sync::Condvar) =
+    (Mutex::new(false), std::sync::Condvar::new());
+
 #[cfg(feature = "test-fixtures")]
 fn identity_snapshot_race_test_hook() {
-    if let Ok(ms) = std::env::var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS") {
-        if let Ok(ms) = ms.parse::<u64>() {
-            std::thread::sleep(std::time::Duration::from_millis(ms));
-        }
+    let Some(timeout_ms) = std::env::var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS")
+        .ok()
+        .and_then(|ms| ms.parse::<u64>().ok())
+    else {
+        // Env var unset: this call is an unrelated dispatch (a different
+        // test entirely) racing through this hot path. Stay a true no-op --
+        // do NOT signal entry and do NOT wait, or every dispatch in every
+        // test would block on a release that will never come.
+        return;
+    };
+    let timeout_ms = timeout_ms.min(5000);
+    {
+        let (lock, cvar) = &IDENTITY_SNAPSHOT_RACE_ENTRY;
+        let mut entered = lock.lock().unwrap();
+        *entered = true;
+        cvar.notify_all();
     }
+    let (lock, cvar) = &IDENTITY_SNAPSHOT_RACE_RELEASE;
+    let released = lock.lock().unwrap();
+    let _ = cvar
+        .wait_timeout_while(
+            released,
+            std::time::Duration::from_millis(timeout_ms),
+            |released| !*released,
+        )
+        .unwrap();
 }
 
 #[cfg(not(feature = "test-fixtures"))]
 fn identity_snapshot_race_test_hook() {}
+
+/// Test-only: reset the round-13 identity-snapshot-race entry and release
+/// signals to unsignaled. Must be called before arming a fresh race attempt
+/// (both are statics and would otherwise still read "signaled" from a prior
+/// test).
+#[cfg(feature = "test-fixtures")]
+pub fn reset_identity_snapshot_race_entry_test_hook() {
+    let (lock, _cvar) = &IDENTITY_SNAPSHOT_RACE_ENTRY;
+    *lock.lock().unwrap() = false;
+    let (lock, _cvar) = &IDENTITY_SNAPSHOT_RACE_RELEASE;
+    *lock.lock().unwrap() = false;
+}
+
+/// Test-only: block the calling thread until `identity_snapshot_race_test_hook`
+/// has been entered by some other thread (i.e. until a concurrent dispatch
+/// call is provably paused immediately after its manifest snapshot read), or
+/// until `timeout` elapses. Returns `true` if the signal was observed,
+/// `false` on timeout -- a `false` return means the racing thread never
+/// entered the hook at all within the budget, which the caller should treat
+/// as a hard test failure rather than silently racing ahead.
+#[cfg(feature = "test-fixtures")]
+pub fn wait_for_identity_snapshot_race_entry_test_hook(timeout: std::time::Duration) -> bool {
+    let (lock, cvar) = &IDENTITY_SNAPSHOT_RACE_ENTRY;
+    let guard = lock.lock().unwrap();
+    if *guard {
+        return true;
+    }
+    let (guard, result) = cvar.wait_timeout_while(guard, timeout, |entered| !*entered).unwrap();
+    drop(guard);
+    !result.timed_out()
+}
+
+/// Test-only: signal `identity_snapshot_race_test_hook` to release its
+/// paused thread. Call this only after the out-of-band replacement has been
+/// performed, so the dispatching thread is guaranteed to observe the
+/// replaced bytes rather than racing ahead of them.
+#[cfg(feature = "test-fixtures")]
+pub fn release_identity_snapshot_race_test_hook() {
+    let (lock, cvar) = &IDENTITY_SNAPSHOT_RACE_RELEASE;
+    let mut released = lock.lock().unwrap();
+    *released = true;
+    cvar.notify_all();
+}
 
 /// Test-only: block the calling thread until `identity_bind_race_test_hook`
 /// has been entered by some other thread (i.e. until a concurrent

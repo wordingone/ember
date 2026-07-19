@@ -45,8 +45,9 @@
 #![cfg(windows)]
 
 use emberd::{
-    reset_identity_bind_race_entry_test_hook, wait_for_identity_bind_race_entry_test_hook, Daemon,
-    HostCommitCapacity,
+    release_identity_snapshot_race_test_hook, reset_identity_bind_race_entry_test_hook,
+    reset_identity_snapshot_race_entry_test_hook, wait_for_identity_bind_race_entry_test_hook,
+    wait_for_identity_snapshot_race_entry_test_hook, Daemon, HostCommitCapacity,
 };
 use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
@@ -985,20 +986,22 @@ fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapsh
 
     let daemon = std::sync::Arc::new(Daemon::open(&db).unwrap());
 
-    std::env::set_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS", "300");
+    reset_identity_snapshot_race_entry_test_hook();
+    std::env::set_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS", "5000");
     let daemon_a = daemon.clone();
     let manifest_a = manifest.clone();
     let thread_a = thread::spawn(move || dispatch(&daemon_a, &manifest_a));
 
-    // The dispatching thread's snapshot read is the very first thing its
-    // impl function does, so 60ms is ample time for it to be inside the
-    // post-read pause before this thread performs the out-of-band
-    // replacement below -- this race is over wall-clock file bytes rather
-    // than the in-process connection mutex, so there is no positive-signal
-    // condvar available the way there is for the round-11/round-12
-    // identity-bind-mutex race; the 300ms pause budget dwarfs realistic
-    // scheduling jitter for this sub-millisecond head start.
-    thread::sleep(Duration::from_millis(60));
+    // Positive entry handshake: block until the dispatching thread has
+    // PROVABLY entered its post-snapshot-read pause, rather than assuming a
+    // fixed head-start sleep landed inside the window. A `false` return
+    // means the racing thread never entered the hook at all within the
+    // budget -- a hard test failure, not a silent race-ahead.
+    assert!(
+        wait_for_identity_snapshot_race_entry_test_hook(Duration::from_secs(5)),
+        "dispatching thread never entered its post-snapshot-read pause \
+         within the budget -- the race window was never armed"
+    );
 
     // Atomically replace the manifest's bytes out-of-band with DIFFERENT
     // content (same job_id/schema shape, one field changed so its hash
@@ -1009,6 +1012,10 @@ fn identity_bind_refuses_when_canonical_file_is_replaced_after_the_caller_snapsh
     let tmp = manifest.with_extension("json.tmp");
     fs::write(&tmp, serde_json::to_vec(&replaced).unwrap()).unwrap();
     fs::rename(&tmp, &manifest).unwrap();
+
+    // Release the paused thread only now that the replacement has landed,
+    // so it is guaranteed to observe the replaced bytes.
+    release_identity_snapshot_race_test_hook();
 
     let result = thread_a.join().unwrap();
     std::env::remove_var("EMBERD_TEST_IDENTITY_SNAPSHOT_RACE_DELAY_MS");
