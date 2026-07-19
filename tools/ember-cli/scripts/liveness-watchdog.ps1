@@ -90,6 +90,110 @@ param(
     [switch]$WhatIf = $false
 )
 
+# Issue #666 / PR954 round 2: if this script's checkout is itself a git WORKTREE (`.git`
+# is a FILE with a `gitdir: <main>/.git/worktrees/<name>` pointer), state paths derived
+# from it would diverge from the main-tree paths the cockpit writer resolves to.
+# Canonicalize to the main checkout so writer and watchdog provably bind the SAME
+# heartbeat file.
+#
+# Strict contract (round 2 repair of the reviewer's reject, same contract as
+# repo-root.ts's canonicalizeThroughWorktree/CanonicalRootError): a marker-valid
+# standalone root with NO `.git` at all is accepted as-is (git-less deployment / plain
+# copy -- the only case Test-Path's Leaf check returns false without a validated `.git`
+# FILE also covers "`.git` is a directory", i.e. an ordinary main checkout, which is
+# likewise returned unchanged). Every OTHER shape that fails to fully resolve to a
+# marker-valid main checkout -- an unreadable `.git` FILE, one whose content doesn't
+# match `gitdir:` at all, one whose gitdir doesn't match the
+# `<main>/.git/worktrees/<name>` shape (e.g. a submodule), or a worktree pointer whose
+# resolved main checkout fails the marker check -- THROWS. The old fallback-to-$Root
+# cases for the malformed/unreadable shapes are REMOVED: this function must never
+# silently return an unverified root, because that root feeds directly into
+# $HeartbeatPath below and a wrong root here means the watchdog polls a file nobody
+# writes.
+function Get-SingleGitdirRecord {
+    <#
+    .SYNOPSIS
+    PR954 round 3: parses a .git FILE's raw content as EXACTLY ONE `gitdir: <path>` record,
+    optionally followed by a single trailing newline (`\n` or `\r\n`). Returns the captured
+    path, or $null if the content is not exactly one such record -- e.g. a junk line
+    before/after the record, a second record, or any other embedded newline. Same contract
+    as repo-root.ts's parseSingleGitdirRecord: round 2's `(?m)^gitdir:\s*(.+?)\s*$` used
+    the multiline flag, so `^`/`$` matched at ANY line boundary and a shape like
+    "junk`ngitdir: valid`n" silently validated against the junk-prefixed line -- exactly
+    the malformed shape this resolver must reject, not paper over.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Raw)
+    $content = $Raw
+    if ($content.EndsWith("`r`n")) { $content = $content.Substring(0, $content.Length - 2) }
+    elseif ($content.EndsWith("`n")) { $content = $content.Substring(0, $content.Length - 1) }
+    if ($content.Contains("`n")) { return $null }
+    $m = [regex]::Match($content, '^gitdir:\s*(.+?)\s*$')
+    if (-not $m.Success) { return $null }
+    return $m.Groups[1].Value
+}
+
+function Get-DotGitItemState {
+    <#
+    .SYNOPSIS
+    PR954 round 4 repair: classifies $Path strictly under TERMINATING-error semantics via
+    Get-Item, never Test-Path. `Test-Path -PathType Leaf` swallows access errors internally
+    and returns $false on anything it can't classify (permission-denied, locked, or
+    otherwise unclassifiable) -- Resolve-CanonicalRepoRoot then read that $false as
+    "definitely absent" and fell open to the worktree-local heartbeat path, exactly the
+    silent-wrong-root failure issue #666 exists to kill. This classifier returns EXACTLY
+    'Absent' (a genuine ItemNotFoundException) or 'Directory'/'File' (Get-Item succeeded);
+    any OTHER failure -- access denied, locked, or any unclassifiable stat error -- throws,
+    same fail-closed contract as the unreadable-content path below.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        return 'Absent'
+    } catch {
+        throw "could not classify $Path (permission-denied, locked, or otherwise unclassifiable -- neither confirmed absent nor confirmed present): $($_.Exception.Message). Refusing to guess whether this is a worktree gitdir pointer file (issue #666 strict resolver, PR954 round 4)."
+    }
+    if ($item.PSIsContainer) { return 'Directory' }
+    return 'File'
+}
+
+function Resolve-CanonicalRepoRoot {
+    param([Parameter(Mandatory)][string]$Root)
+    $dotGit = Join-Path $Root '.git'
+    $dotGitState = Get-DotGitItemState -Path $dotGit
+    if ($dotGitState -eq 'Absent') { return $Root } # no .git at all -- standalone/git-less deployment.
+    if ($dotGitState -eq 'Directory') { return $Root } # main checkout.
+
+    try {
+        $raw = Get-Content -Path $dotGit -Raw -ErrorAction Stop
+    } catch {
+        throw "repo root $Root has a .git file at $dotGit that could not be read: $($_.Exception.Message) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+
+    $gitdir = Get-SingleGitdirRecord -Raw $raw
+    if ($null -eq $gitdir) {
+        throw "repo root $Root has a .git file at $dotGit that does not contain exactly one gitdir: record (malformed, junk-prefixed, multi-line, or otherwise unsupported .git file shape) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    if (-not [System.IO.Path]::IsPathRooted($gitdir)) { $gitdir = Join-Path $Root $gitdir }
+    $resolvedGitdir = [System.IO.Path]::GetFullPath($gitdir)
+    $wt = [regex]::Match($resolvedGitdir, '^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$')
+    if (-not $wt.Success) {
+        throw "repo root $Root's .git file points to $resolvedGitdir, which is not a <main>/.git/worktrees/<name> path (unsupported gitdir shape, e.g. a submodule) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    # PR954 round 3: a dangling gitdir pointer (target directory absent, or present but not
+    # a directory) must reject -- unverifiable is the same failure class as unreadable or
+    # malformed.
+    if (-not (Test-Path $resolvedGitdir -PathType Container)) {
+        throw "repo root $Root's .git file points to $resolvedGitdir, which does not exist as a directory (dangling worktree gitdir pointer) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    $mainRoot = $wt.Groups[1].Value
+    if ((Test-Path (Join-Path $mainRoot 'GOAL.md')) -and (Test-Path (Join-Path $mainRoot 'tools\ember-cli'))) {
+        return $mainRoot
+    }
+    throw "repo root $Root is a git worktree of $mainRoot, but that main checkout does not validate as the ember repo root (issue #666) -- refusing to poll a worktree-scoped heartbeat path."
+}
+$RepoRoot = Resolve-CanonicalRepoRoot -Root $RepoRoot
+
 $StateDir          = Join-Path $RepoRoot 'tools\ember-cli\state'
 $HeartbeatPath     = Join-Path $StateDir 'cockpit-heartbeat.json'
 $MarkerPath        = Join-Path $StateDir 'planned-outage.json'
@@ -931,6 +1035,14 @@ function Start-LivenessWatchdogLoop {
     $dir = Split-Path -Parent $PidFilePath
     if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Set-Content -Path $PidFilePath -Value $PID -Encoding utf8
+
+    # #666 startup path-assert twin of the writer's log line: name the exact heartbeat
+    # file this watchdog polls, in both the console and the restart-log ledger.
+    Write-Host "[liveness-watchdog] polling heartbeat at $HeartbeatPath (repo root $RepoRoot)"
+    Write-RestartLogRow -Path $RestartLogPath -Row @{
+        ts = [datetime]::UtcNow.ToString('o'); target = 'cockpit'; event = 'watchdog-start'
+        heartbeatPath = $HeartbeatPath; repoRoot = $RepoRoot
+    }
 
     $state = Read-WatchdogState -Path $WatchdogStatePath
     $nextCockpitCheck = [datetime]::UtcNow
