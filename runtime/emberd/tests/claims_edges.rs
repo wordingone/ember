@@ -611,6 +611,197 @@ fn admission_refuses_to_reclaim_an_escaped_tombstone_after_the_file_is_removed_o
     assert_eq!(claim_owner.as_deref(), Some("ab"));
 }
 
+/// Round-9 reviewer REJECT: `validate_receipt_claim_available` only
+/// consulted `dispatch_receipt_rollback_evidence` on the FOREIGN-job branch
+/// (`claimed_by_job_id != job_id`); the `claimed_by_job_id == job_id` branch
+/// fell through with no tombstone check at all. That let the OWNING job_id
+/// itself reopen its own escaped tombstone: an escaped rollback deletes the
+/// `jobs` row but preserves the claim + an `escaped=1` evidence row: remove
+/// the escaped file out-of-band, then replay the SAME job_id at the SAME
+/// path (rather than a foreign one), and the same-pair allowance admitted
+/// the reservation with the tombstone never consulted. This test proves the
+/// same-job_id replay is refused identically to the foreign-job replay
+/// already covered above.
+#[test]
+fn admission_refuses_a_same_job_id_replay_of_an_escaped_tombstone_after_the_file_is_removed_out_of_band()
+{
+    let root = sandbox("audita-same-job-tombstone-replay");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("replay-ab-preflight.json");
+
+    // Short sleep_ms: the real fixture process must have actually exited
+    // before the replay below reuses the SAME job_id (same job_id -> same
+    // stdout/stderr log filenames, derived from `hash_bytes(job_id)`).
+    let manifest_ab = write_manifest_with_sleep_ms(&root, "ab", "gpu-ab", &receipt_path, 30);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = dispatch_ok(&daemon, &manifest_ab);
+    assert_eq!(outcome.receipt.path.file_name(), receipt_path.file_name());
+    assert!(receipt_path.exists());
+
+    // Drop this Daemon entirely (same technique as the crash-mid-running
+    // test above): its in-memory monitor/handle-duplication state for "ab"
+    // goes with it, so once the real short-lived fixture process exits on
+    // its own a moment later, NOTHING still holds the stdout/stderr log
+    // files open. A fresh `Daemon::open` below starts with no in-memory
+    // state for "ab" at all -- only the DB rows this test manipulates
+    // directly, exactly like every other rollback test in this suite.
+    drop(daemon);
+    thread::sleep(Duration::from_millis(500));
+    let daemon = Daemon::open(&db).unwrap();
+
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute("UPDATE jobs SET state='failed' WHERE job_id='ab'", [])
+        .unwrap();
+
+    // Rollback sees the receipt still on disk -> escaped, claim preserved,
+    // durable evidence written, `jobs` row deleted -- owner=None from here
+    // on, exactly like the foreign-replay setup above. `remove_identity:
+    // true` -- unlike the foreign-job variant of this test, the replay
+    // below reuses the SAME job_id, so its identity binding must be cleared
+    // here or the replay would refuse on the UNRELATED `IdentityAlreadyBound`
+    // guard before ever reaching the receipt-claim tombstone check this test
+    // targets.
+    let rollback_error = daemon
+        .test_rollback_dispatch_attempt("ab", "gpu-ab", true)
+        .expect_err("setup invariant: rollback must refuse on a genuinely escaped receipt");
+    assert!(format!("{rollback_error:?}").contains("DispatchReceiptEscapedRollback"));
+    assert_eq!(
+        daemon.job_state("ab").unwrap(),
+        None,
+        "setup invariant: the jobs row must be gone after this rollback (owner=None going forward)"
+    );
+
+    // The escaped file disappears out-of-band -- nothing left anywhere
+    // except the durable evidence row and the preserved claim.
+    fs::remove_file(&receipt_path).unwrap();
+
+    // Replay the IDENTICAL job_id ("ab") at the IDENTICAL receipt_path. The
+    // claimed_by_job_id == job_id same-pair allowance must NOT bypass the
+    // tombstone: this must refuse exactly like the foreign-job case.
+    let manifest_replay = write_manifest(&root, "ab", "gpu-ab", &receipt_path);
+    let replay = dispatch(&daemon, &manifest_replay);
+    let replay_error = replay.expect_err(
+        "TOMBSTONE ERASED: a same-job_id replay was admitted at a path whose only owner-gone \
+         signal was the escape marker -- the same-pair allowance skipped the tombstone check"
+    );
+    assert!(
+        format!("{replay_error:?}").contains("DispatchReceiptClaimConflict"),
+        "expected DispatchReceiptClaimConflict, got: {replay_error:?}"
+    );
+    // The original claim row must still exist, still owned by "ab", untouched
+    // by the refused replay attempt.
+    let claim_owner: Option<String> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT job_id FROM dispatch_receipt_claims WHERE job_id=?1",
+            ["ab"],
+            |row| row.get(0),
+        )
+        .optional()
+        .unwrap();
+    assert_eq!(claim_owner.as_deref(), Some("ab"));
+
+    // And the durable evidence row must still read escaped=1 -- the refused
+    // replay must not have touched it either.
+    let evidence_escaped: i64 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT escaped FROM dispatch_receipt_rollback_evidence WHERE job_id='ab'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(evidence_escaped, 1);
+}
+
+/// Round-9 reviewer REJECT: the `dispatch_receipt_rollback_evidence` UPSERT
+/// used a bare `ON CONFLICT DO UPDATE SET escaped=excluded.escaped`, so a
+/// later, ORDINARY clean rollback (escaped=0) landing on the same
+/// receipt_path silently DOWNGRADED a prior `escaped=1` tombstone row --
+/// erasing the durable evidence AUDIT-A's self-heal check depends on, and
+/// discarding the original escape's reason/ts in the process. This test
+/// seeds an escaped=1 evidence row directly (simulating a prior escape,
+/// exactly as a real rollback would have written one), then drives a
+/// genuinely clean rollback (receipt file absent -> escaped=false) against
+/// the SAME receipt_path, and asserts the row is unchanged: escaped stays 1
+/// and the ORIGINAL reason/ts survive.
+#[test]
+fn rollback_evidence_upsert_never_downgrades_an_existing_escaped_tombstone() {
+    let root = sandbox("rollback-evidence-monotone");
+    let db = root.join("emberd.sqlite3");
+    let receipt_path = root.join("custody").join("monotone-cd-preflight.json");
+
+    let manifest = write_manifest(&root, "cd", "gpu-cd", &receipt_path);
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = dispatch_ok(&daemon, &manifest);
+    assert_eq!(outcome.receipt.path.file_name(), receipt_path.file_name());
+
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute("UPDATE jobs SET state='failed' WHERE job_id='cd'", [])
+        .unwrap();
+
+    // Remove the receipt out-of-band BEFORE rollback runs, so this
+    // rollback's own escape probe sees confirmed-absent (escaped=false) --
+    // dispatch itself writes the receipt as part of admission, so it exists
+    // on disk until removed here.
+    fs::remove_file(&receipt_path).unwrap();
+    assert!(!receipt_path.exists());
+
+    // `dispatch_receipt_claims.receipt_path` is written via
+    // `absolute_under_root`, which canonicalizes the parent (Windows
+    // extended-length `\\?\` form) -- NOT the same string this test built by
+    // hand. Read back the exact stored key so the seed row below lands on
+    // the SAME primary key the rollback's own upsert will target.
+    let stored_receipt_path: String = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT receipt_path FROM dispatch_receipt_claims WHERE job_id='cd'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    // Seed a prior escaped=1 evidence row directly, standing in for an
+    // earlier rollback's durable write. Distinct reason/ts from anything the
+    // upcoming clean rollback would generate, so any overwrite is visible.
+    const SEEDED_REASON: &str = "receipt_escaped_to_disk";
+    const SEEDED_TS_MS: i64 = 424_242;
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "INSERT INTO dispatch_receipt_rollback_evidence(receipt_path,job_id,escaped,reason,ts_ms) VALUES(?1,?2,1,?3,?4)",
+            rusqlite::params![stored_receipt_path, "cd", SEEDED_REASON, SEEDED_TS_MS],
+        )
+        .unwrap();
+
+    // This rollback's own probe now sees escaped=false and attempts an
+    // ordinary clean upsert (escaped=0) on the SAME receipt_path the seeded
+    // row already covers.
+    daemon
+        .test_rollback_dispatch_attempt("cd", "gpu-cd", false)
+        .expect("a genuinely clean rollback (no receipt on disk) must succeed");
+
+    let row: (i64, String, i64) = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT escaped, reason, ts_ms FROM dispatch_receipt_rollback_evidence WHERE job_id='cd'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(row.0, 1, "DOWNGRADE: a clean rollback erased the prior escaped=1 tombstone");
+    assert_eq!(
+        row.1, SEEDED_REASON,
+        "a clean rollback must not overwrite the ORIGINAL escape's reason"
+    );
+    assert_eq!(
+        row.2, SEEDED_TS_MS,
+        "a clean rollback must not overwrite the ORIGINAL escape's ts_ms"
+    );
+}
+
 /// Crash-point coverage (reviewer amendment, point 3): a job whose real
 /// process has already exited, but whose row still says 'running' because
 /// no monitor observed the exit yet, is the exact pre-reconcile crash

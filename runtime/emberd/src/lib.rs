@@ -2070,6 +2070,26 @@ impl Daemon {
                         receipt_path,
                     });
                 }
+                // Round-9: a `DispatchReceiptClaimConflict` refusal from
+                // `validate_receipt_claim_available` NEVER creates or
+                // touches a reservation -- every call site (the pinned-
+                // budget precheck above, and `insert_reserved_job_row`'s own
+                // internal call) runs it BEFORE any jobs-row insert, in the
+                // SAME transaction, so this attempt reserved nothing. The
+                // generic catch-all below calls `rollback_dispatch_attempt`
+                // on ANY OTHER error to release whatever this attempt itself
+                // reserved -- but calling it here would act on a claim that
+                // predates this attempt entirely (this exact job_id's own
+                // already-escaped tombstone, in the same-job_id replay
+                // case), and its own probe-and-release logic would find the
+                // now-out-of-band-removed receipt file confirmed-absent and
+                // silently DELETE that claim, reopening the tombstone this
+                // refusal just enforced for a THIRD dispatch attempt. Return
+                // the refusal untouched -- there is nothing this attempt
+                // reserved to roll back.
+                Err(error @ EmberdError::DispatchReceiptClaimConflict { .. }) => {
+                    return Err(error);
+                }
                 Err(error) => {
                     if let Err(escaped @ EmberdError::DispatchReceiptEscapedRollback { .. }) =
                         self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity)
@@ -2295,8 +2315,17 @@ impl Daemon {
                     format!("receipt_existence_probe_failed: {probe_error}"),
                 ),
             };
+            // Round-9: this UPSERT must be MONOTONE in `escaped` -- an
+            // ordinary clean rollback (escaped=0) landing on a receipt_path
+            // that already carries a durable escaped=1 tombstone must never
+            // downgrade it. `escaped=MAX(old,new)` keeps the tombstone once
+            // any rollback ever set it; the CASE guards preserve the
+            // ORIGINAL reason/ts of that escape (not the incoming clean
+            // rollback's) whenever the existing row is escaped and the new
+            // write is not. A new escape (excluded.escaped=1) always updates
+            // reason/ts -- a fresher escape signal is still real evidence.
             tx.execute(
-                "INSERT INTO dispatch_receipt_rollback_evidence(receipt_path,job_id,escaped,reason,ts_ms) VALUES(?1,?2,?3,?4,?5)\n                 ON CONFLICT(receipt_path) DO UPDATE SET job_id=excluded.job_id, escaped=excluded.escaped, reason=excluded.reason, ts_ms=excluded.ts_ms",
+                "INSERT INTO dispatch_receipt_rollback_evidence(receipt_path,job_id,escaped,reason,ts_ms) VALUES(?1,?2,?3,?4,?5)\n                 ON CONFLICT(receipt_path) DO UPDATE SET\n                   job_id=excluded.job_id,\n                   escaped=MAX(dispatch_receipt_rollback_evidence.escaped, excluded.escaped),\n                   reason=CASE WHEN dispatch_receipt_rollback_evidence.escaped=1 AND excluded.escaped=0 THEN dispatch_receipt_rollback_evidence.reason ELSE excluded.reason END,\n                   ts_ms=CASE WHEN dispatch_receipt_rollback_evidence.escaped=1 AND excluded.escaped=0 THEN dispatch_receipt_rollback_evidence.ts_ms ELSE excluded.ts_ms END",
                 params![receipt_path, job_id, escaped as i64, reason, now_ms()],
             )?;
             if escaped {
@@ -2392,6 +2421,36 @@ impl Daemon {
                         [receipt_path],
                     )?;
                 } else {
+                    return Err(EmberdError::DispatchReceiptClaimConflict {
+                        receipt_path: receipt_path.to_string(),
+                        requesting_job_id: job_id.to_string(),
+                        claimed_by_job_id,
+                    });
+                }
+            } else {
+                // Round-9: a same-job_id re-claim (a genuine retry of the
+                // SAME job at the SAME path) is ordinarily allowed to fall
+                // through -- but AUDIT-A's escaped-tombstone guard binds the
+                // (job_id, receipt_path) PAIR, not just a foreign job_id.
+                // Without this check, an escaped rollback that preserves the
+                // claim + an `escaped=1` evidence row (job row deleted,
+                // claim untouched) can be reopened by the OWNING job_id
+                // itself: remove the escaped file out-of-band, then replay
+                // the identical job_id/path -- `claimed_by_job_id == job_id`
+                // skipped every tombstone check and let
+                // `insert_reserved_job_row`'s ON CONFLICT admit the same
+                // claim row as if nothing had ever escaped. Consult the same
+                // durable evidence row the foreign-job branch above checks,
+                // and refuse with the same typed conflict when an unresolved
+                // escape exists for this exact receipt_path.
+                let escape_marker: Option<i64> = tx
+                    .query_row(
+                        "SELECT escaped FROM dispatch_receipt_rollback_evidence WHERE receipt_path=?1 AND escaped=1",
+                        [receipt_path],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if escape_marker.is_some() {
                     return Err(EmberdError::DispatchReceiptClaimConflict {
                         receipt_path: receipt_path.to_string(),
                         requesting_job_id: job_id.to_string(),
