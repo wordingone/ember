@@ -22,7 +22,8 @@ import torch
 
 from durable_io import atomic_replace_durable
 from model import EXPERT_NAMES, UnifiedDecoder
-from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_realization_receipt
+from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_p2b_stream_episode, validate_realization_receipt
+from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
 
 
 _STAGING_LEASE = ".writer-lease.json"
@@ -468,19 +469,64 @@ def _validate_replay_bindings(
     if not isinstance(data_cursor, Mapping):
         raise ValueError("checkpoint requires a nonempty data cursor")
     required_cursor = {"shard", "record_index", "global_step", "tokens_seen"}
-    if not required_cursor.issubset(data_cursor):
-        raise ValueError("checkpoint data cursor must bind shard, record_index, global_step, and tokens_seen")
-    if not isinstance(data_cursor["shard"], str) or not data_cursor["shard"]:
-        raise ValueError("checkpoint data cursor shard must be a nonempty string")
-    for field in ("record_index", "global_step", "tokens_seen"):
-        if not isinstance(data_cursor[field], int) or data_cursor[field] < 0:
-            raise ValueError(f"checkpoint data cursor {field} must be a nonnegative integer")
+    p2b_fields = {"schema_version", "selection_cursor", "global_step", "tokens_seen"}
+    if "selection_cursor" in data_cursor or data_cursor.get("schema_version") == TRAINING_CURSOR_SCHEMA_VERSION:
+        if set(data_cursor) != p2b_fields or data_cursor.get("schema_version") != TRAINING_CURSOR_SCHEMA_VERSION:
+            raise ValueError("P2B training cursor must have an exact outer schema")
+        selection = data_cursor["selection_cursor"]
+        selection_fields = {"schema_version", "selection_receipt_sha256", "selection_rule_id", "selected_ordinal", "next_source_index"}
+        if not isinstance(selection, Mapping) or set(selection) != selection_fields or selection.get("schema_version") != SELECTION_CURSOR_SCHEMA_VERSION:
+            raise ValueError("P2B training cursor requires an exact selection cursor")
+        receipt_sha256 = selection.get("selection_receipt_sha256")
+        if not isinstance(receipt_sha256, str) or len(receipt_sha256) != 64 or any(character not in "0123456789abcdef" for character in receipt_sha256):
+            raise ValueError("P2B training cursor selection receipt is invalid")
+        if not isinstance(selection.get("selection_rule_id"), str) or not selection["selection_rule_id"]:
+            raise ValueError("P2B training cursor selection rule is invalid")
+        for field in ("selected_ordinal", "next_source_index", "global_step", "tokens_seen"):
+            value = selection[field] if field in selection else data_cursor[field]
+            if type(value) is not int or value < 0:
+                raise ValueError("P2B training cursor counters are invalid")
+    else:
+        if not required_cursor.issubset(data_cursor):
+            raise ValueError("checkpoint data cursor must bind shard, record_index, global_step, and tokens_seen")
+        if not isinstance(data_cursor["shard"], str) or not data_cursor["shard"]:
+            raise ValueError("checkpoint data cursor shard must be a nonempty string")
+        for field in ("record_index", "global_step", "tokens_seen"):
+            if not isinstance(data_cursor[field], int) or data_cursor[field] < 0:
+                raise ValueError(f"checkpoint data cursor {field} must be a nonnegative integer")
     _sha256_value(model_config_sha256, name="model_config_sha256")
     _sha256_value(contract_sha256, name="contract_sha256")
     if set(expert_genesis_sha256) != set(EXPERT_NAMES):
         raise ValueError("checkpoint requires genesis hashes for all four experts")
     for name, digest in expert_genesis_sha256.items():
         _sha256_value(digest, name=f"{name} expert genesis hash")
+
+
+def _validate_p2b_checkpoint_progress(episode: Mapping[str, Any], candidate_data_cursor: Mapping[str, Any], parent_data_cursor: Mapping[str, Any]) -> dict[str, Any]:
+    """Bind a P2B episode to the exact outer training-cursor delta without I/O."""
+
+    if not isinstance(episode, Mapping):
+        raise ValueError("P2B checkpoint episode is invalid")
+    for field in ("completed_updates", "training_token_delta"):
+        if type(episode.get(field)) is not int or episode[field] <= 0:
+            raise ValueError("P2B checkpoint episode counters are invalid")
+    end = episode.get("end_selection_cursor")
+    expected_outer = {"schema_version", "selection_cursor", "global_step", "tokens_seen"}
+    if not isinstance(candidate_data_cursor, Mapping) or set(candidate_data_cursor) != expected_outer or candidate_data_cursor.get("schema_version") != TRAINING_CURSOR_SCHEMA_VERSION:
+        raise ValueError("P2B checkpoint candidate cursor is invalid")
+    if candidate_data_cursor.get("selection_cursor") != end:
+        raise ValueError("P2B checkpoint cursor does not match episode end")
+    if not isinstance(parent_data_cursor, Mapping) or set(parent_data_cursor) != {"global_step", "tokens_seen"}:
+        raise ValueError("P2B checkpoint parent cursor is invalid")
+    for cursor in (candidate_data_cursor, parent_data_cursor):
+        for field in ("global_step", "tokens_seen"):
+            if type(cursor.get(field)) is not int or cursor[field] < 0:
+                raise ValueError("P2B checkpoint cursor counters are invalid")
+    if candidate_data_cursor["global_step"] - parent_data_cursor["global_step"] != episode["completed_updates"]:
+        raise ValueError("P2B checkpoint global-step delta does not match episode")
+    if candidate_data_cursor["tokens_seen"] - parent_data_cursor["tokens_seen"] != episode["training_token_delta"]:
+        raise ValueError("P2B checkpoint token delta does not match episode")
+    return dict(candidate_data_cursor)
 
 
 def _external_checkpoint_manifest(path: Path, *, label: str) -> tuple[dict[str, Any], str]:
@@ -536,14 +582,24 @@ def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest
 
 def _specialist_lineage(
     lineage: Mapping[str, Any], *, active_expert: str, candidate_parameter_sha256: Mapping[str, str],
-) -> tuple[dict[str, Any], dict[str, str]]:
+    data_cursor: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, str], dict[str, str], Path]:
     """Close one-family accretion against independently supplied parent/root bundles."""
 
     if active_expert not in EXPERT_NAMES:
         raise ValueError("specialist lineage requires one specialist active expert")
+    p2b_fields = {"parent_manifest", "root_manifest", "trained_expert_ids", "episode"}
+    p2b_cursor = isinstance(data_cursor, Mapping) and (
+        "selection_cursor" in data_cursor or data_cursor.get("schema_version") == TRAINING_CURSOR_SCHEMA_VERSION
+    )
+    is_p2b = isinstance(lineage, Mapping) and set(lineage) == p2b_fields
+    if p2b_cursor and not is_p2b:
+        raise ValueError("P2B training cursor requires P2B specialist lineage")
+    if is_p2b and not p2b_cursor:
+        raise ValueError("P2B specialist lineage requires a P2B training cursor")
     required = {"parent_manifest", "root_manifest", "trained_expert_ids", "data_verification_receipt", "execution_slice"}
     expected_fields = {*required, "scene_split_selection"} if active_expert == "vision" else required
-    if not isinstance(lineage, Mapping) or set(lineage) != expected_fields:
+    if not is_p2b and (not isinstance(lineage, Mapping) or set(lineage) != expected_fields):
         raise ValueError("specialist lineage has an invalid shape")
     parent_source, root_source = lineage["parent_manifest"], lineage["root_manifest"]
     if not isinstance(parent_source, (str, Path)) or not isinstance(root_source, (str, Path)):
@@ -581,6 +637,22 @@ def _specialist_lineage(
             raise ValueError(f"inactive expert parameter content changed from parent: {name}")
         if name not in trained and candidate_parameter_sha256[name] != root_parameters[name]:
             raise ValueError(f"not-yet-trained expert must remain equal to root genesis: {name}")
+    if is_p2b:
+        episode = validate_p2b_stream_episode(lineage["episode"], active_expert=active_expert)
+        parent_cursor = parent.get("data_cursor")
+        if not isinstance(parent_cursor, Mapping):
+            raise ValueError("P2B specialist lineage parent lacks a replay cursor")
+        _validate_p2b_checkpoint_progress(
+            episode,
+            data_cursor,
+            {"global_step": parent_cursor.get("global_step"), "tokens_seen": parent_cursor.get("tokens_seen")},
+        )
+        return ({
+            "parent_checkpoint_sha256": parent_sha256,
+            "root_genesis_checkpoint_sha256": root_sha256,
+            "trained_expert_ids": list(trained),
+            "episode": episode,
+        }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
     verification = lineage["data_verification_receipt"]
     capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
     if not isinstance(verification, Mapping) or set(verification) != SPECIALIST_VERIFICATION_FIELDS:
@@ -865,7 +937,7 @@ def _write_checkpoint_artifacts_impl(
     preflight_lineage = None
     preflight_genesis = None
     if specialist_lineage is not None:
-        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256)
+        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256, data_cursor=data_cursor)
     published_root = root
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
