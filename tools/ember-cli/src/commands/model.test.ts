@@ -1,7 +1,11 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // commands/model.test.ts — unit tests for the /model command.
 
 import { describe, it, expect, beforeEach } from "bun:test";
-import { createModelCommand, _makeKillReceiptWriter } from "./model.ts";
+import { createModelCommand, _makeKillReceiptWriter, _resolveModelIdentity, type ResolvedModelIdentity } from "./model.ts";
 import {
   resetModelLifecycleForTests,
   registerManagedModel,
@@ -9,6 +13,19 @@ import {
   type ModelLifecycleDeps,
 } from "../services/model-lifecycle.ts";
 import type { CommandContext } from "../types/command-types.ts";
+import { join } from "path";
+
+const FIXTURE_DIR = join(import.meta.dir, "__fixtures__", "model-identity");
+const FIXTURE_MANIFEST = join(FIXTURE_DIR, "manifest.json");
+const FIXTURE_CHECKPOINT = join(FIXTURE_DIR, "checkpoint");
+const FIXTURE_BYTE_SHA256 = "6f2e653556dc9162d1b22ec49e522334d6ed4127b1f9696a0f43ad61fcf4906f";
+const FIXTURE_DISPOSITION = "OWNED_CANDIDATE";
+
+/** Stand-in resolved identity for tests that don't exercise the real subprocess. */
+const fakeIdentity: ResolvedModelIdentity = {
+  byte_sha256: "a".repeat(64),
+  disposition: "OWNED_CANDIDATE",
+};
 
 describe("model command", () => {
   const mockCtx: CommandContext = {
@@ -38,6 +55,7 @@ describe("model command", () => {
 
       const cmd = createModelCommand({
         getModelState: () => mockState,
+        resolveModelIdentity: async () => fakeIdentity,
       });
 
       const result = await cmd.execute("status", mockCtx);
@@ -50,6 +68,7 @@ describe("model command", () => {
     it("handles unloaded state", async () => {
       const cmd = createModelCommand({
         getModelState: () => "unloaded",
+        resolveModelIdentity: async () => fakeIdentity,
       });
 
       const result = await cmd.execute("status", mockCtx);
@@ -61,6 +80,7 @@ describe("model command", () => {
     it("handles external state", async () => {
       const cmd = createModelCommand({
         getModelState: () => "external",
+        resolveModelIdentity: async () => fakeIdentity,
       });
 
       const result = await cmd.execute("status", mockCtx);
@@ -72,12 +92,160 @@ describe("model command", () => {
     it("treats empty args as status", async () => {
       const cmd = createModelCommand({
         getModelState: () => "loaded",
+        resolveModelIdentity: async () => fakeIdentity,
       });
 
       const result = await cmd.execute("", mockCtx);
 
       expect(result?.type).toBe("message");
       expect(result?.message).toContain("model:");
+    });
+  });
+
+  // =========================================================================
+  // cond3 inc2a: /model status|load checkpoint-identity binding (fail-closed)
+  // =========================================================================
+  describe("cond3 inc2a: checkpoint identity binding", () => {
+    it("(a) /model status with valid identity renders byte_sha256 and disposition", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "loaded",
+        resolveModelIdentity: async (manifestPath) => {
+          expect(manifestPath).toBe(FIXTURE_MANIFEST);
+          return { byte_sha256: FIXTURE_BYTE_SHA256, disposition: FIXTURE_DISPOSITION };
+        },
+        manifestPath: FIXTURE_MANIFEST,
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.exitCode).toBeUndefined();
+      expect(result?.message).toContain(FIXTURE_BYTE_SHA256);
+      expect(result?.message).toContain(FIXTURE_DISPOSITION);
+    });
+
+    it("(b) /model status with missing/unresolvable manifest returns error with non-zero exit", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "loaded",
+        resolveModelIdentity: async () => null,
+        manifestPath: "/does/not/exist/model-identity.json",
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("error");
+      expect(result?.message).toContain("checkpoint identity validation failed");
+      // Never falls back to a bare, unverified rendering of state.
+      expect(result?.message).not.toContain("model: loaded");
+    });
+
+    it("(c) /model load rejects (fail-closed, non-zero exit) when validation fails, never spawning", async () => {
+      let loadCalled = false;
+      const cmd = createModelCommand({
+        loadModel: async () => {
+          loadCalled = true;
+          return "model loaded (pid 1)";
+        },
+        resolveModelIdentity: async () => null,
+        manifestPath: "/does/not/exist/model-identity.json",
+      });
+
+      const result = await cmd.execute("load", mockCtx);
+
+      expect(loadCalled).toBe(false);
+      expect(result?.type).toBe("message");
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("error");
+      expect(result?.message).toContain("checkpoint identity validation failed");
+    });
+
+    it("(c') /model load proceeds to spawn only after identity resolves", async () => {
+      let loadCalled = false;
+      const cmd = createModelCommand({
+        loadModel: async (deps) => {
+          loadCalled = true;
+          expect(deps.manifestPath).toBe(FIXTURE_MANIFEST);
+          return "model loaded (pid 42)";
+        },
+        resolveModelIdentity: async () => ({
+          byte_sha256: FIXTURE_BYTE_SHA256,
+          disposition: FIXTURE_DISPOSITION,
+        }),
+        manifestPath: FIXTURE_MANIFEST,
+      });
+
+      const result = await cmd.execute("load", mockCtx);
+
+      expect(loadCalled).toBe(true);
+      expect(result?.exitCode).toBeUndefined();
+      expect(result?.message).toContain("loaded");
+    });
+
+    it("(d) _resolveModelIdentity handles subprocess failure gracefully (returns null, never throws)", async () => {
+      const throwingRunner = () => {
+        throw new Error("spawnSync exploded");
+      };
+      // The default runner itself catches spawnSync throws; exercise both the
+      // injected-runner path and a runner that reports a crash via status.
+      await expect(_resolveModelIdentity(FIXTURE_MANIFEST, () => {
+        throw new Error("runner threw");
+      })).resolves.toBeNull();
+
+      await expect(_resolveModelIdentity(FIXTURE_MANIFEST, () => ({
+        status: null,
+        stdout: "",
+      }))).resolves.toBeNull();
+
+      await expect(_resolveModelIdentity(FIXTURE_MANIFEST, () => ({
+        status: 1,
+        stdout: "not json at all {{{",
+      }))).resolves.toBeNull();
+
+      await expect(_resolveModelIdentity(FIXTURE_MANIFEST, () => ({
+        status: 0,
+        stdout: "not json at all {{{",
+      }))).resolves.toBeNull();
+
+      await expect(_resolveModelIdentity("/definitely/does/not/exist.json")).resolves.toBeNull();
+
+      void throwingRunner;
+    });
+
+    it("real round trip: a REAL tiny checkpoint bound to a REAL manifest resolves real sha256 + disposition", async () => {
+      const identity = await _resolveModelIdentity(FIXTURE_MANIFEST);
+
+      expect(identity).not.toBeNull();
+      expect(identity?.byte_sha256).toBe(FIXTURE_BYTE_SHA256);
+      expect(identity?.disposition).toBe(FIXTURE_DISPOSITION);
+
+      // Sanity: the fixture checkpoint file exists and really is what the
+      // manifest claims -- this is not a hand-typed constant.
+      const { createHash } = await import("crypto");
+      const { readFileSync } = await import("fs");
+      const bytes = readFileSync(FIXTURE_CHECKPOINT);
+      const actualSha256 = createHash("sha256").update(bytes).digest("hex");
+      expect(actualSha256).toBe(FIXTURE_BYTE_SHA256);
+    });
+
+    it("real round trip: tampering with the checkpoint bytes fails closed (null, never a stale identity)", async () => {
+      const { mkdtempSync, writeFileSync, rmSync, readFileSync } = await import("fs");
+      const { tmpdir } = await import("os");
+      const { join: pathJoin } = await import("path");
+
+      const tmpDir = mkdtempSync(pathJoin(tmpdir(), "ember-model-identity-tamper-"));
+      try {
+        const manifestCopy = pathJoin(tmpDir, "manifest.json");
+        const checkpointCopy = pathJoin(tmpDir, "checkpoint");
+        writeFileSync(manifestCopy, readFileSync(FIXTURE_MANIFEST));
+        writeFileSync(checkpointCopy, "tampered-bytes-do-not-match-manifest-hash");
+
+        const identity = await _resolveModelIdentity(manifestCopy);
+        expect(identity).toBeNull();
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
     });
   });
 
@@ -126,6 +294,7 @@ describe("model command", () => {
           loadCalls.push("called");
           return "model loaded (pid 5678)";
         },
+        resolveModelIdentity: async () => fakeIdentity,
       });
 
       const result = await cmd.execute("load", mockCtx);
@@ -140,6 +309,7 @@ describe("model command", () => {
         loadModel: async () => {
           throw new Error("spawn failed");
         },
+        resolveModelIdentity: async () => fakeIdentity,
       });
 
       const result = await cmd.execute("load", mockCtx);
@@ -171,6 +341,7 @@ describe("model command", () => {
         getModelState: () => "unloaded",
         loadModel: async () => "model loaded (pid 1234)",
         unloadModel: async () => "model unloaded (pid 1234 freed)",
+        resolveModelIdentity: async () => fakeIdentity,
       });
 
       const tests = ["", " ", "foobar", "load extra args", "unload 123"];
