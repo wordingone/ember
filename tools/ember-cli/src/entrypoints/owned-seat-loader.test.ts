@@ -1,0 +1,567 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+import { describe, expect, it } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
+
+import {
+  captureDevelopmentResolver,
+  loadOwnedDevelopmentIdentity,
+  loadOwnedModelIdentity,
+  verifyOwnedEndpointIdentity,
+} from "./owned-seat-loader.ts";
+
+const CHECKPOINT = "d".repeat(64);
+
+describe("owned seat loader", () => {
+  it("authenticates the complete runtime closure against Git and snapshots it before execution", () => {
+    const root = mkdtempSync(join(tmpdir(), "ember-bootstrap-test-"));
+    const sourceCommit = "a".repeat(40);
+    const trustedSources = [
+      "configs/ember-restart-3b.json",
+      "scripts/ember_restart/development_cli_seat.py",
+      "scripts/ember_restart/prediction_contract.py",
+      "scripts/ember_restart_eval_checkpoint_consumer.py",
+      "scripts/ember_restart_eval_raw_forward.py",
+      "tokenizer/tokenizer.json",
+      "tools/ember-restart-3b/batch.py",
+      "tools/ember-restart-3b/checkpoint_artifacts.py",
+      "tools/ember-restart-3b/infer.py",
+      "tools/ember-restart-3b/model.py",
+      "tools/ember-restart-3b/parameter_counter.py",
+      "tools/ember-restart-3b/serve_owned_openai.py",
+    ];
+    const runtimeFiles = [
+      ...trustedSources,
+      "parameter-evidence/parameter_counter.py",
+      "parameter-evidence/step2-realization-receipt.json",
+      "parameter-evidence/trusted-verifiers.json",
+    ];
+    try {
+      for (const relativePath of runtimeFiles) {
+        const path = join(root, relativePath);
+        mkdirSync(resolve(path, ".."), { recursive: true });
+        writeFileSync(path, relativePath === "scripts/ember_restart/development_cli_seat.py"
+          ? "# exact resolver\n"
+          : "exact:" + relativePath + "\n");
+      }
+      const files = Object.fromEntries(runtimeFiles.map((relativePath) => {
+        const payload = readFileSync(join(root, relativePath));
+        return [relativePath, {
+          bytes: payload.byteLength,
+          sha256: new Bun.CryptoHasher("sha256").update(payload).digest("hex"),
+        }];
+      }));
+      const index = {
+        schema_version: "ember-owned-runtime-bundle-v1",
+        source_commit: sourceCommit,
+        files,
+      };
+      const indexBytes = new TextEncoder().encode(JSON.stringify(index));
+      writeFileSync(join(root, "runtime-bundle-index.json"), indexBytes);
+      const manifest = {
+        runtime_bundle: {
+          index_path: "runtime-bundle-index.json",
+          sha256: new Bun.CryptoHasher("sha256").update(indexBytes).digest("hex"),
+        },
+      };
+      const manifestPath = join(root, "development.json");
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+      const readGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
+        readFileSync(join(root, relativePath));
+
+      const captured = captureDevelopmentResolver(manifestPath, root, sourceCommit, readGitBlob);
+      writeFileSync(join(root, "scripts", "ember_restart", "development_cli_seat.py"), "# drifted resolver\n");
+      expect(new TextDecoder().decode(readFileSync(captured.resolverPath))).toBe(
+        "# exact resolver\n",
+      );
+      expect(captured.manifestSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(captured.runtimeIndexSha256).toBe(manifest.runtime_bundle.sha256);
+      expect(existsSync(captured.manifestPath)).toBe(true);
+      captured.cleanup();
+      expect(existsSync(captured.resolverPath)).toBe(false);
+      expect(() => captureDevelopmentResolver(manifestPath, root, "b".repeat(40), readGitBlob)).toThrow(
+        "exact compiled cockpit commit",
+      );
+      expect(() => captureDevelopmentResolver(
+        manifestPath,
+        root,
+        sourceCommit,
+        (_repoRoot, _commit, relativePath) =>
+          relativePath === "tools/ember-restart-3b/model.py"
+            ? new TextEncoder().encode("forged\n")
+            : readFileSync(join(root, relativePath)),
+      )).toThrow("embedded Git commit");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("returns unavailable when the default pointer does not exist", () => {
+    let executed = false;
+    const identity = loadOwnedModelIdentity(
+      { repoRoot: "C:/repo", configHome: "C:/home" },
+      {
+        exists: () => false,
+        execute: () => {
+          executed = true;
+          return { status: 0, stdout: "{}", stderr: "" };
+        },
+      },
+    );
+    expect(identity).toBeUndefined();
+    expect(executed).toBe(false);
+  });
+
+  it("fails closed when an explicitly selected manifest is missing", () => {
+    expect(() =>
+      loadOwnedModelIdentity(
+        {
+          repoRoot: "C:/repo",
+          configHome: "C:/home",
+          manifestPath: "C:/missing.json",
+        },
+        { exists: () => false },
+      ),
+    ).toThrow("owned rung manifest does not exist");
+  });
+
+  it("executes the central resolver and derives the admitted identity", () => {
+    let observedArgs: string[] = [];
+    const identity = loadOwnedModelIdentity(
+      {
+        repoRoot: "C:/repo",
+        configHome: "C:/home",
+        manifestPath: resolve("C:/run.json"),
+        verifierRegistryPath: resolve("C:/trusted.json"),
+        pythonExecutable: "python-owned",
+      },
+      {
+        exists: () => true,
+        execute: (executable, args) => {
+          observedArgs = [executable, ...args];
+          return {
+            status: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              valid: true,
+              seat: "OWNED_ADMITTED",
+              checkpoint_sha256: CHECKPOINT,
+              endpoint_url: "http://127.0.0.1:8083",
+              identity_url: "http://127.0.0.1:8083/v1/models",
+              model_config_sha256: "b".repeat(64),
+              model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
+              model_format: "safetensors",
+              server_source_sha256: "a".repeat(64),
+              tokenizer_sha256: "c".repeat(64),
+              launch: {
+                checkpoint_dir: resolve("C:/owned/checkpoint"),
+                mode: "INTERACTIVE",
+                model_config_path: resolve("C:/owned/model-config.json"),
+                run_manifest_path: resolve("C:/run.json"),
+                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                tokenizer_path: resolve("C:/owned/tokenizer.json"),
+                trusted_verifier_registry_path: resolve("C:/trusted.json"),
+              },
+            }),
+          };
+        },
+      },
+    );
+
+    expect(identity).toEqual({
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      modelFormat: "safetensors",
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+      launch: {
+        authorityKind: "ADMISSION",
+        checkpointDir: resolve("C:/owned/checkpoint"),
+        mode: "INTERACTIVE",
+      modelConfigPath: "C:\\owned\\model-config.json",
+        pythonExecutable: "python-owned",
+        runManifestPath: resolve("C:/run.json"),
+        serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+        tokenizerPath: resolve("C:/owned/tokenizer.json"),
+        trustedVerifierRegistryPath: resolve("C:/trusted.json"),
+      },
+    });
+    expect(observedArgs).toEqual([
+      "python-owned",
+      "C:\\repo\\scripts\\ember_restart\\cli_seat.py",
+      "C:\\run.json",
+      "--trusted-verifier-registry",
+      "C:\\trusted.json",
+    ]);
+  });
+
+  it("parses model_config_capabilities from a real seat payload end-to-end through the real loader", () => {
+    const configSha = "b".repeat(64);
+    const seatPayload = {
+      valid: true,
+      seat: "OWNED_ADMITTED",
+      checkpoint_sha256: CHECKPOINT,
+      endpoint_url: "http://127.0.0.1:8083",
+      identity_url: "http://127.0.0.1:8083/v1/models",
+      model_config_sha256: configSha,
+      model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      model_format: "safetensors",
+      server_source_sha256: "a".repeat(64),
+      tokenizer_sha256: "c".repeat(64),
+      model_config_capabilities: {
+        model_config_sha256: configSha,
+        structured_outputs: true,
+      },
+      launch: {
+        checkpoint_dir: resolve("C:/owned/checkpoint"),
+        mode: "INTERACTIVE",
+        model_config_path: resolve("C:/owned/model-config.json"),
+        run_manifest_path: resolve("C:/run.json"),
+        server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+        tokenizer_path: resolve("C:/owned/tokenizer.json"),
+        trusted_verifier_registry_path: resolve("C:/trusted.json"),
+      },
+    };
+    const identity = loadOwnedModelIdentity(
+      {
+        repoRoot: "C:/repo",
+        configHome: "C:/home",
+        manifestPath: resolve("C:/run.json"),
+        verifierRegistryPath: resolve("C:/trusted.json"),
+        pythonExecutable: "python-owned",
+      },
+      {
+        exists: () => true,
+        execute: () => ({ status: 0, stderr: "", stdout: JSON.stringify(seatPayload) }),
+      },
+    );
+    expect(identity?.modelConfigCapabilities).toEqual({
+      modelConfigSha256: configSha,
+      structuredOutputs: true,
+    });
+  });
+
+  it("rejects a capability declaration whose hash does not match the served model config", () => {
+    const seatPayload = {
+      valid: true,
+      seat: "OWNED_ADMITTED",
+      checkpoint_sha256: CHECKPOINT,
+      endpoint_url: "http://127.0.0.1:8083",
+      identity_url: "http://127.0.0.1:8083/v1/models",
+      model_config_sha256: "b".repeat(64),
+      model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      model_format: "safetensors",
+      server_source_sha256: "a".repeat(64),
+      tokenizer_sha256: "c".repeat(64),
+      model_config_capabilities: {
+        model_config_sha256: "e".repeat(64),
+        structured_outputs: true,
+      },
+      launch: {
+        checkpoint_dir: resolve("C:/owned/checkpoint"),
+        mode: "INTERACTIVE",
+        model_config_path: resolve("C:/owned/model-config.json"),
+        run_manifest_path: resolve("C:/run.json"),
+        server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+        tokenizer_path: resolve("C:/owned/tokenizer.json"),
+        trusted_verifier_registry_path: resolve("C:/trusted.json"),
+      },
+    };
+    expect(() =>
+      loadOwnedModelIdentity(
+        {
+          repoRoot: "C:/repo",
+          configHome: "C:/home",
+          manifestPath: resolve("C:/run.json"),
+          verifierRegistryPath: resolve("C:/trusted.json"),
+          pythonExecutable: "python-owned",
+        },
+        {
+          exists: () => true,
+          execute: () => ({ status: 0, stderr: "", stdout: JSON.stringify(seatPayload) }),
+        },
+      ),
+    ).toThrow("capability declaration");
+  });
+
+  it("loads a closed development identity through the separate non-claiming resolver", () => {
+    let observedArgs: string[] = [];
+    let cleanupCalls = 0;
+    const identity = loadOwnedDevelopmentIdentity(
+      {
+        repoRoot: "C:/repo",
+        configHome: "C:/home",
+        manifestPath: resolve("C:/development.json"),
+        pythonExecutable: "python-owned",
+      },
+      {
+        exists: () => true,
+        resolveBuildCommit: () => "a".repeat(40),
+        captureDevelopmentResolver: () => ({
+          cleanup: () => { cleanupCalls += 1; },
+          manifestPath: resolve("C:/snapshot/development.json"),
+          manifestSha256: "e".repeat(64),
+          resolverPath: resolve("C:/snapshot/development_cli_seat.py"),
+          runtimeIndexPath: resolve("C:/snapshot/runtime-bundle-index.json"),
+          runtimeIndexSha256: "f".repeat(64),
+        }),
+        execute: (executable, args) => {
+          observedArgs = [executable, ...args];
+          return {
+            status: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              valid: true,
+              seat: "OWNED_DEVELOPMENT",
+              claim_status: "NON_ADMISSIBLE",
+              checkpoint_sha256: CHECKPOINT,
+              endpoint_url: "http://127.0.0.1:8083",
+              identity_url: "http://127.0.0.1:8083/v1/models",
+              model_config_sha256: "b".repeat(64),
+              model_name: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+              model_format: "pytorch-checkpoint-v3",
+              server_source_sha256: "a".repeat(64),
+              tokenizer_sha256: "c".repeat(64),
+              tokens_seen: 2048,
+              allocated_parameters: 3_839_161_856,
+              active_parameters: 1_020_589_568,
+              launch: {
+                checkpoint_dir: resolve("C:/owned/checkpoint"),
+                development_manifest_path: resolve("C:/snapshot/development.json"),
+                mode: "INTERACTIVE",
+                model_config_path: resolve("C:/owned/model-config.json"),
+                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                tokenizer_path: resolve("C:/owned/tokenizer.json"),
+              },
+            }),
+          };
+        },
+      },
+    );
+
+    expect(identity?.seat).toBe("OWNED_DEVELOPMENT");
+    expect(identity?.claimStatus).toBe("NON_ADMISSIBLE");
+    expect(identity?.tokensSeen).toBe(2048);
+    expect(identity?.allocatedParameters).toBe(3_839_161_856);
+    expect(identity?.launch).toEqual({
+      authorityKind: "DEVELOPMENT",
+      checkpointDir: resolve("C:/owned/checkpoint"),
+      cleanupRuntimeSnapshot: expect.any(Function),
+      developmentManifestSha256: "e".repeat(64),
+      developmentManifestPath: resolve("C:/snapshot/development.json"),
+      mode: "INTERACTIVE",
+      modelConfigPath: resolve("C:/owned/model-config.json"),
+      pythonExecutable: "python-owned",
+      runtimeIndexPath: resolve("C:/snapshot/runtime-bundle-index.json"),
+      runtimeIndexSha256: "f".repeat(64),
+      serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+      tokenizerPath: resolve("C:/owned/tokenizer.json"),
+    });
+    expect(observedArgs).toEqual([
+      "python-owned",
+      "C:\\snapshot\\development_cli_seat.py",
+      "C:\\snapshot\\development.json",
+      "--expected-manifest-sha256",
+      "e".repeat(64),
+      "--expected-runtime-index-sha256",
+      "f".repeat(64),
+    ]);
+    expect(cleanupCalls).toBe(0);
+    if (identity?.launch?.authorityKind !== "DEVELOPMENT") throw new Error("missing development launch");
+    identity.launch.cleanupRuntimeSnapshot();
+    expect(cleanupCalls).toBe(1);
+  });
+
+  it("verifies a live development endpoint without upgrading its claim status", async () => {
+    const identity = {
+      seat: "OWNED_DEVELOPMENT" as const,
+      claimStatus: "NON_ADMISSIBLE" as const,
+      tokensSeen: 2048,
+      allocatedParameters: 3_839_161_856,
+      activeParameters: 1_020_589_568,
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    await verifyOwnedEndpointIdentity(identity, async () =>
+      Response.json({
+        seat: "OWNED_DEVELOPMENT",
+        mode: "INTERACTIVE",
+        claim_status: "NON_ADMISSIBLE",
+        tokens_seen: 2048,
+        allocated_parameters: 3_839_161_856,
+        active_parameters: 1_020_589_568,
+        checkpoint_sha256: CHECKPOINT,
+        model_name: identity.modelName,
+        model_config_sha256: identity.modelConfigSha256,
+        server_source_sha256: identity.serverSourceSha256,
+        tokenizer_sha256: identity.tokenizerSha256,
+      }),
+    );
+  });
+  it("surfaces admission errors and rejects malformed successful output", () => {
+    const common = {
+      repoRoot: "C:/repo",
+      configHome: "C:/home",
+      manifestPath: resolve("C:/run.json"),
+      verifierRegistryPath: resolve("C:/trusted.json"),
+    };
+    expect(() =>
+      loadOwnedModelIdentity(common, {
+        exists: () => true,
+        execute: () => ({
+          status: 1,
+          stdout: JSON.stringify({ errors: ["stage is not OWNED_ADMITTED"] }),
+          stderr: "",
+        }),
+      }),
+    ).toThrow("stage is not OWNED_ADMITTED");
+
+    expect(() =>
+      loadOwnedModelIdentity(common, {
+        exists: () => true,
+        execute: () => ({
+          status: 0,
+          stdout: JSON.stringify({
+            valid: true,
+            seat: "OWNED_ADMITTED",
+            checkpoint_sha256: CHECKPOINT,
+            endpoint_url: "http://127.0.0.1:8083",
+            identity_url: "http://127.0.0.1:8083/v1/models",
+            model_name: "qwen3.6-27b",
+          }),
+          stderr: "",
+        }),
+      }),
+    ).toThrow("invalid admitted identity");
+
+    expect(() =>
+      loadOwnedModelIdentity(common, {
+        exists: () => true,
+        execute: () => ({
+          status: 0,
+          stdout: JSON.stringify({
+            valid: true,
+            seat: "OWNED_ADMITTED",
+            checkpoint_sha256: CHECKPOINT,
+            endpoint_url: "",
+            identity_url: "/v1/models",
+            model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
+          }),
+          stderr: "",
+        }),
+      }),
+    ).toThrow("invalid admitted identity");
+  });
+
+  it("accepts only a live endpoint bound to the admitted checkpoint", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    let requested = "";
+    await verifyOwnedEndpointIdentity(identity, async (input) => {
+      requested = String(input);
+      return Response.json({
+        seat: "OWNED_ADMITTED",
+        mode: "INTERACTIVE",
+        checkpoint_sha256: CHECKPOINT,
+        model_name: identity.modelName,
+        model_config_sha256: identity.modelConfigSha256,
+        server_source_sha256: identity.serverSourceSha256,
+        tokenizer_sha256: identity.tokenizerSha256,
+      });
+    });
+    expect(requested).toBe(identity.identityUrl);
+  });
+
+  it("rejects a frozen-eval endpoint when the CLI requested interactive mode", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    await expect(
+      verifyOwnedEndpointIdentity(identity, async () =>
+        Response.json({
+          seat: "OWNED_ADMITTED",
+          mode: "FROZEN_EVAL",
+          checkpoint_sha256: CHECKPOINT,
+          model_name: identity.modelName,
+          model_config_sha256: identity.modelConfigSha256,
+          server_source_sha256: identity.serverSourceSha256,
+          tokenizer_sha256: identity.tokenizerSha256,
+        }),
+      ),
+    ).rejects.toThrow("does not match admitted checkpoint");
+  });
+  it("rejects a live endpoint that reports another checkpoint or identity", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    expect(
+      verifyOwnedEndpointIdentity(identity, async () =>
+        Response.json({
+          seat: "OWNED_ADMITTED",
+          checkpoint_sha256: "f".repeat(64),
+          model_name: identity.modelName,
+        }),
+      ),
+    ).rejects.toThrow("does not match admitted checkpoint");
+    expect(
+      verifyOwnedEndpointIdentity(identity, async () =>
+        new Response("unavailable", { status: 503 }),
+      ),
+    ).rejects.toThrow("identity request failed with HTTP 503");
+  });
+
+  it("rejects a live endpoint whose runtime bytes differ from the admitted identity", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    await expect(
+      verifyOwnedEndpointIdentity(identity, async () =>
+        Response.json({
+          seat: "OWNED_ADMITTED",
+          checkpoint_sha256: CHECKPOINT,
+          model_name: identity.modelName,
+          model_config_sha256: identity.modelConfigSha256,
+          tokenizer_sha256: identity.tokenizerSha256,
+          server_source_sha256: "f".repeat(64),
+        }),
+      ),
+    ).rejects.toThrow("does not match admitted checkpoint");
+  });
+});

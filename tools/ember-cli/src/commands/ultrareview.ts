@@ -1,6 +1,11 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // commands/ultrareview.ts — /ultrareview slash command for AI-powered code review.
 
 import type { CommandContext } from '../types/command-types.ts';
+import { referenceSeatModelName } from '../entrypoints/model-seat.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -58,7 +63,11 @@ export interface UltrareviewDeps {
 export function defaultBughunterConfig() {
   return {
     enabled: true,
-    model: 'qwen3-5',
+    // Fix #51 fiction purge: was the bare literal 'qwen3-5' -- an
+    // unverified claim about which model actually runs the review.
+    // Labeled through the same `referenceSeatModelName` convention every
+    // other borrowed/unverified identity in the codebase uses.
+    model: referenceSeatModelName('qwen3-5'),
     maxFiles: 50,
   };
 }

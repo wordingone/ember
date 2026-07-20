@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/telemetry-watch.ts — tail-polling watcher for the ember telemetry channel.
 //
 // Reads the shared telemetry JSONL file on a 500ms interval, parses newly-appended
@@ -9,7 +12,8 @@
 // The watcher is steerable: consumers call startTelemetryWatch() and hold the
 // returned handle.stop() to tear it down cleanly.
 
-import { readFile } from "fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, stat } from "fs/promises";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -44,6 +48,7 @@ export interface TelemetryEvent {
 
 /** VRAM / governor snapshot extracted from governor-kind events. */
 export interface GovernorSnapshot {
+  runId?: string;
   vramUsedGib: number;
   vramTotalGib: number;
   fractionApplied: number;
@@ -59,25 +64,52 @@ export interface ActiveRunState {
   lastTs: string;
 }
 
+export interface CheckpointState {
+  runId: string;
+  step: number;
+  checkpointManifestSha256: string;
+  lastTs: string;
+}
+
+export interface RunStatusState {
+  runId: string;
+  phase: string;
+  modelChat: string;
+  restoreNotBefore?: string;
+  lastTs: string;
+}
+
 // ---------------------------------------------------------------------------
 // Watcher state
 // ---------------------------------------------------------------------------
 
 export interface TelemetryState {
   recentEvents: TelemetryEvent[];
+  channelStatus?: "UNKNOWN" | "ONLINE" | "OFFLINE";
   lastGovernor?: GovernorSnapshot;
   activeRun?: ActiveRunState;
+  lastCheckpoint?: CheckpointState;
+  runStatus?: RunStatusState;
 }
 
 // Module-level state (singleton watcher)
 let _state: TelemetryState = { recentEvents: [] };
 let _byteOffset = 0;
 let _lineBuffer = "";
+let _fileIdentity: string | undefined;
+let _prefixDigest: string | undefined;
 let _intervalHandle: ReturnType<typeof setInterval> | null = null;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+function validVram(free: unknown, total: unknown): { free: number; total: number } | undefined {
+  if (typeof free !== "number" || !Number.isFinite(free)) return undefined;
+  if (typeof total !== "number" || !Number.isFinite(total)) return undefined;
+  if (free < 0 || total <= 0 || free > total) return undefined;
+  return { free, total };
+}
 
 function pushEvent(event: TelemetryEvent): void {
   _state.recentEvents.push(event);
@@ -98,8 +130,9 @@ function processLine(line: string, clock: () => number): void {
 
   const ev = parsed as Record<string, unknown>;
 
-  const ts =
-    typeof ev["ts"] === "string" ? ev["ts"] : new Date(clock()).toISOString();
+  const ts = typeof ev["ts"] === "string" ? ev["ts"] : undefined;
+  const eventTimestamp = ts ? Date.parse(ts) : NaN;
+  if (!ts || !Number.isFinite(eventTimestamp) || eventTimestamp > clock()) return;
   const kind = typeof ev["kind"] === "string" ? ev["kind"] : "unknown";
   const source = typeof ev["source"] === "string" ? ev["source"] : "";
   const payload =
@@ -111,19 +144,21 @@ function processLine(line: string, clock: () => number): void {
   pushEvent(event);
 
   if (kind === "governor") {
-    const free =
-      typeof payload["free_gib"] === "number" ? payload["free_gib"] : 0;
-    const total =
-      typeof payload["total_gib"] === "number" ? payload["total_gib"] : 0;
-    const fraction =
-      typeof payload["vram_fraction_applied"] === "number"
-        ? payload["vram_fraction_applied"]
-        : 0;
-    _state.lastGovernor = {
-      vramUsedGib: total - free,
-      vramTotalGib: total,
-      fractionApplied: fraction,
-    };
+    const free = payload["free_gib"];
+    const total = payload["total_gib"];
+    const fraction = typeof payload["vram_fraction_applied"] === "number" && Number.isFinite(payload["vram_fraction_applied"])
+      ? payload["vram_fraction_applied"]
+      : 0;
+    const runId = typeof payload["run_id"] === "string" && payload["run_id"].length > 0 ? payload["run_id"] : undefined;
+    const vram = validVram(free, total);
+    if (vram) {
+      _state.lastGovernor = {
+        ...(runId ? { runId } : {}),
+        vramUsedGib: vram.total - vram.free,
+        vramTotalGib: vram.total,
+        fractionApplied: fraction,
+      };
+    }
   } else if (kind === "train_step") {
     const runId =
       typeof payload["run_id"] === "string" ? payload["run_id"] : "";
@@ -138,6 +173,39 @@ function processLine(line: string, clock: () => number): void {
     const stepMs =
       typeof payload["step_ms"] === "number" ? payload["step_ms"] : undefined;
     _state.activeRun = { runId, step, totalSteps, loss, stepMs, lastTs: ts };
+    const free = typeof payload["free_gib"] === "number" ? payload["free_gib"] : undefined;
+    const total = typeof payload["total_gib"] === "number" ? payload["total_gib"] : undefined;
+    const vram = validVram(free, total);
+    if (vram) {
+      const governorRunId = typeof payload["run_id"] === "string" && payload["run_id"].length > 0 ? payload["run_id"] : undefined;
+      _state.lastGovernor = {
+        ...(governorRunId ? { runId: governorRunId } : {}),
+        vramUsedGib: vram.total - vram.free,
+        vramTotalGib: vram.total,
+        fractionApplied: typeof payload["vram_fraction_applied"] === "number" && Number.isFinite(payload["vram_fraction_applied"])
+          ? payload["vram_fraction_applied"]
+          : 0,
+      };
+    }
+  } else if (kind === "checkpoint") {
+    const runId = typeof payload["run_id"] === "string" ? payload["run_id"] : "";
+    const step = typeof payload["step"] === "number" ? payload["step"] : 0;
+    const digest = typeof payload["checkpoint_manifest_sha256"] === "string"
+      ? payload["checkpoint_manifest_sha256"]
+      : "";
+    if (runId && step > 0 && /^[0-9a-f]{64}$/.test(digest)) {
+      _state.lastCheckpoint = { runId, step, checkpointManifestSha256: digest, lastTs: ts };
+    }
+  } else if (kind === "run_status") {
+    const runId = typeof payload["run_id"] === "string" ? payload["run_id"] : "";
+    const phase = typeof payload["phase"] === "string" ? payload["phase"] : "";
+    const modelChat = typeof payload["model_chat"] === "string" ? payload["model_chat"] : "";
+    const restoreNotBefore = typeof payload["restore_not_before"] === "string"
+      ? payload["restore_not_before"]
+      : undefined;
+    if (runId && phase && modelChat) {
+      _state.runStatus = { runId, phase, modelChat, restoreNotBefore, lastTs: ts };
+    }
   }
 }
 
@@ -149,20 +217,54 @@ function checkActiveRunExpiry(clock: () => number): void {
   }
 }
 
+function markChannelOffline(): void {
+  _state = { ..._state, channelStatus: "OFFLINE", activeRun: undefined };
+}
+
+function resetForNewChannelFile(): void {
+  _state = { recentEvents: [], channelStatus: "ONLINE" };
+  _byteOffset = 0;
+  _lineBuffer = "";
+  _prefixDigest = undefined;
+}
+
+function fileIdentity(info: { dev: number; ino: number; birthtimeMs: number }): string {
+  return `${info.dev}:${info.ino}:${info.birthtimeMs}`;
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 async function pollOnce(path: string, clock: () => number): Promise<void> {
   let buf: Buffer;
+  let identity: string;
   try {
+    const info = await stat(path);
+    if (!info.isFile()) throw new Error("telemetry channel is not a regular file");
+    identity = fileIdentity(info);
     buf = await readFile(path);
   } catch {
+    markChannelOffline();
     return;
   }
 
+  const rotated = _fileIdentity !== undefined && identity !== _fileIdentity;
+  const truncated = buf.length < _byteOffset;
+  const rewritten = _byteOffset > 0 && _prefixDigest !== undefined &&
+    buf.length >= _byteOffset && sha256(buf.subarray(0, _byteOffset)) !== _prefixDigest;
+  if (rotated || truncated || rewritten) resetForNewChannelFile();
+  _fileIdentity = identity;
+  _state = { ..._state, channelStatus: "ONLINE" };
+
   if (buf.length === 0) {
+    _prefixDigest = sha256(buf);
     checkActiveRunExpiry(clock);
     return;
   }
 
   if (buf.length <= _byteOffset) {
+    _prefixDigest = sha256(buf.subarray(0, _byteOffset));
     checkActiveRunExpiry(clock);
     return;
   }
@@ -182,6 +284,7 @@ async function pollOnce(path: string, clock: () => number): Promise<void> {
     if (trimmed) processLine(trimmed, clock);
   }
 
+  _prefixDigest = sha256(buf.subarray(0, _byteOffset));
   checkActiveRunExpiry(clock);
 }
 
@@ -227,9 +330,11 @@ export function startTelemetryWatch(
   const clock = deps?.now ?? Date.now.bind(Date);
 
   // Reset state for a fresh watch session
-  _state = { recentEvents: [] };
+  _state = { recentEvents: [], channelStatus: "UNKNOWN" };
   _byteOffset = 0;
   _lineBuffer = "";
+  _fileIdentity = undefined;
+  _prefixDigest = undefined;
 
   _intervalHandle = setInterval(() => {
     pollOnce(path, clock);

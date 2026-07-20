@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Offline unit tests for receipt.py -- schema, hashing, fail-closed behavior.
 No network. Run from anywhere: this file inserts the package dir onto
 sys.path so `import receipt` resolves regardless of cwd."""
@@ -289,6 +292,37 @@ class DownloadUrlTests(unittest.TestCase):
             dest.write_bytes(b"already here")
             with self.assertRaises(rcpt.DestCollisionError):
                 rcpt.download_url("https://example.org/x", dest, opener=lambda *a, **kw: None)
+
+    def test_download_url_caps_oversized_stream(self):
+        """Opener returning unbounded/looping stream raises DownloadTooLargeError
+        and leaves no .partial file behind."""
+        class _LoopingResp:
+            def __init__(self):
+                self._count = 0
+
+            def read(self, size=-1):
+                # Infinite stream: always return data, never EOF
+                self._count += 1
+                return b"x" * (1024 * 1024)  # 1 MiB per chunk
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def opener(request, timeout=60):
+            return _LoopingResp()
+
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "out.bin"
+            # Set a small cap to trigger the error quickly
+            small_cap = 5 * 1024 * 1024  # 5 MiB
+            with self.assertRaises(rcpt.DownloadTooLargeError):
+                rcpt.download_url("https://example.org/x", dest, max_bytes=small_cap, opener=opener)
+            # Verify no .partial left behind
+            partial = dest.with_name(dest.name + ".partial")
+            self.assertFalse(partial.exists(), "runaway download must not leave .partial behind")
 
 
 class RunCliContractTests(unittest.TestCase):
