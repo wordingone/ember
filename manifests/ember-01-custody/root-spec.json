@@ -1,0 +1,287 @@
+{
+    "authority":  {
+                      "goal_id":  "EMBER-01",
+                      "workstream_id":  "EMBER-01B",
+                      "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+                  },
+    "schema":  "ember-01-root-spec-v1",
+    "path_policy":  "logical root IDs in tracked output; machine paths supplied at execution",
+    "roots":  [
+                  {
+                      "root_id":  "avir-ember-repository",
+                      "binding":  "EMBER_AVIR_EMBER_ROOT",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "git_controlled",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_evidence"
+                  },
+                  {
+                      "root_id":  "avir-infra-receipts-root",
+                      "binding":  "EMBER_AVIR_INFRA_RECEIPTS_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "evidence_receipt",
+                      "lineage_admissibility":  "excluded_evidence_only",
+                      "mutability":  "append_only_intended",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_evidence"
+                  },
+                  {
+                      "root_id":  "avir-train-daemon-discovery",
+                      "binding":  "EMBER_AVIR_TRAIN_DAEMON_ROOT",
+                      "required":  true,
+                      "scan":  "directory_discovery",
+                      "name_patterns":  [
+                                            "*"
+                                        ],
+                      "provenance_class":  "unresolved",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "operator_managed",
+                      "owner":  "operator",
+                      "authority_status":  "distributed_training_evidence"
+                  },
+                  {
+                      "root_id":  "benchmark-root",
+                      "binding":  "EMBER_BENCH_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "harness_tooling",
+                      "lineage_admissibility":  "excluded_tooling_and_reference_data",
+                      "mutability":  "operator_managed",
+                      "owner":  "operator",
+                      "authority_status":  "evidence_only"
+                  },
+                  {
+                      "root_id":  "durable-recovery-root",
+                      "binding":  "EMBER_DURABLE_RECOVERY_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "preserve_read_only",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_evidence"
+                  },
+                  {
+                      "root_id":  "ember-named-root-discovery",
+                      "binding":  "EMBER_NAMED_ROOT_PARENT",
+                      "required":  true,
+                      "scan":  "directory_discovery",
+                      "name_patterns":  [
+                                            "ember*",
+                                            "wt-stab480-bench594-scratch"
+                                        ],
+                      "provenance_class":  "unresolved",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "mixed",
+                      "owner":  "operator",
+                      "authority_status":  "distributed_local_material"
+                  },
+                  {
+                      "root_id":  "external-data-root",
+                      "binding":  "EMBER_EXTERNAL_DATA_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "unresolved",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "operator_managed",
+                      "owner":  "operator",
+                      "authority_status":  "unclassified"
+                  },
+                  {
+                      "root_id":  "internal-execution-tree",
+                      "binding":  "EMBER_INTERNAL_EXECUTION_ROOT",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "unresolved",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "unknown",
+                      "owner":  "unresolved",
+                      "authority_status":  "missing_or_relocated"
+                  },
+                  {
+                      "root_id":  "auditor-stale-clone",
+                      "binding":  "EMBER_AUDITOR_STALE_CLONE",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "evidence_receipt",
+                      "lineage_admissibility":  "excluded_stale_audit_copy",
+                      "mutability":  "auditor_managed",
+                      "owner":  "auditor",
+                      "authority_status":  "noncanonical_evidence"
+                  },
+                  {
+                      "root_id":  "auditor-evidence-root",
+                      "binding":  "EMBER_AUDITOR_EVIDENCE_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "evidence_receipt",
+                      "lineage_admissibility":  "excluded_evidence_only",
+                      "mutability":  "auditor_managed",
+                      "owner":  "auditor",
+                      "authority_status":  "noncanonical_evidence"
+                  },
+                  {
+                      "root_id":  "collaborator-evidence-root",
+                      "binding":  "EMBER_COLLABORATOR_EVIDENCE_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "evidence_receipt",
+                      "lineage_admissibility":  "excluded_evidence_only",
+                      "mutability":  "collaborator_managed",
+                      "owner":  "collaborator",
+                      "authority_status":  "noncanonical_evidence"
+                  },
+                  {
+                      "root_id":  "live-receipts-root",
+                      "binding":  "EMBER_LIVE_RECEIPTS_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "evidence_receipt",
+                      "lineage_admissibility":  "excluded_until_receipt_validation",
+                      "mutability":  "append_only_intended",
+                      "owner":  "operator",
+                      "authority_status":  "external_evidence"
+                  },
+                  {
+                      "root_id":  "local-execution-tree",
+                      "binding":  "EMBER_EXECUTION_ROOT",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "owned_lineage_candidate",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "dirty_live_tree",
+                      "owner":  "operator",
+                      "authority_status":  "candidate_not_selected"
+                  },
+                  {
+                      "root_id":  "local-ignored-payload-registry",
+                      "binding":  "EMBER_IGNORED_PAYLOAD_REGISTRY",
+                      "required":  true,
+                      "scan":  "git_ignored_registry",
+                      "source_root_id":  "local-execution-tree",
+                      "provenance_class":  "unresolved",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "dirty_live_tree",
+                      "owner":  "operator",
+                      "authority_status":  "unclassified_ignored_material"
+                  },
+                  {
+                      "root_id":  "private-backup-remote",
+                      "binding":  "EMBER_BACKUP_REMOTE",
+                      "required":  true,
+                      "scan":  "git_remote",
+                      "source_root_id":  "local-execution-tree",
+                      "remote_name":  "backup",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_ref_review",
+                      "mutability":  "remote",
+                      "owner":  "operator",
+                      "authority_status":  "private_noncanonical"
+                  },
+                  {
+                      "root_id":  "private-backup-root",
+                      "binding":  "EMBER_PRIVATE_BACKUP_ROOT",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_ref_review",
+                      "mutability":  "preserve_read_only",
+                      "owner":  "operator",
+                      "authority_status":  "missing_or_relocated"
+                  },
+                  {
+                      "root_id":  "public-bare-mirror",
+                      "binding":  "EMBER_PUBLIC_BARE_MIRROR",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "excluded_mirror",
+                      "mutability":  "mirror",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_bare_mirror"
+                  },
+                  {
+                      "root_id":  "public-repository",
+                      "binding":  "EMBER_PUBLIC_REPO",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "harness_tooling",
+                      "lineage_admissibility":  "source_authority_not_weight_lineage",
+                      "mutability":  "git_controlled",
+                      "owner":  "operator",
+                      "authority_status":  "public_source_authority"
+                  },
+                  {
+                      "root_id":  "public-worktree",
+                      "binding":  "EMBER_PUBLIC_WORKTREE",
+                      "required":  true,
+                      "scan":  "git_repository",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_patch_review",
+                      "mutability":  "dirty_or_branch_specific",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_worktree"
+                  },
+                  {
+                      "root_id":  "pull-backup-root",
+                      "binding":  "EMBER_PULL_BACKUP_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "preserve_read_only",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_backup"
+                  },
+                  {
+                      "root_id":  "recovery-root",
+                      "binding":  "EMBER_RECOVERY_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "preserve_read_only",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_recovery"
+                  },
+                  {
+                      "root_id":  "registered-worktree-material-registry",
+                      "binding":  "EMBER_WORKTREE_MATERIAL_REGISTRY",
+                      "required":  true,
+                      "scan":  "git_worktree_material_registry",
+                      "source_root_id":  "local-execution-tree",
+                      "provenance_class":  "unresolved",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "distributed_worktree_state",
+                      "owner":  "operator",
+                      "authority_status":  "distributed_local_material"
+                  },
+                  {
+                      "root_id":  "registered-worktree-registry",
+                      "binding":  "EMBER_WORKTREE_REGISTRY",
+                      "required":  true,
+                      "scan":  "git_worktree_registry",
+                      "source_root_id":  "local-execution-tree",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_worktree_review",
+                      "mutability":  "git_metadata",
+                      "owner":  "operator",
+                      "authority_status":  "distributed_branch_evidence"
+                  },
+                  {
+                      "root_id":  "untracked-backup-root",
+                      "binding":  "EMBER_UNTRACKED_BACKUP_ROOT",
+                      "required":  true,
+                      "scan":  "files",
+                      "provenance_class":  "archive_history",
+                      "lineage_admissibility":  "unresolved_requires_item_review",
+                      "mutability":  "preserve_read_only",
+                      "owner":  "operator",
+                      "authority_status":  "noncanonical_backup"
+                  }
+              ]
+}
