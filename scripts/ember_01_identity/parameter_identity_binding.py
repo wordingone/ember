@@ -17,12 +17,19 @@ Two functions:
   into a manifest ``parameters`` section and ``checkpoint.byte_sha256``. It never
   invents a parameter count — every value traces to ``execute_counter``'s MEASURED
   receipt.
-- ``verify_parameter_identity_binding`` re-derives the same six axes from the supplied
-  realization receipt and fails closed (raises ``ParameterIdentityMismatch``, naming the
-  axis) the instant the manifest's claimed value diverges from the receipt's measured
-  value for that axis, or the checkpoint identity diverges. This is the round-trip
-  proof surface: tamper one axis in the manifest without touching the receipt and this
-  raises; tamper nothing and it is silent.
+- ``verify_parameter_identity_binding`` takes the live ``checkpoint_manifest`` and
+  ``model_config`` paths (never just the receipt dict) and re-derives every value it
+  checks from bytes on disk: it re-hashes the checkpoint manifest file to catch a
+  receipt whose ``subject_checkpoint_sha256`` does not match any checkpoint that
+  actually exists, then re-runs the real, isolated ``execute_counter`` against those
+  same paths and compares its freshly measured six axes + checkpoint hash against the
+  receipt's claims. Only after that independent re-derivation does it fall back to
+  the manifest-vs-receipt field comparison. It fails closed (raises
+  ``ParameterIdentityMismatch``, naming the axis or the checkpoint identity) the
+  instant any claimed value diverges from what is independently, freshly measured.
+  This is the round-trip proof surface: tamper one axis in the manifest without
+  touching the receipt and this raises; hand-author a receipt with no matching
+  checkpoint on disk and this raises; tamper nothing and it is silent.
 """
 
 from __future__ import annotations
@@ -40,6 +47,7 @@ if str(_COUNTER_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_COUNTER_MODULE_DIR))
 
 from parameter_counter import execute_counter  # noqa: E402  (path seam above)
+from parameter_counter import _sha256 as _hash_file  # noqa: E402  (streaming file hash, no full-file read)
 
 # Maps the manifest's parameter field names (schema-v1.json / validate_identity.py
 # REQUIRED_PATHS) to the realization receipt's field names
@@ -103,14 +111,90 @@ def bind_parameter_identity(
 
 
 def verify_parameter_identity_binding(
-    manifest: Mapping[str, Any], receipt: Mapping[str, Any]
+    manifest: Mapping[str, Any],
+    receipt: Mapping[str, Any],
+    *,
+    checkpoint_manifest: Path,
+    model_config: Path,
+    active_expert: str | None = None,
 ) -> None:
-    """Fail closed the instant a manifest's parameter axis diverges from the receipt.
+    """Fail closed the instant claimed identity diverges from bytes on disk.
 
-    Raises ``ParameterIdentityMismatch`` naming the exact axis (or the checkpoint
-    identity) that no longer matches the independently measured evidence. Silent
-    (returns None) when every bound value matches.
+    ``checkpoint_manifest`` and ``model_config`` are the live paths the receipt
+    claims to be evidence for -- they are the single authoritative source of
+    checkpoint bytes for this verification, never the receipt dict alone. Two
+    independent re-derivations run before any field-to-field comparison:
+
+    1. The checkpoint manifest file is re-hashed from disk (streaming reads, same
+       mechanism as ``parameter_counter._sha256``) and compared against the
+       receipt's claimed ``subject_checkpoint_sha256``. A receipt naming a hash
+       with no matching checkpoint on disk fails here.
+    2. The real, isolated ``execute_counter`` is re-run against those same paths,
+       independently re-measuring all six parameter axes and the checkpoint
+       identity. A hand-authored receipt with fabricated counts fails here even
+       if its checkpoint hash happens to match.
+
+    Only once both re-derivations agree with the receipt does this fall back to
+    the manifest-vs-receipt field comparison (which still catches a manifest that
+    diverges from an otherwise-honest receipt). Raises
+    ``ParameterIdentityMismatch`` naming the exact axis (or the checkpoint
+    identity) that fails to independently re-derive. Silent (returns None) when
+    every bound value matches the freshly measured evidence.
     """
+    checkpoint_manifest = Path(checkpoint_manifest)
+    model_config = Path(model_config)
+
+    claimed_subject_sha256 = receipt.get("subject_checkpoint_sha256")
+    try:
+        real_checkpoint_sha256 = _hash_file(checkpoint_manifest)
+    except OSError as error:
+        raise ParameterIdentityMismatch(
+            f"checkpoint_manifest at {checkpoint_manifest} could not be read from "
+            f"disk to re-derive its hash; receipt claims "
+            f"subject_checkpoint_sha256={claimed_subject_sha256!r} but no such "
+            f"checkpoint bytes exist to verify against ({error})"
+        ) from error
+    if real_checkpoint_sha256 != claimed_subject_sha256:
+        raise ParameterIdentityMismatch(
+            f"receipt claims subject_checkpoint_sha256={claimed_subject_sha256!r} "
+            f"but the checkpoint manifest bytes on disk hash to "
+            f"{real_checkpoint_sha256!r}"
+        )
+
+    resolved_active_expert = active_expert
+    if resolved_active_expert is None:
+        active_expert_ids = receipt.get("active_expert_ids")
+        resolved_active_expert = (
+            active_expert_ids[0]
+            if isinstance(active_expert_ids, list) and active_expert_ids
+            else "shared"
+        )
+    try:
+        remeasured = measure_live_checkpoint(
+            model_config=model_config,
+            checkpoint_manifest=checkpoint_manifest,
+            active_expert=resolved_active_expert,
+        )
+    except ValueError as error:
+        raise ParameterIdentityMismatch(
+            f"re-running the live-checkpoint counter against {checkpoint_manifest} "
+            f"failed; the receipt's evidence does not independently re-derive ({error})"
+        ) from error
+
+    for field, axis in AXIS_MAP.items():
+        measured = remeasured.get(axis)
+        claimed = receipt.get(axis)
+        if measured != claimed:
+            raise ParameterIdentityMismatch(
+                f"receipt claims {axis}={claimed!r} but re-running the live-checkpoint "
+                f"counter independently measured {axis}={measured!r}"
+            )
+    if remeasured.get("subject_checkpoint_sha256") != claimed_subject_sha256:
+        raise ParameterIdentityMismatch(
+            "receipt's subject_checkpoint_sha256 diverges from the re-measured "
+            "counter result"
+        )
+
     parameters = manifest.get("parameters")
     if not isinstance(parameters, Mapping):
         raise ParameterIdentityMismatch("manifest has no parameters section to verify")
