@@ -123,6 +123,7 @@ import {
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
+import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -628,6 +629,28 @@ export function ReplScreen({
 
   const useVirtualScroll = shouldUseVirtualScroll(env);
   const writeTitle       = shouldWriteTerminalTitle(env);
+
+  // #924: the operator surface's source-provenance contract (#921) requires
+  // sourceBindingVerified===true before it will render anything but "SOURCE
+  // UNVERIFIED/UNBOUND" -- no producer ever set it. This independently binds
+  // the claimed EMBER_PUBLIC_SOURCE_COMMIT / EMBER_CLI_BINARY_SHA256 env
+  // values to the actual git HEAD + running-binary bytes; fail-closed on any
+  // mismatch or unreadable evidence (verifySourceBinding never throws).
+  const sourceIdentity = useMemo(() => {
+    const publicCommit = env["EMBER_PUBLIC_SOURCE_COMMIT"];
+    const binarySha256  = env["EMBER_CLI_BINARY_SHA256"];
+    const binding = verifySourceBinding({
+      claimedCommit:       publicCommit,
+      claimedBinarySha256: binarySha256,
+      cwd,
+      binaryPath:          process.execPath,
+    });
+    return {
+      publicCommit,
+      binarySha256,
+      sourceBindingVerified: binding.verified,
+    };
+  }, [env, cwd]);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
   const [taskPanelVisible, setTaskPanelVisible] = useState(false);
@@ -1577,10 +1600,7 @@ export function ReplScreen({
       key: "operator-surface",
       telemetry,
       activityLines: getActivityFeedState().recentLines,
-      sourceIdentity: {
-        publicCommit: env["EMBER_PUBLIC_SOURCE_COMMIT"],
-        binarySha256: env["EMBER_CLI_BINARY_SHA256"],
-      },
+      sourceIdentity,
       width: paneWidth,
       height: terminalRows,
       terminalColumns: terminalCols,
