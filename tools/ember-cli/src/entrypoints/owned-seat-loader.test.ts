@@ -541,6 +541,23 @@ describe("owned seat loader", () => {
     ).rejects.toThrow("identity request failed with HTTP 503");
   });
 
+  it("fails closed when the owned endpoint is unreachable (connection refused / network error)", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    await expect(
+      verifyOwnedEndpointIdentity(identity, async () => {
+        throw new Error("connect ECONNREFUSED 127.0.0.1:8083");
+      }),
+    ).rejects.toThrow("owned endpoint identity request failed: connect ECONNREFUSED 127.0.0.1:8083");
+  });
+
   it("rejects a live endpoint whose runtime bytes differ from the admitted identity", async () => {
     const identity = {
       checkpointSha256: CHECKPOINT,
