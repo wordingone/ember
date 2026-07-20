@@ -194,6 +194,32 @@ describe("OperatorSurfacePane", () => {
     const snapshot = buildOperatorSurfaceSnapshot({ telemetry: telemetry(), activityLines: [], sourceIdentity: { publicCommit: "f".repeat(40), binarySha256: "b".repeat(64) } });
     expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
   });
+  // #924: a producer that independently verified the claim (sourceBindingVerified: true)
+  // renders the bound commit + binary digest instead of the fail-closed placeholder.
+  test("verified source binding renders the bound commit and binary digest", () => {
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry(),
+      activityLines: [],
+      sourceIdentity: { publicCommit: "f".repeat(40), binarySha256: "b".repeat(64), sourceBindingVerified: true },
+    });
+    expect(snapshot.source).toBe(`source ${"f".repeat(12)}${ellipsis} binary ${"b".repeat(12)}${ellipsis}`);
+  });
+  test("sourceBindingVerified true with a malformed commit still stays unverified (fail-closed)", () => {
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry(),
+      activityLines: [],
+      sourceIdentity: { publicCommit: "not-a-sha", binarySha256: "b".repeat(64), sourceBindingVerified: true },
+    });
+    expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
+  });
+  test("sourceBindingVerified true with a missing binary hash still stays unverified (fail-closed)", () => {
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry(),
+      activityLines: [],
+      sourceIdentity: { publicCommit: "f".repeat(40), sourceBindingVerified: true },
+    });
+    expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
+  });
 
   test("mounted pane renders all four bounded families and stays inside narrow terminal bounds", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: [train("run-a", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000, free_gib: 10, total_gib: 24 }), train("run-a", 2, "2026-07-17T17:30:02.000Z", 1, { step_ms: 500, free_gib: 9, total_gib: 24 }), { ts: "2026-07-17T17:30:02.100Z", kind: "checkpoint", source: "journal", payload: { run_id: "run-a", step: 2, checkpoint_manifest_sha256: "a".repeat(64) } }], activeRun: { runId: "run-a", step: 2, loss: 1, stepMs: 500, lastTs: "2026-07-17T17:30:02.000Z" } }), activityLines: [], width: 60, height: 20, terminalColumns: 60, terminalRows: 20, nowMs: Date.parse("2026-07-17T17:30:03.000Z") });
