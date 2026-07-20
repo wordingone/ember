@@ -32,6 +32,20 @@ _FAILURE_EVIDENCE_LIMIT = 64 * 1024
 _STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
 
 
+class CheckpointIdentityMismatch(ValueError):
+    """A checkpoint's recorded cond3 identity manifest binding diverges from its
+    on-disk bytes, or the binding is absent entirely.
+
+    Raised by ``load_checkpoint_artifacts`` BEFORE any model/optimizer mutation.
+    This is additive to (never a replacement for) the existing v3/v4 receipt's
+    optimizer-contract / expert-hash / ``_validated_records`` checks -- it binds
+    the checkpoint to the cond3 identity manifest surface (``checkpoint.byte_sha256``)
+    that increments 1/1b/2a/2b established, closing the gap where this module's own
+    internal receipt could round-trip while carrying an identity the manifest would
+    reject.
+    """
+
+
 def _is_link_or_reparse(path: Path) -> bool:
     try:
         info = path.lstat()
@@ -64,6 +78,23 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _bind_checkpoint_identity(published_root: Path, receipt: Mapping[str, Any]) -> dict[str, Any]:
+    """Bind ``checkpoint.byte_sha256`` to the just-published manifest bytes on disk.
+
+    Reuses ``_sha256``'s streaming disk-hash discipline against the FINAL published
+    location -- never a passed-in constant, never the pre-publish staging candidate
+    -- so the identity binding proves what is actually selectable on disk. This is
+    the cond3 identity manifest surface's ``checkpoint.byte_sha256`` field (same
+    convention as ``scripts/ember_01_identity/parameter_identity_binding.py``'s
+    ``subject_checkpoint_sha256``: the checkpoint manifest file's own bytes are the
+    checkpoint's identity subject). Additive -- every existing receipt field is
+    preserved untouched.
+    """
+    manifest_path = published_root / "checkpoint-manifest.json"
+    byte_sha256 = _sha256(manifest_path)
+    return {**dict(receipt), "checkpoint": {"byte_sha256": byte_sha256}}
 
 
 def _select_detached_state(
@@ -898,7 +929,8 @@ def admit_quarantined_checkpoint(
             _retain_write_failure_evidence(published_root, candidate, error)
             raise FileExistsError(f"published checkpoint bundle appeared during admission: {published_root}") from error
         raise
-    return {key: value for key, value in final_receipt.items() if key != "_counter_receipt_payload"}
+    published_receipt = {key: value for key, value in final_receipt.items() if key != "_counter_receipt_payload"}
+    return _bind_checkpoint_identity(published_root, published_receipt)
 
 def _write_checkpoint_artifacts_impl(
     model: UnifiedDecoder,
@@ -1066,7 +1098,7 @@ def _write_checkpoint_artifacts_impl(
                 max_serialized_bytes=max_serialized_bytes,
             )
         _atomic_publish_no_replace(root, published_root)
-        return receipt
+        return _bind_checkpoint_identity(published_root, receipt)
     except Exception as error:
         evidence_error: Exception | None = None
         if root.exists():
@@ -1194,6 +1226,21 @@ def load_checkpoint_artifacts(
     if not isinstance(active, list) or len(active) != 1 or active[0] not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("checkpoint receipt lacks exactly one declared active expert")
     records = _validated_records(root, receipt)
+
+    identity = receipt.get("checkpoint")
+    if not isinstance(identity, dict) or not isinstance(identity.get("byte_sha256"), str):
+        raise CheckpointIdentityMismatch(
+            "checkpoint receipt is missing a cond3 identity manifest binding "
+            "(checkpoint.byte_sha256) -- refusing to load"
+        )
+    identity_manifest_path = root / "checkpoint-manifest.json"
+    actual_identity_byte_sha256 = _sha256(identity_manifest_path)
+    if actual_identity_byte_sha256 != identity["byte_sha256"]:
+        raise CheckpointIdentityMismatch(
+            f"checkpoint identity mismatch: on-disk checkpoint-manifest.json bytes hash "
+            f"to {actual_identity_byte_sha256!r} but the recorded checkpoint.byte_sha256 "
+            f"is {identity['byte_sha256']!r}"
+        )
 
     payloads: dict[str, Any] = {}
     for relative in records:
