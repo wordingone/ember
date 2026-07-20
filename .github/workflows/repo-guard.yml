@@ -1,6 +1,6 @@
 name: repo-guard
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 # Unbypassable server-side ring. Runs the same kernel as the local hook on every
@@ -36,8 +36,17 @@ jobs:
       - name: Validate PR authority binding
         if: github.event_name == 'pull_request'
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: >-
-          python scripts/check_pr_authority_binding.py
-          --body-env PR_BODY
-          --changed-range origin/master..HEAD
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Read the LIVE PR body via the API rather than
+          # github.event.pull_request.body. The event-payload body is a snapshot
+          # frozen when the event fired; `gh run rerun` replays that same stale
+          # payload, so a body edit never reaches a rerun — only a fresh event
+          # (a new push = synchronize, or close/reopen) refreshes it. Fetching
+          # the body at run time makes reruns authoritative and matches the
+          # tools/pr_authbind_preflight.sh pre-handoff check.
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.body // ""' > "${RUNNER_TEMP}/pr_body.txt"
+          python scripts/check_pr_authority_binding.py \
+            --body-file "${RUNNER_TEMP}/pr_body.txt" \
+            --changed-range origin/master..HEAD

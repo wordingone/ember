@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl.ts — interactive REPL screen.
 // Full-screen conversation loop: virtual transcript, spinner, prompt input,
 // and status bar. Drives the QueryEngine via dynamic import of session-init
@@ -72,10 +75,12 @@ import {
   startTelemetryWatch,
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
+import { telemetryMemoKey }              from "../services/telemetry-label.ts";
 import {
   getActivityFeedState,
   startActivityFeed,
 }                                        from "../services/activity-feed.ts";
+import { advanceActivityTranscript }      from "../services/activity-transcript-window.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
 import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
 import { useOutageBanner }               from "../services/outage-banner-poller.ts";
@@ -84,6 +89,7 @@ import {
   makeSuggestionExecutor,
 } from "../services/prompt-suggestion.ts";
 import type { AppState } from "../state/app-state.ts";
+import type { EmberMessage } from "../types/message-types.ts";
 import type { CallModelParams, ModelResponse } from "../query/query-loop-support.ts";
 import { tryDispatchSlashCommand, parseSlashInput } from "../services/slash-dispatch.ts";
 import { consumePostCompaction } from "../session-state.ts";
@@ -116,6 +122,7 @@ import {
 } from "../services/run-progress-scanner.ts";
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
+import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -133,6 +140,16 @@ export const COMPACTION_TOKEN_THRESHOLD = 180_000;
 export const COMPACTION_INDICATOR_TEXT  = "Razzle-dazzling...";
 export const ANALYTICS_SESSION_START    = "ember_repl_session_start";
 export const ANALYTICS_SESSION_END      = "ember_repl_session_end";
+
+/** Width budget for the in-window provenance/agent pane. */
+export function operatorSurfaceWidth(terminalColumns: number): number {
+  if (!Number.isFinite(terminalColumns) || terminalColumns <= 0) return 28;
+  const minTranscript = Math.min(20, Math.max(10, Math.floor(terminalColumns * 0.5)));
+  const minPane = Math.min(28, Math.max(10, Math.floor(terminalColumns * 0.5)));
+  const preferred = Math.floor(terminalColumns * 0.42);
+  const maxPane = Math.max(minPane, terminalColumns - minTranscript);
+  return Math.max(minPane, Math.min(maxPane, preferred));
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -349,26 +366,6 @@ export function toggleTaskPanel(current: boolean): boolean {
 // Prevents unnecessary re-renders when telemetry hasn't changed meaningfully.
 // ---------------------------------------------------------------------------
 
-function _telemetryMemoKey(state: TelemetryState): string | null {
-  const { lastGovernor, activeRun } = state;
-  if (!lastGovernor && !activeRun) return null;
-  const parts: string[] = [];
-  if (lastGovernor) {
-    parts.push(
-      `VRAM ${lastGovernor.vramUsedGib.toFixed(1)}/${lastGovernor.vramTotalGib.toFixed(1)}`,
-    );
-  }
-  if (activeRun) {
-    const stepStr = activeRun.totalSteps != null
-      ? `${activeRun.step}/${activeRun.totalSteps}`
-      : String(activeRun.step);
-    let runPart = `train r=${activeRun.runId} step ${stepStr}`;
-    if (activeRun.loss != null) runPart += ` loss ${activeRun.loss.toFixed(2)}`;
-    parts.push(runPart);
-  }
-  return `⚡ ${parts.join(" · ")}`;
-}
-
 // ---------------------------------------------------------------------------
 // renderMsgDispatch — routes a SessionMessage to the correct renderer
 // ---------------------------------------------------------------------------
@@ -555,6 +552,65 @@ export function applyResultEvent(
 }
 
 // ---------------------------------------------------------------------------
+// adaptSessionMessagesForSuggestion — issue #50: prompt-suggestion's guard
+// chain (tryGenerateSuggestion) filters on EmberMessage's `role`/`stop_reason`
+// fields, but the REPL transcript is SessionMessage[] (`{id, type, ...}` --
+// app-shell.ts), which has never carried a `role` field. The call site papered
+// over the mismatch with `messages as any`, so Guard 2's
+// `messages.filter(m => m.role === "assistant")` always saw zero matches and
+// the feature could never fire (confirmed: the "as any" cast at the call site
+// and this filter both date to the original publish commit 2051802 -- the
+// shapes never matched in production, so the feature was never live).
+//
+// This is the one boundary adapter (per #50 scope clause 2 -- no forked
+// message type): it maps the transcript's SessionMessage[] to the
+// EmberMessage[] shape the suggestion module expects, threading the
+// stop_reason/usage fields applyResultEvent already attaches at the pending
+// message (see above). Guard-4 usage note (#52 clause 6): the adapter copies
+// each message's `usage` through UNCHANGED -- getParentCacheSuppressReason
+// (prompt-suggestion.ts) reads only the LAST assistant message's own
+// input/cache-creation/output token fields (a per-turn, uncached figure, not
+// a running cumulative total), so no aggregation belongs at this seam.
+// ---------------------------------------------------------------------------
+
+export function adaptSessionMessagesForSuggestion(
+  messages: SessionMessage[],
+): EmberMessage[] {
+  const adapted: EmberMessage[] = [];
+  for (const m of messages) {
+    // Malformed entries (missing/non-string type, or not an object) are
+    // dropped rather than crashing the adapter or the guard chain downstream.
+    if (!m || typeof m !== "object" || typeof m.type !== "string") continue;
+
+    let role: EmberMessage["role"] | null = null;
+    if (m.type === "user") role = "user";
+    else if (m.type === "assistant") role = "assistant";
+    // A transcript entry of type "error" (applyResultEvent's error/max_turns
+    // paths) replaces the pending assistant bubble for a turn that failed --
+    // it IS that turn's assistant outcome, so it maps to role "assistant"
+    // with the literal stop_reason "error" Guard 3 checks for.
+    else if (m.type === "error") role = "assistant";
+    else continue; // welcome/tool_result/compaction/command/etc. -- not a turn
+
+    const content = typeof m["content"] === "string" ? m["content"] : "";
+    const entry: EmberMessage = { role, content };
+    if (m.type === "error") {
+      entry.stop_reason = "error";
+    } else if (
+      typeof m["stop_reason"] === "string" ||
+      m["stop_reason"] === null
+    ) {
+      entry.stop_reason = m["stop_reason"] as string | null;
+    }
+    if (m["usage"] !== undefined) {
+      entry["usage"] = m["usage"];
+    }
+    adapted.push(entry);
+  }
+  return adapted;
+}
+
+// ---------------------------------------------------------------------------
 // ReplScreen — full-screen interactive REPL
 // ---------------------------------------------------------------------------
 
@@ -588,6 +644,19 @@ export function ReplScreen({
   // away" report). It is now an always-mounted, top-locked region (see the render tree below),
   // rendered directly from `config`/`cwd`/`boardSummary`/`dataRoot` -- `messages` starts empty.
   const [messages, setMessages] = useState<SessionMessage[]>([]);
+
+  // #50 round-3 repair: the exact post-applyResultEvent transcript for the
+  // in-flight turn, threaded through a DEDICATED React state slot rather than
+  // a plain local variable assigned from inside setMessages's own updater and
+  // read back synchronously right after (round-2's shape) -- React gives no
+  // ordering guarantee that an updater passed to setState has actually run by
+  // the time the call site's next line executes, so that read could observe
+  // a stale (pre-turn) value. Setting a SECOND piece of state from within the
+  // first updater is well-defined (LegacyRoot, no Strict-mode double-invoke
+  // here), and the effect below only ever fires once React has committed the
+  // exact value written -- never a same-tick, ordering-dependent read.
+  const [completedTranscript, setCompletedTranscript] =
+    useState<SessionMessage[] | null>(null);
 
   const mountRef  = useRef(Date.now());
   const engineRef = useRef<QueryEngine | null>(null);
@@ -685,7 +754,7 @@ export function ReplScreen({
   useInterval(() => {
     const next = getState();
     setTelemetry((prev) =>
-      _telemetryMemoKey(prev) === _telemetryMemoKey(next) ? prev : { ...next },
+      telemetryMemoKey(prev) === telemetryMemoKey(next) ? prev : { ...next },
     );
   }, 500);
 
@@ -698,7 +767,7 @@ export function ReplScreen({
   // are deduped by a content key (ts+source+text), not by array index, so the engine's own ring
   // buffer (which shifts old entries once it hits its cap) can never cause a re-render of an
   // already-seen event or the silent loss of a genuinely new one.
-  const seenActivityKeysRef = useRef<Set<string>>(new Set());
+  const activityCursorRef = useRef(0);
 
   useEffect(() => {
     const handle = startActivityFeed();
@@ -707,28 +776,44 @@ export function ReplScreen({
 
   useInterval(() => {
     const next = getActivityFeedState();
-    const fresh = next.recentLines.filter((line) => {
-      const key = `${line.ts}|${line.source}|${line.text}`;
-      if (seenActivityKeysRef.current.has(key)) return false;
-      seenActivityKeysRef.current.add(key);
-      return true;
+    const latest = next.recentLines[next.recentLines.length - 1]?.sequence ?? 0;
+    if (latest <= activityCursorRef.current) return;
+    setMessages((prev) => {
+      const advanced = advanceActivityTranscript(prev, activityCursorRef.current, next.recentLines);
+      activityCursorRef.current = advanced.cursor;
+      return advanced.messages;
     });
-    if (fresh.length === 0) return;
-    setMessages((prev) => [
-      ...prev,
-      ...fresh.map((line) => ({
-        id:     `activity-${crypto.randomUUID()}`,
-        type:   "activity",
-        ts:     line.ts,
-        source: line.source,
-        text:   line.text,
-        path:   line.path,
-      })),
-    ]);
   }, 500);
 
   // Keep messagesRef in sync with React state for use inside async callbacks.
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // #50 round-3 repair: fires prompt-suggestion generation once React has
+  // actually committed `completedTranscript` (set from inside the "result"
+  // event's setMessages updater in submitPrompt, below) -- a deterministic
+  // post-commit effect keyed to the completed turn, never a same-tick read of
+  // a value whose write-timing setState does not guarantee. Runs at most once
+  // per turn: it clears the slot immediately so a later unrelated `messages`
+  // change (e.g. the activity-feed poller above) can never re-trigger it.
+  useEffect(() => {
+    if (completedTranscript === null) return;
+    const snapshot = completedTranscript;
+    setCompletedTranscript(null);
+    if (!callModelRef.current) return;
+    void executePromptSuggestion({
+      messages:   adaptSessionMessagesForSuggestion(snapshot),
+      getAppState: () => ({} as AppState),
+      setAppState: (updater) => {
+        const next = updater({} as AppState);
+        // executePromptSuggestion casts the state to `any` when writing
+        // currentSuggestion; extract it safely via unknown.
+        const sugg = (next as unknown as Record<string, unknown>)["currentSuggestion"];
+        if (typeof sugg === "string") setCurrentSuggestion(sugg);
+        else if (sugg === null)        setCurrentSuggestion(null);
+      },
+      forkedAgentExecutor: makeSuggestionExecutor(callModelRef.current),
+    });
+  }, [completedTranscript]);
 
   // #561/#565: boardSummary/dataRoot no longer need syncing INTO a messages[0] welcome entry --
   // the banner region (render tree below) reads this component-scope state directly.
@@ -1203,6 +1288,11 @@ export function ReplScreen({
       { id: assistantId, type: "assistant", content: "" },
     ]);
 
+    // #50 round-3: whether a "result" event landed this turn (gates the
+    // fallback dispatch below). Plain per-invocation flag, not read across
+    // any React scheduling boundary -- safe.
+    let sawResultEvent = false;
+
     try {
       for await (const ev of (engineRef.current as QueryEngine).submitMessage(text)) {
         if (abortCtrl.signal.aborted) break;
@@ -1245,7 +1335,22 @@ export function ReplScreen({
         } else if (event.type === "result") {
           // #157/#49: never discard the result event -- error/max_turns carry
           // the ONLY closing text the loop will ever produce for that turn.
-          setMessages((prev) => applyResultEvent(event, prev, assistantId));
+          // #50 round-3: thread the SAME array applyResultEvent produces into
+          // the dedicated `completedTranscript` state slot (never a local
+          // variable read back synchronously right after this call -- see
+          // that state's declaration above for why). Skipped when this turn
+          // was aborted: the abort happened strictly before this branch could
+          // run (the loop's own top-of-iteration check would have broken out
+          // first), so this only guards the dispatch against a signal that
+          // flips true during the awaits still pending below (compaction
+          // read, operator-receipt check).
+          sawResultEvent = true;
+          const aborted = abortCtrl.signal.aborted;
+          setMessages((prev) => {
+            const next = applyResultEvent(event, prev, assistantId);
+            if (!aborted) setCompletedTranscript(next);
+            return next;
+          });
           break;
         }
       }
@@ -1280,10 +1385,19 @@ export function ReplScreen({
         ]);
       }
 
-      // Fire prompt-suggestion generation after each completed turn.
-      if (!abortCtrl.signal.aborted && callModelRef.current) {
+      // #50 round-3: the primary dispatch now happens from the
+      // `completedTranscript`-keyed effect above (fired once React commits
+      // that state, never from a same-tick read here). This is only the
+      // fallback for the one case that effect can never cover: no "result"
+      // event arrived this turn at all (stream ended some other way), so
+      // `completedTranscript` was never set. messagesRef.current's usual
+      // one-render lag is immaterial here -- by this point in the function
+      // several awaited turn-exit steps (operator receipt, compaction) have
+      // already run, so any pending render/effect flush from this turn's own
+      // last setMessages call has long since committed.
+      if (!sawResultEvent && !abortCtrl.signal.aborted && callModelRef.current) {
         void executePromptSuggestion({
-          messages:   messagesRef.current as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          messages:   adaptSessionMessagesForSuggestion(messagesRef.current),
           getAppState: () => ({} as AppState),
           setAppState: (updater) => {
             const next = updater({} as AppState);
@@ -1390,88 +1504,87 @@ export function ReplScreen({
   // Render
   // ---------------------------------------------------------------------------
 
+  const paneWidth = operatorSurfaceWidth(terminalCols);
+  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
+
   return React.createElement(
     Box,
-    { flexDirection: "column", height: terminalRows },
-
-    // #561/#565: banner — always mounted, top-locked (flexShrink:0, same protection as the
-    // bottom chrome below). Previously this was `messages[0]` inside the scrolling/flex-end
-    // transcript, so once enough turns or activity events landed it scrolled away entirely
-    // (the operator's "top banner also scrolled away" report). It now renders directly from
-    // this component's own state, independent of transcript volume, restart, or resize.
+    { flexDirection: "row", width: terminalCols, height: terminalRows, overflow: "hidden" },
     React.createElement(
       Box,
-      { key: "banner", flexShrink: 0 },
-      React.createElement(Homescreen, {
-        state: {
-          model:   config.model,
-          cwd,
-          version: process.env["EMBER_VERSION"] ?? "0.0.0",
-          dataRoot: dataRoot ?? "",
-        },
-        viewportWidth: terminalCols,
-        boardSummary,
+      { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
+      React.createElement(
+        Box,
+        { key: "banner", flexShrink: 0, overflow: "hidden" },
+        React.createElement(Homescreen, {
+          state: {
+            model:   config.model,
+            cwd,
+            version: process.env["EMBER_VERSION"] ?? "0.0.0",
+            dataRoot: dataRoot ?? "",
+          },
+          viewportWidth: mainColumnWidth,
+          boardSummary,
+        }),
+      ),
+      React.createElement(
+        Box,
+        { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
+        React.createElement(
+          Box,
+          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
+          transcript,
+        ),
+      ),
+      dialogOverlay,
+      busy
+        ? React.createElement(SpinnerAnimationRow, {
+            key:         "spinner",
+            elapsedMs:   spinnerElapsed,
+            startedAtMs: spinnerStartRef.current,
+          })
+        : null,
+      dropdownOpen && dropdownDisplay.visible.length > 0
+        ? React.createElement(SlashDropdown, {
+            key:           "slash-dropdown",
+            commands:      dropdownDisplay.visible,
+            selectedIndex: dropdownDisplay.selectedIndex,
+            overflowCount: dropdownDisplay.overflowCount,
+            width:         mainColumnWidth,
+          })
+        : null,
+      React.createElement(PromptInput, {
+        key:            "input",
+        state:          inputState,
+        isProcessing:   busy,
+        showStatusLine: false,
+        suggestion:     currentSuggestion ?? undefined,
+        width:          mainColumnWidth,
+      }),
+      React.createElement(StatusLine, {
+        key:            "status",
+        permissionMode: permModeState,
+        interrupt:      interruptHandler,
+        taskPanel:      taskPanelState,
+        telemetry,
+        modelMetrics:   modelMetrics ?? undefined,
+        effort:         retryStatus,
+        degraded:       degradedBanner,
+        outage:         outageBanner,
       }),
     ),
-
-    // Transcript — real conversation turns + activity events only now; the banner above never
-    // scrolls with it.
-    React.createElement(
-      Box,
-      { key: "transcript", flexDirection: "column", flexGrow: transcriptFlexGrow(messages), overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
-      transcript,
-    ),
-
-    // Dialog overlay (idle-return, cost-threshold, …)
-    dialogOverlay,
-
-    // Spinner while processing
-    busy
-      ? React.createElement(SpinnerAnimationRow, {
-          key:         "spinner",
-          elapsedMs:   spinnerElapsed,
-          startedAtMs: spinnerStartRef.current,
-        })
-      : null,
-
-    // Slash-command completion dropdown (b22 item 1) — sits directly above the input line while
-    // composing a command name; b23: each row's description ellipsis-truncates to the live
-    // terminal width instead of hard-clipping mid-word.
-    dropdownOpen && dropdownDisplay.visible.length > 0
-      ? React.createElement(SlashDropdown, {
-          key:           "slash-dropdown",
-          commands:      dropdownDisplay.visible,
-          selectedIndex: dropdownDisplay.selectedIndex,
-          overflowCount: dropdownDisplay.overflowCount,
-          width:         terminalCols,
-        })
-      : null,
-
-    // Text input (suggestion = dimmed ghost text after cursor; Tab accepts it)
-    // #303 fix: pass terminalCols so input rules re-measure on resize (b242 bar).
-    React.createElement(PromptInput, {
-      key:            "input",
-      state:          inputState,
-      isProcessing:   busy,
-      showStatusLine: false,
-      suggestion:     currentSuggestion ?? undefined,
-      width:          terminalCols,
-    }),
-
-    // Status bar — modelMetrics is null when the model server is unreachable (meter hidden).
-    // effort: issue #197's live retry-attempt indicator (transient; never a
-    // transcript message — see retryStatus state and its clear sites above).
-    // #303 fix: StatusLine doesn't have a width prop yet, but components inside
-    // (like text rendering) will respond to viewport width through their own renders.
-    React.createElement(StatusLine, {
-      key:            "status",
-      permissionMode: permModeState,
-      interrupt:      interruptHandler,
-      taskPanel:      taskPanelState,
-      modelMetrics:   modelMetrics ?? undefined,
-      effort:         retryStatus,
-      degraded:       degradedBanner,
-      outage:         outageBanner,
+    React.createElement(OperatorSurfacePane, {
+      key: "operator-surface",
+      telemetry,
+      activityLines: getActivityFeedState().recentLines,
+      sourceIdentity: {
+        publicCommit: env["EMBER_PUBLIC_SOURCE_COMMIT"],
+        binarySha256: env["EMBER_CLI_BINARY_SHA256"],
+      },
+      width: paneWidth,
+      height: terminalRows,
+      terminalColumns: terminalCols,
+      terminalRows,
     }),
   );
 }

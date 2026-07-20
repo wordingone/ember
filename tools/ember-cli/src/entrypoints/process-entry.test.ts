@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // process-entry.test.ts — AC1–AC12 tests for process-entry.ts
@@ -34,7 +34,9 @@ import {
   main,
 } from "./process-entry.ts";
 import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
-import type { LoopDeps } from "../query/query-loop-support.ts";
+import { _resetInitForTests } from "./session-init.ts";
+import type { OwnedModelIdentity } from "./model-seat.ts";
+import type { LoopDeps, CallModelParams } from "../query/query-loop-support.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { Tool } from "../core/tool-interface.ts";
 import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
@@ -802,9 +804,13 @@ function makeFakeDeps(): LoopDeps {
 
 describe("process-entry — G3: main() with -p routes to headlessRunner before launchRepl", () => {
   it("-p 'hello headless' calls headlessRunner with the prompt, not launchRepl", async () => {
+    const saved = saveEnv(["EMBER_MODEL_NAME"]);
+    const expectedModel = "gate-sentinel-model";
+    process.env["EMBER_MODEL_NAME"] = expectedModel;
     let headlessCalled = false;
     // Use sentinel strings/numbers to avoid TypeScript null-narrowing on closures
     let receivedPrompt = "UNSET";
+    let receivedModel: string | undefined;
     let exitCodeReceived = -1;
 
     await main({
@@ -820,11 +826,12 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
         prompt: string,
         _io: StructuredIO,
         _tools: Tool[],
-        _options: HeadlessReplOptions,
+        options: HeadlessReplOptions,
         _deps: Partial<LoopDeps>,
       ) => {
         headlessCalled = true;
         receivedPrompt = prompt;
+        receivedModel = options.userSpecifiedModel;
         return { events: [], exitCode: 0 };
       },
       exitFn: (code: number): void => {
@@ -832,8 +839,10 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
       },
     });
 
+    restoreEnv(saved);
     expect(headlessCalled).toBe(true);
     expect(receivedPrompt).toBe("hello headless");
+    expect(receivedModel).toBe(`REFERENCE_ONLY: ${expectedModel}`);
     expect(exitCodeReceived).toBe(0);
     // If launchRepl were called it would have thrown or hung; reaching here means it was not.
   });
@@ -1401,7 +1410,6 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
 
     const fakeProc = new EventEmitter();
-    setTimeout(() => fakeProc.emit("exit", 17), 20);
 
     // Widened via `as number | null` (not just the type annotation) to work around a real TS
     // narrowing limitation: since the only assignment (`exitCode = code`) happens inside the
@@ -1417,7 +1425,10 @@ describe("process-entry — #159 cell 1: boot matrix (hardening bar)", () => {
     try {
       await main({
         argv: ["node", "ember", "--reference-seat", "-p", "hello"],
-        spawnServer: async () => ({ process: fakeProc as unknown as ServerHandle["process"], port: 29984, kill() {} }),
+        spawnServer: async () => {
+          setTimeout(() => fakeProc.emit("exit", 17), 20);
+          return { process: fakeProc as unknown as ServerHandle["process"], port: 29984, kill() {} };
+        },
         // Never resolves on its own -- only the raced child-exit should end this cell.
         waitReady: () => new Promise(() => {}),
         probeExisting: async () => false,
@@ -1503,5 +1514,164 @@ describe("process-entry — AC13 --help contract: EMBER_MODEL_URL precedence par
     expect(out).toContain("requires admitted owned identity");
     expect(out).toContain("--reference-seat");
     expect(out).toContain("EMBER_REFERENCE_SEAT");
+    expect(out).toContain("EMBER_OWNED_DEVELOPMENT_MANIFEST");
+    expect(out).toContain("Exact non-claiming manifest");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR948 round-9 repair: production wiring, process-entry.ts main() -> the REAL
+// session-init.ts init() (opts.initFn is NOT overridden here -- that's the whole
+// point). Round-8 (17c53b4f) added modelSupportsStructuredOutputs gating inside
+// buildProductionCallModel, but process-entry.ts derived modelContract (~line 782)
+// and never passed it into InitOpts -- so in the real mounted path,
+// buildGuardedProductionCallModel was always constructed with NO capability
+// declaration and a jsonSchema request was ALWAYS denied, regardless of what the
+// served model actually supported. Round-8's positive tests only proved the gate
+// itself works by calling buildProductionCallModel/buildGuardedProductionCallModel
+// directly with hand-built opts -- they never drove process-entry.ts's main() at all,
+// so they could not have caught this. These tests mock ONLY the network (global
+// fetch) and drive the real main() -> session-init.ts init() -> LoopDeps.callModel
+// path end to end.
+// ---------------------------------------------------------------------------
+
+function makeChatCompletionsReader() {
+  const encoder = new TextEncoder();
+  const chunk = encoder.encode(
+    'data: {"choices":[{"finish_reason":"stop","index":0,"delta":{}}]}\n\n',
+  );
+  let sent = false;
+  return {
+    read: async () => {
+      if (!sent) {
+        sent = true;
+        return { done: false, value: chunk };
+      }
+      return { done: true, value: undefined };
+    },
+    releaseLock: () => {},
+  };
+}
+
+describe("process-entry -> session-init production wiring (PR948 round-9 repair)", () => {
+  let tmpDir: string;
+  let savedEnv: Record<string, string | undefined>;
+  let origFetch: typeof fetch;
+
+  const SHA = "e".repeat(64);
+
+  function makeOwnedIdentity(withCapability: boolean): OwnedModelIdentity {
+    return {
+      seat:               "OWNED_ADMITTED",
+      checkpointSha256:   "f".repeat(64),
+      endpointUrl:        "http://localhost:29777",
+      identityUrl:        "http://localhost:29777/identity",
+      modelConfigSha256:  SHA,
+      modelName:          "ember-owned-test",
+      serverSourceSha256: "g".repeat(64),
+      tokenizerSha256:    "h".repeat(64),
+      modelConfigCapabilities: withCapability
+        ? { modelConfigSha256: SHA, structuredOutputs: true }
+        : undefined,
+    };
+  }
+
+  beforeEach(async () => {
+    tmpDir = join(tmpdir(), `pe-r9-wiring-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(tmpDir, { recursive: true });
+    savedEnv = saveEnv(["EMBER_HOME", "EMBER_MODEL_URL", "EMBER_MODEL_NAME"]);
+    delete process.env["EMBER_MODEL_URL"];
+    delete process.env["EMBER_MODEL_NAME"];
+    process.env["EMBER_HOME"] = tmpDir;
+    _resetConfigHomeMemo();
+    _resetInitForTests();
+    origFetch = globalThis.fetch;
+  });
+
+  afterEach(async () => {
+    globalThis.fetch = origFetch;
+    restoreEnv(savedEnv);
+    _resetConfigHomeMemo();
+    _resetInitForTests();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  /** Drives the REAL main() -> session-init init() path for the given owned identity,
+   *  network mocked (only /v1/chat/completions answers; every other fetch -- the /props
+   *  and /v1/models n_ctx probes -- rejects and falls back, exactly as a real unreachable
+   *  probe would). Captures the real LoopDeps handed to the headless runner so the test can
+   *  drive its callModel directly. Returns the fetch URLs actually reached. */
+  async function driveRealInitAndCapture(
+    ownedIdentity: OwnedModelIdentity,
+  ): Promise<{ fetchUrls: string[]; deps: LoopDeps }> {
+    const fetchUrls: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      const u = String(url);
+      fetchUrls.push(u);
+      if (u.includes("/v1/chat/completions")) {
+        return {
+          ok:   true,
+          body: { getReader: () => makeChatCompletionsReader() },
+        } as unknown as Response;
+      }
+      throw new Error("network disabled in test (n_ctx probe -- expected to fail and fall back)");
+    }) as unknown as typeof fetch;
+
+    let capturedDeps: LoopDeps | null = null;
+    await main({
+      argv:                  ["node", "ember", "-p", "hello"],
+      loadOwnedIdentityFn:   () => ownedIdentity,
+      handshakeEmberdFn:     async () => {},
+      ensureOwnedServerFn:   async () => ({ outcome: "spawned", port: 29777, handle: { process: { pid: 1 }, port: 29777, kill: () => {} } as never }),
+      verifyOwnedEndpointFn: async () => {},
+      headlessRunner: async (_prompt, _io, _tools, _opts, deps) => {
+        capturedDeps = deps;
+        return { events: [], exitCode: 0 };
+      },
+      exitFn: () => {},
+    });
+
+    if (!capturedDeps) throw new Error("headlessRunner was never invoked -- main() did not reach the headless path");
+    return { fetchUrls, deps: capturedDeps };
+  }
+
+  const baseParams: Omit<CallModelParams, "jsonSchema"> = {
+    messages:     [{ role: "user", content: "hello" }],
+    systemPrompt: "test",
+    tools:        [],
+    model:        "test-model",
+    maxTokens:    256,
+  };
+
+  it("(a) matching owned declaration + served hash: a real jsonSchema request reaches the fetch layer", async () => {
+    const { deps, fetchUrls } = await driveRealInitAndCapture(makeOwnedIdentity(true));
+
+    const before = fetchUrls.length;
+    const result = await deps.callModel({ ...baseParams, jsonSchema: { type: "object" } });
+
+    expect(result.stop_reason).toBe("end_turn");
+    expect(fetchUrls.slice(before).some((u) => u.includes("/v1/chat/completions"))).toBe(true);
+  });
+
+  it("(b) no modelConfigCapabilities declared on the owned identity: jsonSchema request is denied with ZERO model-request fetches", async () => {
+    const { deps, fetchUrls } = await driveRealInitAndCapture(makeOwnedIdentity(false));
+
+    const before = fetchUrls.length;
+    let thrown: unknown = null;
+    try {
+      await deps.callModel({ ...baseParams, jsonSchema: { type: "object" } });
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).not.toBeNull();
+    expect(String((thrown as Error).message)).toContain("structured outputs");
+    expect(fetchUrls.slice(before).some((u) => u.includes("/v1/chat/completions"))).toBe(false);
+  });
+
+  it("a request with no jsonSchema still succeeds regardless of capability (gate only fires on jsonSchema)", async () => {
+    const { deps } = await driveRealInitAndCapture(makeOwnedIdentity(false));
+    const result = await deps.callModel({ ...baseParams });
+    expect(result.stop_reason).toBe("end_turn");
   });
 });

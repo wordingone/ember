@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // OpenAI adapter — translates between Ember message/tool format and OpenAI-compatible
 // API format. Activated when EMBER_MODEL_URL points to a non-cloud endpoint.
 
@@ -29,9 +33,12 @@ export const PREFILL_OVERFLOW_FRACTION = 0.95;
  * value (3.5) was a guess and measurably too optimistic for the escaped-JSON-
  * heavy tool_result strings ember actually sends -- it undercounted real token
  * usage enough that a payload the estimator judged safe still 400'd against
- * the server. Measured directly against the production model's own real
- * llama-server /tokenize endpoint (Qwen3.6-27B-Q4_K_M, the exact checkpoint
- * the cockpit serves turns through) on two representative samples: a 6590-char
+ * the server. Measured directly against a llama-server /tokenize endpoint
+ * serving the checkpoint under test at calibration time -- this adapter
+ * serves whatever model the seat-authorized config names (never a
+ * hardcoded cockpit-identity claim), so this constant is a calibration
+ * snapshot against that one checkpoint, not a guarantee re-verified per
+ * served model. Two representative samples from that run: a 6590-char
  * escaped-JSON tool_result (nested object, `\n`/`\"`/`\\` escapes, code lines,
  * file paths) tokenized at 2424 tokens = 2.72 chars/token; an 8023-char
  * JSON-escaped markdown-prose sample tokenized at 1512 tokens = 5.31
@@ -281,8 +288,12 @@ export class ModelHttpError extends Error {
   constructor(
     public readonly status: number,
     statusText: string,
+    public readonly responseBody = "",
   ) {
-    super(`Model server returned HTTP ${status}: ${statusText}`);
+    const boundedBody = responseBody.trim().slice(0, 4096);
+    super(
+      `Model server returned HTTP ${status}: ${statusText}${boundedBody ? `: ${boundedBody}` : ""}`,
+    );
     this.name = "ModelHttpError";
   }
 }

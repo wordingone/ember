@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // repo-root.ts — resolves the ember repository root from a deterministic anchor that
 // survives `bun build --compile` (issue #172: under a compiled binary, import.meta.url
 // resolves to a virtual bunfs path, so a relative parent-walk from it lands at the drive
@@ -31,6 +34,126 @@ function isRepoRoot(candidate: string): boolean {
   );
 }
 
+/** PR954 round 2: the typed error the strict canonical-root resolver throws for every
+ *  malformed/unreadable/unsupported `.git` FILE shape, and for a worktree whose main
+ *  checkout does not validate. Named + typed (never a bare Error) so a caller that must
+ *  degrade instead of crash (the heartbeat writer's inert-writer contract) can catch
+ *  precisely this failure class rather than swallowing unrelated bugs. */
+export class CanonicalRootError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CanonicalRootError";
+  }
+}
+
+/** PR954 round 3: parses a `.git` FILE's raw content as EXACTLY ONE `gitdir: <path>`
+ *  record, optionally followed by a single trailing newline (`\n` or `\r\n`). Returns the
+ *  captured path, or `null` if the content is not exactly one such record -- e.g. a junk
+ *  line before/after the record, a second record, or any other embedded newline. Round 2's
+ *  `raw.match(/^gitdir:\s*(.+?)\s*$/m)` used the multiline flag, so `^`/`$` matched at ANY
+ *  line boundary and a shape like `"junk\ngitdir: valid\n"` silently validated against the
+ *  junk-prefixed line -- exactly the kind of malformed shape this resolver must reject, not
+ *  paper over. */
+function parseSingleGitdirRecord(raw: string): string | null {
+  let content = raw;
+  if (content.endsWith("\r\n")) content = content.slice(0, -2);
+  else if (content.endsWith("\n")) content = content.slice(0, -1);
+  if (content.includes("\n")) return null; // more than one line remains -- not a single record.
+  const m = content.match(/^gitdir:\s*(.+?)\s*$/);
+  return m ? m[1]! : null;
+}
+
+/** Issue #666 / PR954 round 2 — a git WORKTREE checkout carries the marker files too
+ *  (GOAL.md + tools/ember-cli are regular checked-out files), so a marker walk started
+ *  inside a worktree validates the WORKTREE root — and state paths derived from it (the
+ *  liveness heartbeat) silently diverge from a watchdog anchored at the main checkout.
+ *  This canonicalizes any marker-validated root through the worktree's `.git` FILE
+ *  (`gitdir: <main>/.git/worktrees/<name>`) to the main checkout root, so every launch
+ *  location converges on ONE root.
+ *
+ *  Strict contract (round 2 repair of the reviewer's reject): a marker-valid standalone
+ *  root with NO `.git` at all is accepted as-is (git-less deployment / plain copy — the
+ *  ONLY case that returns a root unequal to a validated main checkout without a `.git`
+ *  FILE). Every OTHER shape that fails to fully resolve to a marker-valid main checkout —
+ *  an unreadable `.git` FILE, one whose content doesn't match `gitdir:` at all, one whose
+ *  gitdir doesn't match the `<main>/.git/worktrees/<name>` shape (e.g. a submodule), or a
+ *  worktree pointer whose resolved main checkout fails the marker check — THROWS a typed
+ *  CanonicalRootError. The old behavior silently returned `root` (the worktree root) for
+ *  unreadable/malformed/unsupported shapes, which is exactly the silent divergence issue
+ *  #666 exists to kill: a caller must never bind state paths to an unverified root. */
+function canonicalizeThroughWorktree(root: string): string {
+  const dotGit = path.join(root, ".git");
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(dotGit);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return root; // no .git at all — standalone/git-less deployment.
+    throw new CanonicalRootError(
+      `Could not stat ${dotGit} while canonicalizing repo root ${root}: ` +
+        `${err instanceof Error ? err.message : String(err)} (issue #666 strict resolver).`,
+    );
+  }
+  if (stat.isDirectory()) return root; // main checkout.
+
+  let raw: string;
+  try {
+    raw = fs.readFileSync(dotGit, "utf8");
+  } catch (err) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} exists but could not be read: ` +
+        `${err instanceof Error ? err.message : String(err)}. Refusing to bind state paths ` +
+        "to an unverified root (issue #666 strict resolver).",
+    );
+  }
+  const gitdir = parseSingleGitdirRecord(raw);
+  if (gitdir === null) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} does not contain exactly one gitdir: record (malformed, ` +
+        "junk-prefixed, multi-line, or otherwise unsupported .git file shape). Refusing to " +
+        "bind state paths to an unverified root (issue #666 strict resolver).",
+    );
+  }
+  // <main>/.git/worktrees/<name> -> <main>. A gitdir of any other shape (e.g. a
+  // submodule's .git/modules path) is unsupported by this resolver.
+  const resolvedGitdir = path.resolve(root, gitdir);
+  const wtMatch = resolvedGitdir.match(/^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$/);
+  if (!wtMatch) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} points to ${resolvedGitdir}, which is not a ` +
+        "<main>/.git/worktrees/<name> path (unsupported gitdir shape, e.g. a submodule). " +
+        "Refusing to bind state paths to an unverified root (issue #666 strict resolver).",
+    );
+  }
+  // PR954 round 3: a worktree gitdir pointer whose target directory doesn't exist on disk
+  // (main checkout pruned/moved, or the pointer is simply stale) must reject rather than
+  // resolve through it as if it were live -- a dangling pointer is unverifiable, the same
+  // failure class as an unreadable or malformed .git file.
+  let gitdirStat: fs.Stats | undefined;
+  try {
+    gitdirStat = fs.statSync(resolvedGitdir);
+  } catch {
+    gitdirStat = undefined;
+  }
+  if (!gitdirStat || !gitdirStat.isDirectory()) {
+    throw new CanonicalRootError(
+      `.git file at ${dotGit} points to ${resolvedGitdir}, which does not exist as a ` +
+        "directory (dangling worktree gitdir pointer). Refusing to bind state paths to an " +
+        "unverified root (issue #666 strict resolver).",
+    );
+  }
+  const mainRoot = path.resolve(wtMatch[1]!);
+  if (!isRepoRoot(mainRoot)) {
+    throw new CanonicalRootError(
+      `Resolved root ${root} is a git worktree of ${mainRoot}, but that main checkout ` +
+        "does not validate as the ember repo root (missing GOAL.md + tools/ember-cli). " +
+        "Refusing to bind state paths to a worktree root the watchdog will never poll " +
+        "(issue #666). Set EMBER_REPO_ROOT to the main checkout.",
+    );
+  }
+  return mainRoot;
+}
+
 function walkUpForMarker(startDir: string): string | null {
   let dir = path.resolve(startDir);
   for (;;) {
@@ -59,16 +182,16 @@ export function resolveEmberRepoRoot(options: ResolveEmberRepoRootOptions = {}):
   const envValue = options.envRepoRoot ?? process.env["EMBER_REPO_ROOT"];
   if (envValue) {
     const resolvedEnv = path.resolve(envValue);
-    if (isRepoRoot(resolvedEnv)) return resolvedEnv;
+    if (isRepoRoot(resolvedEnv)) return canonicalizeThroughWorktree(resolvedEnv);
     // Invalid EMBER_REPO_ROOT is rejected, not trusted blindly — fall through to
     // discovery rather than anchoring on a directory that isn't actually the repo.
   }
 
   const fromCwd = walkUpForMarker(options.startDir ?? process.cwd());
-  if (fromCwd) return fromCwd;
+  if (fromCwd) return canonicalizeThroughWorktree(fromCwd);
 
   const fromExe = walkUpForMarker(path.dirname(options.execPath ?? process.execPath));
-  if (fromExe) return fromExe;
+  if (fromExe) return canonicalizeThroughWorktree(fromExe);
 
   throw new Error(
     "Could not resolve the ember repo root (no directory containing GOAL.md + " +

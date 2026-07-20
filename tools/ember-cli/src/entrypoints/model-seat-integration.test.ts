@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -41,6 +41,9 @@ describe("process entry model-seat enforcement", () => {
       "EMBER_MODEL_SEAT",
       "EMBER_MODEL_URL",
       "EMBER_REFERENCE_SEAT",
+      "EMBER_OWNED_RUNG_MANIFEST",
+      "EMBER_TRUSTED_VERIFIER_REGISTRY",
+      "EMBER_PYTHON",
     ]) {
       savedEnv[key] = process.env[key];
       delete process.env[key];
@@ -209,6 +212,172 @@ describe("process entry model-seat enforcement", () => {
     expect(process.env["EMBER_MODEL_NAME"]).toBeUndefined();
   });
 
+  it("selects the admitted owned endpoint and ignores persisted Qwen configuration", async () => {
+    await writeFile(
+      join(tmpDir, "models.json"),
+      JSON.stringify({
+        endpoint: "http://127.0.0.1:9999",
+        modelName: "qwen3.6-27b",
+      }),
+    );
+
+    let exitCode = -1;
+    let initCalls = 0;
+    let verifyCalls = 0;
+    let ensureCalls = 0;
+    const startupOrder: string[] = [];
+    let stdout = "";
+    const originalStdout = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => {
+      stdout += chunk;
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => ({
+          checkpointSha256: "e".repeat(64),
+          endpointUrl: "http://127.0.0.1:9",
+          identityUrl: "http://127.0.0.1:9/v1/models",
+          modelConfigSha256: "b".repeat(64),
+          modelName: "ember-owned:" + "e".repeat(12),
+          serverSourceSha256: "a".repeat(64),
+          tokenizerSha256: "c".repeat(64),
+          launch: {
+            authorityKind: "ADMISSION",
+            checkpointDir: "C:\\owned\\checkpoint",
+            mode: "INTERACTIVE",
+      modelConfigPath: "C:\\owned\\model-config.json",
+            pythonExecutable: "python-owned",
+            runManifestPath: "C:\\owned\\run.json",
+            serverPath: "C:\\repo\\serve_owned_openai.py",
+            tokenizerPath: "C:\\owned\\tokenizer.json",
+            trustedVerifierRegistryPath: "C:\\owned\\trusted.json",
+          },
+        }),
+        handshakeEmberdFn: async () => { startupOrder.push("handshake"); },
+        ensureOwnedServerFn: async (ownedIdentity) => {
+          expect(ownedIdentity.launch?.mode).toBe("INTERACTIVE");
+          startupOrder.push("supervise");
+          ensureCalls += 1;
+          return {
+            outcome: "spawned",
+            port: 9,
+            handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never,
+          };
+        },
+        verifyOwnedEndpointFn: async () => {
+          verifyCalls += 1;
+        },
+        initFn: async () => {
+          initCalls += 1;
+        },
+        getLoopDepsFn: fakeDeps,
+        builtinToolsFn: async () => [{ name: "clean-checkout-tool" }] as never[],
+        headlessRunner: async (_prompt, _io, tools) => {
+          expect(tools).toEqual([{ name: "clean-checkout-tool" }]);
+          return { events: [], exitCode: 0 };
+        },
+        exitFn: (code: number) => {
+          exitCode = code;
+        },
+      });
+    } finally {
+      process.stdout.write = originalStdout;
+    }
+
+    expect(exitCode).toBe(0);
+    expect(initCalls).toBe(1);
+    expect(ensureCalls).toBe(1);
+    expect(verifyCalls).toBe(1);
+    expect(startupOrder).toEqual(["handshake", "supervise"]);
+    expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_ADMITTED");
+    expect(process.env["EMBER_MODEL_URL"]).toBe("http://127.0.0.1:9");
+    expect(process.env["EMBER_MODEL_NAME"]).toBe(
+      "ember-owned:" + "e".repeat(12),
+    );
+    expect(stdout).toContain("model seat: OWNED_ADMITTED");
+    expect(stdout).toContain("bound by admitted checkpoint manifest");
+    expect(stdout).toContain("supervised server started");
+    expect(stdout).not.toContain("adopted");
+    expect(stdout).not.toContain("qwen3.6-27b");
+    expect(stdout).not.toContain("http://127.0.0.1:9999");
+  });
+
+  it("defaults to the exact owned development checkpoint without borrowing Qwen credit", async () => {
+    await writeFile(
+      join(tmpDir, "models.json"),
+      JSON.stringify({ endpoint: "http://127.0.0.1:9999", modelName: "qwen3.6-27b" }),
+    );
+    let exitCode = -1;
+    let ensureCalls = 0;
+    const injectedTools = [{ name: "test-tool" }] as never[];
+    let injectedToolCount = -1;
+    let verifyCalls = 0;
+    let stdout = "";
+    const originalStdout = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => { stdout += chunk; return true; }) as typeof process.stdout.write;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => undefined,
+        loadOwnedDevelopmentIdentityFn: () => ({
+          seat: "OWNED_DEVELOPMENT",
+          claimStatus: "NON_ADMISSIBLE",
+          tokensSeen: 2048,
+          allocatedParameters: 3_839_161_856,
+          activeParameters: 1_020_589_568,
+          checkpointSha256: "f".repeat(64),
+          endpointUrl: "http://127.0.0.1:9",
+          identityUrl: "http://127.0.0.1:9/v1/models",
+          modelConfigSha256: "b".repeat(64),
+          modelName: "ember-owned-development:" + "f".repeat(12),
+          serverSourceSha256: "a".repeat(64),
+          tokenizerSha256: "c".repeat(64),
+          launch: {
+            authorityKind: "DEVELOPMENT",
+            cleanupRuntimeSnapshot: () => {},
+            developmentManifestSha256: "e".repeat(64),
+            runtimeIndexPath: "C:\\owned\\runtime-bundle-index.json",
+            runtimeIndexSha256: "f".repeat(64),
+            checkpointDir: "C:\\owned\\checkpoint",
+            developmentManifestPath: "C:\\owned\\development.json",
+            mode: "INTERACTIVE",
+            modelConfigPath: "C:\\owned\\model-config.json",
+            pythonExecutable: "python-owned",
+            serverPath: "C:\\repo\\serve_owned_openai.py",
+            tokenizerPath: "C:\\owned\\tokenizer.json",
+          },
+        }),
+        handshakeEmberdFn: async () => {},
+        ensureOwnedServerFn: async () => {
+          ensureCalls += 1;
+          return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never };
+        },
+        verifyOwnedEndpointFn: async () => { verifyCalls += 1; },
+        initFn: async () => {},
+        getLoopDepsFn: fakeDeps,
+        builtinToolsFn: async () => injectedTools,
+        headlessRunner: async (_prompt, _io, tools) => { expect(tools).toBe(injectedTools); injectedToolCount = tools.length; return { events: [], exitCode: 0 }; },
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stdout.write = originalStdout;
+    }
+
+    expect(exitCode).toBe(0);
+    expect(ensureCalls).toBe(1);
+    expect(injectedToolCount).toBeGreaterThan(0);
+    expect(verifyCalls).toBe(1);
+    expect(process.env["EMBER_MODEL_SEAT"]).toBe("OWNED_DEVELOPMENT");
+    expect(process.env["EMBER_MODEL_NAME"]).toBe("ember-owned-development:" + "f".repeat(12));
+    expect(stdout).toContain("model seat: OWNED_DEVELOPMENT");
+    expect(stdout).toContain("2,048 training tokens");
+    expect(stdout).toContain("NON_ADMISSIBLE");
+    expect(stdout).not.toContain("qwen3.6-27b");
+    expect(stdout).not.toContain("http://127.0.0.1:9999");
+  });
   it("allows the same endpoint only in an explicit visible reference seat", async () => {
     await writeFile(
       join(tmpDir, "models.json"),
@@ -234,7 +403,11 @@ describe("process entry model-seat enforcement", () => {
           initCalls += 1;
         },
         getLoopDepsFn: fakeDeps,
-        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        builtinToolsFn: async () => [{ name: "clean-checkout-tool" }] as never[],
+        headlessRunner: async (_prompt, _io, tools) => {
+          expect(tools).toEqual([{ name: "clean-checkout-tool" }]);
+          return { events: [], exitCode: 0 };
+        },
         exitFn: (code: number) => {
           exitCode = code;
         },
@@ -250,5 +423,36 @@ describe("process entry model-seat enforcement", () => {
       "REFERENCE_ONLY: qwen3.6-27b",
     );
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("REFERENCE_ONLY");
+  });
+
+  it("requires emberd handshake before owned server supervision", async () => {
+    let exitCode = -1;
+    let ensureCalls = 0;
+    let initCalls = 0;
+    let stderr = "";
+    const originalStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => { stderr += chunk; return true; }) as typeof process.stderr.write;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => ({
+          checkpointSha256: "d".repeat(64), endpointUrl: "http://127.0.0.1:9", identityUrl: "http://127.0.0.1:9/v1/models",
+          modelConfigSha256: "b".repeat(64), modelName: "ember-owned:" + "d".repeat(12), serverSourceSha256: "a".repeat(64), tokenizerSha256: "c".repeat(64),
+          launch: { authorityKind: "ADMISSION", checkpointDir: "C:\\owned\\checkpoint", mode: "INTERACTIVE", modelConfigPath: "C:\\owned\\model-config.json", pythonExecutable: "python-owned", runManifestPath: "C:\\owned\\run.json", serverPath: "C:\\repo\\serve_owned_openai.py", tokenizerPath: "C:\\owned\\tokenizer.json", trustedVerifierRegistryPath: "C:\\owned\\trusted.json" },
+        }),
+        handshakeEmberdFn: async () => { throw new Error("ping unavailable"); },
+        ensureOwnedServerFn: async () => { ensureCalls += 1; return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never }; },
+        initFn: async () => { initCalls += 1; },
+        getLoopDepsFn: fakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code: number) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = originalStderr;
+    }
+    expect(exitCode).toBe(1);
+    expect(ensureCalls).toBe(0);
+    expect(initCalls).toBe(0);
+    expect(stderr).toContain("emberd handshake");
   });
 });

@@ -1,0 +1,32 @@
+{
+    "schema_version":  "c1-public-branch-archive-v6-receipt",
+    "artifact":  "docs/hygiene/branch-deletion-proposal-20260718-v6.json",
+    "bytes":  29640,
+    "file_sha256":  "3e86adc232dd4273caddac299f25df3235580061851306634ff1ce76f794ed10",
+    "public_master":  "f2a8a20e972d391fd5608295f2aa3120aafcae8a",
+    "candidate_count":  2,
+    "archival_refs_created":  true,
+    "deletion_executed":  false,
+    "external_boundary":  "HISTORICAL_PR_NUMBER_REFERENCES_ONLY_NO_BRANCH_REF_CONSUMER_FOUND",
+    "scanned_named_roots":  35,
+    "scanned_files":  7948,
+    "historical_public_pr_number_hits":  4,
+    "actual_branch_ref_consumers":  0,
+    "actual_head_sha_consumers":  0,
+    "root_inventory_digest_sha256":  "cd4a3d90096c51363a544263f9678354b61d81371759e0354731373c7041027b",
+    "private_scan_v2_digest_sha256":  "97f4be37f4aec9b29de4318c41f6fe2f47b5e664f9c8638e00cb430b51c30162",
+    "private_manifest_v6_digest_sha256":  "d99cb457d01efdce40f9c645b04f4d8af58ac765005500aac90730e16b3977cb",
+    "archive_ref_encoding":  "base64 UTF-8; decode ref_utf8_base64/tag_name_utf8_base64 to exact public ref",
+    "tags":  [
+                 "refs/tags/vera-c1-archive/20260718/pr-574-feat-485-p0b-watermark-exclusion-coalescing-af53c49f8b7e",
+                 "refs/tags/vera-c1-archive/20260718/pr-690-exp-580-corrected-rerun-39dc9e1fb073"
+             ],
+    "tags_utf8_base64":  [
+                             "cmVmcy90YWdzL3ZlcmEtYzEtYXJjaGl2ZS8yMDI2MDcxOC9wci01NzQtZmVhdC00ODUtcDBiLXdhdGVybWFyay1leGNsdXNpb24tY29hbGVzY2luZy1hZjUzYzQ5ZjhiN2U=",
+                             "cmVmcy90YWdzL3ZlcmEtYzEtYXJjaGl2ZS8yMDI2MDcxOC9wci02OTAtZXhwLTU4MC1jb3JyZWN0ZWQtcmVydW4tMzlkYzllMWZiMDcz"
+                         ],
+    "source_heads":  [
+                         "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
+                         "39dc9e1fb0737b61affbff0b6d413b3988bfbd36"
+                     ]
+}

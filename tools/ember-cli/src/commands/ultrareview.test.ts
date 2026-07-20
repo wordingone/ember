@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // /ultrareview — acceptance test suite
 // Spec: specs/commands/ultrareview.md
 
@@ -44,6 +48,19 @@ function makeDefaultDeps(overrides?: Partial<UltrareviewDeps>): UltrareviewDeps 
 }
 
 describe("/ultrareview", () => {
+  describe("defaultBughunterConfig().model is labeled REFERENCE_ONLY (Fix #51 fiction purge)", () => {
+    it("is never the bare borrowed literal 'qwen3-5', and carries the REFERENCE_ONLY label", () => {
+      // Prior to the #51 fiction-purge repair this was the bare literal
+      // 'qwen3-5' -- an unverified claim about which model actually runs
+      // the review. Labeled through the same `referenceSeatModelName`
+      // convention every other reference-only identity in the codebase
+      // uses, so it can never be read as a verified served identity.
+      const config = defaultBughunterConfig();
+      expect(config.model.startsWith("REFERENCE_ONLY: ")).toBe(true);
+      expect(config.model).not.toBe("qwen3-5");
+    });
+  });
+
   // -------------------------------------------------------------------------
   // AC1: feature gate
   // -------------------------------------------------------------------------

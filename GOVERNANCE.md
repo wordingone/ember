@@ -20,6 +20,8 @@ master is the canonical public branch. A worktree, mirror, backup, or deleted
 branch cannot self-declare authority. Current state must name its commit and
 custody boundary.
 
+CONTINUITY.md records the current execution cursor and resume order; it is subordinate evidence, not authority.
+
 ## Change conservation
 
 A governing change must pass scripts/verify_authority_conservation.py and its
