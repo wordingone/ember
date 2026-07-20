@@ -19,7 +19,6 @@
 # One relative POSIX path per line (matches tools/check_no_temp.py's file-level
 # grain — a file with any covered temp-primitive match must appear here or the
 # gate fails closed).
-runtime/emberd/src/lib.rs
 scripts/c04_batched_ns5_bench.py
 scripts/c04_eager_bf16_throughput.py
 scripts/c04_pretrain_prestage.py
