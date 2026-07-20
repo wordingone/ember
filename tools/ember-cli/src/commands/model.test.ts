@@ -448,7 +448,11 @@ describe("_makeKillReceiptWriter — JSONL format via injected appendFileFn", ()
     expect(capturedPaths[0]).toBe("/custom/vigil/receipts.jsonl");
   });
 
-  it("swallows I/O errors gracefully — does not throw, does not propagate", async () => {
+  // issue #881: the old writer swallowed I/O failures fire-and-forget, so /model unload
+  // could report success with NO durable receipt ever landing. It must now be durable —
+  // an I/O failure REJECTS the returned promise so the caller (unloadModel) can fail
+  // closed instead of releasing the child with no audit trail.
+  it("rejects (durable) on I/O failure — never swallows, always propagates", async () => {
     const writer = _makeKillReceiptWriter({
       ledgerPath: "/fake/path.jsonl",
       appendFileFn: async () => {
@@ -456,11 +460,29 @@ describe("_makeKillReceiptWriter — JSONL format via injected appendFileFn", ()
       },
     });
 
-    // synchronous call must not throw
-    expect(() => writer({ pid: 999, match_rule: "test" })).not.toThrow();
-    // let the promise reject and be caught internally
-    await new Promise<void>((r) => setTimeout(r, 0));
-    // if we reach here the error was swallowed — test passes
+    await expect(writer({ pid: 999, match_rule: "test" })).rejects.toThrow(/ENOSPC/);
+  });
+
+  // issue #881: path routing — EMBER_KILL_RECEIPTS_PATH is the SAME env var
+  // services/activity-feed.ts resolves the authoritative shared vigil kill-receipts
+  // ledger from. The writer must honor it (not the old cwd-relative default that
+  // nothing else tail-polls).
+  it("honors EMBER_KILL_RECEIPTS_PATH — the authoritative vigil ledger env var", async () => {
+    const prior = process.env["EMBER_KILL_RECEIPTS_PATH"];
+    process.env["EMBER_KILL_RECEIPTS_PATH"] = "/authoritative/vigil/kill-receipts.jsonl";
+    try {
+      const capturedPaths: string[] = [];
+      const writer = _makeKillReceiptWriter({
+        appendFileFn: async (path, _data) => {
+          capturedPaths.push(path);
+        },
+      });
+      await writer({ pid: 222, match_rule: "test" });
+      expect(capturedPaths).toEqual(["/authoritative/vigil/kill-receipts.jsonl"]);
+    } finally {
+      if (prior === undefined) delete process.env["EMBER_KILL_RECEIPTS_PATH"];
+      else process.env["EMBER_KILL_RECEIPTS_PATH"] = prior;
+    }
   });
 
   it("appends a newline after the JSON so the file is valid JSONL", async () => {

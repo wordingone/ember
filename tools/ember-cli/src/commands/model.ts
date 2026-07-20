@@ -125,27 +125,41 @@ export async function _resolveModelIdentity(
 // Kill-receipts ledger wiring
 // ---------------------------------------------------------------------------
 
-/** Default kill-receipt audit ledger (cwd-relative .ember/; override via KILL_RECEIPTS_PATH). */
+/** Default kill-receipt audit ledger (cwd-relative .ember/; used only when neither
+ *  EMBER_KILL_RECEIPTS_PATH nor the legacy KILL_RECEIPTS_PATH is set). */
 const DEFAULT_KILL_RECEIPTS_PATH = ".ember/kill-receipts.jsonl";
 
 /**
  * Factory that produces a kill-receipt writer function.
  * Exported (prefixed _) for unit tests to inject a mock appendFileFn and
  * inspect the JSONL that would be written, without touching the real ledger.
+ *
+ * issue #881: two defects fixed here.
+ * (a) Path: EMBER_KILL_RECEIPTS_PATH is now honored first — the SAME env var
+ *     services/activity-feed.ts's watchdog dashboard resolves the authoritative
+ *     shared vigil kill-receipts ledger from (liveness-watchdog-state.json's
+ *     `kill_receipts_path` / EMBER_KILL_RECEIPTS_PATH). The old default wrote to
+ *     a cwd-relative `.ember/kill-receipts.jsonl` that ledger tail-poll never
+ *     watches — a receipt landed, but nowhere authoritative.
+ * (b) Durability: the returned writer is now awaited by the caller and REJECTS
+ *     on I/O failure instead of swallowing it fire-and-forget — receipt-first
+ *     (kill-discipline) requires the write to durably land BEFORE release, not
+ *     merely be attempted.
  * @internal
  */
 export function _makeKillReceiptWriter(opts: {
   ledgerPath?: string;
   appendFileFn?: (path: string, data: string) => Promise<void>;
-}): (rec: { pid: number; match_rule: string }) => void {
+}): (rec: { pid: number; match_rule: string }) => Promise<void> {
   const ledgerPath =
     opts.ledgerPath ??
+    process.env["EMBER_KILL_RECEIPTS_PATH"] ??
     process.env["KILL_RECEIPTS_PATH"] ??
     DEFAULT_KILL_RECEIPTS_PATH;
   const afn: (path: string, data: string) => Promise<void> =
     opts.appendFileFn ?? ((p, d) => appendFile(p, d));
 
-  return (rec: { pid: number; match_rule: string }): void => {
+  return async (rec: { pid: number; match_rule: string }): Promise<void> => {
     const entry =
       JSON.stringify({
         ts: new Date().toISOString(),
@@ -154,10 +168,9 @@ export function _makeKillReceiptWriter(opts: {
         match_rule: rec.match_rule,
         survivors_expected: "none",
       }) + "\n";
-    // Fire-and-forget: non-fatal I/O failure must never block the kill path.
-    afn(ledgerPath, entry).catch((err: unknown) => {
-      console.warn(`[kill-receipt] write to ${ledgerPath} failed: ${err}`);
-    });
+    // Durable, awaited: a rejection propagates to the caller (unloadModel), which aborts
+    // the unload before the child is released — fail-closed, never fire-and-forget.
+    await afn(ledgerPath, entry);
   };
 }
 
@@ -169,7 +182,7 @@ interface ModelCommandDeps {
   loadModel?: (deps: ModelLifecycleDeps) => Promise<string>;
   unloadModel?: (deps: ModelLifecycleDeps) => Promise<string>;
   getModelState?: () => string;
-  writeKillReceipt?: (rec: { pid: number; match_rule: string }) => void;
+  writeKillReceipt?: (rec: { pid: number; match_rule: string }) => Promise<void>;
   /** Injectable for tests; defaults to the real _resolveModelIdentity. */
   resolveModelIdentity?: (manifestPath: string) => Promise<ResolvedModelIdentity | null>;
   /** Injectable for tests; defaults to EMBER_MODEL_IDENTITY_MANIFEST env / cwd convention. */
@@ -247,8 +260,17 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
       if (subcommand === "unload") {
         const modelLifecycleDeps: ModelLifecycleDeps = {
           spawnModel: () => ({ pid: 0 }), // unused in unload
+          // issue #881: fallback child-only release for a registration that carried no real
+          // handle (e.g. deps-injection seam / an adopted-but-unregistered server). Exact
+          // tracked PID only — never a name-pattern match. Production always prefers the
+          // real owned ServerHandle.kill() wired through registerManagedModel
+          // (entrypoints/process-entry.ts), so this fallback is not the normal path.
           killPid: (pid: number) => {
-            // Real impl would use process.kill(pid, "SIGTERM")
+            try {
+              process.kill(pid, "SIGTERM");
+            } catch {
+              // already gone / not our process — nothing more a PID-scoped kill can do.
+            }
           },
           waitReady: async () => {}, // unused in unload
           writeKillReceipt: doWriteKillReceipt,
@@ -279,7 +301,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
           waitReady: async (port?: number) => {
             await waitForServerReady(port ?? LLAMA_SERVER_DEFAULT_PORT);
           },
-          writeKillReceipt: () => {}, // unused in load
+          writeKillReceipt: async () => {}, // unused in load
           isExternal: () => process.env["EMBER_MODEL_URL"] !== undefined,
           now: () => new Date().toISOString(),
           manifestPath,
