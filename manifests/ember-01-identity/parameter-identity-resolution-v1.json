@@ -1,0 +1,666 @@
+{
+  "consumer_rows": [
+    {
+      "category": "parameter_identity",
+      "claim_effect": "REAL_CONSUMER_VALIDATES_BOUND_MANIFEST",
+      "conflict": "NONE",
+      "current_input": "parameters schema/contradiction validation",
+      "derived_label": "RESOLVED",
+      "evidence_sha256": "25cdba3039d190afb2bed1ec80e6ff0b29d8e8d90fd537a5633f8ed91f6c528f",
+      "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
+      "integration_requirement": "emit all six parameter axes from independently verified evidence",
+      "line": 80,
+      "path": "scripts/ember_01_identity/validate_identity.py",
+      "protocol": "validate_identity.validate_manifest"
+    },
+    {
+      "category": "parameter_identity",
+      "claim_effect": "REAL_CONSUMER_VALIDATES_BOUND_MANIFEST",
+      "conflict": "NONE",
+      "current_input": "parameters schema/contradiction validation",
+      "derived_label": "RESOLVED",
+      "evidence_sha256": "140a1fe2e596a1493fe579742a18033b718bb30a0340dea37ba24abf23a71282",
+      "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
+      "integration_requirement": "emit all six parameter axes from independently verified evidence",
+      "line": 200,
+      "path": "scripts/ember_01_identity/validate_identity.py",
+      "protocol": "validate_identity.validate_manifest"
+    },
+    {
+      "category": "parameter_identity",
+      "claim_effect": "REAL_CONSUMER_VALIDATES_BOUND_MANIFEST",
+      "conflict": "NONE",
+      "current_input": "parameters schema/contradiction validation",
+      "derived_label": "RESOLVED",
+      "evidence_sha256": "7d90db80ab932efea898c83490c1f0a6847ad16e7768080ceffb6bb49dc8c18d",
+      "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
+      "integration_requirement": "emit all six parameter axes from independently verified evidence",
+      "line": 201,
+      "path": "scripts/ember_01_identity/validate_identity.py",
+      "protocol": "validate_identity.validate_manifest"
+    },
+    {
+      "category": "parameter_identity",
+      "claim_effect": "REAL_CONSUMER_VALIDATES_BOUND_MANIFEST",
+      "conflict": "NONE",
+      "current_input": "parameters schema/contradiction validation",
+      "derived_label": "RESOLVED",
+      "evidence_sha256": "fbe1dee47a70cb7a9556f620f41cbc4cefddd725db7e5b89ae2dcf6d88f5786f",
+      "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
+      "integration_requirement": "emit all six parameter axes from independently verified evidence",
+      "line": 631,
+      "path": "scripts/ember_01_identity/validate_identity.py",
+      "protocol": "validate_identity.validate_manifest"
+    },
+    {
+      "category": "parameter_identity",
+      "claim_effect": "REAL_CONSUMER_VALIDATES_BOUND_MANIFEST",
+      "conflict": "NONE",
+      "current_input": "parameters schema/contradiction validation",
+      "derived_label": "RESOLVED",
+      "evidence_sha256": "cd4d705183e743d019b3976df98177735610c045f2b369882784b5c6fd407b28",
+      "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
+      "integration_requirement": "emit all six parameter axes from independently verified evidence",
+      "line": 646,
+      "path": "scripts/ember_01_identity/validate_identity.py",
+      "protocol": "validate_identity.validate_manifest"
+    },
+    {
+      "category": "parameter_identity",
+      "claim_effect": "REAL_CONSUMER_VALIDATES_BOUND_MANIFEST",
+      "conflict": "NONE",
+      "current_input": "parameters schema/contradiction validation",
+      "derived_label": "RESOLVED",
+      "evidence_sha256": "f09bb6f65a0843540561c8f12e5f59e40376de6568ef71cc12946f1462584a03",
+      "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
+      "integration_requirement": "emit all six parameter axes from independently verified evidence",
+      "line": 1082,
+      "path": "scripts/ember_01_identity/validate_identity.py",
+      "protocol": "validate_identity.validate_manifest"
+    },
+    {
+      "category": "parameter_identity",
+      "claim_effect": "REAL_CONSUMER_VALIDATES_BOUND_MANIFEST",
+      "conflict": "NONE",
+      "current_input": "parameters schema/contradiction validation",
+      "derived_label": "RESOLVED",
+      "evidence_sha256": "e3363be0adbd04ac23206f1cc715e0921594c8de3859a4ab51e46c3edec43887",
+      "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
+      "integration_requirement": "emit all six parameter axes from independently verified evidence",
+      "line": 1093,
+      "path": "scripts/ember_01_identity/validate_identity.py",
+      "protocol": "validate_identity.validate_manifest"
+    }
+  ],
+  "coverage": {
+    "duplicate_dispositions": 0,
+    "reviewed_consumer_rows": 7,
+    "reviewed_nonconsumer_rows": 79,
+    "source_executable_rows": 86,
+    "unresolved_executable_rows": 0
+  },
+  "lanes": [
+    {
+      "scope": "parameter_identity-category-only-cond3-increment-1",
+      "sha256": "cc18338799935e4a9454d8959a12021a0f2e6cc3aeb0c856bf3bc413b24c949d"
+    }
+  ],
+  "nonconsumer_files": [],
+  "nonconsumer_rows": [
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "b0c28c13a9d27d229d39b979cf6945ef398b3d955e8460522a5209a781f53451",
+      "line": 207,
+      "path": "scripts/c8_prelaunch/f2_schedule_generator.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "e54fd95951c0300d992d8ec6593cab69ce889db90aabfe944f44d3b27210a3fb",
+      "line": 216,
+      "path": "scripts/c8_prelaunch/f2_schedule_generator.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "3cadf04ec0453286a412ac9a08e880d3aae4d7a2b17312482238072a6b8d6cd7",
+      "line": 94,
+      "path": "scripts/cbase_grow_live.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "e54fd95951c0300d992d8ec6593cab69ce889db90aabfe944f44d3b27210a3fb",
+      "line": 100,
+      "path": "scripts/cbase_grow_live.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "8aadaf692d8e76cd6ccf72f78b135b5c0c1c5f955418ab82c50a238a3c7555fe",
+      "line": 341,
+      "path": "scripts/cbase_grow_live.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "7a22cabba2a9074ab910c9371d7b7c2ad779cbfb8ddb1d412b1fee5778242907",
+      "line": 234,
+      "path": "scripts/cbase_grow_measured_flops.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "5a66fa7feb4860f1926647112cf9e166238d85d64a26ceeb543e374ad4518d66",
+      "line": 249,
+      "path": "scripts/cbase_grow_measured_flops.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "39b40ff11cbbdeec249cb9701a01ad9c6d6c0c4e3f3300bd10f5c986bbbfca9a",
+      "line": 377,
+      "path": "scripts/cbase_grow_measured_flops.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "18c5e9119b7d759b4ae55af47d95e6c18885f74b1b760f32772ca86de2bfa2fc",
+      "line": 1620,
+      "path": "scripts/cbase_grow_rung2_event.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "affc17d148e43447c5820d12fa2192fb5ad1ca44bfd711dbf0905a1a8374dc5b",
+      "line": 1630,
+      "path": "scripts/cbase_grow_rung2_event.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "bf48133abeb60528705af7e8c3dd7d1c6195a4199b6b95fd10fa31a955a2c930",
+      "line": 343,
+      "path": "scripts/check_publication_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "79b43c5fc2b85313ae3484c956c38069dda5f6a1ad27404f3a070ff560119135",
+      "line": 89,
+      "path": "scripts/ember_01_identity/census_consumers.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "b12dd8fac23d58a5a3f3a0d0e4fdee32e1d533d7c9e2774052dc7df890bf58da",
+      "line": 606,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "6b3a0460fcbf68654f3f2a3d7fd9bb055d850b50b1cb2e61f414d008a095af4a",
+      "line": 614,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "8624c1d73c203e102ae3f0df4edf7d3caa2dc33733b4fb1180f259712d835c9f",
+      "line": 621,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "0c7c7bc0d7bcada0ab379ffd33bded1c1c79c4c68e7514df97a8d868d37ccc21",
+      "line": 634,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "a01e8fae4785751aad2ee8545edb3c8411e96be928d157ac5cccfe371c9553b2",
+      "line": 648,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "b6ae753c36e49c92b295a2ad1cab86b93a7cbf1d31d5efecae7c47b228f30653",
+      "line": 654,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "ba3e805dac6367db62fd709e211fa9e7a6323f544e01b22915b5494ae37626d3",
+      "line": 937,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "658b32b5f48a4702a5ea8b227ad20ea536c9b509d175b3689181b4456cdb00b1",
+      "line": 939,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "3bdff1cc065c0cbc5809673f1b2d31b7154c47329f64d54c54fdcc02a3928a53",
+      "line": 952,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "0480f68eca51723dfd4ac0f523e9abc857c5ddb8537a4250d79740184fc83cb6",
+      "line": 954,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "6d8189914fdaa3ea0bafd652a6b9166db38972e27367f7ce0c69b5ed96553f26",
+      "line": 969,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "6c6a1b5e1c8808f8ecaf7ce935ffbd9603a3c1c1f0d7245969f392c193073c7d",
+      "line": 974,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "6448fd09c715f4459c4377cd4b264eaa794a4ade3b933a80a2db29e6bd9173e5",
+      "line": 976,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "38411ac6eecb4ff385c367401858eb008a8c61dba2d455f63e212ba7fa0e2a1e",
+      "line": 990,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "fd11dfacbf061e3cc860835fc8adbd3a0d194852e2daf91cea5ae7b8c411ccac",
+      "line": 1006,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "de132fe6cc97acb2ca905e03db8fe127feb7614ef3f434afc46af5ea19a4de14",
+      "line": 1007,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "56804baa6c6c32dfa28fe3485af6c0f8b5cc38ea90971936eba1ebaf108d1e4a",
+      "line": 1030,
+      "path": "scripts/ember_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "9ccd42b5fc38492cdac21dd2a0f4a88ee2e2eff77e0b9ca6596422bef291bbf0",
+      "line": 858,
+      "path": "scripts/ember_c_e2b_paired_run.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "0cb80c14822ad01ee16ff6906a2bef724f79328f38e971e0c20334556b00dabf",
+      "line": 684,
+      "path": "scripts/ember_resident_training_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "8d6a8bdf9934af3d7dbf03de903f9789a29e17587e53358c9683f2dc2a4db853",
+      "line": 686,
+      "path": "scripts/ember_resident_training_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "f018ce7c50ec64bd0aff15a5773597631d6dbd2095a75415eb594a167f3e7f0f",
+      "line": 687,
+      "path": "scripts/ember_resident_training_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "0cb80c14822ad01ee16ff6906a2bef724f79328f38e971e0c20334556b00dabf",
+      "line": 916,
+      "path": "scripts/ember_resident_training_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "8d6a8bdf9934af3d7dbf03de903f9789a29e17587e53358c9683f2dc2a4db853",
+      "line": 918,
+      "path": "scripts/ember_resident_training_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "f018ce7c50ec64bd0aff15a5773597631d6dbd2095a75415eb594a167f3e7f0f",
+      "line": 919,
+      "path": "scripts/ember_resident_training_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "e4135baa2911f5f38921595c812f7a162752d3c9932fe60d5e9382c2caaeb318",
+      "line": 106,
+      "path": "scripts/ember_train_multimodal_resident_adapter.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "b191c9316c792ab2cd36b30fd8ef8895b0b4e0f90952b54dff4d666b312f5413",
+      "line": 258,
+      "path": "scripts/ember_train_multimodal_resident_adapter.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "b6d143906877fcdf0e9a4014da105eee0199263ada2416de0ccb2d5edd12474a",
+      "line": 58,
+      "path": "scripts/fp19_bench.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "694e0e264b48933616fd57e590f3c98a5da1d4afeb82496518332bdac50a3c93",
+      "line": 149,
+      "path": "scripts/fp19_bench.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "47488c9ba19ddd99b31f0e713598b26a197d593dd262f4143256705849a0e1cb",
+      "line": 203,
+      "path": "scripts/fp19_bench.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "bea362a78cab046db1f40be5e7cd345a85b153ef269765fb5070381765a1748e",
+      "line": 204,
+      "path": "scripts/fp19_bench.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "afcb3d3459a762b2b388c88873c7c7bb759a4be2fcf2e98f56e54dba0f46a180",
+      "line": 44,
+      "path": "scripts/paper/compute_ledger.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "03e5a9d884cb07d36bc583d64a3ecdb5ce36f024f7c4330b21759e486ddc78c9",
+      "line": 188,
+      "path": "scripts/registry_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "e429f6bd0ba5e3a15425609ed0041a6eb41cd014fd9319ef831dee4d635d3960",
+      "line": 189,
+      "path": "scripts/registry_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "ae64082781cb3577eced2157f1b884ce5e900f1df3caa847bf7fb33a94ac9277",
+      "line": 190,
+      "path": "scripts/registry_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "6b3a0460fcbf68654f3f2a3d7fd9bb055d850b50b1cb2e61f414d008a095af4a",
+      "line": 70,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "bc548b0d735e26c79e74689abf986f5f3bd3b1648610bc59fe7211a52beb59d4",
+      "line": 80,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "57aa8544421cf18f66909372dbe446b4ed1fa1eb42d10539797332ce46dbfaa6",
+      "line": 85,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "165b53429ff3dfe5dae866d931797a2ccc588eaa449753a03e1b720bedafdb16",
+      "line": 126,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "32d3e190d43db9a98f13fc1c6910f04fe761bb921d93fd1ca047ca9d170f8042",
+      "line": 136,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "ff7e4887a6130d8be4461a899a76e47721d78a01ff9456581deaa6ceb9a22b76",
+      "line": 265,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "8b4757bdfb1fea9f43a963dddaa312f93d167c814aae24bbe955744b19095f3a",
+      "line": 273,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "0c7c7bc0d7bcada0ab379ffd33bded1c1c79c4c68e7514df97a8d868d37ccc21",
+      "line": 278,
+      "path": "scripts/research/accounting_harness.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "be25851e3b08e79d31f611d45c2f1ec409f69d059951aca547e0595762473877",
+      "line": 364,
+      "path": "scripts/serve_cbase_openai.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "5ff52faf3b9a8b1f1fb43b65347c49324dd7cfd2b41c9239dee5b0d53a867f82",
+      "line": 382,
+      "path": "scripts/serve_cbase_openai.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "406533155948fc3ebc2163bd5bd0d1f6584852ce82da19ec6beef8545e393e5f",
+      "line": 271,
+      "path": "scripts/tests/test_authority_conservation.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "5e5734bcace84fd508e0d70bf6da3a0c441fe6bdad306afc5813b7d9c907813e",
+      "line": 666,
+      "path": "scripts/tests/test_authority_conservation.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "c37bc4be0c0b831c2c8065865f36a69ca976f2888e57adedeefc812baf0a09ac",
+      "line": 680,
+      "path": "scripts/tests/test_authority_conservation.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "6ecd4ac532baf74d751a8ee6f44a167ea65edc3d16ce77f97d8a4f20b01e8b9c",
+      "line": 713,
+      "path": "scripts/tests/test_authority_conservation.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "c37bc4be0c0b831c2c8065865f36a69ca976f2888e57adedeefc812baf0a09ac",
+      "line": 25,
+      "path": "scripts/tests/test_registry_authority_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "63586536df9bcd58693a7611c31724f659ce9d9571303bdaca6a0875a40c567b",
+      "line": 64,
+      "path": "scripts/tests/test_registry_authority_gate.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "e27d4244b1bb58ef91b4780502e7ce82ec278c733fb20766d7bed9c2e897db54",
+      "line": 904,
+      "path": "scripts/verify_authority_conservation.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "3aca27c2fe36f79537a84840130a44795ce5d2591ff2ecfa921e7047acce40a4",
+      "line": 106,
+      "path": "tests/ember_01_identity/test_validate_identity.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "f09bb6f65a0843540561c8f12e5f59e40376de6568ef71cc12946f1462584a03",
+      "line": 138,
+      "path": "tests/ember_01_identity/test_validate_identity.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "1cd219335eceb39ee9b68661214c81ec9bb2879e8b70b14fd0087783dbc188cb",
+      "line": 358,
+      "path": "tests/ember_01_identity/test_validate_identity.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "9e91e3309d80910bed78cf1fbef14b26f6361effb85717ca22f5430b84f078f9",
+      "line": 556,
+      "path": "tests/ember_01_identity/test_validate_identity.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "3d2b29d4a9c9dec56b5572fcdfce72de398437aaabd70e18082ef9d1d041b86d",
+      "line": 794,
+      "path": "tests/ember_01_identity/test_validate_identity.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "9312d65b8e82017ad5a38ce47da7746c443d7b7624039a11c401271bda878df1",
+      "line": 796,
+      "path": "tests/ember_01_identity/test_validate_identity.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "a74b888586e3e85993476dc068d1d4c986fd3b8f816123cf20d6d6ec9550e6f9",
+      "line": 86,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "fa6bb2214daf0d083d25cf7ef71d7f02088cf13d9399946e87eed373a5f7cf3c",
+      "line": 88,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "865ec8fb2ecda16b82f56f91ae3e36282a7c304fc879ff931f844bcb7086f533",
+      "line": 95,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "7d17cacea907cffebec64dcaab941165063772a3c38518aecb62b15fe33eb7dc",
+      "line": 103,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "74495bc734ee2c9d6cd29c5c1f0404fbb844aaa2d706ff0c79a58535b90d8782",
+      "line": 107,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "ab2243a1bcb428d97a32895972195d36d27661d0bedaf1490253aa9018475b1f",
+      "line": 109,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "65533b5f648ae006e93ac3438ff8c19ef4cf114fc9fd0d103da480ffb41baac6",
+      "line": 116,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "de61ff4fbf3bc5b3ab659aebd6bfb18a132194aa7eb2d7a445b2cde25404ec31",
+      "line": 127,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "cfd398c833c573c013978ea9a1e9b4bb6a560f06c10faa83cb9e98bed760f013",
+      "line": 128,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    },
+    {
+      "category": "parameter_identity",
+      "evidence_sha256": "5892eaa76a88059673f63dd535b0114c31de60034a92278ee4d9bea9eb894eed",
+      "line": 135,
+      "path": "tests/test_676_bitnet_exact_twin.py",
+      "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
+    }
+  ],
+  "schema": "ember-consumer-adjudication-review-set-v1",
+  "source_commit": "1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138"
+}
