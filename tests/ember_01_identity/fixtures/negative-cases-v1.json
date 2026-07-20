@@ -1,0 +1,60 @@
+[
+  {
+    "id": "unknown-schema",
+    "path": "schema",
+    "set": "ember-model-experiment-identity-v999",
+    "expected_code": "schema.unsupported"
+  },
+  {
+    "id": "missing-tokenizer-hash",
+    "path": "tokenizer.sha256",
+    "expected_code": "field.missing"
+  },
+  {
+    "id": "unique-exceeds-allocated",
+    "path": "parameters.unique",
+    "set": 3000000001,
+    "expected_code": "parameters.contradictory"
+  },
+  {
+    "id": "evaluation-subject-mismatch",
+    "path": "evaluation.subject_checkpoint_sha256",
+    "set": "9999999999999999999999999999999999999999999999999999999999999999",
+    "expected_code": "evaluation.subject_checkpoint_mismatch"
+  },
+  {
+    "id": "native-audio-missing",
+    "path": "capabilities.native_modalities",
+    "set": ["text", "image"],
+    "expected_code": "capabilities.native_modalities_invalid"
+  },
+  {
+    "id": "modality-mixture-not-normalized",
+    "path": "training.modality_mixture",
+    "set": {"text": 0.7, "image": 0.3, "audio": 0.2},
+    "expected_code": "training.modality_mixture_invalid"
+  },
+  {
+    "id": "tool-supplies-neural-credit",
+    "path": "provenance.neural_capability_credit_sources",
+    "set": ["tool"],
+    "expected_code": "capability.invalid_credit_source"
+  },
+  {
+    "id": "borrowed-teacher-enters-lineage",
+    "path": "provenance.learned_signal_sources",
+    "set": ["teacher"],
+    "expected_code": "provenance.forbidden_learned_signal"
+  },
+  {
+    "id": "unresolved-index-deleted",
+    "path": "unresolved",
+    "expected_code": "field.missing"
+  },
+  {
+    "id": "unresolved-reason-empty",
+    "path": "backend.process_identity",
+    "set": {"status": "unresolved", "reason": ""},
+    "expected_code": "unresolved.reason_missing"
+  }
+]
