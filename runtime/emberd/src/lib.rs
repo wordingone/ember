@@ -19,6 +19,7 @@ use std::sync::{RwLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub mod rpc;
+pub mod scratch;
 
 pub type Result<T> = std::result::Result<T, EmberdError>;
 
@@ -4598,8 +4599,7 @@ mod dispatch_binding_snapshot_tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("emberd-binding-snapshot-{nonce}"));
-        fs::create_dir_all(&root).unwrap();
+        let root = scratch::ember_scratch_dir(&format!("binding-snapshot-{nonce}")).unwrap();
         let registry = root.join("trusted-verifiers.json");
         fs::write(
             &registry,
