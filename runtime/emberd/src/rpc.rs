@@ -1,8 +1,8 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use crate::{Daemon, JobSpec, RestartPolicy};
+use crate::{Daemon, JobSpec, RestartPolicy, SchedulePrediction, MAX_DISPATCH_MANIFEST_BYTES};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -30,6 +30,29 @@ struct LeaseParams {
     resource: String,
     job_id: String,
 }
+#[derive(Debug, Deserialize)]
+struct SchedulePredictionParams {
+    job_id: String,
+    artifact_class: String,
+    predicted_duration_ms: i64,
+    predicted_tokens: i64,
+    predicted_program_completion_ms: i64,
+    absolute_deadline_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct ScheduleMeasurementParams {
+    job_id: String,
+    measured_duration_ms: i64,
+    measured_tokens: i64,
+    outcome: String,
+    receipt_sha256: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AlarmStateParams {
+    path: PathBuf,
+}
 
 #[derive(Debug, Deserialize)]
 struct JobIdParams {
@@ -46,6 +69,12 @@ struct StartJobParams {
     env: BTreeMap<String, String>,
     #[serde(default)]
     restart_policy: RestartPolicy,
+}
+
+#[derive(Debug, Deserialize)]
+struct DispatchManifestParams {
+    manifest_utf8: String,
+    manifest_sha256: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -130,6 +159,50 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 Err(error) => (operation_error(id, error), false),
             }
         }
+        "register_schedule_prediction" => {
+            let params: SchedulePredictionParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            let prediction = SchedulePrediction {
+                job_id: params.job_id,
+                artifact_class: params.artifact_class,
+                predicted_duration_ms: params.predicted_duration_ms,
+                predicted_tokens: params.predicted_tokens,
+                predicted_program_completion_ms: params.predicted_program_completion_ms,
+                absolute_deadline_ms: params.absolute_deadline_ms,
+            };
+            match daemon.register_schedule_prediction(prediction) {
+                Ok(()) => (success(id, json!({"registered": true})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "record_schedule_measurement" => {
+            let params: ScheduleMeasurementParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.record_schedule_measurement(
+                &params.job_id,
+                params.measured_duration_ms,
+                params.measured_tokens,
+                &params.outcome,
+                &params.receipt_sha256,
+            ) {
+                Ok(()) => (success(id, json!({"recorded": true})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "write_schedule_alarm_state" => {
+            let params: AlarmStateParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.write_schedule_alarm_state(&params.path) {
+                Ok(()) => (success(id, json!({"written": true})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
         "acquire_lease" => {
             let params: LeaseParams = match decode(&id, request.params) {
                 Ok(value) => value,
@@ -157,6 +230,33 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
             }
             match daemon.start_job(spec) {
                 Ok(handle) => (success(id, json!({"pid": handle.pid})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "dispatch_manifest" => {
+            let params: DispatchManifestParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            let manifest_bytes = params.manifest_utf8.into_bytes();
+            if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_BYTES {
+                return (
+                    invalid_params(id, "dispatch manifest exceeds the UTF-8 transport ceiling"),
+                    false,
+                );
+            }
+            match daemon.dispatch_manifest_bytes(&manifest_bytes, &params.manifest_sha256) {
+                Ok(outcome) => (
+                    success(
+                        id,
+                        json!({
+                            "pid": outcome.handle.pid,
+                            "preflight_receipt_path": outcome.receipt.path,
+                            "preflight_receipt_sha256": outcome.receipt.sha256,
+                        }),
+                    ),
+                    false,
+                ),
                 Err(error) => (operation_error(id, error), false),
             }
         }

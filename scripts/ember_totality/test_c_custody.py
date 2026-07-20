@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember totality test — Condition C-CUSTODY (status probe / TDD).
 
 C-CUSTODY — Receipts custody and integrity.
@@ -16,9 +19,10 @@ Three failure shapes (issue #381):
   (c) cited-path-missing: any receipts/ path cited in verdict-bearing receipt
                           or board receipt that doesn't exist on disk
 
-Disclosed allowlist mechanism: receipts may carry an "__allowlist_untracked"
-field (array of basename patterns) to exempt specific files from tracking
-requirement (staging files for future operations).
+Allowlist authority: any exception for an untracked staging receipt must come
+from the separately tracked scripts/ember_totality/custody-allowlist.json
+surface. A receipt's own "__allowlist_untracked" field is disclosure only and
+never grants authority.
 
 Issue #415 cure (72/72 cited_missing enumeration + four-bucket addendum +
 DESIGN RULING, gh issue #415): the naive citation extractor over-reported
@@ -88,6 +92,7 @@ attestation; see that doc's dated addendum for the current tree's
 per-row disposition.
 """
 
+import fnmatch
 import glob
 import json
 import os
@@ -95,6 +100,12 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+
+# Keep status output reproducible on default Windows CP1252 consoles.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # --- Locate <execution-root> robustly ----------------------------------------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -401,24 +412,144 @@ def _load_all_spend_annex_rows(root):
     return by_path
 
 
-def _get_allowlist_for_receipt(receipt_data):
-    """Extract __allowlist_untracked from receipt, if present. Returns set of basename patterns."""
-    allowlist = receipt_data.get("__allowlist_untracked", [])
-    if isinstance(allowlist, list):
-        return set(allowlist)
-    return set()
+ALLOWLIST_AUTHORITY_REL = "scripts/ember_totality/custody-allowlist.json"
+ALLOWLIST_SCHEMA_VERSION = "ember-c-custody-allowlist-v1"
+
+# This probe is bound to exactly one goal/workstream (see the file header).
+# An allowlist authority file is honored ONLY when its declared identity
+# matches this binding exactly -- a copied/mismatched allowlist (wrong
+# workstream, or missing one of the three identity fields) grants NO
+# authority, even if its schema_version and patterns are otherwise valid.
+ALLOWLIST_BOUND_GOAL_ID = "EMBER-02"
+ALLOWLIST_BOUND_WORKSTREAM_ID = "EMBER-02A"
+ALLOWLIST_BOUND_NEXT_EXECUTED_OUTCOME = (
+    "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+)
+
+
+def _read_committed_blob(root, rel_path):
+    """Return the raw bytes of rel_path as recorded in the HEAD commit (via
+    `git show HEAD:<path>`), or None if it cannot be read there (not tracked
+    at HEAD, no HEAD yet, etc). This bypasses the mutable working tree
+    entirely -- an uncommitted edit to a tracked authority file can never
+    change what this probe reads, since `git show` reads the committed blob
+    regardless of working-tree state (round-2 repair, PR951 clause 1: the
+    prior version read the working-tree file after only checking `git
+    ls-files`, so an uncommitted edit could authorize receipts)."""
+    try:
+        result = subprocess.run(
+            ["git", "show", f"HEAD:{rel_path}"],
+            cwd=root,
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return result.stdout
+    except Exception:
+        pass
+    return None
+
+
+def _parse_json_bytes_with_fallback(raw_bytes):
+    """Same fallback contract as _load_json_with_fallback but for bytes
+    already read (e.g. from `git show`) rather than a file path."""
+    for encoding in ["utf-8", "utf-8-sig"]:
+        try:
+            return json.loads(raw_bytes.decode(encoding)), None
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            if encoding == "utf-8-sig":
+                return None, str(e)
+            continue
+    return None, "Failed both utf-8 and utf-8-sig"
+
+
+def _get_allowlist_from_tracked_authority(root, tracked_files):
+    """Load basename patterns only from the separately tracked authority file,
+    read at its COMMITTED HEAD blob -- never the working-tree bytes.
+
+    Fail-closed on ANY schema deviation: wrong/missing schema_version, any of
+    the three required identity fields (goal_id, workstream_id,
+    next_executed_outcome) missing or not matching this probe's own bound
+    workstream, or a non-list/non-string pattern set. Round-2 repair
+    (PR951): the prior version validated only schema_version + pattern
+    string-ness, so an allowlist authored for a DIFFERENT workstream (or one
+    missing an identity field) was silently honored here.
+    """
+    if ALLOWLIST_AUTHORITY_REL not in tracked_files:
+        return set()
+    raw = _read_committed_blob(root, ALLOWLIST_AUTHORITY_REL)
+    if raw is None:
+        return set()
+    try:
+        data, _ = _parse_json_bytes_with_fallback(raw)
+    except Exception:
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    if data.get("schema_version") != ALLOWLIST_SCHEMA_VERSION:
+        return set()
+    if data.get("goal_id") != ALLOWLIST_BOUND_GOAL_ID:
+        return set()
+    if data.get("workstream_id") != ALLOWLIST_BOUND_WORKSTREAM_ID:
+        return set()
+    if data.get("next_executed_outcome") != ALLOWLIST_BOUND_NEXT_EXECUTED_OUTCOME:
+        return set()
+    patterns = data.get("allowed_receipt_basenames", [])
+    if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+        return set()
+    return set(patterns)
+
+
+def _validate_allowlist_pattern(pattern):
+    """Fail-closed pre-match validation of a single allowlist pattern
+    (round-2 repair, PR951 clause 2). This allowlist only ever needs to
+    express a basename glob using "*"/"?" wildcards -- path separators,
+    parent-directory traversal, and bracket/brace constructs are not
+    supported syntax here, so a pattern using any of them is rejected
+    outright (grants no authority) rather than falling through to
+    fnmatch with an ambiguous or surprising interpretation.
+
+    Returns True iff pattern is safe to hand to fnmatch."""
+    if not isinstance(pattern, str) or not pattern:
+        return False
+    if "/" in pattern or "\\" in pattern:
+        return False
+    if ".." in pattern:
+        return False
+    if "[" in pattern or "]" in pattern or "{" in pattern or "}" in pattern:
+        return False
+    return True
 
 
 def _is_match_pattern(basename, patterns):
-    """Check if basename matches any pattern in patterns (simple glob support)."""
+    """Check if basename matches any pattern in patterns, using glob
+    semantics (fnmatch, case-sensitive) -- but only after each pattern
+    passes _validate_allowlist_pattern. An invalid pattern is dropped
+    before matching and disclosed on stderr; it grants no authority.
+
+    Round-2 repair (PR951): the prior version hand-translated patterns
+    containing "*"/"?" into a regex via naive string substitution and fed
+    them to re.match -- a malformed pattern (e.g. an unbalanced "[") produced
+    an invalid regex that raised uncaught, crashing main(). fnmatch.translate
+    never raises on malformed glob input (an unterminated "[" degrades to a
+    literal bracket rather than an open character class), so matching is
+    fail-closed by construction: a malformed pattern simply fails to match
+    anything it wasn't exactly meant to, it never crashes the probe and it
+    never silently authorizes an unrelated receipt. The pre-match validation
+    above adds a second, independent fail-closed layer: separator/traversal/
+    bracket-or-brace patterns are rejected before fnmatch ever sees them.
+    """
+    safe_patterns = []
     for pattern in patterns:
-        if "*" in pattern or "?" in pattern:
-            # Glob-style pattern
-            if re.match(pattern.replace(".", r"\.").replace("*", ".*").replace("?", "."), basename):
-                return True
-        elif basename == pattern:
-            return True
-    return False
+        if _validate_allowlist_pattern(pattern):
+            safe_patterns.append(pattern)
+        else:
+            print(
+                f"C-CUSTODY: rejecting unsafe allowlist pattern (no authority "
+                f"granted): {pattern!r}",
+                file=sys.stderr,
+            )
+    return any(fnmatch.fnmatchcase(basename, pattern) for pattern in safe_patterns)
 
 
 def _get_last_landing_time(root):
@@ -481,6 +612,7 @@ def main():
 
     # Normalize paths for comparison (git uses forward slashes)
     git_tracked_normalized = set(p.replace("\\", "/") for p in git_tracked)
+    allowlist = _get_allowlist_from_tracked_authority(ROOT, git_tracked_normalized)
 
     # --- (C) Compute last_landing for age-window classification -------
     last_landing_ts = _get_last_landing_time(ROOT)
@@ -495,25 +627,15 @@ def main():
         rel_path = os.path.relpath(fpath, ROOT).replace("\\", "/")
         basename = os.path.basename(fpath)
 
-        # Shape (a): Untracked check (with allowlist)
+        # Shape (a): Untracked check. Authority is loaded once from the
+        # separately tracked surface; a receipt cannot self-whitelist.
         if rel_path not in git_tracked_normalized:
-            # Check allowlist from any existing receipt file
-            try:
-                data, _ = _load_json_with_fallback(fpath)
-                if data:
-                    allowlist = _get_allowlist_for_receipt(data)
-                    if _is_match_pattern(basename, allowlist):
-                        pass  # Whitelisted, skip
-                    else:
-                        # Classify by age: if mtime > last_landing, it's pending_landing
-                        file_mtime = os.path.getmtime(fpath)
-                        if last_landing_ts is not None and file_mtime > last_landing_ts:
-                            pending_landing.append(f"UNTRACKED: {rel_path} (mtime={int(file_mtime)})")
-                        else:
-                            failures.append(f"UNTRACKED: {rel_path}")
-                else:
-                    failures.append(f"UNTRACKED: {rel_path}")
-            except Exception:
+            if not _is_match_pattern(basename, allowlist):
+                # A non-allowlisted receipt is always a custody failure. Keep
+                # age classification as disclosure, but never bypass the RED gate.
+                file_mtime = os.path.getmtime(fpath)
+                if last_landing_ts is not None and file_mtime > last_landing_ts:
+                    pending_landing.append(f"UNTRACKED: {rel_path} (mtime={int(file_mtime)})")
                 failures.append(f"UNTRACKED: {rel_path}")
 
         # Shape (b): Unparseable check

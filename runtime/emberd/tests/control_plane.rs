@@ -1,8 +1,8 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use emberd::{Daemon, EmberdError, JobSpec, JobState, RestartPolicy};
+use emberd::{Daemon, EmberdError, JobSpec, JobState, RestartPolicy, SchedulePrediction};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -196,12 +196,109 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
     assert_eq!(payload["identity_sha256"], identity_hash);
     assert_eq!(payload["resource_lease"], "cpu-fixture");
     assert_eq!(payload["state"], "stopped");
+    for field in ["binary_sha256", "source_sha256"] {
+        let value = payload["emberd_identity"][field].as_str().unwrap();
+        assert_eq!(value.len(), 64);
+        assert!(value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    }
     let events = payload["events"].as_array().unwrap();
     assert!(events.iter().any(|row| row["kind"] == "job_started"));
     assert!(events.iter().any(|row| row["kind"] == "job_adopted"));
     assert!(events.iter().any(|row| row["kind"] == "job_stopped"));
 }
 
+#[test]
+fn schedule_alarm_turns_red_after_seven_days_even_without_any_prediction() {
+    let root = sandbox("schedule-empty-week");
+    let db = root.join("emberd.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let started_at_ms = daemon.schedule_monitor_started_at_ms().unwrap();
+
+    let before = daemon
+        .schedule_alarm_state_at(started_at_ms + 7 * 24 * 60 * 60 * 1000 - 1)
+        .unwrap();
+    assert_eq!(before["alarms"]["zero_schedule_receipts_7d"], false);
+
+    let overdue = daemon
+        .schedule_alarm_state_at(started_at_ms + 7 * 24 * 60 * 60 * 1000)
+        .unwrap();
+    assert_eq!(overdue["alarms"]["zero_schedule_receipts_7d"], true);
+}
+
+#[test]
+fn schedule_lease_requires_prediction_and_measurement_drives_durable_alarms() {
+    let root = sandbox("schedule-loop");
+    let db = root.join("emberd.sqlite3");
+    let alarm_path = root.join("schedule-alarms.json");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("screen-1", &identity, &identity_hash)
+        .unwrap();
+
+    assert!(matches!(
+        daemon.acquire_lease("schedule:compute-primitive", "screen-1"),
+        Err(EmberdError::SchedulePredictionRequired { .. })
+    ));
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    daemon
+        .register_schedule_prediction(SchedulePrediction {
+            job_id: "screen-1".into(),
+            artifact_class: "compute-primitive".into(),
+            predicted_duration_ms: 60_000,
+            predicted_tokens: 4096,
+            predicted_program_completion_ms: now + 2_000_000,
+            absolute_deadline_ms: now + 1_000_000,
+        })
+        .unwrap();
+    daemon
+        .acquire_lease("schedule:compute-primitive", "screen-1")
+        .unwrap();
+
+    let overdue = daemon
+        .schedule_alarm_state_at(now + 7 * 24 * 60 * 60 * 1000 + 1)
+        .unwrap();
+    assert_eq!(overdue["schema_version"], "emberd-schedule-alarm-state-v1");
+    assert_eq!(overdue["alarms"]["prediction_overrun"], true);
+    assert_eq!(overdue["alarms"]["zero_schedule_receipts_7d"], true);
+    assert_eq!(overdue["alarms"]["absolute_deadline_drift"], true);
+
+    daemon
+        .record_schedule_measurement("screen-1", 55_000, 4096, "COMPLETED", &"a".repeat(64))
+        .unwrap();
+    assert_eq!(
+        daemon.lease_owner("schedule:compute-primitive").unwrap(),
+        None,
+        "shadow-mode measurement must release its schedule lease",
+    );
+    let measured = daemon.schedule_alarm_state_at(now + 120_000).unwrap();
+    assert_eq!(measured["alarms"]["prediction_overrun"], false);
+    assert_eq!(measured["alarms"]["zero_schedule_receipts_7d"], false);
+    assert_eq!(measured["runs"][0]["measured_duration_ms"], 55_000);
+    assert_eq!(
+        measured["runs"][0]["measurement_receipt_sha256"],
+        "a".repeat(64)
+    );
+
+    daemon
+        .write_schedule_alarm_state_at(&alarm_path, now + 120_000)
+        .unwrap();
+    let persisted: Value = serde_json::from_slice(&fs::read(&alarm_path).unwrap()).unwrap();
+    assert_eq!(persisted, measured);
+
+    drop(daemon);
+    let reopened = Daemon::open(&db).unwrap();
+    assert_eq!(
+        reopened.schedule_alarm_state_at(now + 120_000).unwrap(),
+        measured
+    );
+}
 #[test]
 fn unbound_owner_cannot_acquire_a_durable_lease() {
     let root = sandbox("unbound-lease");

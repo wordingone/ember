@@ -6,43 +6,69 @@ they cannot reduce, defer, replace, or reinterpret it.
 
 <!-- EMBER_AUTHORITY_V1
 {
-  "allows_new_network": false,
-  "active_goal_id": "EMBER-01",
+  "allows_new_network": true,
+  "active_goal_id": "EMBER-02",
   "active_workstream_ids": [
-    "EMBER-01A",
-    "EMBER-01B",
-    "EMBER-01C"
+    "EMBER-02A",
+    "EMBER-02B",
+    "EMBER-02C"
   ],
   "workstream_path_scopes": {
-    "EMBER-01A": {
+    "EMBER-02A": {
       "mode": "all_except",
       "prefixes": [
-        "manifests/ember-01-custody/",
-        "scripts/ember_01_custody/",
-        "tests/ember_01_custody/",
-        "docs/ember-01-custody/",
-        "manifests/ember-01-identity/",
-        "scripts/ember_01_identity/",
-        "tests/ember_01_identity/",
-        "docs/ember-01-identity/"
+        "configs/ember-restart-3b.json",
+        "docs/ember-restart-3b-",
+        "models/ember-restart-3b/",
+        "tools/ember-restart-3b/",
+        "receipts/ember-restart-3b/",
+        "inference/ember-restart-3b/",
+        "data/ember-restart-3b/",
+        "tests/ember_restart_model/",
+        "docs/ember-restart-eval-",
+        "docs/ember-restart-terminal-",
+        "docs/ember-restart-browser-",
+        "docs/ember-restart-audio-",
+        "docs/ember-restart-image-",
+        "manifests/ember-restart-eval-",
+        "scripts/ember_restart_eval",
+        "tests/test_ember_restart_eval",
+        "docs/ember-restart-sql-",
+        "docs/ember-restart-structured-tools-",
+        "docs/ember-restart-dynamics-",
+        "scripts/ember_restart_measured_receipts",
+        "tests/test_ember_restart_measured_receipts"
       ]
     },
-    "EMBER-01B": {
+    "EMBER-02B": {
       "mode": "only",
       "prefixes": [
-        "manifests/ember-01-custody/",
-        "scripts/ember_01_custody/",
-        "tests/ember_01_custody/",
-        "docs/ember-01-custody/"
+        "configs/ember-restart-3b.json",
+        "docs/ember-restart-3b-",
+        "models/ember-restart-3b/",
+        "tools/ember-restart-3b/",
+        "receipts/ember-restart-3b/",
+        "inference/ember-restart-3b/",
+        "data/ember-restart-3b/",
+        "tests/ember_restart_model/"
       ]
     },
-    "EMBER-01C": {
+    "EMBER-02C": {
       "mode": "only",
       "prefixes": [
-        "manifests/ember-01-identity/",
-        "scripts/ember_01_identity/",
-        "tests/ember_01_identity/",
-        "docs/ember-01-identity/"
+        "docs/ember-restart-eval-",
+        "docs/ember-restart-terminal-",
+        "docs/ember-restart-browser-",
+        "docs/ember-restart-audio-",
+        "docs/ember-restart-image-",
+        "manifests/ember-restart-eval-",
+        "scripts/ember_restart_eval",
+        "tests/test_ember_restart_eval",
+        "docs/ember-restart-sql-",
+        "docs/ember-restart-structured-tools-",
+        "docs/ember-restart-dynamics-",
+        "scripts/ember_restart_measured_receipts",
+        "tests/test_ember_restart_measured_receipts"
       ]
     }
   },
@@ -82,9 +108,9 @@ they cannot reduce, defer, replace, or reinterpret it.
   "conservation_hashes": {
     "authority_matrix_sha256": "56B7DFDC2DDA2AFF04C2A48CE5FE7BD7367C81FE6056F9D10B2AFCD03E2C5936",
     "governing_surfaces_sha256": {
-      "CONTINUITY.md": "C3ABAB414B474BB733778C0D5D29E2C86A8F528E78E44D6F449D963C745BAB65",
-      "GOVERNANCE.md": "AB049AA0B4B01A71D982A8F6FF371E14108ED1EAAF5B4CB35795EE440B7C4F9F",
-      "README.md": "AE72B2DA64A2616312B3B1669F4BE2479FD2ED6CD7F384B1222FD00431A0996C",
+      "CONTINUITY.md": "9EF6B5C4BA6797F1B96742A0DA42F0714A6E7F66C35722C877AFAC8BEC30EF58",
+      "GOVERNANCE.md": "E583BCA6002549E548A7322C4BEDA6F158DE942C68EAD14B09C45CF19C1B711C",
+      "README.md": "4F67571DC4853978D63AA999AB0036F406A7A862E7B0750381688834E73EAC1E",
       "docs/ember-authority-matrix.md": "56B7DFDC2DDA2AFF04C2A48CE5FE7BD7367C81FE6056F9D10B2AFCD03E2C5936",
       "docs/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
       "docs/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
@@ -95,7 +121,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/spec/conditions-v1.md": "5DCB85F97368CE773D25848362E164545D49BEEEFF12CB0B27FDB1C9CCE15229"
     }
   },
-  "authority_only_goal": true,
+  "authority_only_goal": false,
   "destination": {
     "competitive_reference_parameters": [
       27000000000,

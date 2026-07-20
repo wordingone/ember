@@ -1,0 +1,23 @@
+{
+  "schema_version": "ember-issue-closure-candidate-batch-v1",
+  "batch_id": "20260717-02",
+  "generated_at": "2026-07-17T17:13:12Z",
+  "public_master_git_oid": "f919b116066106fc91a7d86feff39eecc70e14d0",
+  "batch_limit": 10,
+  "review_only": true,
+  "closures_performed": 0,
+  "candidate_count": 0,
+  "screened_open_issues": [
+    {"number": 873, "url": "https://github.com/wordingone/ember/issues/873", "state": "OPEN", "updated_at": "2026-07-16T17:38:00Z", "disposition": "LIVE_WORK_NO_CLOSURE_EVIDENCE"},
+    {"number": 872, "url": "https://github.com/wordingone/ember/issues/872", "state": "OPEN", "updated_at": "2026-07-16T17:37:57Z", "disposition": "LIVE_WORK_NO_CLOSURE_EVIDENCE"},
+    {"number": 869, "url": "https://github.com/wordingone/ember/issues/869", "state": "OPEN", "updated_at": "2026-07-16T14:45:35Z", "disposition": "LIVE_WORK_NO_CLOSURE_EVIDENCE"},
+    {"number": 812, "url": "https://github.com/wordingone/ember/issues/812", "state": "OPEN", "updated_at": "2026-07-16T18:47:58Z", "disposition": "LIVE_WORK_PROGRESS_NOT_COMPLETION"},
+    {"number": 805, "url": "https://github.com/wordingone/ember/issues/805", "state": "OPEN", "updated_at": "2026-07-16T19:03:27Z", "disposition": "LIVE_WORK_PUBLIC_CENSUS_FOLLOWUP"},
+    {"number": 804, "url": "https://github.com/wordingone/ember/issues/804", "state": "OPEN", "updated_at": "2026-07-11T17:36:21Z", "disposition": "LIVE_DEFECT_NO_CLOSURE_EVIDENCE"},
+    {"number": 803, "url": "https://github.com/wordingone/ember/issues/803", "state": "OPEN", "updated_at": "2026-07-16T19:02:52Z", "disposition": "LIVE_WORK_RECEIPT_GATE_PENDING"},
+    {"number": 802, "url": "https://github.com/wordingone/ember/issues/802", "state": "OPEN", "updated_at": "2026-07-11T16:16:44Z", "disposition": "LIVE_DEFECT_NO_CLOSURE_EVIDENCE"},
+    {"number": 801, "url": "https://github.com/wordingone/ember/issues/801", "state": "OPEN", "updated_at": "2026-07-11T17:09:09Z", "disposition": "LIVE_WORK_SPEC_NOT_CLOSED"},
+    {"number": 798, "url": "https://github.com/wordingone/ember/issues/798", "state": "OPEN", "updated_at": "2026-07-11T16:32:40Z", "disposition": "LIVE_WORK_PREREG_NOT_CLOSED"}
+  ],
+  "evidence_rule": "Public issue URLs, current OPEN state, and latest public update timestamps are evidence for review only; no issue closes without complete acceptance or successor proof."
+}

@@ -41,3 +41,7 @@ tools/.leak-gate.log
 
 # bun/npm dependency trees — never tracked, installed on demand per-package.
 node_modules/
+
+# PR body scratch drafts (root-level, one per open PR) -- the PR body content
+# lives ONLY in the GitHub PR body itself, never as a tracked repo artifact.
+/pr*body.txt

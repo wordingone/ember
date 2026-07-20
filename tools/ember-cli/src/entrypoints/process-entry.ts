@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // entrypoints/process-entry.ts — process bootstrap: env cleanup, server spawn,
 // port resolution, arg parsing, and the main() wiring function.
 // Bundle: entrypoints/process-entry.ts (lines 323033–323519)
@@ -7,17 +11,31 @@ import { openSync, closeSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
-import React from "react";
+import type { ComponentType } from "react";
+import {
+  REFERENCE_SEAT_FLAG,
+  isModelFreeFastPath,
+  resolveModelSeat,
+  selectedModelContract,
+} from "./model-seat.ts";
+import type { ModelSeatDecision, SelectedModelContract } from "./model-seat.ts";
+import {
+  loadOwnedDevelopmentIdentity,
+  loadOwnedModelIdentity,
+  verifyOwnedEndpointIdentity,
+} from "./owned-seat-loader.ts";
+import { ensureOwnedServer } from "./owned-server-supervisor.ts";
+import { handshakeConfiguredEmberd } from "../services/emberd-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
+import type { ModelCapabilityDeclaration } from "../model-config.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
 import type { Tool } from "../core/tool-interface.ts";
 import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
-import { App as InkApp } from "../ink/components.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -513,13 +531,19 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  --dump-system-prompt           Print the system prompt and exit\n` +
       `  --mcp                          Run as an MCP server over stdio\n` +
       `  --daemon-worker                Run as a background daemon worker\n` +
+      `  --reference-seat               Explicitly run a borrowed model as REFERENCE_ONLY\n` +
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
       `  new, list, reply, environment-runner, self-hosted-runner, gh doctor\n` +
       `\n` +
       `Environment:\n` +
-      `  EMBER_MODEL_URL   External model server URL; wins over models.json (skips the managed spawn)\n` +
+      `  EMBER_MODEL_URL       External endpoint; requires admitted owned identity match or explicit reference seat\n` +
+      `  EMBER_OWNED_RUNG_MANIFEST  Admitted run manifest (default: EMBER_HOME/owned/current.json)\n` +
+      `  EMBER_OWNED_DEVELOPMENT_MANIFEST  Exact non-claiming manifest (default: EMBER_HOME/owned/development.json)\n` +
+      `  EMBER_TRUSTED_VERIFIER_REGISTRY  Independent verifier registry for owned admission\n` +
+      `  EMBER_PYTHON          Python executable used for the checked-in admission resolver\n` +
+      `  EMBER_REFERENCE_SEAT  Set to 1 for explicit REFERENCE_ONLY automation\n` +
       `  EMBER_API_KEY     API key for the model endpoint (default: local)\n`,
     );
     process.exit(0);
@@ -642,7 +666,19 @@ export interface MainOptions {
   /** #159 boot matrix, "backend already running": probed BEFORE spawning. Defaults to a
    *  short real health probe; tests inject a fake to avoid real network I/O. */
   probeExisting?:  (port: number) => Promise<boolean>;
-  initFn?:         (opts: { serverUrl?: string | null; nCtx?: number; nonInteractive?: boolean }) => Promise<void>;
+  loadOwnedIdentityFn?: typeof loadOwnedModelIdentity;
+  loadOwnedDevelopmentIdentityFn?: typeof loadOwnedDevelopmentIdentity;
+  verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
+  ensureOwnedServerFn?: typeof ensureOwnedServer;
+  handshakeEmberdFn?: typeof handshakeConfiguredEmberd;
+  builtinToolsFn?: () => Promise<Tool[]>;
+  initFn?:         (opts: {
+    serverUrl?: string | null;
+    nCtx?: number;
+    nonInteractive?: boolean;
+    modelCapabilities?: ModelCapabilityDeclaration | null;
+    servedModelConfigSha256?: string | null;
+  }) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
     prompt:  string,
@@ -652,6 +688,10 @@ export interface MainOptions {
     deps:    LoopDeps,
   ) => Promise<{ events: unknown[]; exitCode: number }>;
   exitFn?: (code: number) => void;
+  /** Fix #51 repair: injection point for `selectedModelContract` so tests can
+   *  spy on production seat-construction (call-count assertions) and force
+   *  a missing-contract path without hand-building a ModelSeatDecision. */
+  selectedModelContractFn?: (decision: ModelSeatDecision) => SelectedModelContract | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -659,7 +699,7 @@ export interface MainOptions {
 // ---------------------------------------------------------------------------
 
 export async function main(opts: MainOptions = {}): Promise<void> {
-  const argv = opts.argv ?? process.argv;
+  const rawArgv = opts.argv ?? process.argv;
 
   // issue #196: captured BEFORE applyModelsJsonToEnv's ??= writes below may
   // populate EMBER_MODEL_URL from config -- otherwise the disclosure below
@@ -669,12 +709,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   applyAblationBaseline();
 
   const modelsCfg = await loadModelsJson();
-  if (modelsCfg) {
-    applyModelsJsonToEnv(modelsCfg);
+  const fastPathArgv = rawArgv.filter(
+    (argument, index) => index < 2 || argument !== REFERENCE_SEAT_FLAG,
+  );
+  if (isModelFreeFastPath(rawArgv)) {
+    const didFastPath = await dispatchFastPath(fastPathArgv);
+    if (didFastPath) return;
   }
-
-  const didFastPath = await dispatchFastPath(argv);
-  if (didFastPath) return;
 
   // issue #602: EMBER_GPU_FREE is read once here, ahead of the externalUrl fallback below,
   // so a persisted models.json endpoint can never silently defeat it when EMBER_MODEL_URL
@@ -682,30 +723,170 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // this must key off "is GPU_FREE set" alone -- an empty-string EMBER_MODEL_URL is not a
   // reachable signal from a Windows .bat launcher.
   const gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
+  const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
+  const seatInput = {
+    argv: rawArgv,
+    explicitModelUrl: envModelUrlBeforeConfigApply,
+    gpuFreeRequested,
+    referenceSeatEnv: process.env["EMBER_REFERENCE_SEAT"],
+    // Fix #51 P1 repair: carried through so a REFERENCE_ONLY decision's
+    // `referenceModelName` is populated BEFORE `selectedModelContract` ever
+    // reads it -- otherwise the contract always collapses to
+    // "unidentified-model" even when the caller knows the identity.
+    referenceModelName: process.env["EMBER_MODEL_NAME"] ?? modelsCfg?.modelName ?? modelsCfg?.model,
+  };
+  let seatDecision = resolveModelSeat(seatInput);
+  if (!seatDecision.allowed) {
+    try {
+      const repoRoot = resolveEmberRepoRootOrCwd({}, "[ember-cli]");
+      const configHome = getEmberConfigHomeDir();
+      const admittedIdentity = (opts.loadOwnedIdentityFn ?? loadOwnedModelIdentity)({
+        repoRoot,
+        configHome,
+        manifestPath: process.env["EMBER_OWNED_RUNG_MANIFEST"],
+        verifierRegistryPath: process.env["EMBER_TRUSTED_VERIFIER_REGISTRY"],
+        pythonExecutable: process.env["EMBER_PYTHON"],
+      });
+      const ownedIdentity = admittedIdentity ??
+        (opts.loadOwnedDevelopmentIdentityFn ?? loadOwnedDevelopmentIdentity)({
+          repoRoot,
+          configHome,
+          manifestPath: process.env["EMBER_OWNED_DEVELOPMENT_MANIFEST"],
+          pythonExecutable: process.env["EMBER_PYTHON"],
+        });
+      if (ownedIdentity) {
+        seatDecision = resolveModelSeat({ ...seatInput, ownedIdentity });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: " + message + "\n");
+      doExitMain(1);
+      return;
+    }
+  }
+  const argv = seatDecision.argv;
+  const seatBannerStream = argv.slice(2)[0] === "--mcp"
+    ? process.stderr
+    : process.stdout;
+
+  if (!seatDecision.allowed || seatDecision.seat === null) {
+    process.stderr.write("[ember] ERROR: " + seatDecision.error + "\n");
+    doExitMain(1);
+    return;
+  }
+
+  if (modelsCfg && seatDecision.seat === "REFERENCE_ONLY") {
+    applyModelsJsonToEnv(modelsCfg);
+  }
+
+  process.env["EMBER_MODEL_SEAT"] = seatDecision.seat;
+  // Fix #51 P1 repair (PR #948): the seat-authorized identity + capability
+  // contract is derived exactly ONCE per seat construction, here -- never
+  // re-derived ad-hoc per branch below. `EMBER_MODEL_NAME` for a seat that
+  // is supposed to carry a real model identity (REFERENCE_ONLY, OWNED_*)
+  // comes ONLY from this contract; a missing contract for those seats is a
+  // bug and fails loudly rather than silently falling back to a raw name.
+  const contractFn = opts.selectedModelContractFn ?? selectedModelContract;
+  const modelContract = contractFn(seatDecision);
+  if (seatDecision.seat === "REFERENCE_ONLY") {
+    if (!modelContract) {
+      process.stderr.write(
+        "[ember] ERROR: model seat construction produced no contract for a REFERENCE_ONLY seat\n",
+      );
+      doExitMain(1);
+      return;
+    }
+    process.env["EMBER_MODEL_NAME"] = modelContract.modelName;
+    seatBannerStream.write(
+      "[ember] model seat: REFERENCE_ONLY (" +
+        seatDecision.source +
+        "); owned completion disabled\n",
+    );
+  } else if (seatDecision.ownedIdentity) {
+    const ownedIdentity = seatDecision.ownedIdentity;
+    if (!modelContract) {
+      process.stderr.write(
+        "[ember] ERROR: model seat construction produced no contract for an owned identity\n",
+      );
+      doExitMain(1);
+      return;
+    }
+    process.env["EMBER_MODEL_URL"] = ownedIdentity.endpointUrl;
+    process.env["EMBER_MODEL_NAME"] = modelContract.modelName;
+    if (seatDecision.seat === "OWNED_DEVELOPMENT") {
+      seatBannerStream.write(
+        "[ember] model seat: OWNED_DEVELOPMENT (checkpoint " +
+          ownedIdentity.checkpointSha256.slice(0, 12) + "; " +
+          (ownedIdentity.tokensSeen ?? 0).toLocaleString("en-US") +
+          " training tokens; NON_ADMISSIBLE)\n",
+      );
+    } else {
+      seatBannerStream.write(
+        "[ember] model seat: OWNED_ADMITTED (checkpoint " +
+          ownedIdentity.checkpointSha256.slice(0, 12) +
+          ")\n",
+      );
+    }
+  } else {
+    process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
+    seatBannerStream.write(
+      "[ember] model seat: OFFLINE (GPU-free observation; no model identity)\n",
+    );
+  }
+
+  const didSeatGatedFastPath = await dispatchFastPath(argv);
+  if (didSeatGatedFastPath) return;
+
+  if (seatDecision.ownedIdentity) {
+    try {
+      await (opts.handshakeEmberdFn ?? handshakeConfiguredEmberd)();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: emberd handshake failed (" + message + ")\n");
+      doExitMain(1);
+      return;
+    }
+    try {
+      const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
+      const ensure = opts.ensureOwnedServerFn ?? ((identity) =>
+        ensureOwnedServer(identity, { verifyEndpoint }));
+      await ensure(seatDecision.ownedIdentity);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: could not establish bound owned server (" + message + ")\n");
+      doExitMain(1);
+      return;
+    }
+  }
 
   // issue #196 / #602: one disclosure line, always -- so a leaked/stale EMBER_MODEL_URL (or
   // a models.json "binary"/"endpoint" field silently discarding an explicit override, or a
   // persisted endpoint silently discarding EMBER_GPU_FREE=1) can never reroute the cockpit
   // with zero visible signal.
-  process.stdout.write(
-    describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply, gpuFreeRequested).text + "\n",
-  );
+  if (seatDecision.ownedIdentity) {
+    const authority = seatDecision.seat === "OWNED_DEVELOPMENT"
+      ? "exact NON_ADMISSIBLE development manifest"
+      : "admitted checkpoint manifest";
+    process.stdout.write(
+      "[ember] model endpoint: " + seatDecision.ownedIdentity.endpointUrl +
+        " -- bound by " + authority + "; supervised server started\n",
+    );
+  } else {
+    process.stdout.write(
+      describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply, gpuFreeRequested).text + "\n",
+    );
+  }
 
   // Determine whether we use an external server or spawn our own. issue #196:
   // an explicit EMBER_MODEL_URL always wins over models.json (env > config >
   // managed) -- envModelUrlBeforeConfigApply is the pre-config snapshot, so a
   // config-populated env value can never masquerade as an operator override.
-  const externalUrl = envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
+  const externalUrl = seatDecision.ownedIdentity?.endpointUrl ?? envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
 
   // string | null: null is the explicit GPU-free signal session-init.ts's `!serverUrl`
   // check relies on (issue #602) -- a real, typed null, not an unsafe cast.
   let serverUrl:    string | null;
   let detectedNCtx: number;
-
-  // #159 boot matrix: shared exit path for every managed-spawn failure cell below, so each
-  // produces one clean operator-facing message and a controlled exit -- never an uncaught
-  // exception surfacing as a raw stack trace via main.ts's last-resort handler.
-  const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
 
   // issue #602: GPU-free is a dedicated branch checked AHEAD of the env-or-config fallback
   // (`externalUrl`) below -- with EMBER_MODEL_URL unset, EMBER_GPU_FREE=1 wins outright, even
@@ -833,10 +1014,40 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     }
   }
 
+  if (seatDecision.ownedIdentity) {
+    try {
+      await (opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity)(
+        seatDecision.ownedIdentity,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write("[ember] ERROR: " + message + "\n");
+      doExitMain(1);
+      return;
+    }
+  }
+
   // Session init
+  // PR948 round-9 repair: thread the SAME seat-produced contract derived once above
+  // (~line 782) into InitOpts, so the REAL production callModel client (built inside
+  // session-init.ts's init()) evaluates the actual served capability declaration --
+  // previously modelContract was derived here and used only for the seat banner /
+  // EMBER_MODEL_NAME, never reaching init(), so every real jsonSchema request saw an
+  // undefined declaration and was always denied regardless of what the served model
+  // actually supported.
   const sessionMod = await import("./session-init.ts");
   const doInit     = opts.initFn ?? ((o) => sessionMod.init(o));
-  await doInit({ serverUrl, nCtx: detectedNCtx });
+  await doInit({
+    serverUrl,
+    nCtx: detectedNCtx,
+    modelCapabilities: modelContract
+      ? {
+          modelConfigSha256: modelContract.modelConfigSha256,
+          structuredOutputs: modelContract.structuredOutputs,
+        }
+      : null,
+    servedModelConfigSha256: modelContract?.modelConfigSha256 ?? null,
+  });
 
   // Headless path (-p / --print)
   const headlessSpec = parseHeadlessPrint(argv);
@@ -857,12 +1068,15 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       ? opts.getLoopDepsFn()
       : sessionMod.getLoopDeps();
 
-    const headlessOpts: HeadlessReplOptions = { maxTurns: 50 };
+    const headlessOpts: HeadlessReplOptions = {
+      maxTurns: 50,
+      userSpecifiedModel: process.env["EMBER_MODEL_NAME"],
+    };
 
-    // as unknown as Tool[]: BUILTIN_TOOLS satisfies the Tool interface at runtime
-    const btMod = await import("../tools/builtin-tools.ts");
-    const tools  = (btMod as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
-
+    // Keep injected and default headless execution on the same structured-tool contract.
+    const tools = opts.builtinToolsFn
+      ? await opts.builtinToolsFn()
+      : (await import("../tools/builtin-tools.ts") as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
     let exitCode: number;
     if (opts.headlessRunner) {
       const result = await opts.headlessRunner(prompt, io, tools, headlessOpts, deps);
@@ -878,8 +1092,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     return;
   }
 
-  // Interactive TUI path
-  const frontendShell = await import("../core/frontend-shell.ts");
+  // Interactive TUI path. React and Ink are intentionally loaded only here so
+  // headless owned-seat startup remains executable from a clean source checkout.
+  const [{ default: React }, { App: InkApp }, frontendShell] = await Promise.all([
+    import("react"),
+    import("../ink/components.ts"),
+    import("../core/frontend-shell.ts"),
+  ]);
   const root          = frontendShell.createRoot();
 
   let resolveExit!: () => void;
@@ -933,7 +1152,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
           InkApp,
           null,
           React.createElement(
-            REPLComponent as React.ComponentType<Record<string, unknown>>,
+            REPLComponent as ComponentType<Record<string, unknown>>,
             {
               config: (props as Record<string, unknown>)["config"],
               cwd:    (props as Record<string, unknown>)["cwd"],

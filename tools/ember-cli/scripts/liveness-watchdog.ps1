@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 #requires -Version 5.1
 <#
 .SYNOPSIS
@@ -87,6 +90,110 @@ param(
     [switch]$WhatIf = $false
 )
 
+# Issue #666 / PR954 round 2: if this script's checkout is itself a git WORKTREE (`.git`
+# is a FILE with a `gitdir: <main>/.git/worktrees/<name>` pointer), state paths derived
+# from it would diverge from the main-tree paths the cockpit writer resolves to.
+# Canonicalize to the main checkout so writer and watchdog provably bind the SAME
+# heartbeat file.
+#
+# Strict contract (round 2 repair of the reviewer's reject, same contract as
+# repo-root.ts's canonicalizeThroughWorktree/CanonicalRootError): a marker-valid
+# standalone root with NO `.git` at all is accepted as-is (git-less deployment / plain
+# copy -- the only case Test-Path's Leaf check returns false without a validated `.git`
+# FILE also covers "`.git` is a directory", i.e. an ordinary main checkout, which is
+# likewise returned unchanged). Every OTHER shape that fails to fully resolve to a
+# marker-valid main checkout -- an unreadable `.git` FILE, one whose content doesn't
+# match `gitdir:` at all, one whose gitdir doesn't match the
+# `<main>/.git/worktrees/<name>` shape (e.g. a submodule), or a worktree pointer whose
+# resolved main checkout fails the marker check -- THROWS. The old fallback-to-$Root
+# cases for the malformed/unreadable shapes are REMOVED: this function must never
+# silently return an unverified root, because that root feeds directly into
+# $HeartbeatPath below and a wrong root here means the watchdog polls a file nobody
+# writes.
+function Get-SingleGitdirRecord {
+    <#
+    .SYNOPSIS
+    PR954 round 3: parses a .git FILE's raw content as EXACTLY ONE `gitdir: <path>` record,
+    optionally followed by a single trailing newline (`\n` or `\r\n`). Returns the captured
+    path, or $null if the content is not exactly one such record -- e.g. a junk line
+    before/after the record, a second record, or any other embedded newline. Same contract
+    as repo-root.ts's parseSingleGitdirRecord: round 2's `(?m)^gitdir:\s*(.+?)\s*$` used
+    the multiline flag, so `^`/`$` matched at ANY line boundary and a shape like
+    "junk`ngitdir: valid`n" silently validated against the junk-prefixed line -- exactly
+    the malformed shape this resolver must reject, not paper over.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Raw)
+    $content = $Raw
+    if ($content.EndsWith("`r`n")) { $content = $content.Substring(0, $content.Length - 2) }
+    elseif ($content.EndsWith("`n")) { $content = $content.Substring(0, $content.Length - 1) }
+    if ($content.Contains("`n")) { return $null }
+    $m = [regex]::Match($content, '^gitdir:\s*(.+?)\s*$')
+    if (-not $m.Success) { return $null }
+    return $m.Groups[1].Value
+}
+
+function Get-DotGitItemState {
+    <#
+    .SYNOPSIS
+    PR954 round 4 repair: classifies $Path strictly under TERMINATING-error semantics via
+    Get-Item, never Test-Path. `Test-Path -PathType Leaf` swallows access errors internally
+    and returns $false on anything it can't classify (permission-denied, locked, or
+    otherwise unclassifiable) -- Resolve-CanonicalRepoRoot then read that $false as
+    "definitely absent" and fell open to the worktree-local heartbeat path, exactly the
+    silent-wrong-root failure issue #666 exists to kill. This classifier returns EXACTLY
+    'Absent' (a genuine ItemNotFoundException) or 'Directory'/'File' (Get-Item succeeded);
+    any OTHER failure -- access denied, locked, or any unclassifiable stat error -- throws,
+    same fail-closed contract as the unreadable-content path below.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        return 'Absent'
+    } catch {
+        throw "could not classify $Path (permission-denied, locked, or otherwise unclassifiable -- neither confirmed absent nor confirmed present): $($_.Exception.Message). Refusing to guess whether this is a worktree gitdir pointer file (issue #666 strict resolver, PR954 round 4)."
+    }
+    if ($item.PSIsContainer) { return 'Directory' }
+    return 'File'
+}
+
+function Resolve-CanonicalRepoRoot {
+    param([Parameter(Mandatory)][string]$Root)
+    $dotGit = Join-Path $Root '.git'
+    $dotGitState = Get-DotGitItemState -Path $dotGit
+    if ($dotGitState -eq 'Absent') { return $Root } # no .git at all -- standalone/git-less deployment.
+    if ($dotGitState -eq 'Directory') { return $Root } # main checkout.
+
+    try {
+        $raw = Get-Content -Path $dotGit -Raw -ErrorAction Stop
+    } catch {
+        throw "repo root $Root has a .git file at $dotGit that could not be read: $($_.Exception.Message) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+
+    $gitdir = Get-SingleGitdirRecord -Raw $raw
+    if ($null -eq $gitdir) {
+        throw "repo root $Root has a .git file at $dotGit that does not contain exactly one gitdir: record (malformed, junk-prefixed, multi-line, or otherwise unsupported .git file shape) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    if (-not [System.IO.Path]::IsPathRooted($gitdir)) { $gitdir = Join-Path $Root $gitdir }
+    $resolvedGitdir = [System.IO.Path]::GetFullPath($gitdir)
+    $wt = [regex]::Match($resolvedGitdir, '^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$')
+    if (-not $wt.Success) {
+        throw "repo root $Root's .git file points to $resolvedGitdir, which is not a <main>/.git/worktrees/<name> path (unsupported gitdir shape, e.g. a submodule) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    # PR954 round 3: a dangling gitdir pointer (target directory absent, or present but not
+    # a directory) must reject -- unverifiable is the same failure class as unreadable or
+    # malformed.
+    if (-not (Test-Path $resolvedGitdir -PathType Container)) {
+        throw "repo root $Root's .git file points to $resolvedGitdir, which does not exist as a directory (dangling worktree gitdir pointer) -- refusing to poll a worktree-scoped heartbeat path with an unverified root (issue #666)."
+    }
+    $mainRoot = $wt.Groups[1].Value
+    if ((Test-Path (Join-Path $mainRoot 'GOAL.md')) -and (Test-Path (Join-Path $mainRoot 'tools\ember-cli'))) {
+        return $mainRoot
+    }
+    throw "repo root $Root is a git worktree of $mainRoot, but that main checkout does not validate as the ember repo root (issue #666) -- refusing to poll a worktree-scoped heartbeat path."
+}
+$RepoRoot = Resolve-CanonicalRepoRoot -Root $RepoRoot
+
 $StateDir          = Join-Path $RepoRoot 'tools\ember-cli\state'
 $HeartbeatPath     = Join-Path $StateDir 'cockpit-heartbeat.json'
 $MarkerPath        = Join-Path $StateDir 'planned-outage.json'
@@ -115,14 +222,82 @@ function Write-RestartLogRow {
     ($Row | ConvertTo-Json -Compress) | Add-Content -Path $Path -Encoding utf8
 }
 
-function Get-DefaultWatchdogState {
-    [PSCustomObject]@{
-        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }
-        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 }
-        freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
+function Get-StandDownDecisionKey {
+    param([Parameter(Mandatory)]$Marker)
+    $canonical = [ordered]@{
+        target = [string]$Marker.target
+        owner = [string]$Marker.owner
+        reason = [string]$Marker.reason
+        started = [string]$Marker.started
+        expires = [string]$Marker.expires
+        kill_receipt_ref = [string]$Marker.kill_receipt_ref
+    }
+    $json = $canonical | ConvertTo-Json -Compress
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return (([BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($json)))) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
     }
 }
 
+function Write-StandDownDecision {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][hashtable]$Row,
+        [Parameter(Mandatory)]$TargetState,
+        [Parameter(Mandatory)][string]$DecisionKey
+    )
+    if ($TargetState.standdownDecisionKey -eq $DecisionKey) { return $false }
+    Write-RestartLogRow -Path $Path -Row $Row
+    $TargetState.standdownDecisionKey = $DecisionKey
+    return $true
+}
+function Get-DefaultWatchdogState {
+    [PSCustomObject]@{
+        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; standdownDecisionKey = $null }
+        server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; lastHealthAt = $null; lastHealthyAt = $null; lastHealthCheckAt = $null; standdownDecisionKey = $null }
+        freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
+    }
+}
+function Normalize-WatchdogBackoffState {
+    param($TargetState)
+    if ($null -eq $TargetState) { return }
+    $level = 0
+    $levelValid = $true
+    if ($TargetState.PSObject.Properties.Name -contains 'backoffLevel') {
+        try {
+            $parsedLevel = 0L
+            if (-not [long]::TryParse([string]$TargetState.backoffLevel, [System.Globalization.NumberStyles]::Integer, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedLevel) -or $parsedLevel -lt 0 -or $parsedLevel -gt [int64][int]::MaxValue) {
+                $levelValid = $false
+            } else {
+                $level = [int]$parsedLevel
+            }
+        } catch { $levelValid = $false }
+    }
+    $until = $null
+    $hasUntil = $TargetState.PSObject.Properties.Name -contains 'backoffUntil' -and -not [string]::IsNullOrWhiteSpace([string]$TargetState.backoffUntil)
+    $untilValid = $true
+    if ($hasUntil) {
+        try {
+            $parsedUntil = [datetime]::MinValue
+            if (-not [datetime]::TryParse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal, [ref]$parsedUntil)) {
+                $untilValid = $false
+            } else {
+                $until = $parsedUntil
+            }
+        } catch { $untilValid = $false }
+    }
+    if (-not $levelValid -or -not $untilValid) {
+        $level = 0
+        $until = $null
+        $hasUntil = $false
+    }
+    $TargetState.backoffLevel = $level
+    $TargetState.backoffUntil = if ($until) { $until.ToString('o') } else { $null }
+    $TargetState.backoffState = if ($until) { if ($level -gt 1) { 'escalated' } else { 'active' } } else { 'clear' }
+}
 function Read-WatchdogState {
     <#
     .SYNOPSIS
@@ -137,9 +312,30 @@ function Read-WatchdogState {
         $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
         foreach ($t in 'cockpit', 'server') {
             if (-not ($parsed.PSObject.Properties.Name -contains $t)) {
-                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; consecutiveFailures = 0 })
+                $parsed | Add-Member -NotePropertyName $t -NotePropertyValue ([PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; standdownDecisionKey = $null })
+            }
+            if (-not ($parsed.$t.PSObject.Properties.Name -contains 'backoffLevel')) {
+                $parsed.$t | Add-Member -NotePropertyName 'backoffLevel' -NotePropertyValue 0
+            }
+            if (-not ($parsed.$t.PSObject.Properties.Name -contains 'backoffState')) {
+                $parsed.$t | Add-Member -NotePropertyName 'backoffState' -NotePropertyValue $(if ($parsed.$t.backoffUntil) { 'active' } else { 'clear' })
+            }
+            if (-not ($parsed.$t.PSObject.Properties.Name -contains 'standdownDecisionKey')) {
+                $parsed.$t | Add-Member -NotePropertyName 'standdownDecisionKey' -NotePropertyValue $null
             }
         }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthAt')) {
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthAt' -NotePropertyValue $null
+        }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthyAt')) {
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthyAt' -NotePropertyValue $null
+        }
+        if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthCheckAt')) {
+            $legacyHealthAt = $parsed.server.lastHealthAt
+            $parsed.server | Add-Member -NotePropertyName 'lastHealthCheckAt' -NotePropertyValue $legacyHealthAt
+        }
+        Normalize-WatchdogBackoffState -TargetState $parsed.cockpit
+        Normalize-WatchdogBackoffState -TargetState $parsed.server
         if (-not ($parsed.PSObject.Properties.Name -contains 'freshness')) {
             $parsed | Add-Member -NotePropertyName 'freshness' -NotePropertyValue ([PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null })
         }
@@ -160,6 +356,17 @@ function Save-WatchdogState {
 # ---------------------------------------------------------------------------------------
 # Frozen planned-outage marker contract (issue #464 comment 4918207339)
 # ---------------------------------------------------------------------------------------
+
+function Convert-Iso8601Z {
+    param([Parameter(Mandatory)][string]$Value)
+    $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal
+    foreach ($format in @("yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:ss.f'Z'", "yyyy-MM-dd'T'HH:mm:ss.ff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fff'Z'", "yyyy-MM-dd'T'HH:mm:ss.ffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'")) {
+        try {
+            return [datetimeoffset]::ParseExact($Value, $format, [System.Globalization.CultureInfo]::InvariantCulture, $styles)
+        } catch { }
+    }
+    return $null
+}
 
 function Get-PlannedOutageMarker {
     <#
@@ -183,11 +390,8 @@ function Get-PlannedOutageMarker {
         if (-not $prop -or [string]::IsNullOrWhiteSpace([string]$prop.Value)) { return $null }
     }
     if ($m.target -notin @('server', 'cockpit', 'both')) { return $null }
-    try {
-        [void][datetime]::Parse($m.expires, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
-    } catch {
-        return $null
-    }
+    if ($null -eq (Convert-Iso8601Z -Value ([string]$m.started))) { return $null }
+    if ($null -eq (Convert-Iso8601Z -Value ([string]$m.expires))) { return $null }
     return $m
 }
 
@@ -246,35 +450,67 @@ function Get-HeartbeatPid {
 
 function Get-BackoffState {
     param($TargetState, [Parameter(Mandatory)][datetime]$Now)
+    Normalize-WatchdogBackoffState -TargetState $TargetState
+    $level = [int]$TargetState.backoffLevel
     if ($TargetState.backoffUntil) {
-        $until = [datetime]::Parse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
-        if ($Now -lt $until) { return [PSCustomObject]@{ InBackoff = $true; Until = $until } }
+        $until = [datetime]::ParseExact([string]$TargetState.backoffUntil, 'o', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+        if ($Now -lt $until) {
+            $state = if ($level -gt 1) { 'escalated' } else { 'active' }
+            $TargetState.backoffState = $state
+            return [PSCustomObject]@{ InBackoff = $true; Until = $until; State = $state; Level = $level }
+        }
     }
-    return [PSCustomObject]@{ InBackoff = $false; Until = $null }
+    $TargetState.backoffState = 'clear'
+    return [PSCustomObject]@{ InBackoff = $false; Until = $null; State = 'clear'; Level = $level }
 }
-
 function Add-DeathRecord {
     <#
     .SYNOPSIS
-    Appends $Now to a target's death-timestamp list (pruned to the trailing
-    $WindowMinutes), and trips backoffUntil = Now + $BackoffMinutes the instant the
-    count reaches $Threshold within the window -- a crashloop must surface as a visible
-    failure, not a silent restart storm. Returns the updated sub-state plus whether this
-    death just tripped the cooldown, so the caller can log a distinct 'crashloop-backoff'
-    row.
+    Appends a death timestamp and applies exponential crashloop backoff after each
+    threshold crossing. A quiet trailing window after the previous cooldown resets
+    escalation to level one.
     #>
     param($TargetState, [Parameter(Mandatory)][datetime]$Now, [int]$WindowMinutes = 10, [int]$Threshold = 3, [int]$BackoffMinutes = 10)
     $windowStart = $Now.AddMinutes(-$WindowMinutes)
     $existing = @($TargetState.deaths | Where-Object {
         try { ([datetime]::Parse([string]$_, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)) -ge $windowStart } catch { $false }
     })
+    $previousLevel = if ($TargetState.PSObject.Properties.Name -contains 'backoffLevel') { [int]$TargetState.backoffLevel } else { 0 }
+    $previousUntil = $null
+    if ($TargetState.backoffUntil) {
+        try { $previousUntil = [datetime]::Parse([string]$TargetState.backoffUntil, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal) } catch { $previousUntil = $null }
+    }
+    if ($previousUntil -and $Now -ge $previousUntil.AddMinutes($WindowMinutes)) {
+        $previousLevel = 0
+        $TargetState.backoffLevel = 0
+    }
     $updated = @($existing) + $Now.ToString('o')
     $tripped = $false
     if ($updated.Count -ge $Threshold) {
-        $TargetState.backoffUntil = $Now.AddMinutes($BackoffMinutes).ToString('o')
+        # Keep both the level and DateTime arithmetic inside Int32-safe minutes.
+        # Saturate at the largest representable duration instead of allowing a
+        # high-level crashloop to overflow the Int32 cast or AddMinutes call.
+        $maxMinutes = [int64][int]::MaxValue
+        $baseMinutes = [int64]$BackoffMinutes
+        if ($baseMinutes -lt 1) { $baseMinutes = 1 }
+        if ($baseMinutes -gt $maxMinutes) { $baseMinutes = $maxMinutes }
+        $desiredLevel = [int64]$previousLevel + 1
+        if ($desiredLevel -lt 1) { $desiredLevel = 1 }
+        $actualLevel = 1
+        $durationMinutes = $baseMinutes
+        while ($actualLevel -lt $desiredLevel -and $durationMinutes -le [int64]($maxMinutes / 2)) {
+            $durationMinutes *= 2
+            $actualLevel++
+        }
+        $TargetState.backoffLevel = [int]$actualLevel
+        $TargetState.backoffState = if ($actualLevel -gt 1) { 'escalated' } else { 'active' }
+        $TargetState.backoffUntil = $Now.AddMinutes($durationMinutes).ToString('o')
+        $TargetState.deaths = @()
         $tripped = $true
+    } else {
+        $TargetState.deaths = $updated
+        $TargetState.backoffState = 'clear'
     }
-    $TargetState.deaths = $updated
     return [PSCustomObject]@{ State = $TargetState; Tripped = $tripped; DeathsInWindow = $updated.Count }
 }
 
@@ -319,7 +555,16 @@ function Invoke-CockpitWatchdogTick {
     )
     $marker = Get-PlannedOutageMarker -Path $MarkerPath
     $coverage = Test-MarkerCoversTarget -Marker $marker -Target 'cockpit' -Now $Now
+    if (-not $coverage.StandDown) { $State.cockpit.standdownDecisionKey = $null }
     if ($coverage.StandDown) {
+        $standdownBackoff = Get-BackoffState -TargetState $State.cockpit -Now $Now
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        Write-StandDownDecision -Path $RestartLogPath -TargetState $State.cockpit -DecisionKey $decisionKey -Row @{
+            ts = $Now.ToString('o'); target = 'cockpit'; event = 'standdown'; decision = 'planned-outage'
+            owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
+            backoffUntil = $standdownBackoff.Until
+            backoffState = $standdownBackoff.State
+        } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
     if ($coverage.Expired) {
@@ -345,16 +590,17 @@ function Invoke-CockpitWatchdogTick {
 
     $deathRecord = Add-DeathRecord -TargetState $State.cockpit -Now $Now -WindowMinutes $DeathWindowMinutes -Threshold $DeathThreshold -BackoffMinutes $BackoffMinutes
     $State.cockpit = $deathRecord.State
+    $backoffNow = Get-BackoffState -TargetState $State.cockpit -Now $Now
 
     Write-RestartLogRow -Path $RestartLogPath -Row @{
         ts = $Now.ToString('o'); target = 'cockpit'; event = 'relaunch'
         deadPid = $deadPid; ageSec = $age; relaunchPid = $launch.Pid
-        deathsInWindow = $deathRecord.DeathsInWindow
+        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
     }
     if ($deathRecord.Tripped) {
         Write-RestartLogRow -Path $RestartLogPath -Row @{
             ts = $Now.ToString('o'); target = 'cockpit'; event = 'crashloop-backoff'
-            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.cockpit.backoffUntil
+            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
         }
     }
 
@@ -446,7 +692,16 @@ function Invoke-ServerWatchdogTick {
     )
     $marker = Get-PlannedOutageMarker -Path $MarkerPath
     $coverage = Test-MarkerCoversTarget -Marker $marker -Target 'server' -Now $Now
+    if (-not $coverage.StandDown) { $State.server.standdownDecisionKey = $null }
     if ($coverage.StandDown) {
+        $standdownBackoff = Get-BackoffState -TargetState $State.server -Now $Now
+        $decisionKey = Get-StandDownDecisionKey -Marker $marker
+        Write-StandDownDecision -Path $RestartLogPath -TargetState $State.server -DecisionKey $decisionKey -Row @{
+            ts = $Now.ToString('o'); target = 'server'; event = 'standdown'; decision = 'planned-outage'
+            owner = $marker.owner; reason = $marker.reason; expires = $marker.expires
+            backoffUntil = $standdownBackoff.Until
+            backoffState = $standdownBackoff.State
+        } | Out-Null
         return [PSCustomObject]@{ Action = 'standdown'; Detail = "owner=$($marker.owner) expires=$($marker.expires)" }
     }
     if ($coverage.Expired) {
@@ -461,8 +716,19 @@ function Invoke-ServerWatchdogTick {
         return [PSCustomObject]@{ Action = 'backoff'; Detail = "until=$($backoff.Until.ToString('o'))" }
     }
 
+    $lastHealthyAt = $null
+    if ($State.server.lastHealthyAt) {
+        try {
+            $lastHealthyAt = [datetime]::Parse([string]$State.server.lastHealthyAt, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+        } catch {
+            $lastHealthyAt = $null
+        }
+    }
+    $healthAgeSec = if ($null -ne $lastHealthyAt) { [int][math]::Max(0, [math]::Round(($Now - $lastHealthyAt).TotalSeconds)) } else { $null }
     $healthy = Test-ServerHealth -Url $HealthUrl
+    $State.server.lastHealthCheckAt = $Now.ToString('o')
     if ($healthy) {
+        $State.server.lastHealthyAt = $Now.ToString('o')
         $State.server.consecutiveFailures = 0
         return [PSCustomObject]@{ Action = 'none'; Detail = 'healthy' }
     }
@@ -490,16 +756,17 @@ function Invoke-ServerWatchdogTick {
 
     $deathRecord = Add-DeathRecord -TargetState $State.server -Now $Now -WindowMinutes $DeathWindowMinutes -Threshold $DeathThreshold -BackoffMinutes $BackoffMinutes
     $State.server = $deathRecord.State
+    $backoffNow = Get-BackoffState -TargetState $State.server -Now $Now
 
     Write-RestartLogRow -Path $RestartLogPath -Row @{
         ts = $Now.ToString('o'); target = 'server'; event = 'relaunch'
-        deadPid = $(if ($proc) { [int]$proc.ProcessId } else { $null }); relaunchPid = $launch.Pid
-        deathsInWindow = $deathRecord.DeathsInWindow
+        deadPid = $(if ($proc) { [int]$proc.ProcessId } else { $null }); healthAgeSec = $healthAgeSec; relaunchPid = $launch.Pid
+        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
     }
     if ($deathRecord.Tripped) {
         Write-RestartLogRow -Path $RestartLogPath -Row @{
             ts = $Now.ToString('o'); target = 'server'; event = 'crashloop-backoff'
-            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $State.server.backoffUntil
+            deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
         }
     }
 
@@ -768,6 +1035,14 @@ function Start-LivenessWatchdogLoop {
     $dir = Split-Path -Parent $PidFilePath
     if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Set-Content -Path $PidFilePath -Value $PID -Encoding utf8
+
+    # #666 startup path-assert twin of the writer's log line: name the exact heartbeat
+    # file this watchdog polls, in both the console and the restart-log ledger.
+    Write-Host "[liveness-watchdog] polling heartbeat at $HeartbeatPath (repo root $RepoRoot)"
+    Write-RestartLogRow -Path $RestartLogPath -Row @{
+        ts = [datetime]::UtcNow.ToString('o'); target = 'cockpit'; event = 'watchdog-start'
+        heartbeatPath = $HeartbeatPath; repoRoot = $RepoRoot
+    }
 
     $state = Read-WatchdogState -Path $WatchdogStatePath
     $nextCockpitCheck = [datetime]::UtcNow
