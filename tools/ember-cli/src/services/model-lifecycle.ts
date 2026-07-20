@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/model-lifecycle.ts — managed model process lifecycle (load/unload toggle).
 //
 // Owns the handle for a local-spawned model process so it can be unloaded
@@ -23,6 +27,14 @@ export interface ModelLifecycleDeps {
   writeKillReceipt: (rec: { pid: number; match_rule: string }) => void;
   isExternal: () => boolean;
   now: () => string;
+  /**
+   * Path to the active checkpoint's identity manifest (cond3 inc2a). Threaded
+   * through so /model status|load can resolve+validate checkpoint identity
+   * via _resolveModelIdentity() before rendering/spawning -- fail-closed when
+   * absent or unresolvable (never a silent "no identity" render for a
+   * checkpoint that IS supposed to carry one).
+   */
+  manifestPath?: string;
 }
 
 // ---------------------------------------------------------------------------
