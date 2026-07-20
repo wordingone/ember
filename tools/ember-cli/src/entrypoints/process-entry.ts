@@ -1009,7 +1009,15 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       }
 
       detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
-      registerManagedModel({ pid: serverHandle.process.pid! });
+      // issue #881: preserve the REAL owned server handle through registration — release()
+      // forwards to the actual ServerHandle.kill() (child-only, SIGTERM to the exact spawned
+      // process; see makeServerHandle above), never a bare pid the unload path has to guess
+      // how to kill. Registering only {pid} discarded this handle and made /model unload a
+      // no-op kill.
+      registerManagedModel({
+        pid: serverHandle.process.pid!,
+        release: () => serverHandle.kill(),
+      });
       void serverHandle; // handle held in closure via cleanup hooks
     }
   }

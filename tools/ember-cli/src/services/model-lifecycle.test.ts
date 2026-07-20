@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/model-lifecycle.test.ts — unit tests for managed model lifecycle.
 // All effects injected; CPU-only, no GPU/process required.
 
@@ -358,6 +362,147 @@ describe("model-lifecycle", () => {
       await unloadModel(deps);
 
       expect(killPidCalled).toBe(false);
+    });
+  });
+
+  // =========================================================================
+  // issue #881: real child-only release wired through registerManagedModel —
+  // unloadModel must call the REAL owned release(), not a no-op / not deps.killPid
+  // when a real handle was registered.
+  // =========================================================================
+  describe("issue #881: registered release() is the real child-only release path", () => {
+    it("calls the registered handle's release(), never deps.killPid, when a real handle was registered", async () => {
+      let released = false;
+      let killPidCalled = false;
+
+      registerManagedModel({
+        pid: 7001,
+        release: () => {
+          released = true;
+        },
+      });
+
+      const deps: ModelLifecycleDeps = {
+        spawnModel: () => ({ pid: 0 }),
+        killPid: () => {
+          killPidCalled = true;
+        },
+        waitReady: async () => {},
+        writeKillReceipt: async () => {},
+        isExternal: () => false,
+        now: () => "2026-07-19T00:00:00Z",
+      };
+
+      const status = await unloadModel(deps);
+
+      expect(released).toBe(true);
+      expect(killPidCalled).toBe(false);
+      expect(status).toMatch(/model unloaded \(pid 7001 freed\)/);
+      expect(getModelState()).toBe("unloaded");
+    });
+
+    it("falls back to deps.killPid when the registered handle carried no release()", async () => {
+      let killedPid: number | null = null;
+
+      registerManagedModel({ pid: 7002 }); // no release — legacy/test seam
+
+      const deps: ModelLifecycleDeps = {
+        spawnModel: () => ({ pid: 0 }),
+        killPid: (pid) => {
+          killedPid = pid;
+        },
+        waitReady: async () => {},
+        writeKillReceipt: async () => {},
+        isExternal: () => false,
+        now: () => "2026-07-19T00:00:00Z",
+      };
+
+      await unloadModel(deps);
+
+      expect(killedPid).toBe(7002);
+    });
+  });
+
+  // =========================================================================
+  // issue #881: durable receipt-first — writeKillReceipt is AWAITED and must
+  // land BEFORE release(); a rejection aborts the unload (fail-closed), never
+  // releasing the child with no durable receipt.
+  // =========================================================================
+  describe("issue #881: durable receipt-before-release, fail-closed on receipt failure", () => {
+    it("awaits an async writeKillReceipt to durably complete before calling release()", async () => {
+      const callOrder: string[] = [];
+      let receiptResolve!: () => void;
+      const receiptPromise = new Promise<void>((r) => { receiptResolve = r; });
+
+      registerManagedModel({
+        pid: 7003,
+        release: () => callOrder.push("release"),
+      });
+
+      const deps: ModelLifecycleDeps = {
+        spawnModel: () => ({ pid: 0 }),
+        killPid: () => callOrder.push("killPid"),
+        waitReady: async () => {},
+        writeKillReceipt: async (rec) => {
+          callOrder.push(`writeKillReceipt-start(${rec.pid})`);
+          await receiptPromise;
+          callOrder.push(`writeKillReceipt-landed(${rec.pid})`);
+        },
+        isExternal: () => false,
+        now: () => "2026-07-19T00:00:00Z",
+      };
+
+      const unloadPromise = unloadModel(deps);
+
+      // release() must not have fired while the receipt write is still in flight.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(callOrder).toEqual(["writeKillReceipt-start(7003)"]);
+
+      receiptResolve();
+      await unloadPromise;
+
+      expect(callOrder).toEqual([
+        "writeKillReceipt-start(7003)",
+        "writeKillReceipt-landed(7003)",
+        "release",
+      ]);
+    });
+
+    it("fail-closed: a rejected writeKillReceipt aborts the unload — release() never called, state stays 'loaded'", async () => {
+      let released = false;
+
+      registerManagedModel({
+        pid: 7004,
+        release: () => {
+          released = true;
+        },
+      });
+
+      const deps: ModelLifecycleDeps = {
+        spawnModel: () => ({ pid: 0 }),
+        killPid: () => {},
+        waitReady: async () => {},
+        writeKillReceipt: async () => {
+          throw new Error("ENOSPC: disk full");
+        },
+        isExternal: () => false,
+        now: () => "2026-07-19T00:00:00Z",
+      };
+
+      let caught: Error | null = null;
+      try {
+        await unloadModel(deps);
+      } catch (err) {
+        caught = err as Error;
+      }
+
+      expect(caught).not.toBeNull();
+      expect(caught!.message).toMatch(/ENOSPC/);
+      expect(released).toBe(false);
+      // Fail-closed: state is untouched, the model is still considered loaded/owned —
+      // an unload with no durable receipt never silently succeeds.
+      expect(getModelState()).toBe("loaded");
     });
   });
 
