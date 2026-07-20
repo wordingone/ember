@@ -2,11 +2,12 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
-import { createHash } from "crypto";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { createHash, randomBytes } from "crypto";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { spawnSync } from "child_process";
+
+import { emberScratchDir } from "../utils/ember-scratch.ts";
 
 import type {
   ModelConfigCapabilities,
@@ -244,7 +245,11 @@ export function captureDevelopmentResolver(
   if (resolverBytes === undefined) {
     throw new Error("trusted runtime resolver was not captured");
   }
-  const snapshotRoot = mkdtempSync(join(tmpdir(), "ember-development-runtime-"));
+  const snapshotRoot = join(
+    emberScratchDir("development-runtime"),
+    `${process.pid}-${randomBytes(6).toString("hex")}`,
+  );
+  mkdirSync(snapshotRoot, { recursive: true });
   for (const [relativePath, payload] of capturedFiles) {
     const snapshotFile = join(snapshotRoot, relativePath);
     mkdirSync(dirname(snapshotFile), { recursive: true });

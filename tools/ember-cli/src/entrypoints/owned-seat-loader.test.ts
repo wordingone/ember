@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 
@@ -13,6 +13,7 @@ import {
   loadOwnedModelIdentity,
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
+import { emberScratchDir } from "../utils/ember-scratch.ts";
 
 const CHECKPOINT = "d".repeat(64);
 
@@ -97,6 +98,106 @@ describe("owned seat loader", () => {
       )).toThrow("embedded Git commit");
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("snapshots the owned development runtime under EMBER_HOME regardless of %TEMP% casing/validity (NO-TEMP regression)", () => {
+    // Regression for the launch-blocker: the snapshot used to live at
+    // mkdtempSync(join(tmpdir(), ...)), i.e. inside the OS-managed system
+    // temp directory, whose casing on Windows does not match the real
+    // filesystem case and broke case-sensitive path comparisons. The fix
+    // routes the snapshot through
+    // emberScratchDir(), which never touches system temp at all. Prove that
+    // by pointing TEMP/TMP at a differently-cased, nonexistent path before
+    // exercising the loader — the snapshot must still land under EMBER_HOME.
+    const emberHome = join(process.cwd(), ".ember-home-owned-seat-loader-test");
+    const previousEmberHome = process.env.EMBER_HOME;
+    const previousTemp = process.env.TEMP;
+    const previousTmp = process.env.TMP;
+    rmSync(emberHome, { force: true, recursive: true });
+    process.env.EMBER_HOME = emberHome;
+    process.env.TEMP = "C:\\NONEXISTENT-BOGUS-TEMP-CASING-PROBE";
+    process.env.TMP = "C:\\NONEXISTENT-BOGUS-TEMP-CASING-PROBE";
+    const root = join(emberScratchDir("test-fixture-bundle"), "bundle");
+    mkdirSync(root, { recursive: true });
+    const sourceCommit = "a".repeat(40);
+    const trustedSources = [
+      "configs/ember-restart-3b.json",
+      "scripts/ember_restart/development_cli_seat.py",
+      "scripts/ember_restart/prediction_contract.py",
+      "scripts/ember_restart_eval_checkpoint_consumer.py",
+      "scripts/ember_restart_eval_raw_forward.py",
+      "tokenizer/tokenizer.json",
+      "tools/ember-restart-3b/batch.py",
+      "tools/ember-restart-3b/checkpoint_artifacts.py",
+      "tools/ember-restart-3b/infer.py",
+      "tools/ember-restart-3b/model.py",
+      "tools/ember-restart-3b/parameter_counter.py",
+      "tools/ember-restart-3b/serve_owned_openai.py",
+    ];
+    const runtimeFiles = [
+      ...trustedSources,
+      "parameter-evidence/parameter_counter.py",
+      "parameter-evidence/step2-realization-receipt.json",
+      "parameter-evidence/trusted-verifiers.json",
+    ];
+    try {
+      for (const relativePath of runtimeFiles) {
+        const path = join(root, relativePath);
+        mkdirSync(resolve(path, ".."), { recursive: true });
+        writeFileSync(path, relativePath === "scripts/ember_restart/development_cli_seat.py"
+          ? "# exact resolver\n"
+          : "exact:" + relativePath + "\n");
+      }
+      const files = Object.fromEntries(runtimeFiles.map((relativePath) => {
+        const payload = readFileSync(join(root, relativePath));
+        return [relativePath, {
+          bytes: payload.byteLength,
+          sha256: new Bun.CryptoHasher("sha256").update(payload).digest("hex"),
+        }];
+      }));
+      const index = {
+        schema_version: "ember-owned-runtime-bundle-v1",
+        source_commit: sourceCommit,
+        files,
+      };
+      const indexBytes = new TextEncoder().encode(JSON.stringify(index));
+      writeFileSync(join(root, "runtime-bundle-index.json"), indexBytes);
+      const manifest = {
+        runtime_bundle: {
+          index_path: "runtime-bundle-index.json",
+          sha256: new Bun.CryptoHasher("sha256").update(indexBytes).digest("hex"),
+        },
+      };
+      const manifestPath = join(root, "development.json");
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+      const readGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
+        readFileSync(join(root, relativePath));
+
+      const captured = captureDevelopmentResolver(manifestPath, root, sourceCommit, readGitBlob);
+      const canonicalEmberHome = realpathSync.native(emberHome);
+      expect(captured.resolverPath.startsWith(canonicalEmberHome)).toBe(true);
+      expect(captured.resolverPath.toLowerCase().includes("bogus")).toBe(false);
+      expect(existsSync(captured.resolverPath)).toBe(true);
+      captured.cleanup();
+      expect(existsSync(captured.resolverPath)).toBe(false);
+    } finally {
+      if (previousEmberHome === undefined) {
+        delete process.env.EMBER_HOME;
+      } else {
+        process.env.EMBER_HOME = previousEmberHome;
+      }
+      if (previousTemp === undefined) {
+        delete process.env.TEMP;
+      } else {
+        process.env.TEMP = previousTemp;
+      }
+      if (previousTmp === undefined) {
+        delete process.env.TMP;
+      } else {
+        process.env.TMP = previousTmp;
+      }
+      rmSync(emberHome, { force: true, recursive: true });
     }
   });
 
