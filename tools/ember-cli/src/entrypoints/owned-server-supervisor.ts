@@ -362,6 +362,18 @@ async function defaultWaitForDispatchReady(
   }
   throw new Error("daemon-dispatched owned server readiness timed out: " + lastError);
 }
+// cond3 inc2b: closes the manifest -> validation -> serve -> verify loop. The
+// launched process independently derives and validates its own served
+// identity from checkpoint-manifest.json before it ever answers a request
+// (see LoadedOwnedRuntime.from_paths and its pre-load validation receipt in
+// tools/ember-restart-3b/serve_owned_openai.py; contract documented in
+// scripts/ember_01_identity/README-model-command-identity.md). This
+// supervisor is the independent verifier on the OTHER end of that loop:
+// verifyEndpoint (verifyOwnedEndpointIdentity) re-fetches /v1/models after
+// spawn/dispatch and rejects any endpoint whose live seat/checkpoint/config/
+// tokenizer hashes do not match the identity this call was given -- so a
+// served process can never silently drift from the identity that launched
+// it.
 export async function ensureOwnedServer(
   identity: OwnedModelIdentity,
   deps: EnsureOwnedServerDeps = {},

@@ -220,6 +220,21 @@ def _emit_parent_watchdog_receipt(receipt: dict[str, object]) -> None:
     os.write(2, payload)
 
 
+def _emit_pre_load_validation_receipt(receipt: dict[str, object]) -> None:
+    """Write one structured pre-load identity-validation receipt to stderr.
+
+    cond3 inc2b: emitted the instant checkpoint identity is VALIDATED --
+    the moment the loaded checkpoint-manifest.json bytes have been hashed
+    and the central owned-seat resolver has bound that hash to an admitted
+    claim -- never merely claimed. This is audit-trail evidence distinct
+    from any resolver/admission receipt: it exists even when the resolver
+    output is itself trusted, so the exact instant of validation (not just
+    its outcome) is receipted before any state_dict load touches the model.
+    """
+    payload = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    os.write(2, payload)
+
+
 class _CallableParentProbe:
     def __init__(self, parent_pid: int, checker: Callable[[int], bool]) -> None:
         self.parent_pid = parent_pid
@@ -512,11 +527,37 @@ class LoadedOwnedRuntime:
         frozen_split: Path | None,
         trusted_verifier_registry: Path,
         device: str,
+        emit_validation_receipt: Callable[[dict[str, object]], None] = _emit_pre_load_validation_receipt,
     ) -> "LoadedOwnedRuntime":
+        """Load the serving runtime's identity-bound checkpoint (cond3 inc2b).
+
+        Identity-binding contract: the served checkpoint's identity claim
+        (its checkpoint_sha256) is DERIVED from `checkpoint-manifest.json`
+        bytes on disk and VALIDATED -- against the central owned-seat
+        resolver's admitted claim, and against the central run manifest's
+        pinned model-config/tokenizer hashes -- before any model bytes are
+        loaded via `load_checkpoint_artifacts`. `checkpoint-manifest.json`
+        is immutable at this point: it is read once, hashed, and every
+        downstream binding (admission, receipt, load) is checked against
+        that one read. If validation fails for any reason -- manifest
+        missing, manifest JSON corrupt, admission checkpoint hash mismatch,
+        model config or tokenizer hash mismatch -- this method raises and
+        the server refuses to load or serve; it never falls back to a
+        guessed or partially-validated identity. On success, a structured
+        pre-load validation receipt is emitted (see
+        `_emit_pre_load_validation_receipt`) recording the exact moment
+        identity was validated, distinct from the resolver's own admission
+        receipt.
+        """
         manifest_path = checkpoint / "checkpoint-manifest.json"
         manifest_bytes = manifest_path.read_bytes()
         checkpoint_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
-        manifest = json.loads(manifest_bytes)
+        try:
+            manifest = json.loads(manifest_bytes)
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"checkpoint manifest is not valid JSON: {manifest_path}") from exc
+        if not isinstance(manifest, dict):
+            raise ValueError(f"checkpoint manifest must be a JSON object: {manifest_path}")
         run_manifest_bytes = run_manifest.read_bytes()
         run_manifest_sha256 = hashlib.sha256(run_manifest_bytes).hexdigest()
         resolver_snapshot = _same_root_snapshot(run_manifest, run_manifest_bytes)
@@ -531,6 +572,15 @@ class LoadedOwnedRuntime:
             resolver_snapshot.unlink(missing_ok=True)
         if sha(run_manifest) != run_manifest_sha256:
             raise ValueError("central run manifest changed during owned-seat resolution")
+        emit_validation_receipt({
+            "schema_version": "ember-owned-pre-load-validation-receipt-v1",
+            "ts": time.time(),
+            "manifest_path": str(manifest_path),
+            "manifest_sha256": checkpoint_sha256,
+            "claimed_checkpoint_sha256": str(admission["checkpoint_sha256"]),
+            "actual_checkpoint_sha256": checkpoint_sha256,
+            "validation_status": "PASS",
+        })
         try:
             central_manifest = json.loads(run_manifest_bytes)
             config_record = central_manifest["architecture"]["model_config"]
@@ -569,6 +619,17 @@ class LoadedOwnedRuntime:
             checkpoint,
             {**manifest, "checkpoint_manifest_sha256": checkpoint_sha256},
         )
+        # Post-load identity assert (cond3 inc2b): the architecture ties
+        # lm_head.weight to token_embedding.weight at construction time
+        # (see UnifiedDecoder.__init__). A silent partial/misrouted load
+        # (e.g. a strict=False state_dict load that skips a tied parameter)
+        # would desynchronize this invariant without raising on its own --
+        # catch that here, fail closed, and never serve a checkpoint whose
+        # loaded weights diverge from the architecture's own identity.
+        if not torch.equal(model.lm_head.weight.detach(), model.token_embedding.weight.detach()):
+            raise RuntimeError(
+                "post-load identity assertion failed: lm_head weight is not tied to token embedding weight"
+            )
         identity = OwnedIdentity(
             checkpoint_sha256=checkpoint_sha256,
             model_config_sha256=model_config_sha256,
