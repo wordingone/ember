@@ -124,7 +124,7 @@ describe("model command", () => {
       expect(result?.message).toContain(FIXTURE_DISPOSITION);
     });
 
-    it("(b) /model status with missing/unresolvable manifest returns error with non-zero exit", async () => {
+    it("(b) /model status with missing/unresolvable manifest still reports state, but marks identity UNVERIFIED (never a false sha, never a hard error)", async () => {
       const cmd = createModelCommand({
         getModelState: () => "loaded",
         resolveModelIdentity: async () => null,
@@ -134,11 +134,14 @@ describe("model command", () => {
       const result = await cmd.execute("status", mockCtx);
 
       expect(result?.type).toBe("message");
-      expect(result?.exitCode).toBe(1);
-      expect(result?.message).toContain("error");
-      expect(result?.message).toContain("checkpoint identity validation failed");
-      // Never falls back to a bare, unverified rendering of state.
-      expect(result?.message).not.toContain("model: loaded");
+      // status is a read-only state query -- a missing manifest must NOT break it.
+      expect(result?.exitCode).toBeUndefined();
+      // Core job: report whether the model is loaded.
+      expect(result?.message).toContain("model: loaded");
+      // Fail-closed at the render level: explicit UNVERIFIED marker, never a
+      // guessed/bare sha presented as if validated.
+      expect(result?.message).toContain("UNVERIFIED");
+      expect(result?.message).not.toMatch(/identity: [0-9a-f]{64}/);
     });
 
     it("(c) /model load rejects (fail-closed, non-zero exit) when validation fails, never spawning", async () => {

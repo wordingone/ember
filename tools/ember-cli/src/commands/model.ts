@@ -224,19 +224,19 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
         const state = doGetModelState();
 
         // cond3 inc2a: checkpoint identity is SOURCED from a validated
-        // manifest only. Fail-closed -- a resolution failure never renders
-        // the model as identity-bearing; it refuses with a non-zero exit.
+        // manifest only. Fail-closed at the RENDER level -- status ALWAYS
+        // reports the model's runtime state (its core job: is the model
+        // loaded?), but it never renders a checkpoint identity it could not
+        // validate. When the manifest is absent/invalid/mismatched, the
+        // identity is shown as an explicit UNVERIFIED marker (never a bare
+        // or guessed sha), so the operator sees the truth rather than a
+        // false claim -- and a read-only status query is never broken by a
+        // missing manifest.
         const identity = await doResolveModelIdentity(manifestPath);
-        if (identity === null) {
-          return {
-            type: "message" as const,
-            message: "error: checkpoint identity validation failed",
-            exitCode: 1,
-          };
-        }
-
         const statusLine =
-          `model: ${state} — identity: ${identity.byte_sha256} (${identity.disposition})`;
+          identity === null
+            ? `model: ${state} — identity: UNVERIFIED (no validated manifest)`
+            : `model: ${state} — identity: ${identity.byte_sha256} (${identity.disposition})`;
         return {
           type: "message" as const,
           message: statusLine,
