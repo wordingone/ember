@@ -526,6 +526,7 @@ class LoadedOwnedRuntime:
         run_manifest: Path,
         frozen_split: Path | None,
         trusted_verifier_registry: Path,
+        expected_registry_root_sha256: str,
         device: str,
         emit_validation_receipt: Callable[[dict[str, object]], None] = _emit_pre_load_validation_receipt,
     ) -> "LoadedOwnedRuntime":
@@ -548,6 +549,15 @@ class LoadedOwnedRuntime:
         `_emit_pre_load_validation_receipt`) recording the exact moment
         identity was validated, distinct from the resolver's own admission
         receipt.
+
+        Registry trust-anchor (cond3 harden): the caller-supplied
+        `trusted_verifier_registry` file is hashed and checked against
+        `expected_registry_root_sha256` BEFORE it is trusted at all -- the
+        registry's own inner sha256 pins (see contract.py
+        `_load_trusted_verifiers`) only bind entries against hashes
+        declared inside the same file, which a forged, self-consistent
+        registry would trivially satisfy. Without this outer pin, the
+        registry file itself is the un-anchored trust root.
         """
         manifest_path = checkpoint / "checkpoint-manifest.json"
         manifest_bytes = manifest_path.read_bytes()
@@ -560,6 +570,22 @@ class LoadedOwnedRuntime:
             raise ValueError(f"checkpoint manifest must be a JSON object: {manifest_path}")
         run_manifest_bytes = run_manifest.read_bytes()
         run_manifest_sha256 = hashlib.sha256(run_manifest_bytes).hexdigest()
+        # Registry trust-anchor pin (cond3 harden): _load_trusted_verifiers
+        # (scripts/ember_restart/contract.py) pins the registry's INNER
+        # entries only against sha256 values declared inside that same
+        # registry file -- a self-consistent, attacker-authored registry
+        # would otherwise be trusted as-supplied. Hash the registry FILE
+        # itself and fail closed unless it matches the caller's pinned
+        # expected root hash, before the registry is ever handed to the
+        # central resolver subprocess.
+        registry_bytes = trusted_verifier_registry.read_bytes()
+        registry_root_sha256 = hashlib.sha256(registry_bytes).hexdigest()
+        if registry_root_sha256 != expected_registry_root_sha256:
+            raise ValueError(
+                "trusted verifier registry root hash does not match the pinned "
+                "expected-registry-root-sha256 -- refusing to trust an "
+                "unpinned or substituted registry file"
+            )
         resolver_snapshot = _same_root_snapshot(run_manifest, run_manifest_bytes)
         try:
             admission = resolve_central_owned_admission(
@@ -628,7 +654,9 @@ class LoadedOwnedRuntime:
         # loaded weights diverge from the architecture's own identity.
         if not torch.equal(model.lm_head.weight.detach(), model.token_embedding.weight.detach()):
             raise RuntimeError(
-                "post-load identity assertion failed: lm_head weight is not tied to token embedding weight"
+                "post-load value-equality assertion failed: lm_head weight values "
+                "do not match token embedding weight values (checked by value, not "
+                "storage identity -- a broken tie desynchronizes even the values)"
             )
         identity = OwnedIdentity(
             checkpoint_sha256=checkpoint_sha256,
@@ -727,6 +755,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-development-manifest-sha256")
     parser.add_argument("--expected-runtime-index-sha256")
     parser.add_argument("--trusted-verifier-registry", type=Path)
+    parser.add_argument("--expected-registry-root-sha256")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--mode", choices=("INTERACTIVE", "FROZEN_EVAL"), required=True)
     parser.add_argument("--parent-pid", type=int, required=True)
@@ -772,7 +801,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if args.trusted_verifier_registry is None:
             raise ValueError("admitted server requires trusted verifier registry")
-        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, device=args.device, frozen_split=frozen_split)
+        if not args.expected_registry_root_sha256:
+            raise ValueError("admitted server requires --expected-registry-root-sha256 to pin the trusted verifier registry file")
+        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, expected_registry_root_sha256=args.expected_registry_root_sha256, device=args.device, frozen_split=frozen_split)
     server = create_loopback_server(runtime, host=args.host, port=args.port, mode=args.mode)
     server.serve_forever()
     return 0
