@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // commands/model.ts — /model load|unload|status command for managed model lifecycle.
 // Allows the operator to free GPU VRAM by unloading the local model without closing the cockpit.
 
@@ -10,6 +14,112 @@ import {
 } from "../services/model-lifecycle.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { appendFile } from "fs/promises";
+import { existsSync } from "fs";
+import { spawnSync } from "child_process";
+import { dirname, join, resolve } from "path";
+import { getGitRepositoryRoot } from "../utils/git.ts";
+
+// ---------------------------------------------------------------------------
+// Checkpoint identity resolution (cond3 inc2a)
+// ---------------------------------------------------------------------------
+
+const SHA256_RE = /^[0-9a-f]{64}$/;
+
+/** Resolved, VALIDATED checkpoint identity -- never a raw/unvalidated field. */
+export interface ResolvedModelIdentity {
+  byte_sha256: string;
+  disposition: string;
+}
+
+interface ResolveIdentityRunner {
+  status: number | null;
+  stdout: string;
+}
+
+function _defaultIdentityRunner(executable: string, args: string[]): ResolveIdentityRunner {
+  try {
+    const result = spawnSync(executable, args, {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 30_000,
+    });
+    return { status: result.status, stdout: result.stdout ?? "" };
+  } catch {
+    return { status: null, stdout: "" };
+  }
+}
+
+/**
+ * Resolves the active checkpoint's identity by spawning validate_identity.py
+ * (scripts/ember_01_identity/validate_identity.py) against the manifest at
+ * `manifestPath`, and parsing its JSON verdict.
+ *
+ * FAIL-CLOSED: returns null (never a guessed/partial identity) whenever the
+ * manifest is missing, the resolver script is missing, the subprocess fails
+ * or times out, the resolver's exit code is non-zero (validation rejected
+ * the manifest), the output is not parseable JSON, or the parsed payload
+ * doesn't carry a well-formed sha256 + non-empty disposition. Callers must
+ * treat a null return as "identity unverified" -- never render/spawn a bare
+ * name as though it were checkpoint-identity-bearing.
+ *
+ * A checkpoint file, if present alongside the manifest as `checkpoint`,
+ * is passed via --checkpoint so byte-for-byte re-derivation is exercised;
+ * this is the convention documented in
+ * scripts/ember_01_identity/README-model-command-identity.md.
+ *
+ * @internal exported (prefixed _) for unit tests to inject a mock runner.
+ */
+export async function _resolveModelIdentity(
+  manifestPath: string,
+  runner: (executable: string, args: string[]) => ResolveIdentityRunner = _defaultIdentityRunner,
+): Promise<ResolvedModelIdentity | null> {
+  if (!manifestPath || !existsSync(manifestPath)) return null;
+
+  const repoRoot = (await getGitRepositoryRoot(dirname(manifestPath))) ?? process.cwd();
+  const scriptPath = resolve(repoRoot, "scripts", "ember_01_identity", "validate_identity.py");
+  if (!existsSync(scriptPath)) return null;
+
+  const args = [scriptPath, manifestPath];
+  const checkpointPath = join(dirname(manifestPath), "checkpoint");
+  if (existsSync(checkpointPath)) {
+    args.push("--checkpoint", checkpointPath);
+  }
+
+  const pythonExecutable = process.env["EMBER_PYTHON_BIN"] ?? "python";
+  let result: ResolveIdentityRunner;
+  try {
+    result = runner(pythonExecutable, args);
+  } catch {
+    // Any injected/real runner throwing (crash, ENOENT, timeout raised as an
+    // exception, etc.) fails closed -- never propagates as an uncaught
+    // rejection that would crash the /model command itself.
+    return null;
+  }
+  if (result.status !== 0) return null;
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(result.stdout);
+  } catch {
+    return null;
+  }
+  if (typeof payload !== "object" || payload === null) return null;
+  const record = payload as Record<string, unknown>;
+  if (record["ok"] !== true) return null;
+
+  const byteSha256 = record["byte_sha256"];
+  const disposition = record["disposition"];
+  if (
+    typeof byteSha256 !== "string" ||
+    !SHA256_RE.test(byteSha256) ||
+    typeof disposition !== "string" ||
+    disposition.trim() === ""
+  ) {
+    return null;
+  }
+
+  return { byte_sha256: byteSha256, disposition };
+}
 
 // ---------------------------------------------------------------------------
 // Kill-receipts ledger wiring
@@ -60,6 +170,16 @@ interface ModelCommandDeps {
   unloadModel?: (deps: ModelLifecycleDeps) => Promise<string>;
   getModelState?: () => string;
   writeKillReceipt?: (rec: { pid: number; match_rule: string }) => void;
+  /** Injectable for tests; defaults to the real _resolveModelIdentity. */
+  resolveModelIdentity?: (manifestPath: string) => Promise<ResolvedModelIdentity | null>;
+  /** Injectable for tests; defaults to EMBER_MODEL_IDENTITY_MANIFEST env / cwd convention. */
+  manifestPath?: string;
+}
+
+/** Default manifest path convention: EMBER_MODEL_IDENTITY_MANIFEST env override,
+ * else `.ember/model-identity.json` relative to cwd. */
+function _defaultManifestPath(cwd: string): string {
+  return process.env["EMBER_MODEL_IDENTITY_MANIFEST"] ?? join(cwd, ".ember", "model-identity.json");
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +206,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
   const doUnloadModel = deps.unloadModel ?? unloadModel;
   const doGetModelState = deps.getModelState ?? getModelState;
   const doWriteKillReceipt = deps.writeKillReceipt ?? realWriteKillReceipt;
+  const doResolveModelIdentity = deps.resolveModelIdentity ?? _resolveModelIdentity;
 
   return {
     name: "model",
@@ -93,17 +214,29 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
     isEnabled(): boolean {
       return true;
     },
-    async execute(args: string, _ctx: CommandContext) {
+    async execute(args: string, ctx: CommandContext) {
       // AC9, AC10: parse subcommand
       const subcommand = args.trim().split(/\s+/)[0] ?? "";
+      const manifestPath = deps.manifestPath ?? _defaultManifestPath(ctx.cwd);
 
       // AC9: /model status → current state + pid (if loaded)
       if (subcommand === "status" || subcommand === "") {
         const state = doGetModelState();
-        let statusLine = `model: ${state}`;
-        // Note: we don't have direct access to pid here via getModelState;
-        // the status is returned as part of the state. In a real implementation,
-        // getModelState could return more detail, but for now we keep it simple.
+
+        // cond3 inc2a: checkpoint identity is SOURCED from a validated
+        // manifest only. Fail-closed at the RENDER level -- status ALWAYS
+        // reports the model's runtime state (its core job: is the model
+        // loaded?), but it never renders a checkpoint identity it could not
+        // validate. When the manifest is absent/invalid/mismatched, the
+        // identity is shown as an explicit UNVERIFIED marker (never a bare
+        // or guessed sha), so the operator sees the truth rather than a
+        // false claim -- and a read-only status query is never broken by a
+        // missing manifest.
+        const identity = await doResolveModelIdentity(manifestPath);
+        const statusLine =
+          identity === null
+            ? `model: ${state} — identity: UNVERIFIED (no validated manifest)`
+            : `model: ${state} — identity: ${identity.byte_sha256} (${identity.disposition})`;
         return {
           type: "message" as const,
           message: statusLine,
@@ -149,9 +282,19 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
           writeKillReceipt: () => {}, // unused in load
           isExternal: () => process.env["EMBER_MODEL_URL"] !== undefined,
           now: () => new Date().toISOString(),
+          manifestPath,
         };
 
         try {
+          // cond3 inc2a: validate checkpoint identity BEFORE spawning the
+          // model process. A failed/withheld identity throws -- caught below
+          // and returned as a fail-closed error with a non-zero exit; the
+          // load never proceeds on an unverified checkpoint.
+          const identity = await doResolveModelIdentity(manifestPath);
+          if (identity === null) {
+            throw new Error("checkpoint identity validation failed");
+          }
+
           const status = await doLoadModel(modelLifecycleDeps);
           return {
             type: "message" as const,
@@ -162,6 +305,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
           return {
             type: "message" as const,
             message: `error: failed to load: ${msg}`,
+            exitCode: 1,
           };
         }
       }

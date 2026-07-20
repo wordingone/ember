@@ -1570,7 +1570,21 @@ def main() -> int:
     if args.canonical:
         sys.stdout.write(canonical_json(validated))
     else:
-        print(json.dumps({"ok": True, "schema": validated["schema"]}, sort_keys=True))
+        # byte_sha256/disposition are surfaced here so consumers (e.g. the
+        # ember-cli /model command) can render checkpoint identity sourced
+        # from a VALIDATED manifest only -- never a raw config string read
+        # independently of this validator's pass/fail verdict.
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "schema": validated["schema"],
+                    "byte_sha256": validated["checkpoint"]["byte_sha256"],
+                    "disposition": validated["identity"]["disposition"],
+                },
+                sort_keys=True,
+            )
+        )
     return 0
 
 
