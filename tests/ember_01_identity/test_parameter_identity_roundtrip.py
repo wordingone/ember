@@ -262,8 +262,12 @@ class ParameterIdentityRoundtripTests(unittest.TestCase):
             self.assertEqual(bound["checkpoint"]["byte_sha256"], receipt["subject_checkpoint_sha256"])
 
             # The binding is internally self-consistent against the receipt it was
-            # bound from.
-            verify_parameter_identity_binding(bound, receipt)
+            # bound from -- re-derived from the real checkpoint bytes on disk, not
+            # just compared field-to-field.
+            verify_parameter_identity_binding(
+                bound, receipt,
+                checkpoint_manifest=manifest_path, model_config=config_path,
+            )
 
             # And the bound manifest is schema-valid end to end.
             validated = validate_identity.validate_manifest(bound)
@@ -282,14 +286,21 @@ class ParameterIdentityRoundtripTests(unittest.TestCase):
             manifest = _base_manifest()
             manifest["checkpoint"]["tensors"] = self._tensors_from_shards(manifest_path)
             bound = bind_parameter_identity(manifest, receipt)
-            verify_parameter_identity_binding(bound, receipt)  # sanity: clean binding passes
+            # sanity: clean binding passes, re-derived from the real checkpoint on disk
+            verify_parameter_identity_binding(
+                bound, receipt,
+                checkpoint_manifest=manifest_path, model_config=config_path,
+            )
 
             for field in AXIS_MAP:
                 with self.subTest(axis=field):
                     tampered = copy.deepcopy(bound)
                     tampered["parameters"][field] = tampered["parameters"][field] + 1
                     with self.assertRaisesRegex(ParameterIdentityMismatch, field):
-                        verify_parameter_identity_binding(tampered, receipt)
+                        verify_parameter_identity_binding(
+                            tampered, receipt,
+                            checkpoint_manifest=manifest_path, model_config=config_path,
+                        )
 
     def test_checkpoint_identity_tamper_fails_closed(self) -> None:
         """Rebinding checkpoint.byte_sha256 away from the receipt's subject is caught
@@ -305,7 +316,10 @@ class ParameterIdentityRoundtripTests(unittest.TestCase):
             bound = bind_parameter_identity(manifest, receipt)
             bound["checkpoint"]["byte_sha256"] = "f" * 64
             with self.assertRaisesRegex(ParameterIdentityMismatch, "checkpoint.byte_sha256"):
-                verify_parameter_identity_binding(bound, receipt)
+                verify_parameter_identity_binding(
+                    bound, receipt,
+                    checkpoint_manifest=manifest_path, model_config=config_path,
+                )
 
     def test_bind_refuses_a_receipt_that_is_not_measured(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -319,6 +333,61 @@ class ParameterIdentityRoundtripTests(unittest.TestCase):
             manifest["checkpoint"]["tensors"] = self._tensors_from_shards(manifest_path)
             with self.assertRaises(ParameterIdentityMismatch):
                 bind_parameter_identity(manifest, unmeasured)
+
+    def test_verify_rejects_forged_receipt_via_recompute(self) -> None:
+        """The audit's exact spoof, inverted: a hand-authored receipt with a fake
+        checkpoint sha256 (never derived from any real checkpoint bytes) and fake
+        parameter counts, paired with a real checkpoint written for a DIFFERENT run,
+        must fail closed the instant verify_parameter_identity_binding re-derives the
+        real hash from disk -- it never gets far enough to trust the fake counts.
+
+        Before the fix this would have passed a naive field-to-field comparison as
+        long as the manifest's ``parameters``/``checkpoint.byte_sha256`` were copied
+        from the same forged receipt (bind_parameter_identity's own MEASURED gate is
+        also bypassed here by constructing ``bound`` by hand, exactly the shape a
+        compromised caller could produce without ever running the real counter)."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # A real checkpoint exists on disk -- but it is NOT the checkpoint the
+            # forged receipt below claims to be evidence for.
+            config_path, manifest_path = self._write_live_checkpoint(root, seed=505)
+
+            forged_receipt = {
+                "schema_version": "ember-sparse-realization-receipt-v1",
+                "verification_boundary": "VERIFIED_MEASURED",
+                "result": "MEASURED",
+                "model_config_sha256": "a" * 64,
+                "subject_checkpoint_sha256": "e" * 64,  # never derived from real bytes
+                "architecture_revision": "ember-sparse-3b-v2",
+                "counter_sha256": "b" * 64,
+                "allocated_parameters": 999_000_000,
+                "unique_parameters": 999_000_000,
+                "trainable_parameters": 999_000_000,
+                "served_parameters": 999_000_000,
+                "active_parameters": 999_000_000,
+                "episode_trainable_parameters": 999_000_000,
+                "active_expert_ids": ["shared"],
+                "expert_genesis_sha256": {},
+                "expert_parameter_sha256": {},
+            }
+
+            manifest = _base_manifest()
+            manifest["checkpoint"]["tensors"] = self._tensors_from_shards(manifest_path)
+            bound = dict(manifest)
+            # Hand-construct the bound manifest exactly as bind_parameter_identity
+            # would -- but from the forged receipt, never a real MEASURED one.
+            bound["checkpoint"] = {**manifest["checkpoint"], "byte_sha256": forged_receipt["subject_checkpoint_sha256"]}
+            bound["parameters"] = {
+                **{field: forged_receipt[axis] for field, axis in AXIS_MAP.items()},
+                "evidence_receipts": {field: ["deadbeef" * 8] for field in AXIS_MAP},
+            }
+            bound["evaluation"] = {**manifest["evaluation"], "subject_checkpoint_sha256": forged_receipt["subject_checkpoint_sha256"]}
+
+            with self.assertRaisesRegex(ParameterIdentityMismatch, "subject_checkpoint_sha256"):
+                verify_parameter_identity_binding(
+                    bound, forged_receipt,
+                    checkpoint_manifest=manifest_path, model_config=config_path,
+                )
 
 
 if __name__ == "__main__":
