@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail-closed verifier for Ember's authority and totality conservation contract.
 
@@ -27,44 +27,56 @@ from typing import Any
 
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
 POLICY_SCHEMA = "ember-authority-v1"
-ACTIVE_GOAL_ID = "EMBER-01"
+ACTIVE_GOAL_ID = "EMBER-02"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
-ACTIVE_WORKSTREAM_IDS = ["EMBER-01A", "EMBER-01B", "EMBER-01C"]
-WORKSTREAM_PATH_SCOPES = {
-    "EMBER-01A": {
-        "mode": "all_except",
-        "prefixes": [
-            "manifests/ember-01-custody/",
-            "scripts/ember_01_custody/",
-            "tests/ember_01_custody/",
-            "docs/ember-01-custody/",
-            "manifests/ember-01-identity/",
-            "scripts/ember_01_identity/",
-            "tests/ember_01_identity/",
-            "docs/ember-01-identity/",
-        ],
-    },
-    "EMBER-01B": {
-        "mode": "only",
-        "prefixes": [
-            "manifests/ember-01-custody/",
-            "scripts/ember_01_custody/",
-            "tests/ember_01_custody/",
-            "docs/ember-01-custody/",
-        ],
-    },
-    "EMBER-01C": {
-        "mode": "only",
-        "prefixes": [
-            "manifests/ember-01-identity/",
-            "scripts/ember_01_identity/",
-            "tests/ember_01_identity/",
-            "docs/ember-01-identity/",
-        ],
-    },
-}
+ACTIVE_WORKSTREAM_IDS = ["EMBER-02A", "EMBER-02B", "EMBER-02C"]
+WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
+               'prefixes': ['configs/ember-restart-3b.json',
+                            'docs/ember-restart-3b-',
+                            'models/ember-restart-3b/',
+                            'tools/ember-restart-3b/',
+                            'receipts/ember-restart-3b/',
+                            'inference/ember-restart-3b/',
+                            'data/ember-restart-3b/',
+                            'tests/ember_restart_model/',
+                            'docs/ember-restart-eval-',
+                            'docs/ember-restart-terminal-',
+                            'docs/ember-restart-browser-',
+                            'docs/ember-restart-audio-',
+                            'docs/ember-restart-image-',
+                            'manifests/ember-restart-eval-',
+                            'scripts/ember_restart_eval',
+                            'tests/test_ember_restart_eval',
+                            'docs/ember-restart-sql-',
+                            'docs/ember-restart-structured-tools-',
+                            'docs/ember-restart-dynamics-',
+                            'scripts/ember_restart_measured_receipts',
+                            'tests/test_ember_restart_measured_receipts']},
+ 'EMBER-02B': {'mode': 'only',
+               'prefixes': ['configs/ember-restart-3b.json',
+                            'docs/ember-restart-3b-',
+                            'models/ember-restart-3b/',
+                            'tools/ember-restart-3b/',
+                            'receipts/ember-restart-3b/',
+                            'inference/ember-restart-3b/',
+                            'data/ember-restart-3b/',
+                            'tests/ember_restart_model/']},
+ 'EMBER-02C': {'mode': 'only',
+               'prefixes': ['docs/ember-restart-eval-',
+                            'docs/ember-restart-terminal-',
+                            'docs/ember-restart-browser-',
+                            'docs/ember-restart-audio-',
+                            'docs/ember-restart-image-',
+                            'manifests/ember-restart-eval-',
+                            'scripts/ember_restart_eval',
+                            'tests/test_ember_restart_eval',
+                            'docs/ember-restart-sql-',
+                            'docs/ember-restart-structured-tools-',
+                            'docs/ember-restart-dynamics-',
+                            'scripts/ember_restart_measured_receipts',
+                            'tests/test_ember_restart_measured_receipts']}}
 EXPECTED_ACTIVE_GOAL_SUFFIX = (
-    "goals/ember/ember-01-custody-identity-experiment-spine/goal.md"
+    "goals/ember/ember-02-3b-foundation-birth/goal.md"
 )
 POLICY_RE = re.compile(
     r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
@@ -497,8 +509,8 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
         "policy.future_artifact_fields",
         "future PR/run/control artifacts require goal, workstream, and next outcome",
     )
-    expect(errors, 7, policy.get("authority_only_goal") is True, "policy.authority_only", f"{ACTIVE_GOAL_ID} makes no model or capability completion claim")
-    expect(errors, 7, policy.get("allows_new_network") is False, "policy.new_network", f"{ACTIVE_GOAL_ID} may not create or execute a network")
+    expect(errors, 7, policy.get("authority_only_goal") is False, "policy.authority_only", f"{ACTIVE_GOAL_ID} must retain model-execution authority")
+    expect(errors, 7, policy.get("allows_new_network") is True, "policy.new_network", f"{ACTIVE_GOAL_ID} must permit the owned >=3B network")
 
 
 def check_invariant(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
@@ -764,10 +776,10 @@ def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | No
                     )
                     valid = False
                 if not re.search(
-                    r"(?m)^allows_new_network:\s*false\s*$", selected_text
+                    r"(?m)^allows_new_network:\s*true\s*$", selected_text
                 ):
                     errors.append(
-                        finding(4, "selection.goal_allows_network", str(selected_goal))
+                        finding(4, "selection.goal_forbids_network", str(selected_goal))
                     )
                     valid = False
     return active_goal if valid else None
@@ -776,10 +788,10 @@ def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | No
 def parse_config_classifications(
     root: Path, errors: list[dict[str, Any]]
 ) -> dict[str, dict[str, str]]:
-    state_path = root / "STATE.md"
-    if not state_path.is_file():
+    continuity_path = root / "CONTINUITY.md"
+    if not continuity_path.is_file():
         return {}
-    lines = read_text(state_path).splitlines()
+    lines = read_text(continuity_path).splitlines()
     table_rows: list[list[str]] = []
     for index, raw in enumerate(lines):
         if not raw.lstrip().startswith("|"):
@@ -1029,13 +1041,20 @@ def parse_markdown_table(text: str, expected_columns: int) -> list[list[str]]:
 
 
 def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
-    path = root / "STATE.md"
-    if not path.is_file():
+    pointer_path = root / "STATE.md"
+    if not pointer_path.is_file():
         errors.append(finding(6, "state.missing", "STATE.md is absent"))
+        return
+    pointer_lines = [line.strip() for line in read_text(pointer_path).splitlines() if line.strip()]
+    if len(pointer_lines) != 1 or "CONTINUITY.md" not in pointer_lines[0]:
+        errors.append(finding(6, "state.pointer_invalid", "STATE.md must be a one-line CONTINUITY.md pointer"))
+    path = root / "CONTINUITY.md"
+    if not path.is_file():
+        errors.append(finding(6, "state.missing", "CONTINUITY.md is absent"))
         return
     rows = parse_markdown_table(read_text(path), 9)
     if not rows:
-        errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows"))
+        errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows in CONTINUITY.md"))
         return
     ids = [row[0] for row in rows]
     identities = [row[2] for row in rows]

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Mutation-backed tests for Ember's executable authority spine."""
 
@@ -34,39 +34,51 @@ GOVERNING_SURFACES = [
     "CONTINUITY.md",
 ]
 
-WORKSTREAM_PATH_SCOPES = {
-    "EMBER-01A": {
-        "mode": "all_except",
-        "prefixes": [
-            "manifests/ember-01-custody/",
-            "scripts/ember_01_custody/",
-            "tests/ember_01_custody/",
-            "docs/ember-01-custody/",
-            "manifests/ember-01-identity/",
-            "scripts/ember_01_identity/",
-            "tests/ember_01_identity/",
-            "docs/ember-01-identity/",
-        ],
-    },
-    "EMBER-01B": {
-        "mode": "only",
-        "prefixes": [
-            "manifests/ember-01-custody/",
-            "scripts/ember_01_custody/",
-            "tests/ember_01_custody/",
-            "docs/ember-01-custody/",
-        ],
-    },
-    "EMBER-01C": {
-        "mode": "only",
-        "prefixes": [
-            "manifests/ember-01-identity/",
-            "scripts/ember_01_identity/",
-            "tests/ember_01_identity/",
-            "docs/ember-01-identity/",
-        ],
-    },
-}
+WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
+               'prefixes': ['configs/ember-restart-3b.json',
+                            'docs/ember-restart-3b-',
+                            'models/ember-restart-3b/',
+                            'tools/ember-restart-3b/',
+                            'receipts/ember-restart-3b/',
+                            'inference/ember-restart-3b/',
+                            'data/ember-restart-3b/',
+                            'tests/ember_restart_model/',
+                            'docs/ember-restart-eval-',
+                            'docs/ember-restart-terminal-',
+                            'docs/ember-restart-browser-',
+                            'docs/ember-restart-audio-',
+                            'docs/ember-restart-image-',
+                            'manifests/ember-restart-eval-',
+                            'scripts/ember_restart_eval',
+                            'tests/test_ember_restart_eval',
+                            'docs/ember-restart-sql-',
+                            'docs/ember-restart-structured-tools-',
+                            'docs/ember-restart-dynamics-',
+                            'scripts/ember_restart_measured_receipts',
+                            'tests/test_ember_restart_measured_receipts']},
+ 'EMBER-02B': {'mode': 'only',
+               'prefixes': ['configs/ember-restart-3b.json',
+                            'docs/ember-restart-3b-',
+                            'models/ember-restart-3b/',
+                            'tools/ember-restart-3b/',
+                            'receipts/ember-restart-3b/',
+                            'inference/ember-restart-3b/',
+                            'data/ember-restart-3b/',
+                            'tests/ember_restart_model/']},
+ 'EMBER-02C': {'mode': 'only',
+               'prefixes': ['docs/ember-restart-eval-',
+                            'docs/ember-restart-terminal-',
+                            'docs/ember-restart-browser-',
+                            'docs/ember-restart-audio-',
+                            'docs/ember-restart-image-',
+                            'manifests/ember-restart-eval-',
+                            'scripts/ember_restart_eval',
+                            'tests/test_ember_restart_eval',
+                            'docs/ember-restart-sql-',
+                            'docs/ember-restart-structured-tools-',
+                            'docs/ember-restart-dynamics-',
+                            'scripts/ember_restart_measured_receipts',
+                            'tests/test_ember_restart_measured_receipts']}}
 
 CONSERVATION_HEADER = """<!-- EMBER_CONSERVATION_V1
 minimum_new_network_parameters=3000000000
@@ -80,12 +92,12 @@ mechanism_erasure=forbidden
 VALID_POLICY = {
     "schema": "ember-authority-v1",
     "invariant_sha256": INVARIANT_SHA256,
-    "active_goal_id": "EMBER-01",
-    "active_workstream_ids": ["EMBER-01A", "EMBER-01B", "EMBER-01C"],
+    "active_goal_id": "EMBER-02",
+    "active_workstream_ids": ["EMBER-02A", "EMBER-02B", "EMBER-02C"],
     "workstream_path_scopes": WORKSTREAM_PATH_SCOPES,
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-    "authority_only_goal": True,
-    "allows_new_network": False,
+    "authority_only_goal": False,
+    "allows_new_network": True,
     "highest_amendable_authority": "GOAL.md",
     "required_governing_surfaces": GOVERNING_SURFACES,
     "model_birth": {
@@ -274,13 +286,20 @@ def write_valid_fixture(root: Path) -> None:
 | qwen-reference | backend | model:qwen-reference | borrowed_reference | 27000000000 | unknown | qwen | none | explicit reference seat |
 | ember-target | model_target | uninstantiated:ember-target | target | 30000000001 | 0 | owned | none | GOAL.md |
 """
-    (root / "STATE.md").write_text(state, encoding="utf-8")
+    (root / "STATE.md").write_text(
+        "Current artifact identity and maturity state: [CONTINUITY.md](CONTINUITY.md), "
+        "under the migrated STATE.md artifact-state resolver section; STATE.md is a "
+        "compatibility pointer only and carries no independent authority.\n",
+        encoding="utf-8",
+    )
+    continuity = root / "CONTINUITY.md"
+    continuity.write_text(continuity.read_text(encoding="utf-8") + "\n" + state, encoding="utf-8")
 
     config = {
         "authority": {
             "artifact_class": "historical_only",
             "execution_authority": "denied",
-            "goal_id": "EMBER-01",
+            "goal_id": "EMBER-02",
             "next_executed_outcome": "authority classification only",
         }
     }
@@ -337,6 +356,16 @@ def rewrite_policy(root: Path, mutate) -> None:
     policy = json.loads(match.group(1))
     mutate(policy)
     (root / "GOAL.md").write_text(render_goal(policy), encoding="utf-8")
+
+
+def refresh_continuity_hash(root: Path) -> None:
+    digest = hashlib.sha256((root / "CONTINUITY.md").read_bytes()).hexdigest().upper()
+    rewrite_policy(
+        root,
+        lambda policy: policy["conservation_hashes"]["governing_surfaces_sha256"].update(
+            {"CONTINUITY.md": digest}
+        ),
+    )
 
 
 def assert_rejected(root: Path, code: str, selection: Path | None = None) -> None:
@@ -428,25 +457,25 @@ def test_enforced_matrix_row_must_name_a_real_surface(tmp_path: Path) -> None:
     }
 
 
-def write_ember01_selection(root: Path) -> Path:
+def write_ember02_selection(root: Path) -> Path:
     goal = (
         root
         / "goals"
         / "ember"
-        / "ember-01-custody-identity-experiment-spine"
+        / "ember-02-3b-foundation-birth"
         / "goal.md"
     )
     goal.parent.mkdir(parents=True, exist_ok=True)
     goal.write_text(
-        "---\ngoal_id: EMBER-01\nallows_new_network: false\n---\n",
+        "---\ngoal_id: EMBER-02\nallows_new_network: true\n---\n",
         encoding="utf-8",
     )
     selection = root / "selection.md"
     selection.write_text(
         "state: active\n"
-        "active_goal: EMBER-01\n"
+        "active_goal: EMBER-02\n"
         "active_goal_path: "
-        "goals/ember/ember-01-custody-identity-experiment-spine/goal.md\n",
+        "goals/ember/ember-02-3b-foundation-birth/goal.md\n",
         encoding="utf-8",
     )
     return selection
@@ -460,7 +489,7 @@ def test_historical_artifact_preserves_original_goal_across_transition(
     payload = json.loads(config.read_text(encoding="utf-8"))
     payload["authority"]["goal_id"] = "EMBER-00"
     config.write_text(json.dumps(payload), encoding="utf-8")
-    result = run_verifier(tmp_path, write_ember01_selection(tmp_path))
+    result = run_verifier(tmp_path, write_ember02_selection(tmp_path))
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -486,19 +515,19 @@ def test_nonhistorical_artifact_goal_id_must_match_durable_selection(
         ),
         encoding="utf-8",
     )
-    result = run_verifier(tmp_path, write_ember01_selection(tmp_path))
+    result = run_verifier(tmp_path, write_ember02_selection(tmp_path))
     assert result.returncode == 1, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert "selection.goal_binding" in {item["code"] for item in payload["errors"]}
 
 
-def test_ember01_selection_requires_exact_goal_path(tmp_path: Path) -> None:
+def test_ember02_selection_requires_exact_goal_path(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     selection = tmp_path / "selection.md"
     selection.write_text(
         "state: active\n"
-        "active_goal: EMBER-01\n"
-        "active_goal_path: goals/ember/not-the-custody-spine/EMBER-01/goal.md\n",
+        "active_goal: EMBER-02\n"
+        "active_goal_path: goals/ember/not-the-custody-spine/EMBER-02/goal.md\n",
         encoding="utf-8",
     )
     assert_rejected(tmp_path, "selection.path_exact_mismatch", selection)
@@ -510,32 +539,32 @@ def test_selection_rejects_duplicate_control_keys(tmp_path: Path) -> None:
     selection.write_text(
         "state: paused\n"
         "state: active\n"
-        "active_goal: EMBER-01\n"
-        "active_goal_path: goals/ember/ember-01-custody-identity-experiment-spine/goal.md\n",
+        "active_goal: EMBER-02\n"
+        "active_goal_path: goals/ember/ember-02-3b-foundation-birth/goal.md\n",
         encoding="utf-8",
     )
     assert_rejected(tmp_path, "selection.duplicate_key", selection)
 
 
-def test_exact_ember01_selection_and_goal_file_pass(tmp_path: Path) -> None:
+def test_exact_ember02_selection_and_goal_file_pass(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     goal = (
         tmp_path
         / "goals"
         / "ember"
-        / "ember-01-custody-identity-experiment-spine"
+        / "ember-02-3b-foundation-birth"
         / "goal.md"
     )
     goal.parent.mkdir(parents=True)
     goal.write_text(
-        "---\ngoal_id: EMBER-01\nallows_new_network: false\n---\n",
+        "---\ngoal_id: EMBER-02\nallows_new_network: true\n---\n",
         encoding="utf-8",
     )
     selection = tmp_path / "selection.md"
     selection.write_text(
         "state: active\n"
-        "active_goal: EMBER-01\n"
-        "active_goal_path: goals/ember/ember-01-custody-identity-experiment-spine/goal.md\n",
+        "active_goal: EMBER-02\n"
+        "active_goal_path: goals/ember/ember-02-3b-foundation-birth/goal.md\n",
         encoding="utf-8",
     )
     result = run_verifier(tmp_path, selection)
@@ -549,14 +578,15 @@ def test_hash_bound_external_classification_supports_protected_control_json(
     protected = tmp_path / "configs" / "protected-control.json"
     protected.write_text("[]\n", encoding="utf-8")
     digest = hashlib.sha256(protected.read_bytes()).hexdigest()
-    with (tmp_path / "STATE.md").open("a", encoding="utf-8") as stream:
+    with (tmp_path / "CONTINUITY.md").open("a", encoding="utf-8") as stream:
         stream.write(
             "\n| path | artifact_class | execution_authority | goal_id | "
             "next_executed_outcome | sha256 |\n"
             "|---|---|---|---|---|---|\n"
             "| configs/protected-control.json | historical_only | denied | "
-            f"EMBER-01 | authority classification only | {digest} |\n"
+            f"EMBER-02 | authority classification only | {digest} |\n"
         )
+    refresh_continuity_hash(tmp_path)
     result = run_verifier(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -565,14 +595,15 @@ def test_external_config_classification_is_bound_to_exact_bytes(tmp_path: Path) 
     write_valid_fixture(tmp_path)
     protected = tmp_path / "configs" / "protected-control.json"
     protected.write_text("[]\n", encoding="utf-8")
-    with (tmp_path / "STATE.md").open("a", encoding="utf-8") as stream:
+    with (tmp_path / "CONTINUITY.md").open("a", encoding="utf-8") as stream:
         stream.write(
             "\n| path | artifact_class | execution_authority | goal_id | "
             "next_executed_outcome | sha256 |\n"
             "|---|---|---|---|---|---|\n"
             "| configs/protected-control.json | historical_only | denied | "
-            f"EMBER-01 | authority classification only | {'0' * 64} |\n"
+            f"EMBER-02 | authority classification only | {'0' * 64} |\n"
         )
+    refresh_continuity_hash(tmp_path)
     assert_rejected(tmp_path, "config.classification_hash_mismatch")
 
 def test_invariant_tamper_is_rejected(tmp_path: Path) -> None:
@@ -637,7 +668,7 @@ def test_missing_discrepancy_is_rejected(tmp_path: Path) -> None:
             "policy.reasoning.substitutes",
         ),
         (
-            lambda policy: policy.update(authority_only_goal=False),
+            lambda policy: policy.update(authority_only_goal=True),
             "policy.authority_only",
         ),
         (
@@ -675,7 +706,7 @@ def test_candidate_lineage_mutations_are_rejected(
     authority = {
         "artifact_class": "research_candidate",
         "execution_authority": "allowed",
-        "goal_id": "EMBER-01",
+        "goal_id": "EMBER-02",
         "next_executed_outcome": "clean 3B birth",
         "total_parameters": 3_000_000_000,
         "native_capabilities": copy.deepcopy(
@@ -708,7 +739,7 @@ def test_any_declared_model_mediated_signal_is_rejected(tmp_path: Path) -> None:
                 "authority": {
                     "artifact_class": "research_candidate",
                     "execution_authority": "allowed",
-                    "goal_id": "EMBER-01",
+                    "goal_id": "EMBER-02",
                     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
                     "total_parameters": 3_000_000_000,
                     "native_capabilities": [
@@ -737,7 +768,7 @@ def test_borrowed_reference_requires_frozen_non_ingress_seat(tmp_path: Path) -> 
                 "authority": {
                     "artifact_class": "borrowed_reference",
                     "execution_authority": "reference_only",
-                    "goal_id": "EMBER-01",
+                    "goal_id": "EMBER-02",
                     "next_executed_outcome": "reference comparison",
                     "capability_credit": "none",
                     "frozen": False,
@@ -789,7 +820,7 @@ def test_future_artifact_binding_parser_is_exact() -> None:
     from verify_authority_conservation import validate_artifact_binding
 
     goal = "EMBER-00"
-    outcome = "EMBER-01 clean 3B custody and identity spine"
+    outcome = "EMBER-02 clean 3B custody and identity spine"
     workstream = "EMBER-00A"
     allowed = (workstream,)
     assert validate_artifact_binding(
@@ -879,14 +910,14 @@ def test_future_artifact_binding_accepts_only_named_child_workstreams() -> None:
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     from verify_authority_conservation import validate_artifact_binding
 
-    goal = "EMBER-01"
+    goal = "EMBER-02"
     outcome = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
-    allowed = ("EMBER-01A", "EMBER-01B", "EMBER-01C")
+    allowed = ("EMBER-02A", "EMBER-02B", "EMBER-02C")
     assert validate_artifact_binding(
         json.dumps(
             {
                 "goal_id": goal,
-                "workstream_id": "EMBER-01B",
+                "workstream_id": "EMBER-02B",
                 "next_executed_outcome": outcome,
             }
         ),
@@ -902,24 +933,24 @@ def test_workstream_path_scope_prevents_parallel_authority_overlap() -> None:
     from verify_authority_conservation import workstream_path_allowed
 
     scopes = {
-        "EMBER-01A": {
+        "EMBER-02A": {
             "mode": "all_except",
             "prefixes": ["manifests/ember-01-custody/", "scripts/ember_01_custody/"],
         },
-        "EMBER-01B": {
+        "EMBER-02B": {
             "mode": "only",
             "prefixes": ["manifests/ember-01-custody/", "scripts/ember_01_custody/"],
         },
     }
-    assert workstream_path_allowed("GOAL.md", "EMBER-01A", scopes)
+    assert workstream_path_allowed("GOAL.md", "EMBER-02A", scopes)
     assert not workstream_path_allowed(
-        "scripts/ember_01_custody/hash_roots.py", "EMBER-01A", scopes
+        "scripts/ember_01_custody/hash_roots.py", "EMBER-02A", scopes
     )
     assert workstream_path_allowed(
-        "scripts/ember_01_custody/hash_roots.py", "EMBER-01B", scopes
+        "scripts/ember_01_custody/hash_roots.py", "EMBER-02B", scopes
     )
     assert not workstream_path_allowed(
-        "scripts/verify_authority_conservation.py", "EMBER-01B", scopes
+        "scripts/verify_authority_conservation.py", "EMBER-02B", scopes
     )
 
 
@@ -928,8 +959,8 @@ def test_source_annotations_are_not_authority_markers() -> None:
     from verify_authority_conservation import validate_artifact_binding
 
     text = (
-        "# goal_id: EMBER-01\n"
-        "# workstream_id: EMBER-01A\n"
+        "# goal_id: EMBER-02\n"
+        "# workstream_id: EMBER-02A\n"
         "# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember\n"
         "def check(\n"
         "    workstream_id: str,\n"
@@ -939,9 +970,9 @@ def test_source_annotations_are_not_authority_markers() -> None:
     assert validate_artifact_binding(
         text,
         ".py",
-        "EMBER-01",
+        "EMBER-02",
         "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-        ("EMBER-01A",),
+        ("EMBER-02A",),
     )
 
 
@@ -1004,8 +1035,8 @@ def test_staged_binding_covers_scripts_and_python_experiments(tmp_path: Path) ->
     }, payload
 
     binding = (
-        "# goal_id: EMBER-01\n"
-        "# workstream_id: EMBER-01A\n"
+        "# goal_id: EMBER-02\n"
+        "# workstream_id: EMBER-02A\n"
         "# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember\n"
     )
     control.write_text(binding + "print('control')\n", encoding="utf-8")
@@ -1037,7 +1068,7 @@ def test_renamed_control_cannot_drop_binding_or_escape_by_path(tmp_path: Path) -
 
     original = tmp_path / "scripts" / "bound_control.py"
     binding = (
-        "# goal_id: EMBER-01\n"
+        "# goal_id: EMBER-02\n"
         "# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember\n"
     )
     body = "".join(f"VALUE_{index} = {index}\n" for index in range(30))
@@ -1089,10 +1120,27 @@ def test_policy_requires_exact_goal_execution_binding(
 
 def test_ambiguous_identity_is_rejected(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    state = tmp_path / "STATE.md"
+    state = tmp_path / "CONTINUITY.md"
     with state.open("a", encoding="utf-8") as stream:
         stream.write(
             "| duplicate | checkpoint | sha256:owned-rung2 | historical_only | "
             "2195000000 | 12550144 | none | none | duplicate identity |\n"
         )
+    refresh_continuity_hash(tmp_path)
     assert_rejected(tmp_path, "state.ambiguous_identity")
+
+def test_continuity_identity_rows_loss_is_rejected(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    continuity = tmp_path / "CONTINUITY.md"
+    content = continuity.read_text(encoding="utf-8")
+    markers = ("| owned-rung2 |", "| qwen-reference |", "| ember-target |")
+    content = "\n".join(line for line in content.splitlines() if not line.startswith(markers)) + "\n"
+    continuity.write_text(content, encoding="utf-8")
+    refresh_continuity_hash(tmp_path)
+    assert_rejected(tmp_path, "state.identity_rows_missing")
+
+
+def test_state_pointer_tamper_is_rejected(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    (tmp_path / "STATE.md").write_text("STATE rows moved elsewhere\n", encoding="utf-8")
+    assert_rejected(tmp_path, "state.pointer_invalid")

@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, it } from "bun:test";
@@ -32,6 +32,99 @@ describe("ember-cli model seat authority", () => {
     expect(decision.allowed).toBe(false);
     expect(decision.seat).toBeNull();
     expect(decision.error).toContain("no admitted owned Ember identity");
+  });
+
+  it("selects a verified owned identity for ordinary launch", () => {
+    const decision = resolveModelSeat({
+      argv: ["node", "ember", "-p", "hello"],
+      explicitModelUrl: undefined,
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+      ownedIdentity: {
+        checkpointSha256: "a".repeat(64),
+        endpointUrl: "http://127.0.0.1:8083",
+        identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
+        modelName: "ember-owned:a" + "a".repeat(11),
+      },
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.seat).toBe("OWNED_ADMITTED");
+    expect(decision.source).toBe("owned-manifest");
+    expect(decision.ownedIdentity?.checkpointSha256).toBe("a".repeat(64));
+  });
+
+  it("selects an exact non-claiming development identity when admission is not yet earned", () => {
+    const checkpoint = "9".repeat(64);
+    const decision = resolveModelSeat({
+      argv: ["node", "ember", "-p", "hello"],
+      explicitModelUrl: undefined,
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+      ownedIdentity: {
+        seat: "OWNED_DEVELOPMENT",
+        checkpointSha256: checkpoint,
+        endpointUrl: "http://127.0.0.1:8083",
+        identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
+        modelName: "ember-owned-development:" + checkpoint.slice(0, 12),
+        claimStatus: "NON_ADMISSIBLE",
+        tokensSeen: 2048,
+      },
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.seat).toBe("OWNED_DEVELOPMENT");
+    expect(decision.source).toBe("owned-development-manifest");
+    expect(decision.ownedIdentity?.claimStatus).toBe("NON_ADMISSIBLE");
+    expect(decision.ownedIdentity?.tokensSeen).toBe(2048);
+  });
+  it("does not let an explicit endpoint override an admitted owned identity", () => {
+    const decision = resolveModelSeat({
+      argv: ["node", "ember", "-p", "hello"],
+      explicitModelUrl: "http://127.0.0.1:9999",
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+      ownedIdentity: {
+        checkpointSha256: "b".repeat(64),
+        endpointUrl: "http://127.0.0.1:8083",
+        identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
+        modelName: "ember-owned:b" + "b".repeat(11),
+      },
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.error).toContain("does not match the admitted owned endpoint");
+  });
+
+  it("keeps explicit reference testing separate from an available owned identity", () => {
+    const decision = resolveModelSeat({
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
+      explicitModelUrl: "http://127.0.0.1:9999",
+      gpuFreeRequested: false,
+      referenceSeatEnv: undefined,
+      ownedIdentity: {
+        checkpointSha256: "c".repeat(64),
+        endpointUrl: "http://127.0.0.1:8083",
+        identityUrl: "http://127.0.0.1:8083/v1/models",
+        modelConfigSha256: "d".repeat(64),
+        serverSourceSha256: "e".repeat(64),
+        tokenizerSha256: "f".repeat(64),
+        modelName: "ember-owned:c" + "c".repeat(11),
+      },
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.seat).toBe("REFERENCE_ONLY");
+    expect(decision.source).toBe("flag");
   });
 
   it("allows an explicit --reference-seat and strips it before downstream parsing", () => {

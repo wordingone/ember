@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/liveness-heartbeat.ts — writes a per-render-cycle heartbeat file so external census
 // tooling (issue #413) can tell a live cockpit process from a dead one without needing pixels.
 //
@@ -19,7 +22,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
 
 export interface LivenessHeartbeatRow {
   ts:      string; // ISO8601Z -- when this heartbeat was written
@@ -39,8 +42,13 @@ export interface LivenessHeartbeatWriterOptions {
 }
 
 export interface LivenessHeartbeatWriter {
-  readonly filePath: string;
-  /** Overwrites the heartbeat file with a fresh {ts, pid, version} row. Never throws. */
+  /** null when the strict repo-root resolver failed at construction (PR954 round 2) --
+   *  the writer is then INERT: write() is a no-op, nothing is ever created on disk. A
+   *  caller that needs to know "is this writer live" checks filePath, not a separate
+   *  flag. */
+  readonly filePath: string | null;
+  /** Overwrites the heartbeat file with a fresh {ts, pid, version} row. Never throws.
+   *  A true no-op on an inert writer (filePath === null). */
   write: (nowMs?: number) => void;
 }
 
@@ -51,11 +59,40 @@ export interface LivenessHeartbeatWriter {
 export function createLivenessHeartbeatWriter(
   options: LivenessHeartbeatWriterOptions = {},
 ): LivenessHeartbeatWriter {
-  const repoRoot = options.repoRoot ?? resolveEmberRepoRootOrCwd({}, "[liveness-heartbeat]");
-  const pid      = options.pid ?? process.pid;
-  const version  = options.version ?? "unknown";
+  const pid     = options.pid ?? process.pid;
+  const version = options.version ?? "unknown";
+
+  // PR954 round 2: the heartbeat path is authoritative state the watchdog polls -- it
+  // must go through the STRICT resolver (resolveEmberRepoRoot), never
+  // resolveEmberRepoRootOrCwd's silent cwd fallback (that fallback is reserved for
+  // non-authoritative UI conveniences; see repo-root.ts). On resolution failure this
+  // writer goes INERT: filePath=null, exactly one explicit warning, zero mkdir, zero
+  // writes ever -- a heartbeat silently written to the wrong root is worse than no
+  // heartbeat at all, because it manufactures a false "the cockpit is alive" signal at
+  // a path the watchdog will never poll.
+  let repoRoot: string;
+  try {
+    repoRoot = options.repoRoot ?? resolveEmberRepoRoot({});
+  } catch (err) {
+    console.warn(
+      `[liveness-heartbeat] repo root resolution failed -- heartbeat writer is INERT ` +
+        `(no file will ever be created or written): ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return {
+      filePath: null,
+      write() {
+        // Deliberate no-op -- an inert writer never touches disk.
+      },
+    };
+  }
+
   const dir      = path.join(repoRoot, "tools", "ember-cli", "state");
   const filePath = path.join(dir, "cockpit-heartbeat.json");
+
+  // #666 startup path-assert: name the exact file this process will write, so a divergence
+  // from the path the watchdog logs on ITS side is visible in two adjacent log lines
+  // instead of manifesting as a phantom-stale heartbeat and a duplicate cockpit.
+  console.warn(`[liveness-heartbeat] writing heartbeat to ${filePath} (repo root ${repoRoot})`);
 
   try {
     fs.mkdirSync(dir, { recursive: true });

@@ -1,0 +1,46 @@
+{
+  "goal_id": "EMBER-02",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "predictions": {
+    "benchmark": {
+      "capability": "text",
+      "id": "ember-step2-raw-forward",
+      "protocol_sha256": "4753052248d5f27164a7a97833276f708bb4fa26fcc1e38f4664ef6eac1c1f10",
+      "split_sha256": "fc9c3373ccc17945c3b000abdfa94b33cff8e22309dea32c92f76fd456fdceeb",
+      "version": "1"
+    },
+    "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS",
+    "decoding": {
+      "max_new_tokens": 1,
+      "stop_token_ids": [
+        2
+      ],
+      "strategy": "GREEDY_AUTOREGRESSIVE",
+      "teacher_forcing": false,
+      "temperature": 0,
+      "top_p": 1
+    },
+    "inference_implementation_sha256": "42be91b92d0f4e497b324046122358d9b7e640e32e6c94b14863ffddcf22896a",
+    "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+    "rows": [
+      {
+        "generated_token_ids": [
+          13694
+        ],
+        "id": "ember-step2-shared-raw-forward-001",
+        "input_sha256": "2464808ccba66cc129fc3ac1ff10c2905b2f5ed103ada9167687b021beb7161d",
+        "output": {
+          "kind": "text",
+          "text": "lev"
+        },
+        "stop_reason": "max_new_tokens"
+      }
+    ],
+    "schema_version": "ember-owned-predictions-v1",
+    "tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+  },
+  "schema_version": "ember-restart-eval-public-predictions-v1",
+  "source_predictions_sha256": "7c2a788946fa1eca8ffb7bc0f98155e875658126919d6704650e56ab3983680f",
+  "workstream_id": "EMBER-02C"
+}
