@@ -346,6 +346,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 "--config", "config.json",
                 "--run-manifest", "run.json",
                 "--trusted-verifier-registry", "registry.json",
+                "--expected-registry-root-sha256", "d" * 64,
                 "--mode", "INTERACTIVE",
                 "--parent-pid", str(os.getpid()),
                 "--device", "cpu",
@@ -355,6 +356,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(events[0], ("parent", os.getpid()))
         self.assertEqual(events[1][0], "load")
         self.assertEqual(load.call_args.kwargs["config_path"], Path("config.json"))
+        self.assertEqual(load.call_args.kwargs["expected_registry_root_sha256"], "d" * 64)
         self.assertIsNone(load.call_args.kwargs["frozen_split"])
         create.assert_called_once_with(runtime, host="127.0.0.1", port=8000, mode="INTERACTIVE")
         server.serve_forever.assert_called_once_with()
@@ -799,6 +801,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                     run_manifest=run_manifest_path,
                     frozen_split=None,
                     trusted_verifier_registry=registry_path,
+                    expected_registry_root_sha256=hashlib.sha256(registry_path.read_bytes()).hexdigest(),
                     device="cpu",
                     emit_validation_receipt=receipts.append,
                 )
@@ -819,6 +822,59 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
             self.assertEqual(receipt["manifest_sha256"], real_checkpoint_sha256)
             self.assertEqual(receipt["manifest_path"], str(checkpoint_dir / "checkpoint-manifest.json"))
             self.assertIn("ts", receipt)
+
+    def test_forged_self_consistent_registry_fails_closed_on_root_hash_mismatch(self) -> None:
+        """cond3 harden: a registry file that is internally self-consistent (its own
+        entries validate against sha256 values declared inside itself) must still be
+        REJECTED if its own root bytes do not match the caller's pinned
+        expected_registry_root_sha256 -- the outer pin is the only thing anchoring
+        trust in the registry file at all; nothing inside the registry can vouch for
+        itself. The resolver subprocess must never even be reached."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint_dir, real_checkpoint_sha256, config = self._build_real_checkpoint(root)
+
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
+            tokenizer_path = root / "tokenizer.json"
+            tokenizer_path.write_text("{}", encoding="utf-8")
+            run_manifest_path = self._write_run_manifest(
+                root, config_sha256=config_sha256, tokenizer_sha256="c" * 64,
+            )
+
+            # A self-consistent, attacker-authored registry: every inner entry
+            # pins itself against a sha256 declared inside this same file, so an
+            # inner-only check would trust it as-supplied.
+            forged_registry_path = root / "forged-registry.json"
+            forged_bytes = json.dumps({"verifiers": {"forged": {"sha256": "e" * 64}}}).encode("utf-8")
+            forged_registry_path.write_bytes(forged_bytes)
+            forged_root_sha256 = hashlib.sha256(forged_bytes).hexdigest()
+
+            # Pinned expectation is for a DIFFERENT (legitimate) registry root --
+            # it does not match the forged file's own hash.
+            pinned_root_sha256 = hashlib.sha256(b'{"verifiers": {"legit": {"sha256": "f" * 64}}}').hexdigest()
+            self.assertNotEqual(pinned_root_sha256, forged_root_sha256)
+
+            resolver = MagicMock()
+            with (
+                patch("serve_owned_openai.resolve_central_owned_admission", resolver),
+                patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256="c" * 64)),
+                patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=config),
+            ):
+                with self.assertRaisesRegex(ValueError, "registry root hash does not match"):
+                    LoadedOwnedRuntime.from_paths(
+                        checkpoint=checkpoint_dir,
+                        tokenizer_path=tokenizer_path,
+                        config_path=config_path,
+                        run_manifest=run_manifest_path,
+                        frozen_split=None,
+                        trusted_verifier_registry=forged_registry_path,
+                        expected_registry_root_sha256=pinned_root_sha256,
+                        device="cpu",
+                    )
+            # Fail-closed BEFORE the registry is ever handed to the resolver subprocess.
+            resolver.assert_not_called()
 
     def test_tampered_checkpoint_manifest_fails_closed_against_stale_admission_claim(self) -> None:
         """A real checkpoint, then the manifest changes on disk (tamper/stale-manifest
@@ -873,6 +929,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                         run_manifest=run_manifest_path,
                         frozen_split=None,
                         trusted_verifier_registry=registry_path,
+                        expected_registry_root_sha256=hashlib.sha256(registry_path.read_bytes()).hexdigest(),
                         device="cpu",
                         emit_validation_receipt=receipts.append,
                     )
@@ -891,6 +948,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                     run_manifest=Path(directory) / "run.json",
                     frozen_split=None,
                     trusted_verifier_registry=Path(directory) / "registry.json",
+                    expected_registry_root_sha256="0" * 64,
                     device="cpu",
                 )
 
@@ -907,6 +965,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                     run_manifest=Path(directory) / "run.json",
                     frozen_split=None,
                     trusted_verifier_registry=Path(directory) / "registry.json",
+                    expected_registry_root_sha256="0" * 64,
                     device="cpu",
                 )
 
@@ -951,7 +1010,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                 patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=config),
                 patch("checkpoint_artifacts.load_checkpoint_artifacts", side_effect=break_tie_after_real_load),
             ):
-                with self.assertRaisesRegex(RuntimeError, "post-load identity assertion failed"):
+                with self.assertRaisesRegex(RuntimeError, "post-load value-equality assertion failed"):
                     LoadedOwnedRuntime.from_paths(
                         checkpoint=checkpoint_dir,
                         tokenizer_path=tokenizer_path,
@@ -959,6 +1018,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                         run_manifest=run_manifest_path,
                         frozen_split=None,
                         trusted_verifier_registry=registry_path,
+                        expected_registry_root_sha256=hashlib.sha256(registry_path.read_bytes()).hexdigest(),
                         device="cpu",
                     )
 
