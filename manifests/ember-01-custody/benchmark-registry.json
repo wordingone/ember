@@ -1,0 +1,1096 @@
+{
+    "authority":  {
+                      "goal_id":  "EMBER-01",
+                      "workstream_id":  "EMBER-01B",
+                      "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+                  },
+    "schema":  "ember-01-benchmark-registry-v1",
+    "direct_recovered_minimum":  13,
+    "operator_recollection_minimum":  15,
+    "completion_rule":  "exact allowed benchmark, official/comparable boundary, executed against an owned admissible Ember checkpoint, with bound manifest and result receipt",
+    "benchmarks":  [
+                       {
+                           "benchmark_id":  "swe-bench-pro",
+                           "display_name":  "SWE-Bench Pro",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "research_stub",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "frontiercode-diamond",
+                           "display_name":  "FrontierCode Diamond",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "research_stub",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "gdpval-aa",
+                           "display_name":  "GDPval-AA",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "research_stub",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "gdppdf",
+                           "display_name":  "GDPpdf",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "research_stub",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "blueprint-bench-2",
+                           "display_name":  "Blueprint-Bench 2",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "research_stub",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "automationbench",
+                           "display_name":  "AutomationBench",
+                           "version":  "git-eda214109cf891ebe8102ca826b87fb98911e103",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "present_but_historical_subject_and_borrowed_default",
+                           "data_status":  "checkout_present_unverified",
+                           "license_status":  "local_license_present_unadjudicated",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "bench:AutomationBench/ab_config_2.2b.ps1",
+                                            "bench:AutomationBench/ab_config_2.2b.sh",
+                                            "bench:STATUS.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "bench:AutomationBench/ab_config_2.2b.ps1",
+                           "harness_identity":  {
+                                                    "algorithm":  "sha256-byte-stream-v1",
+                                                    "value":  "bd4ac4f354ebcb03e6a880c5782d262a48d12da5fdcae6f027b5feda06280d68"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "osworld-verified",
+                           "display_name":  "OSWorld-Verified",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "research_stub",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "legal-agent-benchmark",
+                           "display_name":  "Legal Agent Benchmark",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "research_stub",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "humanitys-last-exam",
+                           "display_name":  "Humanity\u0027s Last Exam",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "custom_runner_incomplete_receipt_binding",
+                           "data_status":  "mock_only_access_not_granted",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "bench:hle/hle_access_poll.jsonl",
+                                            "bench:hle/hle_mock_dataset.jsonl",
+                                            "bench:hle/run_benchmark.py"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "bench:hle/hle_access_poll.jsonl",
+                           "harness_identity":  {
+                                                    "algorithm":  "sha256-byte-stream-v1",
+                                                    "value":  "f8213df02d4fe11390e54feb5cdb31ee5c7e6a7de5ce9258a15934a6f397c7a9"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "terminal-bench-2.1",
+                           "display_name":  "Terminal-Bench 2.1",
+                           "version":  "git-46093a8127deaba918661e5775af99ed23ef1e48",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "checkout_present_custom_endpoint_unwired",
+                           "data_status":  "checkout_present_unverified",
+                           "license_status":  "local_license_present_unadjudicated",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "bench:terminal-bench-2-1",
+                                            "bench:MANDATE_HARNESSES.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "bench:terminal-bench-2-1",
+                           "harness_identity":  {
+                                                    "algorithm":  "git-commit-sha1",
+                                                    "value":  "46093a8127deaba918661e5775af99ed23ef1e48"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "arc-agi-1",
+                           "display_name":  "ARC-AGI 1",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "historical_harness_present",
+                           "data_status":  "local_assets_unclassified",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:scripts/t4_eval.py",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "repo:scripts/t4_eval.py",
+                           "harness_identity":  {
+                                                    "algorithm":  "sha256-byte-stream-v1",
+                                                    "value":  "f65229e53c4ee920fdcecae361e6c080a2a55e984a36261409d10530f8e4654e"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "arc-agi-2",
+                           "display_name":  "ARC-AGI 2",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "historical_harness_present",
+                           "data_status":  "local_assets_unclassified",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:scripts/t4_r1_q15_arc2_s14.py",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "repo:scripts/t4_r1_q15_arc2_s14.py",
+                           "harness_identity":  {
+                                                    "algorithm":  "sha256-byte-stream-v1",
+                                                    "value":  "affa5f9ce2352e8f7ce119028d570f58b43d0743e9cf56b7dea715a62d0c5e01"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "arc-agi-3",
+                           "display_name":  "ARC-AGI 3",
+                           "version":  "unresolved",
+                           "provenance_class":  "direct_mandate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "historical_smoke_harness_present",
+                           "data_status":  "local_assets_unclassified",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:scripts/arcade.py",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "repo:scripts/arcade.py",
+                           "harness_identity":  {
+                                                    "algorithm":  "sha256-byte-stream-v1",
+                                                    "value":  "5dd22b3a6dc859f72d9ff0dc8b59c12de86aa29cd79447bfa48719ec7f7b54d2"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "unresolved-direct-01",
+                           "display_name":  "Unrecovered direct request 1",
+                           "version":  "unresolved",
+                           "provenance_class":  "unresolved_direct_request",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "unresolved-direct-02",
+                           "display_name":  "Unrecovered direct request 2",
+                           "version":  "unresolved",
+                           "provenance_class":  "unresolved_direct_request",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:GOAL.md",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "mmlu-pro",
+                           "display_name":  "MMLU-Pro",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "frozen_suite_custody_only",
+                           "data_status":  "frozen_unexecuted",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "gsm8k",
+                           "display_name":  "GSM8K",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "frozen_suite_custody_only",
+                           "data_status":  "frozen_unexecuted",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "math-500",
+                           "display_name":  "MATH-500",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "borrowed_reference_result_only",
+                           "data_status":  "frozen",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "borrowed_reference",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "excluded_reference_or_history",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "arc-challenge",
+                           "display_name":  "ARC-Challenge",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "historical_sub_3b_result_only",
+                           "data_status":  "frozen",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "historical_sub_3b",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "excluded_reference_or_history",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "humaneval-plus",
+                           "display_name":  "HumanEval+",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "frozen_suite_custody_only",
+                           "data_status":  "frozen_unexecuted",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "mbpp",
+                           "display_name":  "MBPP",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "frozen_suite_custody_only",
+                           "data_status":  "frozen_unexecuted",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "hellaswag",
+                           "display_name":  "HellaSwag",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "historical_sub_3b_result_only",
+                           "data_status":  "frozen",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "historical_sub_3b",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "excluded_reference_or_history",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "gpqa-diamond",
+                           "display_name":  "GPQA-Diamond",
+                           "version":  "frozen-suite-v1",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "pin_blocked",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "d3-gym",
+                           "display_name":  "D3-Gym",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "non_model_artifact_result_only",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "non_model_artifact",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "excluded_reference_or_history",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "scienceagentbench",
+                           "display_name":  "ScienceAgentBench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "historical_admission_harness",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:scripts/ember_research_benchmark_harness.py",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "repo:scripts/ember_research_benchmark_harness.py",
+                           "harness_identity":  {
+                                                    "algorithm":  "sha256-byte-stream-v1",
+                                                    "value":  "88bcba4792859db6652c463e2ef265ad9abb29675a2446490eb013c1c2e9cb73"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "re-bench",
+                           "display_name":  "RE-Bench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "paperbench",
+                           "display_name":  "PaperBench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "mle-bench",
+                           "display_name":  "MLE-bench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "local_assets_unclassified",
+                           "data_status":  "local_assets_unclassified",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "mlagentbench",
+                           "display_name":  "MLAgentBench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "core-bench",
+                           "display_name":  "CORE-Bench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "ai-scientist-nanogpt-lite",
+                           "display_name":  "AI-Scientist nanoGPT-lite",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "livecodebench",
+                           "display_name":  "LiveCodeBench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "ifc-building-data",
+                           "display_name":  "IFC/building-data",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "atari",
+                           "display_name":  "Atari",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "gaia",
+                           "display_name":  "GAIA",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "webarena",
+                           "display_name":  "WebArena",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "bfcl",
+                           "display_name":  "BFCL",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "toolbench",
+                           "display_name":  "ToolBench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "scireplicate-bench",
+                           "display_name":  "SciReplicate-Bench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "unresolved",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  null,
+                           "harness_identity":  null,
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       },
+                       {
+                           "benchmark_id":  "researchbench",
+                           "display_name":  "ResearchBench",
+                           "version":  "unresolved",
+                           "provenance_class":  "broader_research_candidate",
+                           "subject_requirement":  "owned_admissible_ember_checkpoint",
+                           "harness_status":  "historical_admission_harness",
+                           "data_status":  "unresolved",
+                           "license_status":  "unresolved",
+                           "execution_status":  "not_executed",
+                           "subject_class":  "none",
+                           "completion":  false,
+                           "evidence":  [
+                                            "repo:scripts/ember_research_benchmark_harness.py",
+                                            "repo:STATE.md"
+                                        ],
+                           "split":  "unresolved",
+                           "harness_path":  "repo:scripts/ember_research_benchmark_harness.py",
+                           "harness_identity":  {
+                                                    "algorithm":  "sha256-byte-stream-v1",
+                                                    "value":  "88bcba4792859db6652c463e2ef265ad9abb29675a2446490eb013c1c2e9cb73"
+                                                },
+                           "comparator_requirements":  {
+                                                           "owned_subject_required":  true,
+                                                           "borrowed_reference_role":  "frozen_reference_only",
+                                                           "lineage_signal_allowed":  false
+                                                       },
+                           "lineage_admissibility":  "owned_subject_only",
+                           "completion_eligibility":  "ineligible_until_exact_owned_execution"
+                       }
+                   ]
+}
