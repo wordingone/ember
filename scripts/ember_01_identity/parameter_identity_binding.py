@@ -21,15 +21,27 @@ Two functions:
   ``model_config`` paths (never just the receipt dict) and re-derives every value it
   checks from bytes on disk: it re-hashes the checkpoint manifest file to catch a
   receipt whose ``subject_checkpoint_sha256`` does not match any checkpoint that
-  actually exists, then re-runs the real, isolated ``execute_counter`` against those
-  same paths and compares its freshly measured six axes + checkpoint hash against the
-  receipt's claims. Only after that independent re-derivation does it fall back to
-  the manifest-vs-receipt field comparison. It fails closed (raises
-  ``ParameterIdentityMismatch``, naming the axis or the checkpoint identity) the
-  instant any claimed value diverges from what is independently, freshly measured.
-  This is the round-trip proof surface: tamper one axis in the manifest without
-  touching the receipt and this raises; hand-author a receipt with no matching
-  checkpoint on disk and this raises; tamper nothing and it is silent.
+  actually exists, re-hashes the model config file and binds it to the receipt's
+  ``model_config_sha256`` when the receipt carries that field, then re-runs the
+  real, isolated ``execute_counter`` against those same paths and compares its
+  freshly measured six axes + checkpoint hash against the receipt's claims. Only
+  after that independent re-derivation does it fall back to the manifest-vs-receipt
+  field comparison. It fails closed (raises ``ParameterIdentityMismatch``, naming
+  the axis or the checkpoint identity) the instant any claimed value diverges from
+  what is independently, freshly measured -- including when the re-derivation itself
+  errors for any reason (not only ``ValueError``). This is the round-trip proof
+  surface: tamper one axis in the manifest without touching the receipt and this
+  raises; hand-author a receipt with no matching checkpoint on disk and this raises;
+  tamper nothing and it is silent.
+
+  Scope: this verification path covers shared-routed receipts only
+  (``active_expert_ids == ["shared"]``, the only routing ``bind_parameter_identity``
+  currently emits). A specialist-routed receipt (``active_expert_ids`` naming one of
+  the four expert banks) demands ``execute_counter``'s external parent/root manifest
+  chain and P2B stream authority inputs that this function does not thread through;
+  rather than silently mis-verify such a receipt, it fails closed immediately naming
+  the scope gap. Specialist-routed verification is a deliberately separate,
+  not-yet-implemented path.
 """
 
 from __future__ import annotations
@@ -161,6 +173,24 @@ def verify_parameter_identity_binding(
             f"{real_checkpoint_sha256!r}"
         )
 
+    claimed_model_config_sha256 = receipt.get("model_config_sha256")
+    if claimed_model_config_sha256 is not None:
+        try:
+            real_model_config_sha256 = _hash_file(model_config)
+        except OSError as error:
+            raise ParameterIdentityMismatch(
+                f"model_config at {model_config} could not be read from disk to "
+                f"re-derive its hash; receipt claims "
+                f"model_config_sha256={claimed_model_config_sha256!r} but no such "
+                f"config bytes exist to verify against ({error})"
+            ) from error
+        if real_model_config_sha256 != claimed_model_config_sha256:
+            raise ParameterIdentityMismatch(
+                f"receipt claims model_config_sha256={claimed_model_config_sha256!r} "
+                f"but the model config bytes on disk hash to "
+                f"{real_model_config_sha256!r}"
+            )
+
     resolved_active_expert = active_expert
     if resolved_active_expert is None:
         active_expert_ids = receipt.get("active_expert_ids")
@@ -169,16 +199,26 @@ def verify_parameter_identity_binding(
             if isinstance(active_expert_ids, list) and active_expert_ids
             else "shared"
         )
+    if resolved_active_expert != "shared":
+        raise ParameterIdentityMismatch(
+            "verify_parameter_identity_binding covers shared-routed receipts only "
+            f"(resolved active_expert={resolved_active_expert!r} from "
+            f"active_expert_ids={receipt.get('active_expert_ids')!r}); "
+            "specialist-routed receipts require execute_counter's external "
+            "parent/root manifest chain, which this function does not thread "
+            "through, and are a separate, not-yet-implemented verification path"
+        )
     try:
         remeasured = measure_live_checkpoint(
             model_config=model_config,
             checkpoint_manifest=checkpoint_manifest,
             active_expert=resolved_active_expert,
         )
-    except ValueError as error:
+    except Exception as error:
         raise ParameterIdentityMismatch(
             f"re-running the live-checkpoint counter against {checkpoint_manifest} "
-            f"failed; the receipt's evidence does not independently re-derive ({error})"
+            f"failed; the receipt's evidence does not independently re-derive "
+            f"({type(error).__name__}: {error})"
         ) from error
 
     for field, axis in AXIS_MAP.items():
