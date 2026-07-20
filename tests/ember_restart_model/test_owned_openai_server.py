@@ -39,6 +39,7 @@ from serve_owned_openai import (
     _read_bound_json_snapshot,
     _config_snapshot_path,
     _same_root_snapshot,
+    _emit_pre_load_validation_receipt,
     main as serve_main,
 )
 
@@ -682,5 +683,285 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 checkpoint_sha256=checkpoint,
                 runner=runner,
             )
+class _CounterReceiptVerifier:
+    """Real (non-mock) pre-publish verifier binding the fixture checkpoint."""
+
+    def __call__(self, candidate: Path, manifest_receipt: dict[str, object]) -> dict[str, object]:
+        architecture = manifest_receipt["architecture"]
+        payload = {
+            "schema_version": "ember-sparse-realization-receipt-v1",
+            "verification_boundary": "VERIFIED_MEASURED",
+            "result": "MEASURED",
+            "subject_checkpoint_sha256": manifest_receipt["checkpoint_manifest_sha256"],
+            "model_config_sha256": manifest_receipt["model_config_sha256"],
+            "architecture_revision": manifest_receipt["architecture_revision"],
+            "counter_sha256": hashlib.sha256(
+                (ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()
+            ).hexdigest(),
+            "runtime_authority": {"schema_version": "ember-counter-runtime-authority-v1", "kind": "NONE"},
+            "active_expert_ids": manifest_receipt["active_expert_ids"],
+            "expert_genesis_sha256": manifest_receipt["expert_genesis_sha256"],
+            "expert_parameter_sha256": manifest_receipt["expert_parameter_sha256"],
+        }
+        for field in (
+            "allocated_parameters", "unique_parameters", "trainable_parameters",
+            "served_parameters", "active_parameters", "episode_trainable_parameters",
+        ):
+            payload[field] = architecture[field]
+        (candidate / "parameter-counter-receipt.json").write_text(
+            json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return payload
+
+
+class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
+    """cond3 inc2b: serving_runtime identity -- real checkpoint round trip.
+
+    Builds a REAL tiny UnifiedDecoder checkpoint (via the production
+    write_checkpoint_artifacts publication path, not a constant fixture
+    file) and drives it through LoadedOwnedRuntime.from_paths -- the
+    serving runtime's identity-binding entry point. Only the boundary this
+    increment does not own (the central owned-seat resolver subprocess and
+    the >=3B-parameter production config contract) is stood in for; the
+    checkpoint bytes, their hash, and the load path are all real.
+    """
+
+    def _build_real_checkpoint(self, root: Path) -> tuple[Path, str, object]:
+        from model import RestartDecoderConfig, UnifiedDecoder
+        from checkpoint_artifacts import write_checkpoint_artifacts
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=1, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, device="cpu", genesis_seed=7)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        checkpoint_dir = root / "checkpoint-0001"
+        write_checkpoint_artifacts(
+            model,
+            optimizer,
+            checkpoint_dir,
+            launch_seed=7,
+            rng_state={
+                "cpu": torch.get_rng_state().clone(),
+                "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8)),
+            },
+            data_cursor={"shard": "owned-inc2b-fixture-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+            model_config_sha256="c" * 64,
+            contract_sha256="d" * 64,
+            expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+            pre_publish_verifier=_CounterReceiptVerifier(),
+        )
+        real_checkpoint_sha256 = hashlib.sha256((checkpoint_dir / "checkpoint-manifest.json").read_bytes()).hexdigest()
+        return checkpoint_dir, real_checkpoint_sha256, config
+
+    def _write_run_manifest(self, root: Path, *, config_sha256: str, tokenizer_sha256: str) -> Path:
+        run_manifest_path = root / "run-manifest.json"
+        run_manifest_path.write_text(
+            json.dumps({
+                "architecture": {"model_config": {"sha256": config_sha256}},
+                "tokenizer": {"sha256": tokenizer_sha256},
+            }),
+            encoding="utf-8",
+        )
+        return run_manifest_path
+
+    def test_valid_real_checkpoint_loads_and_emits_pass_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint_dir, real_checkpoint_sha256, config = self._build_real_checkpoint(root)
+
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
+            tokenizer_path = root / "tokenizer.json"
+            tokenizer_path.write_text("{}", encoding="utf-8")
+            run_manifest_path = self._write_run_manifest(
+                root, config_sha256=config_sha256, tokenizer_sha256="c" * 64,
+            )
+            registry_path = root / "registry.json"
+            registry_path.write_text("{}", encoding="utf-8")
+
+            admission_payload = {
+                "valid": True,
+                "seat": "OWNED_ADMITTED",
+                "checkpoint_sha256": real_checkpoint_sha256,
+                "model_name": "ember-owned:" + real_checkpoint_sha256[:12],
+            }
+            receipts: list[dict[str, object]] = []
+
+            with (
+                patch("serve_owned_openai.resolve_central_owned_admission", return_value=admission_payload),
+                patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256="c" * 64)),
+                patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=config),
+            ):
+                runtime = LoadedOwnedRuntime.from_paths(
+                    checkpoint=checkpoint_dir,
+                    tokenizer_path=tokenizer_path,
+                    config_path=config_path,
+                    run_manifest=run_manifest_path,
+                    frozen_split=None,
+                    trusted_verifier_registry=registry_path,
+                    device="cpu",
+                    emit_validation_receipt=receipts.append,
+                )
+
+            # Real served identity is the real, freshly-derived checkpoint hash.
+            self.assertEqual(runtime.identity.checkpoint_sha256, real_checkpoint_sha256)
+            self.assertEqual(runtime.identity.seat, "OWNED_ADMITTED")
+            # Tied-embedding post-load identity assert did not fire, and the
+            # runtime is genuinely usable (lm_head still shares storage with
+            # the token embedding after a real state_dict load).
+            self.assertIs(runtime.model.lm_head.weight, runtime.model.token_embedding.weight)
+
+            self.assertEqual(len(receipts), 1)
+            receipt = receipts[0]
+            self.assertEqual(receipt["validation_status"], "PASS")
+            self.assertEqual(receipt["actual_checkpoint_sha256"], real_checkpoint_sha256)
+            self.assertEqual(receipt["claimed_checkpoint_sha256"], real_checkpoint_sha256)
+            self.assertEqual(receipt["manifest_sha256"], real_checkpoint_sha256)
+            self.assertEqual(receipt["manifest_path"], str(checkpoint_dir / "checkpoint-manifest.json"))
+            self.assertIn("ts", receipt)
+
+    def test_tampered_checkpoint_manifest_fails_closed_against_stale_admission_claim(self) -> None:
+        """A real checkpoint, then the manifest changes on disk (tamper/stale-manifest
+        simulation): the resolver's admission claim was bound to the ORIGINAL bytes, so
+        the freshly re-derived hash no longer matches -- from_paths must refuse to load."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint_dir, original_checkpoint_sha256, config = self._build_real_checkpoint(root)
+
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
+            tokenizer_path = root / "tokenizer.json"
+            tokenizer_path.write_text("{}", encoding="utf-8")
+            run_manifest_path = self._write_run_manifest(
+                root, config_sha256=config_sha256, tokenizer_sha256="c" * 64,
+            )
+            registry_path = root / "registry.json"
+            registry_path.write_text("{}", encoding="utf-8")
+
+            # Stale admission: bound to the checkpoint's ORIGINAL (pre-tamper) bytes.
+            stale_admission_payload = {
+                "valid": True,
+                "seat": "OWNED_ADMITTED",
+                "checkpoint_sha256": original_checkpoint_sha256,
+                "model_name": "ember-owned:" + original_checkpoint_sha256[:12],
+            }
+
+            # Tamper: real byte mutation of the published manifest on disk.
+            manifest_path = checkpoint_dir / "checkpoint-manifest.json"
+            tampered = json.loads(manifest_path.read_bytes())
+            tampered["launch_seed"] = tampered["launch_seed"] + 1
+            manifest_path.write_text(json.dumps(tampered, sort_keys=True), encoding="utf-8")
+            tampered_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            self.assertNotEqual(tampered_sha256, original_checkpoint_sha256)
+
+            receipts: list[dict[str, object]] = []
+            with (
+                patch("serve_owned_openai.resolve_central_owned_admission", side_effect=lambda **kwargs: (
+                    stale_admission_payload
+                    if kwargs["checkpoint_sha256"] == stale_admission_payload["checkpoint_sha256"]
+                    else (_ for _ in ()).throw(ValueError("central admission checkpoint hash does not match loaded manifest"))
+                )),
+                patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256="c" * 64)),
+                patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=config),
+            ):
+                with self.assertRaisesRegex(ValueError, "checkpoint hash"):
+                    LoadedOwnedRuntime.from_paths(
+                        checkpoint=checkpoint_dir,
+                        tokenizer_path=tokenizer_path,
+                        config_path=config_path,
+                        run_manifest=run_manifest_path,
+                        frozen_split=None,
+                        trusted_verifier_registry=registry_path,
+                        device="cpu",
+                        emit_validation_receipt=receipts.append,
+                    )
+            # Fail-closed: no validation receipt is ever emitted for a rejected load.
+            self.assertEqual(receipts, [])
+
+    def test_missing_checkpoint_manifest_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint_dir = Path(directory) / "checkpoint-missing"
+            checkpoint_dir.mkdir()
+            with self.assertRaises(OSError):
+                LoadedOwnedRuntime.from_paths(
+                    checkpoint=checkpoint_dir,
+                    tokenizer_path=Path(directory) / "tokenizer.json",
+                    config_path=Path(directory) / "config.json",
+                    run_manifest=Path(directory) / "run.json",
+                    frozen_split=None,
+                    trusted_verifier_registry=Path(directory) / "registry.json",
+                    device="cpu",
+                )
+
+    def test_corrupted_checkpoint_manifest_json_raises_value_error_not_json_decode_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint_dir = Path(directory) / "checkpoint-corrupt"
+            checkpoint_dir.mkdir()
+            (checkpoint_dir / "checkpoint-manifest.json").write_bytes(b"{not-json")
+            with self.assertRaisesRegex(ValueError, "not valid JSON"):
+                LoadedOwnedRuntime.from_paths(
+                    checkpoint=checkpoint_dir,
+                    tokenizer_path=Path(directory) / "tokenizer.json",
+                    config_path=Path(directory) / "config.json",
+                    run_manifest=Path(directory) / "run.json",
+                    frozen_split=None,
+                    trusted_verifier_registry=Path(directory) / "registry.json",
+                    device="cpu",
+                )
+
+    def test_post_load_identity_assert_catches_broken_tied_embedding(self) -> None:
+        """If a broken load ever desynchronized the tied lm_head/embedding invariant,
+        from_paths must refuse to construct a runtime around it (cond3 inc2b item 4d)."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint_dir, real_checkpoint_sha256, config = self._build_real_checkpoint(root)
+
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
+            tokenizer_path = root / "tokenizer.json"
+            tokenizer_path.write_text("{}", encoding="utf-8")
+            run_manifest_path = self._write_run_manifest(
+                root, config_sha256=config_sha256, tokenizer_sha256="c" * 64,
+            )
+            registry_path = root / "registry.json"
+            registry_path.write_text("{}", encoding="utf-8")
+
+            admission_payload = {
+                "valid": True,
+                "seat": "OWNED_ADMITTED",
+                "checkpoint_sha256": real_checkpoint_sha256,
+                "model_name": "ember-owned:" + real_checkpoint_sha256[:12],
+            }
+
+            import checkpoint_artifacts as _checkpoint_artifacts_module
+            _real_load = _checkpoint_artifacts_module.load_checkpoint_artifacts
+
+            def break_tie_after_real_load(model, optimizer, checkpoint, receipt):
+                result = _real_load(model, optimizer, checkpoint, receipt)
+                # Simulate a silent partial load: untie lm_head from the embedding.
+                with torch.no_grad():
+                    model.lm_head.weight = torch.nn.Parameter(model.lm_head.weight.detach().clone() + 1.0)
+                return result
+
+            with (
+                patch("serve_owned_openai.resolve_central_owned_admission", return_value=admission_payload),
+                patch("serve_owned_openai.load_frozen_tokenizer", return_value=SimpleNamespace(sha256="c" * 64)),
+                patch("serve_owned_openai.RestartDecoderConfig.from_contract", return_value=config),
+                patch("checkpoint_artifacts.load_checkpoint_artifacts", side_effect=break_tie_after_real_load),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "post-load identity assertion failed"):
+                    LoadedOwnedRuntime.from_paths(
+                        checkpoint=checkpoint_dir,
+                        tokenizer_path=tokenizer_path,
+                        config_path=config_path,
+                        run_manifest=run_manifest_path,
+                        frozen_split=None,
+                        trusted_verifier_registry=registry_path,
+                        device="cpu",
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()
