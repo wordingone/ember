@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/model-circuit-breaker.ts — issue #239: cross-call retry circuit
 // breaker for the model-client request path.
 //
@@ -56,6 +60,16 @@ export interface CircuitBreakerState {
   lastReason: string | null;
   /** The endpoint URL this breaker is tracking. */
   endpoint: string | null;
+  /**
+   * Epoch ms of the most recent successful call, or null if none has ever
+   * succeeded. Unlike every other field here, this is PRESERVED across
+   * recordFailure transitions (never cleared by an open/half-open bounce) so
+   * the status line can always answer "how long since the last successful
+   * roundtrip" -- the #239 acceptance clause distinguishing a wedged session
+   * (age keeps climbing) from an idle one (healthy, just no recent traffic),
+   * visible even before/without a degraded banner ever showing.
+   */
+  lastSuccessAt: number | null;
 }
 
 /** Everything the degraded-state banner (status-bar.ts) needs to render. */
@@ -93,6 +107,7 @@ export function createCircuitBreakerState(): CircuitBreakerState {
     lastStatus: null,
     lastReason: null,
     endpoint: null,
+    lastSuccessAt: null,
   };
 }
 
@@ -170,6 +185,7 @@ export function recordFailure(
       lastStatus: info.status,
       lastReason: info.reason,
       endpoint: info.endpoint,
+      lastSuccessAt: state.lastSuccessAt,
     };
   }
 
@@ -184,12 +200,17 @@ export function recordFailure(
     lastStatus: info.status,
     lastReason: info.reason,
     endpoint: info.endpoint,
+    lastSuccessAt: state.lastSuccessAt,
   };
 }
 
-/** A successful call always fully resets the breaker, from any state. */
-export function recordSuccess(_state: CircuitBreakerState): CircuitBreakerState {
-  return createCircuitBreakerState();
+/**
+ * A successful call always fully resets the breaker to closed/healthy, from
+ * any state -- except lastSuccessAt, which is stamped with `now` rather than
+ * cleared, since this call IS the new most-recent success.
+ */
+export function recordSuccess(_state: CircuitBreakerState, now: number): CircuitBreakerState {
+  return { ...createCircuitBreakerState(), lastSuccessAt: now };
 }
 
 /** Marks the start of a half-open probe attempt (open -> half-open). */
@@ -217,4 +238,25 @@ export function describeDegradedBanner(
     nextProbeAt: last + CIRCUIT_PROBE_INTERVAL_MS,
     probing: state.state === "half-open",
   };
+}
+
+/** What the always-visible status-line roundtrip-age indicator needs. */
+export interface RoundtripAgeInfo {
+  /** Epoch ms of the most recent successful call, or null if none has ever succeeded. */
+  lastSuccessAt: number | null;
+  /** Milliseconds since that success, or null when lastSuccessAt is null (nothing to measure). */
+  ageMs: number | null;
+}
+
+/**
+ * Projects breaker state into the last-successful-roundtrip age -- the #239
+ * acceptance clause ("Status line shows last-successful-model-roundtrip
+ * age"). Unlike describeDegradedBanner, this is NEVER null while the breaker
+ * exists: it is meant to render at all times (closed/open/half-open alike)
+ * so a wedged session (age climbing without bound) reads differently from an
+ * idle-but-healthy one even before any circuit ever trips.
+ */
+export function describeRoundtripAge(state: CircuitBreakerState, now: number): RoundtripAgeInfo {
+  if (state.lastSuccessAt == null) return { lastSuccessAt: null, ageMs: null };
+  return { lastSuccessAt: state.lastSuccessAt, ageMs: Math.max(0, now - state.lastSuccessAt) };
 }

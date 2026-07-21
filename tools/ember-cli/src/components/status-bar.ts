@@ -254,6 +254,54 @@ export function DegradedBanner({ degraded, now }: DegradedBannerProps): React.Re
 }
 
 // ---------------------------------------------------------------------------
+// RoundtripAgeIndicator — issue #239 final acceptance clause: "Status line
+// shows last-successful-model-roundtrip age." Unlike DegradedBanner (hidden
+// while the circuit is closed/healthy), this is meant to render ALWAYS --
+// its whole purpose is telling a wedged session (age climbs without bound,
+// no successful roundtrip in a long time) apart from an idle-but-healthy one
+// (just no recent traffic), even before any breaker has ever tripped.
+// ---------------------------------------------------------------------------
+
+export interface RoundtripAgeState {
+  /** Epoch ms of the most recent successful model roundtrip, or null if none yet. */
+  lastSuccessAt: number | null;
+}
+
+/** Formats a duration compactly: 900 -> "900ms", 45000 -> "45s", 125000 -> "2m5s". */
+export function formatRoundtripAgeDuration(ageMs: number): string {
+  const clamped = Math.max(0, ageMs);
+  if (clamped < 1000) return `${Math.round(clamped)}ms`;
+  const totalSec = Math.floor(clamped / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}m${sec}s`;
+}
+
+/**
+ * Pure formatter: "last roundtrip <age> ago" once a call has ever succeeded,
+ * or "no roundtrip yet" before the first one. `now` is injectable for tests.
+ */
+export function formatRoundtripAgeText(roundtripAge: RoundtripAgeState, now: number): string {
+  if (roundtripAge.lastSuccessAt == null) return "no roundtrip yet";
+  const ageMs = Math.max(0, now - roundtripAge.lastSuccessAt);
+  return `last roundtrip ${formatRoundtripAgeDuration(ageMs)} ago`;
+}
+
+export interface RoundtripAgeIndicatorProps {
+  roundtripAge: RoundtripAgeState;
+  /** Current time (epoch ms); injectable for tests, defaults to Date.now(). */
+  now?: number;
+}
+
+/** Always-visible status-bar segment — never hidden like DegradedBanner/OutageBanner,
+ *  since showing liveness (or its absence) even when nothing else is active is the point. */
+export function RoundtripAgeIndicator({ roundtripAge, now }: RoundtripAgeIndicatorProps): React.ReactElement {
+  const resolvedNow = now ?? Date.now();
+  return React.createElement(Text, { dimColor: true }, formatRoundtripAgeText(roundtripAge, resolvedNow));
+}
+
+// ---------------------------------------------------------------------------
 // OutageBanner — issue #475: cockpit banner for the frozen planned-outage.json
 // marker contract (#464). The liveness watchdogs already honor a planned-outage
 // window server-side (zero failure-counting while it's in effect); this is the
@@ -380,6 +428,10 @@ export interface StatusLineProps {
    *  ABOVE the degraded banner — it explains WHY the model may be unreachable, so the
    *  operator reads the "planned" context before the "degraded" symptom. */
   outage?: OutageBannerState;
+  /** issue #239 final acceptance clause: last-successful-model-roundtrip age.
+   *  Absent → indicator hidden (no guarded client wired yet); present → always rendered,
+   *  healthy or degraded alike, so a wedge is visible even without a tripped circuit. */
+  roundtripAge?: RoundtripAgeState;
 }
 
 export function StatusLine({
@@ -393,6 +445,7 @@ export function StatusLine({
   modelMetrics,
   degraded,
   outage,
+  roundtripAge,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
     if (key.shift && key.tab)    { permissionMode.cycle(); return; }
@@ -440,6 +493,14 @@ export function StatusLine({
         ? React.createElement(React.Fragment, { key: "metrics" },
             React.createElement(Text, { key: "msep", dimColor: true }, SEGMENT_SEPARATOR),
             React.createElement(ModelMetricsBar, { key: "mbar", metrics: modelMetrics }),
+          )
+        : null,
+      // issue #239: always-visible last-successful-roundtrip age — never hidden the
+      // way DegradedBanner is, since it must read as "wedged" even before any circuit trips.
+      roundtripAge != null
+        ? React.createElement(React.Fragment, { key: "roundtrip" },
+            React.createElement(Text, { key: "rsep", dimColor: true }, SEGMENT_SEPARATOR),
+            React.createElement(RoundtripAgeIndicator, { key: "rbar", roundtripAge }),
           )
         : null,
     ),
