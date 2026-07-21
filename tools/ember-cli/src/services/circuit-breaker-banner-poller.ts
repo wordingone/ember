@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/circuit-breaker-banner-poller.ts — issue #239: polls the
 // in-process circuit-breaker singleton (session-init.ts's
 // getCircuitBreakerState) and projects it into status-bar.ts's
@@ -11,8 +15,8 @@
 
 import { useState, useEffect } from "react";
 import { getCircuitBreakerState } from "../entrypoints/session-init.ts";
-import { describeDegradedBanner } from "./model-circuit-breaker.ts";
-import type { DegradedBannerState } from "../components/status-bar.ts";
+import { describeDegradedBanner, describeRoundtripAge } from "./model-circuit-breaker.ts";
+import type { DegradedBannerState, RoundtripAgeState } from "../components/status-bar.ts";
 
 /** Poll cadence for the degraded banner's countdown display. */
 export const DEFAULT_BANNER_POLL_INTERVAL_MS = 1_000;
@@ -58,4 +62,52 @@ export function useCircuitBreakerBanner(
   }, [intervalMs]);
 
   return banner;
+}
+
+// ---------------------------------------------------------------------------
+// Roundtrip-age poller — issue #239 final acceptance clause: "Status line
+// shows last-successful-model-roundtrip age." Unlike readDegradedBannerState
+// (collapses to {active:false} while the circuit is closed), this reflects
+// lastSuccessAt regardless of circuit state, so the indicator is meaningful
+// even when the breaker has never tripped.
+// ---------------------------------------------------------------------------
+
+/** Poll cadence for the roundtrip-age display. */
+export const DEFAULT_ROUNDTRIP_AGE_POLL_INTERVAL_MS = 1_000;
+
+const NO_ROUNDTRIP_YET: RoundtripAgeState = { lastSuccessAt: null };
+
+/**
+ * Reads the current circuit-breaker state and projects it into the
+ * RoundtripAgeState status-bar.ts renders. Returns {lastSuccessAt: null}
+ * both when no guarded client has ever been wired and when one has been
+ * wired but no call has succeeded yet.
+ */
+export function readRoundtripAgeState(now: number = Date.now()): RoundtripAgeState {
+  const state = getCircuitBreakerState();
+  if (!state) return NO_ROUNDTRIP_YET;
+  const info = describeRoundtripAge(state, now);
+  return { lastSuccessAt: info.lastSuccessAt };
+}
+
+/** Polls the in-process circuit breaker at `intervalMs` cadence for the last-successful-roundtrip timestamp. */
+export function useRoundtripAge(
+  intervalMs: number = DEFAULT_ROUNDTRIP_AGE_POLL_INTERVAL_MS,
+): RoundtripAgeState {
+  const [age, setAge] = useState<RoundtripAgeState>(() => readRoundtripAgeState());
+
+  useEffect(() => {
+    let active = true;
+    const poll = (): void => {
+      if (active) setAge(readRoundtripAgeState());
+    };
+    poll(); // immediate first read
+    const id = setInterval(poll, intervalMs);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [intervalMs]);
+
+  return age;
 }
