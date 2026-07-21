@@ -150,7 +150,7 @@
     }
   },
   "evaluation": {
-    "benchmark_id": "fixture-benchmark",
+    "benchmark_id": "terminal-bench-2.1",
     "version": "v1",
     "split": "fixture",
     "harness_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
