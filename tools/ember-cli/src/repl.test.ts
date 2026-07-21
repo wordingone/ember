@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // repl-render.test.ts — AC1–AC4 receipts for M9 render-check wiring.
 //
 // Tests the renderMsgDispatch function (exported from the LIVE screens/repl.ts
@@ -23,13 +27,13 @@ import {
   AssistantTextMessage,
   AssistantToolUseMessage,
   SystemAPIErrorMessage,
-} from "../components/message-renderers.ts";
-import type { MessageLookups } from "../components/message-renderers.ts";
+} from "./components/message-renderers.ts";
+import type { MessageLookups } from "./components/message-renderers.ts";
 import {
   UserToolResultMessage,
   CANCEL_MESSAGE,
-} from "../components/tool-result-renderers.ts";
-import type { ToolResultContent } from "../components/tool-result-renderers.ts";
+} from "./components/tool-result-renderers.ts";
+import type { ToolResultContent } from "./components/tool-result-renderers.ts";
 import {
   Homescreen,
   WelcomeV2,
