@@ -343,6 +343,47 @@ def _git_blob_contents(root: Path, commit: str, paths: Iterable[str]) -> dict[st
     return contents
 
 
+def assert_disposition_root_not_shadowing_public(
+    *,
+    root_id: str,
+    root_path: Path,
+    tracked: Iterable[str],
+    public_root: Path,
+    public_commit: str,
+) -> None:
+    """Fail closed when a root dispositioned optional_local_absent turns out to
+    be present on this machine AND carries content the public-master commit
+    does not have. The disposition may only excuse genuine machine-local
+    absence (env var unset, sentinel path missing) - it must never let
+    present-and-divergent authority content hide behind "not on this machine".
+    """
+    ordered_tracked = sorted(set(tracked))
+    if not ordered_tracked:
+        return
+    public_tree = set(_git_tree_files(public_root, public_commit))
+    present_in_public = [path for path in ordered_tracked if path in public_tree]
+    public_contents = _git_blob_contents(public_root, public_commit, present_in_public)
+    unique: list[str] = []
+    for relative in ordered_tracked:
+        if relative not in public_tree:
+            unique.append(relative)
+            continue
+        try:
+            local_bytes = (root_path / relative).read_bytes()
+        except OSError:
+            unique.append(relative)
+            continue
+        if local_bytes != public_contents.get(relative):
+            unique.append(relative)
+    if unique:
+        raise ValueError(
+            f"root '{root_id}' is dispositioned optional_local_absent but is present "
+            f"with content not on public master at {public_commit} "
+            f"(unique paths: {', '.join(unique[:5])}); the disposition only applies "
+            "when the root is genuinely absent"
+        )
+
+
 def build_census(
     root: Path,
     *,
@@ -1011,6 +1052,10 @@ def build_census_set(
     built: list[dict] = []
     seen: set[str] = set()
     semantics = list(consumer_semantics)
+    root_specs = list(root_specs)
+    public_spec = next(
+        (s for s in root_specs if s.get("root_id") == "public-master"), None
+    )
     for spec in root_specs:
         root_id = spec["root_id"]
         if root_id in seen:
@@ -1050,6 +1095,19 @@ def build_census_set(
             error["path"] == "." and error["error_class"] == "FileNotFoundError"
             for error in discovery_errors
         ) else ("PARTIAL" if discovery_errors else "AVAILABLE")
+        if spec.get("disposition") == "optional_local_absent":
+            if row["availability"] == "MISSING":
+                row["disposition_state"] = "absent_by_disposition"
+            else:
+                row["disposition_state"] = "present"
+                if public_spec is not None and public_spec.get("source_commit"):
+                    assert_disposition_root_not_shadowing_public(
+                        root_id=root_id,
+                        root_path=root_path,
+                        tracked=tracked or [],
+                        public_root=Path(public_spec["root"]),
+                        public_commit=public_spec["source_commit"],
+                    )
         built.append(row)
     unknown_semantic_roots = sorted(
         {row.get("root_id") for row in semantics} - seen
@@ -1067,6 +1125,10 @@ def build_census_set(
             "coverage": row["coverage"],
             "availability": row["availability"],
             "discovery_errors": row["discovery_errors"],
+            **(
+                {"disposition_state": row["disposition_state"]}
+                if "disposition_state" in row else {}
+            ),
         }
         for row in built
     ]
@@ -1177,8 +1239,23 @@ def resolve_root_locator_spec(
             name = locator.get("env")
             value = os.environ.get(name, "") if isinstance(name, str) else ""
             if not value:
-                raise ValueError(f"required census root environment variable is absent: {name}")
-            root = Path(value).resolve()
+                if row.get("disposition") == "optional_local_absent":
+                    # This root is legitimately not present on every machine
+                    # (env var unset). Resolve to the same non-existent
+                    # sentinel the "missing" locator kind uses so downstream
+                    # discovery records a clean MISSING/absent-by-disposition
+                    # state instead of failing the whole census closed.
+                    root = repo_root.resolve() / "__configured_missing_root__"
+                    if root.exists():
+                        raise ValueError(
+                            "configured missing-root sentinel unexpectedly exists"
+                        )
+                else:
+                    raise ValueError(
+                        f"required census root environment variable is absent: {name}"
+                    )
+            else:
+                root = Path(value).resolve()
         elif set(locator) == {"kind"} and locator.get("kind") == "missing":
             root = repo_root.resolve() / "__configured_missing_root__"
             if root.exists():
