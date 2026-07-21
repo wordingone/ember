@@ -1,0 +1,207 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+// commands/custody.ts — /custody status (alias /seat): read-only exposure of the
+// current model seat classification (OWNED_ADMITTED | OWNED_DEVELOPMENT |
+// REFERENCE_ONLY | OFFLINE). Pure exposure of the existing classification
+// logic in entrypoints/model-seat.ts (resolveModelSeat / selectedModelContract)
+// -- no new backend logic, no mutation, no seat/server side effects. Prior to
+// this command, only entrypoints/process-entry.ts (boot-time) and
+// commands/ultraplan.ts (via an injected `getModelContract` dependency) ever
+// read a seat decision; there was no operator-visible way to ask "what seat is
+// this session actually in right now".
+
+import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
+import {
+  referenceSeatModelName,
+  resolveModelSeat,
+  selectedModelContract,
+  type ModelSeatDecision,
+  type ModelSeatResolutionInput,
+  type SelectedModelContract,
+} from "../entrypoints/model-seat.ts";
+import {
+  loadOwnedDevelopmentIdentity,
+  loadOwnedModelIdentity,
+} from "../entrypoints/owned-seat-loader.ts";
+import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
+import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+
+// ---------------------------------------------------------------------------
+// Deps (injectable for testing)
+// ---------------------------------------------------------------------------
+
+interface CustodyCommandDeps {
+  /**
+   * Returns the CURRENT seat classification for this session. Tests inject a
+   * canned `ModelSeatDecision` directly (matching the `getModelContract`
+   * seam `commands/ultraplan.ts` already uses); production defaults to
+   * `_defaultGetModelSeatDecision`, which re-derives the decision the exact
+   * way `entrypoints/process-entry.ts::main()` does at boot -- same
+   * functions, same env-var inputs, same owned-identity fallback -- but with
+   * zero side effects (never spawns/binds a server, never mutates env).
+   */
+  getModelSeatDecision?: () => ModelSeatDecision;
+  /** Injectable for tests; defaults to the real `selectedModelContract`. */
+  selectedModelContractFn?: (decision: ModelSeatDecision) => SelectedModelContract | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Production default: re-derive the current seat decision, read-only
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors the seat-resolution half of `process-entry.ts::main()` (never the
+ * server-binding half): builds the same `ModelSeatResolutionInput` from the
+ * current process env/argv, calls the same `resolveModelSeat`, and -- only
+ * when that comes back refused -- attempts the same owned-identity fallback
+ * (`loadOwnedModelIdentity` / `loadOwnedDevelopmentIdentity`) so an
+ * OWNED_ADMITTED / OWNED_DEVELOPMENT session is classified correctly instead
+ * of always reporting "no admitted owned Ember identity". Any failure in the
+ * fallback (missing manifest, rejected admission, resolver subprocess error)
+ * is swallowed here -- the original refused decision is returned as-is, and
+ * `renderCustodyStatus` turns that into an explicit UNRESOLVED line. This
+ * function never writes to `process.env`, never spawns/binds a model server,
+ * and never calls `process.exit`.
+ */
+function _defaultGetModelSeatDecision(): ModelSeatDecision {
+  const seatInput: ModelSeatResolutionInput = {
+    argv: process.argv,
+    explicitModelUrl: process.env["EMBER_MODEL_URL"],
+    gpuFreeRequested: Boolean(process.env["EMBER_GPU_FREE"]),
+    referenceSeatEnv: process.env["EMBER_REFERENCE_SEAT"],
+    referenceModelName: process.env["EMBER_MODEL_NAME"],
+  };
+
+  const decision = resolveModelSeat(seatInput);
+  if (decision.allowed) return decision;
+
+  try {
+    const repoRoot = resolveEmberRepoRootOrCwd({}, "[ember] /custody");
+    const configHome = getEmberConfigHomeDir();
+    const admittedIdentity = loadOwnedModelIdentity({
+      repoRoot,
+      configHome,
+      manifestPath: process.env["EMBER_OWNED_RUNG_MANIFEST"],
+      verifierRegistryPath: process.env["EMBER_TRUSTED_VERIFIER_REGISTRY"],
+      pythonExecutable: process.env["EMBER_PYTHON"],
+    });
+    const ownedIdentity =
+      admittedIdentity ??
+      loadOwnedDevelopmentIdentity({
+        repoRoot,
+        configHome,
+        manifestPath: process.env["EMBER_OWNED_DEVELOPMENT_MANIFEST"],
+        pythonExecutable: process.env["EMBER_PYTHON"],
+      });
+    if (ownedIdentity) {
+      return resolveModelSeat({ ...seatInput, ownedIdentity });
+    }
+  } catch {
+    // Fail closed to the original refused decision -- rendered as UNRESOLVED
+    // below. A read-only status query is never broken by a missing manifest,
+    // an unavailable python executable, or a rejected admission.
+  }
+
+  return decision;
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders the operator-facing `/custody status` text for a given seat
+ * decision. Exported for direct unit testing of the render shape without
+ * going through the command's `execute()` plumbing.
+ *
+ * Never throws: an unresolved/refused decision (`seat === null`) renders an
+ * explicit UNRESOLVED line carrying `decision.error`, rather than a crash or
+ * a silently blank status.
+ */
+export function renderCustodyStatus(
+  decision: ModelSeatDecision,
+  contractFn: (decision: ModelSeatDecision) => SelectedModelContract | undefined = selectedModelContract,
+): string {
+  if (!decision.allowed || decision.seat === null) {
+    return `custody: UNRESOLVED (${decision.error ?? "no seat could be resolved"})`;
+  }
+
+  const contract = contractFn(decision);
+  const lines = [`custody: ${decision.seat}`, `source: ${decision.source}`];
+
+  if (decision.seat === "OFFLINE") {
+    lines.push("model: none (GPU-free observation; no model identity)");
+    lines.push("offline reason: EMBER_GPU_FREE requested with no explicit EMBER_MODEL_URL");
+    return lines.join("\n");
+  }
+
+  if (decision.seat === "REFERENCE_ONLY") {
+    const modelName = contract?.modelName ?? referenceSeatModelName(decision.referenceModelName);
+    lines.push(`model: ${modelName}`);
+    lines.push("structuredOutputs: false (borrowed model; never owned capability)");
+    return lines.join("\n");
+  }
+
+  // OWNED_ADMITTED | OWNED_DEVELOPMENT
+  const identity = decision.ownedIdentity;
+  lines.push(`model: ${contract?.modelName ?? identity?.modelName ?? "UNVERIFIED"}`);
+  lines.push(`checkpoint: ${identity?.checkpointSha256 ?? "UNVERIFIED"}`);
+  lines.push(
+    `checkpointDir: ${identity?.launch?.checkpointDir ?? "unavailable (no launch descriptor)"}`,
+  );
+  lines.push(`structuredOutputs: ${contract?.structuredOutputs === true}`);
+  if (decision.seat === "OWNED_DEVELOPMENT") {
+    lines.push(`claimStatus: ${identity?.claimStatus ?? "unknown"}`);
+    lines.push(`tokensSeen: ${identity?.tokensSeen ?? "unknown"}`);
+  }
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+/** Creates the read-only `/custody status` (alias `/seat`) command. */
+export function createCustodyCommand(deps: CustodyCommandDeps = {}): RegistryCommand {
+  const doGetModelSeatDecision = deps.getModelSeatDecision ?? _defaultGetModelSeatDecision;
+  const doSelectedModelContract = deps.selectedModelContractFn ?? selectedModelContract;
+
+  return {
+    name: "custody",
+    description: "Show the current model seat classification (read-only): custody status",
+    aliases: ["seat"],
+    isEnabled(): boolean {
+      return true;
+    },
+    async execute(args: string, _ctx: CommandContext) {
+      const subcommand = args.trim().split(/\s+/)[0] ?? "";
+
+      if (subcommand !== "status" && subcommand !== "") {
+        return {
+          type: "message" as const,
+          message: "usage: /custody status (alias: /seat)",
+        };
+      }
+
+      let decision: ModelSeatDecision;
+      try {
+        decision = doGetModelSeatDecision();
+      } catch (err) {
+        // Fail gracefully: seat resolution throwing (subprocess crash, I/O
+        // error, malformed manifest) never crashes the command itself.
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          type: "message" as const,
+          message: `custody: UNRESOLVED (seat resolution failed: ${msg})`,
+        };
+      }
+
+      return {
+        type: "message" as const,
+        message: renderCustodyStatus(decision, doSelectedModelContract),
+      };
+    },
+  };
+}
