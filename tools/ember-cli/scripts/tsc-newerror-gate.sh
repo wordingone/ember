@@ -35,12 +35,38 @@ if ! [[ "$baseline" =~ ^[0-9]+$ ]]; then
 fi
 
 cd "$SRC_DIR"
-current="$(bun run typecheck 2>&1 | grep -c 'error TS' || true)"
+
+# Fail-closed run-proof (oburst-0926 2026-07-21): the old form
+# `bun run typecheck 2>&1 | grep -c 'error TS' || true` cannot distinguish
+# "tsc ran, 0 errors" from "tsc never ran" (bun absent -> 127, spawn failure,
+# crash before emitting any output) -- both produce current=0 and the `|| true`
+# swallowed the pipeline's failure, so a dead/missing tsc binary reported
+# GREEN over an uncompiled tree. Capture bun's own exit status separately
+# from the grep count and require a positive proof of a real run before
+# trusting a low error count.
+set +e
+typecheck_output="$(bun run typecheck 2>&1)"
+bun_status=$?
+set -e
+
+current="$(printf '%s\n' "$typecheck_output" | grep -c 'error TS' || true)"
+
+if [ "$bun_status" -eq 127 ]; then
+  echo "RED: tsc did not run -- bun/tsc command not found (exit 127). Refusing to certify." >&2
+  echo "$typecheck_output" >&2
+  exit 1
+fi
+
+if [ "$bun_status" -ne 0 ] && [ "$current" -eq 0 ]; then
+  echo "RED: tsc did not run -- bun exited $bun_status with no 'error TS' output (spawn/crash, not a completed typecheck). Refusing to certify." >&2
+  echo "$typecheck_output" >&2
+  exit 1
+fi
 
 if [ "$current" -gt "$baseline" ]; then
   echo "RED: tsc error count grew: baseline=$baseline current=$current (+$((current - baseline)))" >&2
   exit 1
 fi
 
-echo "GREEN: tsc error count $current <= baseline $baseline"
+echo "GREEN: tsc error count $current <= baseline $baseline (bun exit $bun_status)"
 exit 0
