@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -294,8 +295,25 @@ def launch_packet_leg(root: Path) -> dict[str, Any]:
     config = root / CONFIG_REL
     if not config.is_file():
         return {"7": leg(UNRESOLVED, LEG_TITLES["7"], f"launch config absent: {CONFIG_REL}")}
+    # launch_packet.py writes a transient receipt INTO root/receipts/ember-01-launch-packet/<ts>/
+    # and has no output-path override. Snapshot the dir so the receipt it creates can be removed
+    # afterward — otherwise leg 7 dirties the checkout mid-run and breaks the integrity invariant
+    # (clean+detached+head-unchanged throughout) that every later leg and the final `ok` depend on.
+    packet_root = root / "receipts" / "ember-01-launch-packet"
+    before = {p.name for p in packet_root.iterdir()} if packet_root.is_dir() else set()
+    packet_root_preexisting = packet_root.is_dir()
     cmd = [sys.executable, "-B", LAUNCH_PACKET_REL, "--config", str(config)]
     result = run(cmd, root=root, name="launch_packet", timeout=180)
+    # Remove the transient receipt launch_packet just created, restoring the clean tree.
+    if packet_root.is_dir():
+        for entry in packet_root.iterdir():
+            if entry.name not in before:
+                shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True)
+        if not packet_root_preexisting:
+            try:
+                packet_root.rmdir()
+            except OSError:
+                pass
     rc = result["returncode"]
     state = RESOLVED_TRUE if rc == 0 else RESOLVED_FALSE
     reason = "launch packet ready" if rc == 0 else f"launch packet not ready (exit {rc})"
