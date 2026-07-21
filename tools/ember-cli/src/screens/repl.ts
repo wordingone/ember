@@ -734,6 +734,12 @@ export function ReplScreen({
   const [spinnerElapsed, setSpinnerElapsed] = useState(0);
   const spinnerStartRef                     = useRef(0);
 
+  // issue #283: an Enter pressed while busy must PREEMPT once idle, never be
+  // silently dropped -- the "user always preempts" goal-mode contract. Queue
+  // the text here instead of discarding it; the idle-watch effect below
+  // flushes it through submitPrompt the instant busy flips false.
+  const pendingSubmitRef                    = useRef<string | null>(null);
+
   // Live retry-attempt status (issue #197 Leg 3/4) — shown via the status
   // bar's existing effort callout, NEVER as a transcript message: a retry is
   // an in-progress, ephemeral condition, not a historical record. Cleared at
@@ -1458,6 +1464,18 @@ export function ReplScreen({
   };
   submitPromptRef.current = submitPrompt;
 
+  // issue #283: flush a queued Enter-while-busy submission the instant busy
+  // flips false -- the queue is cleared BEFORE the async submitPrompt call so
+  // a fresh in-flight turn (started by submitPrompt itself) never re-reads a
+  // stale queued value.
+  useEffect(() => {
+    if (busy) return;
+    const queued = pendingSubmitRef.current;
+    if (queued === null) return;
+    pendingSubmitRef.current = null;
+    void submitPromptRef.current?.(queued, "keyboard");
+  }, [busy]);
+
   // Main keyboard handler
   useInput((input, key) => {
     // Slash-command dropdown navigation takes priority over every other binding while it's open
@@ -1490,12 +1508,18 @@ export function ReplScreen({
     }
 
     if (key.return) {
-      if (busyRef.current || !inputState.text.trim()) return;
+      if (!inputState.text.trim()) return;
       const text = inputState.text;
       inputActions.setText("");
       clearInputRefForSubmit(inputStateRef);
       // Clear any pending suggestion when the user submits.
       setCurrentSuggestion(null);
+      if (busyRef.current) {
+        // issue #283: preempt, don't drop -- queue for submission the moment
+        // the current turn goes idle (flushed by the useEffect above).
+        pendingSubmitRef.current = text;
+        return;
+      }
       void submitPrompt(text, "keyboard");
       return;
     }
