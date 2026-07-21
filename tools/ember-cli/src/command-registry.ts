@@ -13,6 +13,7 @@ import { createTrainCommand } from './commands/train.ts';
 import { createGoalCommand } from './commands/goal.ts';
 import { createWorldStateCommand } from './commands/world-state.ts';
 import { createCustodyCommand } from './commands/custody.ts';
+import { createBenchmarkCommand } from './commands/benchmark.ts';
 import { getModeHistory } from './state/app-state.ts';
 
 export type { RegistryCommand };
@@ -56,6 +57,7 @@ const defaultDeps: CommandRegistryDeps = {
     createGoalCommand(),
     createWorldStateCommand(),
     createCustodyCommand(),
+    createBenchmarkCommand(),
   ],
   getSkillDirCommands: async () => [],
   getPluginCommands: async () => [],
