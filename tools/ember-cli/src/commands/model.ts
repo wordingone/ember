@@ -29,6 +29,22 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 export interface ResolvedModelIdentity {
   byte_sha256: string;
   disposition: string;
+  data: {
+    corpus_id: unknown;
+    sha256: string;
+    ordering_sha256: string;
+    curriculum_sha256: string;
+    verifier_sha256: string;
+    clean_genesis: boolean;
+    accepted_input: {
+      input_id: string;
+      authority_id: string;
+    };
+  };
+  tokenizer: {
+    id: string;
+    sha256: string;
+  };
 }
 
 interface ResolveIdentityRunner {
@@ -109,6 +125,9 @@ export async function _resolveModelIdentity(
 
   const byteSha256 = record["byte_sha256"];
   const disposition = record["disposition"];
+  const data = record["data"];
+  const tokenizer = record["tokenizer"];
+
   if (
     typeof byteSha256 !== "string" ||
     !SHA256_RE.test(byteSha256) ||
@@ -118,7 +137,59 @@ export async function _resolveModelIdentity(
     return null;
   }
 
-  return { byte_sha256: byteSha256, disposition };
+  // Validate data object
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    typeof data.sha256 !== "string" ||
+    !SHA256_RE.test(data.sha256) ||
+    typeof data.ordering_sha256 !== "string" ||
+    !SHA256_RE.test(data.ordering_sha256) ||
+    typeof data.curriculum_sha256 !== "string" ||
+    !SHA256_RE.test(data.curriculum_sha256) ||
+    typeof data.verifier_sha256 !== "string" ||
+    !SHA256_RE.test(data.verifier_sha256) ||
+    typeof data.clean_genesis !== "boolean" ||
+    typeof data.accepted_input !== "object" ||
+    data.accepted_input === null ||
+    typeof data.accepted_input.input_id !== "string" ||
+    typeof data.accepted_input.authority_id !== "string"
+  ) {
+    return null;
+  }
+
+  // Validate tokenizer object
+  if (
+    typeof tokenizer !== "object" ||
+    tokenizer === null ||
+    typeof tokenizer.id !== "string" ||
+    !tokenizer.id.trim() ||
+    typeof tokenizer.sha256 !== "string" ||
+    !SHA256_RE.test(tokenizer.sha256)
+  ) {
+    return null;
+  }
+
+  return {
+    byte_sha256: byteSha256,
+    disposition,
+    data: {
+      corpus_id: data.corpus_id,
+      sha256: data.sha256,
+      ordering_sha256: data.ordering_sha256,
+      curriculum_sha256: data.curriculum_sha256,
+      verifier_sha256: data.verifier_sha256,
+      clean_genesis: data.clean_genesis,
+      accepted_input: {
+        input_id: data.accepted_input.input_id,
+        authority_id: data.accepted_input.authority_id,
+      },
+    },
+    tokenizer: {
+      id: tokenizer.id,
+      sha256: tokenizer.sha256,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +327,47 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
         };
       }
 
+      // /model manifest inspect → identity manifest DATA and TOKENIZER lineage
+      if (subcommand === "manifest") {
+        const args_parts = args.trim().split(/\s+/);
+        const manifest_subcommand = args_parts[1] ?? "";
+
+        if (manifest_subcommand === "inspect") {
+          const identity = await doResolveModelIdentity(manifestPath);
+
+          if (identity === null) {
+            return {
+              type: "message" as const,
+              message: `manifest: UNVERIFIED (no validated manifest)`,
+            };
+          }
+
+          const lines: string[] = [];
+          lines.push("manifest inspect:");
+          lines.push(`  data.corpus_id: ${identity.data.corpus_id}`);
+          lines.push(`  data.sha256: ${identity.data.sha256}`);
+          lines.push(`  data.ordering_sha256: ${identity.data.ordering_sha256}`);
+          lines.push(`  data.curriculum_sha256: ${identity.data.curriculum_sha256}`);
+          lines.push(`  data.verifier_sha256: ${identity.data.verifier_sha256}`);
+          lines.push(`  data.clean_genesis: ${identity.data.clean_genesis}`);
+          lines.push(`  data.accepted_input.input_id: ${identity.data.accepted_input.input_id}`);
+          lines.push(`  data.accepted_input.authority_id: ${identity.data.accepted_input.authority_id}`);
+          lines.push(`  tokenizer.id: ${identity.tokenizer.id}`);
+          lines.push(`  tokenizer.sha256: ${identity.tokenizer.sha256}`);
+
+          return {
+            type: "message" as const,
+            message: lines.join("\n"),
+          };
+        }
+
+        // Unknown manifest subcommand
+        return {
+          type: "message" as const,
+          message: `usage: /model manifest inspect`,
+        };
+      }
+
       // AC10: /model unload
       if (subcommand === "unload") {
         const modelLifecycleDeps: ModelLifecycleDeps = {
@@ -335,7 +447,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
       // Unknown subcommand → clear usage line
       return {
         type: "message" as const,
-        message: `usage: /model status|load|unload`,
+        message: `usage: /model status|load|unload|manifest`,
       };
     },
   };

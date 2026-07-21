@@ -1574,6 +1574,10 @@ def main() -> int:
         # ember-cli /model command) can render checkpoint identity sourced
         # from a VALIDATED manifest only -- never a raw config string read
         # independently of this validator's pass/fail verdict.
+        data = validated.get("data", {})
+        tokenizer = validated.get("tokenizer", {})
+        accepted_input = data.get("accepted_input", {})
+
         print(
             json.dumps(
                 {
@@ -1581,6 +1585,22 @@ def main() -> int:
                     "schema": validated["schema"],
                     "byte_sha256": validated["checkpoint"]["byte_sha256"],
                     "disposition": validated["identity"]["disposition"],
+                    "data": {
+                        "corpus_id": data.get("corpus_id"),
+                        "sha256": data.get("sha256"),
+                        "ordering_sha256": data.get("ordering_sha256"),
+                        "curriculum_sha256": data.get("curriculum_sha256"),
+                        "verifier_sha256": data.get("verifier_sha256"),
+                        "clean_genesis": data.get("clean_genesis"),
+                        "accepted_input": {
+                            "input_id": accepted_input.get("input_id"),
+                            "authority_id": accepted_input.get("authority_id"),
+                        }
+                    },
+                    "tokenizer": {
+                        "id": tokenizer.get("id"),
+                        "sha256": tokenizer.get("sha256"),
+                    },
                 },
                 sort_keys=True,
             )

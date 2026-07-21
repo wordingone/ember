@@ -25,6 +25,22 @@ const FIXTURE_DISPOSITION = "OWNED_CANDIDATE";
 const fakeIdentity: ResolvedModelIdentity = {
   byte_sha256: "a".repeat(64),
   disposition: "OWNED_CANDIDATE",
+  data: {
+    corpus_id: "fake-corpus",
+    sha256: "b".repeat(64),
+    ordering_sha256: "c".repeat(64),
+    curriculum_sha256: "d".repeat(64),
+    verifier_sha256: "e".repeat(64),
+    clean_genesis: true,
+    accepted_input: {
+      input_id: "fake-input-id",
+      authority_id: "fake-authority-id",
+    },
+  },
+  tokenizer: {
+    id: "fake-tokenizer",
+    sha256: "f".repeat(64),
+  },
 };
 
 describe("model command", () => {
@@ -250,6 +266,29 @@ describe("model command", () => {
         rmSync(tmpDir, { recursive: true, force: true });
       }
     });
+
+    it("real round trip: /model manifest inspect renders validated data + tokenizer lineage", async () => {
+      const cmd = createModelCommand({
+        manifestPath: FIXTURE_MANIFEST,
+      });
+
+      const result = await cmd.execute("manifest inspect", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("manifest inspect:");
+      expect(result?.message).toContain("data.corpus_id:");
+      expect(result?.message).toContain("data.sha256:");
+      expect(result?.message).toContain("data.ordering_sha256:");
+      expect(result?.message).toContain("data.curriculum_sha256:");
+      expect(result?.message).toContain("data.verifier_sha256:");
+      expect(result?.message).toContain("data.clean_genesis:");
+      expect(result?.message).toContain("data.accepted_input.input_id:");
+      expect(result?.message).toContain("data.accepted_input.authority_id:");
+      expect(result?.message).toContain("tokenizer.id:");
+      expect(result?.message).toContain("tokenizer.sha256:");
+      // Ensure no exit code on success
+      expect(result?.exitCode).toBeUndefined();
+    });
   });
 
   // =========================================================================
@@ -320,6 +359,87 @@ describe("model command", () => {
       expect(result?.type).toBe("message");
       expect(result?.message).toContain("error");
       expect(result?.message).toContain("spawn failed");
+    });
+  });
+
+  // =========================================================================
+  // /model manifest inspect — read-only identity lineage exposure
+  // =========================================================================
+  describe("/model manifest inspect", () => {
+    it("renders data + tokenizer lineage when manifest is valid", async () => {
+      const testIdentity: ResolvedModelIdentity = {
+        byte_sha256: "a".repeat(64),
+        disposition: "OWNED_CANDIDATE",
+        data: {
+          corpus_id: "test-corpus",
+          sha256: "b".repeat(64),
+          ordering_sha256: "c".repeat(64),
+          curriculum_sha256: "d".repeat(64),
+          verifier_sha256: "e".repeat(64),
+          clean_genesis: true,
+          accepted_input: {
+            input_id: "test-input-id",
+            authority_id: "test-authority-id",
+          },
+        },
+        tokenizer: {
+          id: "test-tokenizer",
+          sha256: "f".repeat(64),
+        },
+      };
+
+      const cmd = createModelCommand({
+        resolveModelIdentity: async () => testIdentity,
+      });
+
+      const result = await cmd.execute("manifest inspect", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("manifest inspect:");
+      expect(result?.message).toContain("data.corpus_id: test-corpus");
+      expect(result?.message).toContain(`data.sha256: ${"b".repeat(64)}`);
+      expect(result?.message).toContain(`data.ordering_sha256: ${"c".repeat(64)}`);
+      expect(result?.message).toContain(`data.curriculum_sha256: ${"d".repeat(64)}`);
+      expect(result?.message).toContain(`data.verifier_sha256: ${"e".repeat(64)}`);
+      expect(result?.message).toContain("data.clean_genesis: true");
+      expect(result?.message).toContain("data.accepted_input.input_id: test-input-id");
+      expect(result?.message).toContain("data.accepted_input.authority_id: test-authority-id");
+      expect(result?.message).toContain("tokenizer.id: test-tokenizer");
+      expect(result?.message).toContain(`tokenizer.sha256: ${"f".repeat(64)}`);
+    });
+
+    it("renders UNVERIFIED when manifest is missing/invalid (fail-closed)", async () => {
+      const cmd = createModelCommand({
+        resolveModelIdentity: async () => null,
+        manifestPath: "/does/not/exist/model-identity.json",
+      });
+
+      const result = await cmd.execute("manifest inspect", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("UNVERIFIED");
+      expect(result?.message).toContain("no validated manifest");
+    });
+
+    it("handles missing manifest inspect subcommand gracefully", async () => {
+      const cmd = createModelCommand();
+
+      const result = await cmd.execute("manifest", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("usage:");
+      expect(result?.message).toContain("manifest inspect");
+    });
+
+    it("never crashes on extra args", async () => {
+      const cmd = createModelCommand({
+        resolveModelIdentity: async () => fakeIdentity,
+      });
+
+      const result = await cmd.execute("manifest inspect extra args", mockCtx);
+
+      expect(result).not.toBeNull();
+      expect(result?.type).toBe("message");
     });
   });
 
