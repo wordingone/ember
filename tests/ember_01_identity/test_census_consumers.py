@@ -1015,3 +1015,61 @@ def test_git_object_census_ignores_deleted_or_empty_checkout_state(tmp_path: Pat
     assert census["coverage"]["tracked_candidates"] == 1
     assert census["evidence"][0]["path"] == "serve.py"
     assert census["evidence"][0]["root_id"] == "private-backup"
+
+
+def _init_public_master_fixture(tmp_path: Path) -> tuple[Path, str]:
+    public_root = tmp_path / "public"
+    public_root.mkdir()
+    (public_root / "known.py").write_text("EMBER_MODEL_URL = 'known'\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=public_root, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "fixture@example.invalid"],
+        cwd=public_root, check=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Fixture"], cwd=public_root, check=True)
+    subprocess.run(["git", "add", "known.py"], cwd=public_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=public_root, check=True)
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=public_root, text=True, capture_output=True, check=True
+    ).stdout.strip()
+    return public_root, commit
+
+
+def test_env_root_absent_by_disposition_does_not_fail_closed(tmp_path: Path) -> None:
+    public_root, commit = _init_public_master_fixture(tmp_path)
+    absent_env_root = tmp_path / "not_on_this_machine"
+    payload = build_census_set([
+        {
+            "root": public_root, "root_id": "public-master", "surface": "public",
+            "source_commit": commit,
+        },
+        {
+            "root": absent_env_root, "root_id": "live-execution-tree",
+            "surface": "live-local", "mode": "filesystem",
+            "disposition": "optional_local_absent",
+        },
+    ])
+    roots = {row["root_id"]: row for row in payload["roots"]}
+    assert roots["live-execution-tree"]["availability"] == "MISSING"
+    assert roots["live-execution-tree"]["disposition_state"] == "absent_by_disposition"
+
+
+def test_env_root_present_and_unique_fails_closed_despite_disposition(tmp_path: Path) -> None:
+    public_root, commit = _init_public_master_fixture(tmp_path)
+    present_env_root = tmp_path / "present_on_this_machine"
+    present_env_root.mkdir()
+    (present_env_root / "unique.py").write_text(
+        "EMBER_MODEL_URL = 'not on public master'\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="optional_local_absent"):
+        build_census_set([
+            {
+                "root": public_root, "root_id": "public-master", "surface": "public",
+                "source_commit": commit,
+            },
+            {
+                "root": present_env_root, "root_id": "live-execution-tree",
+                "surface": "live-local", "mode": "filesystem",
+                "disposition": "optional_local_absent",
+            },
+        ])
