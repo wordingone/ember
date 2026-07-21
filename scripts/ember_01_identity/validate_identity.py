@@ -243,7 +243,10 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
     "parameters.evidence_receipts": {"allocated", "unique", "active", "trainable", "served", "actually_trained"},
     "training": {
         "steps", "effective_tokens", "modality_mixture", "optimizer_state_sha256",
-        "numerics", "stopping_rule",
+        "optimizer_contract", "numerics", "stopping_rule",
+    },
+    "training.optimizer_contract": {
+        "implementation", "hyperparameters", "state_format",
     },
     "training.modality_mixture": {"text", "image", "audio"},
     "training.stopping_rule": {"criterion_id", "result", "receipt_sha256"},
@@ -823,6 +826,35 @@ def validate_manifest(
             findings.append(_finding("training.modality_mixture_invalid", "weights must be non-negative numbers"))
         elif abs(sum(float(value) for value in mixture.values()) - 1.0) > 1e-9:
             findings.append(_finding("training.modality_mixture_invalid", "weights must sum to one"))
+
+    # cond3 optimizer CONTRACT-half: when a manifest declares the optimizer contract
+    # identity (implementation / hyperparameters / state_format -- the fields
+    # scripts/ember_restart/contract.py binds to a signed REALIZED
+    # ember-optimizer-realization-v1 receipt), it must be well-formed. Fail-closed on a
+    # malformed contract: the optimizer that produced the state must be named concretely,
+    # never a blank or partial declaration. Additive: absent contract is legal (state-half
+    # gate unchanged); receipt binding is enforced by
+    # optimizer_identity_binding.verify_optimizer_identity_binding.
+    contract_present, optimizer_contract = _get(payload, "training.optimizer_contract")
+    if contract_present:
+        valid_contract = (
+            isinstance(optimizer_contract, Mapping)
+            and set(optimizer_contract) == {"implementation", "hyperparameters", "state_format"}
+            and isinstance(optimizer_contract.get("implementation"), str)
+            and bool(optimizer_contract.get("implementation"))
+            and isinstance(optimizer_contract.get("state_format"), str)
+            and bool(optimizer_contract.get("state_format"))
+            and isinstance(optimizer_contract.get("hyperparameters"), Mapping)
+            and bool(optimizer_contract.get("hyperparameters"))
+        )
+        if not valid_contract:
+            findings.append(
+                _finding(
+                    "training.optimizer_contract_invalid",
+                    "optimizer contract identity must name a concrete "
+                    "implementation/hyperparameters/state_format",
+                )
+            )
 
     native_present, native = _get(payload, "capabilities.native_modalities")
     if native_present:

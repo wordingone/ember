@@ -152,3 +152,32 @@ def verify_optimizer_identity_binding(
             f"admitted optimizer state bytes ({expected!r}); a hand-typed or borrowed "
             "optimizer digest cannot be credited as this genesis run's optimizer identity"
         )
+
+    # cond3 CONTRACT-half: when the manifest declares the optimizer contract identity,
+    # every field must equal the signed REALIZED realization receipt's field (mirrors
+    # contract.py's ``training.optimizer_receipt.<field>: binding mismatch``). A manifest
+    # optimizer contract that diverges from the realized optimizer -- or omits a field --
+    # fails closed naming the exact field. Absent contract is legal (state-half only).
+    optimizer_contract = training.get("optimizer_contract")
+    if optimizer_contract is not None:
+        if not isinstance(optimizer_contract, Mapping):
+            raise OptimizerIdentityMismatch(
+                "training.optimizer_contract is not an object; the optimizer contract "
+                "identity cannot be bound to the realization receipt"
+            )
+        for field in OPTIMIZER_CONTRACT_FIELDS:
+            manifest_value = optimizer_contract.get(field)
+            receipt_value = realization_receipt.get(field)
+            if manifest_value is None or (
+                isinstance(manifest_value, (str, Mapping)) and not manifest_value
+            ):
+                raise OptimizerIdentityMismatch(
+                    f"training.optimizer_contract_{field}: missing; the optimizer that "
+                    "produced the state is unnamed in the manifest contract identity"
+                )
+            if manifest_value != receipt_value:
+                raise OptimizerIdentityMismatch(
+                    f"training.optimizer_contract_{field}: binding mismatch "
+                    f"(manifest={manifest_value!r} != realized receipt={receipt_value!r}); "
+                    "the manifest optimizer contract is not the realized optimizer"
+                )
