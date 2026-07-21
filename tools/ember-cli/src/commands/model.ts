@@ -26,9 +26,11 @@ import {
 import type { OwnedModelIdentity } from "../entrypoints/model-seat.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
-import { appendFile } from "fs/promises";
+import { saveCheckpoint, type CheckpointSaveDeps } from "../services/checkpoint-save.ts";
+import { appendFile, mkdir as fsMkdir, copyFile as fsCopyFile, rename as fsRename, rm as fsRm } from "fs/promises";
 import { existsSync } from "fs";
 import { spawnSync } from "child_process";
+import { randomBytes } from "crypto";
 import { dirname, join, resolve } from "path";
 import { getGitRepositoryRoot } from "../utils/git.ts";
 
@@ -299,6 +301,10 @@ interface ModelCommandDeps {
   ensureOwnedServer?: (identity: OwnedModelIdentity) => Promise<EnsureOwnedServerResult>;
   /** Injectable for tests; defaults to the real registerManagedModel. */
   registerManagedModel?: (handle: ManagedModelHandle) => void;
+  /** Injectable for tests; defaults to real fs ops bound to resolveModelIdentity.
+   * See services/checkpoint-save.ts -- the atomic-copy/fail-closed core for
+   * `/model checkpoint save`. */
+  checkpointSaveDeps?: CheckpointSaveDeps;
 }
 
 /**
@@ -341,6 +347,34 @@ function _defaultManifestPath(cwd: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// /model checkpoint save (pairs with the checkpoint-LOAD wiring above)
+// ---------------------------------------------------------------------------
+
+/** Unique staging dir sibling to the target -- never collides across concurrent saves. */
+function _defaultStagingPath(targetDir: string): string {
+  return `${targetDir}.tmp-${randomBytes(6).toString("hex")}`;
+}
+
+/** Real filesystem deps for `saveCheckpoint` (see services/checkpoint-save.ts).
+ * `resolveIdentity` is bound per-call to whichever resolver the command is
+ * using (production `_resolveModelIdentity`, or an injected test double) --
+ * never a second/reimplemented validator. */
+function _realCheckpointSaveDeps(
+  resolveIdentity: (manifestPath: string) => Promise<ResolvedModelIdentity | null>,
+): CheckpointSaveDeps {
+  return {
+    resolveIdentity,
+    mkdir: async (path) => {
+      await fsMkdir(path, { recursive: true });
+    },
+    copyFile: (src, dest) => fsCopyFile(src, dest),
+    rename: (from, to) => fsRename(from, to),
+    rmStaging: (path) => fsRm(path, { recursive: true, force: true }),
+    stagingPath: _defaultStagingPath,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Real implementations of injected deps
 // ---------------------------------------------------------------------------
 
@@ -368,6 +402,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
   const doLoadOwnedIdentity = deps.loadOwnedIdentity ?? _defaultLoadOwnedIdentity;
   const doEnsureOwnedServer = deps.ensureOwnedServer ?? _defaultEnsureOwnedServer;
   const doRegisterManagedModel = deps.registerManagedModel ?? registerManagedModel;
+  const doCheckpointSaveDeps = deps.checkpointSaveDeps ?? _realCheckpointSaveDeps(doResolveModelIdentity);
 
   return {
     name: "model",
@@ -442,6 +477,76 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
         return {
           type: "message" as const,
           message: `usage: /model manifest inspect`,
+        };
+      }
+
+      // /model checkpoint save <target-dir> [--source <dir>]
+      //
+      // Snapshots an ALREADY-EXISTING checkpoint (pre-training spine surface --
+      // no training, no new weights) to a target directory and writes its
+      // identity manifest alongside it. Pairs with the checkpoint-LOAD wiring
+      // above (PR #983). Source defaults to the currently-loaded checkpoint
+      // (the same manifestPath convention /model status|load already use);
+      // --source <dir> points at an explicit reference checkpoint directory
+      // instead (a directory holding `manifest.json` + `checkpoint`, the same
+      // fixture layout __fixtures__/model-identity/ uses).
+      //
+      // FAIL-CLOSED + ATOMIC: see services/checkpoint-save.ts for the core --
+      // this handler only resolves source/target paths and reports the result.
+      if (subcommand === "checkpoint") {
+        const rest = args.trim().split(/\s+/).slice(1);
+        const action = rest[0] ?? "";
+
+        if (action === "save") {
+          const positionals: string[] = [];
+          let sourceDir: string | undefined;
+          for (let i = 1; i < rest.length; i++) {
+            if (rest[i] === "--source") {
+              sourceDir = rest[i + 1];
+              i++;
+            } else if (rest[i] !== undefined && rest[i] !== "") {
+              positionals.push(rest[i] as string);
+            }
+          }
+          const targetDir = positionals[0];
+          if (!targetDir) {
+            return {
+              type: "message" as const,
+              message: `usage: /model checkpoint save <target-dir> [--source <dir>]`,
+              exitCode: 1,
+            };
+          }
+
+          const sourceManifestPath = sourceDir ? join(sourceDir, "manifest.json") : manifestPath;
+          const sourceCheckpointPath = sourceDir
+            ? join(sourceDir, "checkpoint")
+            : join(dirname(manifestPath), "checkpoint");
+          const resolvedTargetDir = resolve(ctx.cwd, targetDir);
+
+          try {
+            const result = await saveCheckpoint(
+              sourceManifestPath,
+              sourceCheckpointPath,
+              resolvedTargetDir,
+              doCheckpointSaveDeps,
+            );
+            return {
+              type: "message" as const,
+              message: `checkpoint saved: ${result.byte_sha256} (${result.disposition}) -> ${result.targetDir}`,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              type: "message" as const,
+              message: `error: failed to save checkpoint: ${msg}`,
+              exitCode: 1,
+            };
+          }
+        }
+
+        return {
+          type: "message" as const,
+          message: `usage: /model checkpoint save <target-dir> [--source <dir>]`,
         };
       }
 
@@ -555,7 +660,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
       // Unknown subcommand → clear usage line
       return {
         type: "message" as const,
-        message: `usage: /model status|load|unload|manifest`,
+        message: `usage: /model status|load|unload|manifest|checkpoint`,
       };
     },
   };

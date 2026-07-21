@@ -416,6 +416,95 @@ describe("model command", () => {
   });
 
   // =========================================================================
+  // /model checkpoint save -- CLI routing/wiring only. The atomic-copy/
+  // fail-closed CORE is covered against a fixture in
+  // services/checkpoint-save.test.ts; these tests only prove the subcommand
+  // parses args and wires them into saveCheckpoint correctly.
+  // =========================================================================
+  describe("/model checkpoint save", () => {
+    it("resolves source from the currently-loaded manifestPath convention by default", async () => {
+      const cmd = createModelCommand({
+        manifestPath: FIXTURE_MANIFEST,
+        checkpointSaveDeps: {
+          resolveIdentity: async (manifestPath) => {
+            expect(manifestPath).toBe(FIXTURE_MANIFEST);
+            return fakeIdentity;
+          },
+          mkdir: async () => {},
+          copyFile: async () => {},
+          rename: async () => {},
+          rmStaging: async () => {},
+          stagingPath: (target) => `${target}.tmp`,
+        },
+      });
+
+      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+
+      expect(result?.exitCode).toBeUndefined();
+      expect(result?.message).toContain(fakeIdentity.byte_sha256);
+      expect(result?.message).toContain("target-dir");
+    });
+
+    it("honors --source to override the default currently-loaded manifest", async () => {
+      let resolvedManifest: string | undefined;
+      const cmd = createModelCommand({
+        manifestPath: FIXTURE_MANIFEST,
+        checkpointSaveDeps: {
+          resolveIdentity: async (manifestPath) => {
+            resolvedManifest = manifestPath;
+            return fakeIdentity;
+          },
+          mkdir: async () => {},
+          copyFile: async () => {},
+          rename: async () => {},
+          rmStaging: async () => {},
+          stagingPath: (target) => `${target}.tmp`,
+        },
+      });
+
+      await cmd.execute("checkpoint save /tmp/target-dir --source /tmp/reference-checkpoint", mockCtx);
+
+      expect(resolvedManifest).toBe(join("/tmp/reference-checkpoint", "manifest.json"));
+    });
+
+    it("fails closed (non-zero exit) when identity does not validate, and never writes", async () => {
+      let mkdirCalled = false;
+      const cmd = createModelCommand({
+        manifestPath: FIXTURE_MANIFEST,
+        checkpointSaveDeps: {
+          resolveIdentity: async () => null,
+          mkdir: async () => {
+            mkdirCalled = true;
+          },
+          copyFile: async () => {},
+          rename: async () => {},
+          rmStaging: async () => {},
+          stagingPath: (target) => `${target}.tmp`,
+        },
+      });
+
+      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("error");
+      expect(mkdirCalled).toBe(false);
+    });
+
+    it("usage line when target-dir is missing", async () => {
+      const cmd = createModelCommand();
+      const result = await cmd.execute("checkpoint save", mockCtx);
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("usage:");
+    });
+
+    it("usage line for an unknown checkpoint action", async () => {
+      const cmd = createModelCommand();
+      const result = await cmd.execute("checkpoint frobnicate", mockCtx);
+      expect(result?.message).toContain("usage:");
+    });
+  });
+
+  // =========================================================================
   // AC10: /model unload calls unloadModel, /model load calls loadModel
   // =========================================================================
   describe("AC10: /model unload", () => {
