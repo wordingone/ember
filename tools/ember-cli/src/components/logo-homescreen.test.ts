@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // components/logo-homescreen.test.ts — increment 6 step B: Observatory identity tokens applied
 // to the welcome/homescreen surface (border color, wordmark color, tagline, ember-native hint).
 // Spec: state/field-ux-map.md §8b/§9; step-A mockups (state/design-mockups/welcome-homescreen...).
@@ -350,6 +354,45 @@ describe("Homescreen — ember-native onboarding hint (not generic-agent phrasin
     expect(entryTexts).toContain(`Try "what changed on the board today?"`);
     // never the generic phrasing team-lead flagged
     expect(entryTexts.some((t: string) => t.includes("explain this repo"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #51 regression guard: the identity block renders whatever manifest-derived
+// string it is handed, verbatim, for an OWNED artifact -- and never substitutes
+// a hardcoded third-party model name. `state.model` for an owned seat is
+// produced by entrypoints/model-seat.ts::selectedModelContract() from the
+// served manifest's own `modelName` (see entrypoints/owned-seat-loader.ts,
+// which validates it against "ember-owned:"/"ember-owned-development:" +
+// the checkpoint hash) -- this surface must never diverge from that value by
+// falling back to a literal like "qwen"/"deepseek"/"llama".
+// ---------------------------------------------------------------------------
+
+describe("Homescreen — owned-seat identity render is truthful (#51)", () => {
+  it("renders the manifest-derived owned identity string verbatim in the left column", () => {
+    const ownedModelName = "ember-owned:abc123def456";
+    const el = Homescreen({ state: { model: ownedModelName } });
+    const panel = findPanel(el);
+    const leftCol = children(panel)[0];
+    expect(findTextChild(leftCol, ownedModelName)).toBe(true);
+  });
+
+  it("never substitutes a hardcoded third-party model name for the owned identity", () => {
+    const ownedModelName = "ember-owned-development:0011223344ff";
+    const el = Homescreen({ state: { model: ownedModelName } });
+    const panel = findPanel(el);
+    const leftCol = children(panel)[0];
+    const HARDCODED_THIRD_PARTY_NAMES = ["qwen", "deepseek", "llama"];
+    for (const literal of HARDCODED_THIRD_PARTY_NAMES) {
+      expect(findTextWhere(leftCol, (s) => s.toLowerCase().includes(literal))).toBe(false);
+    }
+  });
+
+  it("omits the identity line entirely when no model is selected (never fabricates a placeholder identity)", () => {
+    const el = Homescreen({ state: {} });
+    const panel = findPanel(el);
+    const leftCol = children(panel)[0];
+    expect(findTextWhere(leftCol, (s) => s.includes("\xB7 Local"))).toBe(false);
   });
 });
 
