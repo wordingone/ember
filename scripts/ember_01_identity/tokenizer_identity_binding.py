@@ -2,124 +2,237 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Bind a tokenizer artifact's identity into the identity manifest, fail-closed.
+"""Bind the RUNNING tokenizer identity into the identity manifest, fail-closed.
 
 cond3 increment (tokenizer_data_lineage category, tokenizer sub-field): the identity
-manifest's ``tokenizer`` section must not be hand-typed or fixture-constant. Its
-``sha256`` must be the content hash of the *actual* tokenizer artifact bytes on disk,
-never a copied constant -- the same content-addressing the recovered shard-generation
-tokenizer already enforces at load time.
+manifest's ``tokenizer.sha256`` must be the identity of the tokenizer the model actually
+tokenizes with -- NOT the sha of a raw ``tokenizer.json`` file. Those differ, and the
+difference is load-bearing:
 
-The two production consumers this binding wires against:
+- The frozen tokenizer's on-disk bytes are DELIBERATELY NOT COMMITTED to the repo
+  (custody: the recovered shard-generation tokenizer, raw-file sha
+  2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97, is pinned by the
+  step-776 freeze receipt but its bytes live in custody, not git). So "repair the
+  artifact and hash it on disk" (artifact-repair) is forced out -- it would commit
+  custody-held bytes. The binding is in-memory-decoder-attach instead.
+- The production encode path (``scripts/token_shards_v0._production_tokenizer`` with
+  ``match_added_tokens=False``, the ENCODE_SEMANTICS the shards were generated under, and
+  what ``scripts/a1_predicate_scan.load_stripped_tokenizer`` is a verbatim reuse of)
+  loads that sha-pinned file and STRIPS the ``added_tokens`` table IN MEMORY before
+  building the tokenizer, so ids 0..7 are unreachable from text. The sha of the raw file
+  is therefore NOT the identity of the object that runs; the identity of the runtime
+  object is the sha of the in-memory, post-strip tokenizer.
 
-- ``scripts/ember_01_identity/validate_identity.validate_manifest`` -- the manifest-shape
-  validator. ``tokenizer.sha256`` is a REQUIRED_PATH, a HASH_PATH (must be a 64-hex
-  content address), a BINDING_PATH, and a member of the closed ``tokenizer`` object
-  ``{id, sha256}`` (validate_identity.py lines 76-77, 142, 162-163, 226). For an
-  ``OWNED_ADMITTED`` manifest it is additionally required to resolve to real
-  content-addressed artifact bytes in the artifact bundle (validate_identity.py's
-  ``required_artifacts["tokenizer"]``, ~line 1067).
-- ``scripts/a1_predicate_scan.load_stripped_tokenizer`` -- the real tokenizer loader,
-  which computes ``file_sha256(tokenizer_json_path)`` and raises
-  ``A1_SCAN_TOKENIZER_SHA_DRIFT`` the instant the tokenizer bytes on disk do not hash to
-  the expected sha. This module's ``verify_`` is the manifest-side analog of that drift
-  guard: it re-derives ``tokenizer.sha256`` from the bytes on disk, not from the receipt
-  or from the manifest against itself.
+This module binds against the REAL, canonical production loader
+``token_shards_v0._production_tokenizer(match_added_tokens=False)`` -- the one the shards
+were produced with, importable without tripping the execution-denied sub-3B cbase trainer
+(``a1_predicate_scan`` and ``ember_cbase_avir_data`` both transitively import that denied
+trainer and cannot be imported here; ``token_shards_v0`` is the canonical source they
+derive from and imports clean). It records TWO real quantities:
 
-Two functions (mirroring ``parameter_identity_binding`` exactly -- additive, no schema
-change, ``verify_`` fails closed on any divergence):
+- ``running_identity_sha256`` -- sha256 of the post-strip attached tokenizer's canonical
+  serialization (``Tokenizer.to_str()``). THIS is what ``tokenizer.sha256`` binds to.
+- ``provenance_sha256`` -- the receipt-pinned raw-file sha of the uncommitted frozen
+  artifact, re-verified from the bytes the loader is pointed at (the loader's own
+  sha-drift guard, ``_production_tokenizer``'s ``ValueError("tokenizer.json ... sha
+  drift")`` -- the analog of ``a1``'s ``A1_SCAN_TOKENIZER_SHA_DRIFT``).
 
-- ``bind_tokenizer_identity`` hashes the real tokenizer artifact file (streaming reads,
-  same mechanism as the a1 loader's ``file_sha256``) and projects that MEASURED digest
-  into the manifest's ``tokenizer.sha256``, setting ``tokenizer.id`` from the caller's
-  stated identity. It never invents a hash -- every value traces to bytes on disk.
-- ``verify_tokenizer_identity_binding`` re-hashes the same tokenizer artifact from disk
-  and fails closed -- raising ``TokenizerIdentityMismatch`` naming the exact field -- the
-  instant the manifest's ``tokenizer.sha256`` diverges from the freshly measured hash,
-  the ``tokenizer.id`` is absent/empty, or the artifact cannot be read (a manifest naming
-  a tokenizer with no bytes on disk to verify against). Silent (returns None) when the
-  bound identity matches the bytes.
+``verify_tokenizer_identity_binding`` re-derives BOTH via the same real loader and fails
+closed -- naming the exact field -- on either a running-identity mismatch OR a provenance
+drift, or an absent/empty ``tokenizer.id``.
+
+Note on ``a1_predicate_scan.load_stripped_tokenizer``: it ADDITIONALLY drops orphaned
+merge rules (a scan-only workaround for a recovered artifact that fails standard BPE
+deserialization), which produces a DIFFERENT tokenizer than production. That scan
+approximation is not the running identity; the production ``_production_tokenizer`` object
+is. The independently-computed orphan-merge count is still disclosed in the receipt
+(``orphan_merges_present``) for transparency, but the bound identity is the production
+object, not the scan's dropped-merge variant.
 
 DEFERRED (out of this smallest-increment scope): the ``OWNED_ADMITTED`` artifact-bundle
-resolution -- proving ``tokenizer.sha256`` also appears as a content-addressed entry in
-the ``ember-artifact-bundle-v1`` bundle -- is a separate, non-additive path that threads
-the full artifact bundle through validate_manifest's admission gate; it is not
-implemented here. This increment binds the tokenizer's own identity (id + content hash of
-the artifact) for the OWNED_CANDIDATE shape; admission-bundle binding is a later leg.
+resolution (proving the provenance sha also appears as a content-addressed bundle entry)
+threads the full ``ember-artifact-bundle-v1`` bundle through validate_manifest's admission
+gate and is a separate, non-additive path; the manifest's closed ``tokenizer`` object is
+``{id, sha256}`` and cannot carry a second sha field without a schema change, so the
+provenance sha is carried in the evidence RECEIPT (verified here), never invented into the
+manifest.
 """
 
 from __future__ import annotations
 
 import hashlib
+import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-_HASH_CHUNK_BYTES = 1 << 20  # 1 MiB streaming reads; never a full-file read
+_SCRIPTS_DIR = Path(__file__).resolve().parents[1]  # ember/scripts
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+# The canonical, importable production tokenizer loader (added_tokens stripped in memory,
+# sha-drift guarded). a1_predicate_scan.load_stripped_tokenizer is a verbatim reuse of
+# this; a1 itself cannot be imported (transitively pulls the execution-denied cbase
+# trainer), so we bind against the canonical source directly.
+import token_shards_v0  # noqa: E402
+
+TOKENIZER_ENCODE_SEMANTICS = "added-token-matching-disabled-v1"
 
 
 class TokenizerIdentityMismatch(ValueError):
     """A manifest's claimed tokenizer identity diverges from measured evidence."""
 
 
-def _hash_file(path: Path) -> str:
-    """Streaming sha256 of a file's bytes on disk (mirrors a1 file_sha256)."""
+def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(_HASH_CHUNK_BYTES), b""):
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
             digest.update(chunk)
     return digest.hexdigest()
 
 
-def measure_tokenizer_artifact(tokenizer_artifact: Path) -> str:
-    """Content-address the real tokenizer artifact on disk. No fixture constant."""
-    return _hash_file(Path(tokenizer_artifact))
+def _count_orphan_merges(tokenizer_json_path: Path) -> int:
+    """Independently count merge rules whose join is absent from the model vocab.
+
+    Disclosure only (a1's scan-workaround territory); the production loader does NOT drop
+    these -- it requires a clean artifact. A production tokenizer.json has zero. Recorded
+    so the receipt carries the same transparency field a1's loader returns."""
+    import json
+
+    data = json.loads(Path(tokenizer_json_path).read_text(encoding="utf-8"))
+    model = data.get("model", {}) if isinstance(data, Mapping) else {}
+    merges = model.get("merges")
+    if not isinstance(merges, list):
+        return 0
+    vocab = model.get("vocab", {})
+
+    def _joined(merge: Any) -> str:
+        parts = merge.split(" ") if isinstance(merge, str) else list(merge)
+        return "".join(parts)
+
+    return sum(1 for merge in merges if _joined(merge) not in vocab)
+
+
+def _load_running_tokenizer(tokenizer_json_path: Path, provenance_sha256: str):
+    """Drive the REAL production loader against the artifact, sha-drift guarded.
+
+    Builds the minimal ``tokfreeze`` receipt the production loader expects
+    (``tokenizer_repo_path`` + ``tokenizer_json_sha256``) so its own sha guard fires on
+    any drift between the receipt-pinned provenance sha and the bytes on disk. Returns the
+    post-strip runtime tokenizer object."""
+    path = Path(tokenizer_json_path)
+    corpus_dir = str(path.parent)
+    tokfreeze = {
+        "tokenizer_repo_path": path.name,
+        "tokenizer_json_sha256": provenance_sha256,
+    }
+    return token_shards_v0._production_tokenizer(
+        corpus_dir, tokfreeze, match_added_tokens=False
+    )
+
+
+def measure_tokenizer_identity(
+    tokenizer_json_path: Path, *, provenance_sha256: str | None = None
+) -> dict[str, Any]:
+    """Measure the running tokenizer identity from a real artifact via the production loader.
+
+    ``provenance_sha256`` is the receipt-pinned raw-file sha of the frozen artifact. If
+    None it is computed from the bytes the loader is pointed at (first measurement). The
+    production loader is then driven against that sha (its drift guard fires on mismatch),
+    the post-strip runtime tokenizer is serialized, and its sha256 is the running identity.
+    Nothing is invented: both shas trace to bytes/loader output.
+    """
+    path = Path(tokenizer_json_path)
+    try:
+        real_provenance = _file_sha256(path)
+    except OSError as error:
+        raise TokenizerIdentityMismatch(
+            f"tokenizer artifact at {path} could not be read from disk to "
+            f"content-address it ({error})"
+        ) from error
+    provenance = provenance_sha256 or real_provenance
+    if provenance != real_provenance:
+        raise TokenizerIdentityMismatch(
+            f"tokenizer provenance_sha256={provenance!r} does not match the artifact "
+            f"bytes on disk ({real_provenance!r})"
+        )
+    try:
+        running_tokenizer = _load_running_tokenizer(path, provenance)
+    except TokenizerIdentityMismatch:
+        raise
+    except Exception as error:  # ValueError sha-drift, strip-probe failure, deser errors
+        raise TokenizerIdentityMismatch(
+            f"the production tokenizer loader failed to build a running tokenizer from "
+            f"{path} ({type(error).__name__}: {error}); the artifact does not load as the "
+            "sha-pinned running tokenizer"
+        ) from error
+    running_identity = hashlib.sha256(
+        running_tokenizer.to_str().encode("utf-8")
+    ).hexdigest()
+    return {
+        "schema_version": "ember-tokenizer-identity-receipt-v1",
+        "result": "MEASURED",
+        "encode_semantics": TOKENIZER_ENCODE_SEMANTICS,
+        "provenance_sha256": provenance,
+        "running_identity_sha256": running_identity,
+        "orphan_merges_present": _count_orphan_merges(path),
+    }
 
 
 def bind_tokenizer_identity(
-    manifest: Mapping[str, Any], *, tokenizer_id: str, tokenizer_artifact: Path
+    manifest: Mapping[str, Any], receipt: Mapping[str, Any], *, tokenizer_id: str
 ) -> dict[str, Any]:
-    """Project a MEASURED tokenizer content hash into the manifest's tokenizer section.
+    """Project a MEASURED running-identity receipt into the manifest's tokenizer section.
 
-    ``tokenizer_artifact`` is the real tokenizer file on disk (e.g. a ``tokenizer.json``);
-    its bytes are hashed here and become ``tokenizer.sha256``. ``tokenizer_id`` is the
-    caller's stated tokenizer identity (a non-empty string), bound to ``tokenizer.id``.
-    Nothing is invented: the sha256 traces to bytes on disk.
-    """
+    ``tokenizer.sha256`` binds to the receipt's ``running_identity_sha256`` (the post-strip
+    runtime object), NOT the raw-file provenance sha. ``tokenizer.id`` is the caller's
+    stated non-empty identity. The provenance sha stays in the receipt (the manifest's
+    closed ``{id, sha256}`` object has no field for it; carried as evidence, verified by
+    ``verify_``)."""
+    if receipt.get("result") != "MEASURED":
+        raise TokenizerIdentityMismatch(
+            "receipt is not measured evidence; refusing to bind an unmeasured tokenizer "
+            "identity"
+        )
     if not isinstance(tokenizer_id, str) or not tokenizer_id.strip():
         raise TokenizerIdentityMismatch(
             f"tokenizer.id must be a non-empty string; got {tokenizer_id!r}"
         )
-    artifact_path = Path(tokenizer_artifact)
-    try:
-        measured_sha256 = _hash_file(artifact_path)
-    except OSError as error:
+    running_identity = receipt.get("running_identity_sha256")
+    if not isinstance(running_identity, str) or len(running_identity) != 64:
         raise TokenizerIdentityMismatch(
-            f"tokenizer artifact at {artifact_path} could not be read from disk to "
-            f"content-address it ({error}); refusing to bind a tokenizer identity with "
-            "no bytes on disk"
-        ) from error
+            f"receipt running_identity_sha256 is not a 64-hex digest: {running_identity!r}"
+        )
     bound = dict(manifest)
     bound["tokenizer"] = {
         **dict(manifest.get("tokenizer", {})),
         "id": tokenizer_id,
-        "sha256": measured_sha256,
+        "sha256": running_identity,
     }
     return bound
 
 
 def verify_tokenizer_identity_binding(
-    manifest: Mapping[str, Any], *, tokenizer_artifact: Path
+    manifest: Mapping[str, Any],
+    receipt: Mapping[str, Any],
+    *,
+    tokenizer_json_path: Path,
 ) -> None:
-    """Fail closed the instant the manifest's tokenizer identity diverges from disk.
+    """Fail closed the instant the manifest's tokenizer identity diverges from evidence.
 
-    ``tokenizer_artifact`` is the single authoritative source of tokenizer bytes for this
-    verification -- never the manifest against itself. The artifact is re-hashed from disk
-    (streaming reads) and compared against ``tokenizer.sha256``; a manifest naming a
-    tokenizer whose bytes do not hash to the claimed content address, or whose artifact
-    cannot be read at all, fails here (the manifest-side analog of the a1 loader's
-    ``A1_SCAN_TOKENIZER_SHA_DRIFT``). ``tokenizer.id`` must also be a present, non-empty
-    string. Raises ``TokenizerIdentityMismatch`` naming the exact field that fails. Silent
-    (returns None) when the bound identity matches the bytes on disk.
+    Re-derives BOTH shas via the same real production loader (never the manifest against
+    itself):
+
+    1. Provenance: the raw artifact is re-hashed and driven through the loader's sha-drift
+       guard against ``receipt.provenance_sha256``. A drifted/absent artifact fails here
+       (the manifest-side analog of ``a1``'s ``A1_SCAN_TOKENIZER_SHA_DRIFT``).
+    2. Running identity: the post-strip runtime tokenizer is re-serialized and re-hashed;
+       ``receipt.running_identity_sha256`` and ``manifest.tokenizer.sha256`` must both
+       equal it. A manifest bound to the raw-file sha, or to any object other than the
+       running tokenizer, fails here.
+    3. ``tokenizer.id`` must be present and non-empty.
+
+    Raises ``TokenizerIdentityMismatch`` naming the exact field. Silent when every bound
+    value matches the freshly measured evidence.
     """
     tokenizer = manifest.get("tokenizer")
     if not isinstance(tokenizer, Mapping):
@@ -131,18 +244,43 @@ def verify_tokenizer_identity_binding(
             f"tokenizer.id must be a present, non-empty string; got {claimed_id!r}"
         )
 
-    claimed_sha256 = tokenizer.get("sha256")
-    artifact_path = Path(tokenizer_artifact)
+    claimed_provenance = receipt.get("provenance_sha256")
+    path = Path(tokenizer_json_path)
     try:
-        real_sha256 = _hash_file(artifact_path)
+        real_provenance = _file_sha256(path)
     except OSError as error:
         raise TokenizerIdentityMismatch(
-            f"tokenizer artifact at {artifact_path} could not be read from disk to "
-            f"re-derive its hash; manifest claims tokenizer.sha256={claimed_sha256!r} but "
-            f"no such tokenizer bytes exist to verify against ({error})"
+            f"tokenizer artifact at {path} could not be read to re-derive its hash; "
+            f"receipt claims provenance_sha256={claimed_provenance!r} but no such bytes "
+            f"exist to verify against ({error})"
         ) from error
-    if real_sha256 != claimed_sha256:
+    if real_provenance != claimed_provenance:
         raise TokenizerIdentityMismatch(
-            f"manifest claims tokenizer.sha256={claimed_sha256!r} but the tokenizer "
-            f"artifact bytes on disk hash to tokenizer.sha256={real_sha256!r}"
+            f"receipt claims tokenizer provenance_sha256={claimed_provenance!r} but the "
+            f"artifact bytes on disk hash to {real_provenance!r} (sha drift)"
+        )
+
+    try:
+        running_tokenizer = _load_running_tokenizer(path, claimed_provenance)
+    except Exception as error:
+        raise TokenizerIdentityMismatch(
+            f"re-running the production tokenizer loader against {path} failed; the "
+            f"receipt's running identity does not independently re-derive "
+            f"({type(error).__name__}: {error})"
+        ) from error
+    real_running = hashlib.sha256(
+        running_tokenizer.to_str().encode("utf-8")
+    ).hexdigest()
+
+    if receipt.get("running_identity_sha256") != real_running:
+        raise TokenizerIdentityMismatch(
+            f"receipt claims running_identity_sha256="
+            f"{receipt.get('running_identity_sha256')!r} but the post-strip runtime "
+            f"tokenizer re-serializes to tokenizer.sha256={real_running!r}"
+        )
+    if tokenizer.get("sha256") != real_running:
+        raise TokenizerIdentityMismatch(
+            f"manifest claims tokenizer.sha256={tokenizer.get('sha256')!r} but the "
+            f"post-strip runtime tokenizer re-serializes to tokenizer.sha256="
+            f"{real_running!r} (a raw-file sha or any non-runtime object fails here)"
         )
