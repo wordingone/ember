@@ -155,7 +155,7 @@ describe("model command", () => {
         getModelState: () => "loaded",
         resolveModelIdentity: async (manifestPath) => {
           expect(manifestPath).toBe(FIXTURE_MANIFEST);
-          return { byte_sha256: FIXTURE_BYTE_SHA256, disposition: FIXTURE_DISPOSITION };
+          return { ...fakeIdentity, byte_sha256: FIXTURE_BYTE_SHA256, disposition: FIXTURE_DISPOSITION };
         },
         manifestPath: FIXTURE_MANIFEST,
       });
@@ -217,6 +217,7 @@ describe("model command", () => {
           return "model loaded (pid 42)";
         },
         resolveModelIdentity: async () => ({
+          ...fakeIdentity,
           byte_sha256: FIXTURE_BYTE_SHA256,
           disposition: FIXTURE_DISPOSITION,
         }),
@@ -265,12 +266,16 @@ describe("model command", () => {
       // loaded checkpoint's identity (its checkpoint dir, tokenizer path, and
       // authority kind) -- proving the wiring is real, not a pid:0 stub.
       expect(ensureCalls).toBe(1);
-      expect(receivedIdentity).toBe(fakeOwnedIdentity);
+      // TS narrows these `let`s to their initial `null` literal at this read
+      // point (control-flow analysis does not see the reassignment inside the
+      // mocked callbacks above) -- the `as` casts restore the declared union
+      // type; the assertions themselves are unchanged.
+      expect(receivedIdentity as OwnedModelIdentity | null).toBe(fakeOwnedIdentity);
       expect(receivedIdentity!.launch?.checkpointDir).toBe("/owned/ckpt");
       expect(receivedIdentity!.launch?.tokenizerPath).toBe("/owned/tok.json");
       expect(receivedIdentity!.launch?.authorityKind).toBe("ADMISSION");
       // The supervisor-established child is tracked by the lifecycle panel.
-      expect(registeredPid).toBe(4242);
+      expect(registeredPid as number | null).toBe(4242);
       expect(result?.exitCode).toBeUndefined();
       expect(result?.message).toContain("loaded");
     });
@@ -610,7 +615,7 @@ describe("model command", () => {
   describe("AC wiring: writeKillReceipt injected into ModelLifecycleDeps for unload", () => {
     it("passes the injected writeKillReceipt into the lifecycle deps object", async () => {
       const capturedDeps: ModelLifecycleDeps[] = [];
-      const mockReceipt = (_rec: { pid: number; match_rule: string }) => {};
+      const mockReceipt = async (_rec: { pid: number; match_rule: string }) => {};
 
       const cmd = createModelCommand({
         unloadModel: async (deps) => {
@@ -770,7 +775,7 @@ describe("writeKillReceipt call-order invariant — via model-lifecycle seam", (
         callOrder.push(`kill(${pid})`);
       },
       waitReady: async () => {},
-      writeKillReceipt: (rec) => {
+      writeKillReceipt: async (rec) => {
         callOrder.push(`receipt(${rec.pid})`);
       },
       isExternal: () => false,
@@ -791,7 +796,7 @@ describe("writeKillReceipt call-order invariant — via model-lifecycle seam", (
       spawnModel: () => ({ pid: 0 }),
       killPid: () => {},
       waitReady: async () => {},
-      writeKillReceipt: (rec) => {
+      writeKillReceipt: async (rec) => {
         receiptPids.push(rec.pid);
       },
       isExternal: () => false,
@@ -814,7 +819,7 @@ describe("writeKillReceipt call-order invariant — via model-lifecycle seam", (
       spawnModel: () => ({ pid: 0 }),
       killPid: () => {},
       waitReady: async () => {},
-      writeKillReceipt: (rec) => {
+      writeKillReceipt: async (rec) => {
         receiptCalls.push(rec.pid);
       },
       isExternal: () => true, // external mode: no managed process

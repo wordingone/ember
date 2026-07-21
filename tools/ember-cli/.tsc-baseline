@@ -1,0 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+# Frozen tsc --noEmit error-count ceiling for tools/ember-cli/scripts/tsc-newerror-gate.sh.
+# Only the gate script updates this number (on a verified reduction); a bump requires
+# a receipted reason in the commit that changes it.
+25

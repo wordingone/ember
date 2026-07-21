@@ -150,35 +150,45 @@ export async function _resolveModelIdentity(
     return null;
   }
 
-  // Validate data object
+  // Validate data object. `data`/`tokenizer` come off `record` as `unknown`;
+  // narrow to non-null `object` first, then treat as a string-keyed record so
+  // property access below type-checks -- this is an index-signature cast, not
+  // an unchecked `any` escape: every field is still typeof/regex validated
+  // before use, same fail-closed contract as before.
+  if (typeof data !== "object" || data === null) return null;
+  const dataFields = data as Record<string, unknown>;
+  const acceptedInput = dataFields["accepted_input"];
   if (
-    typeof data !== "object" ||
-    data === null ||
-    typeof data.sha256 !== "string" ||
-    !SHA256_RE.test(data.sha256) ||
-    typeof data.ordering_sha256 !== "string" ||
-    !SHA256_RE.test(data.ordering_sha256) ||
-    typeof data.curriculum_sha256 !== "string" ||
-    !SHA256_RE.test(data.curriculum_sha256) ||
-    typeof data.verifier_sha256 !== "string" ||
-    !SHA256_RE.test(data.verifier_sha256) ||
-    typeof data.clean_genesis !== "boolean" ||
-    typeof data.accepted_input !== "object" ||
-    data.accepted_input === null ||
-    typeof data.accepted_input.input_id !== "string" ||
-    typeof data.accepted_input.authority_id !== "string"
+    typeof dataFields.sha256 !== "string" ||
+    !SHA256_RE.test(dataFields.sha256) ||
+    typeof dataFields.ordering_sha256 !== "string" ||
+    !SHA256_RE.test(dataFields.ordering_sha256) ||
+    typeof dataFields.curriculum_sha256 !== "string" ||
+    !SHA256_RE.test(dataFields.curriculum_sha256) ||
+    typeof dataFields.verifier_sha256 !== "string" ||
+    !SHA256_RE.test(dataFields.verifier_sha256) ||
+    typeof dataFields.clean_genesis !== "boolean" ||
+    typeof acceptedInput !== "object" ||
+    acceptedInput === null
+  ) {
+    return null;
+  }
+  const acceptedInputFields = acceptedInput as Record<string, unknown>;
+  if (
+    typeof acceptedInputFields.input_id !== "string" ||
+    typeof acceptedInputFields.authority_id !== "string"
   ) {
     return null;
   }
 
   // Validate tokenizer object
+  if (typeof tokenizer !== "object" || tokenizer === null) return null;
+  const tokenizerFields = tokenizer as Record<string, unknown>;
   if (
-    typeof tokenizer !== "object" ||
-    tokenizer === null ||
-    typeof tokenizer.id !== "string" ||
-    !tokenizer.id.trim() ||
-    typeof tokenizer.sha256 !== "string" ||
-    !SHA256_RE.test(tokenizer.sha256)
+    typeof tokenizerFields.id !== "string" ||
+    !tokenizerFields.id.trim() ||
+    typeof tokenizerFields.sha256 !== "string" ||
+    !SHA256_RE.test(tokenizerFields.sha256)
   ) {
     return null;
   }
@@ -187,20 +197,20 @@ export async function _resolveModelIdentity(
     byte_sha256: byteSha256,
     disposition,
     data: {
-      corpus_id: data.corpus_id,
-      sha256: data.sha256,
-      ordering_sha256: data.ordering_sha256,
-      curriculum_sha256: data.curriculum_sha256,
-      verifier_sha256: data.verifier_sha256,
-      clean_genesis: data.clean_genesis,
+      corpus_id: dataFields.corpus_id,
+      sha256: dataFields.sha256,
+      ordering_sha256: dataFields.ordering_sha256,
+      curriculum_sha256: dataFields.curriculum_sha256,
+      verifier_sha256: dataFields.verifier_sha256,
+      clean_genesis: dataFields.clean_genesis,
       accepted_input: {
-        input_id: data.accepted_input.input_id,
-        authority_id: data.accepted_input.authority_id,
+        input_id: acceptedInputFields.input_id,
+        authority_id: acceptedInputFields.authority_id,
       },
     },
     tokenizer: {
-      id: tokenizer.id,
-      sha256: tokenizer.sha256,
+      id: tokenizerFields.id,
+      sha256: tokenizerFields.sha256,
     },
   };
 }
