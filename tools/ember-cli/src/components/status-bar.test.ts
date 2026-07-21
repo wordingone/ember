@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // components/status-bar.test.ts — mode indicator + model metrics tests (AC4-AC6)
 // Spec: specs/surface6-fireball-observatory.md; m10-battery-harness.md (A2/A7)
 
@@ -11,9 +15,13 @@ import {
   DegradedBanner,
   formatOutageBannerText,
   OutageBanner,
+  formatRoundtripAgeDuration,
+  formatRoundtripAgeText,
+  RoundtripAgeIndicator,
   type ModelMetrics,
   type DegradedBannerState,
   type OutageBannerState,
+  type RoundtripAgeState,
 } from "./status-bar.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 
@@ -301,5 +309,65 @@ describe("OutageBanner component — hook-free, follows DegradedBanner conventio
     expect((el as { props: { color: string } }).props.color).toBe("yellow");
     const text = (el as { props: { children: string } }).props.children;
     expect(text).toContain("PLANNED OUTAGE (jun)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issue #239 final acceptance clause: RoundtripAgeIndicator — the
+// always-visible "last-successful-model-roundtrip age" status-line segment.
+// ---------------------------------------------------------------------------
+
+describe("formatRoundtripAgeDuration — compact duration formatting", () => {
+  it("sub-second durations render as ms", () => {
+    expect(formatRoundtripAgeDuration(0)).toBe("0ms");
+    expect(formatRoundtripAgeDuration(900)).toBe("900ms");
+  });
+
+  it("sub-minute durations render as whole seconds", () => {
+    expect(formatRoundtripAgeDuration(1000)).toBe("1s");
+    expect(formatRoundtripAgeDuration(45_000)).toBe("45s");
+    expect(formatRoundtripAgeDuration(59_999)).toBe("59s");
+  });
+
+  it("minute-scale durations render as MmSs", () => {
+    expect(formatRoundtripAgeDuration(60_000)).toBe("1m0s");
+    expect(formatRoundtripAgeDuration(125_000)).toBe("2m5s");
+  });
+
+  it("clamps a negative duration to 0ms", () => {
+    expect(formatRoundtripAgeDuration(-500)).toBe("0ms");
+  });
+});
+
+describe("formatRoundtripAgeText — pure formatter, #239 acceptance text", () => {
+  it("reports 'no roundtrip yet' before any success", () => {
+    const s: RoundtripAgeState = { lastSuccessAt: null };
+    expect(formatRoundtripAgeText(s, 10_000)).toBe("no roundtrip yet");
+  });
+
+  it("reports the age since the last successful roundtrip", () => {
+    const s: RoundtripAgeState = { lastSuccessAt: 1000 };
+    expect(formatRoundtripAgeText(s, 6500)).toBe("last roundtrip 5s ago");
+  });
+
+  it("never negative even if now < lastSuccessAt", () => {
+    const s: RoundtripAgeState = { lastSuccessAt: 5000 };
+    expect(formatRoundtripAgeText(s, 1000)).toBe("last roundtrip 0ms ago");
+  });
+});
+
+describe("RoundtripAgeIndicator component — always renders, never hidden like DegradedBanner", () => {
+  it("renders a dim Text element even with no roundtrip yet (never returns null)", () => {
+    const el = RoundtripAgeIndicator({ roundtripAge: { lastSuccessAt: null }, now: 0 });
+    expect(el).not.toBeNull();
+    expect((el as { props: { dimColor: boolean } }).props.dimColor).toBe(true);
+    const text = (el as { props: { children: string } }).props.children;
+    expect(text).toBe("no roundtrip yet");
+  });
+
+  it("renders the formatted age text once a roundtrip has succeeded", () => {
+    const el = RoundtripAgeIndicator({ roundtripAge: { lastSuccessAt: 1000 }, now: 3000 });
+    const text = (el as { props: { children: string } }).props.children;
+    expect(text).toBe("last roundtrip 2s ago");
   });
 });

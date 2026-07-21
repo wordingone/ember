@@ -82,7 +82,7 @@ import {
 }                                        from "../services/activity-feed.ts";
 import { advanceActivityTranscript }      from "../services/activity-transcript-window.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
-import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
+import { useCircuitBreakerBanner, useRoundtripAge } from "../services/circuit-breaker-banner-poller.ts";
 import { useOutageBanner }               from "../services/outage-banner-poller.ts";
 import {
   executePromptSuggestion,
@@ -995,6 +995,10 @@ export function ReplScreen({
   // model endpoint is healthy (or no guarded client has been wired yet).
   const degradedBanner = useCircuitBreakerBanner();
 
+  // issue #239 final acceptance clause: last-successful-model-roundtrip age,
+  // shown regardless of circuit state — distinguishes a wedge from idle-healthy.
+  const roundtripAge = useRoundtripAge();
+
   // issue #475: planned-outage status banner — {active:false} whenever
   // tools/ember-cli/state/planned-outage.json is absent, expired, or malformed. Explains WHY
   // the model may be unreachable (a planned watchdog-honored maintenance window) so it is
@@ -1594,6 +1598,7 @@ export function ReplScreen({
         effort:         retryStatus,
         degraded:       degradedBanner,
         outage:         outageBanner,
+        roundtripAge,
       }),
     ),
     React.createElement(OperatorSurfacePane, {

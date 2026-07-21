@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/model-circuit-breaker.wrap.test.ts — issue #239: wraps a
 // callModel-shaped function (the model-client request path, e.g.
 // session-init.ts's buildProductionCallModel output) with the circuit
@@ -12,7 +16,7 @@ import {
   wrapModelClientWithCircuitBreaker,
   CircuitOpenError,
 } from "./model-circuit-breaker-client.ts";
-import { CIRCUIT_MAX_ATTEMPTS, CIRCUIT_PROBE_INTERVAL_MS } from "./model-circuit-breaker.ts";
+import { CIRCUIT_MAX_ATTEMPTS, CIRCUIT_PROBE_INTERVAL_MS, describeRoundtripAge } from "./model-circuit-breaker.ts";
 import { ModelHttpError } from "./api-openai-adapter.ts";
 import type { CallModelParams, ModelResponse } from "../query/query-loop-support.ts";
 
@@ -72,6 +76,9 @@ describe("wrapModelClientWithCircuitBreaker — bounded backoff on retryable err
     expect(sleeps.length).toBe(2);
     expect(handle.getState().state).toBe("closed");
     expect(handle.getState().consecutiveFailures).toBe(0);
+    // #239 final acceptance clause: the eventual success stamps lastSuccessAt
+    // with the wrapper's injected clock, not a real Date.now() the test can't control.
+    expect(handle.getState().lastSuccessAt).toBe(clock.now());
   });
 
   it("exhausting all 6 attempts opens the circuit -- exactly 6 underlying calls, never more", async () => {
@@ -206,5 +213,55 @@ describe("wrapModelClientWithCircuitBreaker — non-endpoint errors pass through
       handle.callModel({ ...okParams, abortSignal: ctrl.signal }),
     ).rejects.toThrow("aborted");
     expect(handle.getState().state).toBe("closed");
+  });
+});
+
+describe("wrapModelClientWithCircuitBreaker — #239 final acceptance clause: last-successful-roundtrip age", () => {
+  it("never having succeeded: describeRoundtripAge reports null/null", () => {
+    const clock = makeClock();
+    const handle = wrapModelClientWithCircuitBreaker(
+      async () => okResponse,
+      { endpoint: "e", now: clock.now, sleep: async () => {} },
+    );
+    expect(describeRoundtripAge(handle.getState(), clock.now())).toEqual({
+      lastSuccessAt: null,
+      ageMs: null,
+    });
+  });
+
+  it("a real successful roundtrip stamps a timestamp the status line can age against", async () => {
+    const clock = makeClock(1_000);
+    const handle = wrapModelClientWithCircuitBreaker(
+      async () => okResponse,
+      { endpoint: "e", now: clock.now, sleep: async () => {} },
+    );
+
+    await handle.callModel(okParams);
+    clock.advance(4_500);
+    const age = describeRoundtripAge(handle.getState(), clock.now());
+    expect(age.lastSuccessAt).toBe(1_000);
+    expect(age.ageMs).toBe(4_500);
+  });
+
+  it("a subsequent fail-fast 4xx opens the circuit but PRESERVES the prior success's age -- the operator can still see when the endpoint last actually worked, even while wedged", async () => {
+    const clock = makeClock(1_000);
+    let mode: "ok" | "fail" = "ok";
+    const handle = wrapModelClientWithCircuitBreaker(
+      async () => {
+        if (mode === "fail") throw new ModelHttpError(400, "Bad Request");
+        return okResponse;
+      },
+      { endpoint: "e", now: clock.now, sleep: async () => { throw new Error("must not sleep on 4xx"); } },
+    );
+
+    await handle.callModel(okParams); // succeeds at t=1000
+    clock.advance(19_000); // t=20000
+    mode = "fail";
+    await expect(handle.callModel(okParams)).rejects.toBeInstanceOf(CircuitOpenError);
+
+    expect(handle.getState().state).toBe("open");
+    const age = describeRoundtripAge(handle.getState(), clock.now());
+    expect(age.lastSuccessAt).toBe(1_000);
+    expect(age.ageMs).toBe(19_000); // visibly stale, not silently reset to "just now"
   });
 });

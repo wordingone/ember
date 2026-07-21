@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/model-circuit-breaker-client.ts — issue #239: wraps the
 // model-client request function (session-init.ts's buildProductionCallModel
 // output, i.e. LoopDeps.callModel) with the pure circuit-breaker state
@@ -159,7 +163,7 @@ export function wrapModelClientWithCircuitBreaker(
     while (true) {
       try {
         const response = await callModel(params);
-        state = recordSuccess(state);
+        state = recordSuccess(state, now());
         notify();
         return response;
       } catch (err) {
