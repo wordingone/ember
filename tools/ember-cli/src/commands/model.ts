@@ -299,6 +299,17 @@ interface ModelCommandDeps {
    * Injectable so unit tests stub the actual process spawn.
    */
   ensureOwnedServer?: (identity: OwnedModelIdentity) => Promise<EnsureOwnedServerResult>;
+  /**
+   * cond3 procreg: process_registry_watchdog binding. `/model status` reads a
+   * cached in-memory flag (getModelState) that is set once at register time
+   * and never re-derived -- a crashed owned process whose port got reclaimed
+   * by an unrelated listener, or a live listener answering with a mismatched
+   * checkpoint identity, would otherwise still be reported "loaded" forever.
+   * Defaults to the REAL verifyOwnedEndpointIdentity (owned-seat-loader.ts) --
+   * never reimplemented. Injectable so tests can bind it to a stub fetchFn
+   * while still exercising the real verifier's comparison logic.
+   */
+  verifyOwnedEndpointIdentity?: (identity: OwnedModelIdentity) => Promise<void>;
   /** Injectable for tests; defaults to the real registerManagedModel. */
   registerManagedModel?: (handle: ManagedModelHandle) => void;
   /** Injectable for tests; defaults to real fs ops bound to resolveModelIdentity.
@@ -401,6 +412,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
   const doResolveModelIdentity = deps.resolveModelIdentity ?? _resolveModelIdentity;
   const doLoadOwnedIdentity = deps.loadOwnedIdentity ?? _defaultLoadOwnedIdentity;
   const doEnsureOwnedServer = deps.ensureOwnedServer ?? _defaultEnsureOwnedServer;
+  const doVerifyOwnedEndpointIdentity = deps.verifyOwnedEndpointIdentity ?? verifyOwnedEndpointIdentity;
   const doRegisterManagedModel = deps.registerManagedModel ?? registerManagedModel;
   const doCheckpointSaveDeps = deps.checkpointSaveDeps ?? _realCheckpointSaveDeps(doResolveModelIdentity);
 
@@ -417,7 +429,30 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
 
       // AC9: /model status → current state + pid (if loaded)
       if (subcommand === "status" || subcommand === "") {
-        const state = doGetModelState();
+        let state = doGetModelState();
+
+        // cond3 procreg (process_registry_watchdog): "loaded" out of
+        // getModelState() is a module-level flag set ONCE at register time --
+        // it is never re-derived. Re-verify against manifest-bound
+        // control-plane authority (verifyOwnedEndpointIdentity) on EVERY
+        // status read, so a crashed owned process whose port got reclaimed
+        // by an unrelated listener (ambient/pid-reused process), or a live
+        // listener answering with a mismatched checkpoint identity, is NEVER
+        // still reported "loaded" -- fail-closed to "unloaded" instead.
+        // External mode (EMBER_MODEL_URL) is untouched: an externally
+        // supplied endpoint is not ours to bind/re-verify.
+        if (state === "loaded" && process.env["EMBER_MODEL_URL"] === undefined) {
+          const ownedIdentity = doLoadOwnedIdentity(ctx.cwd);
+          if (ownedIdentity === null) {
+            state = "unloaded";
+          } else {
+            try {
+              await doVerifyOwnedEndpointIdentity(ownedIdentity);
+            } catch {
+              state = "unloaded";
+            }
+          }
+        }
 
         // cond3 inc2a: checkpoint identity is SOURCED from a validated
         // manifest only. Fail-closed at the RENDER level -- status ALWAYS
