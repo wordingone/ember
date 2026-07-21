@@ -15,6 +15,10 @@ import {
 import type { CommandContext } from "../types/command-types.ts";
 import type { OwnedModelIdentity } from "../entrypoints/model-seat.ts";
 import type { EnsureOwnedServerResult } from "../entrypoints/owned-server-supervisor.ts";
+// cond3 procreg: import the REAL verifier (never reimplement) so the new
+// status-report binding is exercised against its actual comparison logic,
+// with only the network fetch stubbed.
+import { verifyOwnedEndpointIdentity as realVerifyOwnedEndpointIdentity } from "../entrypoints/owned-seat-loader.ts";
 import { join } from "path";
 
 const FIXTURE_DIR = join(import.meta.dir, "__fixtures__", "model-identity");
@@ -100,6 +104,11 @@ describe("model command", () => {
       const cmd = createModelCommand({
         getModelState: () => mockState,
         resolveModelIdentity: async () => fakeIdentity,
+        // cond3 procreg: "loaded" is now re-verified against the owned
+        // endpoint identity on every status read; bind a passing stub so
+        // this test keeps exercising the reported-state contract.
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        verifyOwnedEndpointIdentity: async () => {},
       });
 
       const result = await cmd.execute("status", mockCtx);
@@ -137,6 +146,8 @@ describe("model command", () => {
       const cmd = createModelCommand({
         getModelState: () => "loaded",
         resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        verifyOwnedEndpointIdentity: async () => {},
       });
 
       const result = await cmd.execute("", mockCtx);
@@ -158,6 +169,8 @@ describe("model command", () => {
           return { ...fakeIdentity, byte_sha256: FIXTURE_BYTE_SHA256, disposition: FIXTURE_DISPOSITION };
         },
         manifestPath: FIXTURE_MANIFEST,
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        verifyOwnedEndpointIdentity: async () => {},
       });
 
       const result = await cmd.execute("status", mockCtx);
@@ -173,6 +186,8 @@ describe("model command", () => {
         getModelState: () => "loaded",
         resolveModelIdentity: async () => null,
         manifestPath: "/does/not/exist/model-identity.json",
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        verifyOwnedEndpointIdentity: async () => {},
       });
 
       const result = await cmd.execute("status", mockCtx);
@@ -412,6 +427,129 @@ describe("model command", () => {
       expect(result?.message).toContain("tokenizer.sha256:");
       // Ensure no exit code on success
       expect(result?.exitCode).toBeUndefined();
+    });
+  });
+
+  // =========================================================================
+  // cond3 process_registry_watchdog binding: "/model status" must derive its
+  // reported owned-runtime state from manifest-bound control-plane authority
+  // (verifyOwnedEndpointIdentity), never from the cached in-memory flag
+  // alone. Binds the REAL consumer (createModelCommand's status handler) and
+  // the REAL verifier (owned-seat-loader.ts, only its fetch stubbed) --
+  // mirrors the proven-negative shape at
+  // services/brain-server-supervisor.test.ts:448-456 (pid-reuse reclaim).
+  // =========================================================================
+  describe("cond3 procreg: /model status re-verifies owned endpoint identity", () => {
+    const verifiedIdentity = {
+      checkpointSha256: "1".repeat(64),
+      endpointUrl: "http://127.0.0.1:29777/",
+      identityUrl: "http://127.0.0.1:29777/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + "1".repeat(12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    } as unknown as OwnedModelIdentity;
+
+    const matchingPayload = {
+      seat: "OWNED_ADMITTED",
+      mode: "INTERACTIVE",
+      checkpoint_sha256: verifiedIdentity.checkpointSha256,
+      model_name: verifiedIdentity.modelName,
+      model_config_sha256: verifiedIdentity.modelConfigSha256,
+      server_source_sha256: verifiedIdentity.serverSourceSha256,
+      tokenizer_sha256: verifiedIdentity.tokenizerSha256,
+    };
+
+    it("POSITIVE: a manifest-verified owned endpoint IS reported as loaded", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "loaded",
+        resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => verifiedIdentity,
+        verifyOwnedEndpointIdentity: (identity) =>
+          realVerifyOwnedEndpointIdentity(identity, async () => Response.json(matchingPayload)),
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).toContain("model: loaded");
+    });
+
+    it("NEGATIVE-1: an ambient/pid-reused process (mismatched response shape) is NOT reported as loaded", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "loaded",
+        resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => verifiedIdentity,
+        // Simulates a pid-reused ambient process (e.g. notepad.exe) now
+        // holding the port: it answers HTTP, but not with our identity
+        // contract -- the REAL verifier rejects this (mirrors the proven
+        // negative at brain-server-supervisor.test.ts:448-456).
+        verifyOwnedEndpointIdentity: (identity) =>
+          realVerifyOwnedEndpointIdentity(identity, async () => Response.json({ notARealField: true })),
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).not.toContain("model: loaded");
+      expect(result?.message).toContain("model: unloaded");
+    });
+
+    it("NEGATIVE-2: a live process on the owned port with a MISMATCHED checkpoint identity (manifest sha mismatch) is NOT reported as loaded", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "loaded",
+        resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => verifiedIdentity,
+        // Live, well-formed response -- but bound to a DIFFERENT checkpoint
+        // sha than the identity this session admitted. Fail-closed via
+        // verifyOwnedEndpointIdentity's own checkpoint_sha256 comparison.
+        verifyOwnedEndpointIdentity: (identity) =>
+          realVerifyOwnedEndpointIdentity(
+            identity,
+            async () => Response.json({ ...matchingPayload, checkpoint_sha256: "9".repeat(64) }),
+          ),
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.type).toBe("message");
+      expect(result?.message).not.toContain("model: loaded");
+      expect(result?.message).toContain("model: unloaded");
+    });
+
+    it("no owned identity available at all (offline/reference seat) fails closed rather than reporting loaded", async () => {
+      const cmd = createModelCommand({
+        getModelState: () => "loaded",
+        resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => null,
+        verifyOwnedEndpointIdentity: async () => {
+          throw new Error("must not be called when there is no identity to verify against");
+        },
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+
+      expect(result?.message).toContain("model: unloaded");
+    });
+
+    it("external mode is untouched -- never re-verified, never overridden", async () => {
+      const originalEnv = process.env["EMBER_MODEL_URL"];
+      process.env["EMBER_MODEL_URL"] = "http://127.0.0.1:9/external";
+      try {
+        const cmd = createModelCommand({
+          getModelState: () => "external",
+          resolveModelIdentity: async () => fakeIdentity,
+          loadOwnedIdentity: () => {
+            throw new Error("must not be called in external mode");
+          },
+        });
+
+        const result = await cmd.execute("status", mockCtx);
+        expect(result?.message).toContain("model: external");
+      } finally {
+        if (originalEnv === undefined) delete process.env["EMBER_MODEL_URL"];
+        else process.env["EMBER_MODEL_URL"] = originalEnv;
+      }
     });
   });
 
