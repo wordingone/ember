@@ -480,6 +480,83 @@ describe("owned seat loader", () => {
     expect(cleanupCalls).toBe(1);
   });
 
+  it("validates a development launch when the resolver echoes a differently-cased manifest path, and still rejects a genuinely different file", () => {
+    // Regression for the owned-seat launch blocker: the %TEMP% environment
+    // value on Windows can differ in letter-case from the real on-disk case of
+    // the same directory, so the snapshot path handed to the Python resolver
+    // and the Path.resolve()'d path it echoes back could differ only in case.
+    // A raw case-sensitive `!==` on those two paths killed every owned-seat
+    // development launch with "invalid launch descriptor". The compare is now
+    // case-correct (sameResolvedPath) WITHOUT weakening the trust binding:
+    // prove BOTH directions here.
+    const caseInsensitiveFs = process.platform === "win32" || process.platform === "darwin";
+    const build = (echoedManifestPath: string) =>
+      loadOwnedDevelopmentIdentity(
+        {
+          repoRoot: "C:/repo",
+          configHome: "C:/home",
+          manifestPath: resolve("C:/development.json"),
+          pythonExecutable: "python-owned",
+        },
+        {
+          exists: () => true,
+          resolveBuildCommit: () => "a".repeat(40),
+          captureDevelopmentResolver: () => ({
+            cleanup: () => {},
+            // Snapshot manifest recorded with one casing ...
+            manifestPath: resolve("C:/Snapshot/Development.json"),
+            manifestSha256: "e".repeat(64),
+            resolverPath: resolve("C:/snapshot/development_cli_seat.py"),
+            runtimeIndexPath: resolve("C:/snapshot/runtime-bundle-index.json"),
+            runtimeIndexSha256: "f".repeat(64),
+          }),
+          execute: () => ({
+            status: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              valid: true,
+              seat: "OWNED_DEVELOPMENT",
+              claim_status: "NON_ADMISSIBLE",
+              checkpoint_sha256: CHECKPOINT,
+              endpoint_url: "http://127.0.0.1:8083",
+              identity_url: "http://127.0.0.1:8083/v1/models",
+              model_config_sha256: "b".repeat(64),
+              model_name: "ember-owned-development:" + CHECKPOINT.slice(0, 12),
+              model_format: "pytorch-checkpoint-v3",
+              server_source_sha256: "a".repeat(64),
+              tokenizer_sha256: "c".repeat(64),
+              tokens_seen: 2048,
+              allocated_parameters: 3_839_161_856,
+              active_parameters: 1_020_589_568,
+              launch: {
+                checkpoint_dir: resolve("C:/owned/checkpoint"),
+                // ... and echoed back with whatever casing the resolver used.
+                development_manifest_path: echoedManifestPath,
+                mode: "INTERACTIVE",
+                model_config_path: resolve("C:/owned/model-config.json"),
+                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                tokenizer_path: resolve("C:/owned/tokenizer.json"),
+              },
+            }),
+          }),
+        },
+      );
+
+    // POSITIVE (case-insensitive FS): a differently-cased spelling of the SAME
+    // snapshot manifest still validates the launch. On case-sensitive FS the
+    // temp-casing failure mode does not exist, so this branch is Windows/macOS.
+    if (caseInsensitiveFs) {
+      const identity = build(resolve("c:/snapshot/development.json"));
+      expect(identity?.seat).toBe("OWNED_DEVELOPMENT");
+    }
+
+    // NEGATIVE (all platforms): a genuinely DIFFERENT file — not merely a
+    // different case — is STILL rejected. The trust binding is not weakened.
+    expect(() => build(resolve("C:/snapshot/development-IMPOSTER.json"))).toThrow(
+      "invalid launch descriptor",
+    );
+  });
+
   it("verifies a live development endpoint without upgrading its claim status", async () => {
     const identity = {
       seat: "OWNED_DEVELOPMENT" as const,
