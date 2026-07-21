@@ -557,6 +557,77 @@ describe("owned seat loader", () => {
     );
   });
 
+  it("validates an admitted (owned) launch when the resolver echoes differently-cased manifest/registry paths, and still rejects a genuinely different file", () => {
+    // Class-closure of the development-seat case-correctness fix above: the
+    // ADMITTED-seat compare in parseOwnedLaunch had the identical raw
+    // case-sensitive `!==` on runManifestPath/trustedVerifierRegistryPath.
+    // Now case-correct via the same sameResolvedPath helper — prove BOTH
+    // directions here too, without weakening the trust binding.
+    const caseInsensitiveFs = process.platform === "win32" || process.platform === "darwin";
+    const build = (echoedManifestPath: string, echoedRegistryPath: string) =>
+      loadOwnedModelIdentity(
+        {
+          repoRoot: "C:/repo",
+          configHome: "C:/home",
+          // Expected paths recorded with one casing ...
+          manifestPath: resolve("C:/Run/Manifest.json"),
+          verifierRegistryPath: resolve("C:/Trusted/Verifiers.json"),
+          pythonExecutable: "python-owned",
+        },
+        {
+          exists: () => true,
+          execute: () => ({
+            status: 0,
+            stderr: "",
+            stdout: JSON.stringify({
+              valid: true,
+              seat: "OWNED_ADMITTED",
+              checkpoint_sha256: CHECKPOINT,
+              endpoint_url: "http://127.0.0.1:8083",
+              identity_url: "http://127.0.0.1:8083/v1/models",
+              model_config_sha256: "b".repeat(64),
+              model_name: "ember-owned:" + CHECKPOINT.slice(0, 12),
+              model_format: "safetensors",
+              server_source_sha256: "a".repeat(64),
+              tokenizer_sha256: "c".repeat(64),
+              launch: {
+                checkpoint_dir: resolve("C:/owned/checkpoint"),
+                mode: "INTERACTIVE",
+                model_config_path: resolve("C:/owned/model-config.json"),
+                // ... and echoed back with whatever casing the resolver used.
+                run_manifest_path: echoedManifestPath,
+                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                tokenizer_path: resolve("C:/owned/tokenizer.json"),
+                trusted_verifier_registry_path: echoedRegistryPath,
+              },
+            }),
+          }),
+        },
+      );
+
+    // POSITIVE (case-insensitive FS): differently-cased spellings of the SAME
+    // manifest and registry files still validate the admitted seat. On
+    // case-sensitive FS the casing failure mode does not exist, so this
+    // branch is Windows/macOS.
+    if (caseInsensitiveFs) {
+      const identity = build(
+        resolve("c:/run/manifest.json"),
+        resolve("c:/trusted/verifiers.json"),
+      );
+      expect(identity?.launch?.authorityKind).toBe("ADMISSION");
+    }
+
+    // NEGATIVE (all platforms): a genuinely DIFFERENT file for either path —
+    // not merely a different case — is STILL rejected. The trust binding is
+    // not weakened.
+    expect(() =>
+      build(resolve("C:/run/manifest-IMPOSTER.json"), resolve("C:/Trusted/Verifiers.json")),
+    ).toThrow("invalid launch descriptor");
+    expect(() =>
+      build(resolve("C:/Run/Manifest.json"), resolve("C:/trusted/verifiers-IMPOSTER.json")),
+    ).toThrow("invalid launch descriptor");
+  });
+
   it("verifies a live development endpoint without upgrading its claim status", async () => {
     const identity = {
       seat: "OWNED_DEVELOPMENT" as const,
