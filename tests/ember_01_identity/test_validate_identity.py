@@ -779,6 +779,42 @@ def test_fully_evidenced_owned_admission_passes() -> None:
     ) == payload
 
 
+def test_owned_completion_admits_registry_member_benchmark() -> None:
+    # cond6 clause-(a) POSITIVE: the canonical owned-admitted fixture evaluates
+    # a frozen-registry member (terminal-bench-2.1); clause-(a) does not fire.
+    payload, receipts = admitted_manifest()
+    assert payload["evaluation"]["benchmark_id"] == "terminal-bench-2.1"
+    # fully-evidenced fixture validates clean: no membership finding is raised.
+    assert validate_manifest(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    ) == payload
+
+
+def test_owned_completion_rejects_unregistered_benchmark_id() -> None:
+    # cond6 clause-(a) NEGATIVE: an owned-admitted eval whose benchmark_id is
+    # not a member of the frozen registry is fail-closed RED.
+    payload, receipts = admitted_manifest()
+    payload["evaluation"]["benchmark_id"] = "fabricated-bench"
+    codes = error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+    assert "evaluation.benchmark_id_unregistered" in codes
+
+
+def test_owned_completion_fails_closed_when_registry_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # cond6 clause-(a) NEGATIVE: a missing / unreadable pinned registry does not
+    # silently pass — it surfaces evaluation.benchmark_registry_unavailable.
+    missing = tmp_path / "benchmark-registry.json"
+    monkeypatch.setattr(identity_validator, "BENCHMARK_REGISTRY_PATH", missing)
+    payload, receipts = admitted_manifest()
+    codes = error_codes(
+        payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+    assert "evaluation.benchmark_registry_unavailable" in codes
+
+
 def test_owned_admission_rejects_process_executable_mismatch() -> None:
     payload, receipts = admitted_manifest()
     payload["backend"]["process_identity"]["executable_sha256"] = "4" * 64
