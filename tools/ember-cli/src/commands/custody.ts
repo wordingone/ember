@@ -27,6 +27,15 @@ import {
 } from "../entrypoints/owned-seat-loader.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import {
+  MalformedBindingArgError,
+  parseBindingArg,
+  readRootBindingsStore,
+  rootBindingsStorePath,
+  writeRootBinding,
+  type CustodyBindingsDeps,
+  type RootBindingsStore,
+} from "../services/custody-bindings.ts";
 
 // ---------------------------------------------------------------------------
 // Deps (injectable for testing)
@@ -45,6 +54,10 @@ interface CustodyCommandDeps {
   getModelSeatDecision?: () => ModelSeatDecision;
   /** Injectable for tests; defaults to the real `selectedModelContract`. */
   selectedModelContractFn?: (decision: ModelSeatDecision) => SelectedModelContract | undefined;
+  /** Injectable for tests; defaults to the real repo-root resolver. */
+  resolveRepoRoot?: () => string;
+  /** Injectable fs seam for the root-bindings store (`services/custody-bindings.ts`). */
+  bindingsFs?: CustodyBindingsDeps;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +172,23 @@ export function renderCustodyStatus(
   return lines.join("\n");
 }
 
+/**
+ * Renders any persisted machine-local root bindings for `/custody status`.
+ * Read-only, fail-open: when the store is absent/empty this returns `""` so
+ * callers can splice it in without changing today's status shape when no
+ * binding has ever been set (`readRootBindingsStore` already fails open on a
+ * missing/malformed file; this only decides how to *render* an empty result).
+ */
+export function renderRootBindings(store: RootBindingsStore): string {
+  const entries = Object.values(store.roots);
+  if (entries.length === 0) return "";
+  const lines = ["", "bindings:"];
+  for (const b of entries.sort((a, c) => a.root_id.localeCompare(c.root_id))) {
+    lines.push(`  ${b.root_id} -> ${b.machine_path} (${b.binding_env})`);
+  }
+  return lines.join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -167,21 +197,74 @@ export function renderCustodyStatus(
 export function createCustodyCommand(deps: CustodyCommandDeps = {}): RegistryCommand {
   const doGetModelSeatDecision = deps.getModelSeatDecision ?? _defaultGetModelSeatDecision;
   const doSelectedModelContract = deps.selectedModelContractFn ?? selectedModelContract;
+  const doResolveRepoRoot =
+    deps.resolveRepoRoot ?? (() => resolveEmberRepoRootOrCwd({}, "[ember] /custody"));
+  const bindingsFs = deps.bindingsFs ?? {};
 
   return {
     name: "custody",
-    description: "Show the current model seat classification (read-only): custody status",
+    description:
+      "Show the current model seat classification (read-only): custody status; persist a machine-local root path: custody set <root_id>=<path>",
     aliases: ["seat"],
     isEnabled(): boolean {
       return true;
     },
     async execute(args: string, _ctx: CommandContext) {
-      const subcommand = args.trim().split(/\s+/)[0] ?? "";
+      const trimmed = args.trim();
+      const firstSpace = trimmed.search(/\s/);
+      const subcommand = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
+      const rest = firstSpace === -1 ? "" : trimmed.slice(firstSpace + 1).trim();
+
+      if (subcommand === "set") {
+        if (!rest) {
+          return {
+            type: "message" as const,
+            message: "usage: /custody set <root_id>=<path> (or --binding <root_id>=<path>)",
+            exitCode: 1,
+          };
+        }
+        // Accept both `set root_id=path` and `set --binding root_id=path`.
+        const bindingArg = rest.startsWith("--binding")
+          ? rest.slice("--binding".length).trim()
+          : rest;
+
+        let parsed: { rootId: string; machinePath: string };
+        try {
+          parsed = parseBindingArg(bindingArg);
+        } catch (err) {
+          if (err instanceof MalformedBindingArgError) {
+            return {
+              type: "message" as const,
+              message: `custody set: ${err.message}`,
+              exitCode: 1,
+            };
+          }
+          throw err;
+        }
+
+        let repoRoot: string;
+        try {
+          repoRoot = doResolveRepoRoot();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            type: "message" as const,
+            message: `custody set: could not resolve the ember repo root (${msg})`,
+            exitCode: 1,
+          };
+        }
+
+        const binding = writeRootBinding(repoRoot, parsed.rootId, parsed.machinePath, bindingsFs);
+        return {
+          type: "message" as const,
+          message: `custody set: wrote ${binding.root_id} -> ${binding.machine_path} (${binding.binding_env}) to ${rootBindingsStorePath(repoRoot)}`,
+        };
+      }
 
       if (subcommand !== "status" && subcommand !== "") {
         return {
           type: "message" as const,
-          message: "usage: /custody status (alias: /seat)",
+          message: "usage: /custody status (alias: /seat) | /custody set <root_id>=<path>",
         };
       }
 
@@ -198,9 +281,19 @@ export function createCustodyCommand(deps: CustodyCommandDeps = {}): RegistryCom
         };
       }
 
+      let bindingsSuffix = "";
+      try {
+        const repoRoot = doResolveRepoRoot();
+        bindingsSuffix = renderRootBindings(readRootBindingsStore(repoRoot, bindingsFs));
+      } catch {
+        // Fail open to today's behavior (no bindings section) -- a status
+        // query is never broken by a repo-root resolution failure.
+        bindingsSuffix = "";
+      }
+
       return {
         type: "message" as const,
-        message: renderCustodyStatus(decision, doSelectedModelContract),
+        message: renderCustodyStatus(decision, doSelectedModelContract) + bindingsSuffix,
       };
     },
   };

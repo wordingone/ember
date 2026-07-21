@@ -22,6 +22,10 @@ models/
 # internal prompts, absolute local paths, and operator identities. Never tracked.
 .agent/
 
+# Machine-local custody root-binding store (/custody set) — path_policy: logical
+# root IDs in tracked output, machine paths supplied at execution only.
+.ember/
+
 # Scratch / working artifacts — never tracked.
 _scratch_*
 *scratch*/

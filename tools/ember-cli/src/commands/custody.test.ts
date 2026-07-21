@@ -8,6 +8,32 @@ import { describe, it, expect } from "bun:test";
 import { createCustodyCommand, renderCustodyStatus } from "./custody.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import type { ModelSeatDecision } from "../entrypoints/model-seat.ts";
+import type { CustodyBindingsDeps } from "../services/custody-bindings.ts";
+
+/** In-memory fs double for the `/custody set`/status bindings seam -- mirrors
+ *  services/custody-bindings.test.ts's makeMemFs so both suites round-trip
+ *  through the exact same production read/write code path. */
+function makeMemBindingsFs(initial: Record<string, string> = {}): {
+  bindingsFs: CustodyBindingsDeps;
+  files: Record<string, string>;
+} {
+  const files: Record<string, string> = { ...initial };
+  const dirs = new Set<string>();
+  const bindingsFs: CustodyBindingsDeps = {
+    existsSync: (p: string) => p in files || dirs.has(p),
+    readFileSync: (p: string) => {
+      if (!(p in files)) throw new Error(`ENOENT: ${p}`);
+      return files[p]!;
+    },
+    writeFileSync: (p: string, data: string) => {
+      files[p] = data;
+    },
+    mkdirSync: (p: string) => {
+      dirs.add(p);
+    },
+  };
+  return { bindingsFs, files };
+}
 
 const mockCtx: CommandContext = {
   sessionId: "test-session",
@@ -219,6 +245,97 @@ describe("/custody status (alias /seat)", () => {
 
       expect(result?.type).toBe("message");
       expect(result?.message).toContain("usage: /custody status");
+    });
+  });
+
+  describe("/custody set <root_id>=<path>", () => {
+    it("writes a binding + round-trips it back via a read", async () => {
+      const { bindingsFs } = makeMemBindingsFs();
+      const cmd = createCustodyCommand({
+        getModelSeatDecision: () => OWNED_ADMITTED_DECISION,
+        resolveRepoRoot: () => "/repo",
+        bindingsFs,
+      });
+
+      const setResult = await cmd.execute("set benchmark-root=/mnt/data/bench", mockCtx);
+      expect(setResult?.type).toBe("message");
+      expect(setResult?.exitCode).toBeUndefined();
+      expect(setResult?.message).toContain("benchmark-root");
+      expect(setResult?.message).toContain("/mnt/data/bench");
+
+      const statusResult = await cmd.execute("status", mockCtx);
+      expect(statusResult?.message).toContain("bindings:");
+      expect(statusResult?.message).toContain("benchmark-root -> /mnt/data/bench");
+    });
+
+    it("accepts the --binding flag form", async () => {
+      const { bindingsFs } = makeMemBindingsFs();
+      const cmd = createCustodyCommand({
+        getModelSeatDecision: () => OWNED_ADMITTED_DECISION,
+        resolveRepoRoot: () => "/repo",
+        bindingsFs,
+      });
+
+      const result = await cmd.execute("set --binding benchmark-root=/mnt/data/bench", mockCtx);
+      expect(result?.message).toContain("benchmark-root");
+
+      const status = await cmd.execute("status", mockCtx);
+      expect(status?.message).toContain("bindings:");
+    });
+
+    it("read-merge-write: a second binding never clobbers the first", async () => {
+      const { bindingsFs } = makeMemBindingsFs();
+      const cmd = createCustodyCommand({
+        getModelSeatDecision: () => OWNED_ADMITTED_DECISION,
+        resolveRepoRoot: () => "/repo",
+        bindingsFs,
+      });
+
+      await cmd.execute("set benchmark-root=/mnt/data/bench", mockCtx);
+      await cmd.execute("set external-data-root=/mnt/data/external", mockCtx);
+
+      const status = await cmd.execute("status", mockCtx);
+      expect(status?.message).toContain("benchmark-root -> /mnt/data/bench");
+      expect(status?.message).toContain("external-data-root -> /mnt/data/external");
+    });
+
+    it("fails closed (exitCode 1) on a malformed argument, never writing", async () => {
+      const { bindingsFs, files } = makeMemBindingsFs();
+      const cmd = createCustodyCommand({
+        getModelSeatDecision: () => OWNED_ADMITTED_DECISION,
+        resolveRepoRoot: () => "/repo",
+        bindingsFs,
+      });
+
+      const result = await cmd.execute("set benchmark-root", mockCtx);
+      expect(result?.exitCode).toBe(1);
+      expect(Object.keys(files).length).toBe(0);
+    });
+
+    it("fails closed (exitCode 1) with no argument at all", async () => {
+      const cmd = createCustodyCommand({
+        getModelSeatDecision: () => OWNED_ADMITTED_DECISION,
+        resolveRepoRoot: () => "/repo",
+      });
+
+      const result = await cmd.execute("set", mockCtx);
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("usage:");
+    });
+  });
+
+  describe("/custody status with an absent bindings store", () => {
+    it("falls back cleanly (no bindings section) when the store does not exist", async () => {
+      const { bindingsFs } = makeMemBindingsFs();
+      const cmd = createCustodyCommand({
+        getModelSeatDecision: () => OWNED_ADMITTED_DECISION,
+        resolveRepoRoot: () => "/repo",
+        bindingsFs,
+      });
+
+      const result = await cmd.execute("status", mockCtx);
+      expect(result?.message).not.toContain("bindings:");
+      expect(result?.message).toContain("custody: OWNED_ADMITTED");
     });
   });
 
