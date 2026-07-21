@@ -13,6 +13,8 @@ import {
   type ModelLifecycleDeps,
 } from "../services/model-lifecycle.ts";
 import type { CommandContext } from "../types/command-types.ts";
+import type { OwnedModelIdentity } from "../entrypoints/model-seat.ts";
+import type { EnsureOwnedServerResult } from "../entrypoints/owned-server-supervisor.ts";
 import { join } from "path";
 
 const FIXTURE_DIR = join(import.meta.dir, "__fixtures__", "model-identity");
@@ -42,6 +44,32 @@ const fakeIdentity: ResolvedModelIdentity = {
     sha256: "f".repeat(64),
   },
 };
+
+/**
+ * cond item4: a minimal owned model identity carrying the checkpoint/tokenizer/
+ * authority the supervisor is expected to receive. Only the fields the wiring
+ * forwards are populated; cast because the full OwnedModelIdentity is large and
+ * the supervisor call is stubbed in these tests.
+ */
+const fakeOwnedIdentity = {
+  checkpointSha256: "1".repeat(64),
+  endpointUrl: "http://127.0.0.1:29777/",
+  launch: {
+    mode: "INTERACTIVE",
+    authorityKind: "ADMISSION",
+    checkpointDir: "/owned/ckpt",
+    tokenizerPath: "/owned/tok.json",
+  },
+} as unknown as OwnedModelIdentity;
+
+/** cond item4: a stubbed "spawned" supervisor result — no real process/server. */
+function spawnedResult(pid: number): EnsureOwnedServerResult {
+  return {
+    outcome: "spawned",
+    port: 29777,
+    handle: { process: { pid }, port: 29777, kill: () => {} } as never,
+  };
+}
 
 describe("model command", () => {
   const mockCtx: CommandContext = {
@@ -180,7 +208,7 @@ describe("model command", () => {
       expect(result?.message).toContain("checkpoint identity validation failed");
     });
 
-    it("(c') /model load proceeds to spawn only after identity resolves", async () => {
+    it("(c') /model load proceeds to the owned supervisor only after identity resolves", async () => {
       let loadCalled = false;
       const cmd = createModelCommand({
         loadModel: async (deps) => {
@@ -192,6 +220,11 @@ describe("model command", () => {
           byte_sha256: FIXTURE_BYTE_SHA256,
           disposition: FIXTURE_DISPOSITION,
         }),
+        // cond item4: the real serving path is now reached via ensureOwnedServer;
+        // stub the owned-identity load + supervisor so no real process spawns.
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        ensureOwnedServer: async () => spawnedResult(42),
+        registerManagedModel: () => {},
         manifestPath: FIXTURE_MANIFEST,
       });
 
@@ -200,6 +233,92 @@ describe("model command", () => {
       expect(loadCalled).toBe(true);
       expect(result?.exitCode).toBeUndefined();
       expect(result?.message).toContain("loaded");
+    });
+
+    // -----------------------------------------------------------------------
+    // cond item4: /model load routes to the REAL owned-server supervisor
+    // (ensureOwnedServer) with the loaded checkpoint's identity, fail-closed.
+    // The actual process spawn / server endpoint is STUBBED here -- no real
+    // server, no GPU, no served capability.
+    // -----------------------------------------------------------------------
+    it("(item4-a) /model load invokes ensureOwnedServer with the loaded checkpoint/tokenizer/authority identity", async () => {
+      let ensureCalls = 0;
+      let receivedIdentity: OwnedModelIdentity | null = null;
+      let registeredPid: number | null = null;
+      const cmd = createModelCommand({
+        resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        ensureOwnedServer: async (identity) => {
+          ensureCalls += 1;
+          receivedIdentity = identity;
+          return spawnedResult(4242);
+        },
+        registerManagedModel: (handle) => {
+          registeredPid = handle.pid;
+        },
+        manifestPath: FIXTURE_MANIFEST,
+      });
+
+      const result = await cmd.execute("load", mockCtx);
+
+      // The command routed to the real supervisor exactly once, handing it the
+      // loaded checkpoint's identity (its checkpoint dir, tokenizer path, and
+      // authority kind) -- proving the wiring is real, not a pid:0 stub.
+      expect(ensureCalls).toBe(1);
+      expect(receivedIdentity).toBe(fakeOwnedIdentity);
+      expect(receivedIdentity!.launch?.checkpointDir).toBe("/owned/ckpt");
+      expect(receivedIdentity!.launch?.tokenizerPath).toBe("/owned/tok.json");
+      expect(receivedIdentity!.launch?.authorityKind).toBe("ADMISSION");
+      // The supervisor-established child is tracked by the lifecycle panel.
+      expect(registeredPid).toBe(4242);
+      expect(result?.exitCode).toBeUndefined();
+      expect(result?.message).toContain("loaded");
+    });
+
+    it("(item4-b) /model load is fail-closed: an identity/authority mismatch from the supervisor REJECTS the load, never registering a served model", async () => {
+      let registerCalled = false;
+      const cmd = createModelCommand({
+        resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        // Simulates verifyOwnedEndpointIdentity throwing inside ensureOwnedServer
+        // (a served endpoint whose identity/authority does not match the loaded
+        // checkpoint) -- the exact fail-closed rejection init relies on.
+        ensureOwnedServer: async () => {
+          throw new Error("owned endpoint identity mismatch: refusing to bind");
+        },
+        registerManagedModel: () => {
+          registerCalled = true;
+        },
+        manifestPath: FIXTURE_MANIFEST,
+      });
+
+      const result = await cmd.execute("load", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("error");
+      expect(result?.message).toContain("identity mismatch");
+      // Fail-closed: nothing was registered as loaded/served.
+      expect(registerCalled).toBe(false);
+    });
+
+    it("(item4-c) /model load fails closed when no owned identity is available (offline/reference seat), never calling the supervisor", async () => {
+      let ensureCalled = false;
+      const cmd = createModelCommand({
+        resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => null,
+        ensureOwnedServer: async () => {
+          ensureCalled = true;
+          return spawnedResult(1);
+        },
+        registerManagedModel: () => {},
+        manifestPath: FIXTURE_MANIFEST,
+      });
+
+      const result = await cmd.execute("load", mockCtx);
+
+      expect(ensureCalled).toBe(false);
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("no owned model identity available");
     });
 
     it("(d) _resolveModelIdentity handles subprocess failure gracefully (returns null, never throws)", async () => {
@@ -337,6 +456,11 @@ describe("model command", () => {
           return "model loaded (pid 5678)";
         },
         resolveModelIdentity: async () => fakeIdentity,
+        // cond item4: the real serving path is reached via ensureOwnedServer;
+        // stub the owned-identity load + supervisor so no real process spawns.
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        ensureOwnedServer: async () => spawnedResult(5678),
+        registerManagedModel: () => {},
       });
 
       const result = await cmd.execute("load", mockCtx);
@@ -352,6 +476,9 @@ describe("model command", () => {
           throw new Error("spawn failed");
         },
         resolveModelIdentity: async () => fakeIdentity,
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        ensureOwnedServer: async () => spawnedResult(1),
+        registerManagedModel: () => {},
       });
 
       const result = await cmd.execute("load", mockCtx);
