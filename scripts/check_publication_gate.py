@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_publication_gate.py — premature-publication gate checker (publication-v1.md §3).
 
 Mechanizes the three-conjunct gate `docs/spec/publication-v1.md` §3 names as the required
@@ -15,6 +18,13 @@ never from a spec's prose or a model's self-report:
                                  (`reduction_pct` or `flop_saving_pct`). A receipt with only
                                  `identity_preservation` is a growth-STEP, not EARNED
                                  (receipts-v1.md §2) — it does not satisfy this conjunct.
+                                 ADDITIONALLY (identity-manifest binding, closes a verified
+                                 laundering gap): the receipt must name an `identity_manifest`
+                                 field whose target validates cleanly through
+                                 `scripts/ember_01_identity/validate_identity.py`'s
+                                 `validate_manifest` — a hand-authored receipt with no bound,
+                                 validated identity does not satisfy this conjunct regardless
+                                 of its earned metric.
   (c) claims_map_complete     — every row of `paper/claims-evidence-map.md` whose Strength
                                  is not ABSENT names at least one receipt/script/doc path that
                                  resolves on disk (glob- and bare-timestamp-token aware); a
@@ -39,6 +49,13 @@ never from a spec's prose or a model's self-report:
                                  NOT satisfy this — bootstrap-v1.md §2 names B0 as satisfiability-
                                  only, and B1/B2 (the real-world, >=1e6-param rungs) as the
                                  distinct, currently-ABSENT result this conjunct checks for.
+                                 ADDITIONALLY (identity-manifest binding, closes a verified
+                                 laundering gap): the receipt must name an `identity_manifest`
+                                 field whose target validates cleanly through
+                                 `scripts/ember_01_identity/validate_identity.py`'s
+                                 `validate_manifest` — otherwise the outer-pass/param/real-world
+                                 shape rides in with no validated claim of WHICH model produced
+                                 it, and this conjunct stays RED.
   (e) research_focus_test     — GOAL.md §1b's research-focus test, mechanized (fifth conjunct,
                                  R11-ordered follow-up): every row of `paper/claims-evidence-map.md`
                                  must carry a non-empty `Law grade` column value in
@@ -193,6 +210,49 @@ def resolve_local_ref(ref):
 
 
 # ---------------------------------------------------------------------------
+# Identity-manifest binding (closes the capability-receipt identity-laundering gap: a
+# hand-authored capability receipt could carry a truthy BOOTSTRAP_PASS/EARNED shape with
+# no validation of WHICH model produced it). Shared by conjuncts (b) earned_growth_rung and
+# (d) bootstrap_pass_real_world: a capability receipt qualifies for either conjunct only if
+# it ALSO names an `identity_manifest` field whose target validates cleanly through
+# scripts/ember_01_identity/validate_identity.py's validate_manifest. Fails CLOSED: no
+# `identity_manifest` field, an unimportable validator, an unreadable/unparseable manifest
+# file, or any IdentityValidationError finding all resolve to ok=False with a stated reason
+# -- never a silent pass and never a crash.
+# ---------------------------------------------------------------------------
+
+def _check_identity_manifest(receipt):
+    """(ok: bool, reason_or_None) for one capability receipt dict. Never raises."""
+    manifest_ref = receipt.get("identity_manifest")
+    if not isinstance(manifest_ref, str) or not manifest_ref.strip():
+        return False, "receipt names no identity_manifest field"
+
+    try:
+        from ember_01_identity.validate_identity import (  # noqa: PLC0415
+            IdentityValidationError, validate_manifest,
+        )
+    except Exception as e:  # noqa: BLE001 — fail-closed on any import defect
+        return False, f"identity validator unavailable: {type(e).__name__}: {e}"
+
+    manifest_path = REPO_ROOT / manifest_ref
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001
+        return False, (f"identity_manifest {manifest_ref!r} unreadable: "
+                        f"{type(e).__name__}: {e}")
+
+    try:
+        validate_manifest(payload)
+    except IdentityValidationError as e:
+        return False, f"identity_manifest {manifest_ref!r} failed validation: {e}"
+    except Exception as e:  # noqa: BLE001 — fail-closed on any other validator defect
+        return False, (f"identity_manifest {manifest_ref!r} validator error: "
+                        f"{type(e).__name__}: {e}")
+
+    return True, None
+
+
+# ---------------------------------------------------------------------------
 # Conjunct (a): kernel_fired
 # ---------------------------------------------------------------------------
 
@@ -303,20 +363,31 @@ def check_earned_growth_rung():
             continue
         key, value = _earned_reduction_value(earned)
         ip_pass = bool(ip.get("pass")) if isinstance(ip, dict) else None
+        identity_ok, identity_reason = _check_identity_manifest(d)
         candidates.append({
             "path": rel, "earned_field": key, "earned_value": value,
             "identity_preservation_pass": ip_pass,
+            "identity_manifest_ok": identity_ok,
+            "identity_manifest_reason": identity_reason,
         })
-        if key is not None and value > 0:
+        if key is not None and value > 0 and identity_ok:
             earned_hits.append({"path": rel, "field": key, "value": value,
                                  "identity_preservation_pass": ip_pass})
 
     if not earned_hits:
         if candidates:
-            reasons.append(f"{len(candidates)} growth-shaped receipt(s) found, none carry a "
-                            "positive earned.reduction_pct/flop_saving_pct (EARNED per "
+            reasons.append(f"{len(candidates)} growth-shaped receipt(s) found, none carry both "
+                            "a positive earned.reduction_pct/flop_saving_pct (EARNED per "
                             "math-core sec6 requires FLOPs(seed->cap) < FLOPs(scratch->cap), "
-                            "measured, not assumed)")
+                            "measured, not assumed) AND a validated identity_manifest "
+                            "(closes the capability-receipt identity-laundering gap): "
+                            + "; ".join(
+                                f"{c['path']} (earned_field={c['earned_field']!r}, "
+                                f"identity_ok={c['identity_manifest_ok']}"
+                                + (f", {c['identity_manifest_reason']}"
+                                   if c['identity_manifest_reason'] else "") + ")"
+                                for c in candidates
+                            ))
         else:
             reasons.append("no receipt with a growth-EARNED shape (kind:growth or an "
                             "'earned' block) found under receipts/")
@@ -428,15 +499,20 @@ def check_bootstrap_pass_real_world():
         real_world_hits = [m for m in _REAL_WORLD_MARKERS if m in blob]
         params = _max_param_count(d)
 
+        identity_ok, identity_reason = _check_identity_manifest(d)
+
         entry = {
             "path": rel,
             "bootstrap_pass_fields": [p for p, _ in pass_hits],
             "synthetic_markers_found": synthetic_hits,
             "real_world_markers_found": real_world_hits,
             "max_param_count_found": params,
+            "identity_manifest_ok": identity_ok,
+            "identity_manifest_reason": identity_reason,
         }
         is_real = (not synthetic_hits and real_world_hits
-                   and params is not None and params >= MIN_REAL_CORE_PARAMS)
+                   and params is not None and params >= MIN_REAL_CORE_PARAMS
+                   and identity_ok)
         entry["qualifies_as_real_world_ge_1e6"] = bool(is_real)
         candidates.append(entry)
         if is_real:
@@ -451,7 +527,10 @@ def check_bootstrap_pass_real_world():
                     (f"synthetic markers {c['synthetic_markers_found']}"
                      if c["synthetic_markers_found"] else
                      f"no real-world marker" if not c["real_world_markers_found"] else
-                     f"params={c['max_param_count_found']!r} < {MIN_REAL_CORE_PARAMS}")
+                     f"params={c['max_param_count_found']!r} < {MIN_REAL_CORE_PARAMS}"
+                     if c["max_param_count_found"] is None
+                        or c["max_param_count_found"] < MIN_REAL_CORE_PARAMS else
+                     f"identity_manifest: {c['identity_manifest_reason']}")
                     + ")"
                     for c in candidates
                 )
@@ -1064,6 +1143,14 @@ def _selftest():
     orig_root, orig_receipts, orig_map, orig_outline, orig_goal = (
         REPO_ROOT, RECEIPTS_DIR, CLAIMS_MAP_PATH, OUTLINE_PATH, GOAL_PATH)
 
+    # Read the real valid-identity manifest fixture BEFORE REPO_ROOT is repointed at the
+    # temp workspace below, so the identity-manifest-binding fixtures validate through the
+    # real scripts/ember_01_identity/validate_identity.py against the real positive fixture
+    # — never a hand-rolled stand-in.
+    valid_identity_manifest_text = (
+        orig_root / "tests" / "ember_01_identity" / "fixtures" / "valid-identity-v1.json"
+    ).read_text(encoding="utf-8")
+
     td = tempfile.mkdtemp()
     try:
         root = Path(td)
@@ -1074,6 +1161,13 @@ def _selftest():
         CLAIMS_MAP_PATH = root / "paper" / "claims-evidence-map.md"
         OUTLINE_PATH = root / "paper" / "outline.md"
         GOAL_PATH = root / "GOAL.md"
+
+        # Identity-manifest fixtures shared by the earned_growth_rung and
+        # bootstrap_pass_real_world identity-binding tests below.
+        (root / "identity").mkdir()
+        (root / "identity" / "valid-identity-v1.json").write_text(
+            valid_identity_manifest_text, encoding="utf-8")
+        (root / "identity" / "forged-identity.json").write_text("{}", encoding="utf-8")
 
         # --- kernel_fired: absent case ---
         r = check_kernel_fired()
@@ -1115,17 +1209,49 @@ def _selftest():
         check("earned_growth_rung RED for a NEGATIVE earned.flop_saving_pct",
               r5["verdict"] == "RED")
 
-        # --- earned_growth_rung: positive EARNED -> GREEN ---
-        (RECEIPTS_DIR / "growth-positive.json").write_text(json.dumps({
+        # --- earned_growth_rung: positive EARNED but NO identity_manifest -> RED
+        #     (identity-laundering probe: an otherwise-qualifying receipt with no bound,
+        #     validated identity claim must not qualify) ---
+        (RECEIPTS_DIR / "growth-no-identity.json").write_text(json.dumps({
             "ticket": "T", "ts": "20260702T000001Z", "kind": "growth",
             "identity_preservation": {"max_diff": 0.0, "tol": 1e-5, "pass": True},
             "earned": {"reduction_pct": 12.5},
         }), encoding="utf-8")
+        r6a = check_earned_growth_rung()
+        check("earned_growth_rung RED for a positive earned.reduction_pct receipt naming no "
+              "identity_manifest field (identity-laundering probe)",
+              r6a["verdict"] == "RED")
+        (RECEIPTS_DIR / "growth-no-identity.json").unlink()
+
+        # --- earned_growth_rung: positive EARNED + valid identity_manifest -> GREEN ---
+        (RECEIPTS_DIR / "growth-positive.json").write_text(json.dumps({
+            "ticket": "T", "ts": "20260702T000001Z", "kind": "growth",
+            "identity_preservation": {"max_diff": 0.0, "tol": 1e-5, "pass": True},
+            "earned": {"reduction_pct": 12.5},
+            "identity_manifest": "identity/valid-identity-v1.json",
+        }), encoding="utf-8")
         r6 = check_earned_growth_rung()
-        check("earned_growth_rung GREEN for a positive earned.reduction_pct",
+        check("earned_growth_rung GREEN for a positive earned.reduction_pct receipt naming a "
+              "validated identity_manifest",
               r6["verdict"] == "GREEN")
         (RECEIPTS_DIR / "growth-negative.json").unlink()
         (RECEIPTS_DIR / "growth-positive.json").unlink()
+
+        # --- earned_growth_rung: same shape but identity_manifest names a forged/malformed
+        #     manifest -> RED (validate_manifest raises; no publication claim rides on an
+        #     unvalidated identity). Isolated: the qualifying GREEN fixtures above are
+        #     already removed, so only this forged-identity receipt is on disk. ---
+        (RECEIPTS_DIR / "growth-forged-identity.json").write_text(json.dumps({
+            "ticket": "T", "ts": "20260702T000002Z", "kind": "growth",
+            "identity_preservation": {"max_diff": 0.0, "tol": 1e-5, "pass": True},
+            "earned": {"reduction_pct": 12.5},
+            "identity_manifest": "identity/forged-identity.json",
+        }), encoding="utf-8")
+        r6b = check_earned_growth_rung()
+        check("earned_growth_rung RED when identity_manifest names a forged/malformed "
+              "manifest that fails validate_manifest",
+              r6b["verdict"] == "RED")
+        (RECEIPTS_DIR / "growth-forged-identity.json").unlink()
 
         # --- bootstrap_pass_real_world: absent case (no receipts at all) ---
         r_bpw0 = check_bootstrap_pass_real_world()
@@ -1159,18 +1285,53 @@ def _selftest():
               r_bpw2["verdict"] == "RED")
         (RECEIPTS_DIR / "bootstrap-toosmall.json").unlink()
 
-        # --- bootstrap_pass_real_world: satisfying shape -> GREEN (real world, >=1e6
-        #     params, BOOTSTRAP_PASS true, no synthetic marker) ---
-        (RECEIPTS_DIR / "bootstrap-real-pass.json").write_text(json.dumps({
+        # --- bootstrap_pass_real_world: satisfying shape but NO identity_manifest -> RED
+        #     (identity-laundering probe: an otherwise-qualifying receipt with no bound,
+        #     validated identity claim must not qualify) ---
+        (RECEIPTS_DIR / "bootstrap-no-identity.json").write_text(json.dumps({
             "ticket": "T", "ts": "20260702T000001Z",
             "BOOTSTRAP_PASS": True,
             "world": "W-code (real admitted training world, world-environment-v1.md)",
             "core": {"n_params": 1_200_000},
         }), encoding="utf-8")
+        r_bpw3a = check_bootstrap_pass_real_world()
+        check("bootstrap_pass_real_world RED for an otherwise-qualifying receipt naming no "
+              "identity_manifest field (identity-laundering probe)",
+              r_bpw3a["verdict"] == "RED")
+        (RECEIPTS_DIR / "bootstrap-no-identity.json").unlink()
+
+        # --- bootstrap_pass_real_world: satisfying shape + valid identity_manifest -> GREEN
+        #     (real world, >=1e6 params, BOOTSTRAP_PASS true, no synthetic marker, identity
+        #     manifest named AND validated) ---
+        (RECEIPTS_DIR / "bootstrap-real-pass.json").write_text(json.dumps({
+            "ticket": "T", "ts": "20260702T000001Z",
+            "BOOTSTRAP_PASS": True,
+            "world": "W-code (real admitted training world, world-environment-v1.md)",
+            "core": {"n_params": 1_200_000},
+            "identity_manifest": "identity/valid-identity-v1.json",
+        }), encoding="utf-8")
         r_bpw3 = check_bootstrap_pass_real_world()
-        check("bootstrap_pass_real_world GREEN for a real-world, >=1e6-param, "
-              "non-synthetic BOOTSTRAP_PASS=true receipt", r_bpw3["verdict"] == "GREEN")
+        check("bootstrap_pass_real_world GREEN for a real-world, >=1e6-param, non-synthetic "
+              "BOOTSTRAP_PASS=true receipt naming a validated identity_manifest",
+              r_bpw3["verdict"] == "GREEN")
         (RECEIPTS_DIR / "bootstrap-real-pass.json").unlink()
+
+        # --- bootstrap_pass_real_world: same shape but identity_manifest names a forged/
+        #     malformed manifest -> RED (validate_manifest raises; no publication claim rides
+        #     on an unvalidated identity). Isolated: the qualifying GREEN fixture above is
+        #     already removed. ---
+        (RECEIPTS_DIR / "bootstrap-forged-identity.json").write_text(json.dumps({
+            "ticket": "T", "ts": "20260702T000002Z",
+            "BOOTSTRAP_PASS": True,
+            "world": "W-code (real admitted training world, world-environment-v1.md)",
+            "core": {"n_params": 1_200_000},
+            "identity_manifest": "identity/forged-identity.json",
+        }), encoding="utf-8")
+        r_bpw3b = check_bootstrap_pass_real_world()
+        check("bootstrap_pass_real_world RED when identity_manifest names a forged/malformed "
+              "manifest that fails validate_manifest",
+              r_bpw3b["verdict"] == "RED")
+        (RECEIPTS_DIR / "bootstrap-forged-identity.json").unlink()
 
         # --- claims_map_complete: missing file ---
         r7 = check_claims_map_complete()
