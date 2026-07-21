@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // command-registry.ts — loads, caches, and queries the slash-command registry.
 
 import type { RegistryCommand } from './types/command-types.ts';
@@ -7,6 +11,7 @@ import { createFinetuneCommand } from './commands/finetune.ts';
 import { createModelCommand } from './commands/model.ts';
 import { createGoalCommand } from './commands/goal.ts';
 import { createWorldStateCommand } from './commands/world-state.ts';
+import { createCustodyCommand } from './commands/custody.ts';
 import { getModeHistory } from './state/app-state.ts';
 
 export type { RegistryCommand };
@@ -48,6 +53,7 @@ const defaultDeps: CommandRegistryDeps = {
     createModelCommand(),
     createGoalCommand(),
     createWorldStateCommand(),
+    createCustodyCommand(),
   ],
   getSkillDirCommands: async () => [],
   getPluginCommands: async () => [],
