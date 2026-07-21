@@ -234,6 +234,86 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
         with self.assertRaises(OptimizerIdentityMismatch):
             bind_optimizer_identity(payload, OPTIMIZER_STATE_BYTES, unnamed)
 
+    # ---- cond3 CONTRACT-half: optimizer contract identity binds to the receipt --------
+    @staticmethod
+    def _valid_contract() -> dict:
+        # The manifest optimizer contract identity that equals the signed REALIZED
+        # ember-optimizer-realization-v1 receipt scripts/ember_restart/contract.py binds.
+        return {
+            "implementation": REALIZATION_RECEIPT["implementation"],
+            "hyperparameters": dict(REALIZATION_RECEIPT["hyperparameters"]),
+            "state_format": REALIZATION_RECEIPT["state_format"],
+        }
+
+    def test_optimizer_contract_round_trips_through_real_consumer(self) -> None:
+        # POSITIVE: a manifest carrying a well-formed optimizer contract bound to the
+        # REALIZED receipt validates through the real consumer AND the wiring module.
+        payload, receipts = admitted_manifest()
+        authority = artifact_authority(payload)
+        payload["training"]["optimizer_contract"] = self._valid_contract()
+        result = validate_manifest(payload, receipt_bundle=receipts, **authority)
+        self.assertEqual(result, payload)
+        verify_optimizer_identity_binding(
+            payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
+        )
+
+    def test_optimizer_contract_absent_still_valid(self) -> None:
+        # ADDITIVE: an optimizer contract is optional; its absence never fails the
+        # existing state-half gate.
+        payload, receipts = admitted_manifest()
+        authority = artifact_authority(payload)
+        self.assertNotIn("optimizer_contract", payload["training"])
+        result = validate_manifest(payload, receipt_bundle=receipts, **authority)
+        self.assertEqual(result, payload)
+
+    def test_optimizer_contract_malformed_flagged_by_consumer(self) -> None:
+        # NEGATIVE: a contract missing a concrete field is RED at the real consumer with a
+        # named fail-closed code (never a silent pass).
+        payload, receipts = admitted_manifest()
+        authority = artifact_authority(payload)
+        contract = self._valid_contract()
+        contract["implementation"] = ""  # blank: the optimizer is unnamed
+        payload["training"]["optimizer_contract"] = contract
+        codes = _error_codes(payload, receipt_bundle=receipts, **authority)
+        self.assertIn("training.optimizer_contract_invalid", codes)
+
+    def test_optimizer_contract_missing_field_flagged_by_consumer(self) -> None:
+        # NEGATIVE: a contract omitting a required field is RED at the real consumer.
+        payload, receipts = admitted_manifest()
+        authority = artifact_authority(payload)
+        contract = self._valid_contract()
+        del contract["state_format"]
+        payload["training"]["optimizer_contract"] = contract
+        codes = _error_codes(payload, receipt_bundle=receipts, **authority)
+        self.assertIn("training.optimizer_contract_invalid", codes)
+
+    def test_optimizer_contract_mismatch_receipt_fails_closed(self) -> None:
+        # NEGATIVE: a contract field that diverges from the REALIZED receipt fails closed
+        # naming the exact field (mirrors contract.py binding-mismatch).
+        payload, _ = admitted_manifest()
+        artifact_authority(payload)
+        contract = self._valid_contract()
+        contract["implementation"] = "torch.optim.AdamW"  # not the realized optimizer
+        payload["training"]["optimizer_contract"] = contract
+        with self.assertRaises(OptimizerIdentityMismatch) as ctx:
+            verify_optimizer_identity_binding(
+                payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
+            )
+        self.assertIn("training.optimizer_contract_implementation", str(ctx.exception))
+
+    def test_optimizer_contract_missing_field_fails_closed_in_binding(self) -> None:
+        # NEGATIVE: the wiring module fails closed when a declared contract omits a field.
+        payload, _ = admitted_manifest()
+        artifact_authority(payload)
+        contract = self._valid_contract()
+        del contract["hyperparameters"]
+        payload["training"]["optimizer_contract"] = contract
+        with self.assertRaises(OptimizerIdentityMismatch) as ctx:
+            verify_optimizer_identity_binding(
+                payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
+            )
+        self.assertIn("training.optimizer_contract_hyperparameters", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

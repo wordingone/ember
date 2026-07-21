@@ -192,6 +192,16 @@
           }
         },
         "optimizer_state_sha256": {"$ref": "#/$defs/sha256"},
+        "optimizer_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["implementation", "hyperparameters", "state_format"],
+          "properties": {
+            "implementation": {"type": "string", "minLength": 1},
+            "hyperparameters": {"type": "object", "minProperties": 1},
+            "state_format": {"type": "string", "minLength": 1}
+          }
+        },
         "numerics": {
           "type": "object",
           "additionalProperties": false,
