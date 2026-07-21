@@ -390,8 +390,8 @@ function parseOwnedLaunch(
     trustedVerifierRegistryPath: requireAbsolutePath("trusted_verifier_registry_path"),
   };
   if (
-    launch.runManifestPath !== expected.manifestPath ||
-    launch.trustedVerifierRegistryPath !== expected.registryPath ||
+    !sameResolvedPath(launch.runManifestPath, expected.manifestPath) ||
+    !sameResolvedPath(launch.trustedVerifierRegistryPath, expected.registryPath) ||
     [launch.checkpointDir, launch.modelConfigPath, launch.runManifestPath, launch.serverPath, launch.tokenizerPath, launch.trustedVerifierRegistryPath]
       .some((path) => !exists(path))
   ) {
