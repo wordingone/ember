@@ -10,9 +10,22 @@ import {
   getModelState,
   loadModel,
   unloadModel,
+  registerManagedModel,
+  type ManagedModelHandle,
   type ModelLifecycleDeps,
 } from "../services/model-lifecycle.ts";
-import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
+import {
+  ensureOwnedServer,
+  type EnsureOwnedServerResult,
+} from "../entrypoints/owned-server-supervisor.ts";
+import {
+  loadOwnedModelIdentity,
+  loadOwnedDevelopmentIdentity,
+  verifyOwnedEndpointIdentity,
+} from "../entrypoints/owned-seat-loader.ts";
+import type { OwnedModelIdentity } from "../entrypoints/model-seat.ts";
+import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
+import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 import { appendFile } from "fs/promises";
 import { existsSync } from "fs";
 import { spawnSync } from "child_process";
@@ -258,6 +271,57 @@ interface ModelCommandDeps {
   resolveModelIdentity?: (manifestPath: string) => Promise<ResolvedModelIdentity | null>;
   /** Injectable for tests; defaults to EMBER_MODEL_IDENTITY_MANIFEST env / cwd convention. */
   manifestPath?: string;
+  /**
+   * cond item4: loads the active owned model identity the SAME way process-entry
+   * init does (admitted rung manifest, else development manifest). Defaults to
+   * _defaultLoadOwnedIdentity. Returns null when no owned identity is available
+   * (e.g. an offline/reference seat) -- the load then fails closed rather than
+   * routing to a stub.
+   */
+  loadOwnedIdentity?: (cwd: string) => OwnedModelIdentity | null;
+  /**
+   * cond item4: the REAL owned-server supervisor used at init. Defaults to
+   * ensureOwnedServer bound with the fail-closed endpoint identity verifier
+   * (verifyOwnedEndpointIdentity) -- a pre-existing listener or an
+   * identity/authority mismatch REJECTS the load (throws), never serves.
+   * Injectable so unit tests stub the actual process spawn.
+   */
+  ensureOwnedServer?: (identity: OwnedModelIdentity) => Promise<EnsureOwnedServerResult>;
+  /** Injectable for tests; defaults to the real registerManagedModel. */
+  registerManagedModel?: (handle: ManagedModelHandle) => void;
+}
+
+/**
+ * cond item4: resolve the active owned model identity for a mid-session
+ * `/model load`, mirroring process-entry init (main() ~L741): prefer an
+ * ADMITTED rung manifest, else fall back to the OWNED_DEVELOPMENT manifest.
+ * Returns null (fail-closed) when neither is available -- e.g. an offline/
+ * reference seat, where there is no owned checkpoint to serve. This reuses the
+ * init loaders verbatim; it does not reinvent identity resolution.
+ */
+function _defaultLoadOwnedIdentity(cwd: string): OwnedModelIdentity | null {
+  const repoRoot = resolveEmberRepoRootOrCwd({ startDir: cwd }, "[ember-cli]");
+  const configHome = getEmberConfigHomeDir();
+  const admitted = loadOwnedModelIdentity({
+    repoRoot,
+    configHome,
+    manifestPath: process.env["EMBER_OWNED_RUNG_MANIFEST"],
+    verifierRegistryPath: process.env["EMBER_TRUSTED_VERIFIER_REGISTRY"],
+    pythonExecutable: process.env["EMBER_PYTHON"],
+  });
+  if (admitted) return admitted;
+  const development = loadOwnedDevelopmentIdentity({
+    repoRoot,
+    configHome,
+    manifestPath: process.env["EMBER_OWNED_DEVELOPMENT_MANIFEST"],
+    pythonExecutable: process.env["EMBER_PYTHON"],
+  });
+  return development ?? null;
+}
+
+/** Default bound owned-server supervisor: the init serving path, fail-closed. */
+function _defaultEnsureOwnedServer(identity: OwnedModelIdentity): Promise<EnsureOwnedServerResult> {
+  return ensureOwnedServer(identity, { verifyEndpoint: verifyOwnedEndpointIdentity });
 }
 
 /** Default manifest path convention: EMBER_MODEL_IDENTITY_MANIFEST env override,
@@ -291,6 +355,9 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
   const doGetModelState = deps.getModelState ?? getModelState;
   const doWriteKillReceipt = deps.writeKillReceipt ?? realWriteKillReceipt;
   const doResolveModelIdentity = deps.resolveModelIdentity ?? _resolveModelIdentity;
+  const doLoadOwnedIdentity = deps.loadOwnedIdentity ?? _defaultLoadOwnedIdentity;
+  const doEnsureOwnedServer = deps.ensureOwnedServer ?? _defaultEnsureOwnedServer;
+  const doRegisterManagedModel = deps.registerManagedModel ?? registerManagedModel;
 
   return {
     name: "model",
@@ -408,11 +475,15 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
       // AC10: /model load
       if (subcommand === "load") {
         const modelLifecycleDeps: ModelLifecycleDeps = {
-          spawnModel: () => ({ pid: 0 }), // Will be set by the real spawn
+          // cond item4: no longer a pid:0 stub. spawnModel returns the handle
+          // for the child the REAL supervisor already established (below); the
+          // supervisor is what spawns/dispatches the owned server.
+          spawnModel: () => ({ pid: 0 }),
           killPid: () => {}, // unused in load
-          waitReady: async (port?: number) => {
-            await waitForServerReady(port ?? LLAMA_SERVER_DEFAULT_PORT);
-          },
+          // ensureOwnedServer already waited for readiness AND fail-closed
+          // verified endpoint identity, so the lifecycle-level readiness wait
+          // is a no-op here (no second network probe on the llama port).
+          waitReady: async () => {},
           writeKillReceipt: async () => {}, // unused in load
           isExternal: () => process.env["EMBER_MODEL_URL"] !== undefined,
           now: () => new Date().toISOString(),
@@ -429,7 +500,34 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
             throw new Error("checkpoint identity validation failed");
           }
 
-          const status = await doLoadModel(modelLifecycleDeps);
+          // cond item4: route to the REAL owned-server supervisor (the init
+          // serving path) instead of a stub. Load the active owned identity the
+          // SAME way process-entry init does, then ensureOwnedServer -- which
+          // spawns/dispatches the bound server AND fail-closed verifies endpoint
+          // identity (verifyOwnedEndpointIdentity). A pre-existing listener or an
+          // identity/authority mismatch THROWS here, so the load is REJECTED
+          // (never serves an unverifiable/foreign endpoint).
+          const ownedIdentity = doLoadOwnedIdentity(ctx.cwd);
+          if (ownedIdentity === null) {
+            throw new Error(
+              "no owned model identity available; cannot establish a bound owned server",
+            );
+          }
+          const ensured = await doEnsureOwnedServer(ownedIdentity);
+          const servedPid =
+            ensured.outcome === "spawned" ? (ensured.handle.process.pid ?? 0) : ensured.pid;
+          const releaseServed =
+            ensured.outcome === "spawned" ? () => ensured.handle.kill() : undefined;
+
+          // Track the REAL owned child in the lifecycle panel so /model
+          // status|unload operate on it. spawnModel hands back the
+          // already-established handle (no second spawn); waitReady is a no-op
+          // because ensureOwnedServer already waited + verified.
+          const status = await doLoadModel({
+            ...modelLifecycleDeps,
+            spawnModel: () => ({ pid: servedPid, release: releaseServed }),
+          });
+          doRegisterManagedModel({ pid: servedPid, release: releaseServed });
           return {
             type: "message" as const,
             message: status,
