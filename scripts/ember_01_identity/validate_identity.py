@@ -46,6 +46,12 @@ ACCEPTED_TRAINING_INPUT_AUTHORITIES_PATH = (
     / "ember-01-identity"
     / "accepted-training-input-authorities-v1.json"
 )
+BENCHMARK_REGISTRY_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "manifests"
+    / "ember-01-custody"
+    / "benchmark-registry.json"
+)
 OWNED_ADMISSION_PARAMETER_FLOOR = 3_000_000_000
 EVIDENCE_RECEIPT_SCHEMA = "ember-identity-evidence-receipt-v1"
 SUFFICIENT_PRETRAINING_CRITERION = "ember-sufficient-pretraining-v1"
@@ -353,6 +359,30 @@ def _receipt_sha256(receipt: Mapping[str, Any]) -> str:
         receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _benchmark_registry_allowed_ids() -> "frozenset[str] | None":
+    """Frozen clause-(a) allowed benchmark IDs, or None if the pinned registry
+    is missing / not JSON / lacks a well-formed ``benchmarks`` list (fail-closed:
+    None must surface ``evaluation.benchmark_registry_unavailable``, never pass)."""
+    try:
+        registry = json.loads(BENCHMARK_REGISTRY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(registry, Mapping) or not isinstance(
+        registry.get("benchmarks"), list
+    ):
+        return None
+    allowed = {
+        entry["benchmark_id"]
+        for entry in registry["benchmarks"]
+        if isinstance(entry, Mapping)
+        and isinstance(entry.get("benchmark_id"), str)
+        and entry.get("benchmark_id")
+    }
+    if not allowed:
+        return None
+    return frozenset(allowed)
 
 
 def _pinned_verifier_entries() -> dict[str, str]:
@@ -956,6 +986,24 @@ def validate_manifest(
                         )
                     },
                     findings=findings,
+                )
+            # cond6 clause-(a): the evaluated benchmark ID must be a member of
+            # the frozen EMBER-01B benchmark registry. Fail-closed: a missing /
+            # malformed registry is unavailable, never a silent pass.
+            allowed_benchmark_ids = _benchmark_registry_allowed_ids()
+            if allowed_benchmark_ids is None:
+                findings.append(
+                    _finding(
+                        "evaluation.benchmark_registry_unavailable",
+                        str(BENCHMARK_REGISTRY_PATH),
+                    )
+                )
+            elif evaluation.get("benchmark_id") not in allowed_benchmark_ids:
+                findings.append(
+                    _finding(
+                        "evaluation.benchmark_id_unregistered",
+                        str(evaluation.get("benchmark_id")),
+                    )
                 )
     if (selected is True or completion_credit is True) and disposition != "OWNED_ADMITTED":
         findings.append(
