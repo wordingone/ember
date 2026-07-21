@@ -168,7 +168,7 @@ def test_checked_in_public_issue_census_covers_every_snapshot_row() -> None:
     ]
     serialized = json.dumps(payload)
     assert all(fragment not in serialized for fragment in ("B" + ":/M/", "B" + ":\\M\\"))
-    assert payload["open_issue_count"] == 239
+    assert payload["open_issue_count"] == 216
     assert {
         row["number"]
         for row in payload["issues"]
