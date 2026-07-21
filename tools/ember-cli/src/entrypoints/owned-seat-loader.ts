@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "fs";
 import { createHash, randomBytes } from "crypto";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { spawnSync } from "child_process";
@@ -400,6 +400,28 @@ function parseOwnedLaunch(
   return launch;
 }
 
+/**
+ * True iff `a` and `b` denote the SAME real file. Trust-critical path compare:
+ * the runtime snapshot dir is canonicalized at creation (emberScratchDir ->
+ * realpathSync.native) and the Python resolver echoes Path.resolve()'d paths,
+ * so a raw `===` normally holds. This makes the compare self-sufficiently
+ * case-correct instead of depending on that invariant being maintained
+ * elsewhere: canonicalize BOTH via realpathSync.native (also resolves 8.3
+ * short names and symlinks). If either path is not present on disk (e.g. an
+ * injected test mock, or a not-yet-created path), fall back to a
+ * case-insensitive compare on case-insensitive filesystems (win32/darwin) and
+ * an exact compare elsewhere. The binding is never RELAXED: two genuinely
+ * different files differ under realpath AND under the case-folded fallback.
+ */
+function sameResolvedPath(a: string, b: string): boolean {
+  try {
+    return realpathSync.native(a) === realpathSync.native(b);
+  } catch {
+    const caseInsensitiveFs = process.platform === "win32" || process.platform === "darwin";
+    return caseInsensitiveFs ? a.toLowerCase() === b.toLowerCase() : a === b;
+  }
+}
+
 const DEVELOPMENT_LAUNCH_FIELDS = [
   "checkpoint_dir",
   "development_manifest_path",
@@ -457,7 +479,7 @@ function parseDevelopmentLaunch(
     tokenizerPath: requireAbsolutePath("tokenizer_path"),
   };
   if (
-    launch.developmentManifestPath !== expected.manifestPath ||
+    !sameResolvedPath(launch.developmentManifestPath, expected.manifestPath) ||
     [launch.checkpointDir, launch.developmentManifestPath, launch.modelConfigPath, launch.serverPath, launch.tokenizerPath]
       .some((path) => !exists(path))
   ) {
