@@ -158,6 +158,8 @@ def test_required_missing_root_is_explicit_and_paths_stay_portable(
                 "scan": "files",
                 "provenance_class": "evidence_receipt",
                 "lineage_admissibility": "excluded_evidence_only",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
             },
             {
                 "root_id": "missing-root",
@@ -189,6 +191,103 @@ def test_required_missing_root_is_explicit_and_paths_stay_portable(
         "root_id": "present-root",
         "relative_path": "receipt.json",
     }
+
+
+def test_required_root_missing_owner_or_authority_fails_closed(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "unresolved-root"
+    root.mkdir()
+    (root / "file.txt").write_text("x", encoding="utf-8")
+    spec = {
+        "roots": [
+            {
+                "root_id": "unresolved-owner-root",
+                "required": True,
+                "scan": "files",
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved",
+                # owner/authority_status omitted entirely, matching the
+                # live internal-execution-tree manifest entry shape.
+            }
+        ]
+    }
+    result = build_root_census(spec, {"unresolved-owner-root": root})
+
+    assert {
+        "code": "required_root_owner_unresolved",
+        "root_id": "unresolved-owner-root",
+        "resolution": "unresolved",
+    } in result["contradictions"]
+    assert {
+        "code": "required_root_authority_missing",
+        "root_id": "unresolved-owner-root",
+        "resolution": "unresolved",
+    } in result["contradictions"]
+
+    # A well-formed required root (owner + authority both bound) stays clean.
+    well_formed_spec = {
+        "roots": [
+            {
+                "root_id": "resolved-root",
+                "required": True,
+                "scan": "files",
+                "provenance_class": "evidence_receipt",
+                "lineage_admissibility": "excluded_evidence_only",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
+            }
+        ]
+    }
+    clean = build_root_census(well_formed_spec, {"resolved-root": root})
+    assert not any(
+        row["code"] in {"required_root_owner_unresolved", "required_root_authority_missing"}
+        for row in clean["contradictions"]
+    )
+
+    # Empty-string owner/authority are treated the same as absent/"unresolved".
+    empty_string_spec = {
+        "roots": [
+            {
+                "root_id": "empty-string-root",
+                "required": True,
+                "scan": "files",
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved",
+                "owner": "",
+                "authority_status": "",
+            }
+        ]
+    }
+    empty = build_root_census(empty_string_spec, {"empty-string-root": root})
+    assert {
+        "code": "required_root_owner_unresolved",
+        "root_id": "empty-string-root",
+        "resolution": "unresolved",
+    } in empty["contradictions"]
+    assert {
+        "code": "required_root_authority_missing",
+        "root_id": "empty-string-root",
+        "resolution": "unresolved",
+    } in empty["contradictions"]
+
+    # A NON-required root with unresolved owner/authority is never flagged.
+    optional_spec = {
+        "roots": [
+            {
+                "root_id": "optional-root",
+                "required": False,
+                "scan": "files",
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved",
+            }
+        ]
+    }
+    optional = build_root_census(optional_spec, {"optional-root": root})
+    assert not any(
+        row["code"] in {"required_root_owner_unresolved", "required_root_authority_missing"}
+        for row in optional["contradictions"]
+    )
 
 
 def test_benchmark_registry_requires_all_direct_and_unresolved_names() -> None:
@@ -533,7 +632,20 @@ def test_inaccessible_directory_is_coverage_contradiction_not_file_artifact(
             raise OSError(5, "blocked directory")
         return real_iterdir(path)
     monkeypatch.setattr(Path, "iterdir", selective_iterdir)
-    result = build_root_census({"roots": [{"root_id": "root", "required": True, "scan": "files"}]}, {"root": root})
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "root",
+                    "required": True,
+                    "scan": "files",
+                    "owner": "operator",
+                    "authority_status": "noncanonical_evidence",
+                }
+            ]
+        },
+        {"root": root},
+    )
     assert result["artifacts"] == []
     assert result["contradictions"] == [{
         "code": "directory_coverage_inaccessible",
@@ -637,6 +749,8 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
                 "scan": "files",
                 "provenance_class": "evidence_receipt",
                 "lineage_admissibility": "excluded_evidence_only",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
             }
         ],
     }
@@ -739,6 +853,8 @@ def test_inaccessible_artifact_is_recorded_without_aborting_root(
                 "scan": "files",
                 "provenance_class": "evidence_receipt",
                 "lineage_admissibility": "excluded_evidence_only",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
             }
         ]
     }

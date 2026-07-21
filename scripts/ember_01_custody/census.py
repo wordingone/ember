@@ -434,6 +434,29 @@ def build_root_census(
                 )
             continue
         assert bound is not None
+        if root_spec.get("required"):
+            owner = root_spec.get("owner", "unresolved")
+            if not isinstance(owner, str) or not owner.strip() or owner == "unresolved":
+                contradictions.append(
+                    {
+                        "code": "required_root_owner_unresolved",
+                        "root_id": root_id,
+                        "resolution": "unresolved",
+                    }
+                )
+            authority_status = root_spec.get("authority_status", "unresolved")
+            if (
+                not isinstance(authority_status, str)
+                or not authority_status.strip()
+                or authority_status == "unresolved"
+            ):
+                contradictions.append(
+                    {
+                        "code": "required_root_authority_missing",
+                        "root_id": root_id,
+                        "resolution": "unresolved",
+                    }
+                )
         provenance_class = root_spec.get("provenance_class", "unresolved")
         lineage_admissibility = root_spec.get(
             "lineage_admissibility", "unresolved"
