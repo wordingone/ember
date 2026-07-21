@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/speculation.test.ts
 // Covers AC5–AC7 from the speculation surface spec.
 
@@ -9,6 +12,7 @@ import type { EmberMessage } from "../types/message-types.ts";
 import {
   prepareMessagesForInjection,
   copyOverlayToMain,
+  logSpeculation,
 } from "./speculation.ts";
 import { shouldFilterSuggestion } from "./prompt-suggestion.ts";
 
@@ -216,6 +220,31 @@ describe("AC6: copyOverlayToMain", () => {
     expect(ok).toBe(false);
   });
 
+  // #240 — copyOverlayToMain used to console.error the raw {source, dest, err}
+  // object on every failed copy; ink owns the terminal frame during interactive
+  // use, so that landed as literal debug text in the live transcript (the same
+  // leak class as #190's "tryGenerate: too_few_turns { count: 0 }"). The
+  // failure path now routes through the silent-by-default debugLog gate.
+  it("#240: does not console.error/console.debug the raw failure object by default", async () => {
+    const calls: unknown[][] = [];
+    const originalDebug = console.debug;
+    const originalError = console.error;
+    console.debug = (...args: unknown[]) => { calls.push(args); };
+    console.error = (...args: unknown[]) => { calls.push(args); };
+    try {
+      const ok = await copyOverlayToMain(
+        overlayDir,
+        new Set(["still-missing.txt"]),
+        mainDir,
+      );
+      expect(ok).toBe(false);
+    } finally {
+      console.debug = originalDebug;
+      console.error = originalError;
+    }
+    expect(calls).toHaveLength(0);
+  });
+
   it("copies multiple files and returns true when all succeed", async () => {
     const files = ["a.txt", "b.txt", "c.txt"];
     for (const f of files) {
@@ -229,6 +258,49 @@ describe("AC6: copyOverlayToMain", () => {
       const content = await readFile(join(mainDir, f), "utf-8");
       expect(content).toBe(`content of ${f}`);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #240 — logSpeculation debug output never leaks to the interactive surface
+// ---------------------------------------------------------------------------
+
+describe("#240: logSpeculation debug gate", () => {
+  const ORIGINAL_FLAG = process.env["EMBER_SPECULATION_DEBUG"];
+
+  afterEach(() => {
+    if (ORIGINAL_FLAG === undefined) {
+      delete process.env["EMBER_SPECULATION_DEBUG"];
+    } else {
+      process.env["EMBER_SPECULATION_DEBUG"] = ORIGINAL_FLAG;
+    }
+  });
+
+  it("stays silent by default — no raw console.debug write for the outcome record", () => {
+    delete process.env["EMBER_SPECULATION_DEBUG"];
+    const calls: unknown[][] = [];
+    const original = console.debug;
+    console.debug = (...args: unknown[]) => { calls.push(args); };
+    try {
+      logSpeculation("spec-silent", "accepted", Date.now(), 10, [], null);
+    } finally {
+      console.debug = original;
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("emits via console.debug only when EMBER_SPECULATION_DEBUG=1 (headless opt-in)", () => {
+    process.env["EMBER_SPECULATION_DEBUG"] = "1";
+    const calls: unknown[][] = [];
+    const original = console.debug;
+    console.debug = (...args: unknown[]) => { calls.push(args); };
+    try {
+      logSpeculation("spec-verbose", "aborted", Date.now(), 5, [], null);
+    } finally {
+      console.debug = original;
+    }
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]?.[0])).toBe("[speculation] outcome");
   });
 });
 

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/speculation.ts — speculative execution overlay for tool calls.
 // Pre-runs predicted tool sequences in an isolated filesystem overlay, then
 // merges the result into the working tree on acceptance.
@@ -8,6 +11,24 @@ import { tmpdir } from "os";
 
 import type { EmberMessage } from "../types/message-types.ts";
 import { globalConfig } from "./prompt-suggestion.ts";
+
+// ---------------------------------------------------------------------------
+// Debug logging (#240 — mirrors prompt-suggestion.ts's debugLog gate)
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal diagnostics for the speculation engine. Ink owns the terminal frame
+ * during interactive use, so a raw console write from here lands as literal
+ * text on the live transcript -- the exact #190 leak class, but in this
+ * sibling module (prompt-suggestion.ts's own debugLog gate from #199 never
+ * covered speculation.ts). Silent by default; set EMBER_SPECULATION_DEBUG=1
+ * to opt in when debugging outside the TUI (headless run, piped stdout).
+ */
+function debugLog(...args: unknown[]): void {
+  if (process.env["EMBER_SPECULATION_DEBUG"] === "1") {
+    console.debug(...args);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,7 +86,7 @@ export function safeRemoveOverlay(overlayPath: string): void {
     retryDelay: 100,
   }).catch(() => {
     // Removal errors are non-fatal; log but continue.
-    console.debug("[speculation] safeRemoveOverlay: removal failed silently", overlayPath);
+    debugLog("[speculation] safeRemoveOverlay: removal failed silently", overlayPath);
   });
 }
 
@@ -112,7 +133,7 @@ export async function copyOverlayToMain(
       await mkdir(dirname(dest), { recursive: true });
       await copyFile(source, dest);
     } catch (err) {
-      console.error("[speculation] copyOverlayToMain: copy failed", {
+      debugLog("[speculation] copyOverlayToMain: copy failed", {
         source,
         dest,
         err,
@@ -139,7 +160,7 @@ export function logSpeculation(
   boundary: SpeculationBoundary | null,
   extras?: object,
 ): void {
-  console.debug("[speculation] outcome", {
+  debugLog("[speculation] outcome", {
     id,
     outcome,
     durationMs: Date.now() - startTime,
