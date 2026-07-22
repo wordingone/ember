@@ -5,6 +5,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = REPO_ROOT / "docs" / "ember-restart" / "integration-contract-v1.md"
@@ -90,8 +92,10 @@ def test_current_subject_is_one_closed_machine_readable_identity() -> None:
 def test_readme_and_continuity_are_generated_from_current_subject() -> None:
     module = load_generator()
     payload = module.load_current_subject(CURRENT_SUBJECT)
+    module.validate_current_subject_evidence(payload, REPO_ROOT)
     block = module.render_current_subject_block(payload)
 
+    assert "optimizer state (custody-only, public bytes absent)" in block
     assert block in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert block in (REPO_ROOT / "CONTINUITY.md").read_text(encoding="utf-8")
 
@@ -118,3 +122,32 @@ def test_subject_surface_mismatches_fail_closed(tmp_path: Path) -> None:
     readme.write_text((REPO_ROOT / "README.md").read_text(encoding="utf-8"), encoding="utf-8")
     payload["subject"]["token_cursor"]["tokens_seen"] = 1024
     assert not module.subject_surfaces_current(payload, readme, continuity)
+
+
+def test_current_subject_schema_rejects_missing_optimizer_and_extra_fields(
+    tmp_path: Path,
+) -> None:
+    module = load_generator()
+    payload = json.loads(CURRENT_SUBJECT.read_text(encoding="utf-8"))
+    candidate = tmp_path / "subject.json"
+
+    del payload["subject"]["optimizer_state_sha256"]
+    candidate.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="subject fields are not closed"):
+        module.load_current_subject(candidate)
+
+    payload = json.loads(CURRENT_SUBJECT.read_text(encoding="utf-8"))
+    payload["subject"]["unreviewed_identity"] = "forbidden"
+    candidate.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="subject fields are not closed"):
+        module.load_current_subject(candidate)
+
+
+def test_current_subject_must_rederive_from_checked_in_public_evidence() -> None:
+    module = load_generator()
+    payload = module.load_current_subject(CURRENT_SUBJECT)
+    module.validate_current_subject_evidence(payload, REPO_ROOT)
+
+    payload["subject"]["checkpoint_manifest_sha256"] = "a" * 64
+    with pytest.raises(ValueError, match="public evidence"):
+        module.validate_current_subject_evidence(payload, REPO_ROOT)
