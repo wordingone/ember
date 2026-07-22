@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # Local pre-commit ring: refuse a commit that violates the structural invariants.
 # Install once per clone:  git config core.hooksPath .githooks   (or run tools/install-hooks.sh)
 # This is the fast, local ring. It is bypassable (--no-verify); the unbypassable
@@ -17,4 +20,6 @@ case "$top" in
     fi ;;
 esac
 
-exec env REPO_GUARD_SCOPE=staged bash "$(git rev-parse --show-toplevel)/tools/repo-guard.sh"
+ROOT="$(git rev-parse --show-toplevel)"
+python "$ROOT/scripts/worktree_lifecycle.py" audit --quiet || exit $?
+exec env REPO_GUARD_SCOPE=staged bash "$ROOT/tools/repo-guard.sh"
