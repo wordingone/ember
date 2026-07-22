@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # Local pre-push ring: run the full kernel including range checks against the
 # upstream so goal+evidence co-commits are caught before they leave the machine.
@@ -8,6 +8,8 @@
 ROOT="$(git rev-parse --show-toplevel)"
 REMOTE="${1:-origin}"
 PUSH_REMOTE_URL="$(git config --get remote.$REMOTE.url 2>/dev/null || echo '')"
+
+python "$ROOT/scripts/worktree_lifecycle.py" audit --quiet || exit $?
 
 REMOTE_MASTER="$REMOTE/master"
 if git rev-parse --verify -q "$REMOTE_MASTER" >/dev/null; then
