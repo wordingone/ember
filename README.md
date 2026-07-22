@@ -43,7 +43,7 @@ No current checkpoint is an admissible Ember model.
 **Current checkpoint subject:** `bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b`.
 
 - Disposition: `CHECKPOINT_CANDIDATE_NOT_ADMITTED`; capability credit: `none`; sufficient pretraining proven: `false`.
-- Config: `559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0`; tokenizer: `2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97`; optimizer state: `ee864fc9779e7f0d943a08836253726a41f86679360f477a35d5348486f3162b`.
+- Config: `559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0`; tokenizer: `2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97`; optimizer state (custody-only, public bytes absent): `ee864fc9779e7f0d943a08836253726a41f86679360f477a35d5348486f3162b`.
 - Cursor: step `2`, record `2`, token offset `2048`, tokens seen `2048`; active route: `shared`.
 - Parameters: `3839161856` unique, `3839161856` trainable, `3839161856` served, `1020589568` active, `1020589568` episode-trainable.
 - Historical predecessor: `af954c22fb8fb7a0dc640bfd2e0ab97e8e4cde989607372fc45c3db7878699a4` at `1024` tokens (`historical_step1_predecessor`).
