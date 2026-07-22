@@ -25,3 +25,7 @@
 | `tokenizer` | Tokenizer implementations, serialized tokenizer artifacts, and configuration | tool |
 | `tools` | Standalone tools, CLI utilities, and build/analysis helpers | tool |
 | `TEMP` | Junk artifact directory (private-use-codepoint name; contains a nested `claude/<session-id>/...` scratch tree) left behind by a mangled temp-path write that landed inside the repo root instead of the OS temp dir; not a real working directory — flagged here for coordinator cleanup (rename/remove) | junk |
+
+## Worktree lifecycle
+
+All Ember worktree creation and retirement must use `python scripts/worktree_lifecycle.py create` and `python scripts/worktree_lifecycle.py retire`. Raw `git worktree add` and recursive worktree deletion are forbidden. Each managed worktree requires an owner, purpose, and expiry; dirty worktrees are never retired automatically, detached heads are archived first, and the repository-local worktree ceiling may only ratchet downward toward 12.
