@@ -390,6 +390,8 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_rng_state_hash", return_value={"cpu": "c" * 64, "cuda": "d" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "_rng_state", return_value={"cpu": torch.tensor([1]), "cuda": torch.tensor([2])}))
             stack.enter_context(patch.object(run_vertical_slice, "run_manifest_bound_semantic_segment", side_effect=segment))
+            stack.enter_context(patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}))
+            stack.enter_context(patch.object(run_vertical_slice, "governed_resource_preflight", return_value={"free_gb": 32.0}))
             stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=retain))
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
             stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
@@ -417,6 +419,8 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(writer.call_count, 1)
         self.assertEqual(writer.call_args.kwargs["max_serialized_bytes"], bound)
         self.assertEqual(writer.call_args.kwargs["host_commit_reserve_bytes"], 8 * 1024**3)
+        self.assertEqual(writer.call_args.kwargs["data_cursor"]["governor"], {"free_gb": 32.0})
+        self.assertEqual(result["governor"], {"free_gb": 32.0})
 
     def test_semantic_run_resume_uses_parent_step_and_final_publication(self) -> None:
         result, segment_kwargs, writer, _retention_bounds = self._run_semantic_with_mocks(resume=True)
@@ -427,6 +431,46 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(writer.call_count, 2)
         self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
         self.assertTrue(all(call.kwargs["host_commit_reserve_bytes"] == 8 * 1024**3 for call in writer.call_args_list))
+
+    def test_semantic_runner_refuses_cuda_before_governor_admission(self) -> None:
+        with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
+            with patch.object(run_vertical_slice, "governed_resource_preflight", return_value={"free_gb": 32.0}) as governor:
+                with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=RuntimeError("CUDA probe")) as cuda_probe:
+                    with self.assertRaisesRegex(RuntimeError, "CUDA probe"):
+                        run_vertical_slice.run_semantic(
+                            seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
+                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
+                            sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
+                        )
+        governor.assert_called_once_with()
+        cuda_probe.assert_called_once_with()
+
+    def test_governed_resource_preflight_loads_the_repository_governor(self) -> None:
+        with patch.object(run_vertical_slice.torch.cuda, "set_per_process_memory_fraction") as fraction:
+            with patch.object(run_vertical_slice.torch.cuda, "mem_get_info", return_value=(8 * 10**9, 24 * 10**9)) as memory:
+                receipt = run_vertical_slice.governed_resource_preflight()
+        fraction.assert_called_once()
+        memory.assert_called_once_with()
+        self.assertEqual(receipt["free_gb"], 8.0)
+        self.assertEqual(receipt["total_gb"], 24.0)
+        self.assertIn("vram_fraction", receipt)
+        self.assertIn("margin_gb", receipt)
+        self.assertEqual(receipt["governor_source_sha256"], hashlib.sha256((ROOT / "scripts" / "governor.py").read_bytes()).hexdigest())
+        self.assertRegex(receipt["governor_source_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_semantic_runner_resource_refusal_prevents_cuda_probe(self) -> None:
+        with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
+            with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=RuntimeError("resource refusal")) as governor:
+                with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                    with self.assertRaisesRegex(RuntimeError, "resource refusal"):
+                        run_vertical_slice.run_semantic(
+                            seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
+                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
+                            sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
+                        )
+        governor.assert_called_once_with()
+        cuda_probe.assert_not_called()
+
     def _run_vertical_resume_with_mocks(
         self, *, specialist: bool, callback_steps: tuple[int, ...] = (),
     ) -> tuple[dict[str, object], dict[str, object], MagicMock]:
