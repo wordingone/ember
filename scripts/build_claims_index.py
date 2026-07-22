@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Build receipts/INDEX.jsonl and receipts/CLAIMS.md from receipts/**/*.json.
 
@@ -20,9 +23,21 @@ runs given the same input, so regeneration diffs cleanly in review.
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 DEFAULT_RECEIPTS_DIR = Path(__file__).resolve().parent.parent / "receipts"
+
+# Optional era annotation (docs/spec/issue-reference-v1.md, R4). Off by default:
+# when no --sidecar is supplied, output is byte-identical to the pre-R4 schema,
+# so the existing output contract is untouched. Importing the normalizer is
+# best-effort so this script never hard-fails if it is run standalone.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from normalize_issue_reference import Sidecar, normalize
+except Exception:  # noqa: BLE001 — annotation is strictly optional
+    Sidecar = None
+    normalize = None
 
 CLAIM_OR_CONDITION_FIELD = re.compile(r"(claim|condition)", re.IGNORECASE)
 DIRECT_FIELDS = ("ticket", "ts", "issue", "verdict", "pass")
@@ -98,6 +113,24 @@ def build_row(rel_path: str, data: dict) -> "dict | None":
 
     informative = any(k in row for k in ("ticket", "issue", "verdict", "pass", "claim_fields"))
     return row if informative else None
+
+
+def annotate_eras(rows, sidecar) -> None:
+    """Add an ``era`` field to each row that carries an ``issue`` number.
+
+    Uses the issue-reference normalizer in LENIENT mode: an in-range or
+    unmappable number becomes ``unknown:<n>`` rather than failing the whole
+    index build. This is purely additive — rows without an ``issue`` are
+    untouched, and the function is only called when a sidecar is supplied.
+    """
+    if normalize is None:
+        return
+    for row in rows:
+        issue = row.get("issue")
+        if issue is None:
+            continue
+        canonical = normalize(str(issue), sidecar, strict=False)
+        row["era"] = canonical.split(":", 1)[0]
 
 
 def build_index(receipts_dir: Path):
@@ -198,10 +231,21 @@ def write_outputs(receipts_dir: Path, rows) -> None:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--receipts-dir", default=str(DEFAULT_RECEIPTS_DIR), help="Path to the receipts/ directory")
+    parser.add_argument(
+        "--sidecar",
+        default=None,
+        help="Optional issue-reference sidecar JSON (docs/spec/issue-reference-v1.md). "
+        "When supplied, each indexed row with an issue number gains an 'era' field. "
+        "Default output (no --sidecar) is byte-identical to the pre-R4 schema.",
+    )
     args = parser.parse_args(argv)
 
     receipts_dir = Path(args.receipts_dir).resolve()
     rows, stats = build_index(receipts_dir)
+    if args.sidecar:
+        if Sidecar is None:
+            parser.error("--sidecar requested but normalize_issue_reference is unavailable")
+        annotate_eras(rows, Sidecar.from_path(args.sidecar))
     write_outputs(receipts_dir, rows)
 
     print(
