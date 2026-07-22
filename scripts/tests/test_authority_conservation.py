@@ -89,6 +89,42 @@ mechanism_erasure=forbidden
 -->
 """
 
+VALID_EXECUTION_BOUNDARY = {
+    "schema": "ember-execution-boundary-v1",
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "execution_class": "goal_executing",
+    "allows_new_network": True,
+    "permitted_operations": [
+        "repository_governance",
+        "record_coherence_repair",
+        "spine_implementation",
+        "owned_3b_pretraining",
+        "owned_evaluation",
+        "owned_serving",
+    ],
+    "blocked_operations": [
+        "sub_3b_new_network",
+        "borrowed_lineage_signal",
+        "historical_artifact_execution",
+        "capability_or_completion_claim",
+        "benchmark_credit_without_owned_checkpoint",
+    ],
+    "prerequisite_receipts": ["fixture prerequisite receipt"],
+    "next_executable_command": (
+        "python scripts/ember_restart/contract.py validate "
+        "configs/ember-restart-3b.json"
+    ),
+}
+
+
+def render_boundary(boundary: dict) -> str:
+    return (
+        "<!-- EMBER_EXECUTION_BOUNDARY_V1\n"
+        + json.dumps(boundary, indent=2, sort_keys=True)
+        + "\n-->\n"
+    )
+
 VALID_POLICY = {
     "schema": "ember-authority-v1",
     "invariant_sha256": INVARIANT_SHA256,
@@ -294,6 +330,8 @@ def write_valid_fixture(root: Path) -> None:
     )
     continuity = root / "CONTINUITY.md"
     continuity.write_text(continuity.read_text(encoding="utf-8") + "\n" + state, encoding="utf-8")
+    with continuity.open("a", encoding="utf-8") as stream:
+        stream.write("\n" + render_boundary(copy.deepcopy(VALID_EXECUTION_BOUNDARY)))
 
     config = {
         "authority": {
@@ -368,6 +406,26 @@ def refresh_continuity_hash(root: Path) -> None:
     )
 
 
+def rewrite_boundary(root: Path, mutate) -> None:
+    path = root / "CONTINUITY.md"
+    text = path.read_text(encoding="utf-8")
+    match = re.search(
+        r"<!--\s*EMBER_EXECUTION_BOUNDARY_V1\s*\r?\n(.*?)\r?\n-->",
+        text,
+        re.DOTALL,
+    )
+    assert match is not None
+    boundary = json.loads(match.group(1))
+    mutate(boundary)
+    text = (
+        text[: match.start()]
+        + render_boundary(boundary).rstrip("\n")
+        + text[match.end() :]
+    )
+    path.write_text(text, encoding="utf-8")
+    refresh_continuity_hash(root)
+
+
 def assert_rejected(root: Path, code: str, selection: Path | None = None) -> None:
     result = run_verifier(root, selection)
     assert result.returncode == 1, result.stdout + result.stderr
@@ -382,6 +440,76 @@ def test_valid_authority_fixture_passes(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
     assert payload["certificate_legs"] == {str(i): True for i in range(1, 8)}
+
+
+def test_execution_boundary_missing_is_rejected(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    path = tmp_path / "CONTINUITY.md"
+    text = re.sub(
+        r"\n?<!--\s*EMBER_EXECUTION_BOUNDARY_V1\s*\r?\n.*?\r?\n-->\r?\n?",
+        "\n",
+        path.read_text(encoding="utf-8"),
+        count=1,
+        flags=re.DOTALL,
+    )
+    path.write_text(text, encoding="utf-8")
+    refresh_continuity_hash(tmp_path)
+    assert_rejected(tmp_path, "boundary.missing")
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    [
+        (
+            lambda boundary: boundary.update(allows_new_network=False),
+            "boundary.new_network_mismatch",
+        ),
+        (
+            lambda boundary: boundary.update(execution_class="authority_only"),
+            "boundary.execution_class_mismatch",
+        ),
+        (
+            lambda boundary: boundary.update(goal_id="EMBER-01"),
+            "boundary.goal_mismatch",
+        ),
+        (
+            lambda boundary: boundary.update(
+                next_executed_outcome="EMBER-01 clean 3B custody and identity spine"
+            ),
+            "boundary.outcome_mismatch",
+        ),
+        (
+            lambda boundary: boundary["blocked_operations"].remove(
+                "sub_3b_new_network"
+            ),
+            "boundary.blocked_operation_erased",
+        ),
+    ],
+)
+def test_execution_boundary_incompatibility_is_rejected(
+    tmp_path: Path, mutation, code: str
+) -> None:
+    write_valid_fixture(tmp_path)
+    rewrite_boundary(tmp_path, mutation)
+    assert_rejected(tmp_path, code)
+
+
+def test_execution_boundary_tracks_policy_not_constants(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    rewrite_policy(
+        tmp_path,
+        lambda policy: policy.update(
+            authority_only_goal=True,
+            allows_new_network=False,
+        ),
+    )
+    result = run_verifier(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    codes = {item["code"] for item in json.loads(result.stdout)["errors"]}
+    assert {
+        "boundary.execution_class_mismatch",
+        "boundary.new_network_mismatch",
+    } <= codes
 
 
 def test_lower_precedence_document_cannot_authorize_completion(tmp_path: Path) -> None:

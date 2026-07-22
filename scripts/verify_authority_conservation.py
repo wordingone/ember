@@ -84,6 +84,24 @@ POLICY_RE = re.compile(
 CONSERVATION_RE = re.compile(
     r"<!--\s*EMBER_CONSERVATION_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
 )
+EXECUTION_BOUNDARY_RE = re.compile(
+    r"<!--\s*EMBER_EXECUTION_BOUNDARY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
+)
+EXECUTION_BOUNDARY_SCHEMA = "ember-execution-boundary-v1"
+EXECUTION_CLASSES = {"authority_only", "goal_executing"}
+EXECUTION_OPERATIONS = {
+    "owned_3b_pretraining",
+    "owned_training_growth",
+    "owned_evaluation",
+    "owned_serving",
+}
+REQUIRED_BLOCKED_OPERATIONS = [
+    "sub_3b_new_network",
+    "borrowed_lineage_signal",
+    "historical_artifact_execution",
+    "capability_or_completion_claim",
+    "benchmark_credit_without_owned_checkpoint",
+]
 HISTORICAL_ONLY_MARKER = "<!-- EMBER_ARTIFACT_CLASS=historical_only -->"
 CONFIG_CLASSIFICATION_HEADER = [
     "path",
@@ -1089,6 +1107,143 @@ def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
             errors.append(finding(6, "state.required_class_missing", required))
 
 
+def check_execution_boundary(
+    root: Path,
+    policy: dict[str, Any] | None,
+    errors: list[dict[str, Any]],
+) -> None:
+    path = root / "CONTINUITY.md"
+    if not path.is_file():
+        errors.append(finding(7, "boundary.missing", "CONTINUITY.md is absent"))
+        return
+    try:
+        text = read_text(path)
+    except Exception as exc:
+        errors.append(finding(7, "boundary.unreadable", str(exc)))
+        return
+    matches = EXECUTION_BOUNDARY_RE.findall(text)
+    if not matches:
+        errors.append(
+            finding(7, "boundary.missing", "EMBER_EXECUTION_BOUNDARY_V1 is absent")
+        )
+        return
+    if len(matches) != 1:
+        errors.append(
+            finding(
+                7,
+                "boundary.duplicate",
+                f"expected one execution boundary, found {len(matches)}",
+            )
+        )
+        return
+    try:
+        boundary = json.loads(matches[0])
+    except json.JSONDecodeError as exc:
+        errors.append(finding(7, "boundary.invalid_json", str(exc)))
+        return
+    if not isinstance(boundary, dict):
+        errors.append(finding(7, "boundary.not_object", "boundary must be an object"))
+        return
+
+    expect(
+        errors,
+        7,
+        boundary.get("schema") == EXECUTION_BOUNDARY_SCHEMA,
+        "boundary.schema",
+        EXECUTION_BOUNDARY_SCHEMA,
+    )
+    execution_class = boundary.get("execution_class")
+    expect(
+        errors,
+        7,
+        execution_class in EXECUTION_CLASSES,
+        "boundary.execution_class_invalid",
+        str(execution_class),
+    )
+    for field in ("permitted_operations", "blocked_operations", "prerequisite_receipts"):
+        value = boundary.get(field)
+        expect(
+            errors,
+            7,
+            isinstance(value, list)
+            and bool(value)
+            and all(isinstance(item, str) and item.strip() for item in value),
+            "boundary.field_invalid",
+            field,
+        )
+    command = boundary.get("next_executable_command")
+    expect(
+        errors,
+        7,
+        isinstance(command, str) and bool(command.strip()),
+        "boundary.command_missing",
+        "next_executable_command",
+    )
+    blocked = boundary.get("blocked_operations")
+    if isinstance(blocked, list):
+        for operation in REQUIRED_BLOCKED_OPERATIONS:
+            expect(
+                errors,
+                7,
+                operation in blocked,
+                "boundary.blocked_operation_erased",
+                operation,
+            )
+    permitted = boundary.get("permitted_operations")
+    if isinstance(permitted, list):
+        if execution_class == "authority_only":
+            for operation in EXECUTION_OPERATIONS:
+                expect(
+                    errors,
+                    7,
+                    operation not in permitted,
+                    "boundary.authority_only_execution_op",
+                    operation,
+                )
+        elif execution_class == "goal_executing":
+            expect(
+                errors,
+                7,
+                "owned_3b_pretraining" in permitted,
+                "boundary.execution_op_missing",
+                "owned_3b_pretraining",
+            )
+
+    if policy is None:
+        return
+    expect(
+        errors,
+        7,
+        boundary.get("goal_id") == policy.get("active_goal_id"),
+        "boundary.goal_mismatch",
+        f"boundary={boundary.get('goal_id')}, policy={policy.get('active_goal_id')}",
+    )
+    expect(
+        errors,
+        7,
+        boundary.get("next_executed_outcome") == policy.get("next_executed_outcome"),
+        "boundary.outcome_mismatch",
+        "execution boundary and GOAL outcome differ",
+    )
+    allows_new_network = boundary.get("allows_new_network")
+    expect(
+        errors,
+        7,
+        isinstance(allows_new_network, bool)
+        and allows_new_network == policy.get("allows_new_network"),
+        "boundary.new_network_mismatch",
+        "execution boundary and GOAL network authority differ",
+    )
+    expect(
+        errors,
+        7,
+        (execution_class == "authority_only")
+        == (policy.get("authority_only_goal") is True),
+        "boundary.execution_class_mismatch",
+        "execution class and authority_only_goal differ",
+    )
+
+
 def validate_artifact_binding(
     text: str,
     suffix: str,
@@ -1506,6 +1661,7 @@ def verify(
     check_lower_precedence_authority(root, errors)
     check_mechanism_registry(root, errors)
     check_state(root, errors)
+    check_execution_boundary(root, policy, errors)
     check_changed_artifact_bindings(
         root,
         policy,
