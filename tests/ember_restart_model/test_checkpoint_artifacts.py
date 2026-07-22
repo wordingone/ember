@@ -728,13 +728,14 @@ class CheckpointArtifactTests(unittest.TestCase):
             receipt = write_checkpoint_artifacts(
                 model, optimizer, root, launch_seed=17,
                 rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
-                data_cursor={"shard": "TOKEN-SHARDS-V0:receipt", "record_index": 2, "global_step": 2, "tokens_seen": 2048},
+                data_cursor={"shard": "TOKEN-SHARDS-V0:receipt", "record_index": 2, "global_step": 2, "tokens_seen": 2048, "governor": {"free_gb": 32.0, "governor_source_sha256": "a" * 64}},
                 model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
                 test_only_allow_unverified=True,
             )
             restored = UnifiedDecoder(config, genesis_seed=18)
             restore_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
-            load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+            restored_state = load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+        self.assertEqual(restored_state["data_cursor"]["governor"], {"free_gb": 32.0, "governor_source_sha256": "a" * 64})
         self.assertEqual(receipt["active_expert_ids"], ["shared"])
         self.assertEqual(restored.active_expert, "shared")
     def test_optimizer_realization_recomputes_runtime_class_source_hyperparameters_and_state_format(self) -> None:

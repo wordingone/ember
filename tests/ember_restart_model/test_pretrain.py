@@ -118,6 +118,91 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(result["global_step"], 3)
         self.assertEqual(checkpoints, [2, 3])
 
+    def test_forward_interruption_happens_before_optimizer_mutation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=61)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+        checkpoints: list[object] = []
+
+        def interrupted_forward(*_args: object, **_kwargs: object) -> torch.Tensor:
+            raise RuntimeError("injected pre-step interruption")
+
+        model.forward = interrupted_forward  # type: ignore[method-assign]
+        with self.assertRaisesRegex(RuntimeError, "pre-step interruption"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda _step, state: checkpoints.append(state), require_complete_coverage=False,
+            )
+        self.assertEqual(checkpoints, [])
+        self.assertEqual(optimizer.state, {})
+        self.assertTrue(all(torch.equal(value, before[name]) for name, value in model.state_dict().items()))
+
+    def test_post_update_interruption_carries_the_exact_resume_cursor(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=62)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        before = model.token_embedding.weight.detach().clone()
+        observed: list[tuple[int, dict[str, object]]] = []
+
+        def interrupt_after_checkpoint(step: int, state: dict[str, object]) -> None:
+            observed.append((step, state))
+            raise KeyboardInterrupt("injected post-update interruption")
+
+        with self.assertRaisesRegex(KeyboardInterrupt, "post-update interruption"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=interrupt_after_checkpoint, require_complete_coverage=False,
+            )
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0][0], 1)
+        self.assertEqual(observed[0][1]["data_cursor"], {"shard": "owned-pretraining", "record_index": 1, "global_step": 1, "tokens_seen": 3})
+        self.assertFalse(torch.equal(model.token_embedding.weight.detach(), before))
+        self.assertTrue(optimizer.state)
+
+    def test_empty_and_exhausted_segments_never_replay_or_synthesize_records(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least one owned record"):
+            run_pretraining_segment(
+                model=object(), optimizer=object(), records=[], config=object(), device=torch.device("cpu"),
+                checkpoint_every=1, checkpoint_callback=lambda _step, _state: None,
+            )
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=63)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        checkpoints: list[object] = []
+        result = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=[self._record(config, expert="vision")], config=config,
+            device=torch.device("cpu"), checkpoint_every=1, checkpoint_callback=lambda _step, state: checkpoints.append(state),
+            initial_global_step=11, initial_tokens_seen=2048, initial_data_cursor=1,
+            require_complete_coverage=False,
+        )
+        self.assertEqual(result["steps"], 0)
+        self.assertEqual(result["data_cursor"], {"shard": "owned-pretraining", "record_index": 1, "global_step": 11, "tokens_seen": 2048})
+        self.assertEqual(checkpoints, [])
+        self.assertEqual(optimizer.state, {})
+
+    def test_nonfinite_loss_refuses_before_backward_or_optimizer_mutation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=64)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+
+        def nonfinite_forward(input_ids: torch.Tensor, **_kwargs: object) -> torch.Tensor:
+            return torch.full((input_ids.shape[0], input_ids.shape[1], config.vocab_size), float("nan"))
+
+        model.forward = nonfinite_forward  # type: ignore[method-assign]
+        with self.assertRaisesRegex(RuntimeError, "non-finite loss"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda _step, _state: None, require_complete_coverage=False,
+            )
+        self.assertEqual(optimizer.state, {})
+        self.assertTrue(all(torch.equal(value, before[name]) for name, value in model.state_dict().items()))
+
     def test_progress_callback_observes_every_completed_optimizer_step(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=28)

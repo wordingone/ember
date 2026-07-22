@@ -281,19 +281,32 @@ def run_manifest_bound_semantic_segment(
         raise ValueError("semantic stream sequence_length must be positive")
     if not isinstance(steps, int) or steps < 1:
         raise ValueError("semantic stream steps must be positive")
-    if min(initial_global_step, initial_tokens_seen) < 0:
-        raise ValueError("semantic stream resume counters must be nonnegative")
+    if type(initial_global_step) is not int or type(initial_tokens_seen) is not int or min(initial_global_step, initial_tokens_seen) < 0:
+        raise ValueError("semantic stream resume counters must be nonnegative integers")
+    expected_shard = "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12]
     if initial_data_cursor is None:
         shard_index, token_offset = 0, 0
     else:
+        if not isinstance(initial_data_cursor, Mapping):
+            raise ValueError("semantic stream resume cursor is malformed")
         if (
             initial_data_cursor.get("receipt_sha256") != stream.receipt_sha256
             or initial_data_cursor.get("tokenizer_sha256") != stream.tokenizer_sha256
         ):
             raise ValueError("semantic stream resume cursor does not bind this receipt and tokenizer")
+        if (
+            initial_data_cursor.get("shard") != expected_shard
+            or type(initial_data_cursor.get("record_index")) is not int
+            or initial_data_cursor["record_index"] != initial_global_step
+            or type(initial_data_cursor.get("global_step")) is not int
+            or initial_data_cursor["global_step"] != initial_global_step
+            or type(initial_data_cursor.get("tokens_seen")) is not int
+            or initial_data_cursor["tokens_seen"] != initial_tokens_seen
+        ):
+            raise ValueError("semantic stream resume cursor identity is inconsistent")
         shard_index = initial_data_cursor.get("shard_index")
         token_offset = initial_data_cursor.get("token_offset")
-        if not isinstance(shard_index, int) or not isinstance(token_offset, int):
+        if type(shard_index) is not int or type(token_offset) is not int or shard_index < 0 or token_offset < 0:
             raise ValueError("semantic stream resume cursor is malformed")
 
     records: list[dict[str, object]] = []

@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -43,6 +44,26 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def governed_resource_preflight() -> dict[str, object]:
+    """Run the repository-owned GPU governor before any CUDA allocation."""
+
+    governor_path = Path(__file__).resolve().parents[2] / "scripts" / "governor.py"
+    if not governor_path.is_file():
+        raise RuntimeError("repository resource governor is unavailable")
+    spec = importlib.util.spec_from_file_location("ember_governor_bound", governor_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("repository resource governor cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    preflight = getattr(module, "preflight", None)
+    if not callable(preflight):
+        raise RuntimeError("repository resource governor has no preflight")
+    receipt = preflight()
+    if not isinstance(receipt, Mapping):
+        raise RuntimeError("repository resource governor returned an invalid receipt")
+    return {**dict(receipt), "governor_source_sha256": _sha256(governor_path)}
 
 
 def _json_sha256(payload: dict[str, Any]) -> str:
@@ -2296,6 +2317,7 @@ def run_semantic(
     text_lab_preflight = run_text_lab_preflight(repo_root=Path(__file__).resolve().parents[2])
     if text_lab_preflight.get("result") != "VERIFIED":
         raise ValueError(str(text_lab_preflight.get("result", "text-lab authority was not admitted")))
+    governor_receipt = governed_resource_preflight()
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production semantic runner")
     if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
@@ -2384,6 +2406,7 @@ def run_semantic(
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
             data_cursor = dict(state["data_cursor"])
+            data_cursor["governor"] = governor_receipt
             if resume_authority is not None:
                 data_cursor["resume_authority"] = resume_authority
             published = write_checkpoint_artifacts(
@@ -2424,6 +2447,7 @@ def run_semantic(
     return {
         "segment": segment,
         "counts": counts,
+        "governor": governor_receipt,
         "memory_preflight": memory_preflight,
         "launch_seed": seed,
         "rng_state_before_init_sha256": rng_state_before_init,
