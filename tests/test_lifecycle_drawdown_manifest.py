@@ -2,6 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
+import copy
 import hashlib
 import json
 import re
@@ -45,3 +46,26 @@ def test_manifest_registered_worktrees_are_path_free_and_typed() -> None:
         assert re.fullmatch(r"[0-9a-f]{64}", entry["common_repo_path_sha256"])
         assert entry["dirty"] is False
         assert entry["verdict"] == "KEEP_ACTIVE_OR_BASE"
+
+
+def test_manifest_verifier_selects_no_uncertain_delete_rows() -> None:
+    from scripts.verify_lifecycle_drawdown_manifest import verified_delete_rows, verify_manifest
+
+    payload = _load()
+    verify_manifest(payload)
+    assert verified_delete_rows(payload) == []
+
+
+def test_manifest_verifier_rejects_uncertain_row_marked_for_deletion() -> None:
+    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
+
+    payload = _load()
+    tampered = copy.deepcopy(payload)
+    tampered["candidates"][0]["verdict"] = "DELETE_VERIFIED"
+    canonical = dict(tampered)
+    canonical.pop("manifest_sha256")
+    tampered["manifest_sha256"] = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    with __import__("pytest").raises(ManifestError, match="exact path/blob equivalence"):
+        verified_delete_rows(tampered)
