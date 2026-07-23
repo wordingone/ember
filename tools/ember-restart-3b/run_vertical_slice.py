@@ -2103,16 +2103,16 @@ def run(
         }
         if not isinstance(canonical_runner_authority, Mapping) or dict(canonical_runner_authority) != expected_canonical_authority:
             raise RuntimeError("vertical canonical runner authority does not match the live startup assertion")
-    governor_receipt = governed_resource_preflight()
-    if canonical_runner_authority is not None:
-        governor_receipt = {**governor_receipt, "canonical_disk_budget_runner": dict(canonical_runner_authority)}
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is required for the production vertical slice")
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     config = RestartDecoderConfig.from_contract(config_path)
     memory_contract = load_memory_contract(config_path)
+    governor_receipt = governed_resource_preflight()
+    if canonical_runner_authority is not None:
+        governor_receipt = {**governor_receipt, "canonical_disk_budget_runner": dict(canonical_runner_authority)}
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the production vertical slice")
     episode_expert: str | None = None
     total_parameters = config.structural_parameter_count()
     active_parameters = total_parameters - (len(config.expert_names) - 1) * config.layers * 12 * config.hidden_size * config.hidden_size
@@ -2473,19 +2473,20 @@ def run_semantic(
     text_lab_preflight = run_text_lab_preflight(repo_root=Path(__file__).resolve().parents[2])
     if text_lab_preflight.get("result") != "VERIFIED":
         raise ValueError(str(text_lab_preflight.get("result", "text-lab authority was not admitted")))
-    governor_receipt = governed_resource_preflight()
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is required for the production semantic runner")
     artifact_root = production_artifact_root(artifact_root)
     root = Path(__file__).resolve().parents[2]
     config_path = root / "configs" / "ember-restart-3b.json"
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
+    config = RestartDecoderConfig.from_contract(config_path)
+    memory_contract = load_memory_contract(config_path)
+    governor_receipt = governed_resource_preflight()
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the production semantic runner")
     stream = ManifestBoundTokenStream.from_receipt(
         receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path
     )
-    config = RestartDecoderConfig.from_contract(config_path)
     if stream.vocab_size != config.vocab_size:
         raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
     total_parameters = config.structural_parameter_count()
@@ -2494,7 +2495,7 @@ def run_semantic(
     memory_preflight = production_memory_preflight(
         total_parameters=total_parameters, active_parameters=shared_active_parameters, device_free_bytes=int(device_free_bytes)
     )
-    if memory_preflight["parameter_dtype"] != load_memory_contract(config_path)["parameter_dtype"]:
+    if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
         raise RuntimeError("memory preflight and production numerics disagree")
     checkpoint_parent = artifact_root / "checkpoints"
     resume_authority: dict[str, object] | None = None
