@@ -130,6 +130,13 @@ def test_workflow_makes_census_and_report_failures_terminal() -> None:
     assert "invalid stale report schema" in workflow
 
 
+def test_workflow_validates_report_file_before_extracting_terminal_counts() -> None:
+    workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
+    assert "require_stale_report()" in workflow
+    assert "if ! jq -e" in workflow
+    assert workflow.index('require_stale_report "$stale_report"') < workflow.index("stale_pr=$(jq -er")
+
+
 def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() -> None:
     workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
     assert "require_count()" in workflow

@@ -43,6 +43,26 @@ jobs:
             esac
           }
 
+          require_stale_report() {
+            local report="$1"
+            if [ ! -s "$report" ]; then
+              printf 'FAIL [tracker] stale report is missing or empty\n' >&2
+              exit 1
+            fi
+            if ! jq -e '
+              (.schema_version == "ember-lifecycle-stale-v1")
+              and (.receipt_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+              and (.master_sha | type == "string" and test("^[0-9a-f]{40}$"))
+              and (.counts | type == "object")
+              and (.counts.pull_requests | type == "number" and isfinite and . >= 0 and floor == .)
+              and (.counts.issues | type == "number" and isfinite and . >= 0 and floor == .)
+              and (.pull_requests | type == "array")
+              and (.issues | type == "array")
+            ' "$report" >/dev/null; then
+              printf 'FAIL [tracker] invalid stale report schema/counts; refusing stale verdict\n' >&2
+              exit 1
+            fi
+          }
           now=$(date +%s)
 
           # 1. trunk freshness
@@ -81,6 +101,7 @@ jobs:
           fi
 
           # 4. stale open issues / PRs derived from the exact census populations
+          require_stale_report "$stale_report"
           if ! jq -e '
             (.schema_version == "ember-lifecycle-stale-v1")
             and (.receipt_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
