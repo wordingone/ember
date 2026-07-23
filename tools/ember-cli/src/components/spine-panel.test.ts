@@ -11,8 +11,9 @@
 // of silently succeeding or throwing.
 
 import { describe, it, expect } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   assembleAuthorityElement,
   assembleSeatElement,
@@ -270,6 +271,54 @@ describe("assembleCustodyLegElement (element 3)", () => {
     expect(el.status).toBe("BLOCKED");
     expect(el.lines[0]).toContain("BLOCKED");
   });
+
+  // PR #1027 defect fix: the root-spec read was already wrapped fail-closed, but the
+  // bindings-store read after it was not -- a throwing readRootBindingsStoreFn used to
+  // propagate straight out of assembleCustodyLegElement and crash the whole /spine
+  // command instead of blocking element 3 alone. readRootBindingsStore's own default
+  // implementation (services/custody-bindings.ts) is deliberately fail-open and does
+  // not throw on a missing/malformed real store file, so there is no genuine fs
+  // failure to reach through the production readFileSync path here; the injected
+  // readRootBindingsStoreFn is the actual extension seam this component's own
+  // Element3Deps exposes, and the malformed/missing-store scenario is exercised
+  // through it, matching this file's existing element-3 convention throughout.
+  it("BLOCKED: a bindings-store read failure blocks element 3 alone, never throws out of assembleCustodyLegElement", () => {
+    const el = assembleCustodyLegElement("/repo", {
+      readRootSpecFile: () => makeRootSpecJson(["root-a"]),
+      readRootBindingsStoreFn: () => {
+        throw new Error("root-bindings store: EACCES permission denied");
+      },
+    });
+    expect(el.status).toBe("BLOCKED");
+    expect(el.lines[0]).toContain("BLOCKED");
+    expect(el.lines[0]).toContain("root-bindings store");
+  });
+
+  it("BLOCKED element 3 does not crash /spine -- the other 6 elements still render", async () => {
+    const state = await assembleSpinePanelState("/cwd", {
+      resolveRepoRoot: () => "/repo",
+      readAuthorityFile: () => makeBenchmarkRegistryJson({}),
+      getModelSeatDecision: () => OFFLINE_DECISION,
+      readRootSpecFile: () => makeRootSpecJson(["root-a"]),
+      readRootBindingsStoreFn: () => {
+        throw new Error("simulated bindings-store crash");
+      },
+      listLaunchPacketReceipts: () => [],
+      readBenchmarkRegistryFile: () => makeBenchmarkRegistryJson({}),
+      existsC0Ledger: () => false,
+      goalforgeRoot: "",
+    });
+    expect(state.elements.map((e) => e.n)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    const el3 = state.elements.find((e) => e.n === 3)!;
+    expect(el3.status).toBe("BLOCKED");
+    expect(el3.lines[0]).toContain("root-bindings store");
+    // every other element still assembled normally -- per-element isolation.
+    const el1 = state.elements.find((e) => e.n === 1)!;
+    expect(el1.status).toBe("BOUND");
+    const el7 = state.elements.find((e) => e.n === 7)!;
+    expect(el7.status).toBe("BLOCKED"); // unconfigured goalforgeRoot, expected honest state
+    expect(el7.lines[0]).toContain("world-state source not configured");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -329,6 +378,90 @@ describe("assembleLaunchPacketElement (element 4)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Element 4 -- receipt discovery shadowing (PR #1027 defect fix). Production-shaped:
+// real directories/files on a real temp filesystem, read through the real default
+// readdirSync/readFileSync path (no injected listLaunchPacketReceipts/
+// readLaunchPacketReceipt).
+// ---------------------------------------------------------------------------
+
+describe("assembleLaunchPacketElement (element 4) -- real-filesystem receipt-discovery shadowing", () => {
+  function writeReceipt(dir: string, overallReady: boolean): void {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "packet.jsonl"),
+      JSON.stringify({
+        record: "launch-packet-summary",
+        overall_ready: overallReady,
+        implemented_all_pass: overallReady,
+        any_deferred: false,
+        named_ember02_command: overallReady ? { command: "python run_vertical_slice.py --semantic" } : null,
+      }) + "\n",
+      "utf8",
+    );
+  }
+
+  it("BOUND: a stray non-canonical file/dir sorting after the real receipt is filtered out, real newest receipt selected", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-receipts-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      mkdirSync(receiptsDir, { recursive: true });
+
+      writeReceipt(join(receiptsDir, "20260101T000000Z"), true);
+
+      // Both sort lexicographically AFTER the real receipt but are NOT canonical
+      // receipt directories -- a naive readdirSync().sort()-then-last would shadow
+      // the real receipt with one of these.
+      writeFileSync(join(receiptsDir, "zzz-stray-file.txt"), "not a receipt", "utf8");
+      mkdirSync(join(receiptsDir, "zzz-not-canonical"), { recursive: true });
+      writeFileSync(join(receiptsDir, "zzz-not-canonical", "packet.jsonl"), "not json at all", "utf8");
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: true");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BOUND: the newest canonical receipt dir is empty/unreadable -- falls back to the next-newest VALID receipt, real fs", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-receipts-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      mkdirSync(receiptsDir, { recursive: true });
+
+      writeReceipt(join(receiptsDir, "20260101T000000Z"), false);
+      // Newest by name, canonical-shaped, but no packet.jsonl inside it (real ENOENT
+      // on read) -- must not crash and must not block when an older valid receipt
+      // exists.
+      mkdirSync(join(receiptsDir, "20260201T000000Z"), { recursive: true });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: false");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BLOCKED: every canonical receipt dir is invalid -- honest blocked reason, never a crash", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-receipts-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      mkdirSync(join(receiptsDir, "20260101T000000Z"), { recursive: true });
+      writeFileSync(join(receiptsDir, "20260101T000000Z", "packet.jsonl"), "not json", "utf8");
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BLOCKED");
+      expect(el.lines[0]).toContain("BLOCKED");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Element 5 -- benchmark registry + exact non-execution/execution state
 // ---------------------------------------------------------------------------
 
@@ -363,6 +496,97 @@ describe("assembleBenchmarkElement (element 5)", () => {
     const el = assembleBenchmarkElement("/repo", { readBenchmarkRegistryFile: () => "not json" });
     expect(el.status).toBe("BLOCKED");
     expect(el.lines[0]).toContain("BLOCKED");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Element 5 -- fail-CLOSED execution_status vocabulary (PR #1027 defect fix)
+// production-shaped: opens a real registry fixture on disk through the real
+// readFileSync default path (no injected readBenchmarkRegistryFile).
+// ---------------------------------------------------------------------------
+
+describe("assembleBenchmarkElement (element 5) -- out-of-vocabulary execution_status fail-closed", () => {
+  function fixtureRoot(benchmarks: unknown[]): string {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-bench-"));
+    const dir = join(repoRoot, "manifests", "ember-01-custody");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "benchmark-registry.json"),
+      JSON.stringify({
+        authority: { goal_id: "EMBER-01", workstream_id: "EMBER-01B", next_executed_outcome: "x" },
+        schema: "ember-01-benchmark-registry-v1",
+        direct_recovered_minimum: 1,
+        operator_recollection_minimum: 1,
+        completion_rule: "test",
+        benchmarks,
+      }),
+      "utf8",
+    );
+    return repoRoot;
+  }
+
+  const baseRow = {
+    benchmark_id: "bench-bad",
+    display_name: "Bench Bad",
+    version: "v1",
+    provenance_class: "direct_mandate",
+    subject_requirement: "owned_admissible_ember_checkpoint",
+    harness_status: "research_stub",
+    data_status: "unresolved",
+    license_status: "unresolved",
+    subject_class: "none",
+    completion: false,
+    evidence: ["repo:GOAL.md"],
+    split: "unresolved",
+    harness_path: null,
+    harness_identity: null,
+    comparator_requirements: {
+      owned_subject_required: true,
+      borrowed_reference_role: "frozen_reference_only",
+      lineage_signal_allowed: false,
+    },
+    lineage_admissibility: "owned_subject_only",
+    completion_eligibility: "ineligible_until_exact_owned_execution",
+  };
+
+  it("BLOCKED: an out-of-vocabulary execution_status (e.g. a stray 'failed' or 'unsupported') never counts as executed", () => {
+    const repoRoot = fixtureRoot([{ ...baseRow, execution_status: "failed" }]);
+    try {
+      const el = assembleBenchmarkElement(repoRoot);
+      expect(el.status).toBe("BLOCKED");
+      expect(el.lines[0]).toContain("bench-bad");
+      expect(el.lines[0]).toContain("failed");
+      expect(el.lines.join("\n")).not.toContain("executed: 1 / 1");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BLOCKED: a row missing execution_status entirely never silently counts as executed", () => {
+    const { execution_status: _drop, ...rowWithoutStatus } = { ...baseRow, execution_status: "not_executed" };
+    const repoRoot = fixtureRoot([rowWithoutStatus]);
+    try {
+      const el = assembleBenchmarkElement(repoRoot);
+      expect(el.status).toBe("BLOCKED");
+      expect(el.lines[0]).toContain("bench-bad");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BOUND: only exact 'executed' rows count, real fixture through the real readFileSync path", () => {
+    const repoRoot = fixtureRoot([
+      { ...baseRow, benchmark_id: "b0", execution_status: "executed" },
+      { ...baseRow, benchmark_id: "b1", execution_status: "not_executed" },
+      { ...baseRow, benchmark_id: "b2", execution_status: "not_executed" },
+    ]);
+    try {
+      const el = assembleBenchmarkElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("executed: 1 / 3");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });
 
@@ -414,6 +638,68 @@ describe("assembleFailureClassElement (element 6)", () => {
     expect(elOne.lines.join("\n")).toContain("1 failure class(es)");
     expect(elTwo.lines.join("\n")).toContain("2 failure class(es)");
     expect(elOne.lines.join("\n")).not.toEqual(elTwo.lines.join("\n"));
+  });
+
+  // PR #1027 defect fix: `Array.isArray(...) ? ... : []` + `?? "(unnamed)"/"unknown"`
+  // rendered a missing/non-array/empty classes array, or rows missing class_id/state,
+  // as a fake BOUND "0 failure class(es)" / "(unnamed): unknown" line instead of
+  // blocking on the structural violation.
+  it("BLOCKED: classes is missing entirely -- never a fake '0 failure class(es)' BOUND line", () => {
+    const el = assembleFailureClassElement("/repo", {
+      existsC0Ledger: () => true,
+      readC0Ledger: () => JSON.stringify({ schema: "x" }),
+    });
+    expect(el.status).toBe("BLOCKED");
+    expect(el.lines[0]).toContain("classes");
+    expect(el.lines.join("\n")).not.toContain("0 failure class(es)");
+  });
+
+  it("BLOCKED: classes is a non-array value -- never a fake '0 failure class(es)' BOUND line", () => {
+    const el = assembleFailureClassElement("/repo", {
+      existsC0Ledger: () => true,
+      readC0Ledger: () => JSON.stringify({ classes: "not-an-array" }),
+    });
+    expect(el.status).toBe("BLOCKED");
+    expect(el.lines[0]).toContain("classes");
+  });
+
+  it("BLOCKED: classes is an empty array -- never a fake '0 failure class(es)' BOUND line", () => {
+    const el = assembleFailureClassElement("/repo", {
+      existsC0Ledger: () => true,
+      readC0Ledger: () => JSON.stringify({ classes: [] }),
+    });
+    expect(el.status).toBe("BLOCKED");
+    expect(el.lines[0]).toContain("classes");
+  });
+
+  it("BLOCKED: a row missing class_id never renders as '(unnamed): unknown'", () => {
+    const el = assembleFailureClassElement("/repo", {
+      existsC0Ledger: () => true,
+      readC0Ledger: () => JSON.stringify({ classes: [{ state: "past-dead" }] }),
+    });
+    expect(el.status).toBe("BLOCKED");
+    expect(el.lines[0]).toContain("classes[0]");
+    expect(el.lines.join("\n")).not.toContain("(unnamed)");
+  });
+
+  it("BLOCKED: a row missing state never renders as ': unknown'", () => {
+    const el = assembleFailureClassElement("/repo", {
+      existsC0Ledger: () => true,
+      readC0Ledger: () => JSON.stringify({ classes: [{ class_id: "cls-x" }] }),
+    });
+    expect(el.status).toBe("BLOCKED");
+    expect(el.lines[0]).toContain("classes[0]");
+    expect(el.lines.join("\n")).not.toContain(": unknown");
+  });
+
+  it("BLOCKED: a second/later row missing class_id/state is named by its own index", () => {
+    const el = assembleFailureClassElement("/repo", {
+      existsC0Ledger: () => true,
+      readC0Ledger: () =>
+        JSON.stringify({ classes: [{ class_id: "cls-ok", state: "past-dead" }, { class_id: "", state: "x" }] }),
+    });
+    expect(el.status).toBe("BLOCKED");
+    expect(el.lines[0]).toContain("classes[1]");
   });
 });
 
