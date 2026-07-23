@@ -2,7 +2,17 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Resolve the only Ember CLI seat allowed to claim an owned checkpoint."""
+"""Resolve the only Ember CLI seat allowed to claim an owned checkpoint.
+
+cond3 seat-chain identity bridge (state/specs/cond3-seat-bridge-spec.md, goal
+line 95): this resolver is NOT an independent identity authority. Every
+identity-bearing field (checkpoint/model-config/tokenizer sha256) is DERIVED
+from the ``ember-model-experiment-identity-v1`` cert manifest the run manifest
+references (``cert_manifest_path`` / ``cert_manifest_digest``), via
+``seat_identity_bridge.derive_seat_identity`` -- fail-closed, no fallback. The
+run manifest's own values are read only as cross-check INPUT (Step 4 of the
+bridge), never as final truth.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +23,9 @@ from pathlib import Path
 from typing import Any
 
 from contract import validate_manifest
+from seat_identity_bridge import derive_seat_identity, require_admitted_seat
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str, Any]:
@@ -31,18 +44,45 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
     root = run_manifest_path.parent
     serving_path = (root / cli["serving_manifest_path"]).resolve()
     serving = json.loads(serving_path.read_text(encoding="utf-8"))
-    checkpoint_sha256 = manifest["checkpoint"]["sha256"]
     checkpoint_manifest_path = (root / manifest["checkpoint"]["manifest_path"]).resolve()
     tokenizer_path = (root / manifest["tokenizer"]["path"]).resolve()
     model_config_path = (root / manifest["architecture"]["model_config"]["path"]).resolve()
     server_path = (root / serving["server_implementation"]["path"]).resolve()
+
+    # cond3 seat-chain bridge: derive identity from the referenced cert
+    # manifest. The run manifest's own checkpoint/model-config/tokenizer
+    # sha256 values are supplied ONLY as cross-check input (bridge Step 4) --
+    # they are never returned to callers except after the bridge confirms
+    # they equal the cert-derived value byte-for-byte.
+    cert_manifest_path = manifest.get("cert_manifest_path")
+    bridge_seat_config = {
+        "certManifestPath": (
+            str((root / cert_manifest_path).resolve())
+            if isinstance(cert_manifest_path, str)
+            else cert_manifest_path
+        ),
+        "certManifestDigest": manifest.get("cert_manifest_digest"),
+        "checkpointPath": str(checkpoint_manifest_path),
+        "checkpointSha256": manifest["checkpoint"]["sha256"],
+        "modelConfigSha256": manifest["architecture"]["model_config"]["sha256"],
+        "tokenizerSha256": manifest["tokenizer"]["sha256"],
+    }
+    bridge = derive_seat_identity(bridge_seat_config, repo_root=REPO_ROOT)
+    if not bridge["valid"]:
+        return {"valid": False, "seat": None, "errors": bridge["errors"]}
+    try:
+        derived = require_admitted_seat(bridge["seat"])
+    except PermissionError as exc:
+        return {"valid": False, "seat": None, "errors": [str(exc)]}
+
+    checkpoint_sha256 = derived["checkpointSha256"]
     return {
         "valid": True,
         "seat": "OWNED_ADMITTED",
         "run_id": manifest["run_id"],
         "checkpoint_sha256": checkpoint_sha256,
         "endpoint_url": serving["endpoint_url"].rstrip("/"),
-        "model_config_sha256": manifest["architecture"]["model_config"]["sha256"],
+        "model_config_sha256": derived["modelConfigSha256"],
         "identity_url": serving["endpoint_url"].rstrip("/") + serving["identity_path"],
         "model_name": f"ember-owned:{checkpoint_sha256[:12]}",
         "model_format": serving["model_format"],
@@ -56,7 +96,7 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
             "trusted_verifier_registry_path": str(verifier_registry.resolve()),
         },
         "server_source_sha256": serving["server_implementation"]["sha256"],
-        "tokenizer_sha256": manifest["tokenizer"]["sha256"],
+        "tokenizer_sha256": derived["tokenizerSha256"],
         "errors": [],
     }
 
