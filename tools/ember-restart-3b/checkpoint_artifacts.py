@@ -557,13 +557,12 @@ def _derive_checkpoint_storage_projection(
         raise ValueError(
             "checkpoint storage projection requires one post-update optimizer state"
         )
-    projected_optimizer = max(
-        optimizer_actual,
-        routed_optimizer["shared"]
-        + sum(
-            routed_optimizer[name] or active_bytes for name in EXPERT_NAMES
-        ),
-    )
+    # Admission cannot recover the runtime parameter-to-route identity from a
+    # generic optimizer state_dict without trusting candidate-authored labels.
+    # Use the closed worst-case bound: every initialized byte may belong to the
+    # one active specialist and therefore exist once per specialist at full
+    # four-expert realization.
+    projected_optimizer = optimizer_actual * len(EXPERT_NAMES)
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
     projected_checkpoint_floor = (
         actual_checkpoint_floor - optimizer_actual + projected_optimizer
@@ -730,14 +729,7 @@ def _validate_checkpoint_storage_projection(
     optimizer_actual = materialized[
         "optimizer_state_tensor_storage_lower_bound_bytes"
     ]
-    expected_projected_optimizer = max(
-        optimizer_actual,
-        route_bounds["shared"]
-        + sum(
-            route_bounds[name] or route_bounds[active_expert]
-            for name in EXPERT_NAMES
-        ),
-    )
+    expected_projected_optimizer = optimizer_actual * len(EXPERT_NAMES)
     if (
         shard_bounds["optimizer-state.pt"] != optimizer_actual
         or materialized[
@@ -767,6 +759,75 @@ def _validate_checkpoint_storage_projection(
     ):
         raise ValueError("checkpoint storage projection arithmetic is inconsistent")
     return dict(projection)
+
+
+def _measure_candidate_storage_projection(
+    candidate: Path,
+    projection: Mapping[str, Any],
+) -> None:
+    """Recompute the hard storage gate from quarantined serialized bytes."""
+
+    expected_shards = {
+        "shared-model.pt",
+        "optimizer-state.pt",
+        "replay-state.pt",
+        *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+    }
+    measured: dict[str, int] = {}
+    for relative in sorted(expected_shards):
+        try:
+            payload = torch.load(
+                candidate / relative,
+                map_location="cpu",
+                weights_only=False,
+                mmap=True,
+            )
+        except Exception as error:
+            raise ValueError(
+                f"checkpoint shard cannot be measured independently: {relative}"
+            ) from error
+        measured[relative] = _unique_tensor_storage_bytes(payload)
+        del payload
+
+    optimizer_actual = measured["optimizer-state.pt"]
+    projected_optimizer = optimizer_actual * len(EXPERT_NAMES)
+    projected_checkpoint = (
+        sum(measured.values()) - optimizer_actual + projected_optimizer
+    )
+    retained = projection["retained_shard_paths"]
+    transient_peak = max(
+        (
+            bound
+            for path, bound in measured.items()
+            if path not in retained
+        ),
+        default=0,
+    )
+    if (
+        projection["per_shard_tensor_storage_lower_bound_bytes"] != measured
+        or projection["optimizer_state_tensor_storage_lower_bound_bytes"]
+        != optimizer_actual
+        or projection[
+            "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+        ]
+        != projected_optimizer
+        or projection[
+            "all_expert_projected_tensor_storage_lower_bound_bytes"
+        ]
+        != projected_checkpoint
+        or projection["transient_new_write_peak_lower_bound_bytes"]
+        != transient_peak
+    ):
+        raise ValueError(
+            "checkpoint independent tensor-storage measurement does not match projection"
+        )
+    if (
+        transient_peak > projection["max_transient_scratch_bytes"]
+        or projected_checkpoint > projection["max_serialized_bytes"]
+    ):
+        raise ValueError(
+            "checkpoint independent tensor-storage measurement exceeds hard gate"
+        )
 
 
 def _default_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
@@ -1274,6 +1335,7 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
             raise ValueError(
                 "checkpoint shard-byte projection does not match records"
             )
+        _measure_candidate_storage_projection(candidate, validated_projection)
     declared_files = {"checkpoint-manifest.json", *records}
     actual_files: set[str] = set()
     for path in candidate.rglob("*"):
