@@ -103,17 +103,27 @@ def _resolve_current(data_root):
     rows, skipped = board_index.load_index(index_path)
     for s in skipped:
         print("gen_readme_status: SKIPPED (malformed index line): " + s, file=sys.stderr)
+    # Defect 1 fix (2026-07-23): skipped != [] is TERMINAL -- a dropped or
+    # truncated index line must never let selection proceed as if the
+    # index were clean (matches board_index._cmd_verify/_cmd_freshness).
+    if skipped:
+        raise SystemExit(
+            "gen_readme_status: " + str(len(skipped)) +
+            " malformed index line(s), first: " + skipped[0]
+        )
     try:
         receipt_rel_path, row = board_index.current_board(rows)
     except board_index.BoardIndexError as exc:
         raise SystemExit("gen_readme_status: " + str(exc))
     repo_root = _repo_root_for_data_root(data_root)
-    receipt_path = os.path.join(repo_root, receipt_rel_path)
-    if not os.path.isfile(receipt_path):
-        raise SystemExit(
-            "gen_readme_status: current board row points at " + receipt_path +
-            " which does not exist on disk"
-        )
+    # Defect 2 fix (2026-07-23): validate the selected row BEFORE render --
+    # closed schema, repo-root path confinement, and an exact on-disk
+    # sha256 match to row['sha256'] (a row pinned to the wrong hash, or
+    # mutated on-disk bytes, must never reach render_block).
+    try:
+        receipt_path = board_index.validate_selected_row(row, repo_root)
+    except board_index.BoardIndexError as exc:
+        raise SystemExit("gen_readme_status: " + str(exc))
     return row, receipt_path, repo_root
 
 

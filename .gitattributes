@@ -7,14 +7,6 @@
 corpus-manifests/** -text
 receipts/** -text
 tokenizer/** -text
-# R3 board-canonicality (fspec-R3-1436): this exact file is an additive,
-# byte-identical copy of the -text-pinned receipts/ember-totality-
-# 20260711T103912Z.json (C-FED evidence). Its own directory has no -text
-# pin, so without this line the default `* text=auto eol=lf` above would
-# silently normalize its CRLF bytes on add/checkout, breaking the D1
-# byte-identical twin-adjudication this copy exists to satisfy. Same class
-# as the receipts/** pin above -- same reason, narrower scope.
-scripts/ember_totality/receipts-totality/ember-totality-20260711T103912Z.json -text
 # docs/research/ holds raw-byte-pinned premises (fp26_prereg pins the decision
 # artifact's sha256 over exact on-disk bytes); CRLF normalization on Windows
 # checkouts drifts those bytes and fails the prereg premise. Pin -text (eng-47).
