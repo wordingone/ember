@@ -638,12 +638,15 @@ class LoadedOwnedRuntime:
         finally:
             config_snapshot.unlink(missing_ok=True)
         model = UnifiedDecoder(config, device=device, allow_production_allocation=True).eval()
-        from checkpoint_artifacts import load_checkpoint_artifacts
+        from checkpoint_artifacts import load_checkpoint_artifacts, published_checkpoint_receipt
+        checkpoint_receipt = published_checkpoint_receipt(checkpoint)
+        if checkpoint_receipt["checkpoint_manifest_sha256"] != checkpoint_sha256:
+            raise ValueError("checkpoint manifest changed during owned runtime construction")
         load_checkpoint_artifacts(
             model,
             None,
             checkpoint,
-            {**manifest, "checkpoint_manifest_sha256": checkpoint_sha256},
+            checkpoint_receipt,
         )
         # Post-load identity assert (cond3 inc2b): the architecture ties
         # lm_head.weight to token_embedding.weight at construction time
