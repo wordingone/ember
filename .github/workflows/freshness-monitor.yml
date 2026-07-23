@@ -49,7 +49,16 @@ jobs:
             echo "ok   [branches] ${n} remote branches"
           fi
 
-          # 3. stale open issues / PRs (no update within the window)
+          # 3. Complete, content-addressed open-population census. The census
+          # collector follows every page and excludes PRs from issue counts;
+          # an API/partial-page failure exits non-zero before any receipt lands.
+          master_sha=$(git rev-parse origin/master)
+          python scripts/lifecycle_census.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --master-sha "${master_sha}" \
+            --output receipts/lifecycle-census
+
+          # 4. stale open issues / PRs (no update within the window)
           cutoff=$(date -u -d "-${MAX_ITEM_AGE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
           stale_pr=$(gh pr list --state open --json number,updatedAt \
             --jq "[.[] | select(.updatedAt < \"$cutoff\")] | length")
