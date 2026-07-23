@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 from __future__ import annotations
 
 import hashlib
@@ -138,7 +142,7 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
     certificate = {
         "schema_version": "ember-spine-certified-declaration-v1",
         "event_kind": "SPINE_CERTIFIED",
-        "declared_by_role": "KAI_SOL",
+        "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
         "declared_at_utc": "2026-07-23T08:00:00+00:00",
         "superseded_by": None,
         "completion_receipt_path": str(completion_path),
@@ -173,7 +177,7 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
             {
                 "schema_version": "ember-spine-declaration-ledger-row-v1",
                 "event_kind": "SPINE_CERTIFIED",
-                "declared_by_role": "KAI_SOL",
+                "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
                 "certificate_sha256": certificate_sha256,
             }
         )
@@ -208,7 +212,7 @@ def rewrite_certificate(
         {
             "schema_version": "ember-spine-declaration-ledger-row-v1",
             "event_kind": "SPINE_CERTIFIED",
-            "declared_by_role": "KAI_SOL",
+            "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
             "certificate_sha256": certificate_sha256,
         },
     )
@@ -255,7 +259,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 lambda paths: rewrite_certificate(
                     paths,
                     lambda certificate: certificate.__setitem__(
-                        "declared_by_role", "NIKO"
+                        "declared_by_role", "UNAUTHORIZED_ROLE"
                     ),
                 ),
                 "declaration role",

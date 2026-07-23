@@ -179,7 +179,8 @@ def _require_scope_subset(requested: dict[str, Any], authorized: dict[str, Any])
 
 1. reject non-object JSON and unknown/missing keys;
 2. require certificate schema `ember-spine-certified-declaration-v1`, event
-   `SPINE_CERTIFIED`, role `KAI_SOL`, and `superseded_by is None`;
+   `SPINE_CERTIFIED`, role `EMBER_CERTIFICATE_AUTHORITY`, and
+   `superseded_by is None`;
 3. hash canonical certificate bytes and require one exact ledger membership row;
 4. load the certificate-linked B6 receipt by its explicit relative path, rehash
    it, and require schema `ember-01-completion-receipt-v1`, `ok is True`,
@@ -595,7 +596,7 @@ zero disk-runner spawn, and zero GPU process.
 
 - [ ] **Step 3: Request independent schema refutation**
 
-Give the exact immutable head to Leo. Require review of:
+Give the exact immutable head to the delegated authority reviewer. Require review of:
 
 - declaration-ledger membership;
 - current-master and supersession checks;
@@ -627,4 +628,4 @@ The body must state:
 Do not merge and do not launch the canary from this task increment. Merge
 requires exact-head independent review. GPU launch still requires a real B7
 declaration, a subset run spec, all CPU/disk/GPU preflights, and a new explicit
-Leo launch ruling on those exact bytes.
+delegated-authority launch ruling on those exact bytes.
