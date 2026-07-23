@@ -9,6 +9,31 @@
   "title": "Ember model and experiment identity manifest v1",
   "type": "object",
   "additionalProperties": false,
+  "b4_governed_conditional_requirement": {
+    "decision": "OWNED_ADMITTED (current owned-admission legs) requires training.optimizer_contract; a manifest with any other disposition may omit it. Authority: ember01plan.md SS B4 L1067-1069 (conditional requirement inside v1, decided by a governed decision receipt, in lieu of a hard v2 cutover whose blast radius spans unrelated ember-cli/test fixtures outside this PR's scope). Enforced twice: the if/then below (schema.validation finding) and scripts/ember_01_identity/validate_identity.py's admission.optimizer_contract_missing finding (same disposition==OWNED_ADMITTED gate, house style for OWNED_ADMITTED requirements).",
+    "goal_id": "EMBER-01"
+  },
+  "if": {
+    "type": "object",
+    "properties": {
+      "identity": {
+        "type": "object",
+        "properties": {"disposition": {"const": "OWNED_ADMITTED"}},
+        "required": ["disposition"]
+      }
+    },
+    "required": ["identity"]
+  },
+  "then": {
+    "type": "object",
+    "properties": {
+      "training": {
+        "type": "object",
+        "required": ["optimizer_contract"]
+      }
+    },
+    "required": ["training"]
+  },
   "required": [
     "authority",
     "schema",
@@ -195,11 +220,23 @@
         "optimizer_contract": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["implementation", "hyperparameters", "state_format"],
+          "required": [
+            "implementation", "hyperparameters", "state_format",
+            "implementation_source_sha256",
+            "param_group_mapping_convention",
+            "param_name_optimizer_id_mapping_sha256",
+            "realization_receipt_sha256",
+            "trusted_verifier_id"
+          ],
           "properties": {
             "implementation": {"type": "string", "minLength": 1},
             "hyperparameters": {"type": "object", "minProperties": 1},
-            "state_format": {"type": "string", "minLength": 1}
+            "state_format": {"type": "string", "minLength": 1},
+            "implementation_source_sha256": {"$ref": "#/$defs/sha256"},
+            "param_group_mapping_convention": {"type": "string", "minLength": 1},
+            "param_name_optimizer_id_mapping_sha256": {"$ref": "#/$defs/sha256"},
+            "realization_receipt_sha256": {"$ref": "#/$defs/sha256"},
+            "trusted_verifier_id": {"type": "string", "minLength": 1}
           }
         },
         "numerics": {
