@@ -229,6 +229,24 @@ def custody_legs(
             for k in ("1", "2", "6", "9")
         }
 
+    try:
+        issue_census_sha_before = hashlib.sha256(issues.read_bytes()).hexdigest()
+    except OSError as error:
+        evidence = {
+            "tool": CENSUS_REL,
+            "error_type": type(error).__name__,
+            "error": str(error)[-400:],
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "issue census unreadable before custody run",
+                evidence,
+            )
+            for k in ("1", "2", "6", "9")
+        }
+
     out = root / ".ember01-verify-custody.tmp.json"
     head = git(root, "rev-parse", "HEAD").stdout.strip()
     cmd = [
@@ -247,6 +265,25 @@ def custody_legs(
         out.unlink(missing_ok=True)  # keep the checkout clean
     except OSError:
         pass
+    try:
+        issue_census_sha_after = hashlib.sha256(issues.read_bytes()).hexdigest()
+    except OSError:
+        issue_census_sha_after = None
+    if issue_census_sha_after != issue_census_sha_before:
+        evidence = {
+            "tool": CENSUS_REL,
+            "issue_census_sha256_before": issue_census_sha_before,
+            "issue_census_sha256_after": issue_census_sha_after,
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "issue census changed during custody run",
+                evidence,
+            )
+            for k in ("1", "2", "6", "9")
+        }
     rc = result["returncode"]
     if rc == 0:
         state, reason = RESOLVED_TRUE, "census PASS"
@@ -254,7 +291,12 @@ def custody_legs(
         state, reason = RESOLVED_FALSE, "census INCOMPLETE (benchmark/issue/contradiction errors)"
     else:
         state, reason = RESOLVED_FALSE, f"census FAIL (exit {rc})"
-    ev = {"tool": CENSUS_REL, "returncode": rc, "stdout_tail": result["stdout"][-400:]}
+    ev = {
+        "tool": CENSUS_REL,
+        "returncode": rc,
+        "stdout_tail": result["stdout"][-400:],
+        "issue_census_sha256": issue_census_sha_before,
+    }
     return {k: leg(state, LEG_TITLES[k], reason, ev) for k in ("1", "2", "6", "9")}
 
 
