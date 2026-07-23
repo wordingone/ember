@@ -147,6 +147,13 @@ def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() ->
     assert "stale_is=" + "$" + "{stale_is:-0}" not in workflow
 
 
+def test_workflow_schema_validation_binds_report_and_population_counts() -> None:
+    workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
+    assert ".report_sha256 | type == \"string\" and test(\"^[0-9a-f]{64}$\")" in workflow
+    assert ".counts.pull_requests == (.pull_requests | length)" in workflow
+    assert ".counts.issues == (.issues | length)" in workflow
+
+
 def test_main_computes_stale_report_before_writing_receipt() -> None:
     source = (Path(__file__).parents[1] / "scripts" / "lifecycle_census.py").read_text(encoding="utf-8")
     assert source.index("stale_report = build_stale_report") < source.index("write_outputs(receipt, path")
