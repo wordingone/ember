@@ -320,3 +320,99 @@ def test_live_ledger_closed_guarded_rows_resolve() -> None:
     # CLOSED_GUARDED row's guard_ref resolved to real bytes. This test names that
     # invariant explicitly for anyone reading test output.
     assert isinstance(verdict["closed_guarded"], list)
+
+
+# ---------------------------------------------------------------------------
+# (e) COLLECTABILITY GATE: a CLOSED_GUARDED row whose test-file guard_ref cannot be
+# collected must never count as closed, even though its bytes exist and resolve.
+# This kills the dead-on-import false-CLOSE class (2026-07-23 coordinator finding).
+# ---------------------------------------------------------------------------
+
+# A KNOWN dead-on-import guard: bytes exist, resolve_guard_ref() passes, but
+# `pytest --collect-only` on this file INTERNALERRORs because it imports the
+# sub-3B trainer chain, which commit 4f758db0 (2026-07-12) locks at module scope
+# with a raise SystemExit("historical_only: ...execution-denied") -- a lock that
+# POSTDATES this guard's own landing (#792).
+_DEAD_GUARD_REL_PATH = "scripts/tests/test_screen792_bf16_momentum.py"
+
+# A KNOWN collectable guard, for the positive control (must NOT be falsely flagged).
+_LIVE_GUARD_REL_PATH = "scripts/test_v0_launch_gate_shard_dir_override.py"
+
+
+def _ledger_with_single_dead_test_guard(rel_path: str) -> dict:
+    """A minimal, schema-complete ledger (every law-listed class present and closed
+    against a real resolvable non-test guard) except ONE law-listed class is
+    CLOSED_GUARDED against `rel_path` -- the guard file under test."""
+    ledger = _complete_all_closed_ledger()
+    ledger["classes"][0]["guard_ref"] = rel_path
+    return ledger
+
+
+def test_dead_on_import_guard_is_not_collectable_before_fix(tmp_path: Path) -> None:
+    """NEGATIVE case for the collectability gate. Uses the REAL verifier entrypoint
+    (verify()) against a real dead-on-import guard file already checked into this
+    worktree. Must fail closed: the row is NOT accepted as CLOSED_GUARDED."""
+    assert (REPO_ROOT / _DEAD_GUARD_REL_PATH).is_file(), (
+        f"fixture guard file missing from checkout: {_DEAD_GUARD_REL_PATH}"
+    )
+    ledger = _ledger_with_single_dead_test_guard(_DEAD_GUARD_REL_PATH)
+    ledger_path = tmp_path / "ledger.json"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    verdict = verify(ledger_path, REPO_ROOT)
+
+    assert verdict["ok"] is False
+    assert verdict["verdict"] == "RED"
+    assert any("not collectable" in e for e in verdict["errors"]), verdict["errors"]
+
+
+def test_collectable_guard_still_passes_positive_control(tmp_path: Path) -> None:
+    """POSITIVE control: a CLOSED_GUARDED row citing a collectable guard test file
+    must NOT be falsely flagged dead by the same gate."""
+    assert (REPO_ROOT / _LIVE_GUARD_REL_PATH).is_file(), (
+        f"fixture guard file missing from checkout: {_LIVE_GUARD_REL_PATH}"
+    )
+    ledger = _ledger_with_single_dead_test_guard(_LIVE_GUARD_REL_PATH)
+    ledger_path = tmp_path / "ledger.json"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    verdict = verify(ledger_path, REPO_ROOT)
+
+    assert verdict["ok"] is True
+    assert verdict["verdict"] == "CLOSED"
+    assert verdict["errors"] == []
+
+
+def test_non_test_guard_ref_skips_collectability_probe(tmp_path: Path) -> None:
+    """A non-test guard_ref (a validator module referenced by symbol, e.g.
+    census.py:build_root_census) is out of scope for the collectability probe and
+    keeps the prior bytes+symbol-only behavior -- never pytest-collected."""
+    ledger = _complete_all_closed_ledger()
+    ledger["classes"][0]["guard_ref"] = "scripts/ember_01_custody/census.py:build_root_census"
+    ledger_path = tmp_path / "ledger.json"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    verdict = verify(ledger_path, REPO_ROOT)
+
+    assert verdict["ok"] is True
+    assert verdict["verdict"] == "CLOSED"
+
+
+def test_check_collectability_direct_on_dead_guard() -> None:
+    """Direct unit-level exercise of check_collectability() against the real dead
+    guard file, independent of the ledger wiring."""
+    from verify_c0_failure_class_ledger import check_collectability
+
+    ok, reason = check_collectability(REPO_ROOT, _DEAD_GUARD_REL_PATH)
+    assert ok is False
+    assert reason
+
+
+def test_check_collectability_direct_on_live_guard() -> None:
+    """Direct unit-level exercise of check_collectability() against the real
+    collectable guard file, independent of the ledger wiring."""
+    from verify_c0_failure_class_ledger import check_collectability
+
+    ok, reason = check_collectability(REPO_ROOT, _LIVE_GUARD_REL_PATH)
+    assert ok is True
+    assert reason == ""
