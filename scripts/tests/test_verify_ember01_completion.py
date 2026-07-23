@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,15 +22,70 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import verify_ember01_completion as completion  # noqa: E402
 
 
+def _live_issue(number: int = 7, title: str = "Live obligation") -> dict:
+    return {
+        "number": number,
+        "title": title,
+        "body": "body",
+        "url": f"https://github.com/wordingone/ember/issues/{number}",
+        "createdAt": "2026-07-23T00:00:00Z",
+        "updatedAt": "2026-07-23T01:00:00Z",
+        "labels": [{"name": "research"}],
+        "author": {"login": "wordingone"},
+        "state": "OPEN",
+        "stateReason": None,
+        "closedAt": None,
+        "comments": [],
+    }
+
+
+def _live_census_payload(issue: dict | None = None) -> dict:
+    source = issue or _live_issue()
+    return {
+        "issue_source_snapshot": [
+            {
+                "number": source["number"],
+                "title": source["title"],
+                "body_base64": base64.b64encode(
+                    source["body"].encode("utf-8")
+                ).decode("ascii"),
+                "url": source["url"],
+                "created_at": source["createdAt"],
+                "updated_at": source["updatedAt"],
+                "labels": ["research"],
+                "author": "wordingone",
+                "state": "OPEN",
+                "state_reason": "None",
+                "closed_at": "None",
+                "comments": [],
+            }
+        ]
+    }
+
+
 def test_custody_legs_bind_census_to_remote_master_ref(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: list[str] = []
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         completion,
         "git",
         lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
     )
 
     def fake_run(args: list[str], **_: object) -> dict[str, object]:
@@ -47,6 +103,7 @@ def test_custody_legs_bind_census_to_remote_master_ref(
         REPO_ROOT,
         ["public-repository=B:/tmp/public"],
         run_custody=True,
+        issue_census=live_issue_census,
     )
 
     ref_index = captured.index("--public-master-ref")
@@ -58,12 +115,24 @@ def test_custody_legs_use_explicit_live_issue_census(
 ) -> None:
     captured: list[str] = []
     live_issue_census = tmp_path / "public-issue-census-live.json"
-    live_issue_census.write_text("{}", encoding="utf-8")
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         completion,
         "git",
         lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
     )
 
     def fake_run(args: list[str], **_: object) -> dict[str, object]:
@@ -96,16 +165,31 @@ def test_custody_legs_reject_issue_census_mutated_during_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     live_issue_census = tmp_path / "public-issue-census-live.json"
-    live_issue_census.write_text('{"snapshot":"before"}', encoding="utf-8")
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         completion,
         "git",
         lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
     )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
 
     def fake_run(_args: list[str], **_: object) -> dict[str, object]:
-        live_issue_census.write_text('{"snapshot":"after"}', encoding="utf-8")
+        live_issue_census.write_text(
+            json.dumps(_live_census_payload(_live_issue(title="mutated"))),
+            encoding="utf-8",
+        )
         return {
             "returncode": 0,
             "timed_out": False,
@@ -130,15 +214,153 @@ def test_custody_legs_reject_issue_census_mutated_during_run(
     }
 
 
-def test_custody_legs_do_not_impose_arbitrary_census_timeout(
+def test_custody_legs_reject_explicit_census_not_equal_to_live_github(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supplied = tmp_path / "forged-census.json"
+    supplied.write_text(
+        json.dumps(_live_census_payload(_live_issue(title="forged"))),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue(title="actual")],
+            "stdout_sha256": "c" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=supplied,
+    )
+
+    assert {row["state"] for row in result.values()} == {
+        completion.RESOLVED_FALSE
+    }
+    assert {row["reason"] for row in result.values()} == {
+        "issue census does not equal same-run live GitHub snapshot"
+    }
+
+
+def test_custody_legs_without_explicit_live_census_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("census must not run"),
+    )
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+    )
+
+    assert {row["state"] for row in result.values()} == {
+        completion.RESOLVED_FALSE
+    }
+    assert {row["reason"] for row in result.values()} == {
+        "explicit live issue census is required for a custody run"
+    }
+
+
+def test_fetch_live_open_issues_uses_fixed_repository_state_and_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[str] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> dict[str, object]:
+        captured.extend(args)
+        assert kwargs["display"][:3] == ["gh", "issue", "list"]
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "command": kwargs["display"],
+            "stdout": json.dumps([_live_issue()]),
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+    result = completion.fetch_live_open_issues(
+        REPO_ROOT,
+        ["powershell", "-NoProfile", "-File", "gh-safe.ps1"],
+    )
+
+    assert captured[:4] == [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "gh-safe.ps1",
+    ]
+    assert captured[4:] == [
+        "issue",
+        "list",
+        "--repo",
+        "wordingone/ember",
+        "--state",
+        "open",
+        "--limit",
+        "1000",
+        "--json",
+        completion.LIVE_ISSUE_JSON_FIELDS,
+    ]
+    assert result["issues"] == [_live_issue()]
+    assert result["stdout_sha256"] == hashlib.sha256(
+        json.dumps([_live_issue()]).encode("utf-8")
+    ).hexdigest()
+
+
+def test_fetch_live_open_issues_rejects_non_json_stdout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "timed_out": False,
+            "command": ["gh", "issue", "list"],
+            "stdout": "not-json",
+            "stderr": "",
+        },
+    )
+
+    result = completion.fetch_live_open_issues(REPO_ROOT, ["gh"])
+
+    assert result["returncode"] == 2
+    assert result["issues"] is None
+
+
+def test_custody_legs_do_not_impose_arbitrary_census_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured_timeout: list[int | None] = []
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         completion,
         "git",
         lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
     )
 
     def fake_run(_args: list[str], **kwargs: object) -> dict[str, object]:
@@ -156,6 +378,7 @@ def test_custody_legs_do_not_impose_arbitrary_census_timeout(
         REPO_ROOT,
         ["public-repository=B:/tmp/public"],
         run_custody=True,
+        issue_census=live_issue_census,
     )
 
     assert captured_timeout == [None]

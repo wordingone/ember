@@ -41,6 +41,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parent / "ember_01_custody"),
+)
+from issue_census import canonical_open_issue_source_snapshot
+
 # Leg 8 imports the SAME authority function verify_ember00_completion.py uses.
 from verify_authority_conservation import (
     ACTIVE_GOAL_ID,
@@ -76,6 +82,11 @@ LEG_TITLES = {
     "8": "authority conservation certificate",
     "9": "public issue census freeze",
 }
+
+LIVE_ISSUE_JSON_FIELDS = (
+    "number,title,body,url,createdAt,updatedAt,labels,author,"
+    "state,stateReason,closedAt,comments"
+)
 
 
 def validate_receipt_path(root: Path, receipt: Path) -> Path:
@@ -196,12 +207,70 @@ def leg(state: str, title: str, reason: str, evidence: dict[str, Any] | None = N
     return row
 
 
+def fetch_live_open_issues(
+    root: Path,
+    github_cli_prefix: Sequence[str],
+) -> dict[str, Any]:
+    command = [
+        *github_cli_prefix,
+        "issue",
+        "list",
+        "--repo",
+        "wordingone/ember",
+        "--state",
+        "open",
+        "--limit",
+        "1000",
+        "--json",
+        LIVE_ISSUE_JSON_FIELDS,
+    ]
+    result = run(
+        command,
+        root=root,
+        name="github_live_open_issues",
+        display=["gh", *command[len(github_cli_prefix):]],
+        timeout=300,
+    )
+    if result["returncode"] != 0:
+        return {**result, "issues": None, "stdout_sha256": None}
+    try:
+        issues = json.loads(result["stdout"])
+    except json.JSONDecodeError as error:
+        return {
+            **result,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": hashlib.sha256(
+                result["stdout"].encode("utf-8")
+            ).hexdigest(),
+            "stderr": f"live GitHub issue JSON invalid: {error}",
+        }
+    if not isinstance(issues, list):
+        return {
+            **result,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": hashlib.sha256(
+                result["stdout"].encode("utf-8")
+            ).hexdigest(),
+            "stderr": "live GitHub issue result is not a list",
+        }
+    return {
+        **result,
+        "issues": issues,
+        "stdout_sha256": hashlib.sha256(
+            result["stdout"].encode("utf-8")
+        ).hexdigest(),
+    }
+
+
 # ---- Legs 1/2/6/9: custody / roots / benchmark / issues (census.py) ----------
 def custody_legs(
     root: Path,
     bindings: list[str],
     run_custody: bool,
     issue_census: Path | None = None,
+    github_cli_prefix: Sequence[str] = ("gh",),
 ) -> dict[str, Any]:
     manifests = root / "manifests" / "ember-01-custody"
     root_spec = manifests / "root-spec.json"
@@ -223,6 +292,17 @@ def custody_legs(
             why = "custody manifests absent AND no ROOT bindings supplied"
         return {k: leg(UNRESOLVED, LEG_TITLES[k], why) for k in ("1", "2", "6", "9")}
 
+    if issue_census is None:
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "explicit live issue census is required for a custody run",
+                {"tool": CENSUS_REL},
+            )
+            for k in ("1", "2", "6", "9")
+        }
+
     if not have_manifests:
         return {
             k: leg(UNRESOLVED, LEG_TITLES[k], "custody manifests absent from checkout")
@@ -230,8 +310,10 @@ def custody_legs(
         }
 
     try:
-        issue_census_sha_before = hashlib.sha256(issues.read_bytes()).hexdigest()
-    except OSError as error:
+        issue_census_bytes = issues.read_bytes()
+        issue_census_sha_before = hashlib.sha256(issue_census_bytes).hexdigest()
+        issue_census_payload = json.loads(issue_census_bytes)
+    except (OSError, json.JSONDecodeError) as error:
         evidence = {
             "tool": CENSUS_REL,
             "error_type": type(error).__name__,
@@ -242,6 +324,44 @@ def custody_legs(
                 RESOLVED_FALSE,
                 LEG_TITLES[k],
                 "issue census unreadable before custody run",
+                evidence,
+            )
+            for k in ("1", "2", "6", "9")
+        }
+
+    live = fetch_live_open_issues(root, github_cli_prefix)
+    if live["returncode"] != 0 or not isinstance(live["issues"], list):
+        evidence = {
+            "tool": "gh issue list",
+            "returncode": live["returncode"],
+            "command": live["command"],
+            "stdout_sha256": live["stdout_sha256"],
+            "stderr_tail": str(live["stderr"])[-400:],
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "same-run live GitHub issue acquisition failed",
+                evidence,
+            )
+            for k in ("1", "2", "6", "9")
+        }
+
+    live_source = canonical_open_issue_source_snapshot(live["issues"])
+    if issue_census_payload.get("issue_source_snapshot") != live_source:
+        evidence = {
+            "tool": "gh issue list",
+            "command": live["command"],
+            "live_issue_count": len(live_source),
+            "live_stdout_sha256": live["stdout_sha256"],
+            "issue_census_sha256": issue_census_sha_before,
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "issue census does not equal same-run live GitHub snapshot",
                 evidence,
             )
             for k in ("1", "2", "6", "9")
@@ -297,6 +417,9 @@ def custody_legs(
         "returncode": rc,
         "stdout_tail": result["stdout"][-400:],
         "issue_census_sha256": issue_census_sha_before,
+        "live_issue_count": len(live_source),
+        "live_issue_stdout_sha256": live["stdout_sha256"],
+        "live_issue_command": live["command"],
     }
     return {k: leg(state, LEG_TITLES[k], reason, ev) for k in ("1", "2", "6", "9")}
 
@@ -757,7 +880,16 @@ def main() -> int:
         default=None,
         help=(
             "live public-issue census generated outside the verified checkout; "
-            "defaults to the checked-in historical freeze"
+            "required for --run-custody; omission fails the custody legs closed"
+        ),
+    )
+    parser.add_argument(
+        "--github-cli-prefix",
+        action="append",
+        default=[],
+        help=(
+            "one token of the trusted GitHub CLI invocation prefix; repeat for "
+            "wrappers (default: gh)"
         ),
     )
     parser.add_argument("--identity-manifest", default=None,
@@ -776,6 +908,7 @@ def main() -> int:
     checkpoint_manifest = Path(args.checkpoint_manifest).resolve() if args.checkpoint_manifest else None
     model_config = Path(args.model_config).resolve() if args.model_config else None
     issue_census = Path(args.issue_census).resolve() if args.issue_census else None
+    github_cli_prefix = args.github_cli_prefix or ["gh"]
 
     try:
         receipt = validate_receipt_path(root, Path(args.receipt))
@@ -795,6 +928,7 @@ def main() -> int:
                     args.binding,
                     args.run_custody,
                     issue_census=issue_census,
+                    github_cli_prefix=github_cli_prefix,
                 )
             )
             legs.update(
