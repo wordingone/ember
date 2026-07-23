@@ -112,7 +112,7 @@ def governed_gpu_cap_preflight(
             f"GPU envelope requires {required_bytes} bytes but the measured "
             f"declared cap exposes only {effective_cap_bytes}; refusing before allocation"
         )
-    applied_fraction = min(float(fraction), requested_bytes / total_bytes)
+    applied_fraction = min(float(fraction), effective_cap_bytes / total_bytes)
     torch.cuda.set_per_process_memory_fraction(applied_fraction)
     evidence = {
         "schema_version": "ember-governed-gpu-cap-preflight-v1",
