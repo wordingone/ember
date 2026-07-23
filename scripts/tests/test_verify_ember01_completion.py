@@ -73,9 +73,39 @@ def test_selection_evidence_persists_only_goal_basename(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert completion.selection_evidence(selection) == {
-        "selected_goal_suffix": "goal.md"
+    evidence = completion.selection_evidence(selection)
+    assert evidence == {
+        "selected_goal_suffix": "goal.md",
+        "selector_sha256": hashlib.sha256(selection.read_bytes()).hexdigest(),
     }
+    assert "private" not in json.dumps(evidence)
+    assert "operator" not in json.dumps(evidence)
+
+
+def test_selection_evidence_detects_same_basename_target_change(
+    tmp_path: Path,
+) -> None:
+    first_goal = tmp_path / "first" / "goal.md"
+    second_goal = tmp_path / "second" / "goal.md"
+    first_goal.parent.mkdir()
+    second_goal.parent.mkdir()
+    first_goal.write_text("# first\n", encoding="utf-8")
+    second_goal.write_text("# second\n", encoding="utf-8")
+    selection = tmp_path / "EMBER-GOAL-RESUME.md"
+    selection.write_text(
+        f"active_goal_path: {first_goal}\n",
+        encoding="utf-8",
+    )
+    before = completion.selection_evidence(selection)
+
+    selection.write_text(
+        f"active_goal_path: {second_goal}\n",
+        encoding="utf-8",
+    )
+    after = completion.selection_evidence(selection)
+
+    assert before["selected_goal_suffix"] == after["selected_goal_suffix"]
+    assert before["selector_sha256"] != after["selector_sha256"]
 
 
 def test_completion_receipt_declares_one_active_workstream() -> None:
