@@ -167,10 +167,75 @@ class GitHubApi:
         return payload
 
 
-def collect_live_census(*, repository: str, master_sha: str, collected_at: str, token: str) -> dict[str, Any]:
+def _parse_timestamp(value: Any, *, field: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise CensusError(f"{field} must be an ISO-8601 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise CensusError(f"{field} must be an ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None:
+        raise CensusError(f"{field} must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def _stale_rows(items: Sequence[Mapping[str, Any]], *, kind: str, cutoff: datetime) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, Mapping):
+            raise CensusError(f"{kind} item {index} was not an object")
+        number = _item_number(item, page=0, index=index)
+        updated_at = item.get("updated_at")
+        updated = _parse_timestamp(updated_at, field=f"{kind} {number} updated_at")
+        if updated >= cutoff:
+            continue
+        title = item.get("title")
+        if not isinstance(title, str):
+            raise CensusError(f"{kind} {number} title is not a string")
+        digest = item.get("item_sha256")
+        if not isinstance(digest, str):
+            digest = _item_sha256(item)
+        rows.append({"number": number, "title": title, "updated_at": updated_at, "item_sha256": digest})
+    return sorted(rows, key=lambda row: int(row["number"]))
+
+
+def build_stale_report(
+    *,
+    receipt: Mapping[str, Any],
+    issues: Sequence[Mapping[str, Any]],
+    pull_requests: Sequence[Mapping[str, Any]],
+    stale_before: str,
+) -> dict[str, Any]:
+    """Derive stale rows from the exact populations used for the census receipt."""
+    receipt_sha = receipt.get("receipt_sha256")
+    master_sha = receipt.get("master_sha")
+    if not isinstance(receipt_sha, str) or not receipt_sha:
+        raise CensusError("stale report requires a content-addressed census receipt")
+    if not isinstance(master_sha, str) or len(master_sha) != 40:
+        raise CensusError("stale report requires the census master SHA")
+    cutoff = _parse_timestamp(stale_before, field="stale_before")
+    report: dict[str, Any] = {
+        "schema_version": "ember-lifecycle-stale-v1",
+        "receipt_sha256": receipt_sha,
+        "master_sha": master_sha,
+        "stale_before": stale_before,
+        "issues": _stale_rows(issues, kind="issue", cutoff=cutoff),
+        "pull_requests": _stale_rows(pull_requests, kind="pull_request", cutoff=cutoff),
+    }
+    report["counts"] = {"issues": len(report["issues"]), "pull_requests": len(report["pull_requests"])}
+    report["report_sha256"] = hashlib.sha256(_canonical_json(report)).hexdigest()
+    return report
+
+
+def collect_live_populations(*, repository: str, token: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     api = GitHubApi(repository, token)
     issues = collect_population(lambda page, per_page: api.page("issues", page, per_page), kind="issue")
     pull_requests = collect_population(lambda page, per_page: api.page("pulls", page, per_page), kind="pull_request")
+    return issues, pull_requests
+
+
+def collect_live_census(*, repository: str, master_sha: str, collected_at: str, token: str) -> dict[str, Any]:
+    issues, pull_requests = collect_live_populations(repository=repository, token=token)
     return build_receipt(
         repository=repository,
         master_sha=master_sha,
@@ -198,6 +263,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--master-sha", required=True)
     parser.add_argument("--collected-at", default=None)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--stale-before", default=None)
+    parser.add_argument("--stale-output", type=Path, default=None)
     return parser
 
 
@@ -209,14 +276,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     collected_at = args.collected_at or datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     try:
-        receipt = collect_live_census(repository=args.repo, master_sha=args.master_sha, collected_at=collected_at, token=token)
+        if (args.stale_before is None) != (args.stale_output is None):
+            raise CensusError("--stale-before and --stale-output must be supplied together")
+        issues, pull_requests = collect_live_populations(repository=args.repo, token=token)
+        receipt = build_receipt(repository=args.repo, master_sha=args.master_sha, collected_at=collected_at, issues=issues, pull_requests=pull_requests)
         output = args.output
         if output.suffix == ".json" and output.name != "lifecycle-census.json":
             path = output
         else:
             path = output / f"lifecycle-census-{receipt['receipt_sha256']}.json"
+        stale_report: dict[str, Any] | None = None
+        if args.stale_output is not None:
+            stale_report = build_stale_report(receipt=receipt, issues=issues, pull_requests=pull_requests, stale_before=args.stale_before)
         write_receipt(receipt, path)
-        print(json.dumps({"status": "PASS", "path": str(path), "receipt_sha256": receipt["receipt_sha256"]}, sort_keys=True))
+        result: dict[str, Any] = {"status": "PASS", "path": str(path), "receipt_sha256": receipt["receipt_sha256"]}
+        if stale_report is not None:
+            write_receipt(stale_report, args.stale_output)
+            result["stale_path"] = str(args.stale_output)
+            result["stale_report_sha256"] = stale_report["report_sha256"]
+        print(json.dumps(result, sort_keys=True))
         return 0
     except CensusError as exc:
         print(f"CensusError: {exc}", file=sys.stderr)
