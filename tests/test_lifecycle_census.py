@@ -1,0 +1,94 @@
+"""Pagination and receipt contracts for EMBER-LIFECYCLE-CENSUS-001."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+
+import pytest
+
+from scripts.lifecycle_census import CensusError, collect_population, build_receipt
+
+
+def _items(start: int, count: int, *, pull_request: bool = False) -> list[dict[str, object]]:
+    return [
+        {
+            "number": number,
+            "title": f"item-{number}",
+            "updated_at": f"2026-07-22T00:{number % 60:02d}:00Z",
+            **({"pull_request": {"url": f"https://example.test/pr/{number}"}} if pull_request else {}),
+        }
+        for number in range(start, start + count)
+    ]
+
+
+def test_collect_population_paginates_past_default_limit_and_deduplicates_boundary() -> None:
+    pages = {
+        (1, 100): _items(1, 100),
+        (2, 100): _items(100, 3),
+        (3, 100): [],
+    }
+    calls: list[tuple[int, int]] = []
+
+    def fetch(page: int, per_page: int) -> list[dict[str, object]]:
+        calls.append((page, per_page))
+        return pages[(page, per_page)]
+
+    result = collect_population(fetch, kind="issue", page_size=100)
+
+    assert len(result) == 102
+    assert [item["number"] for item in result] == list(range(1, 103))
+    assert calls == [(1, 100), (2, 100), (3, 100)]
+
+
+def test_collect_population_fails_closed_on_partial_page_error() -> None:
+    def fetch(page: int, per_page: int) -> list[dict[str, object]]:
+        if page == 1:
+            return _items(1, 100)
+        raise OSError("rate limited")
+
+    with pytest.raises(CensusError, match="page 2"):
+        collect_population(fetch, kind="issue", page_size=100)
+
+
+def test_issue_population_excludes_pull_request_rows_but_pr_population_keeps_identity() -> None:
+    issue_rows = _items(1, 2) + _items(3, 1, pull_request=True)
+    assert [item["number"] for item in collect_population(lambda _page, _size: issue_rows if _page == 1 else [], kind="issue", page_size=100)] == [1, 2]
+    prs = collect_population(lambda _page, _size: _items(3, 1, pull_request=True) if _page == 1 else [], kind="pull_request", page_size=100)
+    assert [item["number"] for item in prs] == [3]
+
+
+def test_collect_population_rejects_conflicting_duplicate_identity() -> None:
+    first = _items(7, 1)[0]
+    second = {**first, "title": "changed"}
+
+    def fetch(page: int, _size: int) -> list[dict[str, object]]:
+        return [first] if page == 1 else [second] if page == 2 else []
+
+    with pytest.raises(CensusError, match="conflicting duplicate issue identity 7"):
+        collect_population(fetch, kind="issue", page_size=1)
+
+
+def test_collect_population_fails_closed_when_server_never_terminates_pages() -> None:
+    with pytest.raises(CensusError, match="max_pages=2"):
+        collect_population(lambda _page, _size: _items(1, 1), kind="issue", page_size=1, max_pages=2)
+
+
+def test_receipt_binds_master_and_item_hashes_without_claiming_closure() -> None:
+    issues = [{"number": 1, "title": "one"}]
+    prs = [{"number": 2, "title": "two"}]
+
+    receipt = build_receipt(
+        repository="wordingone/ember",
+        master_sha="c75738946168e6272743eda08efcaad270d0195b",
+        collected_at="2026-07-22T00:00:00Z",
+        issues=issues,
+        pull_requests=prs,
+    )
+
+    assert receipt["master_sha"] == "c75738946168e6272743eda08efcaad270d0195b"
+    assert receipt["counts"] == {"issues": 1, "pull_requests": 1}
+    assert receipt["claim_limits"] == ["No issue closure or capability claim follows."]
+    assert receipt["receipt_sha256"] == hashlib.sha256(
+        json.dumps({key: value for key, value in receipt.items() if key != "receipt_sha256"}, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
