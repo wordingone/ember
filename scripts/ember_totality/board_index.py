@@ -43,6 +43,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from typing import Any
@@ -488,16 +489,99 @@ def current_board(index):
         )
         raise BoardIndexError(f"duplicate-epoch RED finding(s): {detail}")
     board_rows = [r for r in index if r.get("row_type") == "board"]
-    superseded_old_paths = {
-        (r.get("old") or {}).get("path")
+    # Defect 4 fix (2026-07-23): match supersession exclusion on the exact
+    # (path, sha256) pair, never path alone -- a supersession row naming a
+    # path at the WRONG sha256 must NOT remove the real board row at that
+    # path (fail closed on unmatched/malformed supersession references).
+    superseded_pairs = {
+        ((r.get("old") or {}).get("path"), (r.get("old") or {}).get("sha256"))
         for r in index
         if r.get("row_type") == "supersession"
     }
-    candidates = [r for r in board_rows if r.get("path") not in superseded_old_paths]
+    candidates = [
+        r for r in board_rows
+        if (r.get("path"), r.get("sha256")) not in superseded_pairs
+    ]
     if not candidates:
         raise BoardIndexError("no eligible current board row (all board rows superseded)")
     newest = max(candidates, key=lambda r: str(r.get("ts", "")))
     return newest.get("path"), newest
+
+
+# Defect 2 fix (2026-07-23): the fields a well-formed board row is permitted
+# to carry. "Closed schema" means an unexpected extra key or a missing
+# required key is itself a fail-closed RED -- a hand-edited or corrupted row
+# never silently passes through with unvalidated extra/missing structure.
+_BOARD_ROW_REQUIRED_FIELDS = frozenset({"row_type", "path", "sha256", "ts", "basis"})
+_BOARD_ROW_ALLOWED_FIELDS = _BOARD_ROW_REQUIRED_FIELDS | frozenset({
+    "goal_id",
+    "workstream_id",
+    "next_executed_outcome",
+    "indexed_ts",
+    "summary",
+    "location_class",
+    "kept_because",
+})
+_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def validate_selected_row(row, repo_root: str) -> str:
+    """Validate the row current_board() selected BEFORE any consumer
+    (render_block/verify/freshness) uses it: closed schema, a repo-root-
+    confined relative path, and an exact on-disk sha256 match to
+    row['sha256']. Raises BoardIndexError on any violation; returns the
+    resolved absolute path on success. This is the mandatory gate between
+    "an index row says this receipt is current" and "this receipt's bytes
+    are actually current" -- an index row pinned to the wrong hash (or
+    mutated on-disk bytes) must never reach render/freshness."""
+    if not isinstance(row, dict):
+        raise BoardIndexError("selected board row is not a JSON object")
+
+    missing = _BOARD_ROW_REQUIRED_FIELDS - set(row)
+    if missing:
+        raise BoardIndexError(
+            f"selected board row missing required field(s): {sorted(missing)}"
+        )
+    extra = set(row) - _BOARD_ROW_ALLOWED_FIELDS
+    if extra:
+        raise BoardIndexError(
+            f"selected board row has unexpected field(s): {sorted(extra)}"
+        )
+
+    rel_path = row.get("path")
+    if not isinstance(rel_path, str) or not rel_path:
+        raise BoardIndexError("selected board row path is not a non-empty string")
+    norm = rel_path.replace("\\", "/")
+    parts = norm.split("/")
+    if norm.startswith("/") or re.match(r"^[A-Za-z]:", norm) or ".." in parts or "" in parts:
+        raise BoardIndexError(f"selected board row path escapes repo root: {rel_path!r}")
+
+    abs_repo_root = os.path.abspath(repo_root)
+    abs_path = os.path.abspath(os.path.join(abs_repo_root, norm))
+    try:
+        confined = os.path.commonpath([abs_repo_root, abs_path]) == abs_repo_root
+    except ValueError:
+        confined = False  # different drives on Windows -- never confined
+    if not confined:
+        raise BoardIndexError(f"selected board row path escapes repo root: {rel_path!r}")
+
+    row_sha = row.get("sha256")
+    if not isinstance(row_sha, str) or not _SHA256_HEX_RE.fullmatch(row_sha):
+        raise BoardIndexError(
+            f"selected board row sha256 is not a well-formed hex digest: {row_sha!r}"
+        )
+
+    on_disk_sha = _file_sha256(abs_path)
+    if on_disk_sha is None:
+        raise BoardIndexError(
+            f"selected board row points at an unreadable path: {rel_path!r}"
+        )
+    if on_disk_sha != row_sha:
+        raise BoardIndexError(
+            f"selected receipt sha mismatch: on-disk {on_disk_sha[:16]} != "
+            f"row {row_sha[:16]}"
+        )
+    return abs_path
 
 
 def freshness(row, repo_root: str):
@@ -515,7 +599,15 @@ def freshness(row, repo_root: str):
     for field in _FRESHNESS_TRIGGER_FIELDS:
         old_v = basis.get(field)
         new_v = now.get(field)
-        if old_v == "UNKNOWN" or new_v == "UNKNOWN":
+        # Defect 3 fix (2026-07-23): a live-basis read that comes back
+        # UNKNOWN (git unavailable, file unreadable) is a terminal STALE,
+        # never a skip -- skipping here let an all-UNKNOWN live snapshot
+        # report FRESH. old_v == "UNKNOWN" cannot happen once the
+        # basis:UNKNOWN_PRE_INDEX short-circuit above has run, but the
+        # continue is kept as a defensive no-op for a partially-UNKNOWN row.
+        if new_v == "UNKNOWN":
+            return {"verdict": "STALE", "changed": ["basis:UNKNOWN_LIVE"]}
+        if old_v == "UNKNOWN":
             continue
         if old_v != new_v:
             changed.append(field)
@@ -665,13 +757,23 @@ def _cmd_verify(root: str) -> int:
     rows, skipped = load_index(_index_path_for(root))
     for s in skipped:
         print(f"SKIPPED: {s}")
+    # Defect 1 fix (2026-07-23): skipped != [] is TERMINAL RED, never a
+    # print-and-continue -- a dropped/malformed line (e.g. a truncated
+    # supersession row) must never let selection proceed as if the index
+    # were clean.
+    if skipped:
+        print(
+            f"RED: {len(skipped)} malformed index line(s), first: {skipped[0]}"
+        )
+        return 1
     findings = duplicate_epochs(rows)
     if findings:
         for f in findings:
             print(f"RED: {f['rule']} {f.get('a')} vs {f.get('b')}: {f['detail']}")
         return 1
     try:
-        path, _row = current_board(rows)
+        path, row = current_board(rows)
+        validate_selected_row(row, root)
     except BoardIndexError as exc:
         print(f"RED: {exc}")
         return 1
@@ -699,8 +801,16 @@ def _cmd_freshness(root: str) -> int:
     rows, skipped = load_index(_index_path_for(root))
     for s in skipped:
         print(f"SKIPPED: {s}")
+    # Defect 1 fix (2026-07-23): same terminal-RED posture as _cmd_verify --
+    # a malformed line must never be silently skipped past freshness.
+    if skipped:
+        print(
+            f"RED: {len(skipped)} malformed index line(s), first: {skipped[0]}"
+        )
+        return 1
     try:
         _path, row = current_board(rows)
+        validate_selected_row(row, root)
     except BoardIndexError as exc:
         print(f"RED: {exc}")
         return 1
