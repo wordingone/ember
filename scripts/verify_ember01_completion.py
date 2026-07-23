@@ -228,7 +228,7 @@ def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str
         "--benchmark-registry", str(bench),
         "--issue-census", str(issues),
         "--source-commit", head,
-        "--public-master-ref", head,
+        "--public-master-ref", "refs/remotes/origin/master",
         "--output", str(out),
     ]
     for b in bindings:
