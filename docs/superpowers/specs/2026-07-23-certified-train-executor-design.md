@@ -1,6 +1,6 @@
 # Certified Ember `/train` Executor Design
 
-Status: approved by delegated operator authority (Leo mail 20733)
+Status: approved by delegated operator authority
 
 Goal-ID: EMBER-02
 Workstream-ID: EMBER-02A

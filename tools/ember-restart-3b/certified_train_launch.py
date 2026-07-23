@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 from __future__ import annotations
 
 import argparse
@@ -219,7 +223,7 @@ def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
             raise ValueError("declaration ledger row schema")
         if row["event_kind"] != "SPINE_CERTIFIED":
             raise ValueError("declaration ledger event")
-        if row["declared_by_role"] != "KAI_SOL":
+        if row["declared_by_role"] != "EMBER_CERTIFICATE_AUTHORITY":
             raise ValueError("declaration ledger role")
         _require_sha256(
             row["certificate_sha256"],
@@ -361,7 +365,7 @@ def validate_certified_request(
         raise ValueError("certificate schema")
     if certificate["event_kind"] != "SPINE_CERTIFIED":
         raise ValueError("declaration event")
-    if certificate["declared_by_role"] != "KAI_SOL":
+    if certificate["declared_by_role"] != "EMBER_CERTIFICATE_AUTHORITY":
         raise ValueError("declaration role")
     if certificate["superseded_by"] is not None:
         raise ValueError("certificate is superseded")
