@@ -1,0 +1,212 @@
+{
+  "authority_certificate": {
+    "certificate_legs": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "4": true,
+      "5": true,
+      "6": true,
+      "7": true
+    },
+    "errors": [],
+    "ok": true,
+    "schema": "ember-authority-certificate-v1"
+  },
+  "certificate_legs": {
+    "1": "unresolved",
+    "2": "unresolved",
+    "3": "resolved-true",
+    "4": "resolved-true",
+    "5": "unresolved",
+    "6": "unresolved",
+    "7": "resolved-true",
+    "8": "resolved-true",
+    "9": "unresolved"
+  },
+  "checkout": {
+    "branch": null,
+    "clean": true,
+    "detached": true,
+    "head": "10811320a02aa4a8493c48545831c0a5502e76df",
+    "head_unchanged": true,
+    "status": [],
+    "status_before": []
+  },
+  "claim_scope": {
+    "benchmark_completed": false,
+    "model_completed": false,
+    "note": "A bare clean clone honestly reports the operator-machine-bound legs (custody/identity/seat) as UNRESOLVED. ok=true requires an operator-machine run with real roots + owned checkpoint + seat.",
+    "runtime_completed": false,
+    "training_completed": false
+  },
+  "goal_id": "EMBER-02",
+  "leg_detail": {
+    "1": {
+      "reason": "no operator-machine ROOT bindings supplied; census cannot bind roots on a bare clone",
+      "state": "unresolved",
+      "title": "custody root census (operator-machine roots)"
+    },
+    "2": {
+      "reason": "no operator-machine ROOT bindings supplied; census cannot bind roots on a bare clone",
+      "state": "unresolved",
+      "title": "artifact custody census"
+    },
+    "3": {
+      "evidence": {
+        "checkpoint_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+        "disposition": "HISTORICAL_ONLY",
+        "ownership": "EXCLUDED_CONTAMINATED",
+        "parameter_receipt_sha256": "dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8",
+        "tool": "scripts/ember_01_identity/parameter_identity_binding.py"
+      },
+      "reason": "real checkpoint identity re-derived",
+      "state": "resolved-true",
+      "title": "identity round-trip on real checkpoint"
+    },
+    "4": {
+      "evidence": {
+        "all_rejected": true,
+        "axes": {
+          "backend": {
+            "expected_finding": "binding.backend_mismatch",
+            "finding_codes": [
+              "binding.backend.executable_sha256_mismatch",
+              "binding.backend_mismatch",
+              "unresolved.index_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "benchmark_id": {
+            "expected_finding": "binding.evaluation.benchmark_id_mismatch",
+            "finding_codes": [
+              "binding.evaluation.benchmark_id_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "checkpoint_bytes": {
+            "detail": "receipt claims subject_checkpoint_sha256='bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b' but the checkpoint manifest bytes on disk hash to '3119b8341957d2c850270b6d8fb75bb0b6ef93781cb395e7729bcec9f24d1f79'",
+            "finding": "parameter_identity_mismatch",
+            "rejected": true
+          },
+          "comparator": {
+            "expected_finding": "binding.evaluation.comparator_identity_mismatch",
+            "finding_codes": [
+              "binding.evaluation.comparator_identity_mismatch",
+              "unresolved.index_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "data_learned_signal": {
+            "expected_finding": "provenance.forbidden_learned_signal",
+            "finding_codes": [
+              "historical.contamination_unclassified",
+              "provenance.forbidden_learned_signal"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "mechanism": {
+            "expected_finding": "binding.mechanisms_mismatch",
+            "finding_codes": [
+              "binding.mechanisms.router_mismatch",
+              "binding.mechanisms_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "param_count": {
+            "expected_finding": "binding.parameters_mismatch",
+            "finding_codes": [
+              "binding.parameters_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "tokenizer": {
+            "expected_finding": "binding.tokenizer_mismatch",
+            "finding_codes": [
+              "binding.tokenizer.sha256_mismatch",
+              "binding.tokenizer_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          }
+        },
+        "axis_count": 8,
+        "failures": [],
+        "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery"
+      },
+      "reason": "all eight isolated identity tamper axes rejected",
+      "state": "resolved-true",
+      "title": "identity fail-closed on tampered checkpoint"
+    },
+    "5": {
+      "reason": "seat proxy not run (pass --run-seat on a machine with bun deps installed)",
+      "state": "unresolved",
+      "title": "reference model seat resolves and serves"
+    },
+    "6": {
+      "reason": "no operator-machine ROOT bindings supplied; census cannot bind roots on a bare clone",
+      "state": "unresolved",
+      "title": "benchmark registry freeze"
+    },
+    "7": {
+      "evidence": {
+        "returncode": 0,
+        "stdout_tail": "20260723T160724Z\\packet.jsonl\n# EMBER-02 launch command:\npython tools/ember-restart-3b/run_vertical_slice.py semantic --seed <launch-seed> --artifact-root receipts/ember-restart-3b/<run-id> --receipt <manifest-bound-stream-receipt.json> --shards-root <token-shard-dir> --tokenizer <tokenizer-path> --steps <N> --sequence-length <seq-len> --checkpoint-interval 50 --write-budget-gib <write-budget-gib>",
+        "tool": "tools/ember-restart-3b/launch_packet.py"
+      },
+      "reason": "launch packet ready",
+      "state": "resolved-true",
+      "title": "3B launch packet readiness"
+    },
+    "8": {
+      "evidence": {
+        "tool": "verify_authority_conservation.verify"
+      },
+      "reason": "authority conservation certificate ok",
+      "state": "resolved-true",
+      "title": "authority conservation certificate"
+    },
+    "9": {
+      "reason": "no operator-machine ROOT bindings supplied; census cannot bind roots on a bare clone",
+      "state": "unresolved",
+      "title": "public issue census freeze"
+    }
+  },
+  "leg_summary": {
+    "resolved_false": [],
+    "resolved_true": [
+      "3",
+      "4",
+      "7",
+      "8"
+    ],
+    "unresolved": [
+      "1",
+      "2",
+      "5",
+      "6",
+      "9"
+    ]
+  },
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "ok": false,
+  "schema": "ember-01-completion-receipt-v1",
+  "selection": {
+    "selected_goal_suffix": "M/avir/kai/EMBER-GOAL-GRAPH.json",
+    "unchanged_during_verification": true
+  },
+  "verified_at_utc": "2026-07-23T16:07:56.219123+00:00"
+}
