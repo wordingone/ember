@@ -53,7 +53,7 @@ def test_custody_legs_bind_census_to_remote_master_ref(
     assert captured[ref_index + 1] == "refs/remotes/origin/master"
 
 
-def test_custody_legs_allow_exhaustive_census_runtime(
+def test_custody_legs_do_not_impose_arbitrary_census_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured_timeout: list[int | None] = []
@@ -81,7 +81,7 @@ def test_custody_legs_allow_exhaustive_census_runtime(
         run_custody=True,
     )
 
-    assert captured_timeout == [60 * 60]
+    assert captured_timeout == [None]
 
 
 def test_run_reports_missing_executable_without_aborting_receipt(
