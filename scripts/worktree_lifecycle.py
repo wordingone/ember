@@ -280,7 +280,12 @@ def install(repo: Path, state_file: Path, target: int) -> dict[str, Any]:
 
 def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> dict[str, Any]:
     state = load_or_initialize(repo, state_file)
-    state, _ = audit_state(repo, state, ratchet=True)
+    # Audit WITHOUT ratchet: the ceiling is lowered ONLY by the explicit operator
+    # `audit --ratchet` path, never on a growth attempt (and never by retire).
+    # Ratcheting here would collapse the ceiling to max(live, target) == live whenever
+    # live >= target, then the live >= ceiling check below would always fire -- making
+    # managed create impossible in the headroom regime (target <= live < ceiling).
+    state, _ = audit_state(repo, state, ratchet=False)
     worktrees = list_worktrees(repo)
     if len(worktrees) >= state["ceiling"]:
         raise LifecycleError(
@@ -364,8 +369,14 @@ def retire_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[s
 
     state["managed"].pop(key, None)
     state["legacy_paths"] = sorted(item for item in state["legacy_paths"] if item != key)
-    remaining = list_worktrees(repo)
-    state["ceiling"] = min(state["ceiling"], max(len(remaining), state["target"]))
+    # Retire frees a slot but does NOT lower the ceiling: the ceiling is a bounded
+    # replacement pool, so a subsequent create can refill up to it. Ceiling reduction
+    # happens ONLY through the explicit operator `audit --ratchet` path -- ordinary
+    # create/retire never lower it. Previously retire clamped ceiling to the live
+    # count which, combined with create's own clamp, made managed create impossible in
+    # the headroom regime (target <= live < ceiling) and trapped the pool in a
+    # shrink-only ramp: retiring toward target kept ceiling == live at every step, so
+    # create could never refill. See create_worktree for the paired create-side fix.
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
     write_state(state_file, state)
     return {
