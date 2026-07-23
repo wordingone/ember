@@ -435,11 +435,10 @@ def _current_root_membership(
         ):
             worktree_path = Path(worktree["normalized_path"])
             if not worktree_path.exists():
-                continue
-            try:
-                material_paths = _git_material_paths(worktree_path)
-            except Exception:
-                continue
+                raise FileNotFoundError(
+                    2, "registered worktree unavailable during final verification"
+                )
+            material_paths = _git_material_paths(worktree_path)
             rows.extend(
                 (
                     f"{worktree['worktree_id']}/{relative}",
@@ -452,6 +451,22 @@ def _current_root_membership(
     if scan == "files" and bound.is_dir():
         return [relative for relative, _ in _discover_file_rows(bound)[0]]
     return list(initial_membership)
+
+
+def _final_verification_error(
+    root_id: str,
+    verification: str,
+    exc: Exception,
+) -> dict[str, Any]:
+    return {
+        "code": "final_verification_inaccessible",
+        "root_id": root_id,
+        "verification": verification,
+        "exception": type(exc).__name__,
+        "winerror": getattr(exc, "winerror", None),
+        "errno": getattr(exc, "errno", None),
+        "resolution": "unresolved_retry_snapshot",
+    }
 
 
 def _current_discovery_snapshot(
@@ -563,6 +578,8 @@ def build_root_census(
                 "lineage_admissibility", "unresolved"
             ),
         }
+        if isinstance(source_root_id, str):
+            root_row["source_root_id"] = source_root_id
         if not isinstance(source_root_id, str) and bound is not None:
             root_row["normalized_bound_path"] = str(bound.resolve()).replace("\\", "/")
         roots.append(root_row)
@@ -878,15 +895,20 @@ def build_root_census(
             initial_membership = [relative for relative, _ in candidates]
         if initial_membership is None:
             initial_membership = [relative for relative, _ in candidates]
-        final_membership_records.append(
-            {
-                "root_id": root_id,
-                "scan": scan,
-                "bound": bound,
-                "root_spec": dict(root_spec),
-                "initial_membership": list(initial_membership),
-            }
-        )
+        if not (
+            scan == "git_repository"
+            and initial_git_summary is not None
+            and initial_git_summary["is_bare"] is True
+        ):
+            final_membership_records.append(
+                {
+                    "root_id": root_id,
+                    "scan": scan,
+                    "bound": bound,
+                    "root_spec": dict(root_spec),
+                    "initial_membership": list(initial_membership),
+                }
+            )
         if initial_git_summary is not None:
             final_git_records.append(
                 {
@@ -1051,11 +1073,19 @@ def build_root_census(
                 final_byte_records[physical_key] = final_record
             final_record["sources"].append((root_id, relative))
     for record in final_discovery_records:
-        final_discovery_snapshot = _current_discovery_snapshot(
-            record["root_id"],
-            record["bound"],
-            record["patterns"],
-        )
+        try:
+            final_discovery_snapshot = _current_discovery_snapshot(
+                record["root_id"],
+                record["bound"],
+                record["patterns"],
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(
+                    record["root_id"], "discovery_snapshot", exc
+                )
+            )
+            continue
         if final_discovery_snapshot != record["initial_snapshot"]:
             contradictions.append({
                 "code": "directory_snapshot_changed_during_scan",
@@ -1063,9 +1093,15 @@ def build_root_census(
                 "resolution": "unresolved_retry_snapshot",
             })
     for record in final_git_records:
-        final_git_summary = git_repository_summary(
-            record["root_id"], record["bound"]
-        )
+        try:
+            final_git_summary = git_repository_summary(
+                record["root_id"], record["bound"]
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(record["root_id"], "git_snapshot", exc)
+            )
+            continue
         if final_git_summary != record["initial_summary"]:
             contradictions.append({
                 "code": "git_snapshot_changed_during_scan",
@@ -1073,12 +1109,20 @@ def build_root_census(
                 "resolution": "unresolved_retry_snapshot",
             })
     for record in final_membership_records:
-        final_membership = _current_root_membership(
-            record["scan"],
-            record["bound"],
-            record["root_spec"],
-            record["initial_membership"],
-        )
+        try:
+            final_membership = _current_root_membership(
+                record["scan"],
+                record["bound"],
+                record["root_spec"],
+                record["initial_membership"],
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(
+                    record["root_id"], "directory_membership", exc
+                )
+            )
+            continue
         if final_membership != record["initial_membership"]:
             contradictions.append({
                 "code": "directory_membership_changed_during_scan",
