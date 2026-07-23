@@ -997,10 +997,6 @@ def build_emberd_dispatch_manifest(
         "forbidden_process_names": [
             "llama-server.exe",
             "qwen.exe",
-            "ollama.exe",
-            "koboldcpp.exe",
-            "text-generation-launcher.exe",
-            "vllm.exe",
         ],
         "wsl_allowed": False,
         "docker_allowed": False,

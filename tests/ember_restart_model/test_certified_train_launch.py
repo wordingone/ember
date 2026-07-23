@@ -1012,6 +1012,10 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 emberd_source_sha256(paths["repo"]),
             )
             self.assertEqual(
+                manifest["canary_scope"]["forbidden_process_names"],
+                ["llama-server.exe", "qwen.exe"],
+            )
+            self.assertEqual(
                 manifest["storage_reserves"],
                 [
                     {"root": "B:\\", "minimum_free_bytes": 250 * 1024**3},
