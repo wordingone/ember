@@ -560,6 +560,21 @@ class TextLabCorpusTests(unittest.TestCase):
         )
         self.assertEqual(descriptor["license_spdx"], "CC-BY-SA-4.0")
 
+    def test_source_inventory_normalizes_authorized_space_separated_cc_labels(self):
+        from text_lab_corpus import source_inventory_descriptor
+        base = {
+            "source_url": "https://example.invalid/open-text", "sha256": sha(b"open-text"),
+            "bytes": len(b"open-text"), "human_provenance_basis": "human-authored open text",
+            "fetched_ts": "2026-07-07T00:00:00Z", "selection_rule": "authorized-wave-rule",
+        }
+        for label, expected in (("CC BY-SA 4.0", "CC-BY-SA-4.0"), ("CC BY-NC 4.0", "CC-BY-NC-4.0")):
+            with self.subTest(label=label):
+                descriptor = source_inventory_descriptor(
+                    source_id="open-text", domain="application_worlds", split="train",
+                    provenance_origin_id="open-text:1", receipt_entry={**base, "license": label},
+                )
+                self.assertEqual(descriptor["license_spdx"], expected)
+
     def test_source_inventory_normalizes_existing_gutenberg_receipt_encoding(self):
         from text_lab_corpus import source_inventory_descriptor
         entry = {

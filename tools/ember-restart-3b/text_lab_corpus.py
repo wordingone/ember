@@ -49,8 +49,8 @@ _SOURCE_CUSTODY_RECEIPT_KEYS = {
 }
 _WAVE_LICENSES = {
     "public domain": "PDDL-1.0", "cc0-1.0": "CC0-1.0", "cc-by-4.0": "CC-BY-4.0",
-    "cc-by-sa 4.0": "CC-BY-SA-4.0", "cc-by-sa-4.0": "CC-BY-SA-4.0",
-    "cc-by-nc 4.0": "CC-BY-NC-4.0", "cc-by-nc-4.0": "CC-BY-NC-4.0",
+    "cc-by-sa 4.0": "CC-BY-SA-4.0", "cc-by-sa-4.0": "CC-BY-SA-4.0", "cc by-sa 4.0": "CC-BY-SA-4.0",
+    "cc-by-nc 4.0": "CC-BY-NC-4.0", "cc-by-nc-4.0": "CC-BY-NC-4.0", "cc by-nc 4.0": "CC-BY-NC-4.0",
 }
 _WAVE_RECEIPT_KEYS = {"source_url", "sha256", "bytes", "license", "human_provenance_basis", "fetched_ts", "selection_rule"}
 
