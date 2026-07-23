@@ -63,6 +63,26 @@ def _live_census_payload(issue: dict | None = None) -> dict:
     }
 
 
+def test_selection_evidence_persists_only_goal_basename(tmp_path: Path) -> None:
+    goal = tmp_path / "private" / "operator" / "goal.md"
+    goal.parent.mkdir(parents=True)
+    goal.write_text("# goal\n", encoding="utf-8")
+    selection = tmp_path / "EMBER-GOAL-RESUME.md"
+    selection.write_text(
+        f"active_goal_path: {goal}\n",
+        encoding="utf-8",
+    )
+
+    assert completion.selection_evidence(selection) == {
+        "selected_goal_suffix": "goal.md"
+    }
+
+
+def test_completion_receipt_declares_one_active_workstream() -> None:
+    assert completion.RECEIPT_WORKSTREAM_ID == "EMBER-02A"
+    assert completion.RECEIPT_WORKSTREAM_ID in completion.ACTIVE_WORKSTREAM_IDS
+
+
 def test_custody_legs_bind_census_to_remote_master_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

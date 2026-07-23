@@ -50,6 +50,7 @@ from issue_census import canonical_open_issue_source_snapshot
 # Leg 8 imports the SAME authority function verify_ember00_completion.py uses.
 from verify_authority_conservation import (
     ACTIVE_GOAL_ID,
+    ACTIVE_WORKSTREAM_IDS,
     NEXT_EXECUTED_OUTCOME,
     verify,
 )
@@ -88,6 +89,10 @@ LIVE_ISSUE_JSON_FIELDS = (
     "state,stateReason,closedAt,comments"
 )
 LIVE_ISSUE_LIMIT = 1000
+RECEIPT_WORKSTREAM_ID = "EMBER-02A"
+
+if RECEIPT_WORKSTREAM_ID not in ACTIVE_WORKSTREAM_IDS:
+    raise RuntimeError("completion receipt workstream is not active")
 
 
 def validate_receipt_path(root: Path, receipt: Path) -> Path:
@@ -146,7 +151,7 @@ def selection_evidence(selection: Path) -> dict[str, Any]:
         goal_path = (selection.parent / goal_path).resolve()
     if not goal_path.is_file():
         raise ValueError(f"selected goal file is missing: {goal_path}")
-    return {"selected_goal_suffix": "/".join(paths[0].replace("\\", "/").split("/")[-4:])}
+    return {"selected_goal_suffix": Path(paths[0]).name}
 
 
 def run(
@@ -1054,6 +1059,7 @@ def main() -> int:
         "ok": ok,
         "verified_at_utc": datetime.now(timezone.utc).isoformat(),
         "goal_id": ACTIVE_GOAL_ID,
+        "workstream_id": RECEIPT_WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
         "certificate_legs": leg_states,
         "leg_detail": legs,
