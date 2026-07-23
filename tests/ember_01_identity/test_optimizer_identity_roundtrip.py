@@ -61,6 +61,7 @@ from test_validate_identity import (  # noqa: E402
 from optimizer_identity_binding import (  # noqa: E402
     OptimizerIdentityMismatch,
     bind_optimizer_identity,
+    canonical_realization_receipt_sha256,
     verify_optimizer_identity_binding,
 )
 
@@ -78,6 +79,10 @@ REALIZATION_RECEIPT = {
     "implementation": "bitsandbytes.optim.AdamW8bit",
     "hyperparameters": {"learning_rate": 1e-4, "weight_decay": 0.1},
     "state_format": "bitsandbytes-device-resident-8bit-adamw-state-dict-v1",
+    "implementation_source_sha256": "d" * 64,
+    "param_group_mapping_convention": "by-module-qualified-name",
+    "param_name_optimizer_id_mapping_sha256": "e" * 64,
+    "trusted_verifier_id": "fixture-optimizer-realization-verifier",
     "model_config_sha256": "a" * 64,
 }
 
@@ -158,8 +163,12 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
             rebound["training"]["optimizer_state_sha256"],
             payload["training"]["optimizer_state_sha256"],
         )
-        result = validate_manifest(payload, receipt_bundle=receipts, **authority)
-        self.assertEqual(result, payload)
+        self.assertEqual(
+            rebound["training"]["optimizer_contract"],
+            self._valid_contract(),
+        )
+        result = validate_manifest(rebound, receipt_bundle=receipts, **authority)
+        self.assertEqual(result, rebound)
 
     # ---- fail-closed negatives at the REAL consumer --------------------------------
     def test_tampered_optimizer_state_bytes_flagged(self) -> None:
@@ -188,6 +197,7 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
     def test_binding_module_round_trips_and_fails_closed(self) -> None:
         payload, _ = admitted_manifest()
         artifact_authority(payload)  # sets training.optimizer_state_sha256 = sha256(bytes)
+        payload["training"]["optimizer_contract"] = self._valid_contract()
 
         # Silent on honest bytes + a REALIZED receipt.
         verify_optimizer_identity_binding(
@@ -273,11 +283,19 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
             "implementation": REALIZATION_RECEIPT["implementation"],
             "hyperparameters": dict(REALIZATION_RECEIPT["hyperparameters"]),
             "state_format": REALIZATION_RECEIPT["state_format"],
-            "implementation_source_sha256": "d" * 64,
-            "param_group_mapping_convention": "by-module-qualified-name",
-            "param_name_optimizer_id_mapping_sha256": "e" * 64,
-            "realization_receipt_sha256": "f" * 64,
-            "trusted_verifier_id": "fixture-optimizer-realization-verifier",
+            "implementation_source_sha256": REALIZATION_RECEIPT[
+                "implementation_source_sha256"
+            ],
+            "param_group_mapping_convention": REALIZATION_RECEIPT[
+                "param_group_mapping_convention"
+            ],
+            "param_name_optimizer_id_mapping_sha256": REALIZATION_RECEIPT[
+                "param_name_optimizer_id_mapping_sha256"
+            ],
+            "realization_receipt_sha256": canonical_realization_receipt_sha256(
+                REALIZATION_RECEIPT
+            ),
+            "trusted_verifier_id": REALIZATION_RECEIPT["trusted_verifier_id"],
         }
 
     def test_optimizer_contract_round_trips_through_real_consumer(self) -> None:
@@ -381,6 +399,53 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
                 payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
             )
         self.assertIn("training.optimizer_contract_implementation", str(ctx.exception))
+
+    def test_optimizer_contract_residual_mismatch_battery_fails_closed(self) -> None:
+        mutations = {
+            "implementation_source_sha256": "0" * 64,
+            "param_group_mapping_convention": "foreign-ordering",
+            "param_name_optimizer_id_mapping_sha256": "1" * 64,
+            "realization_receipt_sha256": "2" * 64,
+            "trusted_verifier_id": "foreign-verifier",
+        }
+        for field, mutated_value in mutations.items():
+            with self.subTest(field=field):
+                payload, _ = admitted_manifest()
+                artifact_authority(payload)
+                contract = self._valid_contract()
+                contract[field] = mutated_value
+                payload["training"]["optimizer_contract"] = contract
+                with self.assertRaises(OptimizerIdentityMismatch) as ctx:
+                    verify_optimizer_identity_binding(
+                        payload,
+                        OPTIMIZER_STATE_BYTES,
+                        REALIZATION_RECEIPT,
+                    )
+                self.assertIn(
+                    f"training.optimizer_contract_{field}",
+                    str(ctx.exception),
+                )
+
+    def test_realization_receipt_residual_omission_battery_fails_closed(self) -> None:
+        for field in (
+            "implementation_source_sha256",
+            "param_group_mapping_convention",
+            "param_name_optimizer_id_mapping_sha256",
+            "trusted_verifier_id",
+        ):
+            with self.subTest(field=field):
+                payload, _ = admitted_manifest()
+                artifact_authority(payload)
+                payload["training"]["optimizer_contract"] = self._valid_contract()
+                receipt = dict(REALIZATION_RECEIPT)
+                del receipt[field]
+                with self.assertRaises(OptimizerIdentityMismatch) as ctx:
+                    verify_optimizer_identity_binding(
+                        payload,
+                        OPTIMIZER_STATE_BYTES,
+                        receipt,
+                    )
+                self.assertIn(field, str(ctx.exception))
 
     def test_optimizer_contract_missing_field_fails_closed_in_binding(self) -> None:
         # NEGATIVE: the wiring module fails closed when a declared contract omits a field.
