@@ -29,6 +29,7 @@ completed - only that the nine authority/custody/identity conditions hold.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -60,6 +61,7 @@ UNRESOLVED = "unresolved"
 CONFIG_REL = "configs/ember-restart-3b.json"
 LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
+VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
 
 # The nine EMBER-01 conditions and which tool certifies each.
@@ -288,6 +290,220 @@ def _checkpoint_shard_rows(checkpoint_payload: Any) -> list[dict[str, Any]]:
     return rows
 
 
+def _flipped_sha256(value: Any) -> str:
+    return "1" * 64 if value == "0" * 64 else "0" * 64
+
+
+def _identity_tamper_mutants(
+    payload: dict[str, Any],
+) -> list[tuple[str, dict[str, Any], str]]:
+    mutants: list[tuple[str, dict[str, Any], str]] = []
+
+    parameter = copy.deepcopy(payload)
+    parameter["parameters"]["allocated"] += 1
+    mutants.append(
+        ("param_count", parameter, "binding.parameters_mismatch")
+    )
+
+    tokenizer = copy.deepcopy(payload)
+    tokenizer["tokenizer"]["sha256"] = _flipped_sha256(
+        tokenizer["tokenizer"].get("sha256")
+    )
+    mutants.append(
+        ("tokenizer", tokenizer, "binding.tokenizer_mismatch")
+    )
+
+    learned_signal = copy.deepcopy(payload)
+    sources = learned_signal["provenance"]["learned_signal_sources"]
+    if "hidden_external_cognition" not in sources:
+        sources.append("hidden_external_cognition")
+    else:
+        sources.append("borrowed_stopping_decision")
+    mutants.append(
+        (
+            "data_learned_signal",
+            learned_signal,
+            "provenance.forbidden_learned_signal",
+        )
+    )
+
+    mechanism = copy.deepcopy(payload)
+    routers = mechanism["mechanisms"]["router"]
+    if not routers or not isinstance(routers[0], dict):
+        raise ValueError("real identity manifest has no concrete router to tamper")
+    routers[0]["sha256"] = _flipped_sha256(routers[0].get("sha256"))
+    mutants.append(
+        ("mechanism", mechanism, "binding.mechanisms_mismatch")
+    )
+
+    backend = copy.deepcopy(payload)
+    backend["backend"]["executable_sha256"] = _flipped_sha256(
+        backend["backend"].get("executable_sha256")
+    )
+    mutants.append(
+        ("backend", backend, "binding.backend_mismatch")
+    )
+
+    benchmark = copy.deepcopy(payload)
+    benchmark["evaluation"]["benchmark_id"] = (
+        "ember-cond4-unregistered-benchmark"
+    )
+    mutants.append(
+        (
+            "benchmark_id",
+            benchmark,
+            "binding.evaluation.benchmark_id_mismatch",
+        )
+    )
+
+    comparator = copy.deepcopy(payload)
+    comparator["evaluation"]["comparator_identity"] = (
+        "ember-cond4-foreign-comparator"
+    )
+    mutants.append(
+        (
+            "comparator",
+            comparator,
+            "binding.evaluation.comparator_identity_mismatch",
+        )
+    )
+    return mutants
+
+
+def _run_identity_tamper_battery(
+    *,
+    root: Path,
+    payload: dict[str, Any],
+    receipt: dict[str, Any],
+    checkpoint_bytes: bytes,
+    model_config: Path,
+    scratch_root: Path,
+) -> dict[str, Any]:
+    """Execute cond4's eight isolated fail-closed probes.
+
+    The checkpoint-bytes axis goes through the real parameter-identity verifier.
+    The other seven axes go through the shipping validate_identity.py CLI with
+    the clean identity as its expected binding. A rejection counts only when
+    the process is non-zero, emits ``ok:false``, and includes the axis's bound
+    finding code.
+    """
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    evidence: dict[str, Any] = {}
+    created: list[Path] = []
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=".ember01-cond4-checkpoint-bytes-",
+            suffix=".json",
+            dir=scratch_root,
+            delete=False,
+        ) as handle:
+            handle.write(checkpoint_bytes + b"\n")
+            checkpoint_tamper = Path(handle.name)
+            created.append(checkpoint_tamper)
+        try:
+            verify_parameter_identity_binding(
+                payload,
+                receipt,
+                checkpoint_manifest=checkpoint_tamper,
+                model_config=model_config,
+            )
+        except ParameterIdentityMismatch as error:
+            evidence["checkpoint_bytes"] = {
+                "rejected": True,
+                "finding": "parameter_identity_mismatch",
+                "detail": str(error)[-400:],
+            }
+        else:
+            evidence["checkpoint_bytes"] = {
+                "rejected": False,
+                "finding": None,
+                "detail": "tampered checkpoint manifest was accepted",
+            }
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            prefix=".ember01-cond4-expected-",
+            suffix=".json",
+            dir=scratch_root,
+            delete=False,
+        ) as handle:
+            json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
+            handle.write("\n")
+            expected_path = Path(handle.name)
+            created.append(expected_path)
+
+        for axis, mutant, expected_code in _identity_tamper_mutants(payload):
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                prefix=f".ember01-cond4-{axis}-",
+                suffix=".json",
+                dir=scratch_root,
+                delete=False,
+            ) as handle:
+                json.dump(mutant, handle, sort_keys=True, separators=(",", ":"))
+                handle.write("\n")
+                mutant_path = Path(handle.name)
+                created.append(mutant_path)
+            result = run(
+                [
+                    sys.executable,
+                    "-B",
+                    VALIDATE_IDENTITY_REL,
+                    str(mutant_path),
+                    "--expected",
+                    str(expected_path),
+                ],
+                root=root,
+                name=f"cond4_{axis}",
+                timeout=180,
+            )
+            try:
+                parsed = json.loads(result["stdout"])
+            except (json.JSONDecodeError, TypeError):
+                parsed = {}
+            findings = parsed.get("findings")
+            finding_codes = sorted(
+                {
+                    row.get("code")
+                    for row in findings
+                    if isinstance(row, dict) and isinstance(row.get("code"), str)
+                }
+            ) if isinstance(findings, list) else []
+            rejected = (
+                result["returncode"] != 0
+                and parsed.get("ok") is False
+                and expected_code in finding_codes
+            )
+            evidence[axis] = {
+                "rejected": rejected,
+                "expected_finding": expected_code,
+                "finding_codes": finding_codes,
+                "returncode": result["returncode"],
+                "timed_out": result["timed_out"],
+            }
+    finally:
+        for path in reversed(created):
+            path.unlink(missing_ok=True)
+
+    failures = [
+        axis
+        for axis, row in evidence.items()
+        if not isinstance(row, dict) or row.get("rejected") is not True
+    ]
+    return {
+        "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery",
+        "axis_count": 8,
+        "axes": evidence,
+        "failures": failures,
+        "all_rejected": not failures and len(evidence) == 8,
+    }
+
+
 def identity_legs(
     root: Path,
     manifest: Path | None,
@@ -357,46 +573,34 @@ def identity_legs(
         "ownership": payload["provenance"]["ownership"],
     }
 
-    scratch_root.mkdir(parents=True, exist_ok=True)
-    tamper_path: Path | None = None
-    tamper_rejected = False
-    tamper_error = ""
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            prefix=".ember01-identity-tamper-",
-            suffix=".json",
-            dir=scratch_root,
-            delete=False,
-        ) as handle:
-            handle.write(checkpoint_bytes + b"\n")
-            tamper_path = Path(handle.name)
-        try:
-            verify_parameter_identity_binding(
-                payload,
-                receipt,
-                checkpoint_manifest=tamper_path,
-                model_config=model_config,
-            )
-        except ParameterIdentityMismatch as error:
-            tamper_rejected = True
-            tamper_error = str(error)
-    finally:
-        if tamper_path is not None:
-            tamper_path.unlink(missing_ok=True)
-
-    tamper_evidence = {
-        "tool": "scripts/ember_01_identity/parameter_identity_binding.py",
-        "tamper": "checkpoint-manifest-byte-append",
-        "rejected": tamper_rejected,
-        "error": tamper_error[-400:],
-    }
+        tamper_evidence = _run_identity_tamper_battery(
+            root=root,
+            payload=payload,
+            receipt=receipt,
+            checkpoint_bytes=checkpoint_bytes,
+            model_config=model_config,
+            scratch_root=scratch_root,
+        )
+    except Exception as error:  # noqa: BLE001 - battery itself fails closed
+        tamper_evidence = {
+            "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery",
+            "axis_count": 8,
+            "axes": {},
+            "failures": ["battery_execution"],
+            "all_rejected": False,
+            "error_type": type(error).__name__,
+            "error": str(error)[-400:],
+        }
+    tamper_rejected = tamper_evidence["all_rejected"] is True
     return {
         "3": leg(RESOLVED_TRUE, LEG_TITLES["3"], "real checkpoint identity re-derived", clean_evidence),
         "4": leg(
             RESOLVED_TRUE if tamper_rejected else RESOLVED_FALSE,
             LEG_TITLES["4"],
-            "tampered checkpoint manifest rejected" if tamper_rejected else "tampered checkpoint manifest was accepted",
+            "all eight isolated identity tamper axes rejected"
+            if tamper_rejected
+            else "one or more isolated identity tamper axes failed open",
             tamper_evidence,
         ),
     }
