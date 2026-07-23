@@ -731,6 +731,14 @@ def load_development_shared_runtime(
         records[path] = record
     schema_version = checkpoint_manifest.get("schema_version")
     if schema_version == "ember-sparse-checkpoint-v5":
+        expected_paths = {
+            "shared-model.pt",
+            "optimizer-state.pt",
+            "replay-state.pt",
+            *(f"expert-{name}.pt" for name in model_module.EXPERT_NAMES),
+        }
+        if set(records) != expected_paths:
+            raise ValueError("development checkpoint closed v5 shard set is invalid")
         shared_path = "shared-model.pt"
     elif schema_version in {None, "ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
         shared_path = "shared.pt"
