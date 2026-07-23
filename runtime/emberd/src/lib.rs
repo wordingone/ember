@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::{RwLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod host_probe;
 pub mod rpc;
 pub mod scratch;
 
@@ -366,9 +367,14 @@ pub struct CanaryHostSnapshot {
     pub gpu_uuid: String,
     pub free_vram_bytes: u64,
     pub total_vram_bytes: u64,
+    pub nvidia_smi_sha256: String,
+    pub gpu_query_sha256: String,
+    pub compute_query_sha256: String,
+    pub process_inventory_sha256: String,
     pub processes: Vec<CanaryProcessIdentity>,
     pub wsl_detected: bool,
     pub docker_detected: bool,
+    pub persistent_worker_detected: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -475,8 +481,13 @@ fn validate_canary_host_snapshot(
         || snapshot.free_vram_bytes < scope.minimum_free_vram_bytes
         || snapshot.total_vram_bytes == 0
         || snapshot.free_vram_bytes > snapshot.total_vram_bytes
+        || validate_hash(&snapshot.nvidia_smi_sha256).is_err()
+        || validate_hash(&snapshot.gpu_query_sha256).is_err()
+        || validate_hash(&snapshot.compute_query_sha256).is_err()
+        || validate_hash(&snapshot.process_inventory_sha256).is_err()
         || snapshot.wsl_detected
         || snapshot.docker_detected
+        || snapshot.persistent_worker_detected
     {
         return Err(EmberdError::InvalidDispatchManifest {
             detail: "governed canary host snapshot does not satisfy the closed GPU/host policy"
@@ -1202,22 +1213,40 @@ impl Daemon {
         manifest_bytes: &[u8],
         expected_sha256: &str,
     ) -> Result<DispatchOutcome> {
-        self.dispatch_manifest_bytes_at_with_probes_and_host(
+        let manifest: DispatchManifest =
+            serde_json::from_slice(manifest_bytes).map_err(|error| {
+                EmberdError::InvalidDispatchManifest {
+                    detail: format!("dispatch manifest schema is invalid: {error}"),
+                }
+            })?;
+        let forbidden_process_names = manifest
+            .canary_scope
+            .as_ref()
+            .map(|scope| scope.forbidden_process_names.clone());
+        self.dispatch_manifest_bytes_at_with_probes_and_host_and_canary(
             manifest_bytes,
             expected_sha256,
             now_ms(),
             available_free_bytes,
             available_free_vram_bytes,
             probe_host_commit_capacity,
+            move || {
+                forbidden_process_names
+                    .as_ref()
+                    .map(|forbidden| host_probe::native_canary_host_snapshot(forbidden))
+                    .transpose()
+            },
         )
     }
     pub fn dispatch_manifest(&self, manifest_path: &Path) -> Result<DispatchOutcome> {
-        self.dispatch_manifest_at_with_probes(
-            manifest_path,
-            now_ms(),
-            available_free_bytes,
-            available_free_vram_bytes,
-        )
+        let canonical = fs::canonicalize(manifest_path).map_err(|error| {
+            EmberdError::InvalidDispatchManifest {
+                detail: format!("dispatch manifest is not a canonical file: {error}"),
+            }
+        })?;
+        let manifest_bytes = fs::read(canonical)?;
+        let manifest_sha256 = hash_bytes(&manifest_bytes);
+        self.dispatch_manifest_bytes(&manifest_bytes, &manifest_sha256)
     }
 
     pub fn dispatch_manifest_at_with_probes<F, G>(
@@ -1284,6 +1313,33 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        self.dispatch_manifest_bytes_at_with_probes_and_host_and_canary(
+            manifest_bytes,
+            expected_sha256,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            || Ok(None),
+        )
+    }
+
+    fn dispatch_manifest_bytes_at_with_probes_and_host_and_canary<F, G, H, I>(
+        &self,
+        manifest_bytes: &[u8],
+        expected_sha256: &str,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        mut canary_host_probe: I,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+        I: FnMut() -> Result<Option<CanaryHostSnapshot>>,
+    {
         if validate_hash(expected_sha256).is_err() || hash_bytes(manifest_bytes) != expected_sha256
         {
             return Err(EmberdError::InvalidDispatchManifest {
@@ -1321,7 +1377,7 @@ impl Daemon {
                 free_space,
                 free_vram,
                 free_host_commit,
-                || Ok(None),
+                || canary_host_probe(),
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -1364,7 +1420,7 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
-            || Ok(None),
+            || canary_host_probe(),
         )
     }
 
@@ -1583,16 +1639,6 @@ impl Daemon {
             &self.emberd_source_sha256,
         )?;
         let canary_scope = manifest.canary_scope.clone();
-        let canary_before = if let Some(scope) = canary_scope.as_ref() {
-            let snapshot =
-                canary_host_probe()?.ok_or_else(|| EmberdError::InvalidDispatchManifest {
-                    detail: "governed canary dispatch requires an authoritative host probe".into(),
-                })?;
-            validate_canary_host_snapshot(scope, &snapshot)?;
-            Some(snapshot)
-        } else {
-            None
-        };
         if observed_at_ms < manifest.not_before_ms {
             return Err(EmberdError::DispatchTooEarly {
                 not_before_ms: manifest.not_before_ms,
@@ -1622,6 +1668,41 @@ impl Daemon {
         {
             return Ok(existing);
         }
+        let canary_before = if let Some(scope) = canary_scope.as_ref() {
+            let first_probe = canary_host_probe()
+                .and_then(|snapshot| {
+                    snapshot.ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                        detail: "governed canary dispatch requires an authoritative host probe"
+                            .into(),
+                    })
+                })
+                .and_then(|snapshot| {
+                    validate_canary_host_snapshot(scope, &snapshot)?;
+                    Ok(snapshot)
+                });
+            match first_probe {
+                Ok(snapshot) => Some(snapshot),
+                Err(error) => {
+                    let refusal = json!({
+                        "schema_version": "emberd-dispatch-preflight-v1",
+                        "result": "REFUSED_CANARY_HOST_PROBE",
+                        "job_id": &manifest.job_id,
+                        "source_commit": &manifest.source_commit,
+                        "observed_at_ms": observed_at_ms,
+                        "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
+                        "governed_canary": {
+                            "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                            "before": Value::Null,
+                            "before_spawn": Value::Null,
+                        },
+                    });
+                    atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+                    return Err(error);
+                }
+            }
+        } else {
+            None
+        };
 
         let host_commit = free_host_commit()?;
         let observed_available_maximum_commit_bytes = host_commit.available_maximum_commit_bytes;
@@ -1773,29 +1854,118 @@ impl Daemon {
             &verified_bindings,
             &custody_root,
         )?;
+        let manifest_sha256 = hash_bytes(&manifest_bytes);
+        let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
+        let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
+        let job_id = manifest.job_id.clone();
+        let resource_lease = manifest.resource_lease.clone();
+        let created_identity = self.identity_hash(&job_id)?.is_none();
+        self.bind_identity_bytes(&job_id, &manifest_path, manifest_bytes, &manifest_sha256)?;
+        if let Err(error) = self.acquire_lease(&resource_lease, &job_id) {
+            let receipt_result = if canary_scope.is_some() {
+                let refusal = json!({
+                    "schema_version": "emberd-dispatch-preflight-v1",
+                    "result": "REFUSED_CANARY_LEASE_CONFLICT",
+                    "job_id": &job_id,
+                    "source_commit": &manifest.source_commit,
+                    "observed_at_ms": observed_at_ms,
+                    "dispatch_manifest_sha256": &manifest_sha256,
+                    "governed_canary": {
+                        "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                        "before": &canary_before,
+                        "before_spawn": Value::Null,
+                    },
+                });
+                atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)
+            } else {
+                Ok(())
+            };
+            let rollback_result =
+                self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
+            receipt_result?;
+            rollback_result?;
+            return Err(error);
+        }
         let canary_before_spawn = if let Some(scope) = canary_scope.as_ref() {
-            let snapshot =
-                canary_host_probe()?.ok_or_else(|| EmberdError::InvalidDispatchManifest {
-                    detail: "governed canary dispatch requires a second pre-spawn host probe"
-                        .into(),
-                })?;
-            validate_canary_host_snapshot(scope, &snapshot)?;
+            let second_probe = canary_host_probe()
+                .and_then(|snapshot| {
+                    snapshot.ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                        detail: "governed canary dispatch requires a second pre-spawn host probe"
+                            .into(),
+                    })
+                })
+                .and_then(|snapshot| {
+                    validate_canary_host_snapshot(scope, &snapshot)?;
+                    Ok(snapshot)
+                });
+            let snapshot = match second_probe {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    let refusal = json!({
+                        "schema_version": "emberd-dispatch-preflight-v1",
+                        "result": "REFUSED_CANARY_HOST_PROBE",
+                        "job_id": &job_id,
+                        "source_commit": &manifest.source_commit,
+                        "observed_at_ms": observed_at_ms,
+                        "dispatch_manifest_sha256": &manifest_sha256,
+                        "governed_canary": {
+                            "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                            "before": &canary_before,
+                            "before_spawn": Value::Null,
+                        },
+                    });
+                    let receipt_result =
+                        atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?);
+                    let rollback_result =
+                        self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
+                    receipt_result?;
+                    rollback_result?;
+                    return Err(error);
+                }
+            };
             let before = canary_before
                 .as_ref()
                 .expect("governed canary first probe is present");
-            if before.gpu_uuid != snapshot.gpu_uuid || before.processes != snapshot.processes {
+            if before.gpu_uuid != snapshot.gpu_uuid
+                || before.free_vram_bytes != snapshot.free_vram_bytes
+                || before.total_vram_bytes != snapshot.total_vram_bytes
+                || before.nvidia_smi_sha256 != snapshot.nvidia_smi_sha256
+                || before.gpu_query_sha256 != snapshot.gpu_query_sha256
+                || before.compute_query_sha256 != snapshot.compute_query_sha256
+                || before.process_inventory_sha256 != snapshot.process_inventory_sha256
+                || before.processes != snapshot.processes
+                || before.wsl_detected != snapshot.wsl_detected
+                || before.docker_detected != snapshot.docker_detected
+                || before.persistent_worker_detected != snapshot.persistent_worker_detected
+            {
+                let refusal = json!({
+                    "schema_version": "emberd-dispatch-preflight-v1",
+                    "result": "REFUSED_CANARY_HOST_DRIFT",
+                    "job_id": &job_id,
+                    "source_commit": &manifest.source_commit,
+                    "observed_at_ms": observed_at_ms,
+                    "dispatch_manifest_sha256": &manifest_sha256,
+                    "governed_canary": {
+                        "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                        "before": before,
+                        "before_spawn": &snapshot,
+                    },
+                });
+                let receipt_result = atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?);
+                let rollback_result =
+                    self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
+                receipt_result?;
+                rollback_result?;
                 return Err(EmberdError::InvalidDispatchManifest {
-                    detail: "governed canary GPU/process identity changed before child creation"
-                        .into(),
+                    detail:
+                        "governed canary GPU/process/free-VRAM identity changed after lease acquisition"
+                            .into(),
                 });
             }
             Some(snapshot)
         } else {
             None
         };
-        let manifest_sha256 = hash_bytes(&manifest_bytes);
-        let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
-        let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
         let receipt_payload = json!({
             "schema_version": "emberd-dispatch-preflight-v1",
             "result": "PREFLIGHT_PASSED",
@@ -1836,6 +2006,7 @@ impl Daemon {
                 "source_sha256": &self.emberd_source_sha256,
             },
             "governed_canary": canary_scope.as_ref().map(|scope| json!({
+                "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
                 "scope": scope,
                 "before": canary_before,
                 "before_spawn": canary_before_spawn,
@@ -1849,14 +2020,6 @@ impl Daemon {
             &receipt_bytes,
         )? {
             return Ok(existing);
-        }
-        let job_id = manifest.job_id.clone();
-        let resource_lease = manifest.resource_lease.clone();
-        let created_identity = self.identity_hash(&job_id)?.is_none();
-        self.bind_identity_bytes(&job_id, &manifest_path, manifest_bytes, &manifest_sha256)?;
-        if let Err(error) = self.acquire_lease(&resource_lease, &job_id) {
-            let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
-            return Err(error);
         }
         let mut spec = JobSpec::new(
             job_id.clone(),

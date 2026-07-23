@@ -82,9 +82,14 @@ fn canary_snapshot(processes: Vec<CanaryProcessIdentity>) -> CanaryHostSnapshot 
         gpu_uuid: "GPU-EMBER-CANARY".into(),
         free_vram_bytes: 24 * GIB,
         total_vram_bytes: 24 * GIB,
+        nvidia_smi_sha256: "1".repeat(64),
+        gpu_query_sha256: "2".repeat(64),
+        compute_query_sha256: "3".repeat(64),
+        process_inventory_sha256: "4".repeat(64),
         processes,
         wsl_detected: false,
         docker_detected: false,
+        persistent_worker_detected: false,
     }
 }
 
@@ -298,6 +303,51 @@ fn governed_canary_refuses_the_legacy_dispatch_path_without_a_host_probe() {
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(daemon.job_state("governed-canary-no-probe").unwrap(), None);
+}
+
+#[test]
+fn governed_canary_persists_a_first_probe_refusal_before_identity_or_lease() {
+    let root = sandbox("governed-canary-first-probe-refusal");
+    let job_id = "governed-canary-first-probe-refusal";
+    let lease_id = "gpu:GPU-EMBER-CANARY:bounded-canary";
+    let manifest = write_governed_canary_manifest(&root, job_id);
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let mut probes = 0;
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || {
+            probes += 1;
+            Err(EmberdError::InvalidDispatchManifest {
+                detail: "authoritative native probe unavailable".into(),
+            })
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(probes, 1);
+    assert_eq!(daemon.job_state(job_id).unwrap(), None);
+    assert_eq!(daemon.identity_hash(job_id).unwrap(), None);
+    assert_eq!(daemon.lease_owner(lease_id).unwrap(), None);
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(root.join("custody").join("preflight.json")).unwrap())
+            .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_CANARY_HOST_PROBE");
+    assert_eq!(
+        receipt["governed_canary"]["process_exclusivity"],
+        "PARTIAL_DENYLIST_UNRESOLVED"
+    );
+    assert!(receipt["governed_canary"]["before"].is_null());
+    assert!(receipt["governed_canary"]["before_spawn"].is_null());
 }
 
 #[test]
@@ -624,6 +674,154 @@ fn governed_canary_refuses_gpu_process_identity_drift_before_spawn() {
             .unwrap(),
         None
     );
+}
+
+#[test]
+fn governed_canary_acquires_the_gpu_lease_before_the_final_host_probe() {
+    let root = sandbox("governed-canary-lease-before-final-probe");
+    let job_id = "governed-canary-lease-before-final-probe";
+    let lease_id = "gpu:GPU-EMBER-CANARY:bounded-canary";
+    let manifest = write_governed_canary_manifest(&root, job_id);
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let mut probes = 0;
+    let mut final_probe_observed_lease = false;
+    let outcome = daemon
+        .dispatch_governed_canary_manifest_bytes_at_with_probes(
+            &bytes,
+            &digest,
+            &manifest,
+            10_001,
+            |_root| Ok(u64::MAX),
+            || Ok(24 * GIB),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            || {
+                probes += 1;
+                if probes == 2 {
+                    final_probe_observed_lease =
+                        daemon.lease_owner(lease_id)?.as_deref() == Some(job_id);
+                }
+                Ok(canary_snapshot(Vec::new()))
+            },
+        )
+        .unwrap();
+    assert_eq!(probes, 2);
+    assert!(
+        final_probe_observed_lease,
+        "the final host probe must run after the exact GPU lease is acquired"
+    );
+    daemon.stop_job(job_id).unwrap();
+    assert!(outcome.handle.pid > 0);
+}
+
+#[test]
+fn governed_canary_refuses_unexplained_free_vram_loss_after_lease() {
+    let root = sandbox("governed-canary-free-vram-drift");
+    let job_id = "governed-canary-free-vram-drift";
+    let lease_id = "gpu:GPU-EMBER-CANARY:bounded-canary";
+    let manifest = write_governed_canary_manifest(&root, job_id);
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let mut probes = 0;
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || {
+            probes += 1;
+            let mut snapshot = canary_snapshot(Vec::new());
+            if probes == 2 {
+                snapshot.free_vram_bytes -= GIB;
+            }
+            Ok(snapshot)
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(probes, 2);
+    assert_eq!(daemon.job_state(job_id).unwrap(), None);
+    assert_eq!(daemon.lease_owner(lease_id).unwrap(), None);
+    assert_eq!(daemon.identity_hash(job_id).unwrap(), None);
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(root.join("custody").join("preflight.json")).unwrap())
+            .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_CANARY_HOST_DRIFT");
+    assert_eq!(
+        receipt["governed_canary"]["process_exclusivity"],
+        "PARTIAL_DENYLIST_UNRESOLVED"
+    );
+    assert_eq!(
+        receipt["governed_canary"]["before"]["free_vram_bytes"],
+        24 * GIB
+    );
+    assert_eq!(
+        receipt["governed_canary"]["before_spawn"]["free_vram_bytes"],
+        23 * GIB
+    );
+}
+
+#[test]
+fn governed_canary_persists_a_refusal_when_the_gpu_lease_has_an_owner() {
+    let daemon_root = sandbox("governed-canary-lease-conflict-daemon");
+    let first_root = sandbox("governed-canary-lease-conflict-first");
+    let second_root = sandbox("governed-canary-lease-conflict-second");
+    let lease_id = "gpu:GPU-EMBER-CANARY:bounded-canary";
+    let first_manifest = write_governed_canary_manifest(&first_root, "governed-canary-owner");
+    let second_manifest = write_governed_canary_manifest(&second_root, "governed-canary-contender");
+    let daemon = Daemon::open(&daemon_root.join("emberd.sqlite3")).unwrap();
+    let first_bytes = fs::read(&first_manifest).unwrap();
+    let first_digest = format!("{:x}", Sha256::digest(&first_bytes));
+    daemon
+        .dispatch_governed_canary_manifest_bytes_at_with_probes(
+            &first_bytes,
+            &first_digest,
+            &first_manifest,
+            10_001,
+            |_root| Ok(u64::MAX),
+            || Ok(24 * GIB),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            || Ok(canary_snapshot(Vec::new())),
+        )
+        .unwrap();
+    let second_bytes = fs::read(&second_manifest).unwrap();
+    let second_digest = format!("{:x}", Sha256::digest(&second_bytes));
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &second_bytes,
+        &second_digest,
+        &second_manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    assert!(matches!(result, Err(EmberdError::LeaseConflict { .. })));
+    assert_eq!(
+        daemon.lease_owner(lease_id).unwrap().as_deref(),
+        Some("governed-canary-owner")
+    );
+    assert_eq!(
+        daemon.identity_hash("governed-canary-contender").unwrap(),
+        None
+    );
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(second_root.join("custody").join("preflight.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_CANARY_LEASE_CONFLICT");
+    assert_eq!(
+        receipt["governed_canary"]["process_exclusivity"],
+        "PARTIAL_DENYLIST_UNRESOLVED"
+    );
+    daemon.stop_job("governed-canary-owner").unwrap();
 }
 
 #[test]
