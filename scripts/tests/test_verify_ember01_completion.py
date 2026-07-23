@@ -293,3 +293,45 @@ def test_identity_legs_are_unresolved_without_real_checkpoint(
 
     assert result["3"]["state"] == completion.UNRESOLVED
     assert result["4"]["state"] == completion.UNRESOLVED
+
+
+def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None:
+    receipt = json.loads(
+        (
+            REPO_ROOT
+            / "receipts"
+            / "ember-restart-3b"
+            / "identity"
+            / "cond4-tamper-battery-bf20f050-v1.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    for binding in receipt["implementation"].values():
+        path = REPO_ROOT / binding["path"]
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == binding["sha256"]
+    identity_binding = receipt["subject"]["identity_manifest"]
+    assert (
+        hashlib.sha256((REPO_ROOT / identity_binding["path"]).read_bytes()).hexdigest()
+        == identity_binding["sha256"]
+    )
+    assert receipt["leg4"]["axis_count"] == 8
+    assert receipt["leg4"]["all_rejected"] is True
+    assert receipt["leg4"]["failures"] == []
+    assert set(receipt["leg4"]["axes"]) == {
+        "checkpoint_bytes",
+        "param_count",
+        "tokenizer",
+        "data_learned_signal",
+        "mechanism",
+        "backend",
+        "benchmark_id",
+        "comparator",
+    }
+    assert all(axis["rejected"] is True for axis in receipt["leg4"]["axes"].values())
+    assert receipt["claim_boundary"] == {
+        "supports_completion_condition": 4,
+        "counts_as_owned_checkpoint": False,
+        "counts_as_sufficient_pretraining": False,
+        "counts_as_capability_evidence": False,
+        "counts_as_full_ember_completion": False,
+    }
