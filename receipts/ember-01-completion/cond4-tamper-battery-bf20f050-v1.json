@@ -3,12 +3,12 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-07-23T11:17:54Z",
-  "implementation_commit": "01a22b996c9118c47a0969d03a8dab350a76463d",
+  "generated_at": "2026-07-23T12:28:32Z",
+  "implementation_commit": "61b4a4060218b9971128ee3a435581499ba82682",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "d1ccf6d07350c4a7c5dd40c0b0d1e8d5958d2b2ec52182ae16fcdcc07720dc2d"
+      "sha256": "88d0ed9085ff2cb05db32f3d5a9bfa4eba216400c0efb7c22e58eea8ee267648"
     },
     "identity_validator": {
       "path": "scripts/ember_01_identity/validate_identity.py",
