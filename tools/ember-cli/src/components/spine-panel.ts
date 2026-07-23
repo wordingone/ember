@@ -259,7 +259,7 @@ interface LaunchPacketSummaryRow {
   overall_ready?: boolean;
   implemented_all_pass?: boolean;
   any_deferred?: boolean;
-  named_ember02_command?: { command?: string } | null;
+  named_ember02_command?: { command: string } | null;
 }
 
 export interface Element4Deps {
@@ -313,14 +313,14 @@ function _isValidLaunchPacketSummary(obj: unknown): obj is LaunchPacketSummaryRo
   if (cmd !== null && cmd !== undefined) {
     if (typeof cmd !== "object") return false;
     const cmdObj = cmd as Record<string, unknown>;
-    if ("command" in cmdObj && typeof cmdObj.command !== "string") return false;
+    if (typeof cmdObj.command !== "string" || cmdObj.command.trim().length === 0) return false;
   }
 
   // Named conditional invariant (re-review, PR #1027 round-2): a claimed-ready summary is unactionable
   // (and therefore invalid) without a real, non-empty named command.
   if (o.overall_ready === true) {
     const cmdObj = cmd as { command?: string } | null | undefined;
-    if (!cmdObj || typeof cmdObj.command !== "string" || cmdObj.command.length === 0) return false;
+    if (!cmdObj || typeof cmdObj.command !== "string" || cmdObj.command.trim().length === 0) return false;
   }
 
   return true;

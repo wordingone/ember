@@ -587,6 +587,52 @@ describe("assembleLaunchPacketElement (element 4) -- closed summary schema, real
     }
   });
 
+  it("BOUND: overall_ready===false with a non-null command object missing command is INVALID -- skipped, falls back to the older VALID receipt", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      writeValidReceipt(join(receiptsDir, "20260101T000000Z"), true);
+      writeRawSummary(join(receiptsDir, "20260201T000000Z"), {
+        record: "launch-packet-summary",
+        overall_ready: false,
+        implemented_all_pass: false,
+        any_deferred: false,
+        named_ember02_command: {},
+      });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).not.toContain("20260201T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: true");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BOUND: overall_ready===true with a whitespace-only command is INVALID -- skipped, falls back to the older VALID receipt", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      writeValidReceipt(join(receiptsDir, "20260101T000000Z"), false);
+      writeRawSummary(join(receiptsDir, "20260201T000000Z"), {
+        record: "launch-packet-summary",
+        overall_ready: true,
+        implemented_all_pass: true,
+        any_deferred: false,
+        named_ember02_command: { command: " \t " },
+      });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).not.toContain("20260201T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: false");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("BLOCKED: ALL candidate receipts have malformed summaries -- honest blocked reason, never a false-default BOUND", () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
     try {
