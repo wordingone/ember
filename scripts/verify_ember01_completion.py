@@ -197,11 +197,20 @@ def leg(state: str, title: str, reason: str, evidence: dict[str, Any] | None = N
 
 
 # ---- Legs 1/2/6/9: custody / roots / benchmark / issues (census.py) ----------
-def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str, Any]:
+def custody_legs(
+    root: Path,
+    bindings: list[str],
+    run_custody: bool,
+    issue_census: Path | None = None,
+) -> dict[str, Any]:
     manifests = root / "manifests" / "ember-01-custody"
     root_spec = manifests / "root-spec.json"
     bench = manifests / "benchmark-registry.json"
-    issues = manifests / "public-issue-census.json"
+    # The live issue census cannot be content-bound to the commit that contains
+    # it: merging a tracked refresh necessarily creates a successor commit.
+    # Accept an explicit, externally generated census so census.py can enforce
+    # its existing exact-current-master check without a self-referential file.
+    issues = issue_census or manifests / "public-issue-census.json"
     have_manifests = root_spec.is_file() and bench.is_file() and issues.is_file()
 
     # A bare clean clone cannot bind operator-machine roots. Without real ROOT
@@ -700,6 +709,14 @@ def main() -> int:
                         help="operator-machine ROOT binding NAME=PATH (repeatable)")
     parser.add_argument("--run-custody", action="store_true",
                         help="run the custody census (requires real ROOT bindings)")
+    parser.add_argument(
+        "--issue-census",
+        default=None,
+        help=(
+            "live public-issue census generated outside the verified checkout; "
+            "defaults to the checked-in historical freeze"
+        ),
+    )
     parser.add_argument("--identity-manifest", default=None,
                         help="owned-checkpoint identity manifest path")
     parser.add_argument("--checkpoint-manifest", "--checkpoint", dest="checkpoint_manifest", default=None,
@@ -715,6 +732,7 @@ def main() -> int:
     ident_manifest = Path(args.identity_manifest).resolve() if args.identity_manifest else None
     checkpoint_manifest = Path(args.checkpoint_manifest).resolve() if args.checkpoint_manifest else None
     model_config = Path(args.model_config).resolve() if args.model_config else None
+    issue_census = Path(args.issue_census).resolve() if args.issue_census else None
 
     try:
         receipt = validate_receipt_path(root, Path(args.receipt))
@@ -728,7 +746,14 @@ def main() -> int:
             authority_row, authority_cert = authority_leg(root, selection)
             legs.update(authority_row)
             legs.update(launch_packet_leg(root))
-            legs.update(custody_legs(root, args.binding, args.run_custody))
+            legs.update(
+                custody_legs(
+                    root,
+                    args.binding,
+                    args.run_custody,
+                    issue_census=issue_census,
+                )
+            )
             legs.update(
                 identity_legs(
                     root,
