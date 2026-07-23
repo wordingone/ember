@@ -226,7 +226,38 @@ def fetch_live_open_issues(
         }
     executable = Path(executable_value).resolve()
     try:
-        executable_sha_before = hashlib.sha256(executable.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory(prefix="ember-gh-snapshot-") as directory:
+            snapshot = Path(directory) / executable.name
+            shutil.copy2(executable, snapshot)
+            executable_sha_before = hashlib.sha256(
+                snapshot.read_bytes()
+            ).hexdigest()
+            command = [
+                str(snapshot),
+                "issue",
+                "list",
+                "--repo",
+                "wordingone/ember",
+                "--state",
+                "open",
+                "--limit",
+                "1000",
+                "--json",
+                LIVE_ISSUE_JSON_FIELDS,
+            ]
+            result = run(
+                command,
+                root=root,
+                name="github_live_open_issues",
+                display=["gh", *command[1:]],
+                timeout=300,
+            )
+            try:
+                executable_sha_after = hashlib.sha256(
+                    snapshot.read_bytes()
+                ).hexdigest()
+            except OSError:
+                executable_sha_after = None
     except OSError as error:
         return {
             "name": "github_live_open_issues",
@@ -240,30 +271,6 @@ def fetch_live_open_issues(
             "executable_name": executable.name,
             "executable_sha256": None,
         }
-    command = [
-        str(executable),
-        "issue",
-        "list",
-        "--repo",
-        "wordingone/ember",
-        "--state",
-        "open",
-        "--limit",
-        "1000",
-        "--json",
-        LIVE_ISSUE_JSON_FIELDS,
-    ]
-    result = run(
-        command,
-        root=root,
-        name="github_live_open_issues",
-        display=["gh", *command[1:]],
-        timeout=300,
-    )
-    try:
-        executable_sha_after = hashlib.sha256(executable.read_bytes()).hexdigest()
-    except OSError:
-        executable_sha_after = None
     executable_evidence = {
         "executable_name": executable.name,
         "executable_sha256": executable_sha_before,
@@ -275,7 +282,7 @@ def fetch_live_open_issues(
             "returncode": 2,
             "issues": None,
             "stdout_sha256": None,
-            "stderr": "GitHub CLI executable changed during acquisition",
+            "stderr": "GitHub CLI executable snapshot changed during acquisition",
         }
     if result["returncode"] != 0:
         return {
