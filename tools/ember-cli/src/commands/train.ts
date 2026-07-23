@@ -193,6 +193,66 @@ interface TrainCommandDeps {
   configPath?: string;
   /** launch_packet.py path override; defaults to <repoRoot>/tools/ember-restart-3b/launch_packet.py. */
   scriptPath?: string;
+  /** certified_train_launch.py path override. */
+  certifiedLaunchScriptPath?: string;
+}
+
+interface TrainArgs {
+  execute: boolean;
+  certificate?: string;
+  declarationLedger?: string;
+  runSpec?: string;
+}
+
+function _parseTrainArgs(raw: string): TrainArgs {
+  const tokens = raw.trim() === "" ? [] : raw.trim().split(/\s+/);
+  const parsed: TrainArgs = { execute: false };
+  const seen = new Set<string>();
+  const valued = new Map<string, "certificate" | "declarationLedger" | "runSpec">([
+    ["--certificate", "certificate"],
+    ["--declaration-ledger", "declarationLedger"],
+    ["--run-spec", "runSpec"],
+  ]);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const option = tokens[index]!;
+    if (seen.has(option)) {
+      throw new Error(`duplicate train option: ${option}`);
+    }
+    seen.add(option);
+    if (option === "--execute") {
+      parsed.execute = true;
+      continue;
+    }
+    const field = valued.get(option);
+    if (field === undefined) {
+      throw new Error(`unknown train option: ${option}`);
+    }
+    const value = tokens[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new Error(`missing value for ${option}`);
+    }
+    parsed[field] = value;
+    index += 1;
+  }
+  if (
+    !parsed.execute &&
+    (parsed.certificate !== undefined ||
+      parsed.declarationLedger !== undefined ||
+      parsed.runSpec !== undefined)
+  ) {
+    throw new Error("authority paths require --execute");
+  }
+  if (
+    parsed.execute &&
+    (parsed.certificate === undefined ||
+      parsed.declarationLedger === undefined ||
+      parsed.runSpec === undefined)
+  ) {
+    throw new Error(
+      "usage: /train --execute --certificate <path> --declaration-ledger <path> --run-spec <path>",
+    );
+  }
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,17 +276,36 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
 
   return {
     name: "train",
-    description: "Preflight EMBER-02 training readiness (cond7 launch packet) and surface the launch command; never launches training",
+    description: "Preflight EMBER-02 training readiness; execute only through an explicit declared B7 certificate",
     isEnabled(): boolean {
       return true;
     },
-    async execute(_args: string, ctx: CommandContext) {
+    async execute(args: string, ctx: CommandContext) {
+      let trainArgs: TrainArgs;
+      try {
+        trainArgs = _parseTrainArgs(args);
+      } catch (error) {
+        return {
+          type: "message" as const,
+          message: `error: ${error instanceof Error ? error.message : "invalid /train arguments"}`,
+          exitCode: 1,
+        };
+      }
+
       const repoRoot = deps.repoRoot ?? _defaultRepoRoot(ctx.cwd);
       const pythonBin = deps.pythonBin ?? process.env["EMBER_PYTHON_BIN"] ?? "python";
       const configPath =
         deps.configPath ?? join(repoRoot, "configs", "ember-restart-3b.json");
       const scriptPath =
         deps.scriptPath ?? join(repoRoot, "tools", "ember-restart-3b", "launch_packet.py");
+      const certifiedLaunchScriptPath =
+        deps.certifiedLaunchScriptPath ??
+        join(
+          repoRoot,
+          "tools",
+          "ember-restart-3b",
+          "certified_train_launch.py",
+        );
 
       // (1) Run the preflight first. It is the only subprocess in default mode;
       // certified execute mode may invoke only the fixed consumer below.
@@ -281,6 +360,79 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           message:
             "error: launch-packet exited 0 but its readiness summary was missing/unparseable or named no launch command -- training is BLOCKED (fail-closed). No launch command surfaced.",
           exitCode: 1,
+        };
+      }
+
+      if (trainArgs.execute) {
+        let certifiedResult: LaunchPacketRunResult;
+        try {
+          certifiedResult = runCertifiedLaunch(pythonBin, [
+            certifiedLaunchScriptPath,
+            "--root",
+            repoRoot,
+            "--certificate",
+            trainArgs.certificate!,
+            "--declaration-ledger",
+            trainArgs.declarationLedger!,
+            "--run-spec",
+            trainArgs.runSpec!,
+          ]);
+        } catch {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified train consumer could not be started; no training process was authorized.",
+            exitCode: 1,
+          };
+        }
+        if (certifiedResult.status !== 0) {
+          const detail = certifiedResult.stdout.trim();
+          return {
+            type: "message" as const,
+            message: [
+              "error: certified train consumer refused or failed.",
+              detail || "No certified execution receipt was produced.",
+            ].join("\n"),
+            exitCode: certifiedResult.status ?? 1,
+          };
+        }
+        let execution: Record<string, unknown>;
+        try {
+          const parsedResult: unknown = JSON.parse(certifiedResult.stdout);
+          if (typeof parsedResult !== "object" || parsedResult === null) {
+            throw new Error("not an object");
+          }
+          execution = parsedResult as Record<string, unknown>;
+        } catch {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified train consumer exited 0 without a valid execution receipt response.",
+            exitCode: 1,
+          };
+        }
+        const executionReceipt = execution["execution_receipt"];
+        const artifactRoot = execution["artifact_root"];
+        if (
+          typeof executionReceipt !== "string" ||
+          executionReceipt === "" ||
+          typeof artifactRoot !== "string" ||
+          artifactRoot === ""
+        ) {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified train consumer response omitted execution_receipt or artifact_root.",
+            exitCode: 1,
+          };
+        }
+        return {
+          type: "message" as const,
+          message: [
+            "certified bounded canary process completed.",
+            `execution receipt: ${executionReceipt}`,
+            `artifact root: ${artifactRoot}`,
+          ].join("\n"),
         };
       }
 
