@@ -3,12 +3,16 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-07-23T12:28:32Z",
-  "implementation_commit": "61b4a4060218b9971128ee3a435581499ba82682",
+  "generated_at": "2026-07-23T17:14:46Z",
+  "implementation_commit": "96d8c83044dd4358acdf959298e0586194edbf31",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "88d0ed9085ff2cb05db32f3d5a9bfa4eba216400c0efb7c22e58eea8ee267648"
+      "sha256": "10d98bcbb2c921b5388a3a417d9decb57dc3285e0dce97b8a9e8d35134e7e28a"
+    },
+    "issue_census_builder": {
+      "path": "scripts/ember_01_custody/issue_census.py",
+      "sha256": "b3bfd1bb5f0136d3c8016e8f087916be0cb641e00cc2de7fa7209c6c5a5acdd9"
     },
     "identity_validator": {
       "path": "scripts/ember_01_identity/validate_identity.py",
@@ -113,18 +117,42 @@
     }
   },
   "verification": {
-    "identity_and_completion_tests": {
-      "passed": 270,
-      "failed": 0
+    "focused_completion_and_custody_tests": {
+      "passed": 60,
+      "failed": 0,
+      "command": [
+        "python",
+        "-B",
+        "-m",
+        "pytest",
+        "-q",
+        "scripts/tests/test_verify_ember01_completion.py",
+        "tests/ember_01_custody/test_census.py",
+        "tests/ember_01_custody/test_issue_census.py"
+      ]
+    },
+    "clean_detached_replay": {
+      "checkout_commit": "96d8c83044dd4358acdf959298e0586194edbf31",
+      "receipt": {
+        "path": "receipts/ember-01-completion/live-census-verifier-replay-96d8c83-v1.json",
+        "sha256": "90bd4e3f574a921b1913dbf1982733462e52165c3a7ffe2e495b5f39c64c6356"
+      },
+      "leg3_state": "resolved-true",
+      "leg4_state": "resolved-true",
+      "leg4_axis_count": 8,
+      "leg4_all_rejected": true,
+      "checkout_clean": true,
+      "checkout_detached": true,
+      "checkout_head_unchanged": true
     },
     "seeded_fail_open": {
       "axis": "tokenizer",
       "aggregate_state": "resolved-false",
       "named_failure": "tokenizer"
     },
-    "repository_guard": "PASS",
-    "github_guard_count": 2,
-    "github_guards": "PASS"
+    "repository_guard": "PENDING",
+    "github_guard_count": 0,
+    "github_guards": "PENDING"
   },
   "claim_boundary": {
     "supports_completion_condition": 4,

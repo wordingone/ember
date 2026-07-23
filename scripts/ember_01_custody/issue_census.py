@@ -215,6 +215,16 @@ def _source_issue(issue: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def canonical_open_issue_source_snapshot(
+    issues: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return the one canonical source projection used by build and live audit."""
+    return sorted(
+        (_source_issue(issue) for issue in issues),
+        key=lambda row: row["number"],
+    )
+
+
 def _normalized_source_issue(source: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "number": int(source["number"]),
@@ -311,9 +321,7 @@ def build_issue_census(
     public_master_sha = _git(root, "rev-parse", public_ref).strip()
     if not re.fullmatch(r"[0-9a-f]{40}", public_master_sha):
         raise ValueError("public ref did not resolve to one commit")
-    source_snapshot = sorted(
-        (_source_issue(issue) for issue in issues), key=lambda row: row["number"]
-    )
+    source_snapshot = canonical_open_issue_source_snapshot(issues)
     normalized = [_normalized_source_issue(source) for source in source_snapshot]
     source_by_number = {row["number"]: row for row in source_snapshot}
     master = _master_evidence(root, public_master_sha)
