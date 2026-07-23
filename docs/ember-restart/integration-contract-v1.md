@@ -4,7 +4,22 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 
 # Ember owned-rung integration contract v1
 
-Status: executable candidate/admission boundary, but the current public execution authority is fail closed. The exact clean-owned step-2 checkpoint manifest is `BF20F05018991EB611B0623EDD50A00EC30639DA2F8CCAE646F6962F152A2A2B`: 3,839,161,856 unique/trainable/served parameters, 1,020,589,568 active parameters, 2,048 observed text tokens, and the shared route only. It is structural resume/checkpoint evidence, not sufficiently pretrained and not capability-admitted. The public registry disposition is `PREPARED_NOT_EXECUTABLE_AWAITING_PROMPT_AND_SAME_BYTE_RUNTIME_BINDING`; allocation, custody, and a validated scorer do not authorize inference.
+Status: executable candidate/admission boundary under the current
+`goal_executing` authority, with every checkpoint-consuming command still
+required to fail closed until its named receipts exist. The canonical subject
+is `manifests/ember-current-subject-v1.json`: the exact clean-owned step-2
+checkpoint manifest is
+`BF20F05018991EB611B0623EDD50A00EC30639DA2F8CCAE646F6962F152A2A2B`,
+with 3,839,161,856 unique/trainable/served parameters,
+1,020,589,568 active parameters, 2,048 observed text tokens, and the
+shared route only. It is
+structural resume/checkpoint evidence, not sufficiently pretrained and
+not capability-admitted. Its disposition is `CHECKPOINT_CANDIDATE_NOT_ADMITTED`.
+The prior 1,024-token
+`AF954C22FB8FB7A0DC640BFD2E0AB97E8E4CDE989607372FC45C3DB7878699A4`
+subject is preserved as the historical step-1 predecessor, not presented as
+current. Allocation, custody, and a validated scorer do not authorize
+capability or admission claims.
 
 ## Integration ownership
 
