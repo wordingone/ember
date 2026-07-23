@@ -118,6 +118,32 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(result["global_step"], 3)
         self.assertEqual(checkpoints, [2, 3])
 
+    def test_bounded_canary_resumes_the_last_full_shard_record_without_skip_or_replay(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = self._domain_records(config)
+        model = UnifiedDecoder(config, genesis_seed=71)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        first_checkpoints: list[dict[str, object]] = []
+        first = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cpu"),
+            checkpoint_every=1, checkpoint_callback=lambda _step, state: first_checkpoints.append(state),
+            require_complete_coverage=False, max_records=3, data_shard_id="owned-four-domain-production-rung-v1",
+        )
+        self.assertEqual(first["data_cursor"]["record_index"], 3)
+        self.assertEqual(first["global_step"], 3)
+        self.assertEqual([state["data_cursor"]["record_index"] for state in first_checkpoints], [1, 2, 3])
+        resumed_checkpoints: list[dict[str, object]] = []
+        resumed = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cpu"),
+            checkpoint_every=1, checkpoint_callback=lambda _step, state: resumed_checkpoints.append(state),
+            initial_global_step=int(first["global_step"]), initial_tokens_seen=int(first["tokens_seen"]),
+            initial_data_cursor=int(first["data_cursor"]["record_index"]),
+            require_complete_coverage=False, max_records=1, data_shard_id="owned-four-domain-production-rung-v1",
+        )
+        self.assertEqual(resumed["data_cursor"]["record_index"], 4)
+        self.assertEqual(resumed["global_step"], 4)
+        self.assertEqual(resumed["expert_examples"], {"vision": 0, "audio": 0, "reasoning": 0, "tool": 1})
+        self.assertEqual([state["data_cursor"]["record_index"] for state in resumed_checkpoints], [4])
     def test_forward_interruption_happens_before_optimizer_mutation(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=61)

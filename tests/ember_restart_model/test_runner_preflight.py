@@ -471,6 +471,19 @@ class RunnerPreflightTests(unittest.TestCase):
         governor.assert_called_once_with()
         cuda_probe.assert_called_once_with()
 
+    def test_semantic_runner_rejects_invalid_pure_arguments_before_governor(self) -> None:
+        with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
+            with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
+                with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                    with self.assertRaisesRegex(ValueError, "semantic launch requires"):
+                        run_vertical_slice.run_semantic(
+                            seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
+                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=0,
+                            sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
+                        )
+        governor.assert_not_called()
+        cuda_probe.assert_not_called()
+
     def test_governed_resource_preflight_loads_the_repository_governor(self) -> None:
         with patch.object(run_vertical_slice.torch.cuda, "set_per_process_memory_fraction") as fraction:
             with patch.object(run_vertical_slice.torch.cuda, "mem_get_info", return_value=(8 * 10**9, 24 * 10**9)) as memory:
@@ -497,9 +510,36 @@ class RunnerPreflightTests(unittest.TestCase):
         governor.assert_called_once_with()
         cuda_probe.assert_not_called()
 
+    def test_vertical_run_rejects_forged_canonical_runner_authority_before_governor(self) -> None:
+        with patch.object(run_vertical_slice, "canonical_disk_budget_runner_authority", return_value={"live": "authority"}):
+            with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
+                with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                    with self.assertRaisesRegex(RuntimeError, "canonical runner authority"):
+                        run_vertical_slice.run(
+                            seed=83, artifact_root=Path("B:/vertical-artifacts"),
+                            canonical_runner_authority={"forged": "authority"},
+                        )
+        governor.assert_not_called()
+        cuda_probe.assert_not_called()
+
+    def test_vertical_runner_resource_refusal_prevents_cuda_probe(self) -> None:
+        with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=RuntimeError("resource refusal")) as governor:
+            with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                with self.assertRaisesRegex(RuntimeError, "resource refusal"):
+                    run_vertical_slice.run(
+                        seed=83,
+                        artifact_root=Path("B:/vertical-artifacts"),
+                    )
+        governor.assert_called_once_with()
+        cuda_probe.assert_not_called()
+
     def _run_vertical_resume_with_mocks(
         self, *, specialist: bool, callback_steps: tuple[int, ...] = (),
         restored_receipts: list[dict[str, object]] | None = None,
+        call_order: list[str] | None = None,
+        ordinary_rows: list[dict[str, object]] | None = None,
+        parent_data_cursor: dict[str, object] | None = None,
+        max_records: int | None = None,
     ) -> tuple[dict[str, object], dict[str, object], MagicMock]:
         model = SimpleNamespace(active_expert="reasoning")
         model.train = lambda: None
@@ -519,6 +559,9 @@ class RunnerPreflightTests(unittest.TestCase):
         real_read_text = Path.read_text
         real_read_bytes = Path.read_bytes
         genesis = {name: (index.to_bytes(1, "little") * 32).hex() for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)}
+        ordinary_rows = ordinary_rows if ordinary_rows is not None else [{"active_expert": "shared", "row_id": index} for index in range(38)]
+        parent_data_cursor = parent_data_cursor if parent_data_cursor is not None else {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}
+        parent_data_cursor.setdefault("input_identity_receipt_sha256", run_vertical_slice._json_sha256({"receipt": "bound"}))
         specialist_rows = [{"active_expert": "vision", "scene_split": "train", "token_ids": [index + 1]} for index in range(len(callback_steps or (20,))) ]
         specialist_artifact_bytes = json.dumps({"records": specialist_rows}, sort_keys=True, separators=(",", ":")).encode("utf-8")
         specialist_artifact_sha256 = hashlib.sha256(specialist_artifact_bytes).hexdigest()
@@ -547,8 +590,9 @@ class RunnerPreflightTests(unittest.TestCase):
         def segment(**kwargs: object) -> dict[str, object]:
             segment_kwargs.update(kwargs)
             published_steps = callback_steps or (20,)
-            result = {"losses": [0.1], "data_cursor": {"shard": str(kwargs["data_shard_id"]), "record_index": len(published_steps), "global_step": published_steps[-1], "tokens_seen": 20_480}}
-            for record_index, step in enumerate(published_steps, start=1):
+            initial_record_index = int(kwargs["initial_data_cursor"])
+            result = {"losses": [0.1], "data_cursor": {"shard": str(kwargs["data_shard_id"]), "record_index": initial_record_index + len(published_steps), "global_step": published_steps[-1], "tokens_seen": 20_480}}
+            for record_index, step in enumerate(published_steps, start=initial_record_index + 1):
                 callback_result = {
                     **result,
                     "data_cursor": {**result["data_cursor"], "record_index": record_index, "global_step": step},
@@ -567,7 +611,11 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice.torch, "get_default_dtype", return_value=torch.float32))
             stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
             stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path, **_kwargs: path))
-            stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", return_value=model))
+            def build_model(*_args: object, **_kwargs: object) -> object:
+                if call_order is not None:
+                    call_order.append("model")
+                return model
+            stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", side_effect=build_model))
             def measure(_model: object) -> dict[str, int]:
                 if specialist:
                     segment_kwargs["count_active_expert"] = model.active_expert
@@ -578,6 +626,17 @@ class RunnerPreflightTests(unittest.TestCase):
                 return optimizer
             stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", side_effect=measure))
             stack.enter_context(patch.object(run_vertical_slice, "build_production_optimizer", side_effect=build))
+            def published_receipt(_checkpoint: Path) -> dict[str, object]:
+                if call_order is not None:
+                    call_order.append("receipt")
+                manifest_sha256 = hashlib.sha256(read_bytes(parent_manifest)).hexdigest()
+                return {
+                    "checkpoint_manifest_sha256": manifest_sha256,
+                    "checkpoint": {"byte_sha256": manifest_sha256},
+                    "expert_genesis_sha256": genesis,
+                    "data_cursor": dict(parent_data_cursor),
+                }
+            stack.enter_context(patch.object(run_vertical_slice, "published_checkpoint_receipt", side_effect=published_receipt))
             stack.enter_context(patch.object(run_vertical_slice, "_rng_state_hash", return_value={"cpu": "c" * 64, "cuda": "d" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "_rng_state", return_value={"cpu": torch.tensor([1]), "cuda": torch.tensor([2])}))
             stack.enter_context(patch.object(run_vertical_slice, "run_pretraining_segment", side_effect=segment))
@@ -589,10 +648,10 @@ class RunnerPreflightTests(unittest.TestCase):
             def load_checkpoint(_model: object, _optimizer: object, _root: Path, receipt: dict[str, object]) -> dict[str, object]:
                 if restored_receipts is not None:
                     restored_receipts.append(dict(receipt))
-                return {"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}}
+                return {"data_cursor": dict(parent_data_cursor)}
 
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", side_effect=load_checkpoint))
-            stack.enter_context(patch.object(run_vertical_slice, "load_authorized_records", return_value=([{"active_expert": "shared"}], {"input_identity": {"shard_path": "TOKEN-SHARDS-V0:prior"}}, {"receipt": "bound"})))
+            stack.enter_context(patch.object(run_vertical_slice, "load_authorized_records", return_value=(ordinary_rows, {"input_identity": {"shard_path": "TOKEN-SHARDS-V0:prior"}}, {"receipt": "bound"})))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
             stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
             stack.enter_context(patch.object(Path, "read_bytes", autospec=True, side_effect=read_bytes))
@@ -606,6 +665,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 specialist_lineage={"parent_manifest": str(parent_manifest), "root_manifest": str(parent_manifest), "execution_slice": specialist_execution_slice, "scene_split_selection": specialist_selection} if specialist else None,
                 checkpoint_interval=8_192 if specialist else None,
                 write_budget_bytes=100 * 1024**3 if specialist else None,
+                max_records=max_records,
             )
         return result, segment_kwargs, writer
 
@@ -626,7 +686,10 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(segment_kwargs["count_active_expert"], "vision")
         self.assertEqual(segment_kwargs["optimizer_active_expert"], "vision")
     def test_vertical_resume_preserves_owned_cursor_but_resets_only_specialist_cursor(self) -> None:
-        _ordinary_result, ordinary_kwargs, ordinary_writer = self._run_vertical_resume_with_mocks(specialist=False)
+        full_rows = [{"active_expert": "shared", "row_id": index} for index in range(38)]
+        _ordinary_result, ordinary_kwargs, ordinary_writer = self._run_vertical_resume_with_mocks(
+            specialist=False, ordinary_rows=full_rows,
+        )
         _specialist_result, specialist_kwargs, specialist_writer = self._run_vertical_resume_with_mocks(specialist=True)
         bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json", active_parameters=1_725_232_640)
         self.assertEqual(ordinary_kwargs["initial_data_cursor"], 37)
@@ -640,14 +703,60 @@ class RunnerPreflightTests(unittest.TestCase):
         """The full runner resume handoff retains the disk manifest's identity receipt."""
 
         receipts: list[dict[str, object]] = []
-        self._run_vertical_resume_with_mocks(specialist=False, restored_receipts=receipts)
+        _result, _segment_kwargs, writer = self._run_vertical_resume_with_mocks(specialist=False, restored_receipts=receipts)
         manifest_bytes = json.dumps({"expert_genesis_sha256": {
             name: (index.to_bytes(1, "little") * 32).hex()
             for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)
         }}).encode("utf-8")
         self.assertEqual(len(receipts), 1)
         self.assertEqual(receipts[0]["checkpoint_manifest_sha256"], hashlib.sha256(manifest_bytes).hexdigest())
+        self.assertIn("governor", writer.call_args.kwargs["data_cursor"])
         self.assertEqual(receipts[0]["checkpoint"], {"byte_sha256": hashlib.sha256(manifest_bytes).hexdigest()})
+
+    def test_vertical_resume_freezes_manifest_receipt_before_cuda_allocation(self) -> None:
+        call_order: list[str] = []
+        self._run_vertical_resume_with_mocks(specialist=False, call_order=call_order)
+        self.assertLess(call_order.index("receipt"), call_order.index("model"))
+
+    def test_vertical_canary_resume_uses_bounded_cursor_for_checkpoint_target(self) -> None:
+        rows = [{"active_expert": "shared", "row_id": index} for index in range(4)]
+        parent_cursor = {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 3, "global_step": 3, "tokens_seen": 3_072}
+        _result, kwargs, writer = self._run_vertical_resume_with_mocks(
+            specialist=False, callback_steps=(4,), ordinary_rows=rows,
+            parent_data_cursor=parent_cursor, max_records=1,
+        )
+        self.assertEqual(kwargs["initial_data_cursor"], 3)
+        self.assertEqual(kwargs["max_records"], 1)
+        self.assertEqual(Path(writer.call_args.args[2]).name, "checkpoint-continue-seed-84-from-step-4")
+
+    def test_vertical_resume_rejects_exhausted_frozen_cursor_before_model_construction(self) -> None:
+        rows = [{"active_expert": "shared", "row_id": index} for index in range(4)]
+        for exhausted_index in (4, 5):
+            call_order: list[str] = []
+            with self.assertRaisesRegex(RuntimeError, "no remaining authorized records"):
+                self._run_vertical_resume_with_mocks(
+                    specialist=False, ordinary_rows=rows,
+                    parent_data_cursor={"shard": "TOKEN-SHARDS-V0:prior", "record_index": exhausted_index, "global_step": 3, "tokens_seen": 3_072},
+                    max_records=1, call_order=call_order,
+                )
+            self.assertNotIn("model", call_order)
+
+    def test_vertical_resume_rejects_frozen_cursor_from_another_admitted_input_before_model(self) -> None:
+        rows = [{"active_expert": "shared", "row_id": index} for index in range(4)]
+        valid_hash = run_vertical_slice._json_sha256({"receipt": "bound"})
+        for field, value, message in (
+            ("shard", "TOKEN-SHARDS-V0:other", "input shard"),
+            ("input_identity_receipt_sha256", "a" * 64, "input receipt"),
+        ):
+            cursor = {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 3, "global_step": 3, "tokens_seen": 3_072, "input_identity_receipt_sha256": valid_hash}
+            cursor[field] = value
+            call_order: list[str] = []
+            with self.assertRaisesRegex(RuntimeError, message):
+                self._run_vertical_resume_with_mocks(
+                    specialist=False, ordinary_rows=rows, parent_data_cursor=cursor,
+                    max_records=1, call_order=call_order,
+                )
+            self.assertNotIn("model", call_order)
 
     def test_specialist_run_requests_periodic_checkpoint_interval(self) -> None:
         _result, specialist_kwargs, _writer = self._run_vertical_resume_with_mocks(specialist=True)
@@ -711,6 +820,186 @@ class RunnerPreflightTests(unittest.TestCase):
             resume_optimizer_transition_registry_sha256=None,
         )
 
+    def test_vertical_cli_refuses_direct_launch_without_disk_budget_runner(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "run_vertical_slice.py", "vertical", "--seed", "83",
+                    "--artifact-root", "B:/ember-artifacts",
+                ],
+            ):
+                with patch.object(run_vertical_slice, "run", return_value={}) as vertical_run:
+                    with self.assertRaisesRegex(RuntimeError, "disk budget runner"):
+                        run_vertical_slice.main()
+        vertical_run.assert_not_called()
+
+    def test_governed_vertical_cli_validates_canonical_startup_assertion_and_budget_before_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            artifact_root = custody / "artifacts"
+            artifact_root.mkdir(parents=True)
+            cache = custody / "tmp"
+            cache.mkdir(parents=True)
+            bindings = {
+                "TEMP": str(cache.resolve()), "TMP": str(cache.resolve()),
+                "TORCH_HOME": str((custody / "torch").resolve()),
+                "TRITON_CACHE_DIR": str((custody / "triton").resolve()),
+                "CUDA_CACHE_PATH": str((custody / "cuda").resolve()),
+                "HF_HOME": str((custody / "hf").resolve()),
+                "XDG_CACHE_HOME": str((custody / "xdg-cache").resolve()),
+            }
+            for value in set(bindings.values()):
+                Path(value).mkdir(parents=True, exist_ok=True)
+            nonce = "a" * 32
+            assertion = custody / "child-env-startup.json"
+            assertion_bytes = json.dumps(
+                {"schema_version": 1, "nonce": nonce, "bindings": bindings},
+                sort_keys=True, separators=(",", ":"),
+            ).encode("utf-8")
+            assertion.write_bytes(assertion_bytes)
+            environment = {
+                **bindings, "EMBER_DISK_BUDGET_ENV_ASSERTION": str(assertion),
+                "EMBER_DISK_BUDGET_ENV_NONCE": nonce,
+            }
+            with patch.dict(os.environ, environment, clear=True):
+                with patch.object(sys, "argv", [
+                    "run_vertical_slice.py", "governed-vertical", "--seed", "83",
+                    "--artifact-root", str(artifact_root), "--write-budget-bytes", "4096", "--max-records", "3",
+                ]):
+                    with patch.object(run_vertical_slice, "checkpoint_serialization_byte_bound", return_value=4096):
+                        with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as vertical_run:
+                            run_vertical_slice.main()
+            assertion_authority = {
+                "schema_version": "ember-canonical-disk-budget-startup-v1",
+                "assertion_sha256": hashlib.sha256(assertion_bytes).hexdigest(),
+                "cache_bindings_sha256": hashlib.sha256(
+                    json.dumps(bindings, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest(),
+                "config_sha256": hashlib.sha256((ROOT / "configs" / "ember-restart-3b.json").read_bytes()).hexdigest(),
+                "runner_source_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py").read_bytes()).hexdigest(),
+                "checkpoint_byte_bound": 4096,
+                "write_budget_bytes": 4096,
+            }
+            vertical_run.assert_called_once_with(
+                seed=83, artifact_root=artifact_root, resume_checkpoint=None,
+                resume_counter_receipt=None, resume_realization_registry=None,
+                resume_optimizer_transition_registry=None,
+                resume_optimizer_transition_registry_sha256=None,
+                write_budget_bytes=4096, max_records=3, canonical_runner_authority=assertion_authority,
+            )
+
+    def test_governed_vertical_wrapper_reaches_real_run_authority_equality(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            artifact_root = custody / "artifacts"
+            cache = custody / "tmp"
+            cache.mkdir(parents=True)
+            artifact_root.mkdir(parents=True)
+            bindings = {name: str((custody / name.lower()).resolve()) for name in (
+                "TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME",
+            )}
+            bindings["TEMP"] = str(cache.resolve())
+            bindings["TMP"] = str(cache.resolve())
+            for value in set(bindings.values()):
+                Path(value).mkdir(parents=True, exist_ok=True)
+            nonce = "e" * 32
+            assertion = custody / "child-env-startup.json"
+            assertion.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": bindings}), encoding="utf-8")
+            with patch.dict(os.environ, {**bindings, "EMBER_DISK_BUDGET_ENV_ASSERTION": str(assertion), "EMBER_DISK_BUDGET_ENV_NONCE": nonce}, clear=True):
+                with patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path, **_kwargs: path):
+                    with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=RuntimeError("governor reached")) as governor:
+                        with self.assertRaisesRegex(RuntimeError, "governor reached"):
+                            run_vertical_slice.run_governed_vertical(
+                                seed=83, artifact_root=artifact_root, write_budget_bytes=12_202_530_816,
+                            )
+            governor.assert_called_once_with()
+
+    def test_governed_vertical_rejects_artifact_root_outside_custody_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            cache = custody / "tmp"
+            cache.mkdir(parents=True)
+            bindings = {name: str((custody / name.lower()).resolve()) for name in (
+                "TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME",
+            )}
+            bindings["TEMP"] = str(cache.resolve())
+            bindings["TMP"] = str(cache.resolve())
+            for value in set(bindings.values()):
+                Path(value).mkdir(parents=True, exist_ok=True)
+            nonce = "d" * 32
+            assertion = custody / "child-env-startup.json"
+            assertion.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": bindings}), encoding="utf-8")
+            outside_artifact_root = Path(directory) / "outside-artifacts"
+            outside_artifact_root.mkdir()
+            with patch.dict(os.environ, {**bindings, "EMBER_DISK_BUDGET_ENV_ASSERTION": str(assertion), "EMBER_DISK_BUDGET_ENV_NONCE": nonce}, clear=True):
+                with patch.object(run_vertical_slice, "checkpoint_serialization_byte_bound", return_value=4096):
+                    with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
+                        with patch.object(run_vertical_slice, "run", side_effect=AssertionError("run")) as vertical_run:
+                            with self.assertRaisesRegex(ValueError, "artifact root escapes canonical runner custody"):
+                                run_vertical_slice.run_governed_vertical(seed=83, artifact_root=outside_artifact_root, write_budget_bytes=4096)
+            governor.assert_not_called()
+            vertical_run.assert_not_called()
+
+    def test_governed_checkpoint_bound_includes_one_active_expert(self) -> None:
+        config_path = ROOT / "configs" / "ember-restart-3b.json"
+        self.assertEqual(
+            run_vertical_slice.governed_vertical_checkpoint_byte_bound(config_path),
+            12_202_530_816,
+        )
+
+    def test_canonical_runner_assertion_outside_custody_is_rejected_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            cache = custody / "tmp"
+            cache.mkdir(parents=True)
+            bindings = {name: str((custody / name.lower()).resolve()) for name in (
+                "TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME",
+            )}
+            bindings["TEMP"] = str(cache.resolve())
+            bindings["TMP"] = str(cache.resolve())
+            for value in set(bindings.values()):
+                Path(value).mkdir(parents=True, exist_ok=True)
+            nonce = "b" * 32
+            assertion = Path(directory) / "child-env-startup.json"
+            assertion.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": bindings}), encoding="utf-8")
+            with patch.dict(os.environ, {**bindings, "EMBER_DISK_BUDGET_ENV_ASSERTION": str(assertion), "EMBER_DISK_BUDGET_ENV_NONCE": nonce}, clear=True):
+                with self.assertRaisesRegex(RuntimeError, "not the custody startup assertion"):
+                    run_vertical_slice.canonical_disk_budget_runner_authority()
+
+    def test_governed_vertical_rejects_one_byte_below_one_expert_bound_before_launch(self) -> None:
+        with patch.object(run_vertical_slice, "_canonical_disk_budget_runner_authority", return_value=({}, ROOT)):
+            with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
+                with patch.object(run_vertical_slice, "run", side_effect=AssertionError("run")) as vertical_run:
+                    with self.assertRaisesRegex(ValueError, "checkpoint publication bound"):
+                        run_vertical_slice.run_governed_vertical(seed=83, artifact_root=ROOT, write_budget_bytes=12_202_530_815)
+        governor.assert_not_called()
+        vertical_run.assert_not_called()
+    def test_governed_vertical_budget_refusal_precedes_governor_and_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            bindings = {name: str((custody / name.lower()).resolve()) for name in (
+                "TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME",
+            )}
+            bindings["TMP"] = bindings["TEMP"]
+            for value in set(bindings.values()):
+                Path(value).mkdir(parents=True, exist_ok=True)
+            nonce = "c" * 32
+            assertion = custody / "child-env-startup.json"
+            assertion.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": bindings}), encoding="utf-8")
+            with patch.dict(os.environ, {**bindings, "EMBER_DISK_BUDGET_ENV_ASSERTION": str(assertion), "EMBER_DISK_BUDGET_ENV_NONCE": nonce}, clear=True):
+                with patch.object(run_vertical_slice, "checkpoint_serialization_byte_bound", return_value=4097):
+                    with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
+                        with patch.object(run_vertical_slice, "run", side_effect=AssertionError("run")) as vertical_run:
+                            with self.assertRaisesRegex(ValueError, "checkpoint publication bound"):
+                                run_vertical_slice.run_governed_vertical(seed=83, artifact_root=custody, write_budget_bytes=4096)
+            governor.assert_not_called()
+            vertical_run.assert_not_called()
+    def test_canonical_runner_missing_nonce_is_rejected_before_launch(self) -> None:
+        with patch.dict(os.environ, {"EMBER_DISK_BUDGET_ENV_ASSERTION": "B:/missing"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "canonical disk budget runner assertion"):
+                run_vertical_slice.canonical_disk_budget_runner_authority()
     def test_specialist_lineage_request_binds_parent_to_exact_resume_bundle(self) -> None:
         verification = {"result": "VERIFIED", "capability": "image", "record_count": 20, "records_artifact_sha256": "e" * 64}
         execution_slice = {
@@ -891,7 +1180,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(specialist.call_args.kwargs["resume_optimizer_transition_registry_sha256"], expected_sha256)
 
     def test_c_custody_resume_bundle_requires_the_declared_disk_runner_root(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="C:/tmp") as directory:
             custody = Path(directory)
             checkpoint = custody / "checkpoint"
             checkpoint.mkdir()

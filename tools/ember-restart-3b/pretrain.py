@@ -78,6 +78,7 @@ def run_pretraining_segment(
     initial_data_cursor: int = 0,
     data_shard_id: str = "owned-pretraining",
     require_complete_coverage: bool = True,
+    max_records: int | None = None,
 ) -> dict[str, Any]:
     """Execute verified routed updates and bind counters needed for exact resume."""
 
@@ -89,6 +90,8 @@ def run_pretraining_segment(
         raise ValueError("resume counters must be nonnegative")
     if initial_data_cursor > len(records):
         raise ValueError("resume data cursor exceeds the bound record sequence")
+    if max_records is not None and (type(max_records) is not int or max_records < 1 or max_records > 200):
+        raise ValueError("pretraining max_records must be an integer from 1 through 200")
     if not isinstance(data_shard_id, str) or not data_shard_id:
         raise ValueError("data_shard_id must be a nonempty owned shard identifier")
     model.train()
@@ -97,7 +100,7 @@ def run_pretraining_segment(
     expert_examples = {expert: 0 for expert in EXPERT_NAMES}
     tokens_seen = initial_tokens_seen
     data_cursor = initial_data_cursor
-    remaining_records = records[initial_data_cursor:]
+    remaining_records = records[initial_data_cursor:] if max_records is None else records[initial_data_cursor:initial_data_cursor + max_records]
     final_global_step = initial_global_step + len(remaining_records)
     for local_step, record in enumerate(remaining_records, start=1):
         step_started = time.perf_counter()
