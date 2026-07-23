@@ -41,9 +41,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parent / "ember_01_custody"),
+)
+from issue_census import canonical_open_issue_source_snapshot
+
 # Leg 8 imports the SAME authority function verify_ember00_completion.py uses.
 from verify_authority_conservation import (
     ACTIVE_GOAL_ID,
+    ACTIVE_WORKSTREAM_IDS,
     NEXT_EXECUTED_OUTCOME,
     verify,
 )
@@ -76,6 +83,16 @@ LEG_TITLES = {
     "8": "authority conservation certificate",
     "9": "public issue census freeze",
 }
+
+LIVE_ISSUE_JSON_FIELDS = (
+    "number,title,body,url,createdAt,updatedAt,labels,author,"
+    "state,stateReason,closedAt,comments"
+)
+LIVE_ISSUE_LIMIT = 1000
+RECEIPT_WORKSTREAM_ID = "EMBER-02A"
+
+if RECEIPT_WORKSTREAM_ID not in ACTIVE_WORKSTREAM_IDS:
+    raise RuntimeError("completion receipt workstream is not active")
 
 
 def validate_receipt_path(root: Path, receipt: Path) -> Path:
@@ -121,7 +138,8 @@ def inspect_checkout(root: Path) -> dict[str, Any]:
 
 def selection_evidence(selection: Path) -> dict[str, Any]:
     """Mirror EMBER-00: exactly one active_goal_path, file must exist."""
-    text = selection.read_text(encoding="utf-8")
+    selection_bytes = selection.read_bytes()
+    text = selection_bytes.decode("utf-8")
     paths = [
         raw.split(":", 1)[1].strip()
         for raw in text.splitlines()
@@ -134,7 +152,10 @@ def selection_evidence(selection: Path) -> dict[str, Any]:
         goal_path = (selection.parent / goal_path).resolve()
     if not goal_path.is_file():
         raise ValueError(f"selected goal file is missing: {goal_path}")
-    return {"selected_goal_suffix": "/".join(paths[0].replace("\\", "/").split("/")[-4:])}
+    return {
+        "selected_goal_suffix": Path(paths[0]).name,
+        "selector_sha256": hashlib.sha256(selection_bytes).hexdigest(),
+    }
 
 
 def run(
@@ -196,12 +217,153 @@ def leg(state: str, title: str, reason: str, evidence: dict[str, Any] | None = N
     return row
 
 
+def fetch_live_open_issues(
+    root: Path,
+) -> dict[str, Any]:
+    executable_value = shutil.which("gh")
+    if executable_value is None:
+        return {
+            "name": "github_live_open_issues",
+            "returncode": 2,
+            "timed_out": False,
+            "command": ["gh", "issue", "list"],
+            "stdout": "",
+            "stderr": "GitHub CLI executable not found",
+            "issues": None,
+            "stdout_sha256": None,
+            "executable_name": None,
+            "executable_sha256": None,
+        }
+    executable = Path(executable_value).resolve()
+    try:
+        with tempfile.TemporaryDirectory(prefix="ember-gh-snapshot-") as directory:
+            snapshot = Path(directory) / executable.name
+            shutil.copy2(executable, snapshot)
+            executable_sha_before = hashlib.sha256(
+                snapshot.read_bytes()
+            ).hexdigest()
+            command = [
+                str(snapshot),
+                "issue",
+                "list",
+                "--repo",
+                "wordingone/ember",
+                "--state",
+                "open",
+        "--limit",
+        str(LIVE_ISSUE_LIMIT),
+                "--json",
+                LIVE_ISSUE_JSON_FIELDS,
+            ]
+            result = run(
+                command,
+                root=root,
+                name="github_live_open_issues",
+                display=["gh", *command[1:]],
+                timeout=300,
+            )
+            try:
+                executable_sha_after = hashlib.sha256(
+                    snapshot.read_bytes()
+                ).hexdigest()
+            except OSError:
+                executable_sha_after = None
+    except OSError as error:
+        return {
+            "name": "github_live_open_issues",
+            "returncode": 2,
+            "timed_out": False,
+            "command": ["gh", "issue", "list"],
+            "stdout": "",
+            "stderr": f"GitHub CLI executable unreadable: {error}",
+            "issues": None,
+            "stdout_sha256": None,
+            "executable_name": executable.name,
+            "executable_sha256": None,
+        }
+    executable_evidence = {
+        "executable_name": executable.name,
+        "executable_sha256": executable_sha_before,
+    }
+    if executable_sha_after != executable_sha_before:
+        return {
+            **result,
+            **executable_evidence,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": None,
+            "stderr": "GitHub CLI executable snapshot changed during acquisition",
+        }
+    if result["returncode"] != 0:
+        return {
+            **result,
+            **executable_evidence,
+            "issues": None,
+            "stdout_sha256": None,
+        }
+    try:
+        issues = json.loads(result["stdout"])
+    except json.JSONDecodeError as error:
+        return {
+            **result,
+            **executable_evidence,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": hashlib.sha256(
+                result["stdout"].encode("utf-8")
+            ).hexdigest(),
+            "stderr": f"live GitHub issue JSON invalid: {error}",
+        }
+    if not isinstance(issues, list):
+        return {
+            **result,
+            **executable_evidence,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": hashlib.sha256(
+                result["stdout"].encode("utf-8")
+            ).hexdigest(),
+            "stderr": "live GitHub issue result is not a list",
+        }
+    if len(issues) >= LIVE_ISSUE_LIMIT:
+        return {
+            **result,
+            **executable_evidence,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": hashlib.sha256(
+                result["stdout"].encode("utf-8")
+            ).hexdigest(),
+            "stderr": (
+                "live GitHub issue result reached the acquisition limit; "
+                "completeness is unproven"
+            ),
+        }
+    return {
+        **result,
+        **executable_evidence,
+        "issues": issues,
+        "stdout_sha256": hashlib.sha256(
+            result["stdout"].encode("utf-8")
+        ).hexdigest(),
+    }
+
+
 # ---- Legs 1/2/6/9: custody / roots / benchmark / issues (census.py) ----------
-def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str, Any]:
+def custody_legs(
+    root: Path,
+    bindings: list[str],
+    run_custody: bool,
+    issue_census: Path | None = None,
+) -> dict[str, Any]:
     manifests = root / "manifests" / "ember-01-custody"
     root_spec = manifests / "root-spec.json"
     bench = manifests / "benchmark-registry.json"
-    issues = manifests / "public-issue-census.json"
+    # The live issue census cannot be content-bound to the commit that contains
+    # it: merging a tracked refresh necessarily creates a successor commit.
+    # Accept an explicit, externally generated census so census.py can enforce
+    # its existing exact-current-master check without a self-referential file.
+    issues = issue_census or manifests / "public-issue-census.json"
     have_manifests = root_spec.is_file() and bench.is_file() and issues.is_file()
 
     # A bare clean clone cannot bind operator-machine roots. Without real ROOT
@@ -214,9 +376,82 @@ def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str
             why = "custody manifests absent AND no ROOT bindings supplied"
         return {k: leg(UNRESOLVED, LEG_TITLES[k], why) for k in ("1", "2", "6", "9")}
 
+    if issue_census is None:
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "explicit live issue census is required for a custody run",
+                {"tool": CENSUS_REL},
+            )
+            for k in ("1", "2", "6", "9")
+        }
+
     if not have_manifests:
         return {
             k: leg(UNRESOLVED, LEG_TITLES[k], "custody manifests absent from checkout")
+            for k in ("1", "2", "6", "9")
+        }
+
+    try:
+        issue_census_bytes = issues.read_bytes()
+        issue_census_sha_before = hashlib.sha256(issue_census_bytes).hexdigest()
+        issue_census_payload = json.loads(issue_census_bytes)
+    except (OSError, json.JSONDecodeError) as error:
+        evidence = {
+            "tool": CENSUS_REL,
+            "error_type": type(error).__name__,
+            "error": str(error)[-400:],
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "issue census unreadable before custody run",
+                evidence,
+            )
+            for k in ("1", "2", "6", "9")
+        }
+
+    live = fetch_live_open_issues(root)
+    if live["returncode"] != 0 or not isinstance(live["issues"], list):
+        evidence = {
+            "tool": "gh issue list",
+            "returncode": live["returncode"],
+            "command": live["command"],
+            "stdout_sha256": live["stdout_sha256"],
+            "github_cli_executable_name": live.get("executable_name"),
+            "github_cli_executable_sha256": live.get("executable_sha256"),
+            "stderr_tail": str(live["stderr"])[-400:],
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "same-run live GitHub issue acquisition failed",
+                evidence,
+            )
+            for k in ("1", "2", "6", "9")
+        }
+
+    live_source = canonical_open_issue_source_snapshot(live["issues"])
+    if issue_census_payload.get("issue_source_snapshot") != live_source:
+        evidence = {
+            "tool": "gh issue list",
+            "command": live["command"],
+            "live_issue_count": len(live_source),
+            "live_stdout_sha256": live["stdout_sha256"],
+            "github_cli_executable_name": live.get("executable_name"),
+            "github_cli_executable_sha256": live.get("executable_sha256"),
+            "issue_census_sha256": issue_census_sha_before,
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "issue census does not equal same-run live GitHub snapshot",
+                evidence,
+            )
             for k in ("1", "2", "6", "9")
         }
 
@@ -227,6 +462,7 @@ def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str
         "--root-spec", str(root_spec),
         "--benchmark-registry", str(bench),
         "--issue-census", str(issues),
+        "--issue-census-sha256", issue_census_sha_before,
         "--source-commit", head,
         "--public-master-ref", "refs/remotes/origin/master",
         "--output", str(out),
@@ -238,6 +474,25 @@ def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str
         out.unlink(missing_ok=True)  # keep the checkout clean
     except OSError:
         pass
+    try:
+        issue_census_sha_after = hashlib.sha256(issues.read_bytes()).hexdigest()
+    except OSError:
+        issue_census_sha_after = None
+    if issue_census_sha_after != issue_census_sha_before:
+        evidence = {
+            "tool": CENSUS_REL,
+            "issue_census_sha256_before": issue_census_sha_before,
+            "issue_census_sha256_after": issue_census_sha_after,
+        }
+        return {
+            k: leg(
+                RESOLVED_FALSE,
+                LEG_TITLES[k],
+                "issue census changed during custody run",
+                evidence,
+            )
+            for k in ("1", "2", "6", "9")
+        }
     rc = result["returncode"]
     if rc == 0:
         state, reason = RESOLVED_TRUE, "census PASS"
@@ -245,7 +500,17 @@ def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str
         state, reason = RESOLVED_FALSE, "census INCOMPLETE (benchmark/issue/contradiction errors)"
     else:
         state, reason = RESOLVED_FALSE, f"census FAIL (exit {rc})"
-    ev = {"tool": CENSUS_REL, "returncode": rc, "stdout_tail": result["stdout"][-400:]}
+    ev = {
+        "tool": CENSUS_REL,
+        "returncode": rc,
+        "stdout_tail": result["stdout"][-400:],
+        "issue_census_sha256": issue_census_sha_before,
+        "live_issue_count": len(live_source),
+        "live_issue_stdout_sha256": live["stdout_sha256"],
+        "live_issue_command": live["command"],
+        "github_cli_executable_name": live.get("executable_name"),
+        "github_cli_executable_sha256": live.get("executable_sha256"),
+    }
     return {k: leg(state, LEG_TITLES[k], reason, ev) for k in ("1", "2", "6", "9")}
 
 
@@ -700,6 +965,14 @@ def main() -> int:
                         help="operator-machine ROOT binding NAME=PATH (repeatable)")
     parser.add_argument("--run-custody", action="store_true",
                         help="run the custody census (requires real ROOT bindings)")
+    parser.add_argument(
+        "--issue-census",
+        default=None,
+        help=(
+            "live public-issue census generated outside the verified checkout; "
+            "required for --run-custody; omission fails the custody legs closed"
+        ),
+    )
     parser.add_argument("--identity-manifest", default=None,
                         help="owned-checkpoint identity manifest path")
     parser.add_argument("--checkpoint-manifest", "--checkpoint", dest="checkpoint_manifest", default=None,
@@ -715,6 +988,7 @@ def main() -> int:
     ident_manifest = Path(args.identity_manifest).resolve() if args.identity_manifest else None
     checkpoint_manifest = Path(args.checkpoint_manifest).resolve() if args.checkpoint_manifest else None
     model_config = Path(args.model_config).resolve() if args.model_config else None
+    issue_census = Path(args.issue_census).resolve() if args.issue_census else None
 
     try:
         receipt = validate_receipt_path(root, Path(args.receipt))
@@ -728,7 +1002,14 @@ def main() -> int:
             authority_row, authority_cert = authority_leg(root, selection)
             legs.update(authority_row)
             legs.update(launch_packet_leg(root))
-            legs.update(custody_legs(root, args.binding, args.run_custody))
+            legs.update(
+                custody_legs(
+                    root,
+                    args.binding,
+                    args.run_custody,
+                    issue_census=issue_census,
+                )
+            )
             legs.update(
                 identity_legs(
                     root,
@@ -782,6 +1063,7 @@ def main() -> int:
         "ok": ok,
         "verified_at_utc": datetime.now(timezone.utc).isoformat(),
         "goal_id": ACTIVE_GOAL_ID,
+        "workstream_id": RECEIPT_WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
         "certificate_legs": leg_states,
         "leg_detail": legs,

@@ -1326,6 +1326,24 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _load_json_bound(
+    path: Path,
+    expected_sha256: str | None,
+) -> tuple[dict[str, Any], str]:
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if expected_sha256 is not None:
+        expected = expected_sha256.lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", expected):
+            raise ValueError("expected JSON digest must be exactly 64 lowercase hex")
+        if digest != expected:
+            raise ValueError("bound JSON digest does not match expected bytes")
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"expected JSON object: {path}")
+    return payload, digest
+
+
 def _parse_bindings(values: Iterable[str]) -> dict[str, Path]:
     bindings: dict[str, Path] = {}
     for value in values:
@@ -1354,6 +1372,7 @@ def main() -> int:
     parser.add_argument("--root-spec", required=True)
     parser.add_argument("--benchmark-registry", required=True)
     parser.add_argument("--issue-census", required=True)
+    parser.add_argument("--issue-census-sha256")
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--public-master-ref", required=True)
     parser.add_argument("--binding", action="append", default=[])
@@ -1367,7 +1386,10 @@ def main() -> int:
         specification = _load_json(spec_path)
         registry = _load_json(registry_path)
         issue_path = Path(arguments.issue_census)
-        issue_census = _load_json(issue_path)
+        issue_census, issue_census_sha256 = _load_json_bound(
+            issue_path,
+            arguments.issue_census_sha256,
+        )
         source_commit = str(arguments.source_commit).lower()
         if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
             raise ValueError("source commit must be exactly 40 lowercase hex")
@@ -1409,7 +1431,7 @@ def main() -> int:
                 json.dumps(canonical_root_identity(root_census), sort_keys=True, separators=(",", ":"))
             ),
             "benchmark_registry_sha256": sha256_file(registry_path),
-            "issue_census_sha256": sha256_file(issue_path),
+            "issue_census_sha256": issue_census_sha256,
             "source_commit": source_commit,
         }
         transient_codes = {

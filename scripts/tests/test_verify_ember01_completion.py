@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,15 +22,120 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import verify_ember01_completion as completion  # noqa: E402
 
 
+def _live_issue(number: int = 7, title: str = "Live obligation") -> dict:
+    return {
+        "number": number,
+        "title": title,
+        "body": "body",
+        "url": f"https://github.com/wordingone/ember/issues/{number}",
+        "createdAt": "2026-07-23T00:00:00Z",
+        "updatedAt": "2026-07-23T01:00:00Z",
+        "labels": [{"name": "research"}],
+        "author": {"login": "wordingone"},
+        "state": "OPEN",
+        "stateReason": None,
+        "closedAt": None,
+        "comments": [],
+    }
+
+
+def _live_census_payload(issue: dict | None = None) -> dict:
+    source = issue or _live_issue()
+    return {
+        "issue_source_snapshot": [
+            {
+                "number": source["number"],
+                "title": source["title"],
+                "body_base64": base64.b64encode(
+                    source["body"].encode("utf-8")
+                ).decode("ascii"),
+                "url": source["url"],
+                "created_at": source["createdAt"],
+                "updated_at": source["updatedAt"],
+                "labels": ["research"],
+                "author": "wordingone",
+                "state": "OPEN",
+                "state_reason": "None",
+                "closed_at": "None",
+                "comments": [],
+            }
+        ]
+    }
+
+
+def test_selection_evidence_persists_only_goal_basename(tmp_path: Path) -> None:
+    goal = tmp_path / "private" / "operator" / "goal.md"
+    goal.parent.mkdir(parents=True)
+    goal.write_text("# goal\n", encoding="utf-8")
+    selection = tmp_path / "EMBER-GOAL-RESUME.md"
+    selection.write_text(
+        f"active_goal_path: {goal}\n",
+        encoding="utf-8",
+    )
+
+    evidence = completion.selection_evidence(selection)
+    assert evidence == {
+        "selected_goal_suffix": "goal.md",
+        "selector_sha256": hashlib.sha256(selection.read_bytes()).hexdigest(),
+    }
+    assert "private" not in json.dumps(evidence)
+    assert "operator" not in json.dumps(evidence)
+
+
+def test_selection_evidence_detects_same_basename_target_change(
+    tmp_path: Path,
+) -> None:
+    first_goal = tmp_path / "first" / "goal.md"
+    second_goal = tmp_path / "second" / "goal.md"
+    first_goal.parent.mkdir()
+    second_goal.parent.mkdir()
+    first_goal.write_text("# first\n", encoding="utf-8")
+    second_goal.write_text("# second\n", encoding="utf-8")
+    selection = tmp_path / "EMBER-GOAL-RESUME.md"
+    selection.write_text(
+        f"active_goal_path: {first_goal}\n",
+        encoding="utf-8",
+    )
+    before = completion.selection_evidence(selection)
+
+    selection.write_text(
+        f"active_goal_path: {second_goal}\n",
+        encoding="utf-8",
+    )
+    after = completion.selection_evidence(selection)
+
+    assert before["selected_goal_suffix"] == after["selected_goal_suffix"]
+    assert before["selector_sha256"] != after["selector_sha256"]
+
+
+def test_completion_receipt_declares_one_active_workstream() -> None:
+    assert completion.RECEIPT_WORKSTREAM_ID == "EMBER-02A"
+    assert completion.RECEIPT_WORKSTREAM_ID in completion.ACTIVE_WORKSTREAM_IDS
+
+
 def test_custody_legs_bind_census_to_remote_master_ref(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: list[str] = []
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         completion,
         "git",
         lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
     )
 
     def fake_run(args: list[str], **_: object) -> dict[str, object]:
@@ -47,21 +153,354 @@ def test_custody_legs_bind_census_to_remote_master_ref(
         REPO_ROOT,
         ["public-repository=B:/tmp/public"],
         run_custody=True,
+        issue_census=live_issue_census,
     )
 
     ref_index = captured.index("--public-master-ref")
     assert captured[ref_index + 1] == "refs/remotes/origin/master"
 
 
-def test_custody_legs_do_not_impose_arbitrary_census_timeout(
-    monkeypatch: pytest.MonkeyPatch,
+def test_custody_legs_use_explicit_live_issue_census(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured_timeout: list[int | None] = []
+    captured: list[str] = []
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         completion,
         "git",
         lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    def fake_run(args: list[str], **_: object) -> dict[str, object]:
+        captured.extend(args)
+        return {
+            "returncode": 2,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+
+    completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=live_issue_census,
+    )
+
+    issue_index = captured.index("--issue-census")
+    assert captured[issue_index + 1] == str(live_issue_census)
+    digest_index = captured.index("--issue-census-sha256")
+    assert captured[digest_index + 1] == hashlib.sha256(
+        live_issue_census.read_bytes()
+    ).hexdigest()
+
+
+def test_custody_legs_reject_issue_census_mutated_during_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        completion,
+        "git",
+        lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    def fake_run(_args: list[str], **_: object) -> dict[str, object]:
+        live_issue_census.write_text(
+            json.dumps(_live_census_payload(_live_issue(title="mutated"))),
+            encoding="utf-8",
+        )
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=live_issue_census,
+    )
+
+    assert {row["state"] for row in result.values()} == {
+        completion.RESOLVED_FALSE
+    }
+    assert {row["reason"] for row in result.values()} == {
+        "issue census changed during custody run"
+    }
+
+
+def test_custody_legs_reject_explicit_census_not_equal_to_live_github(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supplied = tmp_path / "forged-census.json"
+    supplied.write_text(
+        json.dumps(_live_census_payload(_live_issue(title="forged"))),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue(title="actual")],
+            "stdout_sha256": "c" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=supplied,
+    )
+
+    assert {row["state"] for row in result.values()} == {
+        completion.RESOLVED_FALSE
+    }
+    assert {row["reason"] for row in result.values()} == {
+        "issue census does not equal same-run live GitHub snapshot"
+    }
+
+
+def test_custody_legs_without_explicit_live_census_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("census must not run"),
+    )
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+    )
+
+    assert {row["state"] for row in result.values()} == {
+        completion.RESOLVED_FALSE
+    }
+    assert {row["reason"] for row in result.values()} == {
+        "explicit live issue census is required for a custody run"
+    }
+
+
+def test_fetch_live_open_issues_uses_fixed_repository_state_and_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[str] = []
+    executable = tmp_path / "gh.exe"
+    executable.write_bytes(b"trusted-gh")
+    monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
+
+    def fake_run(args: list[str], **kwargs: object) -> dict[str, object]:
+        assert Path(args[0]) != executable
+        assert Path(args[0]).name == "gh.exe"
+        assert Path(args[0]).read_bytes() == b"trusted-gh"
+        captured.extend(["gh", *args[1:]])
+        assert kwargs["display"][:3] == ["gh", "issue", "list"]
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "command": kwargs["display"],
+            "stdout": json.dumps([_live_issue()]),
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+    result = completion.fetch_live_open_issues(REPO_ROOT)
+
+    assert captured == [
+        "gh",
+        "issue",
+        "list",
+        "--repo",
+        "wordingone/ember",
+        "--state",
+        "open",
+        "--limit",
+        str(completion.LIVE_ISSUE_LIMIT),
+        "--json",
+        completion.LIVE_ISSUE_JSON_FIELDS,
+    ]
+    assert result["issues"] == [_live_issue()]
+    assert result["stdout_sha256"] == hashlib.sha256(
+        json.dumps([_live_issue()]).encode("utf-8")
+    ).hexdigest()
+    assert result["executable_sha256"] == hashlib.sha256(b"trusted-gh").hexdigest()
+    assert result["executable_name"] == "gh.exe"
+
+
+def test_fetch_live_open_issues_rejects_non_json_stdout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "gh.exe"
+    executable.write_bytes(b"trusted-gh")
+    monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "timed_out": False,
+            "command": ["gh", "issue", "list"],
+            "stdout": "not-json",
+            "stderr": "",
+        },
+    )
+
+    result = completion.fetch_live_open_issues(REPO_ROOT)
+
+    assert result["returncode"] == 2
+    assert result["issues"] is None
+
+
+def test_fetch_live_open_issues_executes_snapshot_during_source_swap_restore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "gh.exe"
+    executable.write_bytes(b"before")
+    monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
+
+    def fake_run(args: list[str], **kwargs: object) -> dict[str, object]:
+        assert Path(args[0]) != executable
+        assert Path(args[0]).read_bytes() == b"before"
+        executable.write_bytes(b"after")
+        executable.write_bytes(b"before")
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "command": kwargs["display"],
+            "stdout": json.dumps([_live_issue()]),
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+
+    result = completion.fetch_live_open_issues(REPO_ROOT)
+
+    assert result["returncode"] == 0
+    assert result["issues"] == [_live_issue()]
+    assert result["executable_sha256"] == hashlib.sha256(b"before").hexdigest()
+
+
+def test_fetch_live_open_issues_rejects_snapshot_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "gh.exe"
+    executable.write_bytes(b"before")
+    monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
+
+    def fake_run(args: list[str], **kwargs: object) -> dict[str, object]:
+        Path(args[0]).write_bytes(b"after")
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "command": kwargs["display"],
+            "stdout": json.dumps([_live_issue()]),
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+    result = completion.fetch_live_open_issues(REPO_ROOT)
+
+    assert result["returncode"] == 2
+    assert result["issues"] is None
+    assert (
+        result["stderr"]
+        == "GitHub CLI executable snapshot changed during acquisition"
+    )
+
+
+def test_fetch_live_open_issues_rejects_limit_length_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "gh.exe"
+    executable.write_bytes(b"trusted-gh")
+    monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
+    monkeypatch.setattr(completion, "LIVE_ISSUE_LIMIT", 1)
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **kwargs: {
+            "returncode": 0,
+            "timed_out": False,
+            "command": kwargs["display"],
+            "stdout": json.dumps([_live_issue()]),
+            "stderr": "",
+        },
+    )
+
+    result = completion.fetch_live_open_issues(REPO_ROOT)
+
+    assert result["returncode"] == 2
+    assert result["issues"] is None
+    assert (
+        result["stderr"]
+        == "live GitHub issue result reached the acquisition limit; "
+        "completeness is unproven"
+    )
+
+
+def test_custody_legs_do_not_impose_arbitrary_census_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_timeout: list[int | None] = []
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        completion,
+        "git",
+        lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
     )
 
     def fake_run(_args: list[str], **kwargs: object) -> dict[str, object]:
@@ -79,6 +518,7 @@ def test_custody_legs_do_not_impose_arbitrary_census_timeout(
         REPO_ROOT,
         ["public-repository=B:/tmp/public"],
         run_custody=True,
+        issue_census=live_issue_census,
     )
 
     assert captured_timeout == [None]
