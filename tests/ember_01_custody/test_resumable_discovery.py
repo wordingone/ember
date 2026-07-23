@@ -141,6 +141,33 @@ def test_bare_repository_and_all_refs_are_inventoryable(tmp_path: Path) -> None:
     assert refs["refs_sha256"]
 
 
+def test_bare_repository_survives_global_membership_verification(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    init_repo(source)
+    bare = tmp_path / "mirror.git"
+    git(tmp_path, "clone", "--bare", str(source), str(bare))
+
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "bare-root",
+                    "required": True,
+                    "scan": "git_repository",
+                }
+            ]
+        },
+        {"bare-root": bare},
+    )
+
+    assert result["roots"][0]["git"]["is_bare"] is True
+    assert "final_verification_inaccessible" not in {
+        row["code"] for row in result["contradictions"]
+    }
+
+
 def test_path_aliases_are_preserved_as_explicit_contradiction(tmp_path: Path) -> None:
     root = tmp_path / "evidence"
     root.mkdir()
@@ -169,6 +196,29 @@ def test_path_aliases_are_preserved_as_explicit_contradiction(tmp_path: Path) ->
         "alias-b",
     }
     assert str(tmp_path) not in json.dumps(result)
+
+
+def test_source_root_alias_relation_is_preserved_in_root_rows(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    init_repo(root)
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "logical-worktrees",
+                    "source_root_id": "physical-repo",
+                    "required": True,
+                    "scan": "git_worktree_registry",
+                }
+            ]
+        },
+        {"physical-repo": root},
+    )
+
+    assert result["roots"][0]["source_root_id"] == "physical-repo"
+    assert "normalized_bound_path" not in result["roots"][0]
 
 
 def test_registered_worktree_material_hashes_dirty_untracked_and_ignored(
@@ -211,6 +261,104 @@ def test_registered_worktree_material_hashes_dirty_untracked_and_ignored(
     root_row = result["roots"][0]
     assert root_row["registered_worktree_count"] == 2
     assert root_row["materialized_worktree_count"] == 2
+
+
+def test_final_worktree_membership_access_failure_is_explicit(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    source = tmp_path / "source"
+    init_repo(source)
+    calls = 0
+
+    def fail_only_during_final_membership(root: Path) -> list[str]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return []
+        raise PermissionError(13, "final membership blocked")
+
+    monkeypatch.setattr(
+        census_module,
+        "_git_material_paths",
+        fail_only_during_final_membership,
+    )
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "worktree-material",
+                    "source_root_id": "physical-repo",
+                    "required": True,
+                    "scan": "git_worktree_material_registry",
+                }
+            ]
+        },
+        {"physical-repo": source},
+    )
+
+    errors = [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "final_verification_inaccessible"
+    ]
+    assert errors == [
+        {
+            "code": "final_verification_inaccessible",
+            "root_id": "worktree-material",
+            "verification": "directory_membership",
+            "exception": "PermissionError",
+            "winerror": None,
+            "errno": 13,
+            "resolution": "unresolved_retry_snapshot",
+        }
+    ]
+
+
+def test_final_discovery_access_failure_is_explicit(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    (parent / "ember-data").mkdir()
+
+    def fail_final_discovery(*_args, **_kwargs):
+        raise PermissionError(13, "final discovery blocked")
+
+    monkeypatch.setattr(
+        census_module,
+        "_current_discovery_snapshot",
+        fail_final_discovery,
+    )
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "discovery",
+                    "required": True,
+                    "scan": "directory_discovery",
+                    "name_patterns": ["ember*"],
+                }
+            ]
+        },
+        {"discovery": parent},
+    )
+
+    assert [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "final_verification_inaccessible"
+    ] == [
+        {
+            "code": "final_verification_inaccessible",
+            "root_id": "discovery",
+            "verification": "discovery_snapshot",
+            "exception": "PermissionError",
+            "winerror": None,
+            "errno": 13,
+            "resolution": "unresolved_retry_snapshot",
+        }
+    ]
+
 
 def test_directory_discovery_classifies_git_bare_and_non_git_bytes(
     tmp_path: Path,
@@ -568,6 +716,52 @@ def test_final_git_snapshot_pass_runs_after_all_roots_are_discovered(
         {
             "code": "git_snapshot_changed_during_scan",
             "root_id": "early",
+            "resolution": "unresolved_retry_snapshot",
+        }
+    ]
+
+
+def test_final_git_snapshot_access_failure_is_explicit(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    repo = tmp_path / "repo"
+    init_repo(repo)
+    real_summary = census_module.git_repository_summary
+    calls = 0
+
+    def fail_only_during_final_snapshot(root_id, root):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return real_summary(root_id, root)
+        raise PermissionError(13, "final git snapshot blocked")
+
+    monkeypatch.setattr(
+        census_module,
+        "git_repository_summary",
+        fail_only_during_final_snapshot,
+    )
+    result = build_root_census(
+        {
+            "roots": [
+                {"root_id": "repo", "required": True, "scan": "git_repository"}
+            ]
+        },
+        {"repo": repo},
+    )
+
+    assert [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "final_verification_inaccessible"
+    ] == [
+        {
+            "code": "final_verification_inaccessible",
+            "root_id": "repo",
+            "verification": "git_snapshot",
+            "exception": "PermissionError",
+            "winerror": None,
+            "errno": 13,
             "resolution": "unresolved_retry_snapshot",
         }
     ]
