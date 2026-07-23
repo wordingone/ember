@@ -94,7 +94,7 @@ class CheckpointIntegrityTests(unittest.TestCase):
         self.assertEqual(receipt["model_config_sha256"], "c" * 64)
         self.assertEqual(receipt["contract_sha256"], "d" * 64)
         self.assertRegex(receipt["checkpoint_manifest_sha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(len(receipt["shards"]), 6)
+        self.assertEqual(len(receipt["shards"]), 7)
 
 
     def test_restore_recovers_actual_rng_state_and_data_cursor(self) -> None:

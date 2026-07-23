@@ -66,6 +66,7 @@ def governed_resource_preflight() -> dict[str, object]:
     return {**dict(receipt), "governor_source_sha256": _sha256(governor_path)}
 
 _CANONICAL_RUNNER_CACHE_ENV = ("TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME")
+_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES = 4 * 1024**3
 
 
 def _canonical_json_bytes(payload: Mapping[str, object]) -> bytes:
@@ -151,6 +152,34 @@ def run_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes:
         "write_budget_bytes": write_budget_bytes,
     }
     return run(seed=seed, artifact_root=resolved_artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt, resume_realization_registry=resume_realization_registry, resume_optimizer_transition_registry=resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256, write_budget_bytes=write_budget_bytes, max_records=max_records, canonical_runner_authority=authority)
+
+
+def preflight_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None) -> dict[str, object]:
+    """CPU-only canonical-runner child preflight; it never admits CUDA or a training step."""
+
+    if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
+        raise ValueError("governed vertical launch requires a nonnegative seed and positive byte budget")
+    if max_records is not None and (type(max_records) is not int or not 1 <= max_records <= 200):
+        raise ValueError("governed vertical max records must be in 1..200")
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
+    checkpoint_bound = governed_vertical_checkpoint_byte_bound(config_path)
+    if checkpoint_bound > write_budget_bytes:
+        raise ValueError("governed vertical checkpoint publication bound exceeds the declared write budget")
+    startup_authority, custody = _canonical_disk_budget_runner_authority()
+    resolved_artifact_root = artifact_root.resolve()
+    if not resolved_artifact_root.is_relative_to(custody):
+        raise ValueError("governed vertical artifact root escapes canonical runner custody")
+    return {
+        "decision": "PREFLIGHT_ONLY",
+        "canonical_disk_budget_runner": {
+            **startup_authority,
+            "config_sha256": _sha256(config_path),
+            "runner_source_sha256": _sha256(Path(__file__).resolve()),
+            "checkpoint_byte_bound": checkpoint_bound,
+            "write_budget_bytes": write_budget_bytes,
+        },
+        "max_records": max_records,
+    }
 
 
 def require_disk_budget_runner_contract() -> None:
@@ -2289,6 +2318,7 @@ def run(
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
+                max_transient_scratch_bytes=_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES,
                 host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
                 pre_publish_verifier=verify_staging,
             )
@@ -2572,6 +2602,7 @@ def run_semantic(
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 max_serialized_bytes=checkpoint_byte_bound,
+                max_transient_scratch_bytes=_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES,
                 host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
                 pre_publish_verifier=verify_staging,
             )
@@ -2644,6 +2675,11 @@ def main() -> None:
     governed_resume.add_argument("--resume-realization-registry", type=Path)
     governed_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
     governed_vertical.add_argument("--resume-optimizer-transition-registry-sha256")
+    governed_preflight = subparsers.add_parser("governed-vertical-preflight")
+    governed_preflight.add_argument("--seed", type=int, required=True)
+    governed_preflight.add_argument("--artifact-root", type=Path, required=True)
+    governed_preflight.add_argument("--write-budget-bytes", type=int, required=True)
+    governed_preflight.add_argument("--max-records", type=int)
 
     specialist = subparsers.add_parser("specialist")
     specialist.add_argument("--seed", type=int, required=True)
@@ -2687,6 +2723,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "governed-vertical":
         result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
+    elif args.command == "governed-vertical-preflight":
+        result = preflight_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records)
     elif args.command == "specialist":
         result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
     elif args.command == "semantic":
