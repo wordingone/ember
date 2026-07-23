@@ -512,9 +512,10 @@ def _derive_checkpoint_storage_projection(
         raise ValueError(
             "checkpoint storage projection requires post-update global_step"
         )
-    if model.active_expert not in EXPERT_NAMES:
+    route_names = ("shared", *EXPERT_NAMES)
+    if model.active_expert not in route_names:
         raise ValueError(
-            "checkpoint storage projection requires one active specialist expert"
+            "checkpoint storage projection requires one active checkpoint route"
         )
     expected_shards = {
         "shared-model.pt",
@@ -548,12 +549,18 @@ def _derive_checkpoint_storage_projection(
     optimizer_actual = _unique_tensor_storage_bytes(optimizer_file_payload)
     routed_optimizer = _optimizer_tensor_storage_by_route(model, optimizer)
     active_bytes = routed_optimizer[model.active_expert]
-    active_routes = [
+    specialist_routes = [
         name for name in EXPERT_NAMES if routed_optimizer[name] > 0
     ]
-    if optimizer_actual < 1 or active_bytes < 1 or active_routes != [
-        model.active_expert
-    ]:
+    if model.active_expert == "shared":
+        route_valid = active_bytes > 0 and specialist_routes == []
+        active_routes = ["shared"]
+    else:
+        route_valid = active_bytes > 0 and specialist_routes == [
+            model.active_expert
+        ]
+        active_routes = [model.active_expert]
+    if optimizer_actual < 1 or not route_valid:
         raise ValueError(
             "checkpoint storage projection requires one post-update optimizer state"
         )
@@ -562,7 +569,9 @@ def _derive_checkpoint_storage_projection(
     # Use the closed worst-case bound: every initialized byte may belong to the
     # one active specialist and therefore exist once per specialist at full
     # four-expert realization.
-    projected_optimizer = optimizer_actual * len(EXPERT_NAMES)
+    projected_optimizer = optimizer_actual * (
+        1 if model.active_expert == "shared" else len(EXPERT_NAMES)
+    )
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
     projected_checkpoint_floor = (
         actual_checkpoint_floor - optimizer_actual + projected_optimizer
@@ -654,7 +663,7 @@ def _validate_checkpoint_storage_projection(
     ):
         raise ValueError("checkpoint storage projection digest mismatch")
     if (
-        materialized["active_expert"] not in EXPERT_NAMES
+        materialized["active_expert"] not in {"shared", *EXPERT_NAMES}
         or materialized["optimizer_state_active_expert_ids"]
         != [materialized["active_expert"]]
         or type(materialized["optimizer_state_after_global_step"]) is not int
@@ -721,15 +730,23 @@ def _validate_checkpoint_storage_projection(
     ):
         raise ValueError("checkpoint retained-shard projection is invalid")
     active_expert = materialized["active_expert"]
-    active_routes = [
+    specialist_routes = [
         name for name in EXPERT_NAMES if route_bounds[name] > 0
     ]
-    if active_routes != [active_expert]:
+    route_valid = (
+        route_bounds["shared"] > 0 and specialist_routes == []
+        if active_expert == "shared"
+        else route_bounds[active_expert] > 0
+        and specialist_routes == [active_expert]
+    )
+    if not route_valid:
         raise ValueError("checkpoint optimizer route projection is invalid")
     optimizer_actual = materialized[
         "optimizer_state_tensor_storage_lower_bound_bytes"
     ]
-    expected_projected_optimizer = optimizer_actual * len(EXPERT_NAMES)
+    expected_projected_optimizer = optimizer_actual * (
+        1 if active_expert == "shared" else len(EXPERT_NAMES)
+    )
     if (
         shard_bounds["optimizer-state.pt"] != optimizer_actual
         or materialized[
@@ -790,7 +807,9 @@ def _measure_candidate_storage_projection(
         del payload
 
     optimizer_actual = measured["optimizer-state.pt"]
-    projected_optimizer = optimizer_actual * len(EXPERT_NAMES)
+    projected_optimizer = optimizer_actual * (
+        1 if projection["active_expert"] == "shared" else len(EXPERT_NAMES)
+    )
     projected_checkpoint = (
         sum(measured.values()) - optimizer_actual + projected_optimizer
     )
@@ -1334,6 +1353,56 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
         }:
             raise ValueError(
                 "checkpoint shard-byte projection does not match records"
+            )
+        active_expert_ids = receipt.get("active_expert_ids")
+        if active_expert_ids != [validated_projection["active_expert"]]:
+            raise ValueError(
+                "checkpoint storage projection route does not match manifest"
+            )
+        data_cursor = receipt.get("data_cursor")
+        if (
+            not isinstance(data_cursor, Mapping)
+            or data_cursor.get("global_step")
+            != validated_projection["optimizer_state_after_global_step"]
+        ):
+            raise ValueError(
+                "checkpoint storage projection global step does not match manifest"
+            )
+        try:
+            optimizer_payload = torch.load(
+                candidate / "optimizer-state.pt",
+                map_location="cpu",
+                weights_only=False,
+                mmap=True,
+            )
+            replay_payload = torch.load(
+                candidate / "replay-state.pt",
+                map_location="cpu",
+                weights_only=False,
+                mmap=True,
+            )
+        except Exception as error:
+            raise ValueError(
+                "checkpoint projection payload bindings cannot be read"
+            ) from error
+        if (
+            not isinstance(optimizer_payload, Mapping)
+            or set(optimizer_payload)
+            != {"optimizer", "optimizer_contract", "optimizer_realization"}
+            or optimizer_payload.get("optimizer_contract")
+            != receipt.get("optimizer_contract")
+            or optimizer_payload.get("optimizer_realization")
+            != receipt.get("optimizer_realization")
+        ):
+            raise ValueError(
+                "checkpoint optimizer projection payload does not match manifest"
+            )
+        if (
+            not isinstance(replay_payload, Mapping)
+            or replay_payload.get("data_cursor") != data_cursor
+        ):
+            raise ValueError(
+                "checkpoint replay projection payload does not match manifest"
             )
         _measure_candidate_storage_projection(candidate, validated_projection)
     declared_files = {"checkpoint-manifest.json", *records}
