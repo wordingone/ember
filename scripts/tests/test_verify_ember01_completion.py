@@ -280,7 +280,10 @@ def test_fetch_live_open_issues_uses_fixed_repository_state_and_fields(
     monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
 
     def fake_run(args: list[str], **kwargs: object) -> dict[str, object]:
-        captured.extend(args)
+        assert Path(args[0]) != executable
+        assert Path(args[0]).name == "gh.exe"
+        assert Path(args[0]).read_bytes() == b"trusted-gh"
+        captured.extend(["gh", *args[1:]])
         assert kwargs["display"][:3] == ["gh", "issue", "list"]
         return {
             "returncode": 0,
@@ -294,7 +297,7 @@ def test_fetch_live_open_issues_uses_fixed_repository_state_and_fields(
     result = completion.fetch_live_open_issues(REPO_ROOT)
 
     assert captured == [
-        str(executable),
+        "gh",
         "issue",
         "list",
         "--repo",
@@ -338,15 +341,18 @@ def test_fetch_live_open_issues_rejects_non_json_stdout(
     assert result["issues"] is None
 
 
-def test_fetch_live_open_issues_rejects_executable_mutation(
+def test_fetch_live_open_issues_executes_snapshot_during_source_swap_restore(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     executable = tmp_path / "gh.exe"
     executable.write_bytes(b"before")
     monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
 
-    def fake_run(_args: list[str], **kwargs: object) -> dict[str, object]:
+    def fake_run(args: list[str], **kwargs: object) -> dict[str, object]:
+        assert Path(args[0]) != executable
+        assert Path(args[0]).read_bytes() == b"before"
         executable.write_bytes(b"after")
+        executable.write_bytes(b"before")
         return {
             "returncode": 0,
             "timed_out": False,
@@ -359,9 +365,37 @@ def test_fetch_live_open_issues_rejects_executable_mutation(
 
     result = completion.fetch_live_open_issues(REPO_ROOT)
 
+    assert result["returncode"] == 0
+    assert result["issues"] == [_live_issue()]
+    assert result["executable_sha256"] == hashlib.sha256(b"before").hexdigest()
+
+
+def test_fetch_live_open_issues_rejects_snapshot_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "gh.exe"
+    executable.write_bytes(b"before")
+    monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
+
+    def fake_run(args: list[str], **kwargs: object) -> dict[str, object]:
+        Path(args[0]).write_bytes(b"after")
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "command": kwargs["display"],
+            "stdout": json.dumps([_live_issue()]),
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+    result = completion.fetch_live_open_issues(REPO_ROOT)
+
     assert result["returncode"] == 2
     assert result["issues"] is None
-    assert result["stderr"] == "GitHub CLI executable changed during acquisition"
+    assert (
+        result["stderr"]
+        == "GitHub CLI executable snapshot changed during acquisition"
+    )
 
 
 def test_custody_legs_do_not_impose_arbitrary_census_timeout(
