@@ -64,8 +64,10 @@ a preflight-to-execution TOCTOU change.
 6. Rehashes and binds the exact public master, config, CLI binary,
    launch-packet receipt, board receipt, benchmark registry, failure-class
    ledger, subject, seat, and other B7 named evidence.
-7. Rejects a certificate whose public-master SHA is not the current checked-out
-   public master or whose `superseded_by` field is non-null.
+7. Rejects a certificate whose 40-hex Git object ID in `public_master_sha` is
+   not the current checked-out public master or whose `superseded_by` field is
+   non-null. Content/evidence fields ending in `_sha256` remain exact
+   64-hex SHA-256 digests; the Git object ID is not relabeled or hash-wrapped.
 8. Validates that the run request is a subset of the certificate-owned scope.
 9. Constructs one fixed `disk_budget_runner.py` argv and one fixed,
    allowlisted `run_vertical_slice.py governed-vertical` child argv.
@@ -140,4 +142,3 @@ No path executes a shell command string.
 
 All implementation verification is CPU-only. This change dispatches no GPU
 work and does not itself create a certificate.
-

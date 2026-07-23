@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ CERTIFICATE_KEYS = {
     "superseded_by",
     "completion_receipt_path",
     "completion_receipt_sha256",
-    "public_master_sha256",
+    "public_master_sha",
     "checkout_sha256",
     "config_sha256",
     "tokenizer_sha256",
@@ -36,7 +37,6 @@ CERTIFICATE_KEYS = {
 }
 CERTIFICATE_SHA256_KEYS = {
     "completion_receipt_sha256",
-    "public_master_sha256",
     "checkout_sha256",
     "config_sha256",
     "tokenizer_sha256",
@@ -120,7 +120,7 @@ COMPLETION_RECEIPT_KEYS = {
 class ValidatedLaunch(NamedTuple):
     certificate_sha256: str
     run_spec_sha256: str
-    public_master_sha256: str
+    public_master_sha: str
     artifact_root: pathlib.Path
     custody_root: pathlib.Path
     runner_receipt: pathlib.Path
@@ -170,6 +170,22 @@ def _require_sha256(value: object, label: str) -> str:
         int(value, 16)
     except ValueError as error:
         raise ValueError(f"{label} must be a lowercase SHA-256") from error
+    return value
+
+
+def _require_git_sha(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 40
+        or value.lower() != value
+    ):
+        raise ValueError(f"{label} must be a lowercase 40-hex Git object ID")
+    try:
+        int(value, 16)
+    except ValueError as error:
+        raise ValueError(
+            f"{label} must be a lowercase 40-hex Git object ID"
+        ) from error
     return value
 
 
@@ -223,10 +239,12 @@ def read_current_master(repo_root: pathlib.Path) -> str:
     )
     if result.returncode != 0:
         raise ValueError("current public master is unreadable")
-    return _require_sha256(result.stdout.strip(), "current public master")
+    return _require_git_sha(result.stdout.strip(), "current public master")
 
 
-def _validate_completion_receipt(value: dict[str, Any]) -> None:
+def _validate_completion_receipt(
+    value: dict[str, Any], public_master_sha: str
+) -> None:
     _require_keys(value, COMPLETION_RECEIPT_KEYS, "completion receipt")
     if value["schema"] != "ember-01-completion-receipt-v1" or value["ok"] is not True:
         raise ValueError("completion receipt is not a successful EMBER-01 receipt")
@@ -239,6 +257,13 @@ def _validate_completion_receipt(value: dict[str, Any]) -> None:
         raise ValueError("completion receipt must contain exactly nine resolved-true legs")
 
     checkout = _require_object(value["checkout"], "completion checkout")
+    checkout_head = _require_git_sha(
+        checkout.get("head"), "completion checkout head"
+    )
+    if checkout_head != public_master_sha:
+        raise ValueError(
+            "completion checkout head does not match declared public master"
+        )
     if not (
         checkout.get("clean") is True
         and checkout.get("detached") is True
@@ -342,6 +367,7 @@ def validate_certified_request(
         raise ValueError("certificate is superseded")
     for key in CERTIFICATE_SHA256_KEYS:
         _require_sha256(certificate[key], f"certificate {key}")
+    _require_git_sha(certificate["public_master_sha"], "certificate public_master_sha")
 
     certificate_sha256 = _canonical_sha256(certificate)
     ledger_rows = _load_ledger(declaration_ledger_path)
@@ -358,7 +384,7 @@ def validate_certified_request(
         completion_path, "completion receipt"
     ) != certificate["completion_receipt_sha256"]:
         raise ValueError("completion receipt hash mismatch")
-    _validate_completion_receipt(completion)
+    _validate_completion_receipt(completion, certificate["public_master_sha"])
 
     conjuncts = _require_object(
         certificate["declaration_conjuncts"], "declaration conjuncts"
@@ -368,7 +394,7 @@ def validate_certified_request(
         raise ValueError("B7 declaration conjunct is false")
 
     current_master = read_current_master(repo_root)
-    if certificate["public_master_sha256"] != current_master:
+    if certificate["public_master_sha"] != current_master:
         raise ValueError("certificate does not bind current public master")
 
     run_spec = _load_json(run_spec_path, "run spec")
@@ -409,7 +435,7 @@ def validate_certified_request(
     return ValidatedLaunch(
         certificate_sha256=certificate_sha256,
         run_spec_sha256=_file_sha256(run_spec_path, "run spec"),
-        public_master_sha256=current_master,
+        public_master_sha=current_master,
         artifact_root=pathlib.Path(requested_scope["artifact_root"]),
         custody_root=custody_root,
         runner_receipt=runner_receipt,
@@ -466,14 +492,12 @@ def build_runner_argv(
 def _write_execution_receipt(
     launch: ValidatedLaunch, argv: list[str], exit_code: int
 ) -> pathlib.Path:
-    receipt_path = launch.runner_receipt.with_name(
-        f"{launch.runner_receipt.stem}-certified-launch.json"
-    )
+    receipt_path = _execution_receipt_path(launch)
     receipt = {
         "schema_version": "ember-certified-train-execution-v1",
         "certificate_sha256": launch.certificate_sha256,
         "run_spec_sha256": launch.run_spec_sha256,
-        "public_master_sha256": launch.public_master_sha256,
+        "public_master_sha": launch.public_master_sha,
         "argv": argv,
         "exit_code": exit_code,
         "artifact_root": str(launch.artifact_root),
@@ -500,6 +524,12 @@ def _write_execution_receipt(
         os.fsync(handle.fileno())
     os.replace(temporary_path, receipt_path)
     return receipt_path
+
+
+def _execution_receipt_path(launch: ValidatedLaunch) -> pathlib.Path:
+    return launch.runner_receipt.with_name(
+        f"{launch.runner_receipt.stem}-certified-launch.json"
+    )
 
 
 def execute_validated_launch(
@@ -534,3 +564,45 @@ def certify_and_execute(
         run_spec_path,
     )
     return execute_validated_launch(repo_root, launch, run_process=run_process)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Validate a declared Ember canary certificate and execute its fixed runner."
+    )
+    parser.add_argument("--root", required=True, type=pathlib.Path)
+    parser.add_argument("--certificate", required=True, type=pathlib.Path)
+    parser.add_argument(
+        "--declaration-ledger", required=True, type=pathlib.Path
+    )
+    parser.add_argument("--run-spec", required=True, type=pathlib.Path)
+    arguments = parser.parse_args(argv)
+    try:
+        launch = validate_certified_request(
+            arguments.root,
+            arguments.certificate,
+            arguments.declaration_ledger,
+            arguments.run_spec,
+        )
+        exit_code = execute_validated_launch(arguments.root, launch)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    print(
+        json.dumps(
+            {
+                "outcome": "COMPLETED" if exit_code == 0 else "FAILED",
+                "execution_receipt": str(_execution_receipt_path(launch)),
+                "artifact_root": str(launch.artifact_root),
+                "exit_code": exit_code,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
