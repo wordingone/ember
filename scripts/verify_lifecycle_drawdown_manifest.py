@@ -55,24 +55,11 @@ def _verify_candidate(row: Mapping[str, Any]) -> None:
         raise ManifestError(f"{ref} open_head_prs must be a list")
 
     verdict = row.get("verdict")
+    if verdict == "DELETE_VERIFIED":
+        raise ManifestError(f"{ref} DELETE_VERIFIED is not executable in this structural verifier")
     if isinstance(verdict, str) and verdict.startswith("KEEP_"):
         return
-    if verdict != "DELETE_VERIFIED":
-        raise ManifestError(f"{ref} has an unknown or unsafe verdict")
-
-    if row["protection"] is not False or row["open_head_prs"]:
-        raise ManifestError(f"{ref} deletion is not unprotected and head-PR-free")
-    equivalence = row.get("path_diff_blob_equivalence")
-    if not isinstance(equivalence, Mapping) or equivalence.get("status") != "PROVEN_EXACT":
-        raise ManifestError(f"{ref} deletion lacks exact path/blob equivalence")
-    paths = equivalence.get("paths")
-    blobs = equivalence.get("terminal_blobs")
-    if not isinstance(paths, list) or not paths or not all(isinstance(path, str) and path for path in paths):
-        raise ManifestError(f"{ref} deletion lacks a nonempty exact path set")
-    if not isinstance(blobs, Mapping) or set(blobs) != set(paths):
-        raise ManifestError(f"{ref} deletion lacks one terminal blob per exact path")
-    for path, blob in blobs.items():
-        _sha(blob, SHA1, f"{ref}.terminal_blobs[{path}]")
+    raise ManifestError(f"{ref} has an unknown or unsafe verdict")
 
 
 def verify_manifest(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -85,16 +72,23 @@ def verify_manifest(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ManifestError("manifest_sha256 does not match canonical bytes")
     if payload.get("schema_version") != "ember-inherited-drawdown-v2":
         raise ManifestError("unexpected lifecycle manifest schema")
-    if payload.get("deletion_authority") not in {"NOT_GRANTED", "GRANTED_EXACT_ROWS"}:
-        raise ManifestError("deletion_authority is not explicit")
+    if payload.get("deletion_authority") != "NOT_GRANTED":
+        raise ManifestError("deletion_authority must be NOT_GRANTED for this structural verifier")
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
         raise ManifestError("candidates must be a list")
     if payload.get("candidate_count") != len(candidates):
         raise ManifestError("candidate_count does not match candidates")
+    if len(candidates) > 25:
+        raise ManifestError("candidate list must contain at most 25 rows")
+    refs: set[str] = set()
     for row in candidates:
         if not isinstance(row, Mapping):
             raise ManifestError("candidate row must be an object")
+        ref = _require_ref(row.get("ref"))
+        if ref in refs:
+            raise ManifestError(f"duplicate candidate ref: {ref}")
+        refs.add(ref)
         _verify_candidate(row)
     return dict(payload)
 

@@ -21,6 +21,28 @@ def _load() -> dict:
     return payload
 
 
+def _rehashed(payload: dict) -> dict:
+    canonical = dict(payload)
+    canonical.pop("manifest_sha256", None)
+    payload["manifest_sha256"] = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    return payload
+
+
+def _valid_delete_row(payload: dict) -> dict:
+    row = copy.deepcopy(payload["candidates"][0])
+    row["verdict"] = "DELETE_VERIFIED"
+    row["protection"] = False
+    row["open_head_prs"] = []
+    row["path_diff_blob_equivalence"] = {
+        "status": "PROVEN_EXACT",
+        "paths": ["receipts/example.json"],
+        "terminal_blobs": {"receipts/example.json": "a" * 40},
+    }
+    return row
+
+
 def test_manifest_has_no_delete_rows_and_preserves_divergent_edge_case() -> None:
     payload = _load()
     assert payload["deletion_authority"] == "NOT_GRANTED"
@@ -68,8 +90,57 @@ def test_manifest_verifier_rejects_uncertain_row_marked_for_deletion() -> None:
     tampered["manifest_sha256"] = hashlib.sha256(
         json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     ).hexdigest()
-    with __import__("pytest").raises(ManifestError, match="exact path/blob equivalence"):
+    with __import__("pytest").raises(ManifestError, match="DELETE_VERIFIED"):
         verified_delete_rows(tampered)
+
+
+def test_manifest_verifier_rejects_delete_row_under_not_granted_authority() -> None:
+    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
+
+    tampered = copy.deepcopy(_load())
+    tampered["candidates"][0] = _valid_delete_row(tampered)
+    tampered = _rehashed(tampered)
+    with __import__("pytest").raises(ManifestError, match="DELETE_VERIFIED"):
+        verified_delete_rows(tampered)
+
+
+def test_manifest_verifier_rejects_granted_authority_in_structural_verifier() -> None:
+    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
+
+    tampered = copy.deepcopy(_load())
+    tampered["deletion_authority"] = "GRANTED_EXACT_ROWS"
+    tampered = _rehashed(tampered)
+    with __import__("pytest").raises(ManifestError, match="NOT_GRANTED"):
+        verified_delete_rows(tampered)
+
+
+def test_manifest_verifier_rejects_duplicate_candidate_refs() -> None:
+    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
+
+    for duplicate in ("KEEP_KEEP", "KEEP_DELETE"):
+        tampered = copy.deepcopy(_load())
+        duplicate_row = copy.deepcopy(tampered["candidates"][0])
+        if duplicate == "KEEP_DELETE":
+            duplicate_row = _valid_delete_row(tampered)
+        tampered["candidates"].append(duplicate_row)
+        tampered["candidate_count"] = len(tampered["candidates"])
+        tampered = _rehashed(tampered)
+        with __import__("pytest").raises(ManifestError, match="duplicate candidate ref"):
+            verify_manifest(tampered)
+
+
+def test_manifest_verifier_rejects_more_than_25_candidates() -> None:
+    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
+
+    tampered = copy.deepcopy(_load())
+    for index in range(11):
+        row = copy.deepcopy(tampered["candidates"][0])
+        row["ref"] = f"refs/heads/synthetic-wave003-{index}"
+        tampered["candidates"].append(row)
+    tampered["candidate_count"] = len(tampered["candidates"])
+    tampered = _rehashed(tampered)
+    with __import__("pytest").raises(ManifestError, match="at most 25"):
+        verify_manifest(tampered)
 
 
 def test_execution_receipt_is_canonical_noop_and_binds_manifest() -> None:
