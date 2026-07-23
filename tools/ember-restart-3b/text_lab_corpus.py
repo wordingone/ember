@@ -84,6 +84,44 @@ def source_inventory_descriptor(*, source_id: str, domain: str, split: str, prov
         "expected_source_sha256": raw_sha256.lower(), "expected_source_bytes": receipt_entry["bytes"],
     }
 
+def select_numeric_inventory_files(*, raw_root: Path, inventory_path: Path, limit: int) -> list[dict[str, Any]]:
+    """Close a numbered local-file set to one exact, non-path-bearing wave inventory."""
+    if type(limit) is not int or limit < 1:
+        raise ValueError("wave inventory selection limit is invalid")
+    raw_root, inventory_path = Path(raw_root), Path(inventory_path)
+    if not raw_root.is_dir() or not inventory_path.is_file():
+        raise ValueError("wave inventory inputs are unavailable")
+    try:
+        raw_lines = inventory_path.read_bytes().splitlines()
+        rows = [json.loads(line) for line in raw_lines]
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("wave inventory is invalid") from error
+    if not rows or len(rows) < limit:
+        raise ValueError("wave inventory is incomplete")
+    by_bytes: dict[int, list[tuple[dict[str, Any], bytes]]] = {}
+    for row, raw_line in zip(rows, raw_lines, strict=True):
+        if not isinstance(row, dict) or set(row) != _WAVE_RECEIPT_KEYS:
+            raise ValueError("wave inventory row is not closed")
+        if not _valid_hash(str(row.get("sha256", "")).lower()) or type(row.get("bytes")) is not int or row["bytes"] <= 0:
+            raise ValueError("wave inventory row byte binding is invalid")
+        by_bytes.setdefault(row["bytes"], []).append((row, raw_line))
+    paths = sorted((path for path in raw_root.glob("*.txt") if path.is_file() and path.stem.isdecimal()), key=lambda path: int(path.stem))
+    if len(paths) != len(rows):
+        raise ValueError("wave inventory file set is not closed")
+    mapped: list[dict[str, Any]] = []
+    used_rows: set[str] = set()
+    for path in paths:
+        matches = by_bytes.get(path.stat().st_size, [])
+        if len(matches) != 1:
+            raise ValueError("wave inventory filename mapping is ambiguous")
+        row, raw_line = matches[0]
+        inventory_sha256 = _sha_bytes(raw_line)
+        if inventory_sha256 in used_rows:
+            raise ValueError("wave inventory row is reused")
+        used_rows.add(inventory_sha256)
+        mapped.append({"filename": path.name, "raw_path": path, "receipt_entry": dict(row), "inventory_sha256": inventory_sha256})
+    return mapped[:limit]
+
 def record_source_custody(
     *, descriptor: dict[str, Any], raw_bytes: bytes, license_evidence_bytes: bytes,
     policy_bytes: bytes, verifier_bytes: bytes,
