@@ -28,6 +28,8 @@ CERTIFICATE_EVIDENCE_FIELDS = (
     "disk_budget_runner_sha256",
     "governed_runner_sha256",
     "input_identity_validator_sha256",
+    "tokenizer_sha256",
+    "emberd_binary_sha256",
 )
 
 
@@ -37,6 +39,21 @@ def canonical_bytes(value: object) -> bytes:
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def emberd_source_sha256(repo: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    for relative in (
+        "runtime/emberd/src/lib.rs",
+        "runtime/emberd/src/rpc.rs",
+        "runtime/emberd/src/main.rs",
+        "runtime/emberd/Cargo.toml",
+        "runtime/emberd/Cargo.lock",
+    ):
+        payload = (repo / pathlib.PurePosixPath(relative)).read_bytes()
+        digest.update(len(payload).to_bytes(8, "little"))
+        digest.update(payload)
+    return digest.hexdigest()
 
 
 def write_json(path: pathlib.Path, value: object) -> None:
@@ -112,6 +129,15 @@ def valid_scope(artifact_root: pathlib.Path, custody_root: pathlib.Path) -> dict
         "model_server_allowed": False,
         "wsl_allowed": False,
         "persistent_worker_allowed": False,
+        "docker_allowed": False,
+        "expected_gpu_uuid": "GPU-EMBER-4090",
+        "storage_reserves": [
+            {"root": "B:\\", "minimum_free_bytes": 250 * 1024**3},
+            {"root": "C:\\", "minimum_free_bytes": 150 * 1024**3},
+        ],
+        "required_available_maximum_commit_bytes": 40 * 1024**3,
+        "maximum_job_memory_bytes": 32 * 1024**3,
+        "simulated_peak_commit_bytes": 24 * 1024**3,
     }
 
 
@@ -149,6 +175,16 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
     custody_root = root / "custody"
     artifact_root = custody_root / "artifacts"
     artifact_root.mkdir(parents=True)
+    for relative in (
+        "runtime/emberd/src/lib.rs",
+        "runtime/emberd/src/rpc.rs",
+        "runtime/emberd/src/main.rs",
+        "runtime/emberd/Cargo.toml",
+        "runtime/emberd/Cargo.lock",
+    ):
+        path = repo / pathlib.PurePosixPath(relative)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"owned {relative}\n".encode("utf-8"))
 
     completion_path = custody_root / "ember-01-completion.json"
     write_json(completion_path, valid_completion_receipt())
@@ -196,6 +232,14 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
             relative = "tools/ember-restart-3b/input_identity.py"
             path = repo / pathlib.PurePosixPath(relative)
             scope = "repo"
+        elif field == "tokenizer_sha256":
+            relative = "tokenizer/tokenizer.json"
+            path = repo / pathlib.PurePosixPath(relative)
+            scope = "repo"
+        elif field == "emberd_binary_sha256":
+            relative = "runtime/emberd.exe"
+            path = custody_root / relative
+            scope = "certificate"
         else:
             relative = f"evidence/{field}.json"
             path = custody_root / relative
@@ -225,6 +269,7 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
         "evidence_bundle_path": "certificate-evidence-bundle.json",
         "evidence_bundle_sha256": sha256_bytes(evidence_bundle_path.read_bytes()),
         "public_master_sha": SHA,
+        "emberd_source_sha256": emberd_source_sha256(repo),
         **evidence_hashes,
         "declaration_conjuncts": {
             "record_coherent": True,
@@ -840,6 +885,199 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 response["execution_receipt_sha256"],
                 sha256_bytes(execution_receipt.read_bytes()),
             )
+
+    def test_dispatch_manifest_binds_single_canary_authority_chain(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            tokenizer = paths["evidence_paths"]["tokenizer_sha256"]
+            emberd_binary = paths["evidence_paths"]["emberd_binary_sha256"]
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+
+            manifest = module.build_emberd_dispatch_manifest(
+                paths["repo"],
+                launch,
+                now_ms=1_000_000,
+            )
+
+            self.assertEqual(
+                manifest["schema_version"],
+                "emberd-governed-canary-dispatch-v1",
+            )
+            self.assertEqual(manifest["source_commit"], SHA)
+            self.assertEqual(
+                manifest["canary_scope"]["expected_gpu_uuid"],
+                "GPU-EMBER-4090",
+            )
+            self.assertEqual(
+                manifest["canary_scope"]["expected_emberd_binary_sha256"],
+                sha256_bytes(emberd_binary.read_bytes()),
+            )
+            self.assertEqual(
+                manifest["canary_scope"]["expected_emberd_source_sha256"],
+                emberd_source_sha256(paths["repo"]),
+            )
+            self.assertEqual(
+                manifest["storage_reserves"],
+                [
+                    {"root": "B:\\", "minimum_free_bytes": 250 * 1024**3},
+                    {"root": "C:\\", "minimum_free_bytes": 150 * 1024**3},
+                ],
+            )
+            self.assertEqual(
+                manifest["required_available_maximum_commit_bytes"],
+                40 * 1024**3,
+            )
+            self.assertEqual(
+                manifest["maximum_job_memory_bytes"],
+                32 * 1024**3,
+            )
+            self.assertEqual(
+                manifest["simulated_peak_commit_bytes"],
+                24 * 1024**3,
+            )
+            self.assertEqual(
+                {binding["kind"] for binding in manifest["bindings"]},
+                {
+                    "config",
+                    "certified_consumer",
+                    "disk_budget_runner",
+                    "governed_runner",
+                    "tokenizer",
+                    "input",
+                    "verifier",
+                },
+            )
+            self.assertEqual(
+                sum(
+                    binding["kind"] == "input"
+                    for binding in manifest["bindings"]
+                ),
+                2,
+            )
+            self.assertEqual(
+                sum(
+                    binding["kind"] == "verifier"
+                    for binding in manifest["bindings"]
+                ),
+                2,
+            )
+            argv = manifest["args"]
+            delimiter = argv.index("--")
+            self.assertEqual(
+                pathlib.Path(argv[0]).name,
+                "disk_budget_runner.py",
+            )
+            self.assertEqual(argv[delimiter + 1], sys.executable)
+            self.assertEqual(
+                pathlib.Path(argv[delimiter + 2]).name,
+                "run_vertical_slice.py",
+            )
+
+    def test_dispatch_manifest_refuses_storage_reserve_below_operator_floor(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            tokenizer = paths["evidence_paths"]["tokenizer_sha256"]
+            emberd_binary = paths["evidence_paths"]["emberd_binary_sha256"]
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            bad_launch = launch._replace(
+                storage_reserves=[
+                    {"root": "B:\\", "minimum_free_bytes": 250 * 1024**3},
+                    {"root": "C:\\", "minimum_free_bytes": 149 * 1024**3},
+                ]
+            )
+            with self.assertRaisesRegex(ValueError, "operator floor"):
+                module.build_emberd_dispatch_manifest(
+                    paths["repo"],
+                    bad_launch,
+                    now_ms=1_000_000,
+                )
+
+    def test_dispatch_manifest_refuses_unapproved_provisional_host_bounds(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            tokenizer = paths["evidence_paths"]["tokenizer_sha256"]
+            emberd_binary = paths["evidence_paths"]["emberd_binary_sha256"]
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            bad_launch = launch._replace(
+                simulated_peak_commit_bytes=23 * 1024**3
+            )
+            with self.assertRaisesRegex(ValueError, "provisional host"):
+                module.build_emberd_dispatch_manifest(
+                    paths["repo"],
+                    bad_launch,
+                    now_ms=1_000_000,
+                )
+
+    def test_validated_launch_carries_manifest_authority_without_loose_inputs(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            manifest = module.build_emberd_dispatch_manifest(
+                paths["repo"],
+                launch,
+                now_ms=1_000_000,
+            )
+            self.assertEqual(
+                manifest["canary_scope"]["expected_gpu_uuid"],
+                "GPU-EMBER-4090",
+            )
+
+    def test_dispatch_manifest_refuses_emberd_source_drift_after_validation(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            (
+                paths["repo"] / "runtime" / "emberd" / "src" / "rpc.rs"
+            ).write_bytes(b"drifted source\n")
+            with self.assertRaisesRegex(ValueError, "emberd source"):
+                module.build_emberd_dispatch_manifest(
+                    paths["repo"],
+                    launch,
+                    now_ms=1_000_000,
+                )
 
     def test_child_failure_is_propagated_and_receipted(self) -> None:
         module = load_module()
