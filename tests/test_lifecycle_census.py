@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 
+from scripts import lifecycle_census
 from scripts.lifecycle_census import CensusError, build_receipt, build_stale_report, collect_population
 from scripts.lifecycle_census import GitHubApi, collect_live_populations
 
@@ -148,7 +149,7 @@ def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() ->
 
 def test_main_computes_stale_report_before_writing_receipt() -> None:
     source = (Path(__file__).parents[1] / "scripts" / "lifecycle_census.py").read_text(encoding="utf-8")
-    assert source.index("stale_report = build_stale_report") < source.index("write_receipt(receipt, path)")
+    assert source.index("stale_report = build_stale_report") < source.index("write_outputs(receipt, path")
 
 
 def test_collect_population_preserves_unlabeled_unassigned_items() -> None:
@@ -179,3 +180,25 @@ def test_collect_live_populations_refuses_public_master_move(monkeypatch: pytest
 def test_collect_live_populations_rejects_master_reader_without_expected_sha() -> None:
     with pytest.raises(CensusError, match="expected_master_sha"):
         collect_live_populations(repository="wordingone/ember", token="fixture", master_sha_reader=lambda: "a" * 40)
+
+
+def test_write_outputs_serializes_receipt_and_report_before_publishing_either(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    receipt_path = tmp_path / "receipt.json"
+    report_path = tmp_path / "stale.json"
+    receipt = {"receipt_sha256": "a" * 64}
+    report = {"report_sha256": "b" * 64}
+    original = lifecycle_census._canonical_json
+    calls = 0
+
+    def fail_during_report_serialization(value: object) -> bytes:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise CensusError("report serialization failed")
+        return original(value)
+
+    monkeypatch.setattr(lifecycle_census, "_canonical_json", fail_during_report_serialization)
+    with pytest.raises(CensusError, match="report serialization failed"):
+        lifecycle_census.write_outputs(receipt, receipt_path, stale_report=report, stale_output=report_path)
+    assert not receipt_path.exists()
+    assert not report_path.exists()
