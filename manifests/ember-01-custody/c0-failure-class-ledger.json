@@ -1,0 +1,122 @@
+{
+  "authority": {
+    "goal_id": "EMBER-01",
+    "workstream_id": "EMBER-01D",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema": "ember-01-c0-failure-class-ledger-v1",
+  "classes": [
+    {
+      "class_id": "VRAM_OOM",
+      "title": "VRAM/OOM failure",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): the 3B model must not OOM under the governed resource envelope; an unguarded OOM invalidates any training run silently.",
+      "state": "BLOCKING",
+      "blocking_reason": "No landed fail-closed guard on this checkout. Resource-governor headroom rules exist as prose (CLAUDE.md safety rails) but no executable regression guard proves VRAM-fraction-cap + margin-assert + pacing is enforced at launch time. Needs a synthetic-recurrence red-then-green guard before this row can close."
+    },
+    {
+      "class_id": "COMMIT_CHARGE",
+      "title": "Commit-charge / native-crash on startup from system commit starvation",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): commit-charge starvation at a phase boundary crashes the training process and, per visible-window-hygiene, risks the whole host session.",
+      "state": "BLOCKING",
+      "blocking_reason": "No landed fail-closed guard on this checkout. In-run commit governor (checkpoint + clean abort under a commit-floor margin) is a stated rail, not an executable regression guard in the repo. Needs a synthetic low-commit recurrence test before this row can close."
+    },
+    {
+      "class_id": "NATIVE_CRASH",
+      "title": "Native crash / segfault in the training loop",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): an unrecoverable native process death mid-run invalidates the run and, without a crash-survival guard, silently loses training state.",
+      "state": "BLOCKING",
+      "blocking_reason": "No landed fail-closed guard on this checkout. Named as spine-blocking OPEN work directly in the class-kill law (still-can-recur set: native-crash, shard-dir, crash-survival). Needs a crash-survival mechanism plus a synthetic-crash regression guard before this row can close."
+    },
+    {
+      "class_id": "BF16_SILENT_FREEZE",
+      "title": "BF16 silent gradient freeze",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): undetected gradient/loss saturation under BF16 produces a run that LOOKS like it trained but never learned, invalidating any completion claim.",
+      "state": "BLOCKING",
+      "blocking_reason": "Prior CLOSED_GUARDED reverted 2026-07-23: the named guard scripts/tests/test_screen792_bf16_momentum.py is DEAD ON IMPORT \u2014 pytest --collect-only aborts with SystemExit(\"historical_only: ...execution-denied\") because it imports the sub-3B trainer chain locked at module scope by commit 4f758db0 (2026-07-12), which POSTDATES the guard's own landing (#792). A guard whose bytes exist but cannot be collected/executed cannot regression-guard the class (a coordinator collectability audit surfaced this; the class-kill dead-guard class). Reopens to CLOSED_GUARDED when a LIVE guard on the current bf16-momentum path lands and is proven collectable + RED-first."
+    },
+    {
+      "class_id": "GOVERNED_ABORT_OBSERVABILITY",
+      "title": "Governed-abort observability loss",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): a governed abort (resource cap, headroom violation, kill-discipline stop) that leaves no receipt is indistinguishable from an unexplained hang, masking the real defect from post-mortem review.",
+      "state": "BLOCKING",
+      "blocking_reason": "No landed fail-closed guard on this checkout. Receipted-abort logging exists for kill-discipline (kill-receipts.jsonl) but nothing wires a training-loop abort to a mandatory receipt write with a regression guard that reds on a silent-abort recurrence."
+    },
+    {
+      "class_id": "SHARD_DIR_WIRING",
+      "title": "Shard-dir wiring / data-path misconfiguration",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): silent redirection to the wrong shard directory corrupts the training signal without any visible symptom, invalidating the run's provenance.",
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/test_v0_launch_gate_shard_dir_override.py",
+      "guard_kind": "test",
+      "evidence": "#682/#793 landed regression: g_shards()/gate() thread --shard-dir through validate_shards_receipt; an override at a missing/wrong dir fails closed (all three shapes + the wiring proven). Reclassified BLOCKING->CLOSED_GUARDED on landed-guard evidence (coordinator discriminating check 2026-07-23); the codex custody lane holds final classification authority."
+    },
+    {
+      "class_id": "CRASH_SURVIVAL",
+      "title": "Crash-survival / checkpoint validity across a crash",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): resuming from a checkpoint whose validity across a crash was never verified can silently continue training on corrupted state.",
+      "state": "BLOCKING",
+      "blocking_reason": "No landed fail-closed guard on this checkout. Named directly in the class-kill law as spine-blocking OPEN work (still-can-recur set). Checkpoint save/load identity binding exists (scripts/ember_01_identity/checkpoint_save_load_identity_binding.py) but no guard proves a checkpoint written mid-crash is rejected on resume. Needs a synthetic-crash resume probe before this row can close."
+    },
+    {
+      "class_id": "TEXT_LAB_DATA_AUTHORITY",
+      "title": "Text-lab data authority / training-signal provenance corruption",
+      "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21) cross-referenced against R1 (no external loss/reward) and R5 (one ground truth): an untraceable training-data origin means the run cannot be certified as owned-learned-signal.",
+      "state": "BLOCKING",
+      "blocking_reason": "No landed fail-closed guard specific to this class on this checkout. accepted-training-input-authorities-v1.json exists as a manifest but no executable guard cross-references every consumed training shard against it at cycle start. Needs a training-signal path audit plus a receipted data-source census before this row can close."
+    },
+    {
+      "class_id": "CHECKPOINT_SHARD_CONTRADICTION",
+      "title": "Checkpoint / shard-size resource contradiction",
+      "birth_relevance": "Surfaced 2026-07 (issue #1012): the configured shard size (4 GiB) contradicts observed checkpoint sizing, an unresolved resource-envelope defect that can silently truncate or misallocate storage during a real run.",
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "tests/ember_restart_model/test_checkpoint_artifacts.py:test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap",
+      "guard_kind": "test",
+      "evidence": "#1012 merged c0b9219 (public master verified 2026-07-23): v5 split-shard writer + fixed 4 GiB transient scratch cap (_ScratchCappedWriter fails closed mid-write; pre-serialization _unique_tensor_storage_bytes lower-bound check). Two collectable boundary tests regression-guard the class \u2014 test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap (an over-cap single temp shard is REJECTED, fail-closed, never silently truncated) and test_v5_transient_cap_breach_cleans_temps_and_retains_failure_evidence (a breach cleans temps + retains observable failure evidence). CANARY scope: active-expert canary optimizer tensor lower bound ~3.214 GiB passes the 4 GiB cap. Sustained multi-domain ~7.151 GiB EXCEEDS it \u2014 optimizer-state splitting (or another bounded format) is a NAMED OPEN pre-sustained GATE-2 precondition (recorded in the #1012 body), NOT a hole in this guard: the guard makes the contradiction fail closed, never silent. The codex custody lane holds final classification authority."
+    },
+    {
+      "class_id": "R1_CUSTODY_ROOTS",
+      "title": "R1 / RECORD-COHERENT: custody-root census incomplete",
+      "birth_relevance": "EMBER-01 leg 1 (R1 subset): an operator-machine root that is claimed as custody but never bound in the census is an unverifiable authority claim, violating R1 (no external loss/reward masquerading as owned signal).",
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/ember_01_custody/census.py:build_root_census",
+      "guard_kind": "test",
+      "evidence": "PR #809, PR #810; tests/ember_01_custody/test_census.py (build_root_census exercised on resolved/unresolved/empty-string roots)"
+    },
+    {
+      "class_id": "R2_ARTIFACT_CUSTODY",
+      "title": "R2 / RECORD-COHERENT: artifact custody census incomplete",
+      "birth_relevance": "EMBER-01 leg 2 (R2 subset): a benchmark or receipt claimed as evidence whose cited path is untracked, unparseable, or missing a direct mandate is not real custody, violating R2 (the update signal must be the computation, not an assertion).",
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/ember_01_custody/census.py:validate_benchmark_registry",
+      "guard_kind": "test",
+      "evidence": "PR #810; tests/ember_01_custody/test_census.py (validate_benchmark_registry exercised for direct-mandate-missing and malformed-registry cases)"
+    },
+    {
+      "class_id": "R3_IDENTITY_ROUNDTRIP",
+      "title": "R3 / RECORD-COHERENT: identity round-trip on an owned checkpoint",
+      "birth_relevance": "EMBER-01 leg 3 (R3 subset): an owned checkpoint whose identity manifest cannot round-trip (or that a tampered checkpoint still validates) breaks the fail-closed identity binding, violating R3 (self-modification must change behavior traceably).",
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/ember_01_identity/validate_identity.py",
+      "guard_kind": "test",
+      "evidence": "PR #809; tests/ember_01_identity/test_validate_identity.py; EMBER-01 leg 3/leg 4 (identity fail-closed on tampered checkpoint) in scripts/verify_ember01_completion.py"
+    },
+    {
+      "class_id": "R8_AUTHORITY_CONSERVATION",
+      "title": "R8 / RECORD-COHERENT: authority conservation certificate",
+      "birth_relevance": "EMBER-01 leg 8 (R8 subset): undetected drift between the declared goal_id/workstream_id/next_executed_outcome lineage and the actual mechanism/config binding breaks authority conservation across the goal graph.",
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/verify_authority_conservation.py",
+      "guard_kind": "test",
+      "evidence": "EMBER-00 authority framework; scripts/ember_totality/test_c_authority.py"
+    },
+    {
+      "class_id": "R9_ISSUE_CENSUS",
+      "title": "R9 / RECORD-COHERENT: public issue census freeze",
+      "birth_relevance": "EMBER-01 leg 9 (R9 subset): an unfrozen or unreconciled public-issue disposition ledger lets a closed-in-word issue remain open-in-fact (or vice versa), corrupting the one-ground-truth issue record R9 requires.",
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/ember_01_custody/issue_census.py",
+      "guard_kind": "test",
+      "evidence": "PR #810; tests/ember_01_custody/test_issue_census.py (master-blob binding, closure-proof rejection, content-bound snapshot recompute)"
+    }
+  ]
+}
