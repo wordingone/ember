@@ -359,6 +359,164 @@ def detect_contradictions(
     ]
 
 
+def _current_root_membership(
+    scan: str,
+    bound: Path,
+    root_spec: Mapping[str, Any],
+    initial_membership: list[str],
+) -> list[str]:
+    if scan == "git_repository":
+        rows, _ = _material_file_rows(
+            bound, _git_material_paths(bound), "git-material/"
+        )
+        return [relative for relative, _ in rows]
+    if scan == "directory_discovery":
+        patterns = root_spec["name_patterns"]
+        rows: list[tuple[str, Path]] = []
+        for child in sorted(
+            (
+                child
+                for child in bound.iterdir()
+                if any(
+                    fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
+                    for pattern in patterns
+                )
+            ),
+            key=lambda child: child.name.casefold(),
+        ):
+            git_probe = subprocess.run(
+                ["git", "rev-parse", "--git-dir"],
+                cwd=child if child.is_dir() else bound,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            if child.is_dir() and git_probe.returncode == 0:
+                summary = git_repository_summary(
+                    f"membership:{child.name}", child
+                )
+                if not summary["is_bare"]:
+                    material_rows, _ = _material_file_rows(
+                        child,
+                        _git_material_paths(child),
+                        f"{child.name}/git-material/",
+                    )
+                    rows.extend(material_rows)
+            elif child.is_file():
+                rows.append((child.name, child))
+            elif child.is_dir():
+                nested_rows, _ = _discover_file_rows(child)
+                rows.extend(
+                    (f"{child.name}/{relative}", candidate)
+                    for relative, candidate in nested_rows
+                )
+        return [relative for relative, _ in rows]
+    if scan == "git_ignored_registry":
+        ignored = [
+            relative.replace("\\", "/")
+            for relative in _git(
+                bound,
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+            ).split("\0")
+            if relative
+        ]
+        rows, _ = _material_file_rows(bound, ignored)
+        return [relative for relative, _ in rows]
+    if scan == "git_worktree_material_registry":
+        rows: list[tuple[str, Path]] = []
+        for worktree in parse_worktree_porcelain(
+            _git(bound, "worktree", "list", "--porcelain")
+        ):
+            worktree_path = Path(worktree["normalized_path"])
+            if not worktree_path.exists():
+                raise FileNotFoundError(
+                    2, "registered worktree unavailable during final verification"
+                )
+            material_paths = _git_material_paths(worktree_path)
+            rows.extend(
+                (
+                    f"{worktree['worktree_id']}/{relative}",
+                    worktree_path / Path(relative),
+                )
+                for relative in material_paths
+                if (worktree_path / Path(relative)).is_file()
+            )
+        return [relative for relative, _ in rows]
+    if scan == "files" and bound.is_dir():
+        return [relative for relative, _ in _discover_file_rows(bound)[0]]
+    return list(initial_membership)
+
+
+def _final_verification_error(
+    root_id: str,
+    verification: str,
+    exc: Exception,
+) -> dict[str, Any]:
+    return {
+        "code": "final_verification_inaccessible",
+        "root_id": root_id,
+        "verification": verification,
+        "exception": type(exc).__name__,
+        "winerror": getattr(exc, "winerror", None),
+        "errno": getattr(exc, "errno", None),
+        "resolution": "unresolved_retry_snapshot",
+    }
+
+
+def _current_discovery_snapshot(
+    root_id: str,
+    bound: Path,
+    patterns: list[str],
+) -> list[dict[str, Any]]:
+    snapshot: list[dict[str, Any]] = []
+    for child in sorted(
+        (
+            child
+            for child in bound.iterdir()
+            if any(
+                fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
+                for pattern in patterns
+            )
+        ),
+        key=lambda child: child.name.casefold(),
+    ):
+        normalized_path = str(child.resolve()).replace("\\", "/")
+        git_probe = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=child if child.is_dir() else bound,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        if child.is_dir() and git_probe.returncode == 0:
+            summary = git_repository_summary(f"{root_id}:{child.name}", child)
+            snapshot.append(
+                {
+                    "name": child.name,
+                    "normalized_path": normalized_path,
+                    "kind": "bare_git" if summary["is_bare"] else "git_worktree",
+                    "git": summary,
+                }
+            )
+        else:
+            snapshot.append(
+                {
+                    "name": child.name,
+                    "normalized_path": normalized_path,
+                    "kind": "non_git",
+                }
+            )
+    return snapshot
+
+
 def build_root_census(
     specification: Mapping[str, Any],
     bindings: Mapping[str, Path],
@@ -394,6 +552,10 @@ def build_root_census(
                 }
             )
     physical_hash_cache: dict[tuple[object, ...], str] = {}
+    final_byte_records: dict[tuple[object, ...], dict[str, Any]] = {}
+    final_membership_records: list[dict[str, Any]] = []
+    final_git_records: list[dict[str, Any]] = []
+    final_discovery_records: list[dict[str, Any]] = []
     for root_spec in sorted(
         specification.get("roots", []), key=lambda row: row["root_id"]
     ):
@@ -416,6 +578,8 @@ def build_root_census(
                 "lineage_admissibility", "unresolved"
             ),
         }
+        if isinstance(source_root_id, str):
+            root_row["source_root_id"] = source_root_id
         if not isinstance(source_root_id, str) and bound is not None:
             root_row["normalized_bound_path"] = str(bound.resolve()).replace("\\", "/")
         roots.append(root_row)
@@ -483,8 +647,6 @@ def build_root_census(
         initial_membership: list[str] | None = None
         initial_git_summary: dict[str, Any] | None = None
         initial_discovery_snapshot: list[dict[str, Any]] | None = None
-        initial_content_identities: dict[str, tuple[str, int]] = {}
-        final_discovery_candidates: list[tuple[str, Path]] | None = None
         try:
             if scan == "git_repository":
                 summary = git_repository_summary(root_id, bound)
@@ -733,6 +895,37 @@ def build_root_census(
             initial_membership = [relative for relative, _ in candidates]
         if initial_membership is None:
             initial_membership = [relative for relative, _ in candidates]
+        if not (
+            scan == "git_repository"
+            and initial_git_summary is not None
+            and initial_git_summary["is_bare"] is True
+        ):
+            final_membership_records.append(
+                {
+                    "root_id": root_id,
+                    "scan": scan,
+                    "bound": bound,
+                    "root_spec": dict(root_spec),
+                    "initial_membership": list(initial_membership),
+                }
+            )
+        if initial_git_summary is not None:
+            final_git_records.append(
+                {
+                    "root_id": root_id,
+                    "bound": bound,
+                    "initial_summary": initial_git_summary,
+                }
+            )
+        if initial_discovery_snapshot is not None:
+            final_discovery_records.append(
+                {
+                    "root_id": root_id,
+                    "bound": bound,
+                    "patterns": list(root_spec["name_patterns"]),
+                    "initial_snapshot": initial_discovery_snapshot,
+                }
+            )
         for error in directory_errors:
             contradictions.append({
                 "code": "directory_coverage_inaccessible",
@@ -868,124 +1061,110 @@ def build_root_census(
                     "hash_source": "current_bytes",
                 }
             )
-            initial_content_identities[relative] = (digest, stat.st_size)
-        if scan == "directory_discovery" and initial_discovery_snapshot is not None:
-            patterns = root_spec["name_patterns"]
-            final_discovery_snapshot: list[dict[str, Any]] = []
-            final_discovery_candidates = []
-            for child in sorted(
-                (
-                    child for child in bound.iterdir()
-                    if any(
-                        fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
-                        for pattern in patterns
-                    )
-                ),
-                key=lambda child: child.name.casefold(),
+            final_record = final_byte_records.get(physical_key)
+            if final_record is None:
+                final_record = {
+                    "path": path,
+                    "expected_sha256": digest,
+                    "expected_size_bytes": stat.st_size,
+                    "initial_stat_key": physical_key,
+                    "sources": [],
+                }
+                final_byte_records[physical_key] = final_record
+            final_record["sources"].append((root_id, relative))
+    for record in final_discovery_records:
+        try:
+            final_discovery_snapshot = _current_discovery_snapshot(
+                record["root_id"],
+                record["bound"],
+                record["patterns"],
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(
+                    record["root_id"], "discovery_snapshot", exc
+                )
+            )
+            continue
+        if final_discovery_snapshot != record["initial_snapshot"]:
+            contradictions.append({
+                "code": "directory_snapshot_changed_during_scan",
+                "root_id": record["root_id"],
+                "resolution": "unresolved_retry_snapshot",
+            })
+    for record in final_git_records:
+        try:
+            final_git_summary = git_repository_summary(
+                record["root_id"], record["bound"]
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(record["root_id"], "git_snapshot", exc)
+            )
+            continue
+        if final_git_summary != record["initial_summary"]:
+            contradictions.append({
+                "code": "git_snapshot_changed_during_scan",
+                "root_id": record["root_id"],
+                "resolution": "unresolved_retry_snapshot",
+            })
+    for record in final_membership_records:
+        try:
+            final_membership = _current_root_membership(
+                record["scan"],
+                record["bound"],
+                record["root_spec"],
+                record["initial_membership"],
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(
+                    record["root_id"], "directory_membership", exc
+                )
+            )
+            continue
+        if final_membership != record["initial_membership"]:
+            contradictions.append({
+                "code": "directory_membership_changed_during_scan",
+                "root_id": record["root_id"],
+                "resolution": "unresolved_retry_snapshot",
+            })
+    for record in sorted(
+        final_byte_records.values(),
+        key=lambda row: str(row["path"]).replace("\\", "/").casefold(),
+    ):
+        path = record["path"]
+        try:
+            final_stat = path.stat()
+            final_hash = hash_file_streaming(path)
+            final_post_stat = path.stat()
+            final_key = (
+                str(path.resolve()).replace("\\", "/").casefold(),
+                final_post_stat.st_dev,
+                final_post_stat.st_ino,
+                final_post_stat.st_size,
+                final_post_stat.st_mtime_ns,
+                final_post_stat.st_ctime_ns,
+            )
+            if (
+                final_stat.st_size != final_post_stat.st_size
+                or final_stat.st_mtime_ns != final_post_stat.st_mtime_ns
+                or final_hash["size_bytes"] != final_post_stat.st_size
+                or final_key != record["initial_stat_key"]
+                or str(final_hash["sha256"]) != record["expected_sha256"]
+                or final_post_stat.st_size != record["expected_size_bytes"]
             ):
-                normalized_path = str(child.resolve()).replace("\\", "/")
-                git_probe = subprocess.run(
-                    ["git", "rev-parse", "--git-dir"],
-                    cwd=child if child.is_dir() else bound,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    capture_output=True,
-                    check=False,
-                )
-                if child.is_dir() and git_probe.returncode == 0:
-                    summary = git_repository_summary(f"{root_id}:{child.name}", child)
-                    final_discovery_snapshot.append({
-                        "name": child.name,
-                        "normalized_path": normalized_path,
-                        "kind": "bare_git" if summary["is_bare"] else "git_worktree",
-                        "git": summary,
-                    })
-                    if not summary["is_bare"]:
-                        material_rows, _ = _material_file_rows(
-                            child, _git_material_paths(child), f"{child.name}/git-material/"
-                        )
-                        final_discovery_candidates.extend(material_rows)
-                else:
-                    final_discovery_snapshot.append({
-                        "name": child.name,
-                        "normalized_path": normalized_path,
-                        "kind": "non_git",
-                    })
-                    if child.is_file():
-                        final_discovery_candidates.append((child.name, child))
-                    elif child.is_dir():
-                        nested_rows, _ = _discover_file_rows(child)
-                        final_discovery_candidates.extend(
-                            (f"{child.name}/{relative}", candidate)
-                            for relative, candidate in nested_rows
-                        )
-            if final_discovery_snapshot != initial_discovery_snapshot:
-                contradictions.append({
-                    "code": "directory_snapshot_changed_during_scan",
-                    "root_id": root_id,
-                    "resolution": "unresolved_retry_snapshot",
-                })
-        if scan == "git_repository" and initial_git_summary is not None:
-            final_git_summary = git_repository_summary(root_id, bound)
-            if final_git_summary != initial_git_summary:
-                contradictions.append({
-                    "code": "git_snapshot_changed_during_scan",
-                    "root_id": root_id,
-                    "resolution": "unresolved_retry_snapshot",
-                })
-        if initial_membership is not None:
-            if scan == "git_repository":
-                final_paths, _ = _material_file_rows(
-                    bound, _git_material_paths(bound), "git-material/"
-                )
-                final_membership = [relative for relative, _ in final_paths]
-            elif scan == "directory_discovery" and final_discovery_candidates is not None:
-                final_membership = [relative for relative, _ in final_discovery_candidates]
-            elif scan == "git_ignored_registry":
-                final_ignored = [
-                    relative.replace("\\", "/")
-                    for relative in _git(
-                        bound, "ls-files", "--others", "--ignored",
-                        "--exclude-standard", "-z"
-                    ).split("\0") if relative
-                ]
-                final_paths, _ = _material_file_rows(bound, final_ignored)
-                final_membership = [relative for relative, _ in final_paths]
-            elif scan == "files" and bound.is_dir():
-                final_membership = [
-                    relative for relative, _ in _discover_file_rows(bound)[0]
-                ]
-            else:
-                final_membership = initial_membership
-            if final_membership != initial_membership:
-                contradictions.append({
-                    "code": "directory_membership_changed_during_scan",
-                    "root_id": root_id,
-                    "resolution": "unresolved_retry_snapshot",
-                })
-        for relative, path in candidates:
-            expected = initial_content_identities.get(relative)
-            if expected is None:
-                continue
-            try:
-                final_stat = path.stat()
-                final_hash = hash_file_streaming(path)
-                final_post_stat = path.stat()
-                if (
-                    final_stat.st_size != final_post_stat.st_size
-                    or final_stat.st_mtime_ns != final_post_stat.st_mtime_ns
-                    or final_hash["size_bytes"] != final_post_stat.st_size
-                    or (str(final_hash["sha256"]), final_post_stat.st_size) != expected
-                ):
-                    raise RuntimeError("artifact_changed_after_hash")
-            except (OSError, RuntimeError):
-                contradictions.append({
+                raise RuntimeError("artifact_changed_after_hash")
+        except (OSError, RuntimeError):
+            contradictions.extend(
+                {
                     "code": "artifact_changed_after_hash",
                     "root_id": root_id,
                     "relative_path": relative,
                     "resolution": "unresolved_retry_snapshot",
-                })
+                }
+                for root_id, relative in sorted(record["sources"])
+            )
     artifacts.sort(
         key=lambda row: (
             row["source"]["root_id"],
