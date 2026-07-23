@@ -138,7 +138,8 @@ def inspect_checkout(root: Path) -> dict[str, Any]:
 
 def selection_evidence(selection: Path) -> dict[str, Any]:
     """Mirror EMBER-00: exactly one active_goal_path, file must exist."""
-    text = selection.read_text(encoding="utf-8")
+    selection_bytes = selection.read_bytes()
+    text = selection_bytes.decode("utf-8")
     paths = [
         raw.split(":", 1)[1].strip()
         for raw in text.splitlines()
@@ -151,7 +152,10 @@ def selection_evidence(selection: Path) -> dict[str, Any]:
         goal_path = (selection.parent / goal_path).resolve()
     if not goal_path.is_file():
         raise ValueError(f"selected goal file is missing: {goal_path}")
-    return {"selected_goal_suffix": Path(paths[0]).name}
+    return {
+        "selected_goal_suffix": Path(paths[0]).name,
+        "selector_sha256": hashlib.sha256(selection_bytes).hexdigest(),
+    }
 
 
 def run(
