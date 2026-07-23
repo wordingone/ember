@@ -210,8 +210,38 @@ def leg(state: str, title: str, reason: str, evidence: dict[str, Any] | None = N
 def fetch_live_open_issues(
     root: Path,
 ) -> dict[str, Any]:
+    executable_value = shutil.which("gh")
+    if executable_value is None:
+        return {
+            "name": "github_live_open_issues",
+            "returncode": 2,
+            "timed_out": False,
+            "command": ["gh", "issue", "list"],
+            "stdout": "",
+            "stderr": "GitHub CLI executable not found",
+            "issues": None,
+            "stdout_sha256": None,
+            "executable_name": None,
+            "executable_sha256": None,
+        }
+    executable = Path(executable_value).resolve()
+    try:
+        executable_sha_before = hashlib.sha256(executable.read_bytes()).hexdigest()
+    except OSError as error:
+        return {
+            "name": "github_live_open_issues",
+            "returncode": 2,
+            "timed_out": False,
+            "command": ["gh", "issue", "list"],
+            "stdout": "",
+            "stderr": f"GitHub CLI executable unreadable: {error}",
+            "issues": None,
+            "stdout_sha256": None,
+            "executable_name": executable.name,
+            "executable_sha256": None,
+        }
     command = [
-        "gh",
+        str(executable),
         "issue",
         "list",
         "--repo",
@@ -227,16 +257,39 @@ def fetch_live_open_issues(
         command,
         root=root,
         name="github_live_open_issues",
-        display=command,
+        display=["gh", *command[1:]],
         timeout=300,
     )
+    try:
+        executable_sha_after = hashlib.sha256(executable.read_bytes()).hexdigest()
+    except OSError:
+        executable_sha_after = None
+    executable_evidence = {
+        "executable_name": executable.name,
+        "executable_sha256": executable_sha_before,
+    }
+    if executable_sha_after != executable_sha_before:
+        return {
+            **result,
+            **executable_evidence,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": None,
+            "stderr": "GitHub CLI executable changed during acquisition",
+        }
     if result["returncode"] != 0:
-        return {**result, "issues": None, "stdout_sha256": None}
+        return {
+            **result,
+            **executable_evidence,
+            "issues": None,
+            "stdout_sha256": None,
+        }
     try:
         issues = json.loads(result["stdout"])
     except json.JSONDecodeError as error:
         return {
             **result,
+            **executable_evidence,
             "returncode": 2,
             "issues": None,
             "stdout_sha256": hashlib.sha256(
@@ -247,6 +300,7 @@ def fetch_live_open_issues(
     if not isinstance(issues, list):
         return {
             **result,
+            **executable_evidence,
             "returncode": 2,
             "issues": None,
             "stdout_sha256": hashlib.sha256(
@@ -256,6 +310,7 @@ def fetch_live_open_issues(
         }
     return {
         **result,
+        **executable_evidence,
         "issues": issues,
         "stdout_sha256": hashlib.sha256(
             result["stdout"].encode("utf-8")
@@ -334,6 +389,8 @@ def custody_legs(
             "returncode": live["returncode"],
             "command": live["command"],
             "stdout_sha256": live["stdout_sha256"],
+            "github_cli_executable_name": live.get("executable_name"),
+            "github_cli_executable_sha256": live.get("executable_sha256"),
             "stderr_tail": str(live["stderr"])[-400:],
         }
         return {
@@ -353,6 +410,8 @@ def custody_legs(
             "command": live["command"],
             "live_issue_count": len(live_source),
             "live_stdout_sha256": live["stdout_sha256"],
+            "github_cli_executable_name": live.get("executable_name"),
+            "github_cli_executable_sha256": live.get("executable_sha256"),
             "issue_census_sha256": issue_census_sha_before,
         }
         return {
@@ -418,6 +477,8 @@ def custody_legs(
         "live_issue_count": len(live_source),
         "live_issue_stdout_sha256": live["stdout_sha256"],
         "live_issue_command": live["command"],
+        "github_cli_executable_name": live.get("executable_name"),
+        "github_cli_executable_sha256": live.get("executable_sha256"),
     }
     return {k: leg(state, LEG_TITLES[k], reason, ev) for k in ("1", "2", "6", "9")}
 
