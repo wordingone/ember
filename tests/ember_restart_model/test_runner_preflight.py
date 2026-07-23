@@ -342,6 +342,9 @@ class RunnerPreflightTests(unittest.TestCase):
         model._activate_expert = lambda expert: setattr(model, "active_expert", expert)
         model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
         optimizer = SimpleNamespace(param_groups=[{"lr": 1e-5}])
+        resume_receipt = {"expert_genesis_sha256": {name: (index.to_bytes(1, "little") * 32).hex() for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)}, "checkpoint_manifest_sha256": "a" * 64, "checkpoint": {"byte_sha256": "a" * 64}}
+        restore_loader = MagicMock(return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 7, "global_step": 31, "tokens_seen": 31 * 1024}})
+        call_order: list[str] = []
         stream = SimpleNamespace(vocab_size=32_000, receipt_sha256="r" * 64, tokenizer_sha256="t" * 64)
         counts = {"unique_parameters": 3_839_161_856, "active_parameters": 1_020_589_568}
         segment_kwargs: dict[str, object] = {}
@@ -384,7 +387,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
             stack.enter_context(patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path, **_kwargs: path))
             stack.enter_context(patch.object(run_vertical_slice.ManifestBoundTokenStream, "from_receipt", return_value=stream))
-            stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", return_value=model))
+            stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", side_effect=lambda *args, **kwargs: (call_order.append("model"), model)[1]))
             stack.enter_context(patch.object(run_vertical_slice, "measure_parameter_counts", return_value=counts))
             stack.enter_context(patch.object(run_vertical_slice, "build_production_optimizer", return_value=optimizer))
             stack.enter_context(patch.object(run_vertical_slice, "_rng_state_hash", return_value={"cpu": "c" * 64, "cuda": "d" * 64}))
@@ -397,16 +400,20 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
-            stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 7, "global_step": 31, "tokens_seen": 31 * 1024}}))
+            stack.enter_context(patch.object(run_vertical_slice, "published_checkpoint_receipt", side_effect=lambda _path: (call_order.append("receipt"), resume_receipt)[1]))
+            stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", restore_loader))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
             stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
-            stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="h" * 64))
+            stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="a" * 64))
             result = run_vertical_slice.run_semantic(
                 seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
                 shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=2,
                 sequence_length=1024, checkpoint_interval=32, write_budget_bytes=24 * 1024**3,
                 resume_checkpoint=parent if resume else None,
             )
+        self._semantic_restore_loader = restore_loader
+        self._semantic_resume_receipt = resume_receipt
+        self._semantic_call_order = call_order
         return result, segment_kwargs, writer, retention_bounds
 
     def test_semantic_run_fresh_binds_publication_plan_and_writer_limit(self) -> None:
@@ -431,6 +438,10 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(writer.call_count, 2)
         self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
         self.assertTrue(all(call.kwargs["host_commit_reserve_bytes"] == 8 * 1024**3 for call in writer.call_args_list))
+        receipt = self._semantic_restore_loader.call_args.args[3]
+        self.assertIs(receipt, self._semantic_resume_receipt)
+        self.assertEqual(receipt["checkpoint"], {"byte_sha256": "a" * 64})
+        self.assertLess(self._semantic_call_order.index("receipt"), self._semantic_call_order.index("model"))
 
     def test_disk_reopen_resume_receipt_binds_exact_frozen_manifest_bytes(self) -> None:
         """A disk-reopened resume receipt carries the manifest's out-of-band identity."""
@@ -527,6 +538,11 @@ class RunnerPreflightTests(unittest.TestCase):
             if path.resolve() == parent_manifest.resolve():
                 return json.dumps({"expert_genesis_sha256": genesis}).encode("utf-8")
             return real_read_bytes(path, *args, **kwargs)
+        def sha256(path: Path) -> str:
+            if path.resolve() == parent_manifest.resolve():
+                return hashlib.sha256(read_bytes(parent_manifest)).hexdigest()
+            return "h" * 64
+
 
         def segment(**kwargs: object) -> dict[str, object]:
             segment_kwargs.update(kwargs)
@@ -580,7 +596,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
             stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
             stack.enter_context(patch.object(Path, "read_bytes", autospec=True, side_effect=read_bytes))
-            stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="h" * 64))
+            stack.enter_context(patch.object(run_vertical_slice, "_sha256", side_effect=sha256))
             result = run_vertical_slice.run(
                 seed=84, artifact_root=Path("B:/vertical-artifacts"), resume_checkpoint=parent,
                 records_override=specialist_rows if specialist else None,
@@ -1095,11 +1111,22 @@ class RunnerPreflightTests(unittest.TestCase):
         optimizer = object()
         checkpoint = Path("checkpoint")
         receipt = {"checkpoint_manifest_sha256": "a" * 64}
-        authority = {"mode": "MODEL_ONLY_OPTIMIZER_CONTRACT_TRANSITION"}
+        authority = {"mode": "MODEL_ONLY_OPTIMIZER_CONTRACT_TRANSITION", "checkpoint_manifest_sha256": "a" * 64}
         with patch.object(run_vertical_slice, "load_checkpoint_model_only_transition", return_value={"data_cursor": {"global_step": 2}}) as load:
             result = run_vertical_slice.restore_authorized_checkpoint(model, optimizer, checkpoint, receipt, authority)
         self.assertEqual(result["data_cursor"]["global_step"], 2)
         load.assert_called_once_with(model, checkpoint, receipt)
+
+    def test_restore_authorized_checkpoint_refuses_manifest_changed_after_authorization(self) -> None:
+        model = MagicMock()
+        optimizer = MagicMock()
+        checkpoint = Path("B:/published-checkpoint")
+        receipt = {"checkpoint_manifest_sha256": "a" * 64, "checkpoint": {"byte_sha256": "a" * 64}}
+        authority = {"mode": "CURRENT_COUNTER_SUCCESS_RECEIPT", "checkpoint_manifest_sha256": "b" * 64}
+        with patch.object(run_vertical_slice, "load_checkpoint_artifacts") as load:
+            with self.assertRaisesRegex(ValueError, "resume authority checkpoint manifest SHA-256 mismatch"):
+                run_vertical_slice.restore_authorized_checkpoint(model, optimizer, checkpoint, receipt, authority)
+        load.assert_not_called()
 
     def test_resume_lineage_uses_verified_parent_genesis_not_requested_seed(self) -> None:
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}

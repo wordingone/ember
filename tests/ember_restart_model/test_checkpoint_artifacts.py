@@ -968,5 +968,31 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertEqual(receipt["checkpoint_manifest_sha256"], expected)
         self.assertEqual(receipt["checkpoint"], {"byte_sha256": expected})
 
+    def test_published_checkpoint_receipt_refuses_reparse_malformed_and_invalid_utf8_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            manifest = checkpoint / "checkpoint-manifest.json"
+            manifest.write_bytes(b'{"schema_version":"ember-sparse-checkpoint-v4"}\n')
+            with patch.object(checkpoint_artifacts, "_is_link_or_reparse", return_value=True):
+                with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "symlink or reparse"):
+                    checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+            manifest.write_bytes(b"{not-json\n")
+            with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "not valid published JSON"):
+                checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+            manifest.write_bytes(b"\xff\xfe")
+            with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "not valid published JSON"):
+                checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+    def test_published_checkpoint_receipt_refuses_non_object_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            checkpoint.joinpath("checkpoint-manifest.json").write_bytes(b"[]\n")
+            with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "JSON object"):
+                checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
 if __name__ == "__main__":
     unittest.main()
