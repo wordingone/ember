@@ -292,15 +292,40 @@ def collect_live_census(*, repository: str, master_sha: str, collected_at: str, 
     )
 
 
-def write_receipt(receipt: Mapping[str, Any], output: Path) -> Path:
-    output.parent.mkdir(parents=True, exist_ok=True)
-    data = _canonical_json(receipt) + b"\n"
-    temporary = output.with_name(f".{output.name}.{os.getpid()}.tmp")
+def write_outputs(
+    receipt: Mapping[str, Any],
+    output: Path,
+    *,
+    stale_report: Mapping[str, Any] | None = None,
+    stale_output: Path | None = None,
+) -> tuple[Path, Path | None]:
+    """Stage every JSON payload before publishing any output path."""
+
+    if (stale_report is None) != (stale_output is None):
+        raise CensusError("stale report and stale output must be supplied together")
+
+    payloads: list[tuple[Path, bytes]] = [(output, _canonical_json(receipt) + b"\n")]
+    if stale_report is not None and stale_output is not None:
+        payloads.append((stale_output, _canonical_json(stale_report) + b"\n"))
+
+    temporary_paths: list[tuple[Path, Path]] = []
     try:
-        temporary.write_bytes(data)
-        os.replace(temporary, output)
+        for destination, data in payloads:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+            temporary.write_bytes(data)
+            temporary_paths.append((temporary, destination))
+        for temporary, destination in temporary_paths:
+            os.replace(temporary, destination)
     finally:
-        temporary.unlink(missing_ok=True)
+        for temporary, _destination in temporary_paths:
+            temporary.unlink(missing_ok=True)
+
+    return output, stale_output
+
+
+def write_receipt(receipt: Mapping[str, Any], output: Path) -> Path:
+    write_outputs(receipt, output)
     return output
 
 
@@ -335,10 +360,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         stale_report: dict[str, Any] | None = None
         if args.stale_output is not None:
             stale_report = build_stale_report(receipt=receipt, issues=issues, pull_requests=pull_requests, stale_before=args.stale_before)
-        write_receipt(receipt, path)
+        write_outputs(receipt, path, stale_report=stale_report, stale_output=args.stale_output)
         result: dict[str, Any] = {"status": "PASS", "path": str(path), "receipt_sha256": receipt["receipt_sha256"]}
         if stale_report is not None:
-            write_receipt(stale_report, args.stale_output)
             result["stale_path"] = str(args.stale_output)
             result["stale_report_sha256"] = stale_report["report_sha256"]
         print(json.dumps(result, sort_keys=True))
