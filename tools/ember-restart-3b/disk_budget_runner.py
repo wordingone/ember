@@ -503,6 +503,12 @@ def run_budgeted(
             termination_wait_timed_out = True
             terminate_tree(process)
             child_exit_code = process.poll()
+        if (
+            stop_reason is None
+            and max_wall_seconds is not None
+            and time.time() - started_at >= max_wall_seconds
+        ):
+            stop_reason = "wall-time budget exceeded"
     finally:
         if process.poll() is None:
             terminate_tree(process)

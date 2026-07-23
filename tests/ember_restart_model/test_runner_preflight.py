@@ -332,6 +332,32 @@ class RunnerPreflightTests(unittest.TestCase):
                     )
         set_fraction.assert_not_called()
 
+    def test_governed_gpu_cap_clamps_allocator_to_measured_free_bytes(self) -> None:
+        gib = 1024**3
+        governor_receipt = {
+            "vram_fraction": 0.95,
+            "governor_source_sha256": "a" * 64,
+        }
+        with (
+            patch.object(
+                run_vertical_slice.torch.cuda,
+                "mem_get_info",
+                return_value=(16 * gib, 24 * gib),
+            ),
+            patch.object(
+                run_vertical_slice.torch.cuda,
+                "set_per_process_memory_fraction",
+            ) as set_fraction,
+        ):
+            receipt = run_vertical_slice.governed_gpu_cap_preflight(
+                requested_gpu_vram_gib=20.0,
+                required_bytes=1 * gib,
+                governor_receipt=governor_receipt,
+            )
+        set_fraction.assert_called_once_with(16.0 / 24.0)
+        self.assertEqual(receipt["effective_cap_bytes"], 16 * gib)
+        self.assertEqual(receipt["applied_fraction"], 16.0 / 24.0)
+
     def test_production_runner_refuses_retired_bootstrap_curriculum(self) -> None:
         packet = {
             "input_identity": {
@@ -1652,6 +1678,55 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(payload["outcome"], "STOPPED_BY_BUDGET")
         self.assertEqual(payload["stop_reason"], "wall-time budget exceeded")
         self.assertEqual(payload["max_wall_seconds"], 0.05)
+
+    def test_public_disk_budget_runner_refuses_zero_exit_observed_after_deadline(self) -> None:
+        class ExitedProcess:
+            def poll(self):
+                return 0
+
+            def wait(self, timeout=None):
+                return 0
+
+        clock_calls = 0
+
+        def fake_time():
+            nonlocal clock_calls
+            clock_calls += 1
+            return 100.0 if clock_calls == 1 else 102.0
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            custody.mkdir()
+            receipt = custody / "runner-receipt.json"
+            with (
+                patch.object(
+                    disk_budget_runner,
+                    "current_free_gib",
+                    return_value={"C": 500.0, "B": 500.0},
+                ),
+                patch.object(disk_budget_runner.time, "time", side_effect=fake_time),
+                patch.object(
+                    disk_budget_runner.subprocess,
+                    "Popen",
+                    return_value=ExitedProcess(),
+                ),
+                patch.object(
+                    disk_budget_runner,
+                    "_load_child_cache_assertion",
+                    return_value=({"schema_version": 1}, "a" * 64, None),
+                ),
+            ):
+                exit_code = disk_budget_runner.run_budgeted(
+                    [sys.executable, "-c", "pass"],
+                    {"C": 0.0, "B": 0.01},
+                    receipt,
+                    write_roots={"custody": custody},
+                    max_wall_seconds=1.0,
+                )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(exit_code, 125)
+        self.assertEqual(payload["outcome"], "STOPPED_BY_BUDGET")
+        self.assertEqual(payload["stop_reason"], "wall-time budget exceeded")
 
     def test_public_disk_budget_runner_rejects_non_finite_wall_before_child(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
