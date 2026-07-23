@@ -209,10 +209,9 @@ def leg(state: str, title: str, reason: str, evidence: dict[str, Any] | None = N
 
 def fetch_live_open_issues(
     root: Path,
-    github_cli_prefix: Sequence[str],
 ) -> dict[str, Any]:
     command = [
-        *github_cli_prefix,
+        "gh",
         "issue",
         "list",
         "--repo",
@@ -228,7 +227,7 @@ def fetch_live_open_issues(
         command,
         root=root,
         name="github_live_open_issues",
-        display=["gh", *command[len(github_cli_prefix):]],
+        display=command,
         timeout=300,
     )
     if result["returncode"] != 0:
@@ -270,7 +269,6 @@ def custody_legs(
     bindings: list[str],
     run_custody: bool,
     issue_census: Path | None = None,
-    github_cli_prefix: Sequence[str] = ("gh",),
 ) -> dict[str, Any]:
     manifests = root / "manifests" / "ember-01-custody"
     root_spec = manifests / "root-spec.json"
@@ -329,7 +327,7 @@ def custody_legs(
             for k in ("1", "2", "6", "9")
         }
 
-    live = fetch_live_open_issues(root, github_cli_prefix)
+    live = fetch_live_open_issues(root)
     if live["returncode"] != 0 or not isinstance(live["issues"], list):
         evidence = {
             "tool": "gh issue list",
@@ -883,15 +881,6 @@ def main() -> int:
             "required for --run-custody; omission fails the custody legs closed"
         ),
     )
-    parser.add_argument(
-        "--github-cli-prefix",
-        action="append",
-        default=[],
-        help=(
-            "one token of the trusted GitHub CLI invocation prefix; repeat for "
-            "wrappers (default: gh)"
-        ),
-    )
     parser.add_argument("--identity-manifest", default=None,
                         help="owned-checkpoint identity manifest path")
     parser.add_argument("--checkpoint-manifest", "--checkpoint", dest="checkpoint_manifest", default=None,
@@ -908,7 +897,6 @@ def main() -> int:
     checkpoint_manifest = Path(args.checkpoint_manifest).resolve() if args.checkpoint_manifest else None
     model_config = Path(args.model_config).resolve() if args.model_config else None
     issue_census = Path(args.issue_census).resolve() if args.issue_census else None
-    github_cli_prefix = args.github_cli_prefix or ["gh"]
 
     try:
         receipt = validate_receipt_path(root, Path(args.receipt))
@@ -928,7 +916,6 @@ def main() -> int:
                     args.binding,
                     args.run_custody,
                     issue_census=issue_census,
-                    github_cli_prefix=github_cli_prefix,
                 )
             )
             legs.update(
