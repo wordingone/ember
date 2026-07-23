@@ -463,6 +463,312 @@ def _canonical_sha256(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(json.dumps(dict(value), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def _optimizer_tensor_storage_by_route(
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+) -> dict[str, int]:
+    """Measure initialized optimizer tensor storage by shared/expert route."""
+
+    parameter_names = {
+        id(parameter): name for name, parameter in model.named_parameters()
+    }
+    routed_state: dict[str, dict[str, Any]] = {
+        "shared": {},
+        **{name: {} for name in EXPERT_NAMES},
+    }
+    for parameter, state in optimizer.state.items():
+        name = parameter_names.get(id(parameter))
+        if name is None:
+            raise ValueError(
+                "optimizer state contains a parameter outside the checkpoint model"
+            )
+        route = "shared"
+        for expert_name in EXPERT_NAMES:
+            if f".experts.{expert_name}." in name:
+                route = expert_name
+                break
+        routed_state[route][name] = state
+    return {
+        route: _unique_tensor_storage_bytes(state)
+        for route, state in routed_state.items()
+    }
+
+
+def _derive_checkpoint_storage_projection(
+    *,
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    optimizer_file_payload: Mapping[str, Any],
+    shard_storage_lower_bounds: Mapping[str, int],
+    shard_sha256: Mapping[str, str],
+    publication_modes: Mapping[str, str],
+    global_step: int,
+    max_transient_scratch_bytes: int,
+    max_serialized_bytes: int,
+) -> dict[str, Any]:
+    """Bind the post-update optimizer floor and four-expert checkpoint floor."""
+
+    if type(global_step) is not int or global_step < 1:
+        raise ValueError(
+            "checkpoint storage projection requires post-update global_step"
+        )
+    if model.active_expert not in EXPERT_NAMES:
+        raise ValueError(
+            "checkpoint storage projection requires one active specialist expert"
+        )
+    expected_shards = {
+        "shared-model.pt",
+        "optimizer-state.pt",
+        "replay-state.pt",
+        *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+    }
+    if set(shard_storage_lower_bounds) != expected_shards:
+        raise ValueError("checkpoint storage projection shard set is not closed")
+    if set(shard_sha256) != expected_shards:
+        raise ValueError("checkpoint storage projection shard hashes are not closed")
+    for path, digest in shard_sha256.items():
+        _sha256_value(digest, name=f"checkpoint projection {path}")
+    if set(publication_modes) != expected_shards:
+        raise ValueError(
+            "checkpoint storage projection publication modes are not closed"
+        )
+    if any(
+        type(value) is not int or value < 0
+        for value in shard_storage_lower_bounds.values()
+    ):
+        raise ValueError("checkpoint storage projection contains an invalid bound")
+    if any(
+        mode not in {"written", "hardlink"}
+        for mode in publication_modes.values()
+    ):
+        raise ValueError(
+            "checkpoint storage projection contains an unbounded publication mode"
+        )
+
+    optimizer_actual = _unique_tensor_storage_bytes(optimizer_file_payload)
+    routed_optimizer = _optimizer_tensor_storage_by_route(model, optimizer)
+    active_bytes = routed_optimizer[model.active_expert]
+    active_routes = [
+        name for name in EXPERT_NAMES if routed_optimizer[name] > 0
+    ]
+    if optimizer_actual < 1 or active_bytes < 1 or active_routes != [
+        model.active_expert
+    ]:
+        raise ValueError(
+            "checkpoint storage projection requires one post-update optimizer state"
+        )
+    projected_optimizer = max(
+        optimizer_actual,
+        routed_optimizer["shared"]
+        + sum(
+            routed_optimizer[name] or active_bytes for name in EXPERT_NAMES
+        ),
+    )
+    actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
+    projected_checkpoint_floor = (
+        actual_checkpoint_floor - optimizer_actual + projected_optimizer
+    )
+    retained_paths = sorted(
+        path for path, mode in publication_modes.items() if mode == "hardlink"
+    )
+    transient_new_write_peak = max(
+        (
+            shard_storage_lower_bounds[path]
+            for path, mode in publication_modes.items()
+            if mode == "written"
+        ),
+        default=0,
+    )
+    if transient_new_write_peak > max_transient_scratch_bytes:
+        raise RuntimeError(
+            "checkpoint transient new-write projection exceeds scratch cap"
+        )
+    if projected_checkpoint_floor > max_serialized_bytes:
+        raise RuntimeError(
+            "checkpoint all-expert projected tensor-storage lower bound "
+            "exceeds the derived serialized byte bound"
+        )
+
+    projection = {
+        "schema_version": "ember-checkpoint-storage-projection-v1",
+        "active_expert": model.active_expert,
+        "optimizer_state_after_global_step": global_step,
+        "optimizer_state_active_expert_ids": active_routes,
+        "optimizer_state_tensor_storage_lower_bound_bytes": optimizer_actual,
+        "optimizer_state_tensor_storage_by_route_bytes": routed_optimizer,
+        "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes": (
+            projected_optimizer
+        ),
+        "per_shard_tensor_storage_lower_bound_bytes": dict(
+            sorted(shard_storage_lower_bounds.items())
+        ),
+        "per_shard_sha256": dict(sorted(shard_sha256.items())),
+        "transient_new_write_peak_lower_bound_bytes": transient_new_write_peak,
+        "retained_shard_paths": retained_paths,
+        "all_expert_projected_tensor_storage_lower_bound_bytes": (
+            projected_checkpoint_floor
+        ),
+        "max_transient_scratch_bytes": max_transient_scratch_bytes,
+        "max_serialized_bytes": max_serialized_bytes,
+        "manifest_written_last": True,
+    }
+    return {
+        **projection,
+        "projection_sha256": _canonical_sha256(projection),
+    }
+
+
+def _validate_checkpoint_storage_projection(
+    projection: Any,
+    *,
+    max_serialized_bytes: int | None = None,
+) -> dict[str, Any]:
+    """Revalidate the closed projection before quarantine admission."""
+
+    required = {
+        "schema_version",
+        "active_expert",
+        "optimizer_state_after_global_step",
+        "optimizer_state_active_expert_ids",
+        "optimizer_state_tensor_storage_lower_bound_bytes",
+        "optimizer_state_tensor_storage_by_route_bytes",
+        "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes",
+        "per_shard_tensor_storage_lower_bound_bytes",
+        "per_shard_sha256",
+        "transient_new_write_peak_lower_bound_bytes",
+        "retained_shard_paths",
+        "all_expert_projected_tensor_storage_lower_bound_bytes",
+        "max_transient_scratch_bytes",
+        "max_serialized_bytes",
+        "manifest_written_last",
+        "projection_sha256",
+    }
+    if not isinstance(projection, Mapping) or set(projection) != required:
+        raise ValueError("checkpoint storage projection has an invalid shape")
+    materialized = dict(projection)
+    digest = materialized.pop("projection_sha256")
+    if (
+        materialized["schema_version"]
+        != "ember-checkpoint-storage-projection-v1"
+        or not isinstance(digest, str)
+        or digest != _canonical_sha256(materialized)
+    ):
+        raise ValueError("checkpoint storage projection digest mismatch")
+    if (
+        materialized["active_expert"] not in EXPERT_NAMES
+        or materialized["optimizer_state_active_expert_ids"]
+        != [materialized["active_expert"]]
+        or type(materialized["optimizer_state_after_global_step"]) is not int
+        or materialized["optimizer_state_after_global_step"] < 1
+        or materialized["manifest_written_last"] is not True
+    ):
+        raise ValueError("checkpoint storage projection is not post-update")
+    route_bounds = materialized[
+        "optimizer_state_tensor_storage_by_route_bytes"
+    ]
+    if (
+        not isinstance(route_bounds, Mapping)
+        or set(route_bounds) != {"shared", *EXPERT_NAMES}
+        or any(type(value) is not int or value < 0 for value in route_bounds.values())
+        or route_bounds[materialized["active_expert"]] < 1
+    ):
+        raise ValueError("checkpoint optimizer route projection is invalid")
+    shard_bounds = materialized[
+        "per_shard_tensor_storage_lower_bound_bytes"
+    ]
+    expected_shards = {
+        "shared-model.pt",
+        "optimizer-state.pt",
+        "replay-state.pt",
+        *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+    }
+    if (
+        not isinstance(shard_bounds, Mapping)
+        or set(shard_bounds) != expected_shards
+        or any(type(value) is not int or value < 0 for value in shard_bounds.values())
+    ):
+        raise ValueError("checkpoint shard storage projection is invalid")
+    shard_hashes = materialized["per_shard_sha256"]
+    if not isinstance(shard_hashes, Mapping) or set(shard_hashes) != expected_shards:
+        raise ValueError("checkpoint shard-byte projection is invalid")
+    for path, digest in shard_hashes.items():
+        _sha256_value(digest, name=f"checkpoint projection {path}")
+    for field in (
+        "optimizer_state_tensor_storage_lower_bound_bytes",
+        "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes",
+        "transient_new_write_peak_lower_bound_bytes",
+        "all_expert_projected_tensor_storage_lower_bound_bytes",
+        "max_transient_scratch_bytes",
+        "max_serialized_bytes",
+    ):
+        if type(materialized[field]) is not int or materialized[field] < 1:
+            raise ValueError("checkpoint storage projection byte bound is invalid")
+    if (
+        materialized["transient_new_write_peak_lower_bound_bytes"]
+        > materialized["max_transient_scratch_bytes"]
+        or materialized["all_expert_projected_tensor_storage_lower_bound_bytes"]
+        > materialized["max_serialized_bytes"]
+        or (
+            max_serialized_bytes is not None
+            and materialized["max_serialized_bytes"] != max_serialized_bytes
+        )
+    ):
+        raise ValueError("checkpoint storage projection exceeds its hard gate")
+    retained = materialized["retained_shard_paths"]
+    if (
+        not isinstance(retained, list)
+        or retained != sorted(set(retained))
+        or any(path not in expected_shards for path in retained)
+    ):
+        raise ValueError("checkpoint retained-shard projection is invalid")
+    active_expert = materialized["active_expert"]
+    active_routes = [
+        name for name in EXPERT_NAMES if route_bounds[name] > 0
+    ]
+    if active_routes != [active_expert]:
+        raise ValueError("checkpoint optimizer route projection is invalid")
+    optimizer_actual = materialized[
+        "optimizer_state_tensor_storage_lower_bound_bytes"
+    ]
+    expected_projected_optimizer = max(
+        optimizer_actual,
+        route_bounds["shared"]
+        + sum(
+            route_bounds[name] or route_bounds[active_expert]
+            for name in EXPERT_NAMES
+        ),
+    )
+    if (
+        shard_bounds["optimizer-state.pt"] != optimizer_actual
+        or materialized[
+            "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+        ]
+        != expected_projected_optimizer
+    ):
+        raise ValueError("checkpoint optimizer storage projection is inconsistent")
+    expected_checkpoint_floor = (
+        sum(shard_bounds.values())
+        - optimizer_actual
+        + expected_projected_optimizer
+    )
+    expected_transient_peak = max(
+        (
+            bound
+            for path, bound in shard_bounds.items()
+            if path not in retained
+        ),
+        default=0,
+    )
+    if (
+        materialized["all_expert_projected_tensor_storage_lower_bound_bytes"]
+        != expected_checkpoint_floor
+        or materialized["transient_new_write_peak_lower_bound_bytes"]
+        != expected_transient_peak
+    ):
+        raise ValueError("checkpoint storage projection arithmetic is inconsistent")
+    return dict(projection)
+
+
 def _default_optimizer_contract(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
     cls = type(optimizer)
     return {
@@ -855,7 +1161,13 @@ def _specialist_lineage(
             **({"scene_split_selection": dict(scene_selection), "scene_split_selection_sha256": _canonical_sha256(scene_selection)} if scene_selection is not None else {}),
         },
     }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
-def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> tuple[Path, str]:
+def _link_or_copy_verified(
+    source: Path,
+    target: Path,
+    expected_sha256: str,
+    *,
+    max_transient_scratch_bytes: int | None = None,
+) -> tuple[Path, str]:
     publication_mode = "copy"
     try:
         os.link(source, target)
@@ -869,9 +1181,19 @@ def _link_or_copy_verified(source: Path, target: Path, expected_sha256: str) -> 
             publication_mode = "hardlink"
         else:
             target.unlink(missing_ok=True)
+            if max_transient_scratch_bytes is not None:
+                raise RuntimeError(
+                    "inactive-bank copy fallback is forbidden under the "
+                    "transient scratch cap"
+                )
             shutil.copyfile(source, target)
     except OSError:
         target.unlink(missing_ok=True)
+        if max_transient_scratch_bytes is not None:
+            raise RuntimeError(
+                "inactive-bank copy fallback is forbidden under the "
+                "transient scratch cap"
+            )
         shutil.copyfile(source, target)
     if _sha256(target) != expected_sha256:
         raise ValueError("parent expert shard hash mismatch during inactive-bank reuse")
@@ -932,6 +1254,26 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
     receipt = {**manifest, "checkpoint_manifest_sha256": manifest_sha256}
     records = _validated_records(candidate, receipt)
+    projection = receipt.get("storage_projection")
+    if projection is not None:
+        validated_projection = _validate_checkpoint_storage_projection(
+            projection
+        )
+        retained_paths = sorted(
+            path
+            for path, record in records.items()
+            if record.get("publication_mode") == "hardlink"
+        )
+        if validated_projection["retained_shard_paths"] != retained_paths:
+            raise ValueError(
+                "checkpoint retained-shard projection does not match records"
+            )
+        if validated_projection["per_shard_sha256"] != {
+            path: record["sha256"] for path, record in records.items()
+        }:
+            raise ValueError(
+                "checkpoint shard-byte projection does not match records"
+            )
     declared_files = {"checkpoint-manifest.json", *records}
     actual_files: set[str] = set()
     for path in candidate.rglob("*"):
@@ -995,6 +1337,11 @@ def admit_quarantined_checkpoint(
     if (candidate / _STAGING_LEASE).exists():
         raise ValueError("quarantined checkpoint candidate retains a writer lease")
     receipt = _checkpoint_candidate_receipt(candidate)
+    if receipt.get("storage_projection") is not None:
+        _validate_checkpoint_storage_projection(
+            receipt["storage_projection"],
+            max_serialized_bytes=max_serialized_bytes,
+        )
     try:
         # Take a snapshot after direct verifier work, then materialize the returned
         # Mapping before the final snapshot.  No callback-controlled object is touched
@@ -1097,21 +1444,28 @@ def _write_checkpoint_artifacts_impl(
         model_state = model.state_dict()
         shared_state = _select_detached_state(model_state, lambda name: ".experts." not in name)
         optimizer_state_payload = optimizer.state_dict()
-        if max_transient_scratch_bytes is not None:
-            shard_storage_lower_bounds = {
-                "shared-model.pt": _unique_tensor_storage_bytes(shared_state),
-                "optimizer-state.pt": _unique_tensor_storage_bytes(optimizer_state_payload),
-                "replay-state.pt": _unique_tensor_storage_bytes(rng_state),
-                **{
-                    f"expert-{name}.pt": _unique_tensor_storage_bytes(
-                        _select_detached_state(
-                            model_state,
-                            lambda key, selected=name: f".experts.{selected}." in key,
-                        )
+        optimizer_file_payload = {
+            "optimizer": optimizer_state_payload,
+            "optimizer_contract": optimizer_contract,
+            "optimizer_realization": optimizer_realization,
+        }
+        shard_storage_lower_bounds = {
+            "shared-model.pt": _unique_tensor_storage_bytes(shared_state),
+            "optimizer-state.pt": _unique_tensor_storage_bytes(
+                optimizer_file_payload
+            ),
+            "replay-state.pt": _unique_tensor_storage_bytes(rng_state),
+            **{
+                f"expert-{name}.pt": _unique_tensor_storage_bytes(
+                    _select_detached_state(
+                        model_state,
+                        lambda key, selected=name: f".experts.{selected}." in key,
                     )
-                    for name in EXPERT_NAMES
-                },
-            }
+                )
+                for name in EXPERT_NAMES
+            },
+        }
+        if max_transient_scratch_bytes is not None:
             for shard_name, lower_bound in shard_storage_lower_bounds.items():
                 if lower_bound > max_transient_scratch_bytes:
                     raise RuntimeError(
@@ -1134,14 +1488,7 @@ def _write_checkpoint_artifacts_impl(
         optimizer_state_path = _write_atomic(
             root,
             "optimizer-state.pt",
-            lambda handle: torch.save(
-                {
-                    "optimizer": optimizer_state_payload,
-                    "optimizer_contract": optimizer_contract,
-                    "optimizer_realization": optimizer_realization,
-                },
-                handle,
-            ),
+            lambda handle: torch.save(optimizer_file_payload, handle),
             max_transient_scratch_bytes=max_transient_scratch_bytes,
         )
         shards = [
@@ -1171,6 +1518,7 @@ def _write_checkpoint_artifacts_impl(
                     preflight_parent_root / f"expert-{name}.pt",
                     root / f"expert-{name}.pt",
                     preflight_parent_shards[name],
+                    max_transient_scratch_bytes=max_transient_scratch_bytes,
                 )
             else:
                 state = _select_detached_state(
@@ -1188,6 +1536,29 @@ def _write_checkpoint_artifacts_impl(
             record = _record(path, root, role=f"expert_{name}", publication_mode=publication_mode)
             shards.append(record)
             expert_checkpoint_sha256[name] = record["sha256"]
+
+        storage_projection = None
+        if (
+            max_transient_scratch_bytes is not None
+            and max_serialized_bytes is not None
+        ):
+            storage_projection = _derive_checkpoint_storage_projection(
+                model=model,
+                optimizer=optimizer,
+                optimizer_file_payload=optimizer_file_payload,
+                shard_storage_lower_bounds=shard_storage_lower_bounds,
+                shard_sha256={
+                    str(record["path"]): str(record["sha256"])
+                    for record in shards
+                },
+                publication_modes={
+                    str(record["path"]): str(record["publication_mode"])
+                    for record in shards
+                },
+                global_step=int(data_cursor["global_step"]),
+                max_transient_scratch_bytes=max_transient_scratch_bytes,
+                max_serialized_bytes=int(max_serialized_bytes),
+            )
 
         counts = measure_parameter_counts(model)
         expert_parameter_sha256 = model.expert_bank_genesis_hashes()
@@ -1224,6 +1595,8 @@ def _write_checkpoint_artifacts_impl(
             "optimizer_realization": optimizer_realization,
             "shards": shards,
         }
+        if storage_projection is not None:
+            manifest["storage_projection"] = storage_projection
         if lineage is not None:
             manifest["lineage"] = lineage
         if host_commit_plan is not None:
