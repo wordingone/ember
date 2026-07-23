@@ -77,8 +77,13 @@ interface CustodyCommandDeps {
  * `renderCustodyStatus` turns that into an explicit UNRESOLVED line. This
  * function never writes to `process.env`, never spawns/binds a model server,
  * and never calls `process.exit`.
+ *
+ * Exported (T2.1, B5.5 spine panel) so components/spine-panel.ts's element 2
+ * (checkpoint + seat identity) reads the SAME production seat-decision
+ * derivation `/custody status` itself uses -- never a second, drifting
+ * reimplementation of the owned-identity fallback.
  */
-function _defaultGetModelSeatDecision(): ModelSeatDecision {
+export function _defaultGetModelSeatDecision(): ModelSeatDecision {
   const seatInput: ModelSeatResolutionInput = {
     argv: process.argv,
     explicitModelUrl: process.env["EMBER_MODEL_URL"],
