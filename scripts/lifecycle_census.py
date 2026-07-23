@@ -30,6 +30,13 @@ class CensusError(RuntimeError):
 def _canonical_json(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
+def _validate_sha(value: Any, *, field: str) -> str:
+    if not isinstance(value, str) or len(value) != 40 or any(ch not in "0123456789abcdef" for ch in value):
+        raise CensusError(f"{field} must be a lowercase 40-character SHA-1")
+    return value
+
+
+
 
 def _item_number(item: Mapping[str, Any], *, page: int, index: int) -> int:
     number = item.get("number")
@@ -118,8 +125,7 @@ def build_receipt(
 
     if not isinstance(repository, str) or not repository:
         raise CensusError("repository is required")
-    if not isinstance(master_sha, str) or len(master_sha) != 40 or any(ch not in "0123456789abcdef" for ch in master_sha):
-        raise CensusError("master_sha must be a lowercase 40-character SHA-1")
+    _validate_sha(master_sha, field="master_sha")
     try:
         parsed_time = datetime.fromisoformat(collected_at.replace("Z", "+00:00"))
     except ValueError as exc:
@@ -165,6 +171,21 @@ class GitHubApi:
         if not isinstance(payload, list):
             raise CensusError(f"GitHub {endpoint} page {page} was not a list")
         return payload
+
+
+    def master_sha(self) -> str:
+        request = Request(
+            f"{self.api_base}/repos/{self.repository}/git/ref/heads/master",
+            headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {self.token}", "X-GitHub-Api-Version": "2022-11-28"},
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                payload = json.load(response)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            raise CensusError(f"GitHub public master lookup failed: {exc}") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("object"), dict):
+            raise CensusError("GitHub public master lookup returned an invalid object")
+        return _validate_sha(payload["object"].get("sha"), field="public master SHA")
 
 
 def _parse_timestamp(value: Any, *, field: str) -> datetime:
@@ -227,15 +248,41 @@ def build_stale_report(
     return report
 
 
-def collect_live_populations(*, repository: str, token: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def collect_live_populations(
+    *,
+    repository: str,
+    token: str,
+    expected_master_sha: str | None = None,
+    master_sha_reader: Callable[[], str] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if expected_master_sha is None and master_sha_reader is not None:
+        raise CensusError("master_sha_reader requires expected_master_sha")
+    if expected_master_sha is not None:
+        expected_master_sha = _validate_sha(expected_master_sha, field="expected_master_sha")
     api = GitHubApi(repository, token)
+    reader = master_sha_reader or api.master_sha
+    def read_master() -> str:
+        try:
+            return _validate_sha(reader(), field="public master SHA")
+        except CensusError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - lookup failures fail closed
+            raise CensusError(f"public master lookup failed: {exc}") from exc
+    if expected_master_sha is not None:
+        before = read_master()
+        if before != expected_master_sha:
+            raise CensusError(f"public master changed before collection: expected {expected_master_sha}, got {before}")
     issues = collect_population(lambda page, per_page: api.page("issues", page, per_page), kind="issue")
     pull_requests = collect_population(lambda page, per_page: api.page("pulls", page, per_page), kind="pull_request")
+    if expected_master_sha is not None:
+        after = read_master()
+        if after != expected_master_sha:
+            raise CensusError(f"public master changed during collection: expected {expected_master_sha}, got {after}")
     return issues, pull_requests
 
 
 def collect_live_census(*, repository: str, master_sha: str, collected_at: str, token: str) -> dict[str, Any]:
-    issues, pull_requests = collect_live_populations(repository=repository, token=token)
+    issues, pull_requests = collect_live_populations(repository=repository, token=token, expected_master_sha=master_sha)
     return build_receipt(
         repository=repository,
         master_sha=master_sha,
@@ -278,7 +325,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if (args.stale_before is None) != (args.stale_output is None):
             raise CensusError("--stale-before and --stale-output must be supplied together")
-        issues, pull_requests = collect_live_populations(repository=args.repo, token=token)
+        issues, pull_requests = collect_live_populations(repository=args.repo, token=token, expected_master_sha=args.master_sha)
         receipt = build_receipt(repository=args.repo, master_sha=args.master_sha, collected_at=collected_at, issues=issues, pull_requests=pull_requests)
         output = args.output
         if output.suffix == ".json" and output.name != "lifecycle-census.json":
