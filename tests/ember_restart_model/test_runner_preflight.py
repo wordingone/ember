@@ -533,6 +533,33 @@ class RunnerPreflightTests(unittest.TestCase):
         governor.assert_called_once_with()
         cuda_probe.assert_not_called()
 
+    def test_vertical_runner_rejects_missing_integration_contract_before_governor(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            module_path = Path(directory) / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+            module_path.parent.mkdir(parents=True)
+            module_path.write_text("# synthetic module location\n", encoding="utf-8")
+            with patch.object(run_vertical_slice, "__file__", str(module_path)):
+                with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
+                    with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                        with self.assertRaisesRegex(RuntimeError, "merged Ember integration contract"):
+                            run_vertical_slice.run(seed=83, artifact_root=Path("B:/vertical-artifacts"))
+            governor.assert_not_called()
+            cuda_probe.assert_not_called()
+
+    def test_semantic_runner_rejects_missing_integration_contract_before_governor(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            module_path = Path(directory) / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+            module_path.parent.mkdir(parents=True)
+            module_path.write_text("# synthetic module location\n", encoding="utf-8")
+            with patch.object(run_vertical_slice, "__file__", str(module_path)):
+                with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
+                    with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
+                        with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                            with self.assertRaisesRegex(RuntimeError, "merged Ember integration contract"):
+                                run_vertical_slice.run_semantic(seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"), shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1, sequence_length=8, checkpoint_interval=1, write_budget_bytes=1)
+            governor.assert_not_called()
+            cuda_probe.assert_not_called()
+
     def _run_vertical_resume_with_mocks(
         self, *, specialist: bool, callback_steps: tuple[int, ...] = (),
         restored_receipts: list[dict[str, object]] | None = None,
