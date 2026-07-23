@@ -159,6 +159,15 @@ def run(
             "stdout": (exc.stdout or "") if isinstance(exc.stdout, str) else "",
             "stderr": f"timeout after {timeout}s",
         }
+    except OSError as exc:
+        return {
+            "name": name,
+            "returncode": None,
+            "timed_out": False,
+            "command": list(display or args),
+            "stdout": "",
+            "stderr": str(exc),
+        }
     return {
         "name": name,
         "returncode": completed.returncode,
@@ -274,7 +283,16 @@ def seat_leg(root: Path, run_seat: bool) -> dict[str, Any]:
         why = "seat proxy not run (pass --run-seat on a machine with bun deps installed)"
         return {"5": leg(UNRESOLVED, LEG_TITLES["5"], why)}
     cli_dir = root / "tools" / "ember-cli"
-    cmd = ["bun", "test", "src/entrypoints/model-seat.test.ts"]
+    bun = shutil.which("bun")
+    if bun is None:
+        return {
+            "5": leg(
+                UNRESOLVED,
+                LEG_TITLES["5"],
+                "seat test could not execute (bun command is unavailable)",
+            )
+        }
+    cmd = [bun, "test", "src/entrypoints/model-seat.test.ts"]
     result = run(cmd, root=cli_dir, name="model_seat", timeout=240)
     rc = result["returncode"]
     if rc == 0:

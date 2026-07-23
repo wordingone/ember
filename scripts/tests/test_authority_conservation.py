@@ -130,6 +130,13 @@ VALID_POLICY = {
     "invariant_sha256": INVARIANT_SHA256,
     "active_goal_id": "EMBER-02",
     "active_workstream_ids": ["EMBER-02A", "EMBER-02B", "EMBER-02C"],
+    "goal_graph_node_ids": [
+        "EMBER-01",
+        "EMBER-02A",
+        "EMBER-02B",
+        "EMBER-02C",
+        "EMBER-02P",
+    ],
     "workstream_path_scopes": WORKSTREAM_PATH_SCOPES,
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "authority_only_goal": False,
@@ -697,6 +704,187 @@ def test_exact_ember02_selection_and_goal_file_pass(tmp_path: Path) -> None:
     )
     result = run_verifier(tmp_path, selection)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def write_graph_selection(root: Path) -> Path:
+    write_valid_fixture(root)
+    authority_root = root / "authority"
+    coordinator_root = authority_root / "coordinator"
+    nodes = []
+    for workstream in (
+        "EMBER-01",
+        "EMBER-02A",
+        "EMBER-02B",
+        "EMBER-02C",
+        "EMBER-02P",
+    ):
+        relative_goal = Path("coordinator") / "goals" / workstream / "goal.md"
+        goal = authority_root / relative_goal
+        goal.parent.mkdir(parents=True, exist_ok=True)
+        goal.write_text(f"# {workstream}\n", encoding="utf-8")
+        nodes.append(
+            {
+                "id": workstream,
+                "goal_path": relative_goal.as_posix(),
+                "goal_sha256": hashlib.sha256(goal.read_bytes()).hexdigest(),
+                "state": "PRESTAGING",
+            }
+        )
+    graph = coordinator_root / "EMBER-GOAL-GRAPH.json"
+    graph.parent.mkdir(parents=True, exist_ok=True)
+    graph.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-goal-graph-v1",
+                "program": {"id": "EMBER", "state": "ACTIVE"},
+                "nodes": nodes,
+            }
+        ),
+        encoding="utf-8",
+    )
+    selection = coordinator_root / "EMBER-GOAL-RESUME.md"
+    selection.write_text(
+        "state: active\n"
+        "active_goal: graph\n"
+        f"active_goal_path: {graph}\n",
+        encoding="utf-8",
+    )
+    return selection
+
+
+def test_graph_selection_binds_active_workstream_goal_bytes(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_graph_selection_rejects_stale_workstream_goal_hash(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+    graph_path = selection.parent / "EMBER-GOAL-GRAPH.json"
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    graph["nodes"][1]["goal_sha256"] = "0" * 64
+    graph_path.write_text(json.dumps(graph), encoding="utf-8")
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "selection.graph_goal_hash_mismatch" in {
+        item["code"] for item in payload["errors"]
+    }
+
+
+def mutate_graph(selection: Path, mutation) -> None:
+    graph_path = selection.parent / "EMBER-GOAL-GRAPH.json"
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    mutation(graph)
+    graph_path.write_text(json.dumps(graph), encoding="utf-8")
+
+
+@pytest.mark.parametrize("extra_id", ["EMBER-99", "EMBER-02A-shadow"])
+def test_graph_selection_rejects_unlisted_node_id(
+    tmp_path: Path, extra_id: str
+) -> None:
+    selection = write_graph_selection(tmp_path)
+
+    def add_unlisted(graph: dict) -> None:
+        node = copy.deepcopy(graph["nodes"][1])
+        node["id"] = extra_id
+        graph["nodes"].append(node)
+
+    mutate_graph(selection, add_unlisted)
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "selection.graph_node_set" in {
+        item["code"] for item in payload["errors"]
+    }
+
+
+def test_graph_selection_rejects_duplicate_expected_node(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+
+    def duplicate_expected(graph: dict) -> None:
+        graph["nodes"].append(copy.deepcopy(graph["nodes"][1]))
+
+    mutate_graph(selection, duplicate_expected)
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "selection.graph_workstream" in {
+        item["code"] for item in payload["errors"]
+    }
+
+
+def test_graph_selection_rejects_invalid_node_state(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+    mutate_graph(selection, lambda graph: graph["nodes"][1].update(state="PAUSED"))
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "selection.graph_workstream_state" in {
+        item["code"] for item in payload["errors"]
+    }
+
+
+@pytest.mark.parametrize("goal_path", ["../escaped/goal.md", "C:/escaped/goal.md"])
+def test_graph_selection_rejects_goal_path_escape(
+    tmp_path: Path, goal_path: str
+) -> None:
+    selection = write_graph_selection(tmp_path)
+    mutate_graph(
+        selection,
+        lambda graph: graph["nodes"][1].update(goal_path=goal_path),
+    )
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert {
+        "selection.graph_goal_path",
+        "selection.graph_goal_path_escape",
+    } & {item["code"] for item in payload["errors"]}
+
+
+def test_graph_selection_rejects_inactive_program(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+    mutate_graph(
+        selection,
+        lambda graph: graph["program"].update(state="PAUSED"),
+    )
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "selection.graph_program" in {
+        item["code"] for item in payload["errors"]
+    }
+
+
+def test_graph_selection_rejects_schema_mismatch(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+    mutate_graph(
+        selection,
+        lambda graph: graph.update(schema_version="ember-goal-graph-v0"),
+    )
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "selection.graph_schema" in {
+        item["code"] for item in payload["errors"]
+    }
 
 
 def test_hash_bound_external_classification_supports_protected_control_json(
