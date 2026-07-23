@@ -10,12 +10,12 @@
       },
       "head_sha": "587072e683ddde883186ac4d29c0eaa2ed9071b1",
       "master_compare": {
-        "ahead_by": 683,
+        "ahead_by": 687,
         "base": "587072e683ddde883186ac4d29c0eaa2ed9071b1",
         "behind_by": 2,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 683
+        "total_commits": 687
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -31,7 +31,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "ac7f83fca0fe77cadb1a1c49a2badba84017e2e3",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "122dc41d80ead0227dc8376a92642c4ab9160674",
         "merged_at": "2026-07-11T04:31:30Z",
         "number": 755,
@@ -40,7 +40,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/chore/735-lega-receipts-landing:refs/remotes/origin/chore/735-lega-receipts-landing && git rev-parse refs/remotes/origin/chore/735-lega-receipts-landing^{commit}",
@@ -58,12 +58,12 @@
       },
       "head_sha": "c99cc95772e5132c10d9bbab3341e75968751eaf",
       "master_compare": {
-        "ahead_by": 855,
+        "ahead_by": 859,
         "base": "c99cc95772e5132c10d9bbab3341e75968751eaf",
         "behind_by": 3,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 855
+        "total_commits": 859
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -79,7 +79,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "6c9047914663e9043d07f69e5fa4740dc5c486c4",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "c499ff6cd844d801ff1eda0234a2a5612368f478",
         "merged_at": "2026-07-08T10:48:20Z",
         "number": 436,
@@ -88,7 +88,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/docs/custody-disposition-415:refs/remotes/origin/docs/custody-disposition-415 && git rev-parse refs/remotes/origin/docs/custody-disposition-415^{commit}",
@@ -106,12 +106,12 @@
       },
       "head_sha": "d1bc5f82134a9b3dda15e6dfd7798a4b02fec2fb",
       "master_compare": {
-        "ahead_by": 798,
+        "ahead_by": 802,
         "base": "d1bc5f82134a9b3dda15e6dfd7798a4b02fec2fb",
         "behind_by": 2,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 798
+        "total_commits": 802
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -127,7 +127,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "d258038cb7f116dffe11663847f8604db89692cc",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "403fca58eb91771ed352ff0e4847ced5f5b13c1e",
         "merged_at": "2026-07-09T08:48:48Z",
         "number": 532,
@@ -136,7 +136,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/exp/524-measured-cells:refs/remotes/origin/exp/524-measured-cells && git rev-parse refs/remotes/origin/exp/524-measured-cells^{commit}",
@@ -154,12 +154,12 @@
       },
       "head_sha": "dc088ea5f9da5a4ea22ac5ecac847ac6689b1f70",
       "master_compare": {
-        "ahead_by": 781,
+        "ahead_by": 785,
         "base": "dc088ea5f9da5a4ea22ac5ecac847ac6689b1f70",
         "behind_by": 3,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 781
+        "total_commits": 785
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -175,7 +175,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "5f514195045db20c5be90b3301173238a1d83e49",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "b1ee102063b25be4ebf3801f8a75cdc3c5ae9b9c",
         "merged_at": "2026-07-09T15:45:04Z",
         "number": 571,
@@ -184,7 +184,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/485-activity-ledger-rung1:refs/remotes/origin/feat/485-activity-ledger-rung1 && git rev-parse refs/remotes/origin/feat/485-activity-ledger-rung1^{commit}",
@@ -202,12 +202,12 @@
       },
       "head_sha": "372f5ca816b472972f1b54cec238b878c2e0222f",
       "master_compare": {
-        "ahead_by": 680,
+        "ahead_by": 684,
         "base": "372f5ca816b472972f1b54cec238b878c2e0222f",
         "behind_by": 3,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 680
+        "total_commits": 684
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -223,7 +223,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "a0dc2d0e9a1c1a594391bd07ba70ad0da29aa18d",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "574b4ac2e4ee2014d7c4e57bd151141d2b10bb29",
         "merged_at": "2026-07-11T07:21:30Z",
         "number": 765,
@@ -232,7 +232,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/757-legb-inprocess-scorer:refs/remotes/origin/feat/757-legb-inprocess-scorer && git rev-parse refs/remotes/origin/feat/757-legb-inprocess-scorer^{commit}",
@@ -250,12 +250,12 @@
       },
       "head_sha": "c8a6b240d112f88b5dfc07cd7000bf92e70ef1e9",
       "master_compare": {
-        "ahead_by": 562,
+        "ahead_by": 566,
         "base": "c8a6b240d112f88b5dfc07cd7000bf92e70ef1e9",
         "behind_by": 1,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 562
+        "total_commits": 566
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -271,7 +271,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "1b05dd3c682667294d78868ccedf9689fd1109ed",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "54dbd5ea79eeb12650bedb78d24d500bf5b8abf6",
         "merged_at": "2026-07-14T17:45:32Z",
         "number": 824,
@@ -280,7 +280,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-restart-vera-continuation:refs/remotes/origin/feat/ember-restart-vera-continuation && git rev-parse refs/remotes/origin/feat/ember-restart-vera-continuation^{commit}",
@@ -298,12 +298,12 @@
       },
       "head_sha": "a7c88593d8c9dd2214a9580889b554dbebbd3284",
       "master_compare": {
-        "ahead_by": 555,
+        "ahead_by": 559,
         "base": "a7c88593d8c9dd2214a9580889b554dbebbd3284",
         "behind_by": 46,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 555
+        "total_commits": 559
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -319,7 +319,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "7818ffa6268d571a5b6e17bc15c6c478607bc02e",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "057f6fe69b3254e2ced3d329555e8bee5a7ac933",
         "merged_at": "2026-07-15T02:01:22Z",
         "number": 828,
@@ -328,7 +328,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-restart-vera-loader:refs/remotes/origin/feat/ember-restart-vera-loader && git rev-parse refs/remotes/origin/feat/ember-restart-vera-loader^{commit}",
@@ -346,12 +346,12 @@
       },
       "head_sha": "aa7050b23d0ce39ad7ec55b693a1f2152c9af852",
       "master_compare": {
-        "ahead_by": 420,
+        "ahead_by": 424,
         "base": "aa7050b23d0ce39ad7ec55b693a1f2152c9af852",
         "behind_by": 2,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 420
+        "total_commits": 424
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -367,7 +367,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "d327e69b04eaeff1e16155d63a120904efd96b3a",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "50da81d836d6c66b1acdefa1e6d728e010a57909",
         "merged_at": "2026-07-15T04:14:13Z",
         "number": 834,
@@ -376,7 +376,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-restart-vera-shared-raw-route:refs/remotes/origin/feat/ember-restart-vera-shared-raw-route && git rev-parse refs/remotes/origin/feat/ember-restart-vera-shared-raw-route^{commit}",
@@ -394,12 +394,12 @@
       },
       "head_sha": "62f619f5a435b1bf2bc659cf1125dc3ba485ef2e",
       "master_compare": {
-        "ahead_by": 264,
+        "ahead_by": 268,
         "base": "62f619f5a435b1bf2bc659cf1125dc3ba485ef2e",
         "behind_by": 1,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 264
+        "total_commits": 268
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -415,7 +415,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "07dfdd23964c1dfcbde1c826992b51ad8dcc1efb",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "d7b3bbe99b8bc7d6c6e01186775900f1215af578",
         "merged_at": "2026-07-17T06:15:08Z",
         "number": 890,
@@ -424,7 +424,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-semantic-contract-binding:refs/remotes/origin/feat/ember-semantic-contract-binding && git rev-parse refs/remotes/origin/feat/ember-semantic-contract-binding^{commit}",
@@ -442,12 +442,12 @@
       },
       "head_sha": "344fcd866d580869c0d563007f046f0a0a8f584b",
       "master_compare": {
-        "ahead_by": 280,
+        "ahead_by": 284,
         "base": "344fcd866d580869c0d563007f046f0a0a8f584b",
         "behind_by": 1,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 280
+        "total_commits": 284
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -463,7 +463,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "0f1a024936539653ab1a9bbc19779dc6e9495fed",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "f8d32624965f7ddf9950c4b1ea90c88c5c84cb0a",
         "merged_at": "2026-07-16T22:06:20Z",
         "number": 870,
@@ -472,7 +472,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-vision-v4-execution:refs/remotes/origin/feat/ember-vision-v4-execution && git rev-parse refs/remotes/origin/feat/ember-vision-v4-execution^{commit}",
@@ -490,12 +490,12 @@
       },
       "head_sha": "2023c7c30160e9722537912267009b15c1f45226",
       "master_compare": {
-        "ahead_by": 1018,
+        "ahead_by": 1022,
         "base": "2023c7c30160e9722537912267009b15c1f45226",
         "behind_by": 2,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 1018
+        "total_commits": 1022
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -511,7 +511,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "3378b5252f7f82b28580970cff94ab492bb671fe",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "c51d4ae83ea1885de3e10e249ec9162af6b7bbce",
         "merged_at": "2026-07-05T10:22:07Z",
         "number": 127,
@@ -520,7 +520,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/freeze-preregs-board-cures:refs/remotes/origin/feat/freeze-preregs-board-cures && git rev-parse refs/remotes/origin/feat/freeze-preregs-board-cures^{commit}",
@@ -538,12 +538,12 @@
       },
       "head_sha": "1a37a7b8b8c355e01eccc71a2cc87be3e62436f5",
       "master_compare": {
-        "ahead_by": 840,
+        "ahead_by": 844,
         "base": "1a37a7b8b8c355e01eccc71a2cc87be3e62436f5",
         "behind_by": 3,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 840
+        "total_commits": 844
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -559,7 +559,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "20ffd56129312ae08a39f6614b8eabf83d7d4df5",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "3f9400f587ae93be9ae049ec4fb899b1a0f05fe5",
         "merged_at": "2026-07-08T23:12:14Z",
         "number": 460,
@@ -568,7 +568,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/heldout-v21-fcalib-440:refs/remotes/origin/feat/heldout-v21-fcalib-440 && git rev-parse refs/remotes/origin/feat/heldout-v21-fcalib-440^{commit}",
@@ -586,12 +586,12 @@
       },
       "head_sha": "3eec08bb3bbecfd3166900d19dbd35cc801cfeb4",
       "master_compare": {
-        "ahead_by": 970,
+        "ahead_by": 974,
         "base": "3eec08bb3bbecfd3166900d19dbd35cc801cfeb4",
         "behind_by": 2,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 970
+        "total_commits": 974
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -607,7 +607,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "f8ef5a5a60c9e0e67725c6364a3e5023814ddeea",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "82be6e7ee6214c067e6d0a3bcf352ee6285bbaf5",
         "merged_at": "2026-07-06T11:12:24Z",
         "number": 223,
@@ -616,7 +616,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/land-bitnet-phase45-210:refs/remotes/origin/feat/land-bitnet-phase45-210 && git rev-parse refs/remotes/origin/feat/land-bitnet-phase45-210^{commit}",
@@ -634,12 +634,12 @@
       },
       "head_sha": "50273f97794f404894599e647fe022d1685a5768",
       "master_compare": {
-        "ahead_by": 891,
+        "ahead_by": 895,
         "base": "50273f97794f404894599e647fe022d1685a5768",
         "behind_by": 2,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 891
+        "total_commits": 895
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -655,7 +655,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "baa8424ff0ab189147d1520177898c237c4ff9c8",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "4e35651384013e84f6707d4ac39862ad114dc73a",
         "merged_at": "2026-07-07T12:39:10Z",
         "number": 361,
@@ -664,7 +664,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/w1b-unwidened-continuation:refs/remotes/origin/feat/w1b-unwidened-continuation && git rev-parse refs/remotes/origin/feat/w1b-unwidened-continuation^{commit}",
@@ -682,12 +682,12 @@
       },
       "head_sha": "adbc9dffdcf42bd1ad093d6bad940f8df19b642a",
       "master_compare": {
-        "ahead_by": 870,
+        "ahead_by": 874,
         "base": "adbc9dffdcf42bd1ad093d6bad940f8df19b642a",
         "behind_by": 5,
-        "head": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
         "status": "diverged",
-        "total_commits": 870
+        "total_commits": 874
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
@@ -703,7 +703,7 @@
         "commits": null,
         "deletions": null,
         "head_sha": "20b7a30273e3c353e33ef1e2bb1ec2def8cb8c14",
-        "live_verified_at": "2026-07-23T09:45:00Z",
+        "live_verified_at": "2026-07-23T09:58:00Z",
         "merge_sha": "10596714349284a437cffa78f713929985df41c9",
         "merged_at": "2026-07-08T05:49:58Z",
         "number": 405,
@@ -712,7 +712,7 @@
       },
       "protection": {
         "protected": false,
-        "source": "live-api-refresh-20260723"
+        "source": "live-api-refresh-20260723-2"
       },
       "reconstruction": {
         "command": "git fetch origin refs/heads/fix/badge-boot-surface:refs/remotes/origin/fix/badge-boot-surface && git rev-parse refs/remotes/origin/fix/badge-boot-surface^{commit}",
@@ -722,8 +722,8 @@
       "verdict": "KEEP_UNCERTAIN_BRANCH_UNIQUE_OR_DIVERGED"
     }
   ],
-  "captured_branch_count": 79,
-  "captured_open_pr_count": 24,
+  "captured_branch_count": 78,
+  "captured_open_pr_count": 23,
   "claim_limits": [
     "No deletion or model/research claim follows.",
     "Diverged or incompletely evidenced refs remain KEEP."
@@ -732,15 +732,16 @@
   "live_refresh": {
     "candidate_snapshot_branch_count": 79,
     "candidate_snapshot_open_pr_count": 24,
-    "open_pr_count": 24,
-    "prior_manifest_sha256": "6fe75a66fa7693d001e1451e475acda757c60b4d0641de656a0634474233a87d",
-    "prior_open_pr_count": 26,
-    "prior_public_master_sha": "2efc67e1e493b361c4c32817a3f5f9d16caa533c",
-    "prior_remote_branch_count": 81,
-    "public_master_sha": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
-    "refresh_reason": "Public master advanced; all 15 bounded candidate comparisons, branch heads, protection, open-head-PR, and merged-PR state were refreshed through the safe GitHub API.",
-    "refreshed_at": "2026-07-23T09:45:00Z",
-    "remote_branch_count": 79,
+    "open_pr_count": 23,
+    "prior_manifest_sha256": "7cfd91b25ce323f6036faf82d0436d1a614cbeebb70b91a0dd6a38c3a9e0579a",
+    "prior_open_pr_count": 24,
+    "prior_public_master_sha": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+    "prior_remote_branch_count": 79,
+    "public_master_sha": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+    "refresh_generation": 2,
+    "refresh_reason": "Public master advanced again; the same 15 bounded candidates were rechecked through the safe GitHub API.",
+    "refreshed_at": "2026-07-23T09:58:00Z",
+    "remote_branch_count": 78,
     "unclassified_delta": {
       "branch_items": [
         {
@@ -775,9 +776,9 @@
       "reason": "fresh delta was not admitted to the bounded candidate set; no deletion may infer safety from the older snapshot"
     }
   },
-  "manifest_sha256": "7cfd91b25ce323f6036faf82d0436d1a614cbeebb70b91a0dd6a38c3a9e0579a",
+  "manifest_sha256": "d62849bf8cb905c6bcc748b9fad63916d7a73cc05460eefad7deaa6315020f23",
   "mutation_performed": false,
-  "public_master_sha": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
+  "public_master_sha": "0825a69e36fd45584a5c503996004b29d3f1c88e",
   "registered_worktrees": {
     "count": 2,
     "deletion_authority": "NOT_GRANTED",
