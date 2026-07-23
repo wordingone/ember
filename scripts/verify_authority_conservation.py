@@ -30,6 +30,13 @@ POLICY_SCHEMA = "ember-authority-v1"
 ACTIVE_GOAL_ID = "EMBER-02"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 ACTIVE_WORKSTREAM_IDS = ["EMBER-02A", "EMBER-02B", "EMBER-02C"]
+GOAL_GRAPH_NODE_IDS = [
+    "EMBER-01",
+    "EMBER-02A",
+    "EMBER-02B",
+    "EMBER-02C",
+    "EMBER-02P",
+]
 WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
                'prefixes': ['configs/ember-restart-3b.json',
                             'docs/ember-restart-3b-',
@@ -313,6 +320,13 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
         policy.get("active_workstream_ids") == ACTIVE_WORKSTREAM_IDS,
         "policy.active_workstream_ids",
         "active child workstreams must be exact and parent-bound",
+    )
+    expect(
+        errors,
+        4,
+        policy.get("goal_graph_node_ids") == GOAL_GRAPH_NODE_IDS,
+        "policy.goal_graph_node_ids",
+        "durable goal graph node set must be closed and exact",
     )
     expect(
         errors,
@@ -804,16 +818,55 @@ def parse_graph_selection(
             )
         )
         return None
+    expected_graph_nodes = policy.get("goal_graph_node_ids")
+    if (
+        not isinstance(expected_graph_nodes, list)
+        or not expected_graph_nodes
+        or not all(isinstance(item, str) and item for item in expected_graph_nodes)
+        or len(expected_graph_nodes) != len(set(expected_graph_nodes))
+        or not set(expected_workstreams).issubset(expected_graph_nodes)
+    ):
+        errors.append(
+            finding(
+                4,
+                "selection.graph_policy_nodes",
+                "goal graph node policy is invalid",
+            )
+        )
+        return None
     nodes = graph.get("nodes")
     if not isinstance(nodes, list):
         errors.append(finding(4, "selection.graph_nodes", "nodes must be an array"))
         return None
     by_id: dict[str, list[dict[str, Any]]] = {}
     for node in nodes:
-        if isinstance(node, dict) and isinstance(node.get("id"), str):
-            by_id.setdefault(node["id"], []).append(node)
+        if (
+            not isinstance(node, dict)
+            or not isinstance(node.get("id"), str)
+            or not node["id"]
+        ):
+            errors.append(
+                finding(4, "selection.graph_node_id", "every node needs a string id")
+            )
+            valid = False
+            continue
+        by_id.setdefault(node["id"], []).append(node)
+    observed_node_ids = Counter(
+        node["id"]
+        for node in nodes
+        if isinstance(node, dict) and isinstance(node.get("id"), str)
+    )
+    if observed_node_ids != Counter(expected_graph_nodes):
+        errors.append(
+            finding(
+                4,
+                "selection.graph_node_set",
+                "graph node IDs must exactly equal goal_graph_node_ids",
+            )
+        )
+        valid = False
     graph_root = selected_graph.parent.parent.resolve()
-    for workstream in expected_workstreams:
+    for workstream in expected_graph_nodes:
         matches = by_id.get(workstream, [])
         if len(matches) != 1:
             errors.append(
