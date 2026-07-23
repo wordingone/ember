@@ -2,8 +2,8 @@
 
 Status: approved by delegated operator authority (Leo mail 20733)
 
-Goal-ID: EMBER-02  
-Workstream-ID: EMBER-02A  
+Goal-ID: EMBER-02
+Workstream-ID: EMBER-02A
 Next executed outcome: one bounded clean-genesis 3B canary through the canonical Ember CLI
 
 ## Problem
