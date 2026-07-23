@@ -9,6 +9,7 @@
 // requested; certified-mode tests separately prove the one fixed consumer argv.
 
 import { describe, it, expect } from "bun:test";
+import { createHash } from "crypto";
 import {
   CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
@@ -35,6 +36,38 @@ const REAL_LAUNCH_COMMAND =
   "--root . --certificate <spine-certified-declaration.json> " +
   "--declaration-ledger <declaration-ledger.jsonl> " +
   "--run-spec <certified-train-run.json>";
+const EXECUTION_RECEIPT_PATH = "B:\\custody\\runner-certified-launch.json";
+const ARTIFACT_ROOT = "B:\\artifacts\\run";
+
+function validExecutionReceiptBytes(): Buffer {
+  return Buffer.from(JSON.stringify({
+    schema_version: "ember-certified-train-execution-v1",
+    certificate_sha256: "a".repeat(64),
+    run_spec_sha256: "b".repeat(64),
+    public_master_sha: "c".repeat(40),
+    argv: ["python", "disk_budget_runner.py"],
+    exit_code: 0,
+    artifact_root: ARTIFACT_ROOT,
+    runner_receipt: "B:\\custody\\runner.json",
+    claim_scope: {
+      capability_claimed: false,
+      admission_claimed: false,
+      sufficient_pretraining_claimed: false,
+      verified_expert_accretion_claimed: false,
+      competitiveness_claimed: false,
+    },
+  }));
+}
+
+function validCertifiedResponse(): string {
+  const bytes = validExecutionReceiptBytes();
+  return JSON.stringify({
+    outcome: "COMPLETED",
+    execution_receipt: EXECUTION_RECEIPT_PATH,
+    execution_receipt_sha256: createHash("sha256").update(bytes).digest("hex"),
+    artifact_root: ARTIFACT_ROOT,
+  });
+}
 
 /** A well-formed all-green launch_packet.py stdout (JSONL rows + summary + comments). */
 function allGreenStdout(command: string = REAL_LAUNCH_COMMAND): string {
@@ -101,6 +134,7 @@ function makeCmd(runner: (spawns: RecordedSpawn[]) => LaunchPacketRunResult) {
 function makeExecuteCmd(
   preflight: LaunchPacketRunResult,
   certified: LaunchPacketRunResult,
+  executionReceiptBytes: Buffer = validExecutionReceiptBytes(),
 ) {
   const preflightSpawns: RecordedSpawn[] = [];
   const certifiedSpawns: RecordedSpawn[] = [];
@@ -116,6 +150,10 @@ function makeExecuteCmd(
     runCertifiedLaunch: (executable, args) => {
       certifiedSpawns.push({ executable, args });
       return certified;
+    },
+    readExecutionReceipt: (path) => {
+      if (path !== EXECUTION_RECEIPT_PATH) throw new Error("unexpected receipt path");
+      return executionReceiptBytes;
     },
   });
   return { cmd, preflightSpawns, certifiedSpawns };
@@ -351,11 +389,7 @@ describe("train command", () => {
         { status: 0, stdout: allGreenStdout() },
         {
           status: 0,
-          stdout: JSON.stringify({
-            outcome: "COMPLETED",
-            execution_receipt: "receipt.json",
-            artifact_root: "artifacts/run",
-          }),
+          stdout: validCertifiedResponse(),
         },
       );
 
@@ -382,8 +416,62 @@ describe("train command", () => {
       expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(
         REAL_LAUNCH_COMMAND,
       );
-      expect(result?.message).toContain("receipt.json");
+      expect(result?.message).toContain(EXECUTION_RECEIPT_PATH);
       expect(result?.message).not.toContain("capability");
+    });
+
+    it("refuses a zero-exit certified response that supplies only an unverified receipt path", async () => {
+      const { cmd, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: JSON.stringify({
+            outcome: "COMPLETED",
+            execution_receipt: "receipt.json",
+            artifact_root: "artifacts/run",
+          }),
+        },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(certifiedSpawns).toHaveLength(1);
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("receipt bytes");
+    });
+
+    it("refuses an execution receipt with an empty claim boundary", async () => {
+      const receipt = JSON.parse(
+        validExecutionReceiptBytes().toString("utf8"),
+      ) as Record<string, unknown>;
+      receipt["claim_scope"] = {};
+      const bytes = Buffer.from(JSON.stringify(receipt));
+      const { cmd } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: JSON.stringify({
+            outcome: "COMPLETED",
+            execution_receipt: EXECUTION_RECEIPT_PATH,
+            execution_receipt_sha256: createHash("sha256")
+              .update(bytes)
+              .digest("hex"),
+            artifact_root: ARTIFACT_ROOT,
+          }),
+        },
+        bytes,
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("claim boundary");
     });
 
     it("preflight failure prevents certified consumer execution", async () => {

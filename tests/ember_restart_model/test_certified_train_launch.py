@@ -805,6 +805,12 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     paths["run_spec"],
                     run_process=fake_run,
                 )
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
             self.assertEqual(exit_code, 0)
             self.assertEqual(len(calls), 1)
             argv, kwargs = calls[0]
@@ -821,6 +827,18 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             self.assertFalse(
                 any(receipt["claim_scope"].values()),
                 "execution receipt must not claim capability or admission",
+            )
+            response = module._execution_response(
+                launch,
+                0,
+            )
+            self.assertEqual(
+                response["execution_receipt"],
+                str(execution_receipt),
+            )
+            self.assertEqual(
+                response["execution_receipt_sha256"],
+                sha256_bytes(execution_receipt.read_bytes()),
             )
 
     def test_child_failure_is_propagated_and_receipted(self) -> None:

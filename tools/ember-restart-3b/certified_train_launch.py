@@ -743,6 +743,21 @@ def _execution_receipt_path(launch: ValidatedLaunch) -> pathlib.Path:
     )
 
 
+def _execution_response(
+    launch: ValidatedLaunch, exit_code: int
+) -> dict[str, object]:
+    receipt_path = _execution_receipt_path(launch)
+    return {
+        "outcome": "COMPLETED" if exit_code == 0 else "FAILED",
+        "execution_receipt": str(receipt_path),
+        "execution_receipt_sha256": _file_sha256(
+            receipt_path, "certified execution receipt"
+        ),
+        "artifact_root": str(launch.artifact_root),
+        "exit_code": exit_code,
+    }
+
+
 def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
@@ -802,12 +817,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         json.dumps(
-            {
-                "outcome": "COMPLETED" if exit_code == 0 else "FAILED",
-                "execution_receipt": str(_execution_receipt_path(launch)),
-                "artifact_root": str(launch.artifact_root),
-                "exit_code": exit_code,
-            },
+            _execution_response(launch, exit_code),
             sort_keys=True,
             separators=(",", ":"),
         )

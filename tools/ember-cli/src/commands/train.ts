@@ -14,7 +14,9 @@
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 import { spawnSync } from "child_process";
-import { join } from "path";
+import { createHash } from "crypto";
+import { readFileSync } from "fs";
+import { isAbsolute, join } from "path";
 
 // ---------------------------------------------------------------------------
 // Preflight spawn seam (injectable for testing; mirrors model.ts's runner)
@@ -195,6 +197,8 @@ interface TrainCommandDeps {
   scriptPath?: string;
   /** certified_train_launch.py path override. */
   certifiedLaunchScriptPath?: string;
+  /** Read exact certified receipt bytes; injectable so tests never touch disk. */
+  readExecutionReceipt?: (path: string) => Buffer;
 }
 
 interface TrainArgs {
@@ -202,6 +206,96 @@ interface TrainArgs {
   certificate?: string;
   declarationLedger?: string;
   runSpec?: string;
+}
+
+const CERTIFIED_EXECUTION_RECEIPT_FIELDS = [
+  "schema_version",
+  "certificate_sha256",
+  "run_spec_sha256",
+  "public_master_sha",
+  "argv",
+  "exit_code",
+  "artifact_root",
+  "runner_receipt",
+  "claim_scope",
+].sort();
+const CERTIFIED_EXECUTION_CLAIM_FIELDS = [
+  "capability_claimed",
+  "admission_claimed",
+  "sufficient_pretraining_claimed",
+  "verified_expert_accretion_claimed",
+  "competitiveness_claimed",
+].sort();
+
+function _verifyCertifiedExecutionReceipt(
+  execution: Record<string, unknown>,
+  readReceipt: (path: string) => Buffer,
+): { path: string; artifactRoot: string } {
+  const path = execution["execution_receipt"];
+  const expectedSha256 = execution["execution_receipt_sha256"];
+  const artifactRoot = execution["artifact_root"];
+  if (
+    typeof path !== "string" ||
+    !isAbsolute(path) ||
+    typeof expectedSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(expectedSha256) ||
+    typeof artifactRoot !== "string" ||
+    !isAbsolute(artifactRoot)
+  ) {
+    throw new Error("certified response omitted content-addressed receipt bytes");
+  }
+  const bytes = readReceipt(path);
+  if (createHash("sha256").update(bytes).digest("hex") !== expectedSha256) {
+    throw new Error("certified execution receipt hash does not match receipt bytes");
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    throw new Error("certified execution receipt bytes are not strict UTF-8 JSON");
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("certified execution receipt is not an object");
+  }
+  const receipt = value as Record<string, unknown>;
+  const actualFields = Object.keys(receipt).sort();
+  if (
+    actualFields.length !== CERTIFIED_EXECUTION_RECEIPT_FIELDS.length ||
+    actualFields.some(
+      (field, index) => field !== CERTIFIED_EXECUTION_RECEIPT_FIELDS[index],
+    )
+  ) {
+    throw new Error("certified execution receipt fields are not closed");
+  }
+  if (
+    receipt["schema_version"] !== "ember-certified-train-execution-v1" ||
+    receipt["exit_code"] !== 0 ||
+    receipt["artifact_root"] !== artifactRoot
+  ) {
+    throw new Error("certified execution receipt does not bind the completed run");
+  }
+  const claims = receipt["claim_scope"];
+  if (
+    typeof claims !== "object" ||
+    claims === null ||
+    Array.isArray(claims)
+  ) {
+    throw new Error("certified execution receipt exceeds the canary claim boundary");
+  }
+  const claimRecord = claims as Record<string, unknown>;
+  const claimFields = Object.keys(claimRecord).sort();
+  if (
+    claimFields.length !== CERTIFIED_EXECUTION_CLAIM_FIELDS.length ||
+    claimFields.some(
+      (field, index) => field !== CERTIFIED_EXECUTION_CLAIM_FIELDS[index],
+    ) ||
+    Object.values(claimRecord).some(
+      (claimed) => claimed !== false,
+    )
+  ) {
+    throw new Error("certified execution receipt exceeds the canary claim boundary");
+  }
+  return { path, artifactRoot };
 }
 
 function _parseTrainArgs(raw: string): TrainArgs {
@@ -273,6 +367,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
   const runLaunchPacket = deps.runLaunchPacket ?? _defaultLaunchPacketRunner;
   const runCertifiedLaunch =
     deps.runCertifiedLaunch ?? _defaultCertifiedLaunchRunner;
+  const readExecutionReceipt =
+    deps.readExecutionReceipt ?? ((path: string) => readFileSync(path));
 
   return {
     name: "train",
@@ -411,18 +507,18 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             exitCode: 1,
           };
         }
-        const executionReceipt = execution["execution_receipt"];
-        const artifactRoot = execution["artifact_root"];
-        if (
-          typeof executionReceipt !== "string" ||
-          executionReceipt === "" ||
-          typeof artifactRoot !== "string" ||
-          artifactRoot === ""
-        ) {
+        let verifiedExecution: { path: string; artifactRoot: string };
+        try {
+          verifiedExecution = _verifyCertifiedExecutionReceipt(
+            execution,
+            readExecutionReceipt,
+          );
+        } catch (error) {
           return {
             type: "message" as const,
             message:
-              "error: certified train consumer response omitted execution_receipt or artifact_root.",
+              "error: certified train consumer returned unverified receipt bytes: " +
+              (error instanceof Error ? error.message : String(error)),
             exitCode: 1,
           };
         }
@@ -430,8 +526,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           type: "message" as const,
           message: [
             "certified bounded canary process completed.",
-            `execution receipt: ${executionReceipt}`,
-            `artifact root: ${artifactRoot}`,
+            `execution receipt: ${verifiedExecution.path}`,
+            `artifact root: ${verifiedExecution.artifactRoot}`,
           ].join("\n"),
         };
       }
