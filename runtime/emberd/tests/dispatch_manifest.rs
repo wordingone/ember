@@ -344,7 +344,7 @@ fn governed_canary_persists_a_first_probe_refusal_before_identity_or_lease() {
     assert_eq!(receipt["result"], "REFUSED_CANARY_HOST_PROBE");
     assert_eq!(
         receipt["governed_canary"]["process_exclusivity"],
-        "PARTIAL_DENYLIST_UNRESOLVED"
+        "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED"
     );
     assert!(receipt["governed_canary"]["before"].is_null());
     assert!(receipt["governed_canary"]["before_spawn"].is_null());
@@ -597,40 +597,54 @@ fn governed_canary_refuses_an_incomplete_forbidden_process_policy() {
 }
 
 #[test]
-fn governed_canary_denylist_does_not_claim_universal_process_exclusivity() {
-    let root = sandbox("governed-canary-denylist-boundary");
-    let manifest = write_governed_canary_manifest(&root, "governed-canary-denylist-boundary");
+fn governed_canary_refuses_any_foreign_gpu_compute_process_before_spawn() {
+    let root = sandbox("governed-canary-foreign-compute");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-foreign-compute");
     let bytes = fs::read(&manifest).unwrap();
     let digest = format!("{:x}", Sha256::digest(&bytes));
     let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
-    let unrelated = CanaryProcessIdentity {
+    let foreign = CanaryProcessIdentity {
         pid: 998,
         parent_pid: 1,
         start_token: 122,
-        image_name: "unclassified-gpu-peer.exe".into(),
+        image_name: "python.exe".into(),
         image_sha256: "4".repeat(64),
         gpu_uuid: Some("GPU-EMBER-CANARY".into()),
     };
-    let outcome = daemon
-        .dispatch_governed_canary_manifest_bytes_at_with_probes(
-            &bytes,
-            &digest,
-            &manifest,
-            10_001,
-            |_root| Ok(u64::MAX),
-            || Ok(24 * GIB),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
-            || Ok(canary_snapshot(vec![unrelated.clone()])),
-        )
-        .unwrap();
-    let receipt: Value = serde_json::from_slice(&fs::read(&outcome.receipt.path).unwrap()).unwrap();
-    assert_eq!(
-        receipt["governed_canary"]["before"]["processes"][0]["image_name"],
-        unrelated.image_name
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(vec![foreign.clone()])),
     );
-    daemon
-        .stop_job("governed-canary-denylist-boundary")
-        .unwrap();
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(
+        daemon
+            .lease_owner("gpu:GPU-EMBER-CANARY:bounded-canary")
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        daemon
+            .identity_hash("governed-canary-foreign-compute")
+            .unwrap(),
+        None
+    );
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(root.join("custody").join("preflight.json")).unwrap())
+            .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_CANARY_HOST_PROBE");
+    assert_eq!(
+        receipt["governed_canary"]["process_exclusivity"],
+        "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED"
+    );
 }
 
 #[test]
@@ -756,7 +770,7 @@ fn governed_canary_refuses_unexplained_free_vram_loss_after_lease() {
     assert_eq!(receipt["result"], "REFUSED_CANARY_HOST_DRIFT");
     assert_eq!(
         receipt["governed_canary"]["process_exclusivity"],
-        "PARTIAL_DENYLIST_UNRESOLVED"
+        "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED"
     );
     assert_eq!(
         receipt["governed_canary"]["before"]["free_vram_bytes"],
@@ -819,7 +833,7 @@ fn governed_canary_persists_a_refusal_when_the_gpu_lease_has_an_owner() {
     assert_eq!(receipt["result"], "REFUSED_CANARY_LEASE_CONFLICT");
     assert_eq!(
         receipt["governed_canary"]["process_exclusivity"],
-        "PARTIAL_DENYLIST_UNRESOLVED"
+        "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED"
     );
     daemon.stop_job("governed-canary-owner").unwrap();
 }

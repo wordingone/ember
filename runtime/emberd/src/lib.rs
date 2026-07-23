@@ -509,10 +509,7 @@ fn validate_canary_host_snapshot(
             || validate_hash(&process.image_sha256).is_err()
             || !identities.insert((process.pid, process.start_token))
             || forbidden.contains(image_name.as_str())
-            || process
-                .gpu_uuid
-                .as_deref()
-                .is_some_and(|uuid| uuid != scope.expected_gpu_uuid)
+            || process.gpu_uuid.is_some()
         {
             return Err(EmberdError::InvalidDispatchManifest {
                 detail: "governed canary host snapshot contains an invalid or forbidden process"
@@ -1691,7 +1688,7 @@ impl Daemon {
                         "observed_at_ms": observed_at_ms,
                         "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
                         "governed_canary": {
-                            "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                            "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
                             "before": Value::Null,
                             "before_spawn": Value::Null,
                         },
@@ -1871,7 +1868,7 @@ impl Daemon {
                     "observed_at_ms": observed_at_ms,
                     "dispatch_manifest_sha256": &manifest_sha256,
                     "governed_canary": {
-                        "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                        "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
                         "before": &canary_before,
                         "before_spawn": Value::Null,
                     },
@@ -1909,7 +1906,7 @@ impl Daemon {
                         "observed_at_ms": observed_at_ms,
                         "dispatch_manifest_sha256": &manifest_sha256,
                         "governed_canary": {
-                            "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                            "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
                             "before": &canary_before,
                             "before_spawn": Value::Null,
                         },
@@ -1946,7 +1943,7 @@ impl Daemon {
                     "observed_at_ms": observed_at_ms,
                     "dispatch_manifest_sha256": &manifest_sha256,
                     "governed_canary": {
-                        "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                        "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
                         "before": before,
                         "before_spawn": &snapshot,
                     },
@@ -2006,7 +2003,7 @@ impl Daemon {
                 "source_sha256": &self.emberd_source_sha256,
             },
             "governed_canary": canary_scope.as_ref().map(|scope| json!({
-                "process_exclusivity": "PARTIAL_DENYLIST_UNRESOLVED",
+                "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
                 "scope": scope,
                 "before": canary_before,
                 "before_spawn": canary_before_spawn,
