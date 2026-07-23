@@ -4,6 +4,8 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -431,6 +433,145 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         paths["ledger"],
                         paths["run_spec"],
                     )
+
+    def test_valid_request_builds_exact_governed_vertical_disk_runner_argv(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            self.assertEqual(argv[0], sys.executable)
+            self.assertEqual(
+                argv[1],
+                str(
+                    paths["repo"]
+                    / "tools"
+                    / "ember-restart-3b"
+                    / "disk_budget_runner.py"
+                ),
+            )
+            self.assertEqual(argv.count("governed-vertical"), 1)
+            self.assertNotIn("semantic", argv)
+            self.assertEqual(argv[argv.index("--max-records") + 1], "1")
+            self.assertEqual(
+                argv[argv.index("--write-budget-bytes") + 1],
+                str(16 * 1024**3),
+            )
+
+    def test_scope_failure_occurs_before_run_process(self) -> None:
+        module = load_module()
+        calls: list[object] = []
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            request = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            request["requested_scope"]["active_expert_families"] = 2
+            write_json(paths["run_spec"], request)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "scope exceeds certificate"):
+                    module.certify_and_execute(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        run_process=lambda *args, **kwargs: calls.append(
+                            (args, kwargs)
+                        ),
+                    )
+        self.assertEqual(calls, [])
+
+    def test_valid_execution_uses_argv_without_shell_and_writes_receipt(self) -> None:
+        module = load_module()
+        calls: list[tuple[list[str], dict[str, object]]] = []
+
+        def fake_run(argv, **kwargs):
+            calls.append((argv, kwargs))
+            return subprocess.CompletedProcess(argv, 0)
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                exit_code = module.certify_and_execute(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    run_process=fake_run,
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(calls), 1)
+            argv, kwargs = calls[0]
+            self.assertIsInstance(argv, list)
+            self.assertIs(kwargs["shell"], False)
+            self.assertIs(kwargs["check"], False)
+            self.assertEqual(kwargs["cwd"], paths["repo"])
+            execution_receipt = (
+                paths["custody_root"] / "runner-receipt-certified-launch.json"
+            )
+            receipt = json.loads(execution_receipt.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["exit_code"], 0)
+            self.assertEqual(receipt["argv"], argv)
+            self.assertFalse(
+                any(receipt["claim_scope"].values()),
+                "execution receipt must not claim capability or admission",
+            )
+
+    def test_child_failure_is_propagated_and_receipted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+
+            def fail(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, 17)
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                exit_code = module.certify_and_execute(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    run_process=fail,
+                )
+            self.assertEqual(exit_code, 17)
+            receipt = json.loads(
+                (
+                    paths["custody_root"]
+                    / "runner-receipt-certified-launch.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(receipt["exit_code"], 17)
+
+    def test_runner_receipt_outside_authorized_custody_fails_before_process(
+        self,
+    ) -> None:
+        module = load_module()
+        calls: list[object] = []
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["runner_receipt"] = str(
+                pathlib.Path(directory) / "outside" / "receipt.json"
+            )
+            write_json(paths["run_spec"], run_spec)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "scope exceeds certificate: runner_receipt"
+                ):
+                    module.certify_and_execute(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        run_process=lambda *args, **kwargs: calls.append(
+                            (args, kwargs)
+                        ),
+                    )
+        self.assertEqual(calls, [])
 
 
 def _rewrite_completion(

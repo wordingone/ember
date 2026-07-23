@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
+import sys
+import tempfile
 from typing import Any, NamedTuple
 
 
@@ -116,6 +119,7 @@ COMPLETION_RECEIPT_KEYS = {
 
 class ValidatedLaunch(NamedTuple):
     certificate_sha256: str
+    run_spec_sha256: str
     public_master_sha256: str
     artifact_root: pathlib.Path
     custody_root: pathlib.Path
@@ -391,15 +395,142 @@ def validate_certified_request(
     )
     _require_scope_subset(requested_scope, authorized_scope)
 
+    custody_root = pathlib.Path(requested_scope["custody_root"])
+    runner_receipt = pathlib.Path(run_spec["runner_receipt"])
+    try:
+        runner_receipt.resolve(strict=False).relative_to(
+            custody_root.resolve(strict=False)
+        )
+    except ValueError as error:
+        raise ValueError(
+            "run scope exceeds certificate: runner_receipt"
+        ) from error
+
     return ValidatedLaunch(
         certificate_sha256=certificate_sha256,
+        run_spec_sha256=_file_sha256(run_spec_path, "run spec"),
         public_master_sha256=current_master,
         artifact_root=pathlib.Path(requested_scope["artifact_root"]),
-        custody_root=pathlib.Path(requested_scope["custody_root"]),
-        runner_receipt=pathlib.Path(run_spec["runner_receipt"]),
+        custody_root=custody_root,
+        runner_receipt=runner_receipt,
         seed=run_spec["seed"],
         write_budget_bytes=int(requested_scope["write_budget_bytes"]),
         max_records=int(requested_scope["max_records"]),
         max_c_write_gib=float(requested_scope["max_c_write_gib"]),
         max_b_write_gib=float(requested_scope["max_b_write_gib"]),
     )
+
+
+def build_runner_argv(
+    repo_root: pathlib.Path, launch: ValidatedLaunch
+) -> list[str]:
+    repo_root = pathlib.Path(repo_root)
+    return [
+        sys.executable,
+        str(
+            repo_root
+            / "tools"
+            / "ember-restart-3b"
+            / "disk_budget_runner.py"
+        ),
+        "--max-c-write-gib",
+        str(launch.max_c_write_gib),
+        "--max-b-write-gib",
+        str(launch.max_b_write_gib),
+        "--receipt",
+        str(launch.runner_receipt),
+        "--write-root",
+        f"custody={launch.custody_root}",
+        "--write-root",
+        f"artifacts={launch.artifact_root}",
+        "--",
+        sys.executable,
+        str(
+            repo_root
+            / "tools"
+            / "ember-restart-3b"
+            / "run_vertical_slice.py"
+        ),
+        "governed-vertical",
+        "--seed",
+        str(launch.seed),
+        "--artifact-root",
+        str(launch.artifact_root),
+        "--write-budget-bytes",
+        str(launch.write_budget_bytes),
+        "--max-records",
+        str(launch.max_records),
+    ]
+
+
+def _write_execution_receipt(
+    launch: ValidatedLaunch, argv: list[str], exit_code: int
+) -> pathlib.Path:
+    receipt_path = launch.runner_receipt.with_name(
+        f"{launch.runner_receipt.stem}-certified-launch.json"
+    )
+    receipt = {
+        "schema_version": "ember-certified-train-execution-v1",
+        "certificate_sha256": launch.certificate_sha256,
+        "run_spec_sha256": launch.run_spec_sha256,
+        "public_master_sha256": launch.public_master_sha256,
+        "argv": argv,
+        "exit_code": exit_code,
+        "artifact_root": str(launch.artifact_root),
+        "runner_receipt": str(launch.runner_receipt),
+        "claim_scope": {
+            "capability_claimed": False,
+            "admission_claimed": False,
+            "sufficient_pretraining_claimed": False,
+            "verified_expert_accretion_claimed": False,
+            "competitiveness_claimed": False,
+        },
+    }
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=receipt_path.parent,
+        prefix=f".{receipt_path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temporary_path = pathlib.Path(handle.name)
+        handle.write(_canonical_bytes(receipt))
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary_path, receipt_path)
+    return receipt_path
+
+
+def execute_validated_launch(
+    repo_root: pathlib.Path,
+    launch: ValidatedLaunch,
+    run_process=subprocess.run,
+) -> int:
+    repo_root = pathlib.Path(repo_root)
+    argv = build_runner_argv(repo_root, launch)
+    result = run_process(
+        argv,
+        shell=False,
+        check=False,
+        cwd=repo_root,
+    )
+    exit_code = int(result.returncode)
+    _write_execution_receipt(launch, argv, exit_code)
+    return exit_code
+
+
+def certify_and_execute(
+    repo_root: pathlib.Path,
+    certificate_path: pathlib.Path,
+    declaration_ledger_path: pathlib.Path,
+    run_spec_path: pathlib.Path,
+    run_process=subprocess.run,
+) -> int:
+    launch = validate_certified_request(
+        repo_root,
+        certificate_path,
+        declaration_ledger_path,
+        run_spec_path,
+    )
+    return execute_validated_launch(repo_root, launch, run_process=run_process)
