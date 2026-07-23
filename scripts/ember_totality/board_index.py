@@ -476,7 +476,7 @@ def duplicate_epochs(index):
 
 
 def current_board(index):
-    """Newest-ts board row in CANONICAL_DIR that is not the old side of
+    """Newest-ts board row regardless of location_class (spec 1a: no directory filter) that is not the old side of
     any supersession row. Fail-closed: raises BoardIndexError if
     duplicate_epochs is non-empty or the index is missing/empty."""
     if not index:
