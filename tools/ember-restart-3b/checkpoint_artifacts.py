@@ -97,34 +97,6 @@ def _bind_checkpoint_identity(published_root: Path, receipt: Mapping[str, Any]) 
     return {**dict(receipt), "checkpoint": {"byte_sha256": byte_sha256}}
 
 
-def published_checkpoint_receipt(published_root: Path) -> dict[str, Any]:
-    """Reconstruct the complete load receipt from frozen published bytes.
-
-    ``checkpoint.byte_sha256`` cannot live inside the manifest whose bytes it
-    identifies. Reopening consumers therefore derive that outer binding from
-    the exact manifest snapshot they parse, rather than dropping the writer's
-    out-of-band identity field.
-    """
-
-    published_root = _admitted_checkpoint_root(published_root)
-    manifest_path = published_root / "checkpoint-manifest.json"
-    if _is_link_or_reparse(manifest_path):
-        raise CheckpointIdentityMismatch("checkpoint manifest cannot be a symlink or reparse point")
-    try:
-        manifest_bytes = manifest_path.read_bytes()
-        manifest = json.loads(manifest_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise CheckpointIdentityMismatch("checkpoint manifest is not valid published JSON") from error
-    if not isinstance(manifest, dict):
-        raise CheckpointIdentityMismatch("checkpoint manifest must be a JSON object")
-    byte_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
-    return {
-        **manifest,
-        "checkpoint_manifest_sha256": byte_sha256,
-        "checkpoint": {"byte_sha256": byte_sha256},
-    }
-
-
 def _select_detached_state(
     state: Mapping[str, torch.Tensor],
     predicate: Callable[[str], bool],

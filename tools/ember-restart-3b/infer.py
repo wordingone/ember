@@ -17,7 +17,7 @@ from typing import Any, Mapping
 import torch
 
 from batch import decode_owned_batch
-from checkpoint_artifacts import load_checkpoint_artifacts, published_checkpoint_receipt
+from checkpoint_artifacts import load_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -262,7 +262,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("prediction output must not already exist")
     config_path = ROOT / "configs" / "ember-restart-3b.json"
     config = RestartDecoderConfig.from_contract(config_path)
-    receipt = published_checkpoint_receipt(args.checkpoint)
+    manifest_path = args.checkpoint / "checkpoint-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    receipt = {**manifest, "checkpoint_manifest_sha256": sha(manifest_path)}
     model = UnifiedDecoder(config, device=args.device, allow_production_allocation=True).eval()
     load_checkpoint_artifacts(model, None, args.checkpoint, receipt)
     request = json.loads(args.input.read_text(encoding="utf-8"))
