@@ -33,6 +33,16 @@ and `C8` rows). Renaming this file's protocol codes to an F-prefix (F1–F5) to 
 collision permanently is a follow-up decision, filed operator-visible, and is explicitly OUT of
 scope for this pass.
 
+**Board canonicality (R3).** The totality board's output-of-record now derives from a
+canonical directory (`scripts/ember_totality/receipts-totality/`) plus an append-only
+adjudication index (`BOARD-INDEX.jsonl`), not a bare newest-filename glob. Duplicate-epoch
+rules D1 (byte-identical location twin, adjudicated, not red), D2 (differing bytes, red unless
+superseded), and D3 (identical non-UNKNOWN basis re-run, red unless superseded) gate which
+receipt is current; a mechanical freshness verdict (FRESH|STALE) compares that
+receipt’s basis against the live tree on four triggers (condition code, governing hashes, subject
+identity, evidence-index head). Full rule text, schema, and the pre-ruled 2026-07-11 twin
+adjudication: `docs/spec/board-canonicality-v1.md`.
+
 *2026-07-01. Status: GOVERNING — the canonical registry of machine-checkable goal conditions,
 extracted VERBATIM from the pre-goalforge GOAL.md §4–§6 (archived at
 docs/goal-archive/GOAL-20260630-pre-goalforge.md) so the condition text lives in a governing file,
