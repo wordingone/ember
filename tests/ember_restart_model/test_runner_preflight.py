@@ -460,16 +460,35 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(receipt["checkpoint_manifest_sha256"], hashlib.sha256(manifest_bytes).hexdigest())
         self.assertEqual(receipt["checkpoint"], {"byte_sha256": hashlib.sha256(manifest_bytes).hexdigest()})
 
-    def test_semantic_runner_refuses_cuda_before_governor_admission(self) -> None:
+    def test_semantic_runner_opens_bound_stream_before_cuda_probe(self) -> None:
+        stream = SimpleNamespace(vocab_size=32_000, receipt_sha256="r" * 64, tokenizer_sha256="t" * 64)
         with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
-            with patch.object(run_vertical_slice, "governed_resource_preflight", return_value={"free_gb": 32.0}) as governor:
-                with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=RuntimeError("CUDA probe")) as cuda_probe:
-                    with self.assertRaisesRegex(RuntimeError, "CUDA probe"):
-                        run_vertical_slice.run_semantic(
-                            seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
-                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
-                            sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
-                        )
+            with patch.object(run_vertical_slice, "production_artifact_root", side_effect=lambda path, **_kwargs: path):
+                with patch.object(run_vertical_slice, "governed_resource_preflight", return_value={"governor": "accepted"}):
+                    with patch.object(run_vertical_slice.ManifestBoundTokenStream, "from_receipt", return_value=stream) as opener:
+                        with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=RuntimeError("CUDA probe")):
+                            with self.assertRaisesRegex(RuntimeError, "CUDA probe"):
+                                run_vertical_slice.run_semantic(
+                                    seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("bound-receipt.json"),
+                                    shards_root=Path("bound-shards"), tokenizer_path=Path("bound-tokenizer.json"), steps=1,
+                                    sequence_length=8, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
+                                )
+        opener.assert_called_once_with(
+            receipt_path=Path("bound-receipt.json"), shards_root=Path("bound-shards"), tokenizer_path=Path("bound-tokenizer.json"),
+        )
+
+    def test_semantic_runner_refuses_cuda_before_governor_admission(self) -> None:
+        stream = SimpleNamespace(vocab_size=32_000)
+        with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
+            with patch.object(run_vertical_slice.ManifestBoundTokenStream, "from_receipt", return_value=stream):
+                with patch.object(run_vertical_slice, "governed_resource_preflight", return_value={"free_gb": 32.0}) as governor:
+                    with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=RuntimeError("CUDA probe")) as cuda_probe:
+                        with self.assertRaisesRegex(RuntimeError, "CUDA probe"):
+                            run_vertical_slice.run_semantic(
+                                seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
+                                shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
+                                sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
+                            )
         governor.assert_called_once_with()
         cuda_probe.assert_called_once_with()
 
@@ -500,15 +519,17 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertRegex(receipt["governor_source_sha256"], r"^[0-9a-f]{64}$")
 
     def test_semantic_runner_resource_refusal_prevents_cuda_probe(self) -> None:
+        stream = SimpleNamespace(vocab_size=32_000)
         with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
-            with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=RuntimeError("resource refusal")) as governor:
-                with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
-                    with self.assertRaisesRegex(RuntimeError, "resource refusal"):
-                        run_vertical_slice.run_semantic(
-                            seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
-                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
-                            sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
-                        )
+            with patch.object(run_vertical_slice.ManifestBoundTokenStream, "from_receipt", return_value=stream):
+                with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=RuntimeError("resource refusal")) as governor:
+                    with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
+                        with self.assertRaisesRegex(RuntimeError, "resource refusal"):
+                            run_vertical_slice.run_semantic(
+                                seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
+                                shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
+                                sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
+                            )
         governor.assert_called_once_with()
         cuda_probe.assert_not_called()
 

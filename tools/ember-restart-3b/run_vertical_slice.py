@@ -2511,14 +2511,15 @@ def run_semantic(
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     config = RestartDecoderConfig.from_contract(config_path)
     memory_contract = load_memory_contract(config_path)
-    governor_receipt = governed_resource_preflight()
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is required for the production semantic runner")
+    # Rehash and open the exact token receipt before any governor/CUDA touch.
     stream = ManifestBoundTokenStream.from_receipt(
         receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path
     )
     if stream.vocab_size != config.vocab_size:
         raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
+    governor_receipt = governed_resource_preflight()
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the production semantic runner")
     total_parameters = config.structural_parameter_count()
     shared_active_parameters = 1_020_589_568
     device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
