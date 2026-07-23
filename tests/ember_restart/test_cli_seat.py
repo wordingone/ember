@@ -1,6 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+import hashlib
 import json
 import subprocess
 import sys
@@ -9,8 +10,41 @@ from pathlib import Path
 from test_admission import test_owned_admission_binds_sufficient_pretraining_evals_and_cli
 from test_contract import REPO_ROOT, _write_json
 
+# cond3 seat-chain bridge wiring (state/specs/cond3-seat-bridge-spec.md): the
+# in-process axis-6 production-reach test imports the resolver module
+# directly (not just via subprocess) so it can spy on the exact call the
+# PRODUCTION default path makes into seat_identity_bridge.derive_seat_identity.
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "ember_restart"))
+import cli_seat  # noqa: E402  (path must be inserted first)
 
 RESOLVER = REPO_ROOT / "scripts" / "ember_restart" / "cli_seat.py"
+CERT_FIXTURE_PATH = (
+    REPO_ROOT / "tools" / "ember-cli" / "src" / "commands" / "__fixtures__" / "model-identity" / "manifest.json"
+)
+
+
+def _write_cert_manifest(tmp_path: Path, cert: dict, name: str = "cert-manifest.json") -> tuple[Path, str]:
+    path = tmp_path / name
+    data = json.dumps(cert, indent=2).encode("utf-8")
+    path.write_bytes(data)
+    return path, hashlib.sha256(data).hexdigest()
+
+
+def _matching_cert(manifest: dict) -> dict:
+    """A real cert manifest whose identity-bearing hash fields exactly equal
+    THIS generated run manifest's own (real, already-computed) values --
+    reusing the checked-in model-identity fixture (known to pass
+    validate_identity.py per scripts/ember_restart/test_seat_identity_bridge.py)
+    and overriding only the overlapping hashes. No hash is invented: every
+    value copied in here was already produced by the admission fixture
+    builder or by hashing real fixture bytes."""
+    cert = json.loads(CERT_FIXTURE_PATH.read_text(encoding="utf-8"))
+    checkpoint_sha256 = manifest["checkpoint"]["sha256"]
+    cert["checkpoint"]["byte_sha256"] = checkpoint_sha256
+    cert["architecture"]["sha256"] = manifest["architecture"]["model_config"]["sha256"]
+    cert["tokenizer"]["sha256"] = manifest["tokenizer"]["sha256"]
+    cert["evaluation"]["subject_checkpoint_sha256"] = checkpoint_sha256
+    return cert
 
 
 def _resolve(manifest: Path) -> subprocess.CompletedProcess[str]:
@@ -29,39 +63,120 @@ def _resolve(manifest: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_resolver_derives_owned_identity_from_admitted_bytes(tmp_path: Path):
+def test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_unadmitted_cert(tmp_path: Path):
+    """cond3 wiring (state/specs/cond3-seat-bridge-spec.md): the resolver no
+    longer trusts the run manifest's own checkpoint/model-config/tokenizer
+    hashes as an independent identity authority (goal line 95) -- it derives
+    them from the referenced cert manifest via seat_identity_bridge, fail-
+    closed. This replaces the old GREEN happy-path test, which asserted
+    valid:True purely from the run manifest's own fields with no cert
+    involved at all -- exactly the independent-derivation this bridge removes.
+
+    This test proves the cross-check reaches production and passes (bridge
+    Step 1-5 GREEN) using a REAL matching cert -- the checked-in
+    model-identity fixture with its overlapping hashes overridden to the
+    real, already-computed run-manifest values (no invented hashes) -- then
+    documents a genuine, currently-open upstream gap: validate_identity.py's
+    OWNED_ADMITTED admission checks (evaluation receipt / checkpoint bytes /
+    artifact bundle) unconditionally require --receipt-bundle/--checkpoint/
+    --artifact-bundle CLI flags that NEITHER model.ts's _resolveModelIdentity
+    (tools/ember-cli/src/commands/model.ts:113, passes at most --checkpoint)
+    NOR seat_identity_bridge.derive_seat_identity (passes only the bare
+    manifest path) ever supply. No cert manifest can therefore currently
+    reach identity.disposition == OWNED_ADMITTED through this bridge, so the
+    only reachable passing disposition is OWNED_CANDIDATE, and
+    require_admitted_seat correctly REFUSES it (negative #6: never serve or
+    count a candidate as admitted). This is a real, disclosed gap in the
+    admission plumbing shared by model.ts and the bridge -- not a defect
+    introduced by this wiring -- and is out of scope for the production-
+    wiring leg (tracked separately from Artifact B / consumer replay).
+    """
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
-    result = _resolve(tmp_path / "run.json")
-    assert result.returncode == 0, result.stdout + result.stderr
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    cert = _matching_cert(manifest)
+    cert_path, digest = _write_cert_manifest(tmp_path, cert)
+    manifest["cert_manifest_path"] = cert_path.name
+    manifest["cert_manifest_digest"] = digest
+    _write_json(manifest_path, manifest)
+
+    result = _resolve(manifest_path)
+    assert result.returncode != 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
-    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
-    checkpoint_sha256 = manifest["checkpoint"]["sha256"]
-    serving = json.loads(
-        (tmp_path / manifest["cli"]["serving_manifest_path"]).read_text(encoding="utf-8")
+    assert payload["valid"] is False
+    assert payload["seat"] is None
+    assert any(
+        "not OWNED_ADMITTED+selected" in error for error in payload["errors"]
+    ), payload["errors"]
+
+
+def test_axis6_production_path_reaches_seat_identity_bridge(tmp_path: Path, monkeypatch):
+    """Consumer-graph DEFAULT path (7-axis map, axis 6): resolve_owned_seat
+    (the production entrypoint owned-seat-loader.ts spawns) must REACH
+    seat_identity_bridge.derive_seat_identity -- a call-count/observable-
+    effect assertion against the real function, not a unit test of the
+    bridge module alone. derive_seat_identity is replaced with a spy so this
+    also proves WHAT it is called with: the manifest's own checkpoint/model-
+    config/tokenizer sha256 and the resolved checkpoint-manifest path are
+    handed through as bridge INPUT (cross-check material), never consumed
+    directly as final identity truth.
+    """
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    calls: list[tuple[dict, Path]] = []
+
+    def _spy(seat_config, *, repo_root):
+        calls.append((dict(seat_config), repo_root))
+        return {"valid": False, "seat": None, "errors": ["spy: refused by design"]}
+
+    monkeypatch.setattr(cli_seat, "derive_seat_identity", _spy)
+    result = cli_seat.resolve_owned_seat(manifest_path, tmp_path / "trusted-verifiers.json")
+
+    assert len(calls) == 1, "production default path did not reach derive_seat_identity exactly once"
+    seat_config, repo_root = calls[0]
+    assert seat_config["checkpointSha256"] == manifest["checkpoint"]["sha256"]
+    assert seat_config["modelConfigSha256"] == manifest["architecture"]["model_config"]["sha256"]
+    assert seat_config["tokenizerSha256"] == manifest["tokenizer"]["sha256"]
+    assert seat_config["checkpointPath"] == str(
+        (manifest_path.resolve().parent / manifest["checkpoint"]["manifest_path"]).resolve()
     )
-    assert payload == {
-        "checkpoint_sha256": checkpoint_sha256,
-        "endpoint_url": "http://127.0.0.1:8083",
-        "errors": [],
-        "identity_url": "http://127.0.0.1:8083/v1/models",
-        "launch": {
-            "checkpoint_dir": str((tmp_path / manifest["checkpoint"]["manifest_path"]).parent.resolve()),
-            "mode": "INTERACTIVE",
-            "model_config_path": str((tmp_path / manifest["architecture"]["model_config"]["path"]).resolve()),
-            "run_manifest_path": str((tmp_path / "run.json").resolve()),
-            "server_path": str((tmp_path / serving["server_implementation"]["path"]).resolve()),
-            "tokenizer_path": str((tmp_path / manifest["tokenizer"]["path"]).resolve()),
-            "trusted_verifier_registry_path": str((tmp_path / "trusted-verifiers.json").resolve()),
-        },
-        "model_config_sha256": manifest["architecture"]["model_config"]["sha256"],
-        "model_format": "safetensors",
-        "model_name": f"ember-owned:{checkpoint_sha256[:12]}",
-        "run_id": manifest["run_id"],
-        "seat": "OWNED_ADMITTED",
-        "server_source_sha256": serving["server_implementation"]["sha256"],
-        "tokenizer_sha256": manifest["tokenizer"]["sha256"],
-        "valid": True,
-    }
+    assert repo_root == cli_seat.REPO_ROOT
+    # The bridge's REFUSE propagates as the resolver's own REFUSE -- proving
+    # there is no fallback to the old independent-derivation path.
+    assert result == {"valid": False, "seat": None, "errors": ["spy: refused by design"]}
+
+
+def test_axis6_mismatched_cert_field_refused_through_production_path(tmp_path: Path):
+    """A seat whose identity fields disagree with the referenced cert
+    manifest is REFUSED through the REAL production path (subprocess, no
+    mocking) -- proving the new cross-check is load-bearing there, not
+    merely present in the bridge module. The run manifest here is internally
+    self-consistent (would have passed the OLD resolver unmodified); only the
+    cert cross-check this wiring introduces disagrees, isolating exactly the
+    new behavior."""
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    cert = _matching_cert(manifest)
+    # Deliberately mismatch ONE overlapping field: the cert's architecture
+    # hash disagrees with the run manifest's own (real, self-consistent)
+    # model_config sha256 -- swapped for the tokenizer sha256, another real
+    # value already present in the manifest, so nothing is invented.
+    cert["architecture"]["sha256"] = manifest["tokenizer"]["sha256"]
+    cert_path, digest = _write_cert_manifest(tmp_path, cert)
+    manifest["cert_manifest_path"] = cert_path.name
+    manifest["cert_manifest_digest"] = digest
+    _write_json(manifest_path, manifest)
+
+    result = _resolve(manifest_path)
+    assert result.returncode != 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["valid"] is False
+    assert payload["seat"] is None
+    assert any(
+        "does not equal cert-derived value" in error for error in payload["errors"]
+    ), payload["errors"]
 
 
 def test_resolver_rejects_candidate_and_tampered_serving_bytes(tmp_path: Path):
