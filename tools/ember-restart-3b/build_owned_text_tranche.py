@@ -120,12 +120,23 @@ def main() -> int:
         "max_records_per_source": args.max_records_per_source,
     }
     build_id = "wave1-" + _sha(_canonical(premise))[:24]
-    manifest = build_pre_admission_text_tranche(
-        sources=sources, raw_paths=raw_paths, source_custody_receipts=custody,
-        output_root=args.staging_root, build_id=build_id,
-        max_records_per_source=args.max_records_per_source,
-    )
     tranche = args.staging_root / build_id
+    if tranche.exists():
+        expected = {"manifest.json", "train.jsonl", "heldout.jsonl"}
+        if not tranche.is_dir() or {path.name for path in tranche.iterdir()} != expected:
+            raise ValueError("existing tranche is not recoverable pre-admission output")
+        try:
+            manifest = json.loads((tranche / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("existing tranche manifest is invalid") from error
+        if not isinstance(manifest, dict):
+            raise ValueError("existing tranche manifest is invalid")
+    else:
+        manifest = build_pre_admission_text_tranche(
+            sources=sources, raw_paths=raw_paths, source_custody_receipts=custody,
+            output_root=args.staging_root, build_id=build_id,
+            max_records_per_source=args.max_records_per_source,
+        )
     l4_receipt = admit_pre_admission_text_tranche(
         tranche_root=tranche, source_custody_receipts=custody,
         policy_bytes=POLICY_BYTES, verifier_bytes=VERIFIER_BYTES,

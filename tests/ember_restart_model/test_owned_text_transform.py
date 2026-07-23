@@ -93,6 +93,11 @@ class OwnedTextTransformTests(unittest.TestCase):
             l4 = json.loads((tranche / "l4-transform-receipt.json").read_text(encoding="utf-8"))
             self.assertEqual(l4["source_custody_receipts"][-1]["source_id"], "gutenberg-218")
             self.assertIn({"source_id": "courtlistener-scotus-caption", "sha256": sha(json.dumps(court_receipt, sort_keys=True, separators=(",", ":")).encode("utf-8"))}, l4["source_custody_receipts"])
+            (tranche / "l4-transform-receipt.json").unlink()
+            resumed = subprocess.run(result.args, text=True, capture_output=True, check=False)
+            self.assertEqual(resumed.returncode, 0, resumed.stderr)
+            self.assertEqual(json.loads(resumed.stdout)["build_id"], summary["build_id"])
+            self.assertTrue((tranche / "l4-transform-receipt.json").is_file())
 
 if __name__ == "__main__":
     unittest.main()
