@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 """token_shards_v0.py — TOKEN-SHARDS-V0 receipt contract + fail-closed validator.
 
 The v0 owned-core pretrain trains on flat uint16 packed shards produced from
@@ -91,6 +95,45 @@ def _check_premise(nc, key, sub, out):
         out.append(f"premise {key}: sha drift {_sha(p)[:12]} != {sha[:12]}")
 
 
+_OWNED_SOURCE_MANIFEST_KEYS = {
+    "schema_version", "sha256", "source_ids", "train_root_sha256",
+    "heldout_root_sha256",
+}
+
+
+def _valid_sha256(value):
+    return (isinstance(value, str) and len(value) == 64
+            and value == value.lower()
+            and all(character in "0123456789abcdef" for character in value))
+
+
+def _owned_source_manifest_errors(premise):
+    if not isinstance(premise, dict):
+        return ["is not closed"]
+    schema_version = premise.get("schema_version")
+    if schema_version == "ember-text-lab-corpus-manifest-v2":
+        expected_keys = _OWNED_SOURCE_MANIFEST_KEYS
+    elif schema_version == "ember-owned-text-l4-transform-receipt-v1":
+        expected_keys = _OWNED_L4_TRANSFORM_PREMISE_KEYS
+    else:
+        return ["schema version is invalid"]
+    if set(premise) != expected_keys:
+        return ["is not closed"]
+    if schema_version == "ember-owned-text-l4-transform-receipt-v1":
+        if not _valid_sha256(premise.get("l4_transform_receipt_sha256")):
+            return ["L4 transform receipt hash is invalid"]
+        if premise.get("selection_rule") != "train_only_l4_transform_v1":
+            return ["L4 transform selection rule is invalid"]
+    source_ids = premise.get("source_ids")
+    if (not isinstance(source_ids, list) or not source_ids
+            or any(not isinstance(source_id, str) or not source_id for source_id in source_ids)
+            or source_ids != sorted(source_ids) or len(source_ids) != len(set(source_ids))):
+        return ["source IDs are not a canonical nonempty set"]
+    if not all(_valid_sha256(premise[name]) for name in ("sha256", "train_root_sha256", "heldout_root_sha256")):
+        return ["hash binding is invalid"]
+    return []
+
+
 def _scan_uint16_shard(path):
     """Re-derive reserved-band / range / parity facts from the ACTUAL shard
     bytes — never trust the receipt's declared reserved_ids_observed_in_stream
@@ -119,7 +162,7 @@ def _scan_uint16_shard(path):
     return odd, reserved, oob
 
 
-def validate_shards_receipt(d, nc=NC, shard_dir_override=None):
+def validate_shards_receipt(d, nc=NC, shard_dir_override=None, expected_source_ids=None):
     """Return a list of violations (empty = the shard contract holds).
 
     Fail-closed in the fp26_prereg.check_premises grammar: a receipt is valid
@@ -147,7 +190,11 @@ def validate_shards_receipt(d, nc=NC, shard_dir_override=None):
 
     # pinned premises: assembly + tokenizer-freeze receipts
     prem = d.get("premises") or {}
-    _check_premise(nc, "assembly_receipt", prem.get("assembly_receipt"), v)
+    if expected_source_ids is not None:
+        for error in _owned_source_manifest_errors(prem.get("source_manifest")):
+            v.append(f"source-manifest premise {error}")
+    if expected_source_ids is None:
+        _check_premise(nc, "assembly_receipt", prem.get("assembly_receipt"), v)
     _check_premise(nc, "tokenizer_freeze_receipt",
                    prem.get("tokenizer_freeze_receipt"), v)
     # frozen tokenizer.json sha pin
@@ -223,10 +270,18 @@ def validate_shards_receipt(d, nc=NC, shard_dir_override=None):
 
     # per-source content/separator/stream token counts, summing to the total
     ps = d.get("per_source") or {}
-    if set(ps) != EXPECTED_SOURCES:
+    if expected_source_ids is not None:
+        source_manifest = prem.get("source_manifest") if isinstance(prem, dict) else None
+        declared_ids = source_manifest.get("source_ids") if isinstance(source_manifest, dict) else None
+        if (not isinstance(declared_ids, list) or any(not isinstance(name, str) or not name for name in declared_ids)
+                or len(declared_ids) != len(set(declared_ids)) or set(declared_ids) != set(expected_source_ids)):
+            v.append("source-manifest source IDs do not equal the expected closed set")
+        if set(ps) != set(expected_source_ids):
+            v.append(f"per_source sources {sorted(ps)} do not equal owned source-manifest IDs")
+    elif set(ps) != EXPECTED_SOURCES:
         v.append(f"per_source sources {sorted(ps)} != "
                  f"{sorted(EXPECTED_SOURCES)}")
-    else:
+    if (expected_source_ids is None and set(ps) == EXPECTED_SOURCES) or (expected_source_ids is not None and set(ps) == set(expected_source_ids)):
         ssum = 0
         for src, c in ps.items():
             if not isinstance(c, dict):
@@ -415,7 +470,7 @@ def _encode_batch_factory(nc, tokfreeze, encode_fn, match_added_tokens=False):
     return lambda texts: [e.ids for e in tk.encode_batch(texts)]
 
 
-def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
+def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR, source_manifest_premise=None,
                       token_cap=SHARD_TOKEN_CAP, emit=False,
                       assembly_name=ASSEMBLY_RECEIPT,
                       tokfreeze_name=TOKENIZER_FREEZE_RECEIPT):
@@ -436,7 +491,17 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
     page-ins with zero progress output. ~2 bytes/token now, and every
     emitted shard logs."""
     import numpy as np
-    asm_sha, assembly = _load_pinned(nc, assembly_name)
+    if source_manifest_premise is not None:
+        errors = _owned_source_manifest_errors(source_manifest_premise)
+        if errors:
+            raise ValueError("owned source-manifest premise is invalid: " + "; ".join(errors))
+
+    if source_manifest_premise is None:
+        asm_sha, assembly = _load_pinned(nc, assembly_name)
+    else:
+        if sources is None:
+            raise ValueError("owned source-manifest mode requires explicit sources")
+        asm_sha, assembly = None, None
     tok_sha, tokfreeze = _load_pinned(nc, tokfreeze_name)
     tok_json_rel = (tokfreeze.get("tokenizer_repo_path")
                     or "tokenizer/tokenizer.json").replace(chr(92), "/")
@@ -567,12 +632,16 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
         },
         "loader_windows": {"seq": SEQ, "n_mtp": N_MTP,
                            "block_len": BLOCK_LEN, "n_windows": n_windows},
-        "premises": {
+        "premises": ({
             "assembly_receipt": {"name": assembly_name, "sha256": asm_sha},
             "tokenizer_freeze_receipt": {"name": tokfreeze_name,
                                          "sha256": tok_sha},
             "tokenizer_json": {"path": tok_json_rel, "sha256": tok_json_sha},
-        },
+        } if source_manifest_premise is None else {
+            "source_manifest": source_manifest_premise,
+            "tokenizer_freeze_receipt": {"name": tokfreeze_name, "sha256": tok_sha},
+            "tokenizer_json": {"path": tok_json_rel, "sha256": tok_json_sha},
+        }),
         "sha_convention": SHA_CONVENTION,
         "emit": bool(emit),
         "no_gpu": True,
@@ -983,3 +1052,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+_OWNED_L4_TRANSFORM_PREMISE_KEYS = _OWNED_SOURCE_MANIFEST_KEYS | {
+    "l4_transform_receipt_sha256", "selection_rule",
+}
