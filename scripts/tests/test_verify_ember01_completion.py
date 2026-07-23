@@ -300,8 +300,7 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None
         (
             REPO_ROOT
             / "receipts"
-            / "ember-restart-3b"
-            / "identity"
+            / "ember-01-completion"
             / "cond4-tamper-battery-bf20f050-v1.json"
         ).read_text(encoding="utf-8")
     )
