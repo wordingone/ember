@@ -1,5 +1,23 @@
 {
   "candidate_count": 15,
+  "independent_custody_edge_case": {
+    "ref": "refs/heads/feat/ember-restart-vera-loader",
+    "head_sha": "a7c88593d8c9dd2214a9580889b554dbebbd3284",
+    "pr": 828,
+    "pr_state": "MERGED",
+    "merge_sha": "057f6fe69b3254e2ced3d329555e8bee5a7ac933",
+    "master_compare": {
+      "status": "diverged",
+      "ahead_by": 564,
+      "behind_by": 46,
+      "merge_base": "3b60ce5273ee9056a08e1e0fcf001dbd4536f120"
+    },
+    "open_head_prs": [],
+    "protection": false,
+    "path_diff_blob_equivalence": "NOT_PROVEN",
+    "verdict": "KEEP_UNCERTAIN_BRANCH_UNIQUE_OR_DIVERGED",
+    "reason": "merged ancestry does not prove terminal branch bytes are reconstructible after a 67-file divergent branch with 46 commits behind refreshed master"
+  },
   "candidates": [
     {
       "custody_checks": {
@@ -710,7 +728,7 @@
     "refreshed_at": "2026-07-23T10:25:16Z",
     "remote_branch_count": 77
   },
-  "manifest_sha256": "654af30daaa757065c43c7707df2deb60da0023a7a8f3d0b4898d39937c69fd5",
+  "manifest_sha256": "5ea2d04034b25d60a506f2495050a1533f89f9119cc27f3fc055b96f03eb163f",
   "mutation_performed": false,
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "public_master_sha": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
