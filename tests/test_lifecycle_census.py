@@ -117,8 +117,16 @@ def test_workflow_derives_stale_tracker_from_complete_census_report() -> None:
 def test_workflow_tracker_shell_and_count_validation_fail_closed() -> None:
     workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
     assert "set -euo pipefail" in workflow
+    assert "\n          set -u\n" not in workflow
     assert "jq -er" in workflow
     assert "stale_pr" in workflow and "stale_is" in workflow
+
+
+def test_workflow_makes_census_and_report_failures_terminal() -> None:
+    workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
+    assert "if ! python scripts/lifecycle_census.py" in workflow
+    assert "if ! jq -e" in workflow
+    assert "invalid stale report schema" in workflow
 
 
 def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() -> None:
