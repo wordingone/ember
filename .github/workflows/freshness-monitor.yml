@@ -1,4 +1,7 @@
 name: freshness-monitor
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 # The "never stale" ring. Runs daily and FAILS (red run = alarm) when the repo
 # drifts back toward the conditions this consolidation removed: a stale trunk,
@@ -26,8 +29,62 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -u
+          set -euo pipefail
           FAIL=0
+
+          require_count() {
+            local name="$1"
+            local value="$2"
+            case "$value" in
+              ''|*[!0-9]*)
+                printf 'FAIL [tracker] invalid %s count from stale report\n' "$name" >&2
+                exit 1
+                ;;
+            esac
+          }
+
+          require_stale_report() {
+            local report="$1"
+            if [ ! -s "$report" ]; then
+              printf 'FAIL [tracker] stale report is missing or empty\n' >&2
+              exit 1
+            fi
+            if ! jq -e '
+              (.schema_version == "ember-lifecycle-stale-v1")
+              and (.receipt_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+              and (.master_sha | type == "string" and test("^[0-9a-f]{40}$"))
+              and (.report_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+              and (.counts | type == "object")
+              and (.counts.pull_requests | type == "number" and isfinite and . >= 0 and floor == .)
+              and (.counts.issues | type == "number" and isfinite and . >= 0 and floor == .)
+              and (.pull_requests | type == "array")
+              and (.issues | type == "array")
+              and (.counts.pull_requests == (.pull_requests | length))
+              and (.counts.issues == (.issues | length))
+            ' "$report" >/dev/null; then
+              printf 'FAIL [tracker] invalid stale report schema/counts; refusing stale verdict\n' >&2
+              exit 1
+            fi
+          }
+
+          extract_stale_count() {
+            local name="$1"
+            local value
+            if ! value=$(jq -er --arg name "$name" '
+              if (.counts[$name] | type) == "number"
+                 and (.counts[$name] | isfinite)
+                 and (.counts[$name] >= 0)
+                 and ((.counts[$name] | floor) == .counts[$name])
+              then (.counts[$name] | tostring)
+              else error("invalid " + $name + " count")
+              end
+            ' "$stale_report"); then
+              printf 'FAIL [tracker] unable to extract %s count from stale report\n' "$name" >&2
+              exit 1
+            fi
+            require_count "$name" "$value"
+            printf '%s\n' "$value"
+          } # extract_stale_count
           now=$(date +%s)
 
           # 1. trunk freshness
@@ -49,18 +106,46 @@ jobs:
             echo "ok   [branches] ${n} remote branches"
           fi
 
-          # 3. stale open issues / PRs (no update within the window)
+          # 3. Complete, content-addressed open-population census. The census
+          # collector follows every page and excludes PRs from issue counts;
+          # an API/partial-page failure exits non-zero before any receipt lands.
+          master_sha=$(git rev-parse origin/master)
           cutoff=$(date -u -d "-${MAX_ITEM_AGE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
-          stale_pr=$(gh pr list --state open --json number,updatedAt \
-            --jq "[.[] | select(.updatedAt < \"$cutoff\")] | length")
-          stale_is=$(gh issue list --state open --json number,updatedAt \
-            --jq "[.[] | select(.updatedAt < \"$cutoff\")] | length")
-          if [ "${stale_pr:-0}" -gt 0 ] || [ "${stale_is:-0}" -gt 0 ]; then
+          stale_report="${RUNNER_TEMP}/ember-lifecycle-stale.json"
+          if ! python scripts/lifecycle_census.py \
+              --repo "${GITHUB_REPOSITORY}" \
+              --master-sha "${master_sha}" \
+              --stale-before "${cutoff}" \
+              --stale-output "${stale_report}" \
+              --output receipts/lifecycle-census; then
+            printf 'FAIL [tracker] complete census/report generation failed; refusing stale verdict\n' >&2
+            exit 1
+          fi
+
+          # 4. stale open issues / PRs derived from the exact census populations
+          require_stale_report "$stale_report"
+          if ! jq -e '
+            (.schema_version == "ember-lifecycle-stale-v1")
+            and (.receipt_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+            and (.master_sha | type == "string" and test("^[0-9a-f]{40}$"))
+            and (.report_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+            and (.counts | type == "object")
+            and (.counts.pull_requests | type == "number" and isfinite and . >= 0 and floor == .)
+            and (.counts.issues | type == "number" and isfinite and . >= 0 and floor == .)
+            and (.pull_requests | type == "array")
+            and (.issues | type == "array")
+            and (.counts.pull_requests == (.pull_requests | length))
+            and (.counts.issues == (.issues | length))
+          ' "${stale_report}" >/dev/null; then
+            printf 'FAIL [tracker] invalid stale report schema/counts; refusing stale verdict\n' >&2
+            exit 1
+          fi
+          stale_pr=$(extract_stale_count pull_requests)
+          stale_is=$(extract_stale_count issues)
+          if [ "$stale_pr" -gt 0 ] || [ "$stale_is" -gt 0 ]; then
             echo "FAIL [tracker] ${stale_pr} stale PRs + ${stale_is} stale issues (no update in ${MAX_ITEM_AGE_DAYS}d)"
-            gh pr list --state open --json number,title,updatedAt \
-              --jq ".[] | select(.updatedAt < \"$cutoff\") | \"  PR #\(.number) \(.updatedAt[:10]) \(.title)\""
-            gh issue list --state open --json number,title,updatedAt \
-              --jq ".[] | select(.updatedAt < \"$cutoff\") | \"  issue #\(.number) \(.updatedAt[:10]) \(.title)\""
+            jq -r '.pull_requests[] | "  PR #\(.number) \(.updated_at[:10]) \(.title)"' "${stale_report}"
+            jq -r '.issues[] | "  issue #\(.number) \(.updated_at[:10]) \(.title)"' "${stale_report}"
             FAIL=1
           else
             echo "ok   [tracker] no stale open issues/PRs"
