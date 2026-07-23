@@ -86,6 +86,10 @@ def test_custody_legs_use_explicit_live_issue_census(
 
     issue_index = captured.index("--issue-census")
     assert captured[issue_index + 1] == str(live_issue_census)
+    digest_index = captured.index("--issue-census-sha256")
+    assert captured[digest_index + 1] == hashlib.sha256(
+        live_issue_census.read_bytes()
+    ).hexdigest()
 
 
 def test_custody_legs_reject_issue_census_mutated_during_run(
