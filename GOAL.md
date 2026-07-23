@@ -13,6 +13,13 @@ they cannot reduce, defer, replace, or reinterpret it.
     "EMBER-02B",
     "EMBER-02C"
   ],
+  "goal_graph_node_ids": [
+    "EMBER-01",
+    "EMBER-02A",
+    "EMBER-02B",
+    "EMBER-02C",
+    "EMBER-02P"
+  ],
   "workstream_path_scopes": {
     "EMBER-02A": {
       "mode": "all_except",
