@@ -728,7 +728,7 @@
     "refreshed_at": "2026-07-23T10:25:16Z",
     "remote_branch_count": 77
   },
-  "manifest_sha256": "5ea2d04034b25d60a506f2495050a1533f89f9119cc27f3fc055b96f03eb163f",
+  "manifest_sha256": "f0d4687d6139af9c215fa8a875aa6ebe990f1b553431a432595ec0db4743ff97",
   "mutation_performed": false,
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "public_master_sha": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
@@ -749,13 +749,13 @@
         "branch": "feat/ember-lifecycle-census-001",
         "common_repo_path_sha256": "41d5f3c15ba99bbe3cb506e4a09bb925d9fbdc35ac0ffb8066d1778fbce50bf0",
         "dirty": false,
-        "head_sha": "258333db37e1292ad2e2ea8878b044c1bf3e9b13",
+        "head_sha": "d4826d411d567bf45f15cfdc885a33221de940e3",
         "path_sha256": "9bc16e0c67158dd4eb56c34c68dcc8fa4f94dbd9684a489982a07e855c3867b7",
         "role": "active-census-worktree",
         "verdict": "KEEP_ACTIVE_OR_BASE"
       }
     ],
-    "porcelain_sha256": "460f644e207f3edf233d53a005fd15eacb90906151eecdea6f1ac0fd8e738b4f"
+    "porcelain_sha256": "e2979572a04c215499495ce36a801108372ab0e5b68299ce93561092fad4ca60"
   },
   "repository": "wordingone/ember",
   "schema_version": "ember-inherited-drawdown-v2",
