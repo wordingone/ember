@@ -3,12 +3,12 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-07-23T16:24:33Z",
-  "implementation_commit": "daa4e3b7e8e4ac1431749d9e160da33ab4e3cb52",
+  "generated_at": "2026-07-23T16:32:08Z",
+  "implementation_commit": "ed31dde1dbcf5aafed5533cdf5d758fad66f07f4",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "e9537cdeb5c9e7cf130daadb2b42d5fa9385266733009882308e9439032c24c3"
+      "sha256": "946b76c724e20ceeba2850f8282f2fc6a3cc06ec5a42e392059aadee2d6fde54"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
@@ -132,10 +132,10 @@
       ]
     },
     "clean_detached_replay": {
-      "checkout_commit": "daa4e3b7e8e4ac1431749d9e160da33ab4e3cb52",
+      "checkout_commit": "ed31dde1dbcf5aafed5533cdf5d758fad66f07f4",
       "receipt": {
-        "path": "receipts/ember-01-completion/live-census-verifier-replay-daa4e3b-v1.json",
-        "sha256": "c0f83f2de213feea9c9313fb8777cb1d70bcecb2431c6537823e061eee9a3d82"
+        "path": "receipts/ember-01-completion/live-census-verifier-replay-ed31dde-v1.json",
+        "sha256": "f160b2e2510c82d031659aaeb8b2fbbfee2a9d7e6838bc989c9abf358a79192a"
       },
       "leg3_state": "resolved-true",
       "leg4_state": "resolved-true",
