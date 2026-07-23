@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -63,3 +65,103 @@ def test_seat_leg_invokes_resolved_bun_command(
         "src/entrypoints/model-seat.test.ts",
     ]
     assert result["5"]["state"] == completion.RESOLVED_TRUE
+
+
+def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint_manifest = tmp_path / "checkpoint-manifest.json"
+    checkpoint_payload = {
+        "schema_version": "ember-sparse-checkpoint-v3",
+        "shards": [
+            {
+                "path": "shared.pt",
+                "bytes": 4,
+                "sha256": "a" * 64,
+            }
+        ],
+    }
+    checkpoint_manifest.write_text(
+        json.dumps(checkpoint_payload, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    checkpoint_sha = hashlib.sha256(checkpoint_manifest.read_bytes()).hexdigest()
+    model_config = tmp_path / "config.json"
+    model_config.write_text('{"architecture_revision":"ember-sparse-3b-v2"}', encoding="utf-8")
+    identity_manifest = tmp_path / "identity.json"
+    identity_manifest.write_text(
+        json.dumps(
+            {
+                "identity": {
+                    "disposition": "HISTORICAL_ONLY",
+                    "selected_as_owned_ember": False,
+                },
+                "checkpoint": {
+                    "format": "ember-sparse-checkpoint-v3",
+                    "byte_sha256": checkpoint_sha,
+                    "tensors": [
+                        {
+                            "name": "shared.pt",
+                            "shape": [4],
+                            "dtype": "ember-checkpoint-shard-v1",
+                            "sha256": "a" * 64,
+                        }
+                    ],
+                },
+                "parameters": {
+                    "allocated": 3_839_161_856,
+                    "unique": 3_839_161_856,
+                    "trainable": 3_839_161_856,
+                    "served": 3_839_161_856,
+                    "active": 1_020_589_568,
+                    "actually_trained": 1_020_589_568,
+                },
+                "evaluation": {"counts_toward_owned_completion": False},
+                "provenance": {"ownership": "EXCLUDED_CONTAMINATED"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    receipt = {
+        "subject_checkpoint_sha256": checkpoint_sha,
+        "allocated_parameters": 3_839_161_856,
+        "unique_parameters": 3_839_161_856,
+        "trainable_parameters": 3_839_161_856,
+        "served_parameters": 3_839_161_856,
+        "active_parameters": 1_020_589_568,
+        "episode_trainable_parameters": 1_020_589_568,
+    }
+    verified_paths: list[Path] = []
+
+    monkeypatch.setattr(
+        completion.identity_validator,
+        "validate_manifest",
+        lambda payload: payload,
+    )
+    monkeypatch.setattr(
+        completion,
+        "measure_live_checkpoint",
+        lambda **_: receipt,
+    )
+
+    def fake_verify(*_: object, checkpoint_manifest: Path, **__: object) -> None:
+        verified_paths.append(checkpoint_manifest)
+        if checkpoint_manifest != tmp_path / "checkpoint-manifest.json":
+            raise completion.ParameterIdentityMismatch("tampered checkpoint manifest")
+
+    monkeypatch.setattr(completion, "verify_parameter_identity_binding", fake_verify)
+
+    result = completion.identity_legs(
+        tmp_path,
+        identity_manifest,
+        checkpoint_manifest,
+        model_config,
+        tmp_path,
+    )
+
+    assert result["3"]["state"] == completion.RESOLVED_TRUE
+    assert result["4"]["state"] == completion.RESOLVED_TRUE
+    assert len(verified_paths) == 2
+    assert verified_paths[0] == checkpoint_manifest
+    assert verified_paths[1] != checkpoint_manifest
+    assert not verified_paths[1].exists()

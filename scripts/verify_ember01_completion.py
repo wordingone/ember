@@ -29,11 +29,13 @@ completed - only that the nine authority/custody/identity conditions hold.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
@@ -44,6 +46,12 @@ from verify_authority_conservation import (
     NEXT_EXECUTED_OUTCOME,
     verify,
 )
+from ember_01_identity import validate_identity as identity_validator
+from ember_01_identity.parameter_identity_binding import (
+    ParameterIdentityMismatch,
+    measure_live_checkpoint,
+    verify_parameter_identity_binding,
+)
 
 RESOLVED_TRUE = "resolved-true"
 RESOLVED_FALSE = "resolved-false"
@@ -52,14 +60,13 @@ UNRESOLVED = "unresolved"
 CONFIG_REL = "configs/ember-restart-3b.json"
 LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
-VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
 
 # The nine EMBER-01 conditions and which tool certifies each.
 LEG_TITLES = {
     "1": "custody root census (operator-machine roots)",
     "2": "artifact custody census",
-    "3": "identity round-trip on owned checkpoint",
+    "3": "identity round-trip on real checkpoint",
     "4": "identity fail-closed on tampered checkpoint",
     "5": "reference model seat resolves and serves",
     "6": "benchmark registry freeze",
@@ -241,36 +248,157 @@ def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str
 
 
 # ---- Legs 3/4: identity round-trip / fail-closed (validate_identity.py) ------
-def identity_legs(root: Path, manifest: Path | None, checkpoint: Path | None) -> dict[str, Any]:
-    # Requires a REAL owned-checkpoint manifest on disk. Absent on a bare clone
+def _checkpoint_shard_rows(checkpoint_payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(checkpoint_payload, dict):
+        raise ValueError("checkpoint manifest must be an object")
+    shards = checkpoint_payload.get("shards")
+    if not isinstance(shards, list) or not shards:
+        raise ValueError("checkpoint manifest must contain shard records")
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in shards:
+        if not isinstance(record, dict):
+            raise ValueError("checkpoint shard record must be an object")
+        path = record.get("path")
+        size = record.get("bytes")
+        digest = record.get("sha256")
+        if (
+            not isinstance(path, str)
+            or not path
+            or Path(path).is_absolute()
+            or ".." in Path(path).parts
+            or path in seen
+            or not isinstance(size, int)
+            or isinstance(size, bool)
+            or size <= 0
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise ValueError("checkpoint shard record is not closed and content-addressed")
+        seen.add(path)
+        rows.append(
+            {
+                "name": path,
+                "shape": [size],
+                "dtype": "ember-checkpoint-shard-v1",
+                "sha256": digest,
+            }
+        )
+    return rows
+
+
+def identity_legs(
+    root: Path,
+    manifest: Path | None,
+    checkpoint_manifest: Path | None,
+    model_config: Path | None,
+    scratch_root: Path,
+) -> dict[str, Any]:
+    # Requires a real checkpoint manifest on disk. Absent on a bare clone
     # -> UNRESOLVED, never a fake pass.
     if manifest is None:
-        why = "no owned-checkpoint identity manifest supplied; cannot evaluate on a bare clone"
+        why = "no real-checkpoint identity manifest supplied; cannot evaluate on a bare clone"
         return {k: leg(UNRESOLVED, LEG_TITLES[k], why) for k in ("3", "4")}
     if not manifest.is_file():
         return {k: leg(UNRESOLVED, LEG_TITLES[k], f"identity manifest missing: {manifest}") for k in ("3", "4")}
-    if checkpoint is None or not checkpoint.exists():
-        why = "identity manifest supplied but the owned checkpoint is not on disk (RUNNER-BLOCKED)"
+    if checkpoint_manifest is None or not checkpoint_manifest.is_file():
+        why = "identity manifest supplied but the checkpoint manifest is not on disk (RUNNER-BLOCKED)"
+        return {k: leg(UNRESOLVED, LEG_TITLES[k], why) for k in ("3", "4")}
+    if model_config is None or not model_config.is_file():
+        why = "identity manifest supplied but the exact model config is not on disk (RUNNER-BLOCKED)"
         return {k: leg(UNRESOLVED, LEG_TITLES[k], why) for k in ("3", "4")}
 
-    cmd = [sys.executable, "-B", VALIDATE_IDENTITY_REL, str(manifest),
-           "--checkpoint", str(checkpoint), "--require-resolved"]
-    result = run(cmd, root=root, name="ember_01_identity", timeout=180)
-    rc = result["returncode"]
-    ok = rc == 0
     try:
-        parsed = json.loads(result["stdout"]) if result["stdout"] else {}
-        ok = ok and bool(parsed.get("ok"))
-    except (json.JSONDecodeError, ValueError):
-        ok = False
-    ev = {"tool": VALIDATE_IDENTITY_REL, "returncode": rc, "stdout_tail": result["stdout"][-400:]}
-    state = RESOLVED_TRUE if ok else RESOLVED_FALSE
-    reason = "identity validation ok" if ok else f"identity validation failed (exit {rc})"
-    # Leg 4 (fail-closed) is only genuinely proven by a tamper case; on a real
-    # run validate_identity's --require-resolved covers the resolved round-trip.
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        checkpoint_bytes = checkpoint_manifest.read_bytes()
+        checkpoint_payload = json.loads(checkpoint_bytes.decode("utf-8"))
+        identity_validator.validate_manifest(payload)
+        expected_rows = _checkpoint_shard_rows(checkpoint_payload)
+        checkpoint_identity = payload.get("checkpoint")
+        if not isinstance(checkpoint_identity, dict):
+            raise ValueError("identity manifest lacks checkpoint identity")
+        if checkpoint_identity.get("format") != checkpoint_payload.get("schema_version"):
+            raise ValueError("identity checkpoint format does not match the real checkpoint manifest")
+        if checkpoint_identity.get("tensors") != expected_rows:
+            raise ValueError("identity checkpoint shard rows do not match the real checkpoint manifest")
+        receipt = measure_live_checkpoint(
+            model_config=model_config,
+            checkpoint_manifest=checkpoint_manifest,
+            active_expert="shared",
+        )
+        verify_parameter_identity_binding(
+            payload,
+            receipt,
+            checkpoint_manifest=checkpoint_manifest,
+            model_config=model_config,
+        )
+    except Exception as error:  # noqa: BLE001 - completion must fail closed
+        evidence = {
+            "tool": "scripts/ember_01_identity/parameter_identity_binding.py",
+            "error_type": type(error).__name__,
+            "error": str(error)[-400:],
+        }
+        return {
+            "3": leg(RESOLVED_FALSE, LEG_TITLES["3"], "real checkpoint identity failed", evidence),
+            "4": leg(RESOLVED_FALSE, LEG_TITLES["4"], "tamper proof unavailable because clean round-trip failed", evidence),
+        }
+
+    receipt_sha = hashlib.sha256(
+        json.dumps(
+            receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+    clean_evidence = {
+        "tool": "scripts/ember_01_identity/parameter_identity_binding.py",
+        "checkpoint_sha256": receipt["subject_checkpoint_sha256"],
+        "parameter_receipt_sha256": receipt_sha,
+        "disposition": payload["identity"]["disposition"],
+        "ownership": payload["provenance"]["ownership"],
+    }
+
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    tamper_path: Path | None = None
+    tamper_rejected = False
+    tamper_error = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=".ember01-identity-tamper-",
+            suffix=".json",
+            dir=scratch_root,
+            delete=False,
+        ) as handle:
+            handle.write(checkpoint_bytes + b"\n")
+            tamper_path = Path(handle.name)
+        try:
+            verify_parameter_identity_binding(
+                payload,
+                receipt,
+                checkpoint_manifest=tamper_path,
+                model_config=model_config,
+            )
+        except ParameterIdentityMismatch as error:
+            tamper_rejected = True
+            tamper_error = str(error)
+    finally:
+        if tamper_path is not None:
+            tamper_path.unlink(missing_ok=True)
+
+    tamper_evidence = {
+        "tool": "scripts/ember_01_identity/parameter_identity_binding.py",
+        "tamper": "checkpoint-manifest-byte-append",
+        "rejected": tamper_rejected,
+        "error": tamper_error[-400:],
+    }
     return {
-        "3": leg(state, LEG_TITLES["3"], reason, ev),
-        "4": leg(state, LEG_TITLES["4"], reason, ev),
+        "3": leg(RESOLVED_TRUE, LEG_TITLES["3"], "real checkpoint identity re-derived", clean_evidence),
+        "4": leg(
+            RESOLVED_TRUE if tamper_rejected else RESOLVED_FALSE,
+            LEG_TITLES["4"],
+            "tampered checkpoint manifest rejected" if tamper_rejected else "tampered checkpoint manifest was accepted",
+            tamper_evidence,
+        ),
     }
 
 
@@ -370,8 +498,10 @@ def main() -> int:
                         help="run the custody census (requires real ROOT bindings)")
     parser.add_argument("--identity-manifest", default=None,
                         help="owned-checkpoint identity manifest path")
-    parser.add_argument("--checkpoint", default=None,
-                        help="owned checkpoint path for identity round-trip")
+    parser.add_argument("--checkpoint-manifest", "--checkpoint", dest="checkpoint_manifest", default=None,
+                        help="real sharded checkpoint-manifest.json for identity round-trip")
+    parser.add_argument("--model-config", default=None,
+                        help="exact model config bound by the checkpoint manifest")
     parser.add_argument("--run-seat", action="store_true",
                         help="run bun test on the reference model seat")
     args = parser.parse_args()
@@ -379,7 +509,8 @@ def main() -> int:
     root = Path(args.root).resolve()
     selection = Path(args.selection).resolve()
     ident_manifest = Path(args.identity_manifest).resolve() if args.identity_manifest else None
-    checkpoint = Path(args.checkpoint).resolve() if args.checkpoint else None
+    checkpoint_manifest = Path(args.checkpoint_manifest).resolve() if args.checkpoint_manifest else None
+    model_config = Path(args.model_config).resolve() if args.model_config else None
 
     try:
         receipt = validate_receipt_path(root, Path(args.receipt))
@@ -394,7 +525,15 @@ def main() -> int:
             legs.update(authority_row)
             legs.update(launch_packet_leg(root))
             legs.update(custody_legs(root, args.binding, args.run_custody))
-            legs.update(identity_legs(root, ident_manifest, checkpoint))
+            legs.update(
+                identity_legs(
+                    root,
+                    ident_manifest,
+                    checkpoint_manifest,
+                    model_config,
+                    receipt.parent,
+                )
+            )
             legs.update(seat_leg(root, args.run_seat))
         else:
             authority_cert = {"ok": False, "skipped": "checkout not clean+detached"}
