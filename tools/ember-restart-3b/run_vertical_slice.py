@@ -1771,6 +1771,11 @@ def restore_authorized_checkpoint(
 ) -> dict[str, Any]:
     """Restore model/replay state while enforcing explicit optimizer-state disposition."""
 
+    expected_manifest_sha256 = authority.get("checkpoint_manifest_sha256")
+    actual_manifest_sha256 = receipt.get("checkpoint_manifest_sha256")
+    if not _is_sha256(expected_manifest_sha256) or not _is_sha256(actual_manifest_sha256) or expected_manifest_sha256 != actual_manifest_sha256:
+        raise ValueError("resume authority checkpoint manifest SHA-256 mismatch")
+
     if authority.get("mode") == "MODEL_ONLY_OPTIMIZER_CONTRACT_TRANSITION":
         return load_checkpoint_model_only_transition(model, checkpoint, receipt)
     return load_checkpoint_artifacts(model, optimizer, checkpoint, receipt)
@@ -2342,6 +2347,7 @@ def run_semantic(
         raise RuntimeError("memory preflight and production numerics disagree")
     checkpoint_parent = artifact_root / "checkpoints"
     resume_authority: dict[str, object] | None = None
+    resume_receipt: dict[str, object] | None = None
     if resume_checkpoint is not None:
         resume_checkpoint, resume_authority = authorize_production_resume_checkpoint(
             resume_checkpoint,
@@ -2350,6 +2356,7 @@ def run_semantic(
             optimizer_transition_registry=resume_optimizer_transition_registry,
             optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
         )
+        resume_receipt = published_checkpoint_receipt(resume_checkpoint)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     rng_state_before_init = _rng_state_hash(torch.device("cuda"))
@@ -2370,12 +2377,12 @@ def run_semantic(
     initial_global_step = 0
     initial_tokens_seen = 0
     if resume_checkpoint is not None:
-        manifest_path = resume_checkpoint / "checkpoint-manifest.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
+        if resume_receipt is None or resume_authority is None:
+            raise RuntimeError("authorized semantic resume requires a frozen checkpoint receipt")
+        genesis_hashes = resume_expert_genesis(resume_receipt, requested_seed=seed)
         loaded = restore_authorized_checkpoint(
             model, optimizer, resume_checkpoint,
-            {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}, resume_authority,
+            resume_receipt, resume_authority,
         )
         resume_cursor = dict(loaded["data_cursor"])
         initial_global_step = int(resume_cursor["global_step"])
