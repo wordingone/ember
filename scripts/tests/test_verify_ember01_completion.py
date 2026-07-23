@@ -305,7 +305,7 @@ def test_fetch_live_open_issues_uses_fixed_repository_state_and_fields(
         "--state",
         "open",
         "--limit",
-        "1000",
+        str(completion.LIVE_ISSUE_LIMIT),
         "--json",
         completion.LIVE_ISSUE_JSON_FIELDS,
     ]
@@ -395,6 +395,36 @@ def test_fetch_live_open_issues_rejects_snapshot_mutation(
     assert (
         result["stderr"]
         == "GitHub CLI executable snapshot changed during acquisition"
+    )
+
+
+def test_fetch_live_open_issues_rejects_limit_length_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "gh.exe"
+    executable.write_bytes(b"trusted-gh")
+    monkeypatch.setattr(completion.shutil, "which", lambda _name: str(executable))
+    monkeypatch.setattr(completion, "LIVE_ISSUE_LIMIT", 1)
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **kwargs: {
+            "returncode": 0,
+            "timed_out": False,
+            "command": kwargs["display"],
+            "stdout": json.dumps([_live_issue()]),
+            "stderr": "",
+        },
+    )
+
+    result = completion.fetch_live_open_issues(REPO_ROOT)
+
+    assert result["returncode"] == 2
+    assert result["issues"] is None
+    assert (
+        result["stderr"]
+        == "live GitHub issue result reached the acquisition limit; "
+        "completeness is unproven"
     )
 
 

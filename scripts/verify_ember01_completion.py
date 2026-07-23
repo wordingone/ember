@@ -87,6 +87,7 @@ LIVE_ISSUE_JSON_FIELDS = (
     "number,title,body,url,createdAt,updatedAt,labels,author,"
     "state,stateReason,closedAt,comments"
 )
+LIVE_ISSUE_LIMIT = 1000
 
 
 def validate_receipt_path(root: Path, receipt: Path) -> Path:
@@ -240,8 +241,8 @@ def fetch_live_open_issues(
                 "wordingone/ember",
                 "--state",
                 "open",
-                "--limit",
-                "1000",
+        "--limit",
+        str(LIVE_ISSUE_LIMIT),
                 "--json",
                 LIVE_ISSUE_JSON_FIELDS,
             ]
@@ -314,6 +315,20 @@ def fetch_live_open_issues(
                 result["stdout"].encode("utf-8")
             ).hexdigest(),
             "stderr": "live GitHub issue result is not a list",
+        }
+    if len(issues) >= LIVE_ISSUE_LIMIT:
+        return {
+            **result,
+            **executable_evidence,
+            "returncode": 2,
+            "issues": None,
+            "stdout_sha256": hashlib.sha256(
+                result["stdout"].encode("utf-8")
+            ).hexdigest(),
+            "stderr": (
+                "live GitHub issue result reached the acquisition limit; "
+                "completeness is unproven"
+            ),
         }
     return {
         **result,
