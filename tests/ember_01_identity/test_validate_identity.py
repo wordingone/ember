@@ -574,6 +574,20 @@ def test_unresolved_values_are_explicit_and_preserved() -> None:
     assert "field.unresolved" in error_codes(payload, require_resolved=True)
 
 
+def test_historical_unknown_hashes_are_explicitly_unresolved() -> None:
+    payload = valid_manifest()
+    payload["identity"]["disposition"] = "HISTORICAL_ONLY"
+    payload["data"]["ordering_sha256"] = {
+        "status": "unresolved",
+        "reason": "historical ordering implementation bytes were not preserved",
+    }
+    payload["unresolved"].append("data.ordering_sha256")
+
+    validated = validate_manifest(copy.deepcopy(payload))
+    assert validated["data"]["ordering_sha256"]["status"] == "unresolved"
+    assert "field.unresolved" in error_codes(payload, require_resolved=True)
+
+
 def test_missing_values_are_not_defaulted() -> None:
     payload = valid_manifest()
     del payload["backend"]["process_identity"]
@@ -736,6 +750,63 @@ def test_only_owned_admitted_can_be_selected_or_counted(disposition: str) -> Non
     payload["identity"]["selected_as_owned_ember"] = True
     payload["evaluation"]["counts_toward_owned_completion"] = True
     assert "admission.disposition" in error_codes(payload)
+
+
+def test_historical_contaminated_identity_preserves_forbidden_signal() -> None:
+    payload = valid_manifest()
+    payload["identity"]["disposition"] = "HISTORICAL_ONLY"
+    payload["provenance"]["ownership"] = "EXCLUDED_CONTAMINATED"
+    payload["provenance"]["exclusion_reasons"] = [
+        "training corpus includes externally model-filtered FineWeb-Edu records"
+    ]
+    payload["provenance"]["learned_signal_sources"] = [
+        "owned_training_data",
+        "filter",
+    ]
+
+    assert validate_manifest(payload) == payload
+
+
+def test_contaminated_owned_candidate_still_fails_closed() -> None:
+    payload = valid_manifest()
+    payload["identity"]["disposition"] = "OWNED_CANDIDATE"
+    payload["provenance"]["ownership"] = "EXCLUDED_CONTAMINATED"
+    payload["provenance"]["exclusion_reasons"] = ["external learned filter"]
+    payload["provenance"]["learned_signal_sources"] = [
+        "owned_training_data",
+        "filter",
+    ]
+
+    assert {
+        "provenance.forbidden_learned_signal",
+        "candidate.contaminated_provenance",
+    } <= error_codes(payload)
+
+
+def test_historical_contamination_requires_explicit_excluded_provenance() -> None:
+    payload = valid_manifest()
+    payload["identity"]["disposition"] = "HISTORICAL_ONLY"
+    payload["provenance"]["learned_signal_sources"] = [
+        "owned_training_data",
+        "filter",
+    ]
+
+    assert "historical.contamination_unclassified" in error_codes(payload)
+
+
+def test_reference_contamination_does_not_receive_historical_exemption() -> None:
+    payload = valid_manifest()
+    payload["identity"]["disposition"] = "REFERENCE_ONLY"
+    payload["provenance"]["ownership"] = "REFERENCE_ONLY"
+    payload["provenance"]["exclusion_reasons"] = [
+        "filter is external learned evidence"
+    ]
+    payload["provenance"]["learned_signal_sources"] = [
+        "owned_training_data",
+        "filter",
+    ]
+
+    assert "provenance.forbidden_learned_signal" in error_codes(payload)
 
 
 @pytest.mark.parametrize(

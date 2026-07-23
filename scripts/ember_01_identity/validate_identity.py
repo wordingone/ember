@@ -624,7 +624,11 @@ def validate_manifest(
 
     for path in HASH_PATHS:
         present, value = _get(payload, path)
-        if present and not (isinstance(value, str) and SHA256_RE.fullmatch(value)):
+        if (
+            present
+            and not _is_unresolved(value)
+            and not (isinstance(value, str) and SHA256_RE.fullmatch(value))
+        ):
             findings.append(_finding("hash.invalid", path))
 
     present, tensors = _get(payload, "checkpoint.tensors")
@@ -1051,16 +1055,86 @@ def validate_manifest(
             findings.append(_finding("reference.owned_completion_credit", "reference cannot increment owned completion"))
 
     present, credit_sources = _get(payload, "provenance.neural_capability_credit_sources")
+    invalid_credit: list[str] = []
     if present and isinstance(credit_sources, list):
-        invalid = sorted(set(str(item) for item in credit_sources) & INVALID_CAPABILITY_CREDIT_SOURCES)
-        if invalid:
-            findings.append(_finding("capability.invalid_credit_source", ",".join(invalid)))
+        invalid_credit = sorted(
+            set(str(item) for item in credit_sources)
+            & INVALID_CAPABILITY_CREDIT_SOURCES
+        )
 
     present, learned_sources = _get(payload, "provenance.learned_signal_sources")
+    invalid_learned: list[str] = []
     if present and isinstance(learned_sources, list):
-        invalid = sorted(set(str(item) for item in learned_sources) & FORBIDDEN_LEARNED_SIGNAL_SOURCES)
-        if invalid:
-            findings.append(_finding("provenance.forbidden_learned_signal", ",".join(invalid)))
+        invalid_learned = sorted(
+            set(str(item) for item in learned_sources)
+            & FORBIDDEN_LEARNED_SIGNAL_SOURCES
+        )
+
+    provenance = payload.get("provenance")
+    ownership = (
+        provenance.get("ownership") if isinstance(provenance, Mapping) else None
+    )
+    exclusion_reasons = (
+        provenance.get("exclusion_reasons")
+        if isinstance(provenance, Mapping)
+        else None
+    )
+    has_contaminated_evidence = bool(invalid_credit or invalid_learned)
+    has_exclusion_reasons = (
+        isinstance(exclusion_reasons, list)
+        and bool(exclusion_reasons)
+        and all(isinstance(reason, str) and reason.strip() for reason in exclusion_reasons)
+    )
+    normalized_reasons = (
+        [reason.casefold() for reason in exclusion_reasons]
+        if has_exclusion_reasons
+        else []
+    )
+    explicitly_excluded = all(
+        any(source.casefold() in reason for reason in normalized_reasons)
+        for source in invalid_credit + invalid_learned
+    )
+    historical_contamination_allowlisted = (
+        disposition == "HISTORICAL_ONLY"
+        and ownership == "EXCLUDED_CONTAMINATED"
+        and has_exclusion_reasons
+        and explicitly_excluded
+    )
+    if invalid_credit and not historical_contamination_allowlisted:
+        findings.append(
+            _finding("capability.invalid_credit_source", ",".join(invalid_credit))
+        )
+    if invalid_learned and not historical_contamination_allowlisted:
+        findings.append(
+            _finding(
+                "provenance.forbidden_learned_signal",
+                ",".join(invalid_learned),
+            )
+        )
+    if disposition in {"OWNED_CANDIDATE", "OWNED_ADMITTED"} and ownership == "EXCLUDED_CONTAMINATED":
+        findings.append(
+            _finding(
+                "candidate.contaminated_provenance",
+                "excluded/contaminated provenance cannot remain an owned candidate",
+            )
+        )
+    if disposition == "HISTORICAL_ONLY" and has_contaminated_evidence:
+        if not historical_contamination_allowlisted:
+            findings.append(
+                _finding(
+                    "historical.contamination_unclassified",
+                    "contaminated historical evidence requires EXCLUDED_CONTAMINATED ownership and an explicit exclusion reason for every forbidden source",
+                )
+            )
+    if ownership == "EXCLUDED_CONTAMINATED" and (
+        disposition != "HISTORICAL_ONLY" or not has_exclusion_reasons
+    ):
+        findings.append(
+            _finding(
+                "provenance.excluded_contaminated_invalid",
+                "EXCLUDED_CONTAMINATED is valid only for HISTORICAL_ONLY with explicit exclusion reasons",
+            )
+        )
 
     unresolved = _unresolved_paths(payload)
     declared_unresolved = payload.get("unresolved")
