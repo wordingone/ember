@@ -13,6 +13,7 @@ import pytest
 
 
 from scripts.lifecycle_census import CensusError, build_receipt, build_stale_report, collect_population
+from scripts.lifecycle_census import GitHubApi, collect_live_populations
 
 
 def _items(start: int, count: int, *, pull_request: bool = False) -> list[dict[str, object]]:
@@ -141,3 +142,33 @@ def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() ->
 def test_main_computes_stale_report_before_writing_receipt() -> None:
     source = (Path(__file__).parents[1] / "scripts" / "lifecycle_census.py").read_text(encoding="utf-8")
     assert source.index("stale_report = build_stale_report") < source.index("write_receipt(receipt, path)")
+
+
+def test_collect_population_preserves_unlabeled_unassigned_items() -> None:
+    item = {
+        "number": 11,
+        "title": "unclassified",
+        "updated_at": "2026-07-22T00:00:00Z",
+        "labels": [],
+        "assignee": None,
+    }
+    result = collect_population(lambda page, _size: [item] if page == 1 else [], kind="issue")
+    assert result[0]["labels"] == []
+    assert result[0]["assignee"] is None
+
+
+def test_collect_live_populations_refuses_public_master_move(monkeypatch: pytest.MonkeyPatch) -> None:
+    expected = "a" * 40
+    moved = "b" * 40
+    master_values = iter([expected, moved])
+
+    monkeypatch.setattr(GitHubApi, "master_sha", lambda _self: next(master_values))
+    monkeypatch.setattr(GitHubApi, "page", lambda _self, _endpoint, page, _per_page: [])
+
+    with pytest.raises(CensusError, match="public master changed during collection"):
+        collect_live_populations(repository="wordingone/ember", token="fixture", expected_master_sha=expected)
+
+
+def test_collect_live_populations_rejects_master_reader_without_expected_sha() -> None:
+    with pytest.raises(CensusError, match="expected_master_sha"):
+        collect_live_populations(repository="wordingone/ember", token="fixture", master_sha_reader=lambda: "a" * 40)
