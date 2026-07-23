@@ -2,31 +2,37 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""gen_readme_status.py — regenerate README.md's board-status block from the newest totality receipt.
+"""gen_readme_status.py -- regenerate README.md's board-status block from the
+canonical, adjudicated current board receipt (R3, fspec-R3-1436-20260722T213546Z).
 
-Reads the newest ember-totality-*.json under a receipts-totality directory (lexicographic sort of
-the ts-stamped filename == chronological order) and rewrites everything between the
-<!-- BOARD-STATUS-BEGIN --> / <!-- BOARD-STATUS-END --> markers in README.md with: the receipt
-id, its ts, counts by status, and a one-line legend. This makes a stale README count structurally
-impossible for whatever receipt tree the script was pointed at -- the block can only ever say
-what the newest receipt in THAT tree says.
-
-**"Newest" is scoped to --data-root, not to the world.** By default this reads
-scripts/ember_totality/receipts-totality/ under this repo -- the newest receipt COMMITTED to this
-checkout. A board-run lane's live data tree (uncommitted local receipts, or a different working
-copy) can genuinely hold a newer receipt than what's tracked here; that receipt is invisible to
-this script until it (or a copy of it) lands under --data-root. The generated block's stamped
-receipt id is the honest disclosure either way -- it never claims to be "current," only to match
-the newest receipt the script could see.
+Selection used to be "newest lexicographic filename in one glob'd directory"
+(the pre-R3 newest_receipt_path) -- location-blind, index-blind, and
+freshness-blind, which is exactly how two 2026-07-11 twin board receipts (18
+minutes apart, different counts, different locations) produced a README
+citing the wrong one. Selection now derives from
+scripts/ember_totality/board_index.py's canonical, adjudicated
+BOARD-INDEX.jsonl: board_index.current_board() fails closed (raises) on any
+duplicate-epoch RED or a missing/empty index -- this script never falls back
+to the old newest-glob rule. The rendered block also carries a mechanical
+Binding (receipt sha256 + governing commit) and Freshness (FRESH|STALE +
+which basis field moved) verdict, so a stale README is visible in the
+rendered text itself, not just discoverable by re-running the script.
 
 Board-run playbook:
-  - A board-run lane with a live data tree runs this against that tree BEFORE committing anything:
-    `python scripts/gen_readme_status.py --data-root /path/to/live/receipts-totality --check`
-    to see whether README would change, then without --check to render it, then reviews the diff.
-  - Run this script as the last step of every totality board run against the tree that will
-    actually be committed, so README never drifts from what ships in the same commit.
-  - If README changes as a result, land it as its own docs PR through the normal stop-at-open
-    review flow -- this script never commits or pushes on its own.
+  - A board-run lane with a live data tree runs this against that tree BEFORE
+    committing anything:
+    python scripts/gen_readme_status.py --data-root /path/to/live/receipts-totality --check
+    to see whether README would change, then without --check to render it,
+    then reviews the diff. The lane tree must carry its own BOARD-INDEX.jsonl
+    (the runner now writes one wherever it runs, and
+    board_index.py backfill --root <lane root> creates one for a tree that
+    predates R3) -- an absent index is a SystemExit, not a silent skip.
+  - Run this script as the last step of every totality board run against the
+    tree that will actually be committed, so README never drifts from what
+    ships in the same commit.
+  - If README changes as a result, land it as its own docs PR through the
+    normal stop-at-open review flow -- this script never commits or pushes
+    on its own.
 
 CLI:
   python scripts/gen_readme_status.py            # regenerate README.md from the in-repo tree
@@ -35,10 +41,10 @@ CLI:
                                                   # point at a different (e.g. live/uncommitted)
                                                   # receipts-totality directory instead
 
-Stdlib only. No network.
+Stdlib only. No network. PYTHONIOENCODING=utf-8 required (cp1252 console).
 """
 import argparse
-import glob
+import hashlib
 import json
 import os
 import re
@@ -70,20 +76,52 @@ CURRENT_SUBJECT_FIELDS = {
     "tokenizer_sha256",
 }
 
+sys.path.insert(0, ROOT)
+from scripts.ember_totality import board_index
 
-def newest_receipt_path(data_root):
-    receipts_glob = os.path.join(data_root, "ember-totality-*.json")
-    paths = sorted(glob.glob(receipts_glob))
-    if not paths:
+
+def _repo_root_for_data_root(data_root):
+    """data_root is normally <repo>/scripts/ember_totality/receipts-totality --
+    a lane tree mirrors the same layout, so its repo root is three levels up."""
+    return os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(data_root)))
+    )
+
+
+def _resolve_current(data_root):
+    """Derive the current board row from <data_root>/BOARD-INDEX.jsonl.
+    Fail-closed: any board_index.current_board failure (missing index,
+    duplicate-epoch RED) raises SystemExit with the finding text -- this
+    never falls back to the old newest-glob selection rule."""
+    index_path = os.path.join(data_root, "BOARD-INDEX.jsonl")
+    if not os.path.isfile(index_path):
         raise SystemExit(
-            f"gen_readme_status: no ember-totality-*.json receipts found under {data_root}"
+            "gen_readme_status: no BOARD-INDEX.jsonl under " + data_root +
+            " -- run board_index.py backfill --root <lane root> first "
+            "(every board-run tree now carries its own index)."
         )
-    return paths[-1]
+    rows, skipped = board_index.load_index(index_path)
+    for s in skipped:
+        print("gen_readme_status: SKIPPED (malformed index line): " + s, file=sys.stderr)
+    try:
+        receipt_rel_path, row = board_index.current_board(rows)
+    except board_index.BoardIndexError as exc:
+        raise SystemExit("gen_readme_status: " + str(exc))
+    repo_root = _repo_root_for_data_root(data_root)
+    receipt_path = os.path.join(repo_root, receipt_rel_path)
+    if not os.path.isfile(receipt_path):
+        raise SystemExit(
+            "gen_readme_status: current board row points at " + receipt_path +
+            " which does not exist on disk"
+        )
+    return row, receipt_path, repo_root
 
 
-def render_block(receipt_path):
+def render_block(receipt_path, row, freshness_result):
     with open(receipt_path, "r", encoding="utf-8") as f:
         receipt = json.load(f)
+    with open(receipt_path, "rb") as f:
+        receipt_sha256 = hashlib.sha256(f.read()).hexdigest()
     receipt_id = os.path.splitext(os.path.basename(receipt_path))[0]
     ts = receipt.get("ts", "unknown")
     summary = receipt.get("summary", {})
@@ -98,6 +136,17 @@ def render_block(receipt_path):
         green + red + unevaluable + audit_ok + audit_incident + audit_pending_epoch,
     )
     pct_green = summary.get("pct_green", 0.0)
+
+    basis = row.get("basis") or {}
+    governing_commit = basis.get("governing_commit") or "UNKNOWN"
+    if governing_commit == "UNKNOWN":
+        governing_commit_text = "UNKNOWN (pre-index receipt)"
+    else:
+        governing_commit_text = governing_commit
+
+    changed = freshness_result.get("changed") or []
+    changed_text = ", ".join(changed) if changed else "current at index basis"
+
     lines = [
         BEGIN_MARKER,
         "<!-- GENERATED by scripts/gen_readme_status.py -- do not hand-edit between the markers -->",
@@ -107,6 +156,11 @@ def render_block(receipt_path):
         f"{audit_ok}-AUDIT-OK / {audit_incident}-AUDIT-INCIDENT / "
         f"{audit_pending_epoch}-AUDIT-PENDING-EPOCH (total {total} rows, "
         f"{pct_green}% of state-conditions GREEN).",
+        "",
+        f"**Binding:** receipt sha256 {receipt_sha256[:16]}, governing commit "
+        f"{governing_commit_text}.",
+        "",
+        f"**Freshness:** {freshness_result['verdict']} -- {changed_text}.",
         "",
         "**Legend:** GREEN = a fresh receipt satisfies the condition's CHK; RED = CHK unmet or a "
         "satisfying artifact is absent; UNEVALUABLE = the probe genuinely cannot look (counts as "
@@ -397,9 +451,10 @@ def main():
         "--data-root",
         default=DEFAULT_DATA_ROOT,
         help=(
-            "directory to scan for ember-totality-*.json (default: this repo's "
-            "scripts/ember_totality/receipts-totality/). Point this at a board-run lane's live "
-            "data tree to render against a receipt not yet committed here."
+            "directory to scan for the canonical board index and receipts (default: "
+            "this repo's scripts/ember_totality/receipts-totality/). Point this at a "
+            "board-run lane's live data tree to render against a receipt not yet "
+            "committed here; that tree must carry its own BOARD-INDEX.jsonl."
         ),
     )
     parser.add_argument("--readme", default=README_PATH)
@@ -407,8 +462,9 @@ def main():
     parser.add_argument("--subject-manifest", default=CURRENT_SUBJECT_PATH)
     args = parser.parse_args()
 
-    receipt_path = newest_receipt_path(args.data_root)
-    block = render_block(receipt_path)
+    row, receipt_path, repo_root = _resolve_current(args.data_root)
+    fresh = board_index.freshness(row, repo_root)
+    block = render_block(receipt_path, row, fresh)
 
     with open(args.readme, "r", encoding="utf-8") as f:
         readme = f.read()

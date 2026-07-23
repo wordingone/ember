@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember Totality master spec — runner / board aggregator.
 
 Executes every test_*.py status probe in this directory, parses each probe's
@@ -111,6 +112,7 @@ REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, REPO_ROOT)
 from scripts.lib.invariant import stamp, INVARIANT_SHA256
 from scripts.ember_totality import receipt_chain_verify
+from scripts.ember_totality import board_index
 
 try:  # pragma: no cover - best-effort console hardening, never fatal
     sys.stdout.reconfigure(encoding="utf-8")
@@ -1361,6 +1363,37 @@ def main():
     with open(receipt_path, "w", encoding="utf-8") as fh:
         json.dump(receipt, fh, indent=2)
         fh.write("\n")
+
+    # R3 (fspec-R3-1436): index this receipt into the canonical board index
+    # and surface any duplicate-epoch RED findings loudly. This never raises
+    # -- the board run's own receipt must land regardless; the REDs gate
+    # downstream rendering (gen_readme_status.py), not the run itself.
+    try:
+        with open(receipt_path, "rb") as _fh:
+            _receipt_bytes = _fh.read()
+        board_row = {
+            "row_type": "board",
+            "ts": ts,
+            "path": os.path.relpath(receipt_path, REPO_ROOT).replace("\\", "/"),
+            "sha256": hashlib.sha256(_receipt_bytes).hexdigest(),
+            "indexed_ts": board_index._now_iso(),
+            "basis": board_index.collect_basis(REPO_ROOT),
+            "summary": {
+                "green": green,
+                "red": red,
+                "unevaluable": unevaluable,
+                "pct_green": pct_green,
+            },
+        }
+        board_index.append_row(board_row)
+        _indexed_rows, _skipped = board_index.load_index()
+        for _finding in board_index.duplicate_epochs(_indexed_rows):
+            print(
+                "BOARD-INDEX RED: " + _finding["rule"] + " " + str(_finding.get("a"))
+                + " vs " + str(_finding.get("b")) + ": " + _finding["detail"]
+            )
+    except OSError as _exc:
+        print(f"BOARD-INDEX RED: failed to index this board receipt: {_exc}")
 
     # Print the board.
     print("=" * 72)
