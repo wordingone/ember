@@ -416,3 +416,91 @@ def test_check_collectability_direct_on_live_guard() -> None:
     ok, reason = check_collectability(REPO_ROOT, _LIVE_GUARD_REL_PATH)
     assert ok is True
     assert reason == ""
+
+
+# ---------------------------------------------------------------------------
+# (f) SYMBOL-GRANULARITY COLLECTABILITY: a guard_ref of the form file.py:symbol is not
+# satisfied merely by the FILE collecting -- a collected pytest test node whose leaf
+# equals `symbol` must exist. Kills the finer false-CLOSE class (2026-07-23 coordinator
+# P1): a cited helper / non-test / selectively-uncollectable symbol in a file whose
+# OTHER tests collect fine was wrongly counting CLOSED under the file-level probe.
+# The leaf match (not a bare file::symbol nodeid) is deliberate: a real test that is a
+# class method collects as file::Class::method, whose leaf is `method`.
+# ---------------------------------------------------------------------------
+
+# A real checked-in test file whose tests are CLASS METHODS on CheckpointArtifactTests.
+# This is the exact shape of the live CHECKPOINT_SHARD_CONTRADICTION guard_ref.
+_CLASS_METHOD_TEST_FILE = "tests/ember_restart_model/test_checkpoint_artifacts.py"
+# A real collectable test that is a method on the class (leaf == this symbol).
+_REAL_CLASS_METHOD_SYMBOL = (
+    "test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap"
+)
+# A real symbol in the same file that RESOLVES (it is the `class` def) but is NOT a
+# collected test node -- its leaf never appears as a pytest node leaf.
+_NON_TEST_SYMBOL = "CheckpointArtifactTests"
+
+
+def _ledger_with_symboled_test_guard(rel_path: str, symbol: str) -> dict:
+    ledger = _complete_all_closed_ledger()
+    ledger["classes"][0]["guard_ref"] = f"{rel_path}:{symbol}"
+    return ledger
+
+
+def test_class_method_symbol_leaf_matches_stays_closed(tmp_path: Path) -> None:
+    """POSITIVE / anti-regression: the live CHECKPOINT-shaped guard_ref cites a test
+    that is a CLASS METHOD. A bare file::symbol nodeid probe would false-BLOCK it; the
+    leaf match keeps it correctly CLOSED. Real verifier entrypoint, real checkout."""
+    assert (REPO_ROOT / _CLASS_METHOD_TEST_FILE).is_file()
+    ledger = _ledger_with_symboled_test_guard(
+        _CLASS_METHOD_TEST_FILE, _REAL_CLASS_METHOD_SYMBOL
+    )
+    ledger_path = tmp_path / "ledger.json"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    verdict = verify(ledger_path, REPO_ROOT)
+
+    assert verdict["ok"] is True, verdict["errors"]
+    assert verdict["verdict"] == "CLOSED"
+    assert verdict["errors"] == []
+
+
+def test_non_test_symbol_in_collectable_file_is_red(tmp_path: Path) -> None:
+    """NEGATIVE (coordinator-required RED): a file with collectable tests, but the
+    cited symbol resolves (it is the class def) yet is NOT a collected test node.
+    Under the file-level probe this wrongly counted CLOSED; the symbol-granularity
+    gate flags it. Real verifier entrypoint, real checkout."""
+    assert (REPO_ROOT / _CLASS_METHOD_TEST_FILE).is_file()
+    ledger = _ledger_with_symboled_test_guard(
+        _CLASS_METHOD_TEST_FILE, _NON_TEST_SYMBOL
+    )
+    ledger_path = tmp_path / "ledger.json"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    verdict = verify(ledger_path, REPO_ROOT)
+
+    assert verdict["ok"] is False
+    assert verdict["verdict"] == "RED"
+    assert any(
+        "not a collected pytest test node" in e for e in verdict["errors"]
+    ), verdict["errors"]
+
+
+def test_check_collectability_symbol_leaf_match_direct() -> None:
+    """Direct unit exercise: a class-method leaf matches; a class/helper symbol that is
+    not a test-node leaf fails; the file-level (symbol=None) path is unchanged."""
+    from verify_c0_failure_class_ledger import check_collectability
+
+    ok, _ = check_collectability(
+        REPO_ROOT, _CLASS_METHOD_TEST_FILE, _REAL_CLASS_METHOD_SYMBOL
+    )
+    assert ok is True
+
+    ok, reason = check_collectability(
+        REPO_ROOT, _CLASS_METHOD_TEST_FILE, _NON_TEST_SYMBOL
+    )
+    assert ok is False
+    assert "not a collected pytest test node" in reason
+
+    # symbol=None keeps the file-level behavior (the file itself collects).
+    ok, _ = check_collectability(REPO_ROOT, _CLASS_METHOD_TEST_FILE, None)
+    assert ok is True

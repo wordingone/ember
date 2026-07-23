@@ -114,11 +114,23 @@ def _is_test_guard_path(rel_path: str) -> bool:
     return bool(_TEST_PATH_RE.match(basename))
 
 
-def check_collectability(repo_root: Path, rel_path: str) -> tuple[bool, str]:
+def check_collectability(
+    repo_root: Path, rel_path: str, symbol: str | None = None
+) -> tuple[bool, str]:
     """Bounded `pytest --collect-only` probe on a single test file. Returns
     (collectable, reason-if-not). Never raises on ordinary probe failure - a timeout or
     an unexpected exception is itself treated as non-collectable (fail-closed), never
-    silently accepted as collectable."""
+    silently accepted as collectable.
+
+    When `symbol` is given (a guard_ref of the form `file.py:symbol`), the probe is
+    not satisfied merely by the FILE collecting: a collected pytest test node whose
+    LEAF name (the final `::` component, parametrization suffix stripped) equals
+    `symbol` must exist. This closes the symbol-granularity false-CLOSE class (a cited
+    helper / non-test def, or a selectively-uncollectable test, in a file whose OTHER
+    tests collect fine). The leaf match - rather than a bare `file::symbol` nodeid -
+    is deliberate: a real test that is a class method collects as
+    `file::Class::method`, so a bare-symbol nodeid would false-BLOCK it; the leaf of
+    that nodeid is still `method`, which the cited symbol correctly matches."""
     full_path = repo_root / rel_path
     try:
         proc = subprocess.run(
@@ -158,6 +170,20 @@ def check_collectability(repo_root: Path, rel_path: str) -> tuple[bool, str]:
             (line for line in combined.splitlines() if line.strip()), "(no output)"
         )
         return False, first_line.strip()
+    if symbol is not None:
+        collected_leaves = set()
+        for line in proc.stdout.splitlines():
+            stripped = line.strip()
+            if "::" in stripped:
+                leaf = stripped.rsplit("::", 1)[-1].split("[", 1)[0].strip()
+                if leaf:
+                    collected_leaves.add(leaf)
+        if symbol not in collected_leaves:
+            return (
+                False,
+                f"cited test symbol {symbol!r} is not a collected pytest test node "
+                "(helper/non-test/uncollectable; the file collects other tests)",
+            )
     return True, ""
 
 
@@ -271,8 +297,11 @@ def validate_row(row: Any, repo_root: Path) -> tuple[list[str], dict[str, Any] |
             else:
                 match = _GUARD_REF_RE.match(guard_ref)
                 rel_path = match.group("path") if match else guard_ref
+                symbol = match.group("symbol") if match else None
                 if _is_test_guard_path(rel_path):
-                    collectable, dead_reason = check_collectability(repo_root, rel_path)
+                    collectable, dead_reason = check_collectability(
+                        repo_root, rel_path, symbol
+                    )
                     if not collectable:
                         errors.append(
                             f"class {class_id!r}: guard test not collectable "
