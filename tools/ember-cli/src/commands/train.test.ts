@@ -95,6 +95,29 @@ function makeCmd(runner: (spawns: RecordedSpawn[]) => LaunchPacketRunResult) {
   return { cmd, spawns };
 }
 
+function makeExecuteCmd(
+  preflight: LaunchPacketRunResult,
+  certified: LaunchPacketRunResult,
+) {
+  const preflightSpawns: RecordedSpawn[] = [];
+  const certifiedSpawns: RecordedSpawn[] = [];
+  const cmd = createTrainCommand({
+    pythonBin: "python",
+    repoRoot: "/fake/ember",
+    certifiedLaunchScriptPath:
+      "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
+    runLaunchPacket: (executable, args) => {
+      preflightSpawns.push({ executable, args });
+      return preflight;
+    },
+    runCertifiedLaunch: (executable, args) => {
+      certifiedSpawns.push({ executable, args });
+      return certified;
+    },
+  });
+  return { cmd, preflightSpawns, certifiedSpawns };
+}
+
 /** Assert the only subprocess ever spawned was the launch_packet.py preflight. */
 function assertOnlyPreflightSpawned(spawns: RecordedSpawn[]): void {
   expect(spawns.length).toBe(1);
@@ -293,6 +316,114 @@ describe("train command", () => {
         const { cmd, spawns } = makeCmd(scenario);
         await cmd.execute("", mockCtx);
         assertOnlyPreflightSpawned(spawns);
+      }
+    });
+  });
+
+  describe("certified execution mode", () => {
+    it("requires all three explicit authority paths before any spawn", async () => {
+      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        { status: 0, stdout: "{}" },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate certificate.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("--declaration-ledger");
+      expect(preflightSpawns).toHaveLength(0);
+      expect(certifiedSpawns).toHaveLength(0);
+    });
+
+    it("green preflight invokes exactly one certified consumer with fixed argv", async () => {
+      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: JSON.stringify({
+            outcome: "COMPLETED",
+            execution_receipt: "receipt.json",
+            artifact_root: "artifacts/run",
+          }),
+        },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBeUndefined();
+      expect(preflightSpawns).toHaveLength(1);
+      expect(certifiedSpawns).toHaveLength(1);
+      expect(certifiedSpawns[0]!.executable).toBe("python");
+      expect(certifiedSpawns[0]!.args).toEqual([
+        "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
+        "--root",
+        "/fake/ember",
+        "--certificate",
+        "c.json",
+        "--declaration-ledger",
+        "d.jsonl",
+        "--run-spec",
+        "r.json",
+      ]);
+      expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(
+        REAL_LAUNCH_COMMAND,
+      );
+      expect(result?.message).toContain("receipt.json");
+      expect(result?.message).not.toContain("capability");
+    });
+
+    it("preflight failure prevents certified consumer execution", async () => {
+      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+        { status: 1, stdout: failingStdout() },
+        { status: 0, stdout: "{}" },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(1);
+      expect(preflightSpawns).toHaveLength(1);
+      expect(certifiedSpawns).toHaveLength(0);
+    });
+
+    it("certified consumer failure propagates without surfacing launch text", async () => {
+      const { cmd, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        { status: 23, stdout: "scope exceeds certificate: max_records" },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(23);
+      expect(certifiedSpawns).toHaveLength(1);
+      expect(result?.message).toContain("scope exceeds certificate");
+      expect(result?.message).not.toContain(REAL_LAUNCH_COMMAND);
+    });
+
+    it("unknown and duplicate options fail before either spawn", async () => {
+      for (const args of [
+        "--execute --unknown x --certificate c --declaration-ledger d --run-spec r",
+        "--execute --execute --certificate c --declaration-ledger d --run-spec r",
+      ]) {
+        const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+          { status: 0, stdout: allGreenStdout() },
+          { status: 0, stdout: "{}" },
+        );
+        const result = await cmd.execute(args, mockCtx);
+        expect(result?.exitCode).toBe(1);
+        expect(preflightSpawns).toHaveLength(0);
+        expect(certifiedSpawns).toHaveLength(0);
       }
     });
   });
