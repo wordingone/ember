@@ -1,0 +1,405 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import pathlib
+import subprocess
+from typing import Any, NamedTuple
+
+
+CERTIFICATE_KEYS = {
+    "schema_version",
+    "event_kind",
+    "declared_by_role",
+    "declared_at_utc",
+    "superseded_by",
+    "completion_receipt_path",
+    "completion_receipt_sha256",
+    "public_master_sha256",
+    "checkout_sha256",
+    "config_sha256",
+    "tokenizer_sha256",
+    "input_authority_sha256",
+    "cli_binary_sha256",
+    "launch_packet_sha256",
+    "board_receipt_sha256",
+    "benchmark_registry_sha256",
+    "failure_class_ledger_sha256",
+    "subject_manifest_sha256",
+    "seat_sha256",
+    "root_summary_sha256",
+    "declaration_conjuncts",
+    "execution_scope",
+}
+CERTIFICATE_SHA256_KEYS = {
+    "completion_receipt_sha256",
+    "public_master_sha256",
+    "checkout_sha256",
+    "config_sha256",
+    "tokenizer_sha256",
+    "input_authority_sha256",
+    "cli_binary_sha256",
+    "launch_packet_sha256",
+    "board_receipt_sha256",
+    "benchmark_registry_sha256",
+    "failure_class_ledger_sha256",
+    "subject_manifest_sha256",
+    "seat_sha256",
+    "root_summary_sha256",
+}
+DECLARATION_CONJUNCT_KEYS = {
+    "record_coherent",
+    "nine_leg_completion",
+    "birth_failure_classes_disposed",
+}
+LEDGER_ROW_KEYS = {
+    "schema_version",
+    "event_kind",
+    "declared_by_role",
+    "certificate_sha256",
+}
+RUN_SPEC_KEYS = {
+    "schema_version",
+    "certificate_sha256",
+    "run_id",
+    "seed",
+    "runner_receipt",
+    "requested_scope",
+}
+AUTHORIZED_SCOPE_KEYS = {
+    "purpose",
+    "allowed_modes",
+    "max_optimizer_steps",
+    "max_records",
+    "max_active_expert_families",
+    "max_gpu_vram_gib",
+    "max_transient_checkpoint_gib",
+    "max_wall_minutes",
+    "max_b_write_gib",
+    "max_c_write_gib",
+    "max_write_budget_bytes",
+    "allowed_artifact_roots",
+    "allowed_custody_roots",
+    "model_server_allowed",
+    "wsl_allowed",
+    "persistent_worker_allowed",
+}
+REQUESTED_SCOPE_KEYS = {
+    "mode",
+    "optimizer_steps",
+    "max_records",
+    "active_expert_families",
+    "gpu_vram_gib",
+    "transient_checkpoint_gib",
+    "wall_minutes",
+    "max_b_write_gib",
+    "max_c_write_gib",
+    "write_budget_bytes",
+    "artifact_root",
+    "custody_root",
+}
+COMPLETION_RECEIPT_KEYS = {
+    "schema",
+    "ok",
+    "verified_at_utc",
+    "goal_id",
+    "next_executed_outcome",
+    "certificate_legs",
+    "leg_detail",
+    "leg_summary",
+    "claim_scope",
+    "checkout",
+    "selection",
+    "authority_certificate",
+}
+
+
+class ValidatedLaunch(NamedTuple):
+    certificate_sha256: str
+    public_master_sha256: str
+    artifact_root: pathlib.Path
+    custody_root: pathlib.Path
+    runner_receipt: pathlib.Path
+    seed: int
+    write_budget_bytes: int
+    max_records: int
+    max_c_write_gib: float
+    max_b_write_gib: float
+
+
+def _canonical_bytes(value: object) -> bytes:
+    return (
+        json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+
+
+def _canonical_sha256(value: object) -> str:
+    return hashlib.sha256(_canonical_bytes(value)).hexdigest()
+
+
+def _file_sha256(path: pathlib.Path, label: str) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise ValueError(f"{label} is unreadable") from error
+
+
+def _require_object(value: object, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _require_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
+    if set(value) != expected:
+        raise ValueError(f"{label} schema keys mismatch")
+
+
+def _require_sha256(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or value.lower() != value
+    ):
+        raise ValueError(f"{label} must be a lowercase SHA-256")
+    try:
+        int(value, 16)
+    except ValueError as error:
+        raise ValueError(f"{label} must be a lowercase SHA-256") from error
+    return value
+
+
+def _load_json(path: pathlib.Path, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is unreadable or invalid JSON") from error
+    return _require_object(value, label)
+
+
+def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
+        raise ValueError("declaration ledger is unreadable") from error
+    rows: list[dict[str, Any]] = []
+    for index, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            row = _require_object(
+                json.loads(line), f"declaration ledger row {index}"
+            )
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"declaration ledger row {index} is invalid JSON"
+            ) from error
+        _require_keys(row, LEDGER_ROW_KEYS, f"declaration ledger row {index}")
+        if row["schema_version"] != "ember-spine-declaration-ledger-row-v1":
+            raise ValueError("declaration ledger row schema")
+        if row["event_kind"] != "SPINE_CERTIFIED":
+            raise ValueError("declaration ledger event")
+        if row["declared_by_role"] != "KAI_SOL":
+            raise ValueError("declaration ledger role")
+        _require_sha256(
+            row["certificate_sha256"],
+            f"declaration ledger row {index} certificate_sha256",
+        )
+        rows.append(row)
+    return rows
+
+
+def read_current_master(repo_root: pathlib.Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True,
+        shell=False,
+    )
+    if result.returncode != 0:
+        raise ValueError("current public master is unreadable")
+    return _require_sha256(result.stdout.strip(), "current public master")
+
+
+def _validate_completion_receipt(value: dict[str, Any]) -> None:
+    _require_keys(value, COMPLETION_RECEIPT_KEYS, "completion receipt")
+    if value["schema"] != "ember-01-completion-receipt-v1" or value["ok"] is not True:
+        raise ValueError("completion receipt is not a successful EMBER-01 receipt")
+
+    legs = _require_object(value["certificate_legs"], "completion certificate legs")
+    expected_legs = {str(index) for index in range(1, 10)}
+    if set(legs) != expected_legs or any(
+        state != "RESOLVED_TRUE" for state in legs.values()
+    ):
+        raise ValueError("completion receipt must contain exactly nine resolved-true legs")
+
+    checkout = _require_object(value["checkout"], "completion checkout")
+    if not (
+        checkout.get("clean") is True
+        and checkout.get("detached") is True
+        and checkout.get("head_unchanged") is True
+    ):
+        raise ValueError("completion checkout integrity")
+
+    selection = _require_object(value["selection"], "completion selection")
+    if (
+        selection.get("goal_id") != "EMBER-01"
+        or selection.get("unchanged_during_verification") is not True
+    ):
+        raise ValueError("completion selection integrity")
+
+
+def _require_scope_subset(
+    requested: dict[str, Any], authorized: dict[str, Any]
+) -> None:
+    _require_keys(requested, REQUESTED_SCOPE_KEYS, "requested scope")
+    _require_keys(authorized, AUTHORIZED_SCOPE_KEYS, "certificate execution scope")
+
+    if authorized["purpose"] != "BOUNDED_CANARY":
+        raise ValueError("certificate execution scope is not a bounded canary")
+    if not (
+        authorized["model_server_allowed"] is False
+        and authorized["wsl_allowed"] is False
+        and authorized["persistent_worker_allowed"] is False
+    ):
+        raise ValueError("certificate execution scope enables a forbidden runtime")
+
+    allowed_modes = authorized["allowed_modes"]
+    if (
+        not isinstance(allowed_modes, list)
+        or allowed_modes != ["governed-vertical"]
+        or requested["mode"] not in allowed_modes
+    ):
+        raise ValueError("run scope exceeds certificate: mode")
+
+    numeric_pairs = (
+        ("optimizer_steps", "max_optimizer_steps"),
+        ("max_records", "max_records"),
+        ("active_expert_families", "max_active_expert_families"),
+        ("gpu_vram_gib", "max_gpu_vram_gib"),
+        ("transient_checkpoint_gib", "max_transient_checkpoint_gib"),
+        ("wall_minutes", "max_wall_minutes"),
+        ("max_b_write_gib", "max_b_write_gib"),
+        ("max_c_write_gib", "max_c_write_gib"),
+        ("write_budget_bytes", "max_write_budget_bytes"),
+    )
+    for requested_key, authorized_key in numeric_pairs:
+        requested_value = requested[requested_key]
+        authorized_value = authorized[authorized_key]
+        if (
+            isinstance(requested_value, bool)
+            or not isinstance(requested_value, (int, float))
+            or isinstance(authorized_value, bool)
+            or not isinstance(authorized_value, (int, float))
+            or requested_value < 0
+            or requested_value > authorized_value
+        ):
+            raise ValueError(
+                f"run scope exceeds certificate: {requested_key}"
+            )
+
+    root_pairs = (
+        ("artifact_root", "allowed_artifact_roots"),
+        ("custody_root", "allowed_custody_roots"),
+    )
+    for requested_key, allowed_key in root_pairs:
+        allowed = authorized[allowed_key]
+        if (
+            not isinstance(allowed, list)
+            or not all(isinstance(item, str) for item in allowed)
+            or requested[requested_key] not in allowed
+        ):
+            raise ValueError(
+                f"run scope exceeds certificate: {requested_key}"
+            )
+
+
+def validate_certified_request(
+    repo_root: pathlib.Path,
+    certificate_path: pathlib.Path,
+    declaration_ledger_path: pathlib.Path,
+    run_spec_path: pathlib.Path,
+) -> ValidatedLaunch:
+    repo_root = pathlib.Path(repo_root)
+    certificate_path = pathlib.Path(certificate_path)
+    declaration_ledger_path = pathlib.Path(declaration_ledger_path)
+    run_spec_path = pathlib.Path(run_spec_path)
+
+    certificate = _load_json(certificate_path, "certificate")
+    _require_keys(certificate, CERTIFICATE_KEYS, "certificate")
+    if certificate["schema_version"] != "ember-spine-certified-declaration-v1":
+        raise ValueError("certificate schema")
+    if certificate["event_kind"] != "SPINE_CERTIFIED":
+        raise ValueError("declaration event")
+    if certificate["declared_by_role"] != "KAI_SOL":
+        raise ValueError("declaration role")
+    if certificate["superseded_by"] is not None:
+        raise ValueError("certificate is superseded")
+    for key in CERTIFICATE_SHA256_KEYS:
+        _require_sha256(certificate[key], f"certificate {key}")
+
+    certificate_sha256 = _canonical_sha256(certificate)
+    ledger_rows = _load_ledger(declaration_ledger_path)
+    if not any(
+        row["certificate_sha256"] == certificate_sha256 for row in ledger_rows
+    ):
+        raise ValueError("declaration ledger membership is missing")
+
+    completion_path = pathlib.Path(certificate["completion_receipt_path"])
+    if not completion_path.is_absolute():
+        completion_path = certificate_path.parent / completion_path
+    completion = _load_json(completion_path, "completion receipt")
+    if _file_sha256(
+        completion_path, "completion receipt"
+    ) != certificate["completion_receipt_sha256"]:
+        raise ValueError("completion receipt hash mismatch")
+    _validate_completion_receipt(completion)
+
+    conjuncts = _require_object(
+        certificate["declaration_conjuncts"], "declaration conjuncts"
+    )
+    _require_keys(conjuncts, DECLARATION_CONJUNCT_KEYS, "declaration conjuncts")
+    if any(value is not True for value in conjuncts.values()):
+        raise ValueError("B7 declaration conjunct is false")
+
+    current_master = read_current_master(repo_root)
+    if certificate["public_master_sha256"] != current_master:
+        raise ValueError("certificate does not bind current public master")
+
+    run_spec = _load_json(run_spec_path, "run spec")
+    _require_keys(run_spec, RUN_SPEC_KEYS, "run spec")
+    if run_spec["schema_version"] != "ember-certified-train-run-v1":
+        raise ValueError("run spec schema")
+    if run_spec["certificate_sha256"] != certificate_sha256:
+        raise ValueError("run spec certificate hash mismatch")
+    if (
+        not isinstance(run_spec["run_id"], str)
+        or not run_spec["run_id"]
+        or not isinstance(run_spec["seed"], int)
+        or isinstance(run_spec["seed"], bool)
+        or not isinstance(run_spec["runner_receipt"], str)
+        or not run_spec["runner_receipt"]
+    ):
+        raise ValueError("run spec scalar fields are invalid")
+
+    requested_scope = _require_object(
+        run_spec["requested_scope"], "requested scope"
+    )
+    authorized_scope = _require_object(
+        certificate["execution_scope"], "certificate execution scope"
+    )
+    _require_scope_subset(requested_scope, authorized_scope)
+
+    return ValidatedLaunch(
+        certificate_sha256=certificate_sha256,
+        public_master_sha256=current_master,
+        artifact_root=pathlib.Path(requested_scope["artifact_root"]),
+        custody_root=pathlib.Path(requested_scope["custody_root"]),
+        runner_receipt=pathlib.Path(run_spec["runner_receipt"]),
+        seed=run_spec["seed"],
+        write_budget_bytes=int(requested_scope["write_budget_bytes"]),
+        max_records=int(requested_scope["max_records"]),
+        max_c_write_gib=float(requested_scope["max_c_write_gib"]),
+        max_b_write_gib=float(requested_scope["max_b_write_gib"]),
+    )
