@@ -277,6 +277,21 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
         counts_toward_owned_completion=True,
     )
     payload["unresolved"] = []
+    # B4 REQUIRED-half (ember01plan.md SS B4 L1061-1082): OWNED_ADMITTED (what this
+    # factory produces) now requires training.optimizer_contract -- default one in so
+    # every existing OWNED_ADMITTED-fixture consumer across this test corpus stays
+    # green; tests that specifically exercise the omission/mutation battery delete or
+    # mutate individual fields off this default (see test_optimizer_identity_roundtrip.py).
+    payload["training"]["optimizer_contract"] = {
+        "implementation": "bitsandbytes.optim.AdamW8bit",
+        "hyperparameters": {"learning_rate": 1e-4, "weight_decay": 0.1},
+        "state_format": "bitsandbytes-device-resident-8bit-adamw-state-dict-v1",
+        "implementation_source_sha256": "d" * 64,
+        "param_group_mapping_convention": "by-module-qualified-name",
+        "param_name_optimizer_id_mapping_sha256": "e" * 64,
+        "realization_receipt_sha256": "f" * 64,
+        "trusted_verifier_id": "fixture-optimizer-realization-verifier",
+    }
     return payload, receipts
 
 
