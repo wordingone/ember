@@ -28,7 +28,7 @@
     "branch": null,
     "clean": true,
     "detached": true,
-    "head": "816754effbb19343bdd7ade5d8b5bbac3da4fb5d",
+    "head": "96d8c83044dd4358acdf959298e0586194edbf31",
     "head_unchanged": true,
     "status": [],
     "status_before": []
@@ -164,7 +164,7 @@
     "7": {
       "evidence": {
         "returncode": 0,
-        "stdout_tail": "20260723T170603Z\\packet.jsonl\n# EMBER-02 launch command:\npython tools/ember-restart-3b/run_vertical_slice.py semantic --seed <launch-seed> --artifact-root receipts/ember-restart-3b/<run-id> --receipt <manifest-bound-stream-receipt.json> --shards-root <token-shard-dir> --tokenizer <tokenizer-path> --steps <N> --sequence-length <seq-len> --checkpoint-interval 50 --write-budget-gib <write-budget-gib>",
+        "stdout_tail": "20260723T171412Z\\packet.jsonl\n# EMBER-02 launch command:\npython tools/ember-restart-3b/run_vertical_slice.py semantic --seed <launch-seed> --artifact-root receipts/ember-restart-3b/<run-id> --receipt <manifest-bound-stream-receipt.json> --shards-root <token-shard-dir> --tokenizer <tokenizer-path> --steps <N> --sequence-length <seq-len> --checkpoint-interval 50 --write-budget-gib <write-budget-gib>",
         "tool": "tools/ember-restart-3b/launch_packet.py"
       },
       "reason": "launch packet ready",
@@ -206,8 +206,9 @@
   "schema": "ember-01-completion-receipt-v1",
   "selection": {
     "selected_goal_suffix": "EMBER-GOAL-GRAPH.json",
+    "selector_sha256": "cb9df0b3cd915969a4b97703f26865fb0c0bb9733c36e0e93f463991766aa220",
     "unchanged_during_verification": true
   },
-  "verified_at_utc": "2026-07-23T17:06:34.140655+00:00",
+  "verified_at_utc": "2026-07-23T17:14:46.632861+00:00",
   "workstream_id": "EMBER-02A"
 }
