@@ -53,6 +53,37 @@ def test_custody_legs_bind_census_to_remote_master_ref(
     assert captured[ref_index + 1] == "refs/remotes/origin/master"
 
 
+def test_custody_legs_allow_exhaustive_census_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_timeout: list[int | None] = []
+
+    monkeypatch.setattr(
+        completion,
+        "git",
+        lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+
+    def fake_run(_args: list[str], **kwargs: object) -> dict[str, object]:
+        captured_timeout.append(kwargs.get("timeout"))  # type: ignore[arg-type]
+        return {
+            "returncode": 2,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+
+    completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+    )
+
+    assert captured_timeout == [60 * 60]
+
+
 def test_run_reports_missing_executable_without_aborting_receipt(
     tmp_path: Path,
 ) -> None:

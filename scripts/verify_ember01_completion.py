@@ -63,6 +63,7 @@ LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
 VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
+CUSTODY_TIMEOUT_SECONDS = 60 * 60
 
 # The nine EMBER-01 conditions and which tool certifies each.
 LEG_TITLES = {
@@ -233,7 +234,12 @@ def custody_legs(root: Path, bindings: list[str], run_custody: bool) -> dict[str
     ]
     for b in bindings:
         cmd += ["--binding", b]
-    result = run(cmd, root=root, name="ember_01_custody", timeout=180)
+    result = run(
+        cmd,
+        root=root,
+        name="ember_01_custody",
+        timeout=CUSTODY_TIMEOUT_SECONDS,
+    )
     try:
         out.unlink(missing_ok=True)  # keep the checkout clean
     except OSError:
