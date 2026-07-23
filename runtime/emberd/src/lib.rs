@@ -317,6 +317,9 @@ pub enum DispatchBindingKind {
     Manifest,
     Input,
     Verifier,
+    Source,
+    Tokenizer,
+    Runner,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -335,10 +338,10 @@ pub struct DispatchCanaryScope {
     pub lease_id: String,
     pub expected_emberd_binary_sha256: String,
     pub expected_emberd_source_sha256: String,
-    pub source_sha256: String,
-    pub config_sha256: String,
-    pub tokenizer_sha256: String,
-    pub runner_sha256: String,
+    pub source: DispatchFileHash,
+    pub config: DispatchFileHash,
+    pub tokenizer: DispatchFileHash,
+    pub runner: DispatchFileHash,
     pub forbidden_process_names: Vec<String>,
     pub wsl_allowed: bool,
     pub docker_allowed: bool,
@@ -394,6 +397,7 @@ pub struct DispatchManifest {
 }
 
 const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const GOVERNED_CANARY_FORBIDDEN_PROCESS_NAMES: [&str; 2] = ["llama-server.exe", "qwen.exe"];
 
 fn validate_dispatch_canary_scope(
     manifest: &DispatchManifest,
@@ -418,10 +422,10 @@ fn validate_dispatch_canary_scope(
     let hashes = [
         &scope.expected_emberd_binary_sha256,
         &scope.expected_emberd_source_sha256,
-        &scope.source_sha256,
-        &scope.config_sha256,
-        &scope.tokenizer_sha256,
-        &scope.runner_sha256,
+        &scope.source.sha256,
+        &scope.config.sha256,
+        &scope.tokenizer.sha256,
+        &scope.runner.sha256,
     ];
     if scope.dispatch_kind != "governed_vertical"
         || scope.expected_gpu_uuid.trim().is_empty()
@@ -434,7 +438,11 @@ fn validate_dispatch_canary_scope(
         || scope.docker_allowed
         || scope.persistent_worker_allowed
         || hashes.iter().any(|value| validate_hash(value).is_err())
-        || scope.forbidden_process_names.is_empty()
+        || !scope
+            .forbidden_process_names
+            .iter()
+            .map(String::as_str)
+            .eq(GOVERNED_CANARY_FORBIDDEN_PROCESS_NAMES.iter().copied())
     {
         return Err(EmberdError::InvalidDispatchManifest {
             detail: "governed canary scope is incomplete or does not bind the running emberd"
@@ -506,28 +514,61 @@ fn validate_canary_host_snapshot(
 
 fn validate_canary_binding_closure(
     scope: Option<&DispatchCanaryScope>,
+    program: &Path,
     program_sha256: &str,
     bindings: &[(PathBuf, String, DispatchBindingKind)],
 ) -> Result<()> {
     let Some(scope) = scope else {
         return Ok(());
     };
-    let available = std::iter::once(program_sha256)
-        .chain(bindings.iter().map(|(_, sha256, _)| sha256.as_str()))
-        .collect::<std::collections::BTreeSet<_>>();
-    for (role, sha256) in [
-        ("source", scope.source_sha256.as_str()),
-        ("config", scope.config_sha256.as_str()),
-        ("tokenizer", scope.tokenizer_sha256.as_str()),
-        ("runner", scope.runner_sha256.as_str()),
-    ] {
-        if !available.contains(sha256) {
+    let roles = [
+        ("source", &scope.source, DispatchBindingKind::Source),
+        ("config", &scope.config, DispatchBindingKind::Config),
+        (
+            "tokenizer",
+            &scope.tokenizer,
+            DispatchBindingKind::Tokenizer,
+        ),
+        ("runner", &scope.runner, DispatchBindingKind::Runner),
+    ];
+    let mut role_paths = std::collections::BTreeSet::new();
+    for (role, file, expected_kind) in roles {
+        let canonical =
+            fs::canonicalize(&file.path).map_err(|error| EmberdError::InvalidDispatchManifest {
+                detail: format!("governed canary {role} path is unavailable: {error}"),
+            })?;
+        if !role_paths.insert(canonical.clone()) {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "governed canary semantic roles must bind distinct files".into(),
+            });
+        }
+        let exact_matches = bindings
+            .iter()
+            .filter(|(path, sha256, kind)| {
+                *path == canonical && sha256 == &file.sha256 && *kind == expected_kind
+            })
+            .count();
+        let role_kind_count = bindings
+            .iter()
+            .filter(|(_, _, kind)| *kind == expected_kind)
+            .count();
+        if exact_matches != 1 || role_kind_count != 1 {
             return Err(EmberdError::InvalidDispatchManifest {
                 detail: format!(
-                    "governed canary {role} sha256 is not bound to an exact dispatch file"
+                    "governed canary {role} must bind exactly one path, sha256, and semantic kind"
                 ),
             });
         }
+    }
+    let runner = fs::canonicalize(&scope.runner.path).map_err(|error| {
+        EmberdError::InvalidDispatchManifest {
+            detail: format!("governed canary runner path is unavailable: {error}"),
+        }
+    })?;
+    if runner != program || scope.runner.sha256 != program_sha256 {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "governed canary runner role must equal the exact spawned program".into(),
+        });
     }
     Ok(())
 }
@@ -1435,6 +1476,7 @@ impl Daemon {
         }
         validate_canary_binding_closure(
             manifest.canary_scope.as_ref(),
+            &program,
             &manifest.program.sha256,
             &verified_bindings,
         )?;
@@ -1650,6 +1692,7 @@ impl Daemon {
         }
         validate_canary_binding_closure(
             manifest.canary_scope.as_ref(),
+            &program,
             &manifest.program.sha256,
             &verified_bindings,
         )?;

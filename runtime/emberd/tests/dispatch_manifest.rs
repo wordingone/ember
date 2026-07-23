@@ -94,18 +94,17 @@ fn write_governed_canary_manifest(root: &Path, job_id: &str) -> PathBuf {
     let program = std::env::current_exe().unwrap();
     let source = root.join("certified-source.py");
     let tokenizer = root.join("tokenizer.json");
-    let runner = root.join("governed-runner.py");
     fs::write(&source, b"# certified source\n").unwrap();
     fs::write(&tokenizer, b"{\"tokenizer\":\"owned\"}").unwrap();
-    fs::write(&runner, b"# governed runner\n").unwrap();
+    let config_path = payload["bindings"][0]["path"].as_str().unwrap().to_string();
     let config_sha256 = payload["bindings"][0]["sha256"]
         .as_str()
         .unwrap()
         .to_string();
     payload["bindings"].as_array_mut().unwrap().extend([
-        json!({"kind":"verifier","path":source,"sha256":sha256(&source)}),
-        json!({"kind":"input","path":tokenizer,"sha256":sha256(&tokenizer)}),
-        json!({"kind":"verifier","path":runner,"sha256":sha256(&runner)}),
+        json!({"kind":"source","path":source,"sha256":sha256(&source)}),
+        json!({"kind":"tokenizer","path":tokenizer,"sha256":sha256(&tokenizer)}),
+        json!({"kind":"runner","path":program,"sha256":sha256(&program)}),
     ]);
     payload["schema_version"] = json!("emberd-governed-canary-dispatch-v1");
     payload["minimum_free_vram_bytes"] = json!(20 * GIB);
@@ -117,10 +116,10 @@ fn write_governed_canary_manifest(root: &Path, job_id: &str) -> PathBuf {
         "lease_id": "gpu:GPU-EMBER-CANARY:bounded-canary",
         "expected_emberd_binary_sha256": sha256(&program),
         "expected_emberd_source_sha256": emberd_source_sha256(),
-        "source_sha256": sha256(&source),
-        "config_sha256": config_sha256,
-        "tokenizer_sha256": sha256(&tokenizer),
-        "runner_sha256": sha256(&runner),
+        "source": {"path": source, "sha256": sha256(&source)},
+        "config": {"path": config_path, "sha256": config_sha256},
+        "tokenizer": {"path": tokenizer, "sha256": sha256(&tokenizer)},
+        "runner": {"path": program, "sha256": sha256(&program)},
         "forbidden_process_names": ["llama-server.exe", "qwen.exe"],
         "wsl_allowed": false,
         "docker_allowed": false,
@@ -306,7 +305,7 @@ fn governed_canary_refuses_a_scope_hash_without_an_exact_file_binding() {
     let root = sandbox("governed-canary-unbound-hash");
     let manifest = write_governed_canary_manifest(&root, "governed-canary-unbound-hash");
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-    let tokenizer_sha = payload["canary_scope"]["tokenizer_sha256"]
+    let tokenizer_sha = payload["canary_scope"]["tokenizer"]["sha256"]
         .as_str()
         .unwrap()
         .to_string();
@@ -340,6 +339,248 @@ fn governed_canary_refuses_a_scope_hash_without_an_exact_file_binding() {
         daemon.job_state("governed-canary-unbound-hash").unwrap(),
         None
     );
+}
+
+#[test]
+fn governed_canary_refuses_swapped_semantic_role_hashes() {
+    let root = sandbox("governed-canary-role-swap");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-role-swap");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let source_sha = payload["canary_scope"]["source"]["sha256"].clone();
+    let tokenizer_sha = payload["canary_scope"]["tokenizer"]["sha256"].clone();
+    payload["canary_scope"]["source"]["sha256"] = tokenizer_sha;
+    payload["canary_scope"]["tokenizer"]["sha256"] = source_sha;
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon.stop_job("governed-canary-role-swap").unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+}
+
+#[test]
+fn governed_canary_refuses_a_semantic_role_bound_with_the_wrong_kind() {
+    let root = sandbox("governed-canary-role-kind");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-role-kind");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let source_sha = payload["canary_scope"]["source"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    for binding in payload["bindings"].as_array_mut().unwrap() {
+        if binding["sha256"] == source_sha {
+            binding["kind"] = json!("input");
+        }
+    }
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon.stop_job("governed-canary-role-kind").unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+}
+
+#[test]
+fn governed_canary_refuses_a_duplicate_semantic_role_binding() {
+    let root = sandbox("governed-canary-duplicate-role");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-duplicate-role");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let duplicate_source = root.join("duplicate-certified-source.py");
+    fs::write(&duplicate_source, b"# duplicate certified source\n").unwrap();
+    payload["bindings"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"kind":"source","path":duplicate_source,"sha256":sha256(&duplicate_source)}));
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon.stop_job("governed-canary-duplicate-role").unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+}
+
+#[test]
+fn governed_canary_refuses_a_runner_role_not_equal_to_the_spawn_program() {
+    let root = sandbox("governed-canary-runner-program-drift");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-runner-program-drift");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let unrelated_runner = root.join("unrelated-governed-runner.py");
+    fs::write(&unrelated_runner, b"# unrelated runner\n").unwrap();
+    payload["canary_scope"]["runner"] =
+        json!({"path": unrelated_runner, "sha256": sha256(&unrelated_runner)});
+    payload["bindings"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"kind":"runner","path":unrelated_runner,"sha256":sha256(&unrelated_runner)}));
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon
+            .stop_job("governed-canary-runner-program-drift")
+            .unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+}
+
+#[test]
+fn governed_canary_refuses_a_substituted_forbidden_process_policy() {
+    let root = sandbox("governed-canary-forbidden-policy-substitution");
+    let manifest =
+        write_governed_canary_manifest(&root, "governed-canary-forbidden-policy-substitution");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["canary_scope"]["forbidden_process_names"] = json!(["benign.exe"]);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon
+            .stop_job("governed-canary-forbidden-policy-substitution")
+            .unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+}
+
+#[test]
+fn governed_canary_refuses_an_incomplete_forbidden_process_policy() {
+    let root = sandbox("governed-canary-forbidden-policy-omission");
+    let manifest =
+        write_governed_canary_manifest(&root, "governed-canary-forbidden-policy-omission");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["canary_scope"]["forbidden_process_names"] = json!(["llama-server.exe"]);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon
+            .stop_job("governed-canary-forbidden-policy-omission")
+            .unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+}
+
+#[test]
+fn governed_canary_denylist_does_not_claim_universal_process_exclusivity() {
+    let root = sandbox("governed-canary-denylist-boundary");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-denylist-boundary");
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let unrelated = CanaryProcessIdentity {
+        pid: 998,
+        parent_pid: 1,
+        start_token: 122,
+        image_name: "unclassified-gpu-peer.exe".into(),
+        image_sha256: "4".repeat(64),
+        gpu_uuid: Some("GPU-EMBER-CANARY".into()),
+    };
+    let outcome = daemon
+        .dispatch_governed_canary_manifest_bytes_at_with_probes(
+            &bytes,
+            &digest,
+            &manifest,
+            10_001,
+            |_root| Ok(u64::MAX),
+            || Ok(24 * GIB),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            || Ok(canary_snapshot(vec![unrelated.clone()])),
+        )
+        .unwrap();
+    let receipt: Value = serde_json::from_slice(&fs::read(&outcome.receipt.path).unwrap()).unwrap();
+    assert_eq!(
+        receipt["governed_canary"]["before"]["processes"][0]["image_name"],
+        unrelated.image_name
+    );
+    daemon
+        .stop_job("governed-canary-denylist-boundary")
+        .unwrap();
 }
 
 #[test]
