@@ -288,18 +288,10 @@ def test_fetch_live_open_issues_uses_fixed_repository_state_and_fields(
         }
 
     monkeypatch.setattr(completion, "run", fake_run)
-    result = completion.fetch_live_open_issues(
-        REPO_ROOT,
-        ["powershell", "-NoProfile", "-File", "gh-safe.ps1"],
-    )
+    result = completion.fetch_live_open_issues(REPO_ROOT)
 
-    assert captured[:4] == [
-        "powershell",
-        "-NoProfile",
-        "-File",
-        "gh-safe.ps1",
-    ]
-    assert captured[4:] == [
+    assert captured == [
+        "gh",
         "issue",
         "list",
         "--repo",
@@ -332,7 +324,7 @@ def test_fetch_live_open_issues_rejects_non_json_stdout(
         },
     )
 
-    result = completion.fetch_live_open_issues(REPO_ROOT, ["gh"])
+    result = completion.fetch_live_open_issues(REPO_ROOT)
 
     assert result["returncode"] == 2
     assert result["issues"] is None
