@@ -282,16 +282,29 @@ def admitted_manifest(checkpoint_bytes: bytes = CHECKPOINT_BYTES) -> tuple[dict,
     # every existing OWNED_ADMITTED-fixture consumer across this test corpus stays
     # green; tests that specifically exercise the omission/mutation battery delete or
     # mutate individual fields off this default (see test_optimizer_identity_roundtrip.py).
-    payload["training"]["optimizer_contract"] = {
+    optimizer_contract = {
         "implementation": "bitsandbytes.optim.AdamW8bit",
         "hyperparameters": {"learning_rate": 1e-4, "weight_decay": 0.1},
         "state_format": "bitsandbytes-device-resident-8bit-adamw-state-dict-v1",
         "implementation_source_sha256": "d" * 64,
         "param_group_mapping_convention": "by-module-qualified-name",
         "param_name_optimizer_id_mapping_sha256": "e" * 64,
-        "realization_receipt_sha256": "f" * 64,
-        "trusted_verifier_id": "fixture-optimizer-realization-verifier",
+        "trusted_verifier_id": verifier,
     }
+    optimizer_receipt = {
+        "schema": "ember-identity-evidence-receipt-v1",
+        "evidence_class": "optimizer_realization",
+        "subject_checkpoint_sha256": subject,
+        "verifier_sha256": verifier,
+        "result": "REALIZED",
+        "optimizer_schema_version": "ember-optimizer-realization-v1",
+        **optimizer_contract,
+    }
+    sign_receipt(optimizer_receipt)
+    optimizer_receipt_digest = receipt_sha256(optimizer_receipt)
+    receipts[optimizer_receipt_digest] = optimizer_receipt
+    optimizer_contract["realization_receipt_sha256"] = optimizer_receipt_digest
+    payload["training"]["optimizer_contract"] = optimizer_contract
     return payload, receipts
 
 
@@ -1151,6 +1164,71 @@ def test_owned_admission_rejects_parameter_receipt_with_wrong_count() -> None:
     payload["parameters"]["evidence_receipts"]["actually_trained"] = [new]
     assert "admission.receipt_claim_mismatch" in error_codes(
         payload, receipt_bundle=receipts, **artifact_authority(payload)
+    )
+
+
+def test_owned_admission_rejects_optimizer_residual_mismatch_battery() -> None:
+    mutations = {
+        "implementation_source_sha256": "0" * 64,
+        "param_group_mapping_convention": "foreign-ordering",
+        "param_name_optimizer_id_mapping_sha256": "1" * 64,
+        "trusted_verifier_id": "foreign-verifier",
+    }
+    for field, value in mutations.items():
+        payload, receipts = admitted_manifest()
+        payload["training"]["optimizer_contract"][field] = value
+        codes = error_codes(
+            payload,
+            receipt_bundle=receipts,
+            **artifact_authority(payload),
+        )
+        assert "admission.receipt_claim_mismatch" in codes, field
+
+
+def test_owned_admission_requires_optimizer_realization_receipt_content() -> None:
+    payload, receipts = admitted_manifest()
+    digest = payload["training"]["optimizer_contract"]["realization_receipt_sha256"]
+    receipts.pop(digest)
+    assert "admission.receipt_missing" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        **artifact_authority(payload),
+    )
+
+
+def test_optimizer_claimant_cannot_rehash_forged_realization_receipt() -> None:
+    payload, receipts = admitted_manifest()
+    contract = payload["training"]["optimizer_contract"]
+    old_digest = contract["realization_receipt_sha256"]
+    receipt = receipts.pop(old_digest)
+    receipt["implementation_source_sha256"] = "0" * 64
+    contract["implementation_source_sha256"] = "0" * 64
+    forged_digest = receipt_sha256(receipt)
+    receipts[forged_digest] = receipt
+    contract["realization_receipt_sha256"] = forged_digest
+    assert "admission.receipt_signature_invalid" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        **artifact_authority(payload),
+    )
+
+
+def test_optimizer_trusted_verifier_id_is_pinned_to_admission_verifier() -> None:
+    payload, receipts = admitted_manifest()
+    contract = payload["training"]["optimizer_contract"]
+    old_digest = contract["realization_receipt_sha256"]
+    new_digest = rebind_receipt(
+        payload,
+        receipts,
+        old_digest,
+        trusted_verifier_id="foreign-verifier",
+    )
+    contract["trusted_verifier_id"] = "foreign-verifier"
+    contract["realization_receipt_sha256"] = new_digest
+    assert "admission.optimizer_verifier_untrusted" in error_codes(
+        payload,
+        receipt_bundle=receipts,
+        **artifact_authority(payload),
     )
 
 

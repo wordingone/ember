@@ -1218,6 +1218,44 @@ def validate_manifest(
             findings.append(_finding("field.unresolved", path))
 
     if disposition == "OWNED_ADMITTED":
+        optimizer_contract = _get(payload, "training.optimizer_contract")[1]
+        optimizer_verifier = _get(payload, "data.verifier_sha256")[1]
+        if isinstance(optimizer_contract, Mapping):
+            if optimizer_contract.get("trusted_verifier_id") != optimizer_verifier:
+                findings.append(
+                    _finding(
+                        "admission.optimizer_verifier_untrusted",
+                        "optimizer contract verifier is not the pinned admission verifier",
+                    )
+                )
+            if isinstance(receipt_bundle, Mapping):
+                _resolve_admission_receipt(
+                    optimizer_contract.get("realization_receipt_sha256"),
+                    receipt_bundle=receipt_bundle,
+                    expected_class="optimizer_realization",
+                    expected_checkpoint=checkpoint_hash,
+                    expected_verifier=optimizer_verifier,
+                    expected_result="REALIZED",
+                    expected_claims={
+                        "optimizer_schema_version": "ember-optimizer-realization-v1",
+                        "implementation": optimizer_contract.get("implementation"),
+                        "hyperparameters": optimizer_contract.get("hyperparameters"),
+                        "state_format": optimizer_contract.get("state_format"),
+                        "implementation_source_sha256": optimizer_contract.get(
+                            "implementation_source_sha256"
+                        ),
+                        "param_group_mapping_convention": optimizer_contract.get(
+                            "param_group_mapping_convention"
+                        ),
+                        "param_name_optimizer_id_mapping_sha256": optimizer_contract.get(
+                            "param_name_optimizer_id_mapping_sha256"
+                        ),
+                        "trusted_verifier_id": optimizer_contract.get(
+                            "trusted_verifier_id"
+                        ),
+                    },
+                    findings=findings,
+                )
         backend = payload.get("backend")
         process_identity = (
             backend.get("process_identity") if isinstance(backend, Mapping) else None

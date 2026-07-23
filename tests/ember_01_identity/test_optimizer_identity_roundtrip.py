@@ -154,8 +154,14 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
     def test_owned_optimizer_identity_round_trips(self) -> None:
         payload, receipts = admitted_manifest()
         authority = artifact_authority(payload)
-        # The wiring module derives the SAME digest the artifact authority admits, from
-        # the actual optimizer state bytes, gated by a signed REALIZED receipt.
+        # The production admission path consumes the content-addressed, signed
+        # realization receipt installed by admitted_manifest.
+        result = validate_manifest(payload, receipt_bundle=receipts, **authority)
+        self.assertEqual(result, payload)
+
+        # The standalone wiring module independently derives and verifies its complete
+        # optimizer identity. Its local REALIZATION_RECEIPT is not allowed to impersonate
+        # the separately signed production-admission receipt bundle.
         rebound = bind_optimizer_identity(
             payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
         )
@@ -167,8 +173,9 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
             rebound["training"]["optimizer_contract"],
             self._valid_contract(),
         )
-        result = validate_manifest(rebound, receipt_bundle=receipts, **authority)
-        self.assertEqual(result, rebound)
+        verify_optimizer_identity_binding(
+            rebound, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
+        )
 
     # ---- fail-closed negatives at the REAL consumer --------------------------------
     def test_tampered_optimizer_state_bytes_flagged(self) -> None:
@@ -299,18 +306,21 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
         }
 
     def test_optimizer_contract_round_trips_through_real_consumer(self) -> None:
-        # POSITIVE (GREEN): a manifest carrying a COMPLETE, well-formed optimizer
-        # contract (all 8 fields, including all 5 B4 residuals) bound to the REALIZED
-        # receipt validates through the real consumer AND the wiring module.
+        # POSITIVE (GREEN): production admission validates the complete optimizer
+        # contract against its content-addressed signed receipt.
         payload, receipts = admitted_manifest()
         authority = artifact_authority(payload)
-        contract = self._valid_contract()
-        self.assertEqual(set(contract), set(self.ALL_CONTRACT_FIELDS))
-        payload["training"]["optimizer_contract"] = contract
         result = validate_manifest(payload, receipt_bundle=receipts, **authority)
         self.assertEqual(result, payload)
+
+        # The standalone wiring module is exercised separately with its own REALIZED
+        # receipt; it does not borrow the production receipt bundle's authority.
+        contract = self._valid_contract()
+        self.assertEqual(set(contract), set(self.ALL_CONTRACT_FIELDS))
+        standalone = copy.deepcopy(payload)
+        standalone["training"]["optimizer_contract"] = contract
         verify_optimizer_identity_binding(
-            payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
+            standalone, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
         )
 
     def test_optimizer_contract_absent_still_valid_when_not_owned_admitted(self) -> None:
