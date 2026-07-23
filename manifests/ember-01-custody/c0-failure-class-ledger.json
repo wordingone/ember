@@ -31,10 +31,8 @@
       "class_id": "BF16_SILENT_FREEZE",
       "title": "BF16 silent gradient freeze",
       "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): undetected gradient/loss saturation under BF16 produces a run that LOOKS like it trained but never learned, invalidating any completion claim.",
-      "state": "CLOSED_GUARDED",
-      "guard_ref": "scripts/tests/test_screen792_bf16_momentum.py",
-      "guard_kind": "test",
-      "evidence": "#792 required negative fixture: sub-ULP EMA increments detectably STALL under naive in-place bf16 and PASS under the A1 fp32 read-modify-writeback dataflow, compared to two independent fp64 analytic references. Reclassified BLOCKING->CLOSED_GUARDED on landed-guard evidence (coordinator discriminating check 2026-07-23); the codex custody lane holds final classification authority."
+      "state": "BLOCKING",
+      "blocking_reason": "Prior CLOSED_GUARDED reverted 2026-07-23: the named guard scripts/tests/test_screen792_bf16_momentum.py is DEAD ON IMPORT \u2014 pytest --collect-only aborts with SystemExit(\"historical_only: ...execution-denied\") because it imports the sub-3B trainer chain locked at module scope by commit 4f758db0 (2026-07-12), which POSTDATES the guard's own landing (#792). A guard whose bytes exist but cannot be collected/executed cannot regression-guard the class (a coordinator collectability audit surfaced this; the class-kill dead-guard class). Reopens to CLOSED_GUARDED when a LIVE guard on the current bf16-momentum path lands and is proven collectable + RED-first."
     },
     {
       "class_id": "GOVERNED_ABORT_OBSERVABILITY",
@@ -70,8 +68,10 @@
       "class_id": "CHECKPOINT_SHARD_CONTRADICTION",
       "title": "Checkpoint / shard-size resource contradiction",
       "birth_relevance": "Surfaced 2026-07 (issue #1012): the configured shard size (4 GiB) contradicts observed checkpoint sizing, an unresolved resource-envelope defect that can silently truncate or misallocate storage during a real run.",
-      "state": "BLOCKING",
-      "blocking_reason": "Issue #1012: bounded-shard fix from Niko not yet landed on this checkout. Checkpoint save/load identity-binding guards exist (scripts/ember_01_identity/checkpoint_save_load_identity_binding.py) but do not enforce a shard-size ceiling. Row reopens to CLOSED_GUARDED once the bounded-shard fix lands with its own guard."
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "tests/ember_restart_model/test_checkpoint_artifacts.py:test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap",
+      "guard_kind": "test",
+      "evidence": "#1012 merged c0b9219 (public master verified 2026-07-23): v5 split-shard writer + fixed 4 GiB transient scratch cap (_ScratchCappedWriter fails closed mid-write; pre-serialization _unique_tensor_storage_bytes lower-bound check). Two collectable boundary tests regression-guard the class \u2014 test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap (an over-cap single temp shard is REJECTED, fail-closed, never silently truncated) and test_v5_transient_cap_breach_cleans_temps_and_retains_failure_evidence (a breach cleans temps + retains observable failure evidence). CANARY scope: active-expert canary optimizer tensor lower bound ~3.214 GiB passes the 4 GiB cap. Sustained multi-domain ~7.151 GiB EXCEEDS it \u2014 optimizer-state splitting (or another bounded format) is a NAMED OPEN pre-sustained GATE-2 precondition (recorded in the #1012 body), NOT a hole in this guard: the guard makes the contradiction fail closed, never silent. The codex custody lane holds final classification authority."
     },
     {
       "class_id": "R1_CUSTODY_ROOTS",
