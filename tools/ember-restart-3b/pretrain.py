@@ -78,6 +78,7 @@ def run_pretraining_segment(
     initial_data_cursor: int = 0,
     data_shard_id: str = "owned-pretraining",
     require_complete_coverage: bool = True,
+    max_records: int | None = None,
 ) -> dict[str, Any]:
     """Execute verified routed updates and bind counters needed for exact resume."""
 
@@ -89,6 +90,8 @@ def run_pretraining_segment(
         raise ValueError("resume counters must be nonnegative")
     if initial_data_cursor > len(records):
         raise ValueError("resume data cursor exceeds the bound record sequence")
+    if max_records is not None and (type(max_records) is not int or max_records < 1 or max_records > 200):
+        raise ValueError("pretraining max_records must be an integer from 1 through 200")
     if not isinstance(data_shard_id, str) or not data_shard_id:
         raise ValueError("data_shard_id must be a nonempty owned shard identifier")
     model.train()
@@ -97,7 +100,7 @@ def run_pretraining_segment(
     expert_examples = {expert: 0 for expert in EXPERT_NAMES}
     tokens_seen = initial_tokens_seen
     data_cursor = initial_data_cursor
-    remaining_records = records[initial_data_cursor:]
+    remaining_records = records[initial_data_cursor:] if max_records is None else records[initial_data_cursor:initial_data_cursor + max_records]
     final_global_step = initial_global_step + len(remaining_records)
     for local_step, record in enumerate(remaining_records, start=1):
         step_started = time.perf_counter()
@@ -281,19 +284,32 @@ def run_manifest_bound_semantic_segment(
         raise ValueError("semantic stream sequence_length must be positive")
     if not isinstance(steps, int) or steps < 1:
         raise ValueError("semantic stream steps must be positive")
-    if min(initial_global_step, initial_tokens_seen) < 0:
-        raise ValueError("semantic stream resume counters must be nonnegative")
+    if type(initial_global_step) is not int or type(initial_tokens_seen) is not int or min(initial_global_step, initial_tokens_seen) < 0:
+        raise ValueError("semantic stream resume counters must be nonnegative integers")
+    expected_shard = "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12]
     if initial_data_cursor is None:
         shard_index, token_offset = 0, 0
     else:
+        if not isinstance(initial_data_cursor, Mapping):
+            raise ValueError("semantic stream resume cursor is malformed")
         if (
             initial_data_cursor.get("receipt_sha256") != stream.receipt_sha256
             or initial_data_cursor.get("tokenizer_sha256") != stream.tokenizer_sha256
         ):
             raise ValueError("semantic stream resume cursor does not bind this receipt and tokenizer")
+        if (
+            initial_data_cursor.get("shard") != expected_shard
+            or type(initial_data_cursor.get("record_index")) is not int
+            or initial_data_cursor["record_index"] != initial_global_step
+            or type(initial_data_cursor.get("global_step")) is not int
+            or initial_data_cursor["global_step"] != initial_global_step
+            or type(initial_data_cursor.get("tokens_seen")) is not int
+            or initial_data_cursor["tokens_seen"] != initial_tokens_seen
+        ):
+            raise ValueError("semantic stream resume cursor identity is inconsistent")
         shard_index = initial_data_cursor.get("shard_index")
         token_offset = initial_data_cursor.get("token_offset")
-        if not isinstance(shard_index, int) or not isinstance(token_offset, int):
+        if type(shard_index) is not int or type(token_offset) is not int or shard_index < 0 or token_offset < 0:
             raise ValueError("semantic stream resume cursor is malformed")
 
     records: list[dict[str, object]] = []

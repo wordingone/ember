@@ -97,6 +97,34 @@ def _bind_checkpoint_identity(published_root: Path, receipt: Mapping[str, Any]) 
     return {**dict(receipt), "checkpoint": {"byte_sha256": byte_sha256}}
 
 
+def published_checkpoint_receipt(published_root: Path) -> dict[str, Any]:
+    """Reconstruct the complete load receipt from frozen published bytes.
+
+    ``checkpoint.byte_sha256`` cannot live inside the manifest whose bytes it
+    identifies. Reopening consumers therefore derive that outer binding from
+    the exact manifest snapshot they parse, rather than dropping the writer's
+    out-of-band identity field.
+    """
+
+    published_root = _admitted_checkpoint_root(published_root)
+    manifest_path = published_root / "checkpoint-manifest.json"
+    if _is_link_or_reparse(manifest_path):
+        raise CheckpointIdentityMismatch("checkpoint manifest cannot be a symlink or reparse point")
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CheckpointIdentityMismatch("checkpoint manifest is not valid published JSON") from error
+    if not isinstance(manifest, dict):
+        raise CheckpointIdentityMismatch("checkpoint manifest must be a JSON object")
+    byte_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    return {
+        **manifest,
+        "checkpoint_manifest_sha256": byte_sha256,
+        "checkpoint": {"byte_sha256": byte_sha256},
+    }
+
+
 def _select_detached_state(
     state: Mapping[str, torch.Tensor],
     predicate: Callable[[str], bool],
@@ -114,6 +142,29 @@ def _tensor_bytes(value: object) -> int:
     if isinstance(value, (list, tuple)):
         return max((_tensor_bytes(item) for item in value), default=0)
     return 0
+
+
+def _unique_tensor_storage_bytes(value: object) -> int:
+    """Return the tensor-storage lower bound for one serialized shard payload."""
+
+    seen: set[tuple[str, int, int]] = set()
+
+    def visit(item: object) -> int:
+        if isinstance(item, torch.Tensor):
+            storage = item.untyped_storage()
+            size = int(storage.nbytes())
+            key = (str(item.device), int(storage.data_ptr()), size)
+            if key in seen:
+                return 0
+            seen.add(key)
+            return size
+        if isinstance(item, Mapping):
+            return sum(visit(child) for child in item.values())
+        if isinstance(item, (list, tuple)):
+            return sum(visit(child) for child in item)
+        return 0
+
+    return visit(value)
 
 
 def checkpoint_streaming_peak_bytes(
@@ -302,14 +353,49 @@ def _record(
     }
 
 
-def _write_atomic(root: Path, filename: str, writer: Callable[[Any], None]) -> Path:
+class _ScratchCappedWriter:
+    """Reject a temporary shard before a write would cross its byte cap."""
+
+    def __init__(self, handle: Any, max_bytes: int) -> None:
+        self._handle = handle
+        self._max_bytes = max_bytes
+
+    def write(self, payload: bytes | bytearray | memoryview) -> int:
+        projected_end = self._handle.tell() + len(payload)
+        if projected_end > self._max_bytes:
+            raise RuntimeError(
+                f"checkpoint transient scratch exceeds {self._max_bytes} bytes"
+            )
+        return self._handle.write(payload)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._handle, name)
+
+
+def _write_atomic(
+    root: Path,
+    filename: str,
+    writer: Callable[[Any], None],
+    *,
+    max_transient_scratch_bytes: int | None = None,
+) -> Path:
     """Write, fsync, and rename one artifact without publishing partial bytes."""
 
+    if max_transient_scratch_bytes is not None and (
+        type(max_transient_scratch_bytes) is not int
+        or max_transient_scratch_bytes < 1
+    ):
+        raise ValueError("max_transient_scratch_bytes must be a positive integer")
     target = root / filename
     temporary = root / f".{filename}.{uuid.uuid4().hex}.tmp"
     try:
         with temporary.open("wb") as handle:
-            writer(handle)
+            bounded_handle = (
+                _ScratchCappedWriter(handle, max_transient_scratch_bytes)
+                if max_transient_scratch_bytes is not None
+                else handle
+            )
+            writer(bounded_handle)
             handle.flush()
             os.fsync(handle.fileno())
         atomic_replace_durable(temporary, target)
@@ -319,9 +405,20 @@ def _write_atomic(root: Path, filename: str, writer: Callable[[Any], None]) -> P
             temporary.unlink()
 
 
-def _write_json_atomic(root: Path, filename: str, payload: Mapping[str, Any]) -> Path:
+def _write_json_atomic(
+    root: Path,
+    filename: str,
+    payload: Mapping[str, Any],
+    *,
+    max_transient_scratch_bytes: int | None = None,
+) -> Path:
     encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-    return _write_atomic(root, filename, lambda handle: handle.write(encoded))
+    return _write_atomic(
+        root,
+        filename,
+        lambda handle: handle.write(encoded),
+        max_transient_scratch_bytes=max_transient_scratch_bytes,
+    )
 
 
 def _atomic_publish_no_replace(source: Path, target: Path) -> None:
@@ -572,7 +669,11 @@ def _external_checkpoint_manifest(path: Path, *, label: str) -> tuple[dict[str, 
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError(f"{label} manifest is not JSON") from error
     manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
-    if manifest.get("schema_version") not in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
+    if manifest.get("schema_version") not in {
+        "ember-sparse-checkpoint-v3",
+        "ember-sparse-checkpoint-v4",
+        "ember-sparse-checkpoint-v5",
+    }:
         raise ValueError(f"{label} manifest has an unsupported schema")
     _validated_records(path.parent, {**manifest, "checkpoint_manifest_sha256": manifest_sha256})
     experts = manifest.get("expert_checkpoint_sha256")
@@ -592,7 +693,7 @@ def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest
 
     parent, parent_sha256 = _external_checkpoint_manifest(Path(parent_manifest), label="parent")
     root, root_sha256 = _external_checkpoint_manifest(Path(root_manifest), label="root genesis")
-    if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
+    if not isinstance(parent.get("lineage"), Mapping):
         if parent_sha256 != root_sha256:
             raise ValueError("first specialist successor requires exact parent and root checkpoint hashes")
         history = []
@@ -640,7 +741,7 @@ def _specialist_lineage(
     parent, parent_sha256 = _external_checkpoint_manifest(parent_path, label="parent")
     root, root_sha256 = _external_checkpoint_manifest(root_path, label="root genesis")
     parent_lineage = parent.get("lineage")
-    if parent.get("schema_version") == "ember-sparse-checkpoint-v3":
+    if not isinstance(parent_lineage, Mapping):
         if parent_sha256 != root_sha256:
             raise ValueError("first specialist successor requires exact parent and root checkpoint hashes")
         parent_history = []
@@ -946,6 +1047,7 @@ def _write_checkpoint_artifacts_impl(
     optimizer_contract: Mapping[str, Any] | None = None,
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
+    max_transient_scratch_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
     pre_publish_verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -953,6 +1055,11 @@ def _write_checkpoint_artifacts_impl(
 
     if max_serialized_bytes is not None and (type(max_serialized_bytes) is not int or max_serialized_bytes < 1):
         raise ValueError("max_serialized_bytes must be a positive integer")
+    if max_transient_scratch_bytes is not None and (
+        type(max_transient_scratch_bytes) is not int
+        or max_transient_scratch_bytes < 1
+    ):
+        raise ValueError("max_transient_scratch_bytes must be a positive integer")
     if not callable(pre_publish_verifier):
         raise ValueError("pre-publish verifier is required")
     _validate_replay_bindings(
@@ -987,20 +1094,74 @@ def _write_checkpoint_artifacts_impl(
     root = published_root.parent / f".{published_root.name}.{os.getpid()}.{uuid.uuid4().hex}.staging"
     root.mkdir()
     try:
+        model_state = model.state_dict()
+        shared_state = _select_detached_state(model_state, lambda name: ".experts." not in name)
+        optimizer_state_payload = optimizer.state_dict()
+        if max_transient_scratch_bytes is not None:
+            shard_storage_lower_bounds = {
+                "shared-model.pt": _unique_tensor_storage_bytes(shared_state),
+                "optimizer-state.pt": _unique_tensor_storage_bytes(optimizer_state_payload),
+                "replay-state.pt": _unique_tensor_storage_bytes(rng_state),
+                **{
+                    f"expert-{name}.pt": _unique_tensor_storage_bytes(
+                        _select_detached_state(
+                            model_state,
+                            lambda key, selected=name: f".experts.{selected}." in key,
+                        )
+                    )
+                    for name in EXPERT_NAMES
+                },
+            }
+            for shard_name, lower_bound in shard_storage_lower_bounds.items():
+                if lower_bound > max_transient_scratch_bytes:
+                    raise RuntimeError(
+                        f"checkpoint {shard_name} tensor-storage lower bound "
+                        f"{lower_bound} exceeds transient scratch cap "
+                        f"{max_transient_scratch_bytes}"
+                    )
         _write_json_atomic(
             root,
             _STAGING_LEASE,
             {"pid": os.getpid(), "started_at_ns": time.time_ns()},
+            max_transient_scratch_bytes=max_transient_scratch_bytes,
         )
-        model_state = model.state_dict()
-        shared_state = _select_detached_state(model_state, lambda name: ".experts." not in name)
-        shared = _write_atomic(
+        shared_model = _write_atomic(
             root,
-            "shared.pt",
-            lambda handle: torch.save({"model": shared_state, "optimizer": optimizer.state_dict(), "optimizer_contract": optimizer_contract, "optimizer_realization": optimizer_realization}, handle),
+            "shared-model.pt",
+            lambda handle: torch.save({"model": shared_state}, handle),
+            max_transient_scratch_bytes=max_transient_scratch_bytes,
         )
-        shards = [_record(shared, root, role="shared_model_and_optimizer")]
-        replay = _write_atomic(root, "replay-state.pt", lambda handle: torch.save({"rng_state": {name: state.detach().cpu() for name, state in rng_state.items()}, "data_cursor": dict(data_cursor)}, handle))
+        optimizer_state_path = _write_atomic(
+            root,
+            "optimizer-state.pt",
+            lambda handle: torch.save(
+                {
+                    "optimizer": optimizer_state_payload,
+                    "optimizer_contract": optimizer_contract,
+                    "optimizer_realization": optimizer_realization,
+                },
+                handle,
+            ),
+            max_transient_scratch_bytes=max_transient_scratch_bytes,
+        )
+        shards = [
+            _record(shared_model, root, role="shared_model"),
+            _record(optimizer_state_path, root, role="optimizer_state"),
+        ]
+        replay = _write_atomic(
+            root,
+            "replay-state.pt",
+            lambda handle: torch.save(
+                {
+                    "rng_state": {
+                        name: state.detach().cpu() for name, state in rng_state.items()
+                    },
+                    "data_cursor": dict(data_cursor),
+                },
+                handle,
+            ),
+            max_transient_scratch_bytes=max_transient_scratch_bytes,
+        )
         shards.append(_record(replay, root, role="replay_state"))
         expert_checkpoint_sha256: dict[str, str] = {}
         for name in EXPERT_NAMES:
@@ -1022,6 +1183,7 @@ def _write_checkpoint_artifacts_impl(
                     lambda handle, selected=name, selected_state=state: torch.save(
                         {"expert": selected, "model": selected_state}, handle
                     ),
+                    max_transient_scratch_bytes=max_transient_scratch_bytes,
                 )
             record = _record(path, root, role=f"expert_{name}", publication_mode=publication_mode)
             shards.append(record)
@@ -1034,8 +1196,8 @@ def _write_checkpoint_artifacts_impl(
         if specialist_lineage is not None:
             lineage, manifest_genesis = preflight_lineage, preflight_genesis
         manifest = {
-            "schema_version": "ember-sparse-checkpoint-v4" if lineage is not None else "ember-sparse-checkpoint-v3",
-            "contract_version": 4 if lineage is not None else 3,
+            "schema_version": "ember-sparse-checkpoint-v5",
+            "contract_version": 5,
             "architecture_revision": "ember-sparse-3b-v2",
             "architecture": {
                 "revision": "ember-sparse-3b-v2",
@@ -1056,7 +1218,8 @@ def _write_checkpoint_artifacts_impl(
             "expert_genesis_sha256": manifest_genesis,
             "expert_checkpoint_sha256": expert_checkpoint_sha256,
             "expert_parameter_sha256": expert_parameter_sha256,
-            "shared_optimizer_shard_sha256": shards[0]["sha256"],
+            "shared_model_shard_sha256": shards[0]["sha256"],
+            "optimizer_state_shard_sha256": shards[1]["sha256"],
             "optimizer_contract": optimizer_contract,
             "optimizer_realization": optimizer_realization,
             "shards": shards,
@@ -1065,7 +1228,12 @@ def _write_checkpoint_artifacts_impl(
             manifest["lineage"] = lineage
         if host_commit_plan is not None:
             manifest["host_commit_preflight"] = host_commit_plan
-        manifest_path = _write_json_atomic(root, "checkpoint-manifest.json", manifest)
+        manifest_path = _write_json_atomic(
+            root,
+            "checkpoint-manifest.json",
+            manifest,
+            max_transient_scratch_bytes=max_transient_scratch_bytes,
+        )
         logical_serialized_bytes = sum(
             path.stat().st_size
             for path in root.rglob("*")
@@ -1135,6 +1303,7 @@ def write_checkpoint_artifacts(
     optimizer_contract: Mapping[str, Any] | None = None,
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
+    max_transient_scratch_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
     pre_publish_verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -1151,6 +1320,7 @@ def write_checkpoint_artifacts(
         optimizer_contract=optimizer_contract,
         specialist_lineage=specialist_lineage,
         max_serialized_bytes=max_serialized_bytes,
+        max_transient_scratch_bytes=max_transient_scratch_bytes,
         host_commit_reserve_bytes=host_commit_reserve_bytes,
         pre_publish_verifier=pre_publish_verifier,
     )
@@ -1186,9 +1356,27 @@ def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict
                 raise ValueError(f"checkpoint expert shard hash mismatch: {name}")
             raise ValueError(f"checkpoint shard hash mismatch: {relative}")
         records[relative] = item
-    expected_paths = {"shared.pt", "replay-state.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
+    schema_version = receipt.get("schema_version")
+    if schema_version == "ember-sparse-checkpoint-v5":
+        expected_paths = {
+            "shared-model.pt",
+            "optimizer-state.pt",
+            "replay-state.pt",
+            *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+        }
+    elif schema_version in {
+        "ember-sparse-checkpoint-v3",
+        "ember-sparse-checkpoint-v4",
+    }:
+        expected_paths = {
+            "shared.pt",
+            "replay-state.pt",
+            *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+        }
+    else:
+        raise ValueError("checkpoint schema version is unsupported")
     if set(records) != expected_paths:
-        raise ValueError("checkpoint does not contain exactly the shared and four expert shards")
+        raise ValueError("checkpoint shard set is not closed for its schema version")
     return records
 
 
@@ -1210,8 +1398,13 @@ def load_checkpoint_artifacts(
     """Verify every manifest/shard/payload before mutating model or optimizer."""
 
     root = _admitted_checkpoint_root(root)
-    if receipt.get("schema_version") not in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
-        raise ValueError("checkpoint optimizer contract requires a v3 or v4 manifest")
+    schema_version = receipt.get("schema_version")
+    if schema_version not in {
+        "ember-sparse-checkpoint-v3",
+        "ember-sparse-checkpoint-v4",
+        "ember-sparse-checkpoint-v5",
+    }:
+        raise ValueError("checkpoint optimizer contract requires a v3, v4, or v5 manifest")
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
     optimizer_realization = _validate_optimizer_realization(optimizer_contract, receipt.get("optimizer_realization"))
     if optimizer is not None:
@@ -1226,6 +1419,19 @@ def load_checkpoint_artifacts(
     if not isinstance(active, list) or len(active) != 1 or active[0] not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("checkpoint receipt lacks exactly one declared active expert")
     records = _validated_records(root, receipt)
+    if schema_version == "ember-sparse-checkpoint-v5":
+        if (
+            receipt.get("shared_model_shard_sha256")
+            != records["shared-model.pt"]["sha256"]
+            or receipt.get("optimizer_state_shard_sha256")
+            != records["optimizer-state.pt"]["sha256"]
+        ):
+            raise ValueError("v5 checkpoint does not bind its split shared and optimizer shards")
+    elif (
+        receipt.get("shared_optimizer_shard_sha256")
+        != records["shared.pt"]["sha256"]
+    ):
+        raise ValueError("legacy checkpoint does not bind its shared optimizer shard")
 
     identity = receipt.get("checkpoint")
     if not isinstance(identity, dict) or not isinstance(identity.get("byte_sha256"), str):
@@ -1251,11 +1457,23 @@ def load_checkpoint_artifacts(
     for name, state in replay_payload["rng_state"].items():
         if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
             raise ValueError(f"checkpoint replay RNG state is invalid: {name}")
-    shared_payload = payloads["shared.pt"]
-    if not isinstance(shared_payload, dict) or not isinstance(shared_payload.get("optimizer"), dict):
-        raise ValueError("shared checkpoint does not contain optimizer state")
-    if shared_payload.get("optimizer_contract") != optimizer_contract or shared_payload.get("optimizer_realization") != optimizer_realization:
-        raise ValueError("shared checkpoint optimizer realization does not match manifest")
+    if schema_version == "ember-sparse-checkpoint-v5":
+        shared_payload = payloads["shared-model.pt"]
+        optimizer_payload = payloads["optimizer-state.pt"]
+    else:
+        shared_payload = payloads["shared.pt"]
+        optimizer_payload = shared_payload
+    if (
+        not isinstance(shared_payload, dict)
+        or not isinstance(optimizer_payload, dict)
+        or not isinstance(optimizer_payload.get("optimizer"), dict)
+    ):
+        raise ValueError("checkpoint does not contain split model and optimizer state")
+    if (
+        optimizer_payload.get("optimizer_contract") != optimizer_contract
+        or optimizer_payload.get("optimizer_realization") != optimizer_realization
+    ):
+        raise ValueError("checkpoint optimizer realization does not match manifest")
     expected_state = model.state_dict()
     shared_expected = {key: value for key, value in expected_state.items() if ".experts." not in key}
     shared_state = _validate_model_state(shared_expected, shared_payload.get("model"), label="shared")
@@ -1276,7 +1494,7 @@ def load_checkpoint_artifacts(
     for state in expert_states.values():
         model.load_state_dict(state, strict=False)
     if optimizer is not None:
-        optimizer.load_state_dict(shared_payload["optimizer"])
+        optimizer.load_state_dict(optimizer_payload["optimizer"])
     model._activate_expert(active[0])
     torch.set_rng_state(replay_payload["rng_state"]["cpu"])
     if torch.cuda.is_available():
@@ -1291,16 +1509,21 @@ def load_checkpoint_model_only_transition(
 ) -> dict[str, Any]:
     """Stream a verified historical checkpoint without reusing optimizer state.
 
-    The historical shared shard physically contains model and optimizer state.
-    It is loaded once, its model tensors are applied, and its optimizer payload
-    is discarded without calling ``Optimizer.load_state_dict``. Expert shards
-    are then loaded and released one at a time so host demand is bounded by the
-    largest single shard rather than the whole checkpoint bundle.
+    Historical v3/v4 shared shards physically contain model and optimizer
+    state.  V5 stores those payloads separately, so this path verifies the
+    optimizer authority from the manifest but never opens the optimizer shard.
+    Expert shards are loaded and released one at a time so host demand is
+    bounded by the largest single model shard rather than the whole bundle.
     """
 
     root = _admitted_checkpoint_root(root)
-    if receipt.get("schema_version") != "ember-sparse-checkpoint-v3":
-        raise ValueError("model-only optimizer transition requires a v3 source checkpoint")
+    schema_version = receipt.get("schema_version")
+    if schema_version not in {
+        "ember-sparse-checkpoint-v3",
+        "ember-sparse-checkpoint-v4",
+        "ember-sparse-checkpoint-v5",
+    }:
+        raise ValueError("model-only optimizer transition requires a v3, v4, or v5 source checkpoint")
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
     expected_optimizer = {
         "name": "paged_8bit_adamw",
@@ -1329,11 +1552,15 @@ def load_checkpoint_model_only_transition(
         if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
             raise ValueError(f"checkpoint replay RNG state is invalid: {name}")
 
-    shared_payload = torch.load(root / "shared.pt", map_location="cpu", weights_only=False, mmap=True)
-    if not isinstance(shared_payload, dict) or not isinstance(shared_payload.get("optimizer"), dict):
-        raise ValueError("shared checkpoint does not contain optimizer state")
-    if shared_payload.get("optimizer_contract") != optimizer_contract or shared_payload.get("optimizer_realization") != optimizer_realization:
-        raise ValueError("shared checkpoint optimizer realization does not match manifest")
+    shared_name = "shared-model.pt" if schema_version == "ember-sparse-checkpoint-v5" else "shared.pt"
+    shared_payload = torch.load(root / shared_name, map_location="cpu", weights_only=False, mmap=True)
+    if not isinstance(shared_payload, dict):
+        raise ValueError("shared checkpoint payload is invalid")
+    if schema_version != "ember-sparse-checkpoint-v5":
+        if not isinstance(shared_payload.get("optimizer"), dict):
+            raise ValueError("shared checkpoint does not contain optimizer state")
+        if shared_payload.get("optimizer_contract") != optimizer_contract or shared_payload.get("optimizer_realization") != optimizer_realization:
+            raise ValueError("shared checkpoint optimizer realization does not match manifest")
     shared_expected = {key: value for key, value in expected_state.items() if ".experts." not in key}
     shared_state = _validate_model_state(shared_expected, shared_payload.get("model"), label="shared")
     model.load_state_dict(shared_state, strict=False)
