@@ -15,6 +15,7 @@ from typing import Any, Iterable
 
 DOMAINS = ("mathematics", "statistics", "physics", "computer_science", "ml_ai", "training_infrastructure", "formal_logic", "software_engineering", "data_evaluation", "scientific_method", "application_worlds")
 LICENSES = {"CC0-1.0", "CC-BY-4.0", "MIT", "Apache-2.0", "BSD-3-Clause", "PDDL-1.0"}
+SOURCE_LICENSES = LICENSES | {"CC-BY-SA-4.0", "CC-BY-NC-4.0"}
 _UNRESOLVED_EVIDENCE = ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]
 
 def _root(rows: Iterable[dict[str, Any]], split: str) -> str:
@@ -59,7 +60,7 @@ def source_inventory_descriptor(*, source_id: str, domain: str, split: str, prov
         raise ValueError("wave source receipt is not closed")
     license_label = receipt_entry.get("license")
     license_spdx = _WAVE_LICENSES.get(license_label.casefold() if isinstance(license_label, str) else "")
-    if license_spdx not in LICENSES:
+    if license_spdx not in SOURCE_LICENSES:
         raise ValueError("wave source license is not permitted")
     if (not isinstance(source_id, str) or PurePosixPath(source_id).name != source_id
             or "\\" in source_id or source_id in {"", ".", ".."}):
@@ -135,7 +136,7 @@ def record_source_custody(
         raise ValueError("source custody source ID is invalid")
     if descriptor.get("domain") not in DOMAINS or descriptor.get("split") not in {"train", "heldout"}:
         raise ValueError("source custody domain or split is invalid")
-    if descriptor.get("license_spdx") not in LICENSES:
+    if descriptor.get("license_spdx") not in SOURCE_LICENSES:
         raise ValueError("source custody license is not permitted")
     for field in ("source_url", "provenance_origin_id", "human_provenance_basis", "fetched_ts", "selection_rule"):
         if not isinstance(descriptor.get(field), str) or not descriptor[field]:
@@ -178,7 +179,7 @@ def record_source_custody_file(
         raise ValueError("source custody source ID is invalid")
     if descriptor.get("domain") not in DOMAINS or descriptor.get("split") not in {"train", "heldout"}:
         raise ValueError("source custody domain or split is invalid")
-    if descriptor.get("license_spdx") not in LICENSES:
+    if descriptor.get("license_spdx") not in SOURCE_LICENSES:
         raise ValueError("source custody license is not permitted")
     for field in ("source_url", "provenance_origin_id", "human_provenance_basis", "fetched_ts", "selection_rule"):
         if not isinstance(descriptor.get(field), str) or not descriptor[field]:
@@ -459,7 +460,7 @@ def _validate(rows: list[dict[str, Any]], frozen: set[str]) -> None:
         if not isinstance(source_id, str) or not source_id or source_id in source_ids: raise ValueError("source ID is not globally unique")
         if not isinstance(origin_id, str) or not origin_id: raise ValueError("source provenance origin is invalid")
         if domain not in DOMAINS or row["split"] not in {"train","heldout"}: raise ValueError("source domain or split is invalid")
-        if row["license_spdx"] not in LICENSES: raise ValueError("source license is not permitted")
+        if row["license_spdx"] not in SOURCE_LICENSES: raise ValueError("source license is not permitted")
         if not isinstance(content,str) or len(content)!=64 or content.lower()!=content: raise ValueError("source content hash is invalid")
         if content in seen: raise ValueError("duplicate source content is forbidden")
         if content in frozen: raise ValueError("source contaminates frozen eval")

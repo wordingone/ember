@@ -546,6 +546,20 @@ class TextLabCorpusTests(unittest.TestCase):
                 provenance_origin_id="blocked-origin", receipt_entry=blocked,
             )
 
+    def test_source_inventory_accepts_authorized_sharealike_license(self):
+        from text_lab_corpus import source_inventory_descriptor
+        entry = {
+            "source_url": "https://example.invalid/open-text", "sha256": sha(b"open-text"),
+            "bytes": len(b"open-text"), "license": "CC-BY-SA 4.0",
+            "human_provenance_basis": "human-authored open text",
+            "fetched_ts": "2026-07-07T00:00:00Z", "selection_rule": "authorized-wave-rule",
+        }
+        descriptor = source_inventory_descriptor(
+            source_id="open-text", domain="application_worlds", split="train",
+            provenance_origin_id="open-text:1", receipt_entry=entry,
+        )
+        self.assertEqual(descriptor["license_spdx"], "CC-BY-SA-4.0")
+
     def test_source_inventory_normalizes_existing_gutenberg_receipt_encoding(self):
         from text_lab_corpus import source_inventory_descriptor
         entry = {
