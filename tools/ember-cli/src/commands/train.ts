@@ -217,7 +217,35 @@ const CERTIFIED_EXECUTION_RECEIPT_FIELDS = [
   "exit_code",
   "artifact_root",
   "runner_receipt",
+  "dispatch_job_id",
+  "dispatch_pid",
+  "dispatch_manifest_sha256",
+  "preflight_receipt",
+  "preflight_receipt_sha256",
+  "emberd_binary_sha256",
+  "emberd_source_sha256",
   "claim_scope",
+].sort();
+const EMBERD_PREFLIGHT_RECEIPT_FIELDS = [
+  "schema_version",
+  "result",
+  "job_id",
+  "source_commit",
+  "observed_at_ms",
+  "not_before_ms",
+  "expires_at_ms",
+  "dispatch_manifest_sha256",
+  "program",
+  "bindings",
+  "args_sha256",
+  "env_sha256",
+  "custody_root",
+  "storage_reserves",
+  "vram_reserve",
+  "maximum_job_memory_bytes",
+  "host_commit",
+  "emberd_identity",
+  "governed_canary",
 ].sort();
 const CERTIFIED_EXECUTION_CLAIM_FIELDS = [
   "capability_claimed",
@@ -235,6 +263,7 @@ function _verifyCertifiedExecutionReceipt(
   const expectedSha256 = execution["execution_receipt_sha256"];
   const artifactRoot = execution["artifact_root"];
   if (
+    execution["outcome"] !== "DISPATCHED" ||
     typeof path !== "string" ||
     !isAbsolute(path) ||
     typeof expectedSha256 !== "string" ||
@@ -272,7 +301,75 @@ function _verifyCertifiedExecutionReceipt(
     receipt["exit_code"] !== 0 ||
     receipt["artifact_root"] !== artifactRoot
   ) {
-    throw new Error("certified execution receipt does not bind the completed run");
+    throw new Error("certified execution receipt does not bind the Emberd dispatch");
+  }
+  const dispatchJobId = receipt["dispatch_job_id"];
+  const dispatchPid = receipt["dispatch_pid"];
+  const manifestSha256 = receipt["dispatch_manifest_sha256"];
+  const preflightPath = receipt["preflight_receipt"];
+  const preflightSha256 = receipt["preflight_receipt_sha256"];
+  const emberdBinarySha256 = receipt["emberd_binary_sha256"];
+  const emberdSourceSha256 = receipt["emberd_source_sha256"];
+  if (
+    typeof dispatchJobId !== "string" ||
+    dispatchJobId.length === 0 ||
+    !Number.isSafeInteger(dispatchPid) ||
+    (dispatchPid as number) < 1 ||
+    typeof preflightPath !== "string" ||
+    !isAbsolute(preflightPath) ||
+    [manifestSha256, preflightSha256, emberdBinarySha256, emberdSourceSha256]
+      .some((value) => typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value))
+  ) {
+    throw new Error("certified execution receipt has invalid Emberd dispatch identity");
+  }
+  const preflightBytes = readReceipt(preflightPath);
+  if (
+    createHash("sha256").update(preflightBytes).digest("hex") !==
+    preflightSha256
+  ) {
+    throw new Error("Emberd preflight receipt hash does not match receipt bytes");
+  }
+  let preflightValue: unknown;
+  try {
+    preflightValue = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(preflightBytes),
+    );
+  } catch {
+    throw new Error("Emberd preflight receipt bytes are not strict UTF-8 JSON");
+  }
+  if (
+    typeof preflightValue !== "object" ||
+    preflightValue === null ||
+    Array.isArray(preflightValue)
+  ) {
+    throw new Error("Emberd preflight receipt is not an object");
+  }
+  const preflight = preflightValue as Record<string, unknown>;
+  const preflightFields = Object.keys(preflight).sort();
+  if (
+    preflightFields.length !== EMBERD_PREFLIGHT_RECEIPT_FIELDS.length ||
+    preflightFields.some(
+      (field, index) => field !== EMBERD_PREFLIGHT_RECEIPT_FIELDS[index],
+    )
+  ) {
+    throw new Error("Emberd preflight receipt fields are not closed");
+  }
+  const emberdIdentity = preflight["emberd_identity"];
+  if (
+    preflight["schema_version"] !== "emberd-dispatch-preflight-v1" ||
+    preflight["result"] !== "PREFLIGHT_PASSED" ||
+    preflight["job_id"] !== dispatchJobId ||
+    preflight["source_commit"] !== receipt["public_master_sha"] ||
+    preflight["dispatch_manifest_sha256"] !== manifestSha256 ||
+    typeof emberdIdentity !== "object" ||
+    emberdIdentity === null ||
+    Array.isArray(emberdIdentity) ||
+    (emberdIdentity as Record<string, unknown>)["binary_sha256"] !==
+      emberdBinarySha256 ||
+    (emberdIdentity as Record<string, unknown>)["source_sha256"] !==
+      emberdSourceSha256
+  ) {
+    throw new Error("Emberd preflight receipt does not bind the certified dispatch");
   }
   const claims = receipt["claim_scope"];
   if (
@@ -525,7 +622,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         return {
           type: "message" as const,
           message: [
-            "certified bounded canary process completed.",
+            "certified bounded canary was accepted by Emberd.",
             `execution receipt: ${verifiedExecution.path}`,
             `artifact root: ${verifiedExecution.artifactRoot}`,
           ].join("\n"),
