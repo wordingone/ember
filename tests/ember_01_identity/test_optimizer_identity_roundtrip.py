@@ -61,6 +61,7 @@ from test_validate_identity import (  # noqa: E402
 from optimizer_identity_binding import (  # noqa: E402
     OptimizerIdentityMismatch,
     bind_optimizer_identity,
+    canonical_realization_receipt_sha256,
     verify_optimizer_identity_binding,
 )
 
@@ -78,6 +79,10 @@ REALIZATION_RECEIPT = {
     "implementation": "bitsandbytes.optim.AdamW8bit",
     "hyperparameters": {"learning_rate": 1e-4, "weight_decay": 0.1},
     "state_format": "bitsandbytes-device-resident-8bit-adamw-state-dict-v1",
+    "implementation_source_sha256": "d" * 64,
+    "param_group_mapping_convention": "by-module-qualified-name",
+    "param_name_optimizer_id_mapping_sha256": "e" * 64,
+    "trusted_verifier_id": "fixture-optimizer-realization-verifier",
     "model_config_sha256": "a" * 64,
 }
 
@@ -149,8 +154,14 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
     def test_owned_optimizer_identity_round_trips(self) -> None:
         payload, receipts = admitted_manifest()
         authority = artifact_authority(payload)
-        # The wiring module derives the SAME digest the artifact authority admits, from
-        # the actual optimizer state bytes, gated by a signed REALIZED receipt.
+        # The production admission path consumes the content-addressed, signed
+        # realization receipt installed by admitted_manifest.
+        result = validate_manifest(payload, receipt_bundle=receipts, **authority)
+        self.assertEqual(result, payload)
+
+        # The standalone wiring module independently derives and verifies its complete
+        # optimizer identity. Its local REALIZATION_RECEIPT is not allowed to impersonate
+        # the separately signed production-admission receipt bundle.
         rebound = bind_optimizer_identity(
             payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
         )
@@ -158,8 +169,13 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
             rebound["training"]["optimizer_state_sha256"],
             payload["training"]["optimizer_state_sha256"],
         )
-        result = validate_manifest(payload, receipt_bundle=receipts, **authority)
-        self.assertEqual(result, payload)
+        self.assertEqual(
+            rebound["training"]["optimizer_contract"],
+            self._valid_contract(),
+        )
+        verify_optimizer_identity_binding(
+            rebound, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
+        )
 
     # ---- fail-closed negatives at the REAL consumer --------------------------------
     def test_tampered_optimizer_state_bytes_flagged(self) -> None:
@@ -188,6 +204,7 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
     def test_binding_module_round_trips_and_fails_closed(self) -> None:
         payload, _ = admitted_manifest()
         artifact_authority(payload)  # sets training.optimizer_state_sha256 = sha256(bytes)
+        payload["training"]["optimizer_contract"] = self._valid_contract()
 
         # Silent on honest bytes + a REALIZED receipt.
         verify_optimizer_identity_binding(
@@ -234,37 +251,129 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
         with self.assertRaises(OptimizerIdentityMismatch):
             bind_optimizer_identity(payload, OPTIMIZER_STATE_BYTES, unnamed)
 
-    # ---- cond3 CONTRACT-half: optimizer contract identity binds to the receipt --------
+    # ---- cond3 CONTRACT-half + B4 REQUIRED-half: optimizer contract identity binds to
+    # the receipt AND (ember01plan.md SS B4 L1061-1082) is now REQUIRED -- never
+    # legally absent -- for a manifest with identity.disposition == "OWNED_ADMITTED"
+    # (current owned-admission legs). Today, before this PR, an absent
+    # optimizer_contract passed identity validation unconditionally; that is the
+    # defect this battery proves closed. -----------------------------------------
+
+    # The 5 B4 residual identity fields (ember01plan.md item 5 / SS B4 L1070-1082):
+    # optimizer implementation source hash, param-group mapping convention,
+    # param-name<->optimizer-local-ID mapping identity, realization-receipt identity,
+    # and trusted-verifier identity. Together with the 3 original contract fields
+    # (implementation / hyperparameters / state_format) these are the 8 fields
+    # schema-v1.json's training.optimizer_contract now requires in full whenever a
+    # contract is declared at all.
+    B4_RESIDUAL_CONTRACT_FIELDS: tuple[str, ...] = (
+        "implementation_source_sha256",
+        "param_group_mapping_convention",
+        "param_name_optimizer_id_mapping_sha256",
+        "realization_receipt_sha256",
+        "trusted_verifier_id",
+    )
+    ALL_CONTRACT_FIELDS: tuple[str, ...] = (
+        "implementation",
+        "hyperparameters",
+        "state_format",
+    ) + B4_RESIDUAL_CONTRACT_FIELDS
+
     @staticmethod
     def _valid_contract() -> dict:
         # The manifest optimizer contract identity that equals the signed REALIZED
-        # ember-optimizer-realization-v1 receipt scripts/ember_restart/contract.py binds.
+        # ember-optimizer-realization-v1 receipt scripts/ember_restart/contract.py binds
+        # (the first 3 fields), PLUS the 5 B4 residual identity fields REQUIRED as of
+        # this PR (ember01plan.md SS B4 L1061-1082). A complete contract -- every one
+        # of the 8 fields present and well-formed -- is the GREEN case; the mutation
+        # battery below deletes one field at a time off a deep copy of this dict.
         return {
             "implementation": REALIZATION_RECEIPT["implementation"],
             "hyperparameters": dict(REALIZATION_RECEIPT["hyperparameters"]),
             "state_format": REALIZATION_RECEIPT["state_format"],
+            "implementation_source_sha256": REALIZATION_RECEIPT[
+                "implementation_source_sha256"
+            ],
+            "param_group_mapping_convention": REALIZATION_RECEIPT[
+                "param_group_mapping_convention"
+            ],
+            "param_name_optimizer_id_mapping_sha256": REALIZATION_RECEIPT[
+                "param_name_optimizer_id_mapping_sha256"
+            ],
+            "realization_receipt_sha256": canonical_realization_receipt_sha256(
+                REALIZATION_RECEIPT
+            ),
+            "trusted_verifier_id": REALIZATION_RECEIPT["trusted_verifier_id"],
         }
 
     def test_optimizer_contract_round_trips_through_real_consumer(self) -> None:
-        # POSITIVE: a manifest carrying a well-formed optimizer contract bound to the
-        # REALIZED receipt validates through the real consumer AND the wiring module.
+        # POSITIVE (GREEN): production admission validates the complete optimizer
+        # contract against its content-addressed signed receipt.
         payload, receipts = admitted_manifest()
         authority = artifact_authority(payload)
-        payload["training"]["optimizer_contract"] = self._valid_contract()
         result = validate_manifest(payload, receipt_bundle=receipts, **authority)
         self.assertEqual(result, payload)
+
+        # The standalone wiring module is exercised separately with its own REALIZED
+        # receipt; it does not borrow the production receipt bundle's authority.
+        contract = self._valid_contract()
+        self.assertEqual(set(contract), set(self.ALL_CONTRACT_FIELDS))
+        standalone = copy.deepcopy(payload)
+        standalone["training"]["optimizer_contract"] = contract
         verify_optimizer_identity_binding(
-            payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
+            standalone, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
         )
 
-    def test_optimizer_contract_absent_still_valid(self) -> None:
-        # ADDITIVE: an optimizer contract is optional; its absence never fails the
-        # existing state-half gate.
+    def test_optimizer_contract_absent_still_valid_when_not_owned_admitted(self) -> None:
+        # ADDITIVE (unchanged, narrowed): a manifest whose disposition is NOT
+        # OWNED_ADMITTED may still omit the optimizer contract entirely -- the
+        # REQUIRED-half gate below is scoped to current owned-admission legs only,
+        # never a blanket requirement (ember01plan.md SS B4: "make the contract
+        # REQUIRED for current owned-admission legs").
         payload, receipts = admitted_manifest()
         authority = artifact_authority(payload)
+        del payload["training"]["optimizer_contract"]
+        payload["identity"]["disposition"] = "OWNED_CANDIDATE"
+        payload["identity"]["selected_as_owned_ember"] = False
+        payload["evaluation"]["counts_toward_owned_completion"] = False
         self.assertNotIn("optimizer_contract", payload["training"])
         result = validate_manifest(payload, receipt_bundle=receipts, **authority)
         self.assertEqual(result, payload)
+
+    def test_owned_admitted_optimizer_contract_absent_fails_closed(self) -> None:
+        # NEGATIVE (RED, THE B4 DEFECT): before this PR, an OWNED_ADMITTED manifest
+        # with NO training.optimizer_contract at all passed identity validation
+        # unconditionally. It must now fail closed, naming the omission, at BOTH
+        # enforcement layers: the JSON-schema if/then (schema-v1.json
+        # b4_governed_conditional_requirement) and the named Python finding
+        # (validate_identity.py's admission.optimizer_contract_missing).
+        payload, receipts = admitted_manifest()
+        authority = artifact_authority(payload)
+        del payload["training"]["optimizer_contract"]
+        self.assertEqual(payload["identity"]["disposition"], "OWNED_ADMITTED")
+        codes = _error_codes(payload, receipt_bundle=receipts, **authority)
+        self.assertIn("admission.optimizer_contract_missing", codes)
+        self.assertIn("schema.validation", codes)
+
+    def test_optimizer_contract_residual_field_omission_mutation_battery(self) -> None:
+        # MUTATION BATTERY (RED-per-field, frozen-spec-required): for EACH of the 8
+        # required optimizer_contract fields (3 original + 5 B4 residual), a manifest
+        # that declares a contract omitting JUST that one field must fail closed
+        # naming training.optimizer_contract_invalid -- never a silent pass on a
+        # partial contract. The complete contract (all 8 present) is proved GREEN by
+        # test_optimizer_contract_round_trips_through_real_consumer above.
+        for omitted_field in self.ALL_CONTRACT_FIELDS:
+            with self.subTest(omitted_field=omitted_field):
+                payload, receipts = admitted_manifest()
+                authority = artifact_authority(payload)
+                contract = self._valid_contract()
+                del contract[omitted_field]
+                payload["training"]["optimizer_contract"] = contract
+                codes = _error_codes(payload, receipt_bundle=receipts, **authority)
+                self.assertIn(
+                    "training.optimizer_contract_invalid",
+                    codes,
+                    msg=f"omitting {omitted_field!r} did not fail closed",
+                )
 
     def test_optimizer_contract_malformed_flagged_by_consumer(self) -> None:
         # NEGATIVE: a contract missing a concrete field is RED at the real consumer with a
@@ -300,6 +409,53 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
                 payload, OPTIMIZER_STATE_BYTES, REALIZATION_RECEIPT
             )
         self.assertIn("training.optimizer_contract_implementation", str(ctx.exception))
+
+    def test_optimizer_contract_residual_mismatch_battery_fails_closed(self) -> None:
+        mutations = {
+            "implementation_source_sha256": "0" * 64,
+            "param_group_mapping_convention": "foreign-ordering",
+            "param_name_optimizer_id_mapping_sha256": "1" * 64,
+            "realization_receipt_sha256": "2" * 64,
+            "trusted_verifier_id": "foreign-verifier",
+        }
+        for field, mutated_value in mutations.items():
+            with self.subTest(field=field):
+                payload, _ = admitted_manifest()
+                artifact_authority(payload)
+                contract = self._valid_contract()
+                contract[field] = mutated_value
+                payload["training"]["optimizer_contract"] = contract
+                with self.assertRaises(OptimizerIdentityMismatch) as ctx:
+                    verify_optimizer_identity_binding(
+                        payload,
+                        OPTIMIZER_STATE_BYTES,
+                        REALIZATION_RECEIPT,
+                    )
+                self.assertIn(
+                    f"training.optimizer_contract_{field}",
+                    str(ctx.exception),
+                )
+
+    def test_realization_receipt_residual_omission_battery_fails_closed(self) -> None:
+        for field in (
+            "implementation_source_sha256",
+            "param_group_mapping_convention",
+            "param_name_optimizer_id_mapping_sha256",
+            "trusted_verifier_id",
+        ):
+            with self.subTest(field=field):
+                payload, _ = admitted_manifest()
+                artifact_authority(payload)
+                payload["training"]["optimizer_contract"] = self._valid_contract()
+                receipt = dict(REALIZATION_RECEIPT)
+                del receipt[field]
+                with self.assertRaises(OptimizerIdentityMismatch) as ctx:
+                    verify_optimizer_identity_binding(
+                        payload,
+                        OPTIMIZER_STATE_BYTES,
+                        receipt,
+                    )
+                self.assertIn(field, str(ctx.exception))
 
     def test_optimizer_contract_missing_field_fails_closed_in_binding(self) -> None:
         # NEGATIVE: the wiring module fails closed when a declared contract omits a field.

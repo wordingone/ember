@@ -21,12 +21,12 @@ re-derives (never restates) their invariants:
   ``admission.artifact_hash_mismatch`` for ``training.optimizer_state``). That is the
   state-bytes half of the optimizer identity: the digest in the manifest must equal the
   sha256 of the optimizer state bytes actually admitted.
-- ``scripts/ember_restart/contract.py`` binds a signed
-  ``ember-optimizer-realization-v1`` receipt (``result == "REALIZED"``) whose
-  ``implementation`` / ``hyperparameters`` / ``state_format`` must match the optimizer
-  the checkpoint manifest declares (contract.py ~line 795-809, error
-  ``training.optimizer_receipt.<field>: binding mismatch``). That is the contract half:
-  the optimizer that produced the state is the realized one, not an arbitrary optimizer.
+- A signed ``ember-optimizer-realization-v1`` receipt (``result == "REALIZED"``)
+  carries the realized implementation, hyperparameters, state format, implementation
+  source, parameter-group convention, parameter-name/local-ID mapping, and trusted
+  verifier identity. The identity contract binds each field plus a canonical
+  content-address of that receipt. That is the contract half: the optimizer that
+  produced the state is the realized one, not an arbitrary optimizer.
 
 ``bind_optimizer_identity`` projects the state-bytes digest into the manifest, deriving
 it from the actual optimizer state bytes (never hand-typed) and only after a signed
@@ -42,6 +42,7 @@ tests/ember_01_identity/test_optimizer_identity_roundtrip.py.
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any, Mapping
 
 # The optimizer-realization schema + result that scripts/ember_restart/contract.py binds
@@ -50,13 +51,23 @@ from typing import Any, Mapping
 OPTIMIZER_REALIZATION_SCHEMA = "ember-optimizer-realization-v1"
 OPTIMIZER_REALIZATION_RESULT = "REALIZED"
 
-# The optimizer-contract fields contract.py cross-checks (implementation / hyperparameters
-# / state_format). Each must be present and concrete in the signed realization receipt
-# before its state bytes may be credited as the manifest's optimizer identity.
-OPTIMIZER_CONTRACT_FIELDS: tuple[str, ...] = (
+# Contract fields carried by the independently verified realization receipt. Each must
+# be present and concrete before its state bytes may be credited as the manifest's
+# optimizer identity. ``realization_receipt_sha256`` is deliberately excluded: it is
+# derived below from canonical receipt content rather than self-attested by the receipt.
+OPTIMIZER_RECEIPT_CONTRACT_FIELDS: tuple[str, ...] = (
     "implementation",
     "hyperparameters",
     "state_format",
+    "implementation_source_sha256",
+    "param_group_mapping_convention",
+    "param_name_optimizer_id_mapping_sha256",
+    "trusted_verifier_id",
+)
+
+OPTIMIZER_CONTRACT_FIELDS: tuple[str, ...] = (
+    *OPTIMIZER_RECEIPT_CONTRACT_FIELDS,
+    "realization_receipt_sha256",
 )
 
 
@@ -66,6 +77,17 @@ class OptimizerIdentityMismatch(ValueError):
 
 def _state_digest(optimizer_state_bytes: bytes) -> str:
     return hashlib.sha256(optimizer_state_bytes).hexdigest()
+
+
+def canonical_realization_receipt_sha256(receipt: Mapping[str, Any]) -> str:
+    """Content-address a realization receipt without depending on file formatting."""
+    canonical = json.dumps(
+        dict(receipt),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _require_realized_receipt(receipt: Mapping[str, Any]) -> None:
@@ -83,7 +105,7 @@ def _require_realized_receipt(receipt: Mapping[str, Any]) -> None:
             f"realization receipt result={result!r} is not "
             f"{OPTIMIZER_REALIZATION_RESULT!r}; refusing to bind an unrealized optimizer"
         )
-    for field in OPTIMIZER_CONTRACT_FIELDS:
+    for field in OPTIMIZER_RECEIPT_CONTRACT_FIELDS:
         value = receipt.get(field)
         if value is None or (isinstance(value, (str, Mapping)) and not value):
             raise OptimizerIdentityMismatch(
@@ -114,6 +136,13 @@ def bind_optimizer_identity(
     bound = dict(manifest)
     bound_training = dict(training)
     bound_training["optimizer_state_sha256"] = _state_digest(optimizer_state_bytes)
+    bound_training["optimizer_contract"] = {
+        field: realization_receipt[field]
+        for field in OPTIMIZER_RECEIPT_CONTRACT_FIELDS
+    }
+    bound_training["optimizer_contract"][
+        "realization_receipt_sha256"
+    ] = canonical_realization_receipt_sha256(realization_receipt)
     bound["training"] = bound_training
     return bound
 
@@ -157,7 +186,14 @@ def verify_optimizer_identity_binding(
     # every field must equal the signed REALIZED realization receipt's field (mirrors
     # contract.py's ``training.optimizer_receipt.<field>: binding mismatch``). A manifest
     # optimizer contract that diverges from the realized optimizer -- or omits a field --
-    # fails closed naming the exact field. Absent contract is legal (state-half only).
+    # fails closed naming the exact field. Absent contract is legal HERE (state-half
+    # only, this function does not gate on disposition) -- but as of B4
+    # (ember01plan.md SS B4 L1061-1082) an absent contract is NOT legal fleet-wide: a
+    # manifest with identity.disposition == "OWNED_ADMITTED" is rejected by
+    # validate_identity.validate_manifest's admission.optimizer_contract_missing check
+    # before this function is ever reached for that manifest's contract-half. This
+    # The binding below independently compares all realized evidence fields and the
+    # canonical receipt content address; schema completeness alone is insufficient.
     optimizer_contract = training.get("optimizer_contract")
     if optimizer_contract is not None:
         if not isinstance(optimizer_contract, Mapping):
@@ -165,7 +201,7 @@ def verify_optimizer_identity_binding(
                 "training.optimizer_contract is not an object; the optimizer contract "
                 "identity cannot be bound to the realization receipt"
             )
-        for field in OPTIMIZER_CONTRACT_FIELDS:
+        for field in OPTIMIZER_RECEIPT_CONTRACT_FIELDS:
             manifest_value = optimizer_contract.get(field)
             receipt_value = realization_receipt.get(field)
             if manifest_value is None or (
@@ -181,3 +217,14 @@ def verify_optimizer_identity_binding(
                     f"(manifest={manifest_value!r} != realized receipt={receipt_value!r}); "
                     "the manifest optimizer contract is not the realized optimizer"
                 )
+        manifest_receipt_sha = optimizer_contract.get("realization_receipt_sha256")
+        expected_receipt_sha = canonical_realization_receipt_sha256(
+            realization_receipt
+        )
+        if manifest_receipt_sha != expected_receipt_sha:
+            raise OptimizerIdentityMismatch(
+                "training.optimizer_contract_realization_receipt_sha256: "
+                f"binding mismatch (manifest={manifest_receipt_sha!r} != canonical "
+                f"realized receipt={expected_receipt_sha!r}); the manifest optimizer "
+                "contract is not bound to the supplied realization evidence"
+            )
