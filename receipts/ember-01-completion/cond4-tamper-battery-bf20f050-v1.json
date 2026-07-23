@@ -3,12 +3,12 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-07-23T15:51:30Z",
-  "implementation_commit": "69aa165a83c181265e2505157892ef4e275efdfe",
+  "generated_at": "2026-07-23T16:01:11Z",
+  "implementation_commit": "4b846475ee3eee3d71d149889735b41c95d2b5b5",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "211f285cecdddb507d46a57ca07bf19961ab16dbea744707dde9e95a8df06dc9"
+      "sha256": "a15ee1f023bedb90ebc49ca18e955501a42c392eb37becc0a0183af7584048c7"
     },
     "identity_validator": {
       "path": "scripts/ember_01_identity/validate_identity.py",
@@ -114,12 +114,12 @@
   },
   "verification": {
     "focused_completion_and_custody_tests": {
-      "passed": 48,
+      "passed": 49,
       "failed": 0
     },
     "clean_detached_replay": {
-      "checkout_commit": "69aa165a83c181265e2505157892ef4e275efdfe",
-      "external_receipt_sha256": "162ab1b0b445c844aa2f7f2a3b34c519fd9917242188a6af8faa88ae5ecff4e1",
+      "checkout_commit": "4b846475ee3eee3d71d149889735b41c95d2b5b5",
+      "external_receipt_sha256": "55994172790c5d3e6b0c67fe975efba1db9671a34722a555a3991127c2ef7d81",
       "leg3_state": "resolved-true",
       "leg4_state": "resolved-true",
       "leg4_axis_count": 8,
