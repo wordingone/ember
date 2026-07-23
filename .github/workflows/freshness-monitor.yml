@@ -66,6 +66,25 @@ jobs:
               exit 1
             fi
           }
+
+          extract_stale_count() {
+            local name="$1"
+            local value
+            if ! value=$(jq -er --arg name "$name" '
+              if (.counts[$name] | type) == "number"
+                 and (.counts[$name] | isfinite)
+                 and (.counts[$name] >= 0)
+                 and ((.counts[$name] | floor) == .counts[$name])
+              then (.counts[$name] | tostring)
+              else error("invalid " + $name + " count")
+              end
+            ' "$stale_report"); then
+              printf 'FAIL [tracker] unable to extract %s count from stale report\n' "$name" >&2
+              exit 1
+            fi
+            require_count "$name" "$value"
+            printf '%s\n' "$value"
+          } # extract_stale_count
           now=$(date +%s)
 
           # 1. trunk freshness
@@ -121,10 +140,8 @@ jobs:
             printf 'FAIL [tracker] invalid stale report schema/counts; refusing stale verdict\n' >&2
             exit 1
           fi
-          stale_pr=$(jq -er 'if (.counts.pull_requests | type) == "number" and (.counts.pull_requests >= 0) and ((.counts.pull_requests | floor) == .counts.pull_requests) then (.counts.pull_requests | tostring) else error("invalid pull_requests count") end' "${stale_report}")
-          stale_is=$(jq -er 'if (.counts.issues | type) == "number" and (.counts.issues >= 0) and ((.counts.issues | floor) == .counts.issues) then (.counts.issues | tostring) else error("invalid issues count") end' "${stale_report}")
-          require_count "pull_requests" "$stale_pr"
-          require_count "issues" "$stale_is"
+          stale_pr=$(extract_stale_count pull_requests)
+          stale_is=$(extract_stale_count issues)
           if [ "$stale_pr" -gt 0 ] || [ "$stale_is" -gt 0 ]; then
             echo "FAIL [tracker] ${stale_pr} stale PRs + ${stale_is} stale issues (no update in ${MAX_ITEM_AGE_DAYS}d)"
             jq -r '.pull_requests[] | "  PR #\(.number) \(.updated_at[:10]) \(.title)"' "${stale_report}"

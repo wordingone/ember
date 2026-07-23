@@ -118,7 +118,7 @@ def test_workflow_derives_stale_tracker_from_complete_census_report() -> None:
     assert "gh issue list" not in workflow
 def test_workflow_tracker_shell_and_count_validation_fail_closed() -> None:
     workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
-    assert "set -euo pipefail" in workflow
+    assert "run: |\n          set -euo pipefail" in workflow
     assert "\n          set -u\n" not in workflow
     assert "jq -er" in workflow
     assert "stale_pr" in workflow and "stale_is" in workflow
@@ -135,7 +135,7 @@ def test_workflow_validates_report_file_before_extracting_terminal_counts() -> N
     workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
     assert "require_stale_report()" in workflow
     assert "if ! jq -e" in workflow
-    assert workflow.index('require_stale_report "$stale_report"') < workflow.index("stale_pr=$(jq -er")
+    assert workflow.index('require_stale_report "$stale_report"') < workflow.index("stale_pr=$(extract_stale_count")
 
 
 def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() -> None:
@@ -143,6 +143,8 @@ def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() ->
     assert "require_count()" in workflow
     assert 'case "$value" in' in workflow
     assert "*[!0-9]*" in workflow
+    assert "if ! value=$(jq -er --arg name \"$name\"" in workflow
+    assert "unable to extract %s count from stale report" in workflow
     assert "stale_pr=" + "$" + "{stale_pr:-0}" not in workflow
     assert "stale_is=" + "$" + "{stale_is:-0}" not in workflow
 
