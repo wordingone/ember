@@ -289,10 +289,113 @@ def test_same_physical_file_is_hashed_once_but_keeps_all_logical_rows(
         spec, {"logical-a": root, "logical-b": root}
     )
 
-    # One shared initial hash plus one final byte-stability verification per logical root.
-    assert calls == 3
+    # One shared initial hash plus one global final byte-stability verification.
+    # Logical aliases must not multiply physical I/O.
+    assert calls == 2
     assert len(result["artifacts"]) == 2
     assert result["artifacts"][0]["sha256"] == result["artifacts"][1]["sha256"]
+
+
+def test_final_byte_stability_pass_runs_after_all_roots_are_discovered(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    early_root = tmp_path / "early"
+    late_root = tmp_path / "late"
+    early_root.mkdir()
+    late_root.mkdir()
+    early = early_root / "early.bin"
+    late = late_root / "late.bin"
+    early.write_bytes(b"early-before")
+    late.write_bytes(b"late")
+    real_hash = census_module.hash_file_streaming
+    late_initial_seen = False
+
+    def mutate_early_while_late_root_is_scanned(path, *args, **kwargs):
+        nonlocal late_initial_seen
+        result = real_hash(path, *args, **kwargs)
+        if Path(path) == late and not late_initial_seen:
+            late_initial_seen = True
+            early.write_bytes(b"early-after-different-size")
+        return result
+
+    monkeypatch.setattr(
+        census_module,
+        "hash_file_streaming",
+        mutate_early_while_late_root_is_scanned,
+    )
+    spec = {
+        "roots": [
+            {"root_id": "early", "required": True, "scan": "files"},
+            {"root_id": "late", "required": True, "scan": "files"},
+        ]
+    }
+
+    result = build_root_census(spec, {"early": early_root, "late": late_root})
+
+    assert late_initial_seen is True
+    changed = [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "artifact_changed_after_hash"
+    ]
+    assert changed == [
+        {
+            "code": "artifact_changed_after_hash",
+            "root_id": "early",
+            "relative_path": "early.bin",
+            "resolution": "unresolved_retry_snapshot",
+        }
+    ]
+
+
+def test_final_membership_pass_runs_after_all_roots_are_discovered(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    early_root = tmp_path / "early"
+    late_root = tmp_path / "late"
+    early_root.mkdir()
+    late_root.mkdir()
+    (early_root / "early.bin").write_bytes(b"early")
+    (late_root / "late.bin").write_bytes(b"late")
+    real_discover = census_module._discover_file_rows
+    mutated = False
+
+    def mutate_early_when_late_is_discovered(root):
+        nonlocal mutated
+        result = real_discover(root)
+        if Path(root) == late_root and not mutated:
+            mutated = True
+            (early_root / "added-after-early-pass.bin").write_bytes(b"late addition")
+        return result
+
+    monkeypatch.setattr(
+        census_module,
+        "_discover_file_rows",
+        mutate_early_when_late_is_discovered,
+    )
+    spec = {
+        "roots": [
+            {"root_id": "early", "required": True, "scan": "files"},
+            {"root_id": "late", "required": True, "scan": "files"},
+        ]
+    }
+
+    result = build_root_census(spec, {"early": early_root, "late": late_root})
+
+    assert mutated is True
+    changed = [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "directory_membership_changed_during_scan"
+    ]
+    assert changed == [
+        {
+            "code": "directory_membership_changed_during_scan",
+            "root_id": "early",
+            "resolution": "unresolved_retry_snapshot",
+        }
+    ]
+
 
 def test_worktree_ids_are_path_derived_not_ordinal() -> None:
     common = "worktree X:/private/main\nHEAD " + "a" * 40 + "\n\n"
@@ -339,6 +442,68 @@ def test_directory_discovery_detects_git_state_change_during_scan(
     } >= {"directory_snapshot_changed_during_scan"}
 
 
+def test_final_discovery_snapshot_pass_runs_after_all_roots(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    early_parent = tmp_path / "early-parent"
+    late_parent = tmp_path / "late-parent"
+    early_parent.mkdir()
+    late_parent.mkdir()
+    early_repo = early_parent / "ember-early"
+    late_repo = late_parent / "ember-late"
+    early_head = init_repo(early_repo)
+    init_repo(late_repo)
+    real_summary = census_module.git_repository_summary
+    mutated = False
+
+    def mutate_early_ref_while_late_discovery_runs(root_id, root):
+        nonlocal mutated
+        if root_id.startswith("late:") and not mutated:
+            mutated = True
+            git(early_repo, "update-ref", "refs/heads/late-mutation", early_head)
+        return real_summary(root_id, root)
+
+    monkeypatch.setattr(
+        census_module,
+        "git_repository_summary",
+        mutate_early_ref_while_late_discovery_runs,
+    )
+    spec = {
+        "roots": [
+            {
+                "root_id": "early",
+                "required": True,
+                "scan": "directory_discovery",
+                "name_patterns": ["ember*"],
+            },
+            {
+                "root_id": "late",
+                "required": True,
+                "scan": "directory_discovery",
+                "name_patterns": ["ember*"],
+            },
+        ]
+    }
+
+    result = build_root_census(
+        spec, {"early": early_parent, "late": late_parent}
+    )
+
+    assert mutated is True
+    changed = [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "directory_snapshot_changed_during_scan"
+    ]
+    assert changed == [
+        {
+            "code": "directory_snapshot_changed_during_scan",
+            "root_id": "early",
+            "resolution": "unresolved_retry_snapshot",
+        }
+    ]
+
+
 def test_git_repository_detects_same_status_dirty_byte_change(
     tmp_path: Path, monkeypatch,
 ) -> None:
@@ -360,6 +525,52 @@ def test_git_repository_detects_same_status_dirty_byte_change(
     monkeypatch.setattr(census_module, "git_repository_summary", mutate_between_passes)
     result = build_root_census(spec, {"repo": repo})
     assert "artifact_changed_after_hash" in {row["code"] for row in result["contradictions"]}
+
+
+def test_final_git_snapshot_pass_runs_after_all_roots_are_discovered(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    early = tmp_path / "early-repo"
+    late = tmp_path / "late-repo"
+    early_head = init_repo(early)
+    init_repo(late)
+    real_summary = census_module.git_repository_summary
+    mutated = False
+
+    def mutate_early_ref_while_late_is_scanned(root_id, root):
+        nonlocal mutated
+        if root_id == "late" and not mutated:
+            mutated = True
+            git(early, "update-ref", "refs/heads/added-after-early-pass", early_head)
+        return real_summary(root_id, root)
+
+    monkeypatch.setattr(
+        census_module,
+        "git_repository_summary",
+        mutate_early_ref_while_late_is_scanned,
+    )
+    spec = {
+        "roots": [
+            {"root_id": "early", "required": True, "scan": "git_repository"},
+            {"root_id": "late", "required": True, "scan": "git_repository"},
+        ]
+    }
+
+    result = build_root_census(spec, {"early": early, "late": late})
+
+    assert mutated is True
+    changed = [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "git_snapshot_changed_during_scan"
+    ]
+    assert changed == [
+        {
+            "code": "git_snapshot_changed_during_scan",
+            "root_id": "early",
+            "resolution": "unresolved_retry_snapshot",
+        }
+    ]
 
 
 def test_directory_discovery_detects_nested_membership_change(
