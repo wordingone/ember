@@ -3,11 +3,11 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """r3_repair_negative_test.py -- RED-first regression for the PR #1013 R3
-board-canonicality repair round (frozen spec:
-B:/M/avir/leo/state/specs/pr1013-r3-repair-spec.md; per PR948 execution-
-binding, every test exercises the REAL production consumers -- board_index.py's
-_cmd_verify/_cmd_freshness CLI subcommands and gen_readme_status._resolve_current
--- never a helper fixture standing in for them).
+board-canonicality repair round (frozen repair spec, R3 track). Per PR948
+execution-binding, every test exercises the REAL production consumers --
+board_index.py's _cmd_verify/_cmd_freshness CLI subcommands and
+gen_readme_status._resolve_current -- never a helper fixture standing in
+for them).
 
 Four negative branches, one per repaired defect:
   1. malformed/truncated index line -> selection/verify/freshness ALL RED
