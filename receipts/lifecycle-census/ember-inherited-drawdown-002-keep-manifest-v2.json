@@ -776,8 +776,9 @@
       "reason": "fresh delta was not admitted to the bounded candidate set; no deletion may infer safety from the older snapshot"
     }
   },
-  "manifest_sha256": "d62849bf8cb905c6bcc748b9fad63916d7a73cc05460eefad7deaa6315020f23",
+  "manifest_sha256": "1f3739dc9e6c0fc3ae2759ea47acfc8fdee3724fb7dc080b71ad24d748b1ac14",
   "mutation_performed": false,
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "public_master_sha": "0825a69e36fd45584a5c503996004b29d3f1c88e",
   "registered_worktrees": {
     "count": 2,
@@ -820,5 +821,7 @@
       "sha256": "f0a2f962245cbf1da6a2cea551fd61d491a2a8eb0a4504e63e85a9fbb50085f9"
     }
   },
-  "task_id": "EMBER-INHERITED-DRAWDOWN-002"
+  "task_id": "EMBER-INHERITED-DRAWDOWN-002",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A"
 }
