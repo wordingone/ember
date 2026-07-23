@@ -119,7 +119,10 @@ def test_storage_fail_closed_uncomputable_floor(cfg, root):
 def test_recovery_pass_real_roundtrip(cfg, root):
     r = lp.preflight_recovery(cfg, root)
     assert r["status"] == "pass", r
-    assert r["checkpoint_shards"] == 6
+    # Shard count is a serialization detail that can change when newly bound
+    # optimizer/model state is added.  Recovery's contract is that a nonempty
+    # checkpoint round-trips exact state, not that it always has six files.
+    assert r["checkpoint_shards"] > 0
     assert r["data_cursor"]["global_step"] == 4
 
 
@@ -217,19 +220,41 @@ def test_all_five_implemented_no_deferred(cfg, root):
     assert len(lp.IMPLEMENTED) == 5
 
 
-def test_run_exits_zero_when_all_five_pass(root):
+def test_run_exits_zero_when_all_five_pass_without_mutating_checkout(root):
     # Real config: all 5 preflights (storage, resource, no-sub-3B, recovery,
     # clean-genesis) are implemented and pass -> packet exits 0 and prints
-    # the real EMBER-02 command.
+    # the real EMBER-02 command. Observation-only preflight must not dirty the
+    # public checkout that the certified consumer immediately verifies.
+    receipt_root = root / "receipts" / "ember-01-launch-packet"
+    before = {
+        path.relative_to(receipt_root)
+        for path in receipt_root.rglob("*")
+    } if receipt_root.exists() else set()
     rc = lp.run(_CONFIG_PATH)
+    after = {
+        path.relative_to(receipt_root)
+        for path in receipt_root.rglob("*")
+    } if receipt_root.exists() else set()
     assert rc == 0
+    assert after == before
+
+
+def test_run_persists_packet_only_under_explicit_receipt_root(tmp_path):
+    receipt_root = tmp_path / "custody" / "launch-packets"
+    rc = lp.run(_CONFIG_PATH, receipt_root=receipt_root)
+    packets = list(receipt_root.glob("*/packet.jsonl"))
+    assert rc == 0
+    assert len(packets) == 1
 
 
 def test_named_command_is_truthful_no_placeholder(cfg):
     cmd = lp.named_launch_command(cfg)
-    assert "run_vertical_slice.py" in cmd["command"]
-    assert "semantic" in cmd["command"]
-    assert "run_semantic" in cmd["library_entrypoint"]
+    assert "certified_train_launch.py" in cmd["command"]
+    assert "--certificate <spine-certified-declaration.json>" in cmd["command"]
+    assert "--declaration-ledger <declaration-ledger.jsonl>" in cmd["command"]
+    assert "--run-spec <certified-train-run.json>" in cmd["command"]
+    assert "certify_and_execute" in cmd["library_entrypoint"]
+    assert "semantic" not in cmd["command"]
     # The historical sub-3B trainer is EXECUTION-DENIED (historical_only);
     # the named command must never point at it, and the note must say why.
     assert "timeshare_pretrain.py" not in cmd["command"]

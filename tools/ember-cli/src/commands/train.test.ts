@@ -31,11 +31,10 @@ interface RecordedSpawn {
 
 /** The real launch command string launch_packet.py names on an all-green packet. */
 const REAL_LAUNCH_COMMAND =
-  "python tools/ember-restart-3b/run_vertical_slice.py semantic " +
-  "--seed <launch-seed> --artifact-root ckpt/<run-id> " +
-  "--receipt <manifest-bound-stream-receipt.json> --shards-root <token-shard-dir> " +
-  "--tokenizer <tokenizer-path> --steps <N> --sequence-length <seq-len> " +
-  "--checkpoint-interval 50 --write-budget-gib <write-budget-gib>";
+  "python tools/ember-restart-3b/certified_train_launch.py " +
+  "--root . --certificate <spine-certified-declaration.json> " +
+  "--declaration-ledger <declaration-ledger.jsonl> " +
+  "--run-spec <certified-train-run.json>";
 
 /** A well-formed all-green launch_packet.py stdout (JSONL rows + summary + comments). */
 function allGreenStdout(command: string = REAL_LAUNCH_COMMAND): string {
@@ -52,9 +51,9 @@ function allGreenStdout(command: string = REAL_LAUNCH_COMMAND): string {
       implemented_all_pass: true,
       any_deferred: false,
       named_ember02_command: {
-        note: "scripts/timeshare_pretrain.py is EXECUTION-DENIED; the real governed entry is run_vertical_slice.py semantic.",
+        note: "scripts/timeshare_pretrain.py is EXECUTION-DENIED; training authority enters only through certified_train_launch.py.",
         command,
-        library_entrypoint: "tools/ember-restart-3b/run_vertical_slice.py::run_semantic",
+        library_entrypoint: "tools/ember-restart-3b/certified_train_launch.py::certify_and_execute",
       },
     }),
     "# receipt: receipts/ember-01-launch-packet/20260721T000000Z/packet.jsonl",
@@ -159,7 +158,7 @@ describe("train command", () => {
   // POSITIVE: all preflights green (exit 0) -> surface the launch command
   // =========================================================================
   describe("POSITIVE: all-green packet surfaces the launch command", () => {
-    it("exit 0 + valid summary -> surfaces the run_vertical_slice launch command string, exitCode success, no GPU spawn", async () => {
+    it("exit 0 + valid summary -> surfaces the fixed certified-consumer command, exitCode success, no GPU spawn", async () => {
       const { cmd, spawns } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }));
 
       const result = await cmd.execute("", mockCtx);

@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 import pathlib
 import re
@@ -300,7 +301,18 @@ def run_budgeted(
     *,
     write_roots: Mapping[str, pathlib.Path],
     poll_seconds: float = 0.25,
+    max_wall_seconds: float | None = None,
 ) -> int:
+    if (
+        max_wall_seconds is not None
+        and (
+            isinstance(max_wall_seconds, bool)
+            or not isinstance(max_wall_seconds, (int, float))
+            or not math.isfinite(float(max_wall_seconds))
+            or max_wall_seconds <= 0
+        )
+    ):
+        raise ValueError("max wall seconds must be finite positive")
     receipt_path = _require_receipt_within_write_root(receipt_path, write_roots)
     budgets = _validate_budgets(max_write_gib)
     child_environment, child_cache_bindings, child_assertion_path = _child_cache_environment(write_roots)
@@ -433,6 +445,7 @@ def run_budgeted(
             },
             "backing_indicators": {"start": start_backing, "end": _backing_indicators()},
             "runtime_stop_floors_gib": OPERATING_RESERVES_GIB,
+            "max_wall_seconds": max_wall_seconds,
             "operating_reserve_breaches": sorted(operating_reserve_breaches),
             "start_free_gib": start_free,
             "end_free_gib": end_free,
@@ -472,6 +485,12 @@ def run_budgeted(
             observe_roots()
             stop_reason = (
                 (f"write root binding lost: {root_binding_error}" if root_binding_error else None)
+                or (
+                    "wall-time budget exceeded"
+                    if max_wall_seconds is not None
+                    and time.time() - started_at >= max_wall_seconds
+                    else None
+                )
                 or _file_budget_stop_reason(growth_with_receipt_reservation(), budgets)
                 or _reserve_stop_reason(observed_free)
             )
@@ -515,6 +534,7 @@ def main() -> int:
     parser.add_argument("--max-write-gib", type=float)
     parser.add_argument("--max-c-write-gib", type=float)
     parser.add_argument("--max-b-write-gib", type=float)
+    parser.add_argument("--max-wall-seconds", type=float)
     parser.add_argument("--receipt", type=pathlib.Path, required=True)
     parser.add_argument("--write-root", action="append", required=True, metavar="NAME=PATH")
     parser.add_argument("command", nargs=argparse.REMAINDER)
@@ -535,7 +555,13 @@ def main() -> int:
         command.pop(0)
     if not command:
         parser.error("a command is required after --")
-    return run_budgeted(command, budgets, args.receipt, write_roots=write_roots)
+    return run_budgeted(
+        command,
+        budgets,
+        args.receipt,
+        write_roots=write_roots,
+        max_wall_seconds=args.max_wall_seconds,
+    )
 
 
 if __name__ == "__main__":

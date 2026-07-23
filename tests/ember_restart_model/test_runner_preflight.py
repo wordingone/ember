@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import run_vertical_slice
+import disk_budget_runner
 from build_owned_reasoning_tool_trajectories import build_records
 from train import run_launch as live_run_launch
 from verify_capability_record import expected_receipt
@@ -284,6 +285,53 @@ class RunnerPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(MemoryError, "before allocation"):
             run_vertical_slice.production_memory_preflight(total_parameters=3_839_161_856, active_parameters=1_725_232_640, device_free_bytes=plan["required_bytes"] - 1)
 
+    def test_governed_gpu_cap_uses_raw_device_bytes_and_clamps_allocator(self) -> None:
+        gib = 1024**3
+        governor_receipt = {
+            "vram_fraction": 0.85,
+            "free_gb": 64.0,
+            "total_gb": 64.0,
+            "margin_gb": 4.0,
+            "governor_source_sha256": "a" * 64,
+        }
+        with patch.object(
+            run_vertical_slice.torch.cuda,
+            "mem_get_info",
+            return_value=(24 * gib, 24 * gib),
+        ):
+            with patch.object(
+                run_vertical_slice.torch.cuda,
+                "set_per_process_memory_fraction",
+            ) as set_fraction:
+                receipt = run_vertical_slice.governed_gpu_cap_preflight(
+                    requested_gpu_vram_gib=20.0,
+                    required_bytes=19 * gib,
+                    governor_receipt=governor_receipt,
+                )
+        set_fraction.assert_called_once_with(20.0 / 24.0)
+        self.assertEqual(receipt["requested_gpu_vram_bytes"], 20 * gib)
+        self.assertEqual(receipt["measured_device_free_bytes"], 24 * gib)
+        self.assertEqual(receipt["measured_device_total_bytes"], 24 * gib)
+        self.assertEqual(receipt["effective_cap_bytes"], 20 * gib)
+        self.assertEqual(receipt["result"], "PASS")
+
+        with patch.object(
+            run_vertical_slice.torch.cuda,
+            "mem_get_info",
+            return_value=(16 * gib, 16 * gib),
+        ):
+            with patch.object(
+                run_vertical_slice.torch.cuda,
+                "set_per_process_memory_fraction",
+            ) as set_fraction:
+                with self.assertRaisesRegex(MemoryError, "20.0 GiB"):
+                    run_vertical_slice.governed_gpu_cap_preflight(
+                        requested_gpu_vram_gib=20.0,
+                        required_bytes=1,
+                        governor_receipt=governor_receipt,
+                    )
+        set_fraction.assert_not_called()
+
     def test_production_runner_refuses_retired_bootstrap_curriculum(self) -> None:
         packet = {
             "input_identity": {
@@ -519,6 +567,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "canonical runner authority"):
                         run_vertical_slice.run(
                             seed=83, artifact_root=Path("B:/vertical-artifacts"),
+                            requested_gpu_vram_gib=20.0,
                             canonical_runner_authority={"forged": "authority"},
                         )
         governor.assert_not_called()
@@ -897,7 +946,8 @@ class RunnerPreflightTests(unittest.TestCase):
             with patch.dict(os.environ, environment, clear=True):
                 with patch.object(sys, "argv", [
                     "run_vertical_slice.py", "governed-vertical", "--seed", "83",
-                    "--artifact-root", str(artifact_root), "--write-budget-bytes", "4096", "--max-records", "3",
+                    "--artifact-root", str(artifact_root), "--write-budget-bytes", "4096",
+                    "--gpu-vram-gib", "20.0", "--max-records", "3",
                 ]):
                     with patch.object(run_vertical_slice, "checkpoint_serialization_byte_bound", return_value=4096):
                         with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as vertical_run:
@@ -912,13 +962,15 @@ class RunnerPreflightTests(unittest.TestCase):
                 "runner_source_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py").read_bytes()).hexdigest(),
                 "checkpoint_byte_bound": 4096,
                 "write_budget_bytes": 4096,
+                "gpu_vram_gib": 20.0,
             }
             vertical_run.assert_called_once_with(
                 seed=83, artifact_root=artifact_root, resume_checkpoint=None,
                 resume_counter_receipt=None, resume_realization_registry=None,
                 resume_optimizer_transition_registry=None,
                 resume_optimizer_transition_registry_sha256=None,
-                write_budget_bytes=4096, max_records=3, canonical_runner_authority=assertion_authority,
+                write_budget_bytes=4096, max_records=3, requested_gpu_vram_gib=20.0,
+                canonical_runner_authority=assertion_authority,
             )
 
     def test_governed_vertical_wrapper_reaches_real_run_authority_equality(self) -> None:
@@ -944,6 +996,7 @@ class RunnerPreflightTests(unittest.TestCase):
                         with self.assertRaisesRegex(RuntimeError, "governor reached"):
                             run_vertical_slice.run_governed_vertical(
                                 seed=83, artifact_root=artifact_root, write_budget_bytes=12_202_530_816,
+                                gpu_vram_gib=20.0,
                             )
             governor.assert_called_once_with()
 
@@ -969,7 +1022,10 @@ class RunnerPreflightTests(unittest.TestCase):
                     with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
                         with patch.object(run_vertical_slice, "run", side_effect=AssertionError("run")) as vertical_run:
                             with self.assertRaisesRegex(ValueError, "artifact root escapes canonical runner custody"):
-                                run_vertical_slice.run_governed_vertical(seed=83, artifact_root=outside_artifact_root, write_budget_bytes=4096)
+                                run_vertical_slice.run_governed_vertical(
+                                    seed=83, artifact_root=outside_artifact_root,
+                                    write_budget_bytes=4096, gpu_vram_gib=20.0,
+                                )
             governor.assert_not_called()
             vertical_run.assert_not_called()
 
@@ -1008,7 +1064,10 @@ class RunnerPreflightTests(unittest.TestCase):
             with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
                 with patch.object(run_vertical_slice, "run", side_effect=AssertionError("run")) as vertical_run:
                     with self.assertRaisesRegex(ValueError, "checkpoint publication bound"):
-                        run_vertical_slice.run_governed_vertical(seed=83, artifact_root=ROOT, write_budget_bytes=12_202_530_815)
+                        run_vertical_slice.run_governed_vertical(
+                            seed=83, artifact_root=ROOT,
+                            write_budget_bytes=12_202_530_815, gpu_vram_gib=20.0,
+                        )
         governor.assert_not_called()
         vertical_run.assert_not_called()
     def test_governed_vertical_budget_refusal_precedes_governor_and_run(self) -> None:
@@ -1028,7 +1087,10 @@ class RunnerPreflightTests(unittest.TestCase):
                     with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
                         with patch.object(run_vertical_slice, "run", side_effect=AssertionError("run")) as vertical_run:
                             with self.assertRaisesRegex(ValueError, "checkpoint publication bound"):
-                                run_vertical_slice.run_governed_vertical(seed=83, artifact_root=custody, write_budget_bytes=4096)
+                                run_vertical_slice.run_governed_vertical(
+                                    seed=83, artifact_root=custody,
+                                    write_budget_bytes=4096, gpu_vram_gib=20.0,
+                                )
             governor.assert_not_called()
             vertical_run.assert_not_called()
     def test_canonical_runner_missing_nonce_is_rejected_before_launch(self) -> None:
@@ -1566,6 +1628,50 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 125)
         self.assertEqual(payload["outcome"], "PRELAUNCH_REJECTED")
         self.assertIn("operating reserve", payload["stop_reason"])
+
+    def test_public_disk_budget_runner_terminates_child_at_wall_deadline(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            custody.mkdir()
+            receipt = custody / "runner-receipt.json"
+            with patch.object(
+                disk_budget_runner,
+                "current_free_gib",
+                return_value={"C": 500.0, "B": 500.0},
+            ):
+                exit_code = disk_budget_runner.run_budgeted(
+                    [sys.executable, "-c", "import time; time.sleep(10)"],
+                    {"C": 0.0, "B": 0.01},
+                    receipt,
+                    write_roots={"custody": custody},
+                    poll_seconds=0.01,
+                    max_wall_seconds=0.05,
+                )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(exit_code, 125)
+        self.assertEqual(payload["outcome"], "STOPPED_BY_BUDGET")
+        self.assertEqual(payload["stop_reason"], "wall-time budget exceeded")
+        self.assertEqual(payload["max_wall_seconds"], 0.05)
+
+    def test_public_disk_budget_runner_rejects_non_finite_wall_before_child(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            custody.mkdir()
+            receipt = custody / "runner-receipt.json"
+            with patch.object(
+                disk_budget_runner.subprocess,
+                "Popen",
+                side_effect=AssertionError("child must not start"),
+            ) as child:
+                with self.assertRaisesRegex(ValueError, "finite positive"):
+                    disk_budget_runner.run_budgeted(
+                        [sys.executable, "-c", "pass"],
+                        {"C": 0.0, "B": 0.01},
+                        receipt,
+                        write_roots={"custody": custody},
+                        max_wall_seconds=float("nan"),
+                    )
+            child.assert_not_called()
 
     def test_public_runner_reaches_real_governed_vertical_cpu_preflight_child(self) -> None:
         runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"

@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import pathlib
 import subprocess
@@ -23,36 +24,60 @@ CERTIFICATE_KEYS = {
     "superseded_by",
     "completion_receipt_path",
     "completion_receipt_sha256",
+    "evidence_bundle_path",
+    "evidence_bundle_sha256",
     "public_master_sha",
-    "checkout_sha256",
     "config_sha256",
-    "tokenizer_sha256",
-    "input_authority_sha256",
-    "cli_binary_sha256",
-    "launch_packet_sha256",
-    "board_receipt_sha256",
-    "benchmark_registry_sha256",
-    "failure_class_ledger_sha256",
-    "subject_manifest_sha256",
-    "seat_sha256",
-    "root_summary_sha256",
+    "input_identity_sha256",
+    "input_shard_sha256",
+    "input_admission_receipt_sha256",
+    "certified_consumer_sha256",
+    "disk_budget_runner_sha256",
+    "governed_runner_sha256",
+    "input_identity_validator_sha256",
     "declaration_conjuncts",
     "execution_scope",
 }
 CERTIFICATE_SHA256_KEYS = {
     "completion_receipt_sha256",
-    "checkout_sha256",
+    "evidence_bundle_sha256",
     "config_sha256",
-    "tokenizer_sha256",
-    "input_authority_sha256",
-    "cli_binary_sha256",
-    "launch_packet_sha256",
-    "board_receipt_sha256",
-    "benchmark_registry_sha256",
-    "failure_class_ledger_sha256",
-    "subject_manifest_sha256",
-    "seat_sha256",
-    "root_summary_sha256",
+    "input_identity_sha256",
+    "input_shard_sha256",
+    "input_admission_receipt_sha256",
+    "certified_consumer_sha256",
+    "disk_budget_runner_sha256",
+    "governed_runner_sha256",
+    "input_identity_validator_sha256",
+}
+CERTIFICATE_EVIDENCE_SHA256_KEYS = (
+    CERTIFICATE_SHA256_KEYS
+    - {"completion_receipt_sha256", "evidence_bundle_sha256"}
+)
+EVIDENCE_BUNDLE_KEYS = {"schema_version", "evidence"}
+EVIDENCE_ENTRY_KEYS = {"scope", "path"}
+FIXED_REPO_EVIDENCE_PATHS = {
+    "config_sha256": "configs/ember-restart-3b.json",
+    "input_identity_sha256": "data/ember-restart-3b/input-identity.json",
+    "input_shard_sha256": (
+        "data/ember-restart-3b/owned-four-domain-production-rung-v1.json"
+    ),
+    "input_admission_receipt_sha256": (
+        "data/ember-restart-3b/"
+        "owned-four-domain-production-rung-v1.receipt.json"
+    ),
+    "certified_consumer_sha256": (
+        "tools/ember-restart-3b/certified_train_launch.py"
+    ),
+    "disk_budget_runner_sha256": (
+        "tools/ember-restart-3b/disk_budget_runner.py"
+    ),
+    "governed_runner_sha256": (
+        "tools/ember-restart-3b/run_vertical_slice.py"
+    ),
+    "input_identity_validator_sha256": (
+        "tools/ember-restart-3b/input_identity.py"
+    ),
 }
 DECLARATION_CONJUNCT_KEYS = {
     "record_coherent",
@@ -109,7 +134,9 @@ COMPLETION_RECEIPT_KEYS = {
     "schema",
     "ok",
     "verified_at_utc",
+    "completed_goal_id",
     "goal_id",
+    "workstream_id",
     "next_executed_outcome",
     "certificate_legs",
     "leg_detail",
@@ -133,6 +160,8 @@ class ValidatedLaunch(NamedTuple):
     max_records: int
     max_c_write_gib: float
     max_b_write_gib: float
+    max_wall_seconds: float
+    gpu_vram_gib: float
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -201,6 +230,111 @@ def _load_json(path: pathlib.Path, label: str) -> dict[str, Any]:
     return _require_object(value, label)
 
 
+def _load_bound_json(
+    path: pathlib.Path, expected_sha256: str, label: str
+) -> dict[str, Any]:
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise ValueError(f"{label} is unreadable") from error
+    if hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise ValueError(f"{label} hash mismatch")
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is invalid JSON") from error
+    return _require_object(value, label)
+
+
+def _resolve_relative_evidence_path(
+    *,
+    base: pathlib.Path,
+    raw_path: object,
+    label: str,
+) -> pathlib.Path:
+    if (
+        not isinstance(raw_path, str)
+        or not raw_path
+        or "\\" in raw_path
+        or any(character.isspace() for character in raw_path)
+    ):
+        raise ValueError(f"{label} path must be a portable relative path")
+    relative = pathlib.PurePosixPath(raw_path)
+    if (
+        relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or relative.as_posix() != raw_path
+    ):
+        raise ValueError(f"{label} path must be a portable relative path")
+    try:
+        resolved_base = base.resolve(strict=True)
+        resolved = (
+            resolved_base.joinpath(*relative.parts).resolve(strict=True)
+        )
+        resolved.relative_to(resolved_base)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{label} path is missing or escapes its root") from error
+    if not resolved.is_file():
+        raise ValueError(f"{label} path is not a file")
+    return resolved
+
+
+def _validate_certificate_evidence(
+    *,
+    repo_root: pathlib.Path,
+    certificate_path: pathlib.Path,
+    certificate: dict[str, Any],
+) -> None:
+    bundle_path = _resolve_relative_evidence_path(
+        base=certificate_path.parent,
+        raw_path=certificate["evidence_bundle_path"],
+        label="certificate evidence bundle",
+    )
+    bundle = _load_bound_json(
+        bundle_path,
+        certificate["evidence_bundle_sha256"],
+        "certificate evidence bundle",
+    )
+    _require_keys(bundle, EVIDENCE_BUNDLE_KEYS, "certificate evidence bundle")
+    if (
+        bundle["schema_version"]
+        != "ember-spine-certificate-evidence-bundle-v1"
+    ):
+        raise ValueError("certificate evidence bundle schema")
+    evidence = _require_object(
+        bundle["evidence"], "certificate evidence bundle entries"
+    )
+    if set(evidence) != CERTIFICATE_EVIDENCE_SHA256_KEYS:
+        raise ValueError("certificate evidence bundle entry keys mismatch")
+
+    for field in sorted(CERTIFICATE_EVIDENCE_SHA256_KEYS):
+        entry = _require_object(
+            evidence[field], f"certificate evidence entry {field}"
+        )
+        _require_keys(
+            entry, EVIDENCE_ENTRY_KEYS, f"certificate evidence entry {field}"
+        )
+        scope = entry["scope"]
+        if scope not in {"repo", "certificate"}:
+            raise ValueError(f"certificate evidence scope invalid: {field}")
+        fixed_path = FIXED_REPO_EVIDENCE_PATHS.get(field)
+        if fixed_path is not None and (
+            scope != "repo" or entry["path"] != fixed_path
+        ):
+            raise ValueError(f"certificate evidence canonical path mismatch: {field}")
+        base = repo_root if scope == "repo" else certificate_path.parent
+        evidence_path = _resolve_relative_evidence_path(
+            base=base,
+            raw_path=entry["path"],
+            label=f"certificate evidence {field}",
+        )
+        if (
+            _file_sha256(evidence_path, f"certificate evidence {field}")
+            != certificate[field]
+        ):
+            raise ValueError(f"certificate evidence hash mismatch: {field}")
+
+
 def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -234,16 +368,36 @@ def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
 
 
 def read_current_master(repo_root: pathlib.Path) -> str:
-    result = subprocess.run(
+    head_result = subprocess.run(
         ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
         check=False,
         capture_output=True,
         text=True,
         shell=False,
     )
-    if result.returncode != 0:
+    if head_result.returncode != 0:
         raise ValueError("current public master is unreadable")
-    return _require_git_sha(result.stdout.strip(), "current public master")
+    status_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        shell=False,
+    )
+    if status_result.returncode != 0:
+        raise ValueError("current public checkout status is unreadable")
+    if status_result.stdout:
+        raise ValueError("current public checkout is not clean")
+    return _require_git_sha(
+        head_result.stdout.strip(), "current public master"
+    )
 
 
 def _validate_completion_receipt(
@@ -252,6 +406,12 @@ def _validate_completion_receipt(
     _require_keys(value, COMPLETION_RECEIPT_KEYS, "completion receipt")
     if value["schema"] != "ember-01-completion-receipt-v1" or value["ok"] is not True:
         raise ValueError("completion receipt is not a successful EMBER-01 receipt")
+    if (
+        value["completed_goal_id"] != "EMBER-01"
+        or value["goal_id"] != "EMBER-02"
+        or value["workstream_id"] != "EMBER-02A"
+    ):
+        raise ValueError("completion receipt completed/active authority identity")
 
     legs = _require_object(value["certificate_legs"], "completion certificate legs")
     expected_legs = {str(index) for index in range(1, 10)}
@@ -277,7 +437,7 @@ def _validate_completion_receipt(
 
     selection = _require_object(value["selection"], "completion selection")
     if (
-        selection.get("goal_id") != "EMBER-01"
+        selection.get("goal_id") != "EMBER-02"
         or selection.get("unchanged_during_verification") is not True
     ):
         raise ValueError("completion selection integrity")
@@ -320,17 +480,48 @@ def _require_scope_subset(
     for requested_key, authorized_key in numeric_pairs:
         requested_value = requested[requested_key]
         authorized_value = authorized[authorized_key]
+        zero_allowed = requested_key == "max_c_write_gib"
         if (
             isinstance(requested_value, bool)
             or not isinstance(requested_value, (int, float))
             or isinstance(authorized_value, bool)
             or not isinstance(authorized_value, (int, float))
+            or not math.isfinite(float(requested_value))
+            or not math.isfinite(float(authorized_value))
             or requested_value < 0
+            or (not zero_allowed and requested_value == 0)
+            or authorized_value < 0
+            or (not zero_allowed and authorized_value == 0)
             or requested_value > authorized_value
         ):
+            if (
+                not isinstance(requested_value, bool)
+                and isinstance(requested_value, (int, float))
+                and not math.isfinite(float(requested_value))
+            ):
+                raise ValueError(
+                    f"run scope requires finite {requested_key}"
+                )
+            if (
+                not isinstance(requested_value, bool)
+                and isinstance(requested_value, (int, float))
+                and requested_value == 0
+                and not zero_allowed
+            ):
+                raise ValueError(
+                    f"run scope requires positive {requested_key}"
+                )
             raise ValueError(
                 f"run scope exceeds certificate: {requested_key}"
             )
+    if requested["optimizer_steps"] != requested["max_records"]:
+        raise ValueError(
+            "run scope optimizer_steps must equal max_records"
+        )
+    if requested["active_expert_families"] != 1:
+        raise ValueError(
+            "run scope active_expert_families must be exactly one"
+        )
 
     root_pairs = (
         ("artifact_root", "allowed_artifact_roots"),
@@ -372,6 +563,11 @@ def validate_certified_request(
     for key in CERTIFICATE_SHA256_KEYS:
         _require_sha256(certificate[key], f"certificate {key}")
     _require_git_sha(certificate["public_master_sha"], "certificate public_master_sha")
+    _validate_certificate_evidence(
+        repo_root=repo_root,
+        certificate_path=certificate_path,
+        certificate=certificate,
+    )
 
     certificate_sha256 = _canonical_sha256(certificate)
     ledger_rows = _load_ledger(declaration_ledger_path)
@@ -380,14 +576,16 @@ def validate_certified_request(
     ):
         raise ValueError("declaration ledger membership is missing")
 
-    completion_path = pathlib.Path(certificate["completion_receipt_path"])
-    if not completion_path.is_absolute():
-        completion_path = certificate_path.parent / completion_path
-    completion = _load_json(completion_path, "completion receipt")
-    if _file_sha256(
-        completion_path, "completion receipt"
-    ) != certificate["completion_receipt_sha256"]:
-        raise ValueError("completion receipt hash mismatch")
+    completion_path = _resolve_relative_evidence_path(
+        base=certificate_path.parent,
+        raw_path=certificate["completion_receipt_path"],
+        label="completion receipt",
+    )
+    completion = _load_bound_json(
+        completion_path,
+        certificate["completion_receipt_sha256"],
+        "completion receipt",
+    )
     _validate_completion_receipt(completion, certificate["public_master_sha"])
 
     conjuncts = _require_object(
@@ -412,10 +610,13 @@ def validate_certified_request(
         or not run_spec["run_id"]
         or not isinstance(run_spec["seed"], int)
         or isinstance(run_spec["seed"], bool)
+        or run_spec["seed"] < 0
         or not isinstance(run_spec["runner_receipt"], str)
         or not run_spec["runner_receipt"]
     ):
-        raise ValueError("run spec scalar fields are invalid")
+        raise ValueError(
+            "run spec scalar fields require a nonnegative seed"
+        )
 
     requested_scope = _require_object(
         run_spec["requested_scope"], "requested scope"
@@ -448,6 +649,8 @@ def validate_certified_request(
         max_records=int(requested_scope["max_records"]),
         max_c_write_gib=float(requested_scope["max_c_write_gib"]),
         max_b_write_gib=float(requested_scope["max_b_write_gib"]),
+        max_wall_seconds=float(requested_scope["wall_minutes"]) * 60.0,
+        gpu_vram_gib=float(requested_scope["gpu_vram_gib"]),
     )
 
 
@@ -467,6 +670,8 @@ def build_runner_argv(
         str(launch.max_c_write_gib),
         "--max-b-write-gib",
         str(launch.max_b_write_gib),
+        "--max-wall-seconds",
+        str(launch.max_wall_seconds),
         "--receipt",
         str(launch.runner_receipt),
         "--write-root",
@@ -482,6 +687,8 @@ def build_runner_argv(
             / "run_vertical_slice.py"
         ),
         "governed-vertical",
+        "--gpu-vram-gib",
+        str(launch.gpu_vram_gib),
         "--seed",
         str(launch.seed),
         "--artifact-root",
