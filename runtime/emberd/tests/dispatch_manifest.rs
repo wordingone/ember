@@ -76,6 +76,22 @@ fn emberd_source_sha256() -> String {
     format!("{:x}", digest.finalize())
 }
 
+fn python_executable() -> PathBuf {
+    let output = std::process::Command::new("where.exe")
+        .arg("python.exe")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let first = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap()
+        .to_string();
+    fs::canonicalize(first).unwrap()
+}
+
 fn canary_snapshot(processes: Vec<CanaryProcessIdentity>) -> CanaryHostSnapshot {
     CanaryHostSnapshot {
         observed_at_ms: 10_001,
@@ -96,20 +112,40 @@ fn canary_snapshot(processes: Vec<CanaryProcessIdentity>) -> CanaryHostSnapshot 
 fn write_governed_canary_manifest(root: &Path, job_id: &str) -> PathBuf {
     let manifest = write_manifest(root, job_id, 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-    let program = std::env::current_exe().unwrap();
-    let source = root.join("certified-source.py");
+    let program = python_executable();
+    let emberd_binary = std::env::current_exe().unwrap();
+    let certified_consumer = root.join("certified_train_launch.py");
+    let disk_budget_runner = root.join("disk_budget_runner.py");
+    let governed_runner = root.join("run_vertical_slice.py");
     let tokenizer = root.join("tokenizer.json");
-    fs::write(&source, b"# certified source\n").unwrap();
+    fs::write(&certified_consumer, b"# certified consumer\n").unwrap();
+    fs::write(
+        &disk_budget_runner,
+        b"import time\nif __name__ == '__main__':\n    time.sleep(30)\n",
+    )
+    .unwrap();
+    fs::write(&governed_runner, b"# governed runner\n").unwrap();
     fs::write(&tokenizer, b"{\"tokenizer\":\"owned\"}").unwrap();
+    let certified_consumer = fs::canonicalize(certified_consumer).unwrap();
+    let disk_budget_runner = fs::canonicalize(disk_budget_runner).unwrap();
+    let governed_runner = fs::canonicalize(governed_runner).unwrap();
+    let tokenizer = fs::canonicalize(tokenizer).unwrap();
     let config_path = payload["bindings"][0]["path"].as_str().unwrap().to_string();
     let config_sha256 = payload["bindings"][0]["sha256"]
         .as_str()
         .unwrap()
         .to_string();
+    payload["program"] = json!({"path":&program,"sha256":sha256(&program)});
+    payload["args"] = json!([&disk_budget_runner, "--", &program, &governed_runner]);
+    payload["env"]
+        .as_object_mut()
+        .unwrap()
+        .remove("EMBERD_DISPATCH_FIXTURE_CHILD");
     payload["bindings"].as_array_mut().unwrap().extend([
-        json!({"kind":"source","path":source,"sha256":sha256(&source)}),
-        json!({"kind":"tokenizer","path":tokenizer,"sha256":sha256(&tokenizer)}),
-        json!({"kind":"runner","path":program,"sha256":sha256(&program)}),
+        json!({"kind":"certified_consumer","path":&certified_consumer,"sha256":sha256(&certified_consumer)}),
+        json!({"kind":"disk_budget_runner","path":&disk_budget_runner,"sha256":sha256(&disk_budget_runner)}),
+        json!({"kind":"governed_runner","path":&governed_runner,"sha256":sha256(&governed_runner)}),
+        json!({"kind":"tokenizer","path":&tokenizer,"sha256":sha256(&tokenizer)}),
     ]);
     payload["schema_version"] = json!("emberd-governed-canary-dispatch-v1");
     payload["minimum_free_vram_bytes"] = json!(20 * GIB);
@@ -119,12 +155,13 @@ fn write_governed_canary_manifest(root: &Path, job_id: &str) -> PathBuf {
         "expected_gpu_uuid": "GPU-EMBER-CANARY",
         "minimum_free_vram_bytes": 20 * GIB,
         "lease_id": "gpu:GPU-EMBER-CANARY:bounded-canary",
-        "expected_emberd_binary_sha256": sha256(&program),
+        "expected_emberd_binary_sha256": sha256(&emberd_binary),
         "expected_emberd_source_sha256": emberd_source_sha256(),
-        "source": {"path": source, "sha256": sha256(&source)},
+        "certified_consumer": {"path": &certified_consumer, "sha256": sha256(&certified_consumer)},
+        "disk_budget_runner": {"path": &disk_budget_runner, "sha256": sha256(&disk_budget_runner)},
+        "governed_runner": {"path": &governed_runner, "sha256": sha256(&governed_runner)},
         "config": {"path": config_path, "sha256": config_sha256},
-        "tokenizer": {"path": tokenizer, "sha256": sha256(&tokenizer)},
-        "runner": {"path": program, "sha256": sha256(&program)},
+        "tokenizer": {"path": &tokenizer, "sha256": sha256(&tokenizer)},
         "forbidden_process_names": ["llama-server.exe", "qwen.exe"],
         "wsl_allowed": false,
         "docker_allowed": false,
@@ -396,9 +433,9 @@ fn governed_canary_refuses_swapped_semantic_role_hashes() {
     let root = sandbox("governed-canary-role-swap");
     let manifest = write_governed_canary_manifest(&root, "governed-canary-role-swap");
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-    let source_sha = payload["canary_scope"]["source"]["sha256"].clone();
+    let source_sha = payload["canary_scope"]["certified_consumer"]["sha256"].clone();
     let tokenizer_sha = payload["canary_scope"]["tokenizer"]["sha256"].clone();
-    payload["canary_scope"]["source"]["sha256"] = tokenizer_sha;
+    payload["canary_scope"]["certified_consumer"]["sha256"] = tokenizer_sha;
     payload["canary_scope"]["tokenizer"]["sha256"] = source_sha;
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let bytes = fs::read(&manifest).unwrap();
@@ -428,7 +465,7 @@ fn governed_canary_refuses_a_semantic_role_bound_with_the_wrong_kind() {
     let root = sandbox("governed-canary-role-kind");
     let manifest = write_governed_canary_manifest(&root, "governed-canary-role-kind");
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-    let source_sha = payload["canary_scope"]["source"]["sha256"]
+    let source_sha = payload["canary_scope"]["certified_consumer"]["sha256"]
         .as_str()
         .unwrap()
         .to_string();
@@ -470,7 +507,7 @@ fn governed_canary_refuses_a_duplicate_semantic_role_binding() {
     payload["bindings"]
         .as_array_mut()
         .unwrap()
-        .push(json!({"kind":"source","path":duplicate_source,"sha256":sha256(&duplicate_source)}));
+        .push(json!({"kind":"certified_consumer","path":duplicate_source,"sha256":sha256(&duplicate_source)}));
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let bytes = fs::read(&manifest).unwrap();
     let digest = format!("{:x}", Sha256::digest(&bytes));
@@ -495,18 +532,20 @@ fn governed_canary_refuses_a_duplicate_semantic_role_binding() {
 }
 
 #[test]
-fn governed_canary_refuses_a_runner_role_not_equal_to_the_spawn_program() {
-    let root = sandbox("governed-canary-runner-program-drift");
-    let manifest = write_governed_canary_manifest(&root, "governed-canary-runner-program-drift");
+fn governed_canary_refuses_a_governed_runner_not_equal_to_the_argv_chain() {
+    let root = sandbox("governed-canary-governed-runner-drift");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-governed-runner-drift");
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
     let unrelated_runner = root.join("unrelated-governed-runner.py");
     fs::write(&unrelated_runner, b"# unrelated runner\n").unwrap();
-    payload["canary_scope"]["runner"] =
+    payload["canary_scope"]["governed_runner"] =
         json!({"path": unrelated_runner, "sha256": sha256(&unrelated_runner)});
-    payload["bindings"]
-        .as_array_mut()
-        .unwrap()
-        .push(json!({"kind":"runner","path":unrelated_runner,"sha256":sha256(&unrelated_runner)}));
+    for binding in payload["bindings"].as_array_mut().unwrap() {
+        if binding["kind"] == "governed_runner" {
+            binding["path"] = json!(unrelated_runner);
+            binding["sha256"] = json!(sha256(&unrelated_runner));
+        }
+    }
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let bytes = fs::read(&manifest).unwrap();
     let digest = format!("{:x}", Sha256::digest(&bytes));
@@ -523,13 +562,45 @@ fn governed_canary_refuses_a_runner_role_not_equal_to_the_spawn_program() {
     );
     if result.is_ok() {
         daemon
-            .stop_job("governed-canary-runner-program-drift")
+            .stop_job("governed-canary-governed-runner-drift")
             .unwrap();
     }
     assert!(matches!(
         result,
         Err(EmberdError::InvalidDispatchManifest { .. })
     ));
+}
+
+#[test]
+fn governed_canary_refuses_a_bound_governed_runner_missing_from_argv() {
+    let root = sandbox("governed-canary-missing-governed-argv");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-missing-governed-argv");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["args"].as_array_mut().unwrap().pop();
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(
+        daemon
+            .identity_hash("governed-canary-missing-governed-argv")
+            .unwrap(),
+        None
+    );
 }
 
 #[test]

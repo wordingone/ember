@@ -315,6 +315,9 @@ pub struct DispatchFileBinding {
 #[serde(rename_all = "snake_case")]
 pub enum DispatchBindingKind {
     Config,
+    CertifiedConsumer,
+    DiskBudgetRunner,
+    GovernedRunner,
     Manifest,
     Input,
     Verifier,
@@ -339,10 +342,11 @@ pub struct DispatchCanaryScope {
     pub lease_id: String,
     pub expected_emberd_binary_sha256: String,
     pub expected_emberd_source_sha256: String,
-    pub source: DispatchFileHash,
+    pub certified_consumer: DispatchFileHash,
+    pub disk_budget_runner: DispatchFileHash,
+    pub governed_runner: DispatchFileHash,
     pub config: DispatchFileHash,
     pub tokenizer: DispatchFileHash,
-    pub runner: DispatchFileHash,
     pub forbidden_process_names: Vec<String>,
     pub wsl_allowed: bool,
     pub docker_allowed: bool,
@@ -428,10 +432,11 @@ fn validate_dispatch_canary_scope(
     let hashes = [
         &scope.expected_emberd_binary_sha256,
         &scope.expected_emberd_source_sha256,
-        &scope.source.sha256,
+        &scope.certified_consumer.sha256,
+        &scope.disk_budget_runner.sha256,
+        &scope.governed_runner.sha256,
         &scope.config.sha256,
         &scope.tokenizer.sha256,
-        &scope.runner.sha256,
     ];
     if scope.dispatch_kind != "governed_vertical"
         || scope.expected_gpu_uuid.trim().is_empty()
@@ -524,20 +529,34 @@ fn validate_canary_binding_closure(
     scope: Option<&DispatchCanaryScope>,
     program: &Path,
     program_sha256: &str,
+    args: &[String],
     bindings: &[(PathBuf, String, DispatchBindingKind)],
 ) -> Result<()> {
     let Some(scope) = scope else {
         return Ok(());
     };
     let roles = [
-        ("source", &scope.source, DispatchBindingKind::Source),
+        (
+            "certified_consumer",
+            &scope.certified_consumer,
+            DispatchBindingKind::CertifiedConsumer,
+        ),
+        (
+            "disk_budget_runner",
+            &scope.disk_budget_runner,
+            DispatchBindingKind::DiskBudgetRunner,
+        ),
+        (
+            "governed_runner",
+            &scope.governed_runner,
+            DispatchBindingKind::GovernedRunner,
+        ),
         ("config", &scope.config, DispatchBindingKind::Config),
         (
             "tokenizer",
             &scope.tokenizer,
             DispatchBindingKind::Tokenizer,
         ),
-        ("runner", &scope.runner, DispatchBindingKind::Runner),
     ];
     let mut role_paths = std::collections::BTreeSet::new();
     for (role, file, expected_kind) in roles {
@@ -568,14 +587,53 @@ fn validate_canary_binding_closure(
             });
         }
     }
-    let runner = fs::canonicalize(&scope.runner.path).map_err(|error| {
+    if role_paths.contains(program) {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "governed canary executable image must be distinct from bound source roles"
+                .into(),
+        });
+    }
+    let disk_budget_runner = fs::canonicalize(&scope.disk_budget_runner.path).map_err(|error| {
         EmberdError::InvalidDispatchManifest {
-            detail: format!("governed canary runner path is unavailable: {error}"),
+            detail: format!("governed canary disk-budget runner path is unavailable: {error}"),
         }
     })?;
-    if runner != program || scope.runner.sha256 != program_sha256 {
+    let governed_runner = fs::canonicalize(&scope.governed_runner.path).map_err(|error| {
+        EmberdError::InvalidDispatchManifest {
+            detail: format!("governed canary governed runner path is unavailable: {error}"),
+        }
+    })?;
+    let separators = args
+        .iter()
+        .enumerate()
+        .filter_map(|(index, arg)| (arg == "--").then_some(index))
+        .collect::<Vec<_>>();
+    let separator = separators.first().copied();
+    let disk_argument = args.first().map(PathBuf::from);
+    let child_program_argument = separator
+        .and_then(|index| args.get(index + 1))
+        .map(PathBuf::from);
+    let governed_argument = separator
+        .and_then(|index| args.get(index + 2))
+        .map(PathBuf::from);
+    if separators.len() != 1
+        || disk_argument.as_deref() != Some(disk_budget_runner.as_path())
+        || child_program_argument.as_deref() != Some(program)
+        || governed_argument.as_deref() != Some(governed_runner.as_path())
+        || args
+            .iter()
+            .filter(|arg| Path::new(arg.as_str()) == disk_budget_runner)
+            .count()
+            != 1
+        || args
+            .iter()
+            .filter(|arg| Path::new(arg.as_str()) == governed_runner)
+            .count()
+            != 1
+        || validate_hash(program_sha256).is_err()
+    {
         return Err(EmberdError::InvalidDispatchManifest {
-            detail: "governed canary runner role must equal the exact spawned program".into(),
+            detail: "governed canary manifest does not bind the exact executable, disk-budget runner, and governed-runner argv chain".into(),
         });
     }
     Ok(())
@@ -1531,6 +1589,7 @@ impl Daemon {
             manifest.canary_scope.as_ref(),
             &program,
             &manifest.program.sha256,
+            &manifest.args,
             &verified_bindings,
         )?;
         validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
@@ -1772,6 +1831,7 @@ impl Daemon {
             manifest.canary_scope.as_ref(),
             &program,
             &manifest.program.sha256,
+            &manifest.args,
             &verified_bindings,
         )?;
         validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
