@@ -21,6 +21,13 @@ not resolve to real in-repo bytes is RED, never silently accepted. A BLOCKING ro
 the conjunct verdict BLOCKED, not CLOSED - the ledger tells the truth, it does not fake
 green.
 
+COLLECTABILITY GATE (dead-on-import false-CLOSE class, 2026-07-23): bytes existing is not
+proof a guard works. A CLOSED_GUARDED row whose guard_ref names a test file is additionally
+probed with a bounded pytest --collect-only; a guard that cannot even be collected (a
+module-scope import chain frozen out by a later, unrelated commit; an internal collection
+error) never regression-guards its class and now REDs the row instead of counting as closed.
+Non-test guard_refs (validator modules referenced by symbol) are unaffected.
+
 Verdict states (mutually exclusive):
     RED      - the ledger could not be loaded, or fails schema / completeness /
                guard-resolution checks. Never a valid declaration input.
@@ -35,6 +42,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -83,6 +91,74 @@ LAW_LISTED_CLASS_IDS = frozenset(
 _GUARD_REF_RE = re.compile(
     r"^(?P<path>[^:]+\.(?:py|ts|json|md))(?::(?P<symbol>[A-Za-z_][A-Za-z0-9_]*))?$"
 )
+
+# Collectability-gate constants (dead-on-import false-CLOSE class, see module docstring
+# amendment below). A CLOSED_GUARDED row's guard_ref bytes existing is NOT sufficient
+# proof the guard can regression-guard anything -> a test file whose bytes resolve but
+# whose collection dies on import (module-scope SystemExit / an unrelated import chain
+# frozen out by a later commit) must never count as closed.
+_COLLECTABILITY_TIMEOUT_S = 120
+_TEST_PATH_RE = re.compile(r".*test.*\.py$", re.IGNORECASE)
+
+
+def _is_test_guard_path(rel_path: str) -> bool:
+    """True when a guard_ref path names a test file (collectability-gate scope).
+    Non-test guard_refs (validator modules like census.py:symbol) are out of scope for
+    this gate and keep the prior bytes+symbol-only behavior."""
+    normalized = rel_path.replace("\\", "/")
+    if normalized.startswith("tests/"):
+        return True
+    if "/test" in normalized:
+        return True
+    basename = normalized.rsplit("/", 1)[-1]
+    return bool(_TEST_PATH_RE.match(basename))
+
+
+def check_collectability(repo_root: Path, rel_path: str) -> tuple[bool, str]:
+    """Bounded `pytest --collect-only` probe on a single test file. Returns
+    (collectable, reason-if-not). Never raises on ordinary probe failure - a timeout or
+    an unexpected exception is itself treated as non-collectable (fail-closed), never
+    silently accepted as collectable."""
+    full_path = repo_root / rel_path
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", str(full_path), "--collect-only", "-q"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=_COLLECTABILITY_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"collect-only probe timed out after {_COLLECTABILITY_TIMEOUT_S}s"
+    except OSError as exc:
+        return False, f"collect-only probe could not be started: {exc}"
+
+    combined = f"{proc.stdout}\n{proc.stderr}"
+    if proc.returncode != 0:
+        first_line = next(
+            (line for line in combined.splitlines() if line.strip()), "(no output)"
+        )
+        return False, f"collect-only exited {proc.returncode} -> {first_line.strip()}"
+    if "INTERNALERROR" in combined:
+        first_line = next(
+            (line for line in combined.splitlines() if "INTERNALERROR" in line),
+            "INTERNALERROR",
+        )
+        return False, first_line.strip()
+    if "SystemExit" in combined:
+        first_line = next(
+            (line for line in combined.splitlines() if "SystemExit" in line),
+            "SystemExit",
+        )
+        return False, first_line.strip()
+    if "no tests collected" in combined and (
+        "error" in combined.lower() or "INTERNALERROR" in combined
+    ):
+        first_line = next(
+            (line for line in combined.splitlines() if line.strip()), "(no output)"
+        )
+        return False, first_line.strip()
+    return True, ""
 
 
 class LedgerLoadError(Exception):
@@ -192,6 +268,16 @@ def validate_row(row: Any, repo_root: Path) -> tuple[list[str], dict[str, Any] |
             ok, reason = resolve_guard_ref(repo_root, guard_ref)
             if not ok:
                 errors.append(f"class {class_id!r}: dangling guard_ref -> {reason}")
+            else:
+                match = _GUARD_REF_RE.match(guard_ref)
+                rel_path = match.group("path") if match else guard_ref
+                if _is_test_guard_path(rel_path):
+                    collectable, dead_reason = check_collectability(repo_root, rel_path)
+                    if not collectable:
+                        errors.append(
+                            f"class {class_id!r}: guard test not collectable "
+                            f"(dead-on-import or collection error) -> {dead_reason}"
+                        )
     else:  # STATE_BLOCKING
         blocking_reason = row.get("blocking_reason")
         if not isinstance(blocking_reason, str) or not blocking_reason.strip():
