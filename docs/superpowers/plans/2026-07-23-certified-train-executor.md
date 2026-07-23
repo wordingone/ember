@@ -117,7 +117,7 @@ from pathlib import Path
 from typing import Any
 
 SHA256_KEYS = {
-    "public_master_sha256",
+    "public_master_sha",
     "checkout_sha256",
     "completion_receipt_sha256",
     "config_sha256",
@@ -134,7 +134,7 @@ SHA256_KEYS = {
 @dataclass(frozen=True)
 class ValidatedLaunch:
     certificate_sha256: str
-    public_master_sha256: str
+    public_master_sha: str
     artifact_root: Path
     runner_receipt: Path
     seed: int

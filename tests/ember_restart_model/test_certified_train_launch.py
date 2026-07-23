@@ -13,7 +13,8 @@ from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "certified_train_launch.py"
-SHA = "a" * 64
+SHA = "a" * 40
+EVIDENCE_SHA256 = "b" * 64
 
 
 def canonical_bytes(value: object) -> bytes:
@@ -142,19 +143,19 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
         "superseded_by": None,
         "completion_receipt_path": str(completion_path),
         "completion_receipt_sha256": completion_sha256,
-        "public_master_sha256": SHA,
-        "checkout_sha256": SHA,
-        "config_sha256": SHA,
-        "tokenizer_sha256": SHA,
-        "input_authority_sha256": SHA,
-        "cli_binary_sha256": SHA,
-        "launch_packet_sha256": SHA,
-        "board_receipt_sha256": SHA,
-        "benchmark_registry_sha256": SHA,
-        "failure_class_ledger_sha256": SHA,
-        "subject_manifest_sha256": SHA,
-        "seat_sha256": SHA,
-        "root_summary_sha256": SHA,
+        "public_master_sha": SHA,
+        "checkout_sha256": EVIDENCE_SHA256,
+        "config_sha256": EVIDENCE_SHA256,
+        "tokenizer_sha256": EVIDENCE_SHA256,
+        "input_authority_sha256": EVIDENCE_SHA256,
+        "cli_binary_sha256": EVIDENCE_SHA256,
+        "launch_packet_sha256": EVIDENCE_SHA256,
+        "board_receipt_sha256": EVIDENCE_SHA256,
+        "benchmark_registry_sha256": EVIDENCE_SHA256,
+        "failure_class_ledger_sha256": EVIDENCE_SHA256,
+        "subject_manifest_sha256": EVIDENCE_SHA256,
+        "seat_sha256": EVIDENCE_SHA256,
+        "root_summary_sha256": EVIDENCE_SHA256,
         "declaration_conjuncts": {
             "record_coherent": True,
             "nine_leg_completion": True,
@@ -229,7 +230,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     paths["ledger"],
                     paths["run_spec"],
                 )
-            self.assertEqual(launch.public_master_sha256, SHA)
+            self.assertEqual(launch.public_master_sha, SHA)
             self.assertEqual(launch.max_records, 1)
             self.assertEqual(launch.artifact_root, paths["artifact_root"])
 
@@ -283,7 +284,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             "wrong current master": (
                 lambda paths: None,
                 "current public master",
-                "b" * 64,
+                "c" * 40,
             ),
             "tampered linked completion": (
                 lambda paths: paths["completion"].write_text(
@@ -379,6 +380,64 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         paths["ledger"],
                         paths["run_spec"],
                     )
+
+    def test_git_object_and_content_digest_widths_are_not_interchangeable(
+        self,
+    ) -> None:
+        module = load_module()
+        cases = {
+            "git field carrying 64 hex": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "public_master_sha", EVIDENCE_SHA256
+                    ),
+                ),
+                "40-hex Git object ID",
+            ),
+            "content field carrying 40 hex": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "config_sha256", SHA
+                    ),
+                ),
+                "lowercase SHA-256",
+            ),
+            "linked checkout head carrying 64 hex": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["checkout"].__setitem__(
+                        "head", EVIDENCE_SHA256
+                    ),
+                ),
+                "completion checkout head",
+            ),
+            "linked checkout head differs from declared master": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["checkout"].__setitem__(
+                        "head", "c" * 40
+                    ),
+                ),
+                "completion checkout head does not match",
+            ),
+        }
+        for label, (mutate, error) in cases.items():
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths = write_valid_bundle(pathlib.Path(directory))
+                    mutate(paths)
+                    with mock.patch.object(
+                        module, "read_current_master", return_value=SHA
+                    ):
+                        with self.assertRaisesRegex(ValueError, error):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
 
     def test_every_scope_axis_fails_above_certificate(self) -> None:
         module = load_module()
@@ -572,6 +631,60 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         ),
                     )
         self.assertEqual(calls, [])
+
+    def test_cli_scope_escalation_exits_before_runner_receipt(self) -> None:
+        current_master = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            shell=False,
+        ).stdout.strip()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            _rewrite_completion(
+                paths,
+                lambda receipt: receipt["checkout"].__setitem__(
+                    "head", current_master
+                ),
+            )
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate.__setitem__(
+                    "public_master_sha", current_master
+                ),
+            )
+            request = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            request["requested_scope"]["active_expert_families"] = 2
+            write_json(paths["run_spec"], request)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    "--root",
+                    str(ROOT),
+                    "--certificate",
+                    str(paths["certificate"]),
+                    "--declaration-ledger",
+                    str(paths["ledger"]),
+                    "--run-spec",
+                    str(paths["run_spec"]),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                shell=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(
+                "scope exceeds certificate: active_expert_families",
+                result.stdout + result.stderr,
+            )
+            self.assertFalse(
+                (paths["custody_root"] / "runner-receipt.json").exists()
+            )
 
 
 def _rewrite_completion(
