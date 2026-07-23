@@ -70,14 +70,30 @@ jobs:
           master_sha=$(git rev-parse origin/master)
           cutoff=$(date -u -d "-${MAX_ITEM_AGE_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
           stale_report="${RUNNER_TEMP}/ember-lifecycle-stale.json"
-          python scripts/lifecycle_census.py \
-            --repo "${GITHUB_REPOSITORY}" \
-            --master-sha "${master_sha}" \
-            --stale-before "${cutoff}" \
-            --stale-output "${stale_report}" \
-            --output receipts/lifecycle-census
+          if ! python scripts/lifecycle_census.py \
+              --repo "${GITHUB_REPOSITORY}" \
+              --master-sha "${master_sha}" \
+              --stale-before "${cutoff}" \
+              --stale-output "${stale_report}" \
+              --output receipts/lifecycle-census; then
+            printf 'FAIL [tracker] complete census/report generation failed; refusing stale verdict\n' >&2
+            exit 1
+          fi
 
           # 4. stale open issues / PRs derived from the exact census populations
+          if ! jq -e '
+            (.schema_version == "ember-lifecycle-stale-v1")
+            and (.receipt_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+            and (.master_sha | type == "string" and test("^[0-9a-f]{40}$"))
+            and (.counts | type == "object")
+            and (.counts.pull_requests | type == "number" and isfinite and . >= 0 and floor == .)
+            and (.counts.issues | type == "number" and isfinite and . >= 0 and floor == .)
+            and (.pull_requests | type == "array")
+            and (.issues | type == "array")
+          ' "${stale_report}" >/dev/null; then
+            printf 'FAIL [tracker] invalid stale report schema/counts; refusing stale verdict\n' >&2
+            exit 1
+          fi
           stale_pr=$(jq -er 'if (.counts.pull_requests | type) == "number" and (.counts.pull_requests >= 0) and ((.counts.pull_requests | floor) == .counts.pull_requests) then (.counts.pull_requests | tostring) else error("invalid pull_requests count") end' "${stale_report}")
           stale_is=$(jq -er 'if (.counts.issues | type) == "number" and (.counts.issues >= 0) and ((.counts.issues | floor) == .counts.issues) then (.counts.issues | tostring) else error("invalid issues count") end' "${stale_report}")
           require_count "pull_requests" "$stale_pr"
