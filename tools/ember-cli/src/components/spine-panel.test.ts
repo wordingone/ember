@@ -11,6 +11,8 @@
 // of silently succeeding or throwing.
 
 import { describe, it, expect } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   assembleAuthorityElement,
   assembleSeatElement,
@@ -25,6 +27,7 @@ import {
   driveSpineElement,
   createSpinePanelCommand,
 } from "./spine-panel.ts";
+import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import type { ModelSeatDecision } from "../entrypoints/model-seat.ts";
 import type { RootBindingsStore } from "../services/custody-bindings.ts";
@@ -385,9 +388,9 @@ describe("assembleFailureClassElement (element 6)", () => {
       readC0Ledger: () => {
         readCalls += 1;
         return JSON.stringify({
-          failure_classes: [
-            { class_id: "cls-training-start", status: "past-dead" },
-            { class_id: "cls-worktree-ceiling", status: "past-dead" },
+          classes: [
+            { class_id: "cls-training-start", state: "past-dead" },
+            { class_id: "cls-worktree-ceiling", state: "past-dead" },
           ],
         });
       },
@@ -402,15 +405,43 @@ describe("assembleFailureClassElement (element 6)", () => {
   it("mutating the class count changes the rendered value (proves binding, not a literal)", () => {
     const elOne = assembleFailureClassElement("/repo", {
       existsC0Ledger: () => true,
-      readC0Ledger: () => JSON.stringify({ failure_classes: [{ class_id: "a", status: "x" }] }),
+      readC0Ledger: () => JSON.stringify({ classes: [{ class_id: "a", state: "x" }] }),
     });
     const elTwo = assembleFailureClassElement("/repo", {
       existsC0Ledger: () => true,
-      readC0Ledger: () => JSON.stringify({ failure_classes: [{ class_id: "a", status: "x" }, { class_id: "b", status: "y" }] }),
+      readC0Ledger: () => JSON.stringify({ classes: [{ class_id: "a", state: "x" }, { class_id: "b", state: "y" }] }),
     });
     expect(elOne.lines.join("\n")).toContain("1 failure class(es)");
     expect(elTwo.lines.join("\n")).toContain("2 failure class(es)");
     expect(elOne.lines.join("\n")).not.toEqual(elTwo.lines.join("\n"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Element 6 -- production-shaped, real committed ledger (T2.2 landed;
+// defect fix 2026-07-23: T2.1 acceptance leg found the reader keyed on
+// failure_classes/status, but the landed ledger (T2.2) uses classes/state.
+// This test opens the REAL checked-in manifests/ember-01-custody/
+// c0-failure-class-ledger.json bytes and runs them through the real
+// production reader (assembleFailureClassElement, no injected deps) -- never
+// an in-test-rebuilt fixture -- and asserts on the ledger's real row count.
+// ---------------------------------------------------------------------------
+
+describe("assembleFailureClassElement (element 6) -- real committed ledger (T2.2)", () => {
+  it("BOUND: reads the real committed ledger through the production path and renders its real row count, never 0", () => {
+    const repoRoot = resolveEmberRepoRoot({ startDir: import.meta.dir });
+    const ledgerPath = join(repoRoot, "manifests/ember-01-custody/c0-failure-class-ledger.json");
+    const real = JSON.parse(readFileSync(ledgerPath, "utf8")) as { classes: Array<{ class_id: string }> };
+    const expectedCount = real.classes.length;
+    // Guards the test itself against a future empty/absent ledger silently
+    // passing a 0-vs-0 comparison -- the committed ledger must have real rows.
+    expect(expectedCount).toBeGreaterThan(0);
+
+    const el = assembleFailureClassElement(repoRoot);
+    expect(el.status).toBe("BOUND");
+    expect(el.lines[0]).toBe(`${expectedCount} failure class(es) recorded`);
+    expect(el.lines[0]).not.toBe("0 failure class(es) recorded");
+    expect(el.lines.join("\n")).toContain(real.classes[0]!.class_id);
   });
 });
 
