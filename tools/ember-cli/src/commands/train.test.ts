@@ -4,13 +4,17 @@
 
 // commands/train.test.ts — unit tests for the /train command.
 //
-// The launch-packet preflight runner is FULLY INJECTED: no real subprocess,
-// no torch/CPU work, and (load-bearing) never any GPU/training launch. Every
-// test records every spawn the command makes and asserts it only ever ran the
-// launch_packet.py preflight -- never a training-launch entrypoint.
+// Both subprocess runners are fully injected: no real subprocess, CPU model,
+// or training launch occurs. Default-mode tests prove only launch_packet.py is
+// requested; certified-mode tests separately prove the one fixed consumer argv.
 
 import { describe, it, expect } from "bun:test";
-import { createTrainCommand, type LaunchPacketRunResult } from "./train.ts";
+import {
+  CERTIFIED_LAUNCH_TIMEOUT_MS,
+  PREFLIGHT_TIMEOUT_MS,
+  createTrainCommand,
+  type LaunchPacketRunResult,
+} from "./train.ts";
 import type { CommandContext } from "../types/command-types.ts";
 
 const mockCtx: CommandContext = {
@@ -143,6 +147,11 @@ describe("train command", () => {
       expect(cmd.name).toBe("train");
       expect(cmd.isEnabled()).toBe(true);
       expect(cmd.description.toLowerCase()).toContain("train");
+    });
+
+    it("keeps the certified canary timeout above the 15-minute run budget", () => {
+      expect(PREFLIGHT_TIMEOUT_MS).toBe(600_000);
+      expect(CERTIFIED_LAUNCH_TIMEOUT_MS).toBeGreaterThan(15 * 60_000);
     });
   });
 
@@ -302,10 +311,10 @@ describe("train command", () => {
   });
 
   // =========================================================================
-  // Load-bearing invariant: the training launch is NEVER spawned, on any path.
+  // Load-bearing default-mode invariant: no training process is spawned.
   // =========================================================================
-  describe("invariant: never invokes a training/GPU launch", () => {
-    it("across success and every failure path, only launch_packet.py is ever spawned", async () => {
+  describe("default-mode invariant: never invokes a training process", () => {
+    it("across default success and failure paths, only launch_packet.py is requested", async () => {
       const scenarios: Array<() => LaunchPacketRunResult> = [
         () => ({ status: 0, stdout: allGreenStdout() }),
         () => ({ status: 1, stdout: failingStdout() }),
