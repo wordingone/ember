@@ -89,3 +89,17 @@ def test_execution_receipt_is_canonical_noop_and_binds_manifest() -> None:
     assert receipt["before"]["remote_branch_count"] == 77
     assert receipt["after"]["remote_branch_count"] == 78
     assert "not attributed" in receipt["interpretation"]
+
+
+def test_manifest_verifier_rejects_path_traversal_ref() -> None:
+    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
+
+    tampered = copy.deepcopy(_load())
+    tampered["candidates"][0]["ref"] = "refs/heads/../unsafe"
+    canonical = dict(tampered)
+    canonical.pop("manifest_sha256")
+    tampered["manifest_sha256"] = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    with __import__("pytest").raises(ManifestError, match="safe full head ref"):
+        verify_manifest(tampered)
