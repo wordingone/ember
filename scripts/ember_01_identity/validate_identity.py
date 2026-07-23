@@ -156,6 +156,9 @@ HASH_PATHS = (
     "data.accepted_input.validator_sha256",
     "data.accepted_input.forwarding_receipt_sha256",
     "training.optimizer_state_sha256",
+    "training.optimizer_contract.implementation_source_sha256",
+    "training.optimizer_contract.param_name_optimizer_id_mapping_sha256",
+    "training.optimizer_contract.realization_receipt_sha256",
     "backend.executable_sha256",
     "evaluation.harness_sha256",
     "evaluation.comparator_sha256",
@@ -248,6 +251,11 @@ CLOSED_OBJECT_KEYS: dict[str, set[str]] = {
     },
     "training.optimizer_contract": {
         "implementation", "hyperparameters", "state_format",
+        "implementation_source_sha256",
+        "param_group_mapping_convention",
+        "param_name_optimizer_id_mapping_sha256",
+        "realization_receipt_sha256",
+        "trusted_verifier_id",
     },
     "training.modality_mixture": {"text", "image", "audio"},
     "training.stopping_rule": {"criterion_id", "result", "receipt_sha256"},
@@ -832,32 +840,67 @@ def validate_manifest(
         elif abs(sum(float(value) for value in mixture.values()) - 1.0) > 1e-9:
             findings.append(_finding("training.modality_mixture_invalid", "weights must sum to one"))
 
-    # cond3 optimizer CONTRACT-half: when a manifest declares the optimizer contract
-    # identity (implementation / hyperparameters / state_format -- the fields
+    # cond3 optimizer CONTRACT-half + B4 REQUIRED-half (ember01plan.md SS B4
+    # L1061-1082): when a manifest declares the optimizer contract identity
+    # (implementation / hyperparameters / state_format -- the fields
     # scripts/ember_restart/contract.py binds to a signed REALIZED
-    # ember-optimizer-realization-v1 receipt), it must be well-formed. Fail-closed on a
-    # malformed contract: the optimizer that produced the state must be named concretely,
-    # never a blank or partial declaration. Additive: absent contract is legal (state-half
-    # gate unchanged); receipt binding is enforced by
+    # ember-optimizer-realization-v1 receipt -- PLUS the 5 B4 residual identity
+    # fields: implementation_source_sha256, param_group_mapping_convention,
+    # param_name_optimizer_id_mapping_sha256, realization_receipt_sha256,
+    # trusted_verifier_id), it must be well-formed and complete. Fail-closed on a
+    # malformed OR partial contract: the optimizer that produced the state must be
+    # named concretely, never a blank or partial declaration -- an omitted residual
+    # field fails exactly like an omitted original field. A manifest with
+    # disposition OWNED_ADMITTED (current owned-admission legs) MUST declare a
+    # contract at all -- see the admission.optimizer_contract_missing check below and
+    # schema-v1.json's b4_governed_conditional_requirement if/then. Manifests with any
+    # other disposition may still omit the contract entirely (state-half only);
+    # receipt binding is enforced by
     # optimizer_identity_binding.verify_optimizer_identity_binding.
     contract_present, optimizer_contract = _get(payload, "training.optimizer_contract")
     if contract_present:
+        required_contract_fields = {
+            "implementation", "hyperparameters", "state_format",
+            "implementation_source_sha256",
+            "param_group_mapping_convention",
+            "param_name_optimizer_id_mapping_sha256",
+            "realization_receipt_sha256",
+            "trusted_verifier_id",
+        }
+        contract_hash_fields = (
+            "implementation_source_sha256",
+            "param_name_optimizer_id_mapping_sha256",
+            "realization_receipt_sha256",
+        )
         valid_contract = (
             isinstance(optimizer_contract, Mapping)
-            and set(optimizer_contract) == {"implementation", "hyperparameters", "state_format"}
+            and set(optimizer_contract) == required_contract_fields
             and isinstance(optimizer_contract.get("implementation"), str)
             and bool(optimizer_contract.get("implementation"))
             and isinstance(optimizer_contract.get("state_format"), str)
             and bool(optimizer_contract.get("state_format"))
             and isinstance(optimizer_contract.get("hyperparameters"), Mapping)
             and bool(optimizer_contract.get("hyperparameters"))
+            and isinstance(optimizer_contract.get("param_group_mapping_convention"), str)
+            and bool(optimizer_contract.get("param_group_mapping_convention"))
+            and isinstance(optimizer_contract.get("trusted_verifier_id"), str)
+            and bool(optimizer_contract.get("trusted_verifier_id"))
+            and all(
+                isinstance(optimizer_contract.get(field), str)
+                and bool(SHA256_RE.fullmatch(optimizer_contract.get(field, "")))
+                for field in contract_hash_fields
+            )
         )
         if not valid_contract:
             findings.append(
                 _finding(
                     "training.optimizer_contract_invalid",
                     "optimizer contract identity must name a concrete "
-                    "implementation/hyperparameters/state_format",
+                    "implementation/hyperparameters/state_format plus all 5 B4 "
+                    "residual fields (implementation_source_sha256, "
+                    "param_group_mapping_convention, "
+                    "param_name_optimizer_id_mapping_sha256, "
+                    "realization_receipt_sha256, trusted_verifier_id)",
                 )
             )
 
@@ -1054,6 +1097,27 @@ def validate_manifest(
             findings.append(_finding("reference.selected_as_owned", "reference cannot be owned Ember"))
         if completion_credit is True:
             findings.append(_finding("reference.owned_completion_credit", "reference cannot increment owned completion"))
+
+    # B4 REQUIRED-half (ember01plan.md SS B4 L1061-1082): an absent optimizer_contract
+    # used to pass identity validation unconditionally -- that is the defect. A
+    # manifest declaring OWNED_ADMITTED (current owned-admission legs) now fails
+    # closed the instant training.optimizer_contract is omitted. Mirrors
+    # schema-v1.json's b4_governed_conditional_requirement if/then (redundant,
+    # named finding -- house style for OWNED_ADMITTED requirements, see the
+    # checkpoint/evaluation/backend blocks above and below).
+    if disposition == "OWNED_ADMITTED":
+        admitted_contract_present, _ = _get(payload, "training.optimizer_contract")
+        if not admitted_contract_present:
+            findings.append(
+                _finding(
+                    "admission.optimizer_contract_missing",
+                    "OWNED_ADMITTED requires a bound optimizer contract naming the "
+                    "implementation, hyperparameters, state_format, "
+                    "implementation_source_sha256, param_group_mapping_convention, "
+                    "param_name_optimizer_id_mapping_sha256, "
+                    "realization_receipt_sha256, and trusted_verifier_id",
+                )
+            )
 
     present, credit_sources = _get(payload, "provenance.neural_capability_credit_sources")
     invalid_credit: list[str] = []

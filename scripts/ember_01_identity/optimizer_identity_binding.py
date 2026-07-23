@@ -157,7 +157,14 @@ def verify_optimizer_identity_binding(
     # every field must equal the signed REALIZED realization receipt's field (mirrors
     # contract.py's ``training.optimizer_receipt.<field>: binding mismatch``). A manifest
     # optimizer contract that diverges from the realized optimizer -- or omits a field --
-    # fails closed naming the exact field. Absent contract is legal (state-half only).
+    # fails closed naming the exact field. Absent contract is legal HERE (state-half
+    # only, this function does not gate on disposition) -- but as of B4
+    # (ember01plan.md SS B4 L1061-1082) an absent contract is NOT legal fleet-wide: a
+    # manifest with identity.disposition == "OWNED_ADMITTED" is rejected by
+    # validate_identity.validate_manifest's admission.optimizer_contract_missing check
+    # before this function is ever reached for that manifest's contract-half. This
+    # function's own binding logic against the realization receipt is unchanged
+    # (schema-legalization, not new binding machinery per ember01plan.md item 5).
     optimizer_contract = training.get("optimizer_contract")
     if optimizer_contract is not None:
         if not isinstance(optimizer_contract, Mapping):
