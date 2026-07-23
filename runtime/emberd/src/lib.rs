@@ -328,6 +328,48 @@ pub struct DispatchStorageReserve {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct DispatchCanaryScope {
+    pub dispatch_kind: String,
+    pub expected_gpu_uuid: String,
+    pub minimum_free_vram_bytes: u64,
+    pub lease_id: String,
+    pub expected_emberd_binary_sha256: String,
+    pub expected_emberd_source_sha256: String,
+    pub source_sha256: String,
+    pub config_sha256: String,
+    pub tokenizer_sha256: String,
+    pub runner_sha256: String,
+    pub forbidden_process_names: Vec<String>,
+    pub wsl_allowed: bool,
+    pub docker_allowed: bool,
+    pub persistent_worker_allowed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CanaryProcessIdentity {
+    pub pid: u32,
+    pub parent_pid: u32,
+    pub start_token: u64,
+    pub image_name: String,
+    pub image_sha256: String,
+    pub gpu_uuid: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CanaryHostSnapshot {
+    pub observed_at_ms: i64,
+    pub gpu_uuid: String,
+    pub free_vram_bytes: u64,
+    pub total_vram_bytes: u64,
+    pub processes: Vec<CanaryProcessIdentity>,
+    pub wsl_detected: bool,
+    pub docker_detected: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DispatchManifest {
     pub schema_version: String,
     pub job_id: String,
@@ -347,9 +389,148 @@ pub struct DispatchManifest {
     pub maximum_job_memory_bytes: u64,
     pub simulated_peak_commit_bytes: u64,
     pub preflight_receipt: PathBuf,
+    #[serde(default)]
+    pub canary_scope: Option<DispatchCanaryScope>,
 }
 
 const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+
+fn validate_dispatch_canary_scope(
+    manifest: &DispatchManifest,
+    emberd_binary_sha256: &str,
+    emberd_source_sha256: &str,
+) -> Result<()> {
+    match (
+        manifest.schema_version.as_str(),
+        manifest.canary_scope.as_ref(),
+    ) {
+        ("emberd-dispatch-manifest-v2", None) => return Ok(()),
+        ("emberd-governed-canary-dispatch-v1", Some(_)) => {}
+        _ => {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail:
+                    "dispatch schema and canary_scope must select exactly one closed authority path"
+                        .into(),
+            })
+        }
+    }
+    let scope = manifest.canary_scope.as_ref().expect("matched Some above");
+    let hashes = [
+        &scope.expected_emberd_binary_sha256,
+        &scope.expected_emberd_source_sha256,
+        &scope.source_sha256,
+        &scope.config_sha256,
+        &scope.tokenizer_sha256,
+        &scope.runner_sha256,
+    ];
+    if scope.dispatch_kind != "governed_vertical"
+        || scope.expected_gpu_uuid.trim().is_empty()
+        || scope.minimum_free_vram_bytes == 0
+        || scope.minimum_free_vram_bytes != manifest.minimum_free_vram_bytes
+        || scope.lease_id != manifest.resource_lease
+        || scope.expected_emberd_binary_sha256 != emberd_binary_sha256
+        || scope.expected_emberd_source_sha256 != emberd_source_sha256
+        || scope.wsl_allowed
+        || scope.docker_allowed
+        || scope.persistent_worker_allowed
+        || hashes.iter().any(|value| validate_hash(value).is_err())
+        || scope.forbidden_process_names.is_empty()
+    {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "governed canary scope is incomplete or does not bind the running emberd"
+                .into(),
+        });
+    }
+    let mut forbidden = std::collections::BTreeSet::new();
+    for name in &scope.forbidden_process_names {
+        let normalized = name.trim().to_ascii_lowercase();
+        if normalized.is_empty()
+            || normalized != *name
+            || normalized.chars().any(char::is_whitespace)
+            || !forbidden.insert(normalized)
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "governed canary forbidden-process names must be unique normalized tokens"
+                    .into(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_canary_host_snapshot(
+    scope: &DispatchCanaryScope,
+    snapshot: &CanaryHostSnapshot,
+) -> Result<()> {
+    if snapshot.observed_at_ms < 0
+        || snapshot.gpu_uuid != scope.expected_gpu_uuid
+        || snapshot.free_vram_bytes < scope.minimum_free_vram_bytes
+        || snapshot.total_vram_bytes == 0
+        || snapshot.free_vram_bytes > snapshot.total_vram_bytes
+        || snapshot.wsl_detected
+        || snapshot.docker_detected
+    {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "governed canary host snapshot does not satisfy the closed GPU/host policy"
+                .into(),
+        });
+    }
+    let forbidden = scope
+        .forbidden_process_names
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut identities = std::collections::BTreeSet::new();
+    for process in &snapshot.processes {
+        let image_name = process.image_name.trim().to_ascii_lowercase();
+        if process.pid == 0
+            || process.start_token == 0
+            || image_name.is_empty()
+            || image_name != process.image_name
+            || validate_hash(&process.image_sha256).is_err()
+            || !identities.insert((process.pid, process.start_token))
+            || forbidden.contains(image_name.as_str())
+            || process
+                .gpu_uuid
+                .as_deref()
+                .is_some_and(|uuid| uuid != scope.expected_gpu_uuid)
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "governed canary host snapshot contains an invalid or forbidden process"
+                    .into(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_canary_binding_closure(
+    scope: Option<&DispatchCanaryScope>,
+    program_sha256: &str,
+    bindings: &[(PathBuf, String, DispatchBindingKind)],
+) -> Result<()> {
+    let Some(scope) = scope else {
+        return Ok(());
+    };
+    let available = std::iter::once(program_sha256)
+        .chain(bindings.iter().map(|(_, sha256, _)| sha256.as_str()))
+        .collect::<std::collections::BTreeSet<_>>();
+    for (role, sha256) in [
+        ("source", scope.source_sha256.as_str()),
+        ("config", scope.config_sha256.as_str()),
+        ("tokenizer", scope.tokenizer_sha256.as_str()),
+        ("runner", scope.runner_sha256.as_str()),
+    ] {
+        if !available.contains(sha256) {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: format!(
+                    "governed canary {role} sha256 is not bound to an exact dispatch file"
+                ),
+            });
+        }
+    }
+    Ok(())
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -1044,6 +1225,7 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
+            || Ok(None),
         )
     }
 
@@ -1098,6 +1280,7 @@ impl Daemon {
                 free_space,
                 free_vram,
                 free_host_commit,
+                || Ok(None),
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -1140,6 +1323,48 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
+            || Ok(None),
+        )
+    }
+
+    pub fn dispatch_governed_canary_manifest_bytes_at_with_probes<F, G, H, I>(
+        &self,
+        manifest_bytes: &[u8],
+        expected_sha256: &str,
+        manifest_identity_path: &Path,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        mut canary_host_probe: I,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+        I: FnMut() -> Result<CanaryHostSnapshot>,
+    {
+        if validate_hash(expected_sha256).is_err() || hash_bytes(manifest_bytes) != expected_sha256
+        {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "governed canary manifest bytes do not match the supplied sha256".into(),
+            });
+        }
+        let manifest: DispatchManifest =
+            serde_json::from_slice(manifest_bytes).map_err(|error| {
+                EmberdError::InvalidDispatchManifest {
+                    detail: format!("governed canary manifest schema is invalid: {error}"),
+                }
+            })?;
+        self.validate_dispatch_manifest_snapshot_preconditions(&manifest)?;
+        self.dispatch_manifest_bytes_at_with_probes_and_host_inner(
+            manifest_bytes,
+            manifest_identity_path,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            || canary_host_probe().map(Some),
         )
     }
 
@@ -1147,8 +1372,10 @@ impl Daemon {
         &self,
         manifest: &DispatchManifest,
     ) -> Result<()> {
-        if manifest.schema_version != "emberd-dispatch-manifest-v2"
-            || manifest.job_id.trim().is_empty()
+        if !matches!(
+            manifest.schema_version.as_str(),
+            "emberd-dispatch-manifest-v2" | "emberd-governed-canary-dispatch-v1"
+        ) || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
                 .source_commit
@@ -1168,6 +1395,11 @@ impl Daemon {
                 detail: "dispatch manifest requires the closed v2 schema, identities, window, bindings, and reserves".into(),
             });
         }
+        validate_dispatch_canary_scope(
+            manifest,
+            &self.emberd_binary_sha256,
+            &self.emberd_source_sha256,
+        )?;
         let custody_root = fs::canonicalize(&manifest.custody_root).map_err(|error| {
             EmberdError::InvalidDispatchManifest {
                 detail: format!("dispatch custody root is unavailable: {error}"),
@@ -1201,6 +1433,11 @@ impl Daemon {
                     .into(),
             });
         }
+        validate_canary_binding_closure(
+            manifest.canary_scope.as_ref(),
+            &manifest.program.sha256,
+            &verified_bindings,
+        )?;
         validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
         for key in [
             "TEMP",
@@ -1248,7 +1485,7 @@ impl Daemon {
         }
         validate_absolute_dispatch_args(&manifest.args, &program, &verified_bindings, &custody_root)
     }
-    fn dispatch_manifest_bytes_at_with_probes_and_host_inner<F, G, H>(
+    fn dispatch_manifest_bytes_at_with_probes_and_host_inner<F, G, H, I>(
         &self,
         manifest_bytes: &[u8],
         manifest_identity_path: &Path,
@@ -1256,11 +1493,13 @@ impl Daemon {
         mut free_space: F,
         mut free_vram: G,
         mut free_host_commit: H,
+        mut canary_host_probe: I,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
+        I: FnMut() -> Result<Option<CanaryHostSnapshot>>,
     {
         let manifest_path = fs::canonicalize(manifest_identity_path).map_err(|error| {
             EmberdError::InvalidDispatchManifest {
@@ -1273,8 +1512,10 @@ impl Daemon {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
-        if manifest.schema_version != "emberd-dispatch-manifest-v2"
-            || manifest.job_id.trim().is_empty()
+        if !matches!(
+            manifest.schema_version.as_str(),
+            "emberd-dispatch-manifest-v2" | "emberd-governed-canary-dispatch-v1"
+        ) || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
                 .source_commit
@@ -1294,6 +1535,22 @@ impl Daemon {
                 detail: "dispatch manifest requires the closed v2 schema, identities, window, bindings, and reserves".into(),
             });
         }
+        validate_dispatch_canary_scope(
+            &manifest,
+            &self.emberd_binary_sha256,
+            &self.emberd_source_sha256,
+        )?;
+        let canary_scope = manifest.canary_scope.clone();
+        let canary_before = if let Some(scope) = canary_scope.as_ref() {
+            let snapshot =
+                canary_host_probe()?.ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                    detail: "governed canary dispatch requires an authoritative host probe".into(),
+                })?;
+            validate_canary_host_snapshot(scope, &snapshot)?;
+            Some(snapshot)
+        } else {
+            None
+        };
         if observed_at_ms < manifest.not_before_ms {
             return Err(EmberdError::DispatchTooEarly {
                 not_before_ms: manifest.not_before_ms,
@@ -1391,6 +1648,11 @@ impl Daemon {
                     .into(),
             });
         }
+        validate_canary_binding_closure(
+            manifest.canary_scope.as_ref(),
+            &manifest.program.sha256,
+            &verified_bindings,
+        )?;
         validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
 
         const CACHE_KEYS: [&str; 7] = [
@@ -1468,6 +1730,26 @@ impl Daemon {
             &verified_bindings,
             &custody_root,
         )?;
+        let canary_before_spawn = if let Some(scope) = canary_scope.as_ref() {
+            let snapshot =
+                canary_host_probe()?.ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                    detail: "governed canary dispatch requires a second pre-spawn host probe"
+                        .into(),
+                })?;
+            validate_canary_host_snapshot(scope, &snapshot)?;
+            let before = canary_before
+                .as_ref()
+                .expect("governed canary first probe is present");
+            if before.gpu_uuid != snapshot.gpu_uuid || before.processes != snapshot.processes {
+                return Err(EmberdError::InvalidDispatchManifest {
+                    detail: "governed canary GPU/process identity changed before child creation"
+                        .into(),
+                });
+            }
+            Some(snapshot)
+        } else {
+            None
+        };
         let manifest_sha256 = hash_bytes(&manifest_bytes);
         let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
         let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
@@ -1510,6 +1792,11 @@ impl Daemon {
                 "binary_sha256": &self.emberd_binary_sha256,
                 "source_sha256": &self.emberd_source_sha256,
             },
+            "governed_canary": canary_scope.as_ref().map(|scope| json!({
+                "scope": scope,
+                "before": canary_before,
+                "before_spawn": canary_before_spawn,
+            })),
         });
         let receipt_bytes = serde_json::to_vec(&receipt_payload)?;
         if let Some(existing) = self.recover_pending_dispatch_receipt(
