@@ -217,21 +217,37 @@ export function assembleCustodyLegElement(repoRoot: string, deps: Element3Deps =
     };
   }
 
+  // Defect (adversarial review, PR #1027): the root-spec read above is wrapped
+  // fail-closed, but this bindings-store read was NOT -- readRootBindingsStore's own
+  // default implementation is fail-open by design (services/custody-bindings.ts), but
+  // an injected readRootBindingsStoreFn (or any future non-fail-open implementation)
+  // that throws propagated straight out of assembleCustodyLegElement and crashed the
+  // WHOLE /spine command, not just element 3. Wrap it -- per-element isolation.
   const readBindings = deps.readRootBindingsStoreFn ?? ((root: string) => readRootBindingsStore(root));
-  const store = readBindings(repoRoot);
-  const boundIds = new Set(Object.keys(store.roots));
-  const boundCount = spec.roots.filter((r) => boundIds.has(r.root_id)).length;
+  try {
+    const store = readBindings(repoRoot);
+    const boundIds = new Set(Object.keys(store.roots ?? {}));
+    const boundCount = spec.roots.filter((r) => boundIds.has(r.root_id)).length;
 
-  const lines = [
-    `roots declared: ${spec.roots.length}`,
-    `roots bound: ${boundCount}`,
-    `store: ${rootBindingsStorePath(repoRoot)}`,
-  ];
-  const bindingsRendered = renderRootBindings(store);
-  if (bindingsRendered) {
-    lines.push(...bindingsRendered.split("\n").filter((l) => l !== ""));
+    const lines = [
+      `roots declared: ${spec.roots.length}`,
+      `roots bound: ${boundCount}`,
+      `store: ${rootBindingsStorePath(repoRoot)}`,
+    ];
+    const bindingsRendered = renderRootBindings(store);
+    if (bindingsRendered) {
+      lines.push(...bindingsRendered.split("\n").filter((l) => l !== ""));
+    }
+    return { n: 3, label: "custody-leg state + persisted logical roots", status: "BOUND", lines };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      n: 3,
+      label: "custody-leg state + persisted logical roots",
+      status: "BLOCKED",
+      lines: [`BLOCKED: root-bindings store read failed: ${msg}`],
+    };
   }
-  return { n: 3, label: "custody-leg state + persisted logical roots", status: "BOUND", lines };
 }
 
 // ---------------------------------------------------------------------------
@@ -251,9 +267,24 @@ export interface Element4Deps {
   readLaunchPacketReceipt?: (path: string) => string;
 }
 
+// Canonical launch-packet receipt directory name shape: the exact UTC-basic-format
+// timestamp launch_packet.py's preflight writes (e.g. "20260201T000000Z").
+const CANONICAL_RECEIPT_TS_RE = /^\d{8}T\d{6}Z$/;
+
+// Defect (adversarial review, PR #1027): the prior implementation returned every
+// `readdirSync(dirPath)` entry name (files AND directories, canonical-timestamp or not)
+// sorted lexicographically, then blindly took the LAST one as "newest". A stray file
+// dropped directly in the receipts dir, or a directory whose name doesn't follow the
+// canonical timestamp shape, can sort after every real receipt and shadow it -- /spine
+// would then try to read a non-existent/malformed packet.jsonl instead of the real
+// latest receipt. FAIL-CLOSED here means filtering to real directories matching the
+// canonical shape BEFORE selection ever runs.
 function _defaultListLaunchPacketReceipts(dirPath: string): string[] {
   try {
-    return readdirSync(dirPath).sort();
+    return readdirSync(dirPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && CANONICAL_RECEIPT_TS_RE.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
   } catch {
     return [];
   }
@@ -278,51 +309,61 @@ export function assembleLaunchPacketElement(repoRoot: string, deps: Element4Deps
     };
   }
 
-  const newest = dirs[dirs.length - 1]!;
-  const receiptPath = join(dirPath, newest, "packet.jsonl");
-  let raw: string;
-  try {
-    raw = readFile(receiptPath);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      n: 4,
-      label: "launch-packet state",
-      status: "BLOCKED",
-      lines: [`BLOCKED: could not read ${receiptPath}: ${msg}`],
-    };
-  }
-
-  let summary: LaunchPacketSummaryRow | null = null;
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{")) continue;
+  // Select the NEWEST READABLE VALID receipt: walk from newest to oldest and skip
+  // (never crash on) any entry that fails to read or lacks a valid summary record --
+  // a corrupted/incomplete newest receipt must fall back to the next-newest good one,
+  // never silently block on a shadowing entry that a genuinely valid older receipt
+  // would have satisfied.
+  let lastError: string | null = null;
+  for (let i = dirs.length - 1; i >= 0; i--) {
+    const candidate = dirs[i]!;
+    const receiptPath = join(dirPath, candidate, "packet.jsonl");
+    let raw: string;
     try {
-      const obj = JSON.parse(trimmed) as LaunchPacketSummaryRow;
-      if (obj.record === "launch-packet-summary") summary = obj;
-    } catch {
-      // skip unparseable line -- mirrors train.ts's _parseLaunchPacketOutput tolerance.
+      raw = readFile(receiptPath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      lastError = `could not read ${receiptPath}: ${msg}`;
+      continue;
     }
-  }
-  if (!summary) {
-    return {
-      n: 4,
-      label: "launch-packet state",
-      status: "BLOCKED",
-      lines: [`BLOCKED: ${receiptPath} has no launch-packet-summary record`],
-    };
+
+    let summary: LaunchPacketSummaryRow | null = null;
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("{")) continue;
+      try {
+        const obj = JSON.parse(trimmed) as LaunchPacketSummaryRow;
+        if (obj.record === "launch-packet-summary") summary = obj;
+      } catch {
+        // skip unparseable line -- mirrors train.ts's _parseLaunchPacketOutput tolerance.
+      }
+    }
+    if (!summary) {
+      lastError = `${receiptPath} has no launch-packet-summary record`;
+      continue;
+    }
+
+    const lines = [
+      `receipt: ${receiptPath}`,
+      `overall_ready: ${summary.overall_ready === true}`,
+      `implemented_all_pass: ${summary.implemented_all_pass === true}`,
+      `any_deferred: ${summary.any_deferred === true}`,
+    ];
+    if (summary.overall_ready === true && summary.named_ember02_command?.command) {
+      lines.push(`named command: ${summary.named_ember02_command.command}`);
+    }
+    return { n: 4, label: "launch-packet state", status: "BOUND", lines };
   }
 
-  const lines = [
-    `receipt: ${receiptPath}`,
-    `overall_ready: ${summary.overall_ready === true}`,
-    `implemented_all_pass: ${summary.implemented_all_pass === true}`,
-    `any_deferred: ${summary.any_deferred === true}`,
-  ];
-  if (summary.overall_ready === true && summary.named_ember02_command?.command) {
-    lines.push(`named command: ${summary.named_ember02_command.command}`);
-  }
-  return { n: 4, label: "launch-packet state", status: "BOUND", lines };
+  return {
+    n: 4,
+    label: "launch-packet state",
+    status: "BLOCKED",
+    lines: [
+      `BLOCKED: no valid launch-packet receipt found under ${dirPath}`,
+      ...(lastError ? [lastError] : []),
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +373,17 @@ export function assembleLaunchPacketElement(repoRoot: string, deps: Element4Deps
 export interface Element5Deps {
   readBenchmarkRegistryFile?: (path: string) => string;
 }
+
+// _loadBenchmarkRegistry (commands/benchmark.ts) validates benchmark_id/harness_status/
+// completion but does NOT constrain execution_status's vocabulary -- it's typed `string`
+// with no runtime check. Defect (adversarial review, PR #1027): counting
+// `!== "not_executed"` as "executed" silently folds missing/malformed/unsupported/failed/
+// novel status strings into the executed bucket. FAIL-CLOSED here: the known vocabulary
+// is exactly {"executed", "not_executed"} (the only two values _loadBenchmarkRegistry's
+// producer, launch_packet.py / the registry authors, ever write); any row whose
+// execution_status is missing, non-string, or outside that set blocks the WHOLE element
+// (never a guessed partial count) with the offending benchmark_id named.
+const KNOWN_EXECUTION_STATUSES = new Set(["executed", "not_executed"]);
 
 export function assembleBenchmarkElement(repoRoot: string, deps: Element5Deps = {}): SpineElementState {
   const path = join(repoRoot, BENCHMARK_REGISTRY_REL);
@@ -346,7 +398,23 @@ export function assembleBenchmarkElement(repoRoot: string, deps: Element5Deps = 
     };
   }
   const rows = loaded.registry.benchmarks;
-  const executed = rows.filter((r) => r.execution_status !== "not_executed").length;
+  const badRow = rows.find(
+    (r) => typeof r.execution_status !== "string" || !KNOWN_EXECUTION_STATUSES.has(r.execution_status),
+  );
+  if (badRow) {
+    return {
+      n: 5,
+      label: "benchmark registry + execution state",
+      status: "BLOCKED",
+      lines: [
+        `BLOCKED: benchmark ${badRow.benchmark_id ?? "(unknown)"} has an out-of-vocabulary ` +
+          `execution_status ${JSON.stringify(badRow.execution_status)} ` +
+          `(known: ${[...KNOWN_EXECUTION_STATUSES].join(", ")})`,
+        `source: ${path}`,
+      ],
+    };
+  }
+  const executed = rows.filter((r) => r.execution_status === "executed").length;
   const lines = [
     `${rows.length} benchmark(s) -- schema ${loaded.registry.schema}`,
     `executed: ${executed} / ${rows.length}`,
@@ -400,10 +468,43 @@ export function assembleFailureClassElement(repoRoot: string, deps: Element6Deps
     };
   }
 
-  const classes = Array.isArray(ledger.classes) ? ledger.classes : [];
+  // Defect (adversarial review, PR #1027): `Array.isArray(...) ? ... : []` plus
+  // `?? "(unnamed)"` / `?? "unknown"` fallbacks rendered a missing/non-array/empty
+  // `classes`, or rows missing class_id/state, as a fake BOUND "0 failure class(es)" or
+  // "(unnamed): unknown" line -- structurally invalid ledger bytes must never render as
+  // a plausible-looking count. FAIL-CLOSED: `classes` must be a non-empty array and
+  // EVERY row must carry non-empty string class_id + state, or the whole element blocks
+  // naming the exact violation (never a partial/guessed table).
+  if (!Array.isArray(ledger.classes) || ledger.classes.length === 0) {
+    return {
+      n: 6,
+      label: "failure-class state",
+      status: "BLOCKED",
+      lines: [`BLOCKED: ${path} is missing a non-empty "classes" array`],
+    };
+  }
+  const badIndex = ledger.classes.findIndex(
+    (c) =>
+      !c ||
+      typeof c !== "object" ||
+      typeof c.class_id !== "string" ||
+      c.class_id.trim() === "" ||
+      typeof c.state !== "string" ||
+      c.state.trim() === "",
+  );
+  if (badIndex !== -1) {
+    return {
+      n: 6,
+      label: "failure-class state",
+      status: "BLOCKED",
+      lines: [`BLOCKED: ${path}: classes[${badIndex}] is missing a non-empty "class_id" or "state"`],
+    };
+  }
+
+  const classes = ledger.classes;
   const lines = [
     `${classes.length} failure class(es) recorded`,
-    ...classes.map((c) => `  ${c.class_id ?? "(unnamed)"}: ${c.state ?? "unknown"}`),
+    ...classes.map((c) => `  ${c.class_id}: ${c.state}`),
     `source: ${path}`,
   ];
   return { n: 6, label: "failure-class state", status: "BOUND", lines };
