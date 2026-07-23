@@ -1,0 +1,315 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema": "ember-model-experiment-identity-v1",
+  "identity": {
+    "model_id": "ember-sparse-3b-v2-historical",
+    "experiment_id": "ember-restart-3b-semantic-seed83-retry1",
+    "run_id": "semantic-seed83-retry1",
+    "checkpoint_id": "checkpoint-semantic-seed-83-step-2",
+    "disposition": "HISTORICAL_ONLY",
+    "selected_as_owned_ember": false
+  },
+  "architecture": {
+    "source": "configs/ember-restart-3b.json",
+    "sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0"
+  },
+  "checkpoint": {
+    "format": "ember-sparse-checkpoint-v3",
+    "byte_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "tensors": [
+      {
+        "name": "shared.pt",
+        "shape": [4214570949],
+        "dtype": "ember-checkpoint-shard-v1",
+        "sha256": "ee864fc9779e7f0d943a08836253726a41f86679360f477a35d5348486f3162b"
+      },
+      {
+        "name": "replay-state.pt",
+        "shape": [7205],
+        "dtype": "ember-checkpoint-shard-v1",
+        "sha256": "c2bd047f6a38ff8b0d24e6dbf3d75295c3af10e1a25e698ac41e819848e83c37"
+      },
+      {
+        "name": "expert-vision.pt",
+        "shape": [1409295119],
+        "dtype": "ember-checkpoint-shard-v1",
+        "sha256": "8e485774f75a5345279dc294501aa6ec55a53cf6247c70f3ce71944b2827bab0"
+      },
+      {
+        "name": "expert-audio.pt",
+        "shape": [1409295119],
+        "dtype": "ember-checkpoint-shard-v1",
+        "sha256": "0383834d92217380a6c97f2f65428dfac27405205304ea657e7dd2dccf521e15"
+      },
+      {
+        "name": "expert-reasoning.pt",
+        "shape": [1409295247],
+        "dtype": "ember-checkpoint-shard-v1",
+        "sha256": "65820c4f8466e37016ee86943a298f22efc066221a75e22c272479839282712f"
+      },
+      {
+        "name": "expert-tool.pt",
+        "shape": [1409295055],
+        "dtype": "ember-checkpoint-shard-v1",
+        "sha256": "eb5839469d0680fa6aa51bfa2fc7e68141524871eb447f4f1bf7939f3767415e"
+      }
+    ],
+    "ancestry": [],
+    "recovery_state": "CLEAN"
+  },
+  "tokenizer": {
+    "id": "tokenizer-freeze-20260611",
+    "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+  },
+  "data": {
+    "corpus_id": "TOKEN-SHARDS-V0:3adffdda07bf",
+    "sha256": "3adffdda07bf6de31c5f9a9b82aaa08134aac567898c27c5fb0eae90d8ee409d",
+    "ordering_sha256": {
+      "status": "unresolved",
+      "reason": "the historical receipt does not preserve a separately content-addressed ordering implementation"
+    },
+    "curriculum_sha256": {
+      "status": "unresolved",
+      "reason": "the historical receipt does not preserve a separately content-addressed curriculum implementation"
+    },
+    "verifier_sha256": {
+      "status": "unresolved",
+      "reason": "the historical receipt does not bind the exact verifier executable bytes"
+    },
+    "clean_genesis": false,
+    "accepted_input": {
+      "input_id": "TOKEN-SHARDS-V0",
+      "authority_id": "historical-token-shards-v0",
+      "authority_record_sha256": "3adffdda07bf6de31c5f9a9b82aaa08134aac567898c27c5fb0eae90d8ee409d",
+      "authority": "HISTORICAL_REFERENCE",
+      "shard_manifest_sha256": "3adffdda07bf6de31c5f9a9b82aaa08134aac567898c27c5fb0eae90d8ee409d",
+      "caller_sha256": {
+        "status": "unresolved",
+        "reason": "the exact historical training caller bytes were not preserved in this identity chain"
+      },
+      "gate_sha256": {
+        "status": "unresolved",
+        "reason": "the exact historical admission gate bytes were not preserved in this identity chain"
+      },
+      "validator_sha256": {
+        "status": "unresolved",
+        "reason": "the exact historical input validator bytes were not preserved in this identity chain"
+      },
+      "forwarding_receipt_sha256": {
+        "status": "unresolved",
+        "reason": "no current accepted-input forwarding receipt exists for this excluded historical checkpoint"
+      }
+    }
+  },
+  "parameters": {
+    "allocated": 3839161856,
+    "unique": 3839161856,
+    "active": 1020589568,
+    "trainable": 3839161856,
+    "served": 3839161856,
+    "actually_trained": 1020589568,
+    "evidence_receipts": {
+      "allocated": ["dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8"],
+      "unique": ["dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8"],
+      "active": ["dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8"],
+      "trainable": ["dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8"],
+      "served": ["dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8"],
+      "actually_trained": ["dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8"]
+    }
+  },
+  "training": {
+    "steps": 2,
+    "effective_tokens": 2048,
+    "modality_mixture": {
+      "text": 1.0,
+      "image": 0.0,
+      "audio": 0.0
+    },
+    "optimizer_state_sha256": {
+      "status": "unresolved",
+      "reason": "shared model and optimizer bytes were co-serialized and no optimizer-only digest was preserved"
+    },
+    "optimizer_contract": {
+      "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+      "hyperparameters": {
+        "block_wise": true,
+        "learning_rate": 1e-05,
+        "percentile_clipping": 100,
+        "weight_decay": 0.01
+      },
+      "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1"
+    },
+    "numerics": {
+      "profile": "bfloat16-parameters-and-gradients-with-paged-8bit-optimizer",
+      "sha256": {
+        "status": "unresolved",
+        "reason": "the historical checkpoint does not bind a standalone numerics-profile artifact"
+      }
+    },
+    "stopping_rule": {
+      "criterion_id": "ember-sufficient-pretraining-v1",
+      "result": "NOT_REACHED",
+      "receipt_sha256": {
+        "status": "unresolved",
+        "reason": "two steps and 2048 effective tokens do not reach sufficient pretraining"
+      }
+    }
+  },
+  "capabilities": {
+    "native_modalities": {
+      "text": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "image": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "audio": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      }
+    },
+    "reasoning": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    },
+    "structured_tool_use": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    }
+  },
+  "mechanisms": {
+    "experts": [
+      {
+        "id": "vision",
+        "sha256": "8e485774f75a5345279dc294501aa6ec55a53cf6247c70f3ce71944b2827bab0",
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      {
+        "id": "audio",
+        "sha256": "0383834d92217380a6c97f2f65428dfac27405205304ea657e7dd2dccf521e15",
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      {
+        "id": "reasoning",
+        "sha256": "65820c4f8466e37016ee86943a298f22efc066221a75e22c272479839282712f",
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      {
+        "id": "tool",
+        "sha256": "eb5839469d0680fa6aa51bfa2fc7e68141524871eb447f4f1bf7939f3767415e",
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      }
+    ],
+    "router": [
+      {
+        "id": "explicit-local-episode-declaration",
+        "sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      }
+    ],
+    "temporary_adapters": [],
+    "permanent_merges": [],
+    "memory_substrates": [],
+    "world_models": [],
+    "dreaming_updates": [],
+    "deletion_objects": []
+  },
+  "backend": {
+    "executable_sha256": {
+      "status": "unresolved",
+      "reason": "no currently runnable checkpoint loader is bound to these historical bytes"
+    },
+    "process_identity": {
+      "status": "unresolved",
+      "reason": "the historical checkpoint is not currently served"
+    },
+    "process_receipt_sha256": {
+      "status": "unresolved",
+      "reason": "the historical checkpoint has no current process receipt"
+    },
+    "protocol": "historical-checkpoint-only",
+    "device": "cuda",
+    "runtime_dependencies": [],
+    "resource_lease_id": {
+      "status": "unresolved",
+      "reason": "the historical run has no current resource lease"
+    }
+  },
+  "evaluation": {
+    "benchmark_id": "none-executed",
+    "version": "not-applicable",
+    "split": "not-applicable",
+    "harness_sha256": {
+      "status": "unresolved",
+      "reason": "no external benchmark harness was executed against this checkpoint"
+    },
+    "subject_checkpoint_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "comparator_identity": {
+      "status": "unresolved",
+      "reason": "no comparator was executed against this checkpoint"
+    },
+    "comparator_sha256": {
+      "status": "unresolved",
+      "reason": "no comparator artifact was used"
+    },
+    "score": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "uncertainty": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "receipt_sha256": {
+      "status": "unresolved",
+      "reason": "no benchmark receipt exists"
+    },
+    "counts_toward_owned_completion": false
+  },
+  "provenance": {
+    "ownership": "EXCLUDED_CONTAMINATED",
+    "exclusion_reasons": [
+      "filter: TOKEN-SHARDS-V0 includes 1666837789 FineWeb-Edu content tokens selected by an external learned model filter"
+    ],
+    "learned_signal_sources": [
+      "owned_training_data",
+      "filter"
+    ],
+    "neural_capability_credit_sources": [
+      "historical_receipt"
+    ]
+  },
+  "unresolved": [
+    "data.ordering_sha256",
+    "data.curriculum_sha256",
+    "data.verifier_sha256",
+    "data.accepted_input.caller_sha256",
+    "data.accepted_input.gate_sha256",
+    "data.accepted_input.validator_sha256",
+    "data.accepted_input.forwarding_receipt_sha256",
+    "training.optimizer_state_sha256",
+    "training.numerics.sha256",
+    "training.stopping_rule.receipt_sha256",
+    "backend.executable_sha256",
+    "backend.process_identity",
+    "backend.process_receipt_sha256",
+    "backend.resource_lease_id",
+    "evaluation.harness_sha256",
+    "evaluation.comparator_identity",
+    "evaluation.comparator_sha256",
+    "evaluation.score",
+    "evaluation.uncertainty",
+    "evaluation.receipt_sha256"
+  ]
+}

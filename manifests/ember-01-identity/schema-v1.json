@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:ember:model-experiment-identity:v1",
   "authority": {
-    "goal_id": "EMBER-01",
-    "workstream_id": "EMBER-01C",
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
   },
   "title": "Ember model and experiment identity manifest v1",
@@ -107,9 +107,9 @@
       "properties": {
         "corpus_id": {"type": "string", "minLength": 1},
         "sha256": {"$ref": "#/$defs/sha256"},
-        "ordering_sha256": {"$ref": "#/$defs/sha256"},
-        "curriculum_sha256": {"$ref": "#/$defs/sha256"},
-        "verifier_sha256": {"$ref": "#/$defs/sha256"},
+        "ordering_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "curriculum_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "verifier_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
         "clean_genesis": {"type": "boolean"},
         "accepted_input": {
           "type": "object",
@@ -128,15 +128,15 @@
           "properties": {
             "input_id": {"type": "string", "minLength": 1},
             "authority_id": {"type": "string", "minLength": 1},
-            "authority_record_sha256": {"$ref": "#/$defs/sha256"},
+            "authority_record_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
             "authority": {
               "enum": ["CURRENT_EXECUTABLE", "HISTORICAL_REFERENCE", "UNRESOLVED"]
             },
-            "shard_manifest_sha256": {"$ref": "#/$defs/sha256"},
-            "caller_sha256": {"$ref": "#/$defs/sha256"},
-            "gate_sha256": {"$ref": "#/$defs/sha256"},
-            "validator_sha256": {"$ref": "#/$defs/sha256"},
-            "forwarding_receipt_sha256": {"$ref": "#/$defs/sha256"}
+            "shard_manifest_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "caller_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "gate_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "validator_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "forwarding_receipt_sha256": {"$ref": "#/$defs/sha256OrUnresolved"}
           }
         }
       }
@@ -191,7 +191,7 @@
             "audio": {"type": "number", "minimum": 0, "maximum": 1}
           }
         },
-        "optimizer_state_sha256": {"$ref": "#/$defs/sha256"},
+        "optimizer_state_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
         "optimizer_contract": {
           "type": "object",
           "additionalProperties": false,
@@ -208,7 +208,7 @@
           "required": ["profile", "sha256"],
           "properties": {
             "profile": {"type": "string", "minLength": 1},
-            "sha256": {"$ref": "#/$defs/sha256"}
+            "sha256": {"$ref": "#/$defs/sha256OrUnresolved"}
           }
         },
         "stopping_rule": {"$ref": "#/$defs/stoppingRule"}
@@ -261,7 +261,7 @@
         "resource_lease_id"
       ],
       "properties": {
-        "executable_sha256": {"$ref": "#/$defs/sha256"},
+        "executable_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
         "process_identity": {"$ref": "#/$defs/processIdentityOrUnresolved"},
         "process_receipt_sha256": {
           "oneOf": [
@@ -298,10 +298,10 @@
         "benchmark_id": {"type": "string", "minLength": 1},
         "version": {"type": "string", "minLength": 1},
         "split": {"type": "string", "minLength": 1},
-        "harness_sha256": {"$ref": "#/$defs/sha256"},
+        "harness_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
         "subject_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
         "comparator_identity": {"$ref": "#/$defs/stringOrUnresolved"},
-        "comparator_sha256": {"$ref": "#/$defs/sha256"},
+        "comparator_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
         "score": {"$ref": "#/$defs/measurementOrUnresolved"},
         "uncertainty": {"$ref": "#/$defs/measurementOrUnresolved"},
         "receipt_sha256": {
@@ -342,7 +342,24 @@
               "locally_verified_experience",
               "borrowed_reference_weights",
               "borrowed_reference_outputs",
-              "unknown_historical_signal"
+              "unknown_historical_signal",
+              "weights",
+              "outputs",
+              "teachers",
+              "judges",
+              "filters",
+              "ranks",
+              "curricula",
+              "stopping_decisions",
+              "borrowed_weights",
+              "borrowed_outputs",
+              "teacher",
+              "judge",
+              "filter",
+              "rank",
+              "borrowed_curriculum",
+              "borrowed_stopping_decision",
+              "hidden_external_cognition"
             ]
           }
         },
@@ -355,7 +372,15 @@
               "owned_checkpoint",
               "checkpoint_bound_causal_evidence",
               "reference_checkpoint",
-              "historical_receipt"
+              "historical_receipt",
+              "borrowed_model",
+              "harness",
+              "human_intervention",
+              "script",
+              "search",
+              "tool",
+              "ui_label",
+              "verifier"
             ]
           }
         }
@@ -371,6 +396,12 @@
     "sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256OrUnresolved": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha256"},
+        {"$ref": "#/$defs/unresolved"}
+      ]
     },
     "unresolved": {
       "type": "object",
