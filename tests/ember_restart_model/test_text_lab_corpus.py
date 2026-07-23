@@ -565,6 +565,24 @@ class TextLabCorpusTests(unittest.TestCase):
         self.assertEqual(descriptor["license_spdx"], "PDDL-1.0")
         self.assertEqual(descriptor["fetched_ts"], "2026-07-07T00:33:11Z")
 
+    def test_numeric_inventory_selector_closes_filename_to_receipt_mapping(self):
+        from text_lab_corpus import select_numeric_inventory_files
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw_root = root / "raw"; raw_root.mkdir()
+            (raw_root / "218.txt").write_bytes(b"court")
+            (raw_root / "1000.txt").write_bytes(b"gutenberg")
+            inventory = [
+                {"source_url": "https://example.invalid/gutenberg", "sha256": sha(b"gutenberg"), "bytes": 9, "license": "Public Domain", "human_provenance_basis": "human-authored public literature", "fetched_ts": "2026-07-07T00:00:00.123Z", "selection_rule": "authorized"},
+                {"source_url": "https://example.invalid/court", "sha256": sha(b"court"), "bytes": 5, "license": "Public Domain", "human_provenance_basis": "human-authored public record", "fetched_ts": "2026-07-07T00:00:01Z", "selection_rule": "authorized"},
+            ]
+            inventory_path = root / "manifest.jsonl"
+            inventory_path.write_bytes(b"".join(json.dumps(row, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n" for row in inventory))
+            selected = select_numeric_inventory_files(raw_root=raw_root, inventory_path=inventory_path, limit=2)
+        self.assertEqual([item["filename"] for item in selected], ["218.txt", "1000.txt"])
+        self.assertEqual([item["inventory_sha256"] for item in selected], [sha(json.dumps(inventory[1], sort_keys=True, separators=(",", ":")).encode("utf-8")), sha(json.dumps(inventory[0], sort_keys=True, separators=(",", ":")).encode("utf-8"))])
+        self.assertEqual([item["receipt_entry"]["sha256"] for item in selected], [sha(b"court"), sha(b"gutenberg")])
+
     def test_pre_admission_transform_is_deterministic_resumable_and_rejects_cross_split_overlap(self):
         from text_lab_corpus import build_pre_admission_text_tranche, iter_pre_admission_text_records, record_source_custody_file
         with tempfile.TemporaryDirectory() as directory:
