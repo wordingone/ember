@@ -1452,6 +1452,102 @@ class CheckpointArtifactTests(unittest.TestCase):
             ):
                 checkpoint_artifacts._checkpoint_candidate_receipt(root)
 
+    def test_v5_admission_rejects_rehashed_forged_storage_lower_bounds(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=188)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            original = parent / "original"
+            write_checkpoint_artifacts(
+                model,
+                optimizer,
+                original,
+                launch_seed=188,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            quarantine = parent / ".checkpoint-quarantine"
+            quarantine.mkdir(exist_ok=True)
+            candidate = quarantine / "candidate-forged-projection"
+            original.rename(candidate)
+            manifest_path = candidate / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = manifest["storage_projection"]
+            projection["per_shard_tensor_storage_lower_bound_bytes"] = {
+                path: 1
+                for path in projection[
+                    "per_shard_tensor_storage_lower_bound_bytes"
+                ]
+            }
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"] = 1
+            projection[
+                "optimizer_state_tensor_storage_by_route_bytes"
+            ] = {
+                "shared": 0,
+                "vision": 1,
+                "audio": 0,
+                "reasoning": 0,
+                "tool": 0,
+            }
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ] = 4
+            projection[
+                "all_expert_projected_tensor_storage_lower_bound_bytes"
+            ] = 10
+            projection["transient_new_write_peak_lower_bound_bytes"] = 1
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {
+                    key: value
+                    for key, value in projection.items()
+                    if key != "projection_sha256"
+                }
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            verifier_called = False
+
+            def verifier(_candidate, _receipt):
+                nonlocal verifier_called
+                verifier_called = True
+                raise AssertionError("forged candidate reached verifier")
+
+            with self.assertRaisesRegex(
+                ValueError, "independent tensor-storage measurement"
+            ):
+                checkpoint_artifacts.admit_quarantined_checkpoint(
+                    candidate,
+                    parent / "published",
+                    verifier=verifier,
+                    max_serialized_bytes=1024**3,
+                )
+            self.assertFalse(verifier_called)
+            self.assertFalse((parent / "published").exists())
+
     def test_v5_copy_fallback_cannot_bypass_transient_cap(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
