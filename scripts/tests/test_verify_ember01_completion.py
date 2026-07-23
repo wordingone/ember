@@ -88,6 +88,44 @@ def test_custody_legs_use_explicit_live_issue_census(
     assert captured[issue_index + 1] == str(live_issue_census)
 
 
+def test_custody_legs_reject_issue_census_mutated_during_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text('{"snapshot":"before"}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        completion,
+        "git",
+        lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+
+    def fake_run(_args: list[str], **_: object) -> dict[str, object]:
+        live_issue_census.write_text('{"snapshot":"after"}', encoding="utf-8")
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=live_issue_census,
+    )
+
+    assert {row["state"] for row in result.values()} == {
+        completion.RESOLVED_FALSE
+    }
+    assert {row["reason"] for row in result.values()} == {
+        "issue census changed during custody run"
+    }
+
+
 def test_custody_legs_do_not_impose_arbitrary_census_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
