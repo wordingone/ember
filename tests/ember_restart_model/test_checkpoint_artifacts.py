@@ -953,5 +953,20 @@ class CheckpointArtifactTests(unittest.TestCase):
             with self.subTest(label=label), patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))), self.assertRaises(ValueError):
                 checkpoint_artifacts._specialist_lineage(lineage, active_expert="vision", candidate_parameter_sha256=forged_parameters, data_cursor=candidate_cursor)
 
+    def test_published_checkpoint_receipt_reopens_exact_manifest_identity(self) -> None:
+        """A reopening consumer derives the out-of-band identity from frozen bytes."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            manifest_bytes = b'{"schema_version":"ember-sparse-checkpoint-v4","step":17}\n'
+            checkpoint.joinpath("checkpoint-manifest.json").write_bytes(manifest_bytes)
+
+            receipt = checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+        expected = __import__("hashlib").sha256(manifest_bytes).hexdigest()
+        self.assertEqual(receipt["checkpoint_manifest_sha256"], expected)
+        self.assertEqual(receipt["checkpoint"], {"byte_sha256": expected})
+
 if __name__ == "__main__":
     unittest.main()

@@ -432,6 +432,21 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
         self.assertTrue(all(call.kwargs["host_commit_reserve_bytes"] == 8 * 1024**3 for call in writer.call_args_list))
 
+    def test_disk_reopen_resume_receipt_binds_exact_frozen_manifest_bytes(self) -> None:
+        """A disk-reopened resume receipt carries the manifest's out-of-band identity."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            manifest_bytes = b'{"schema_version":"ember-sparse-checkpoint-v4","step":17}\n'
+            manifest_path.write_bytes(manifest_bytes)
+
+            receipt = run_vertical_slice.published_checkpoint_receipt(checkpoint)
+
+        self.assertEqual(receipt["checkpoint_manifest_sha256"], hashlib.sha256(manifest_bytes).hexdigest())
+        self.assertEqual(receipt["checkpoint"], {"byte_sha256": hashlib.sha256(manifest_bytes).hexdigest()})
+
     def test_semantic_runner_refuses_cuda_before_governor_admission(self) -> None:
         with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value={"result": "VERIFIED"}):
             with patch.object(run_vertical_slice, "governed_resource_preflight", return_value={"free_gb": 32.0}) as governor:
@@ -473,6 +488,7 @@ class RunnerPreflightTests(unittest.TestCase):
 
     def _run_vertical_resume_with_mocks(
         self, *, specialist: bool, callback_steps: tuple[int, ...] = (),
+        restored_receipts: list[dict[str, object]] | None = None,
     ) -> tuple[dict[str, object], dict[str, object], MagicMock]:
         model = SimpleNamespace(active_expert="reasoning")
         model.train = lambda: None
@@ -490,6 +506,7 @@ class RunnerPreflightTests(unittest.TestCase):
         parent = Path("B:/vertical-parent")
         parent_manifest = parent / "checkpoint-manifest.json"
         real_read_text = Path.read_text
+        real_read_bytes = Path.read_bytes
         genesis = {name: (index.to_bytes(1, "little") * 32).hex() for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)}
         specialist_rows = [{"active_expert": "vision", "scene_split": "train", "token_ids": [index + 1]} for index in range(len(callback_steps or (20,))) ]
         specialist_artifact_bytes = json.dumps({"records": specialist_rows}, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -506,6 +523,11 @@ class RunnerPreflightTests(unittest.TestCase):
                 return json.dumps({"expert_genesis_sha256": genesis})
             return real_read_text(path, *args, **kwargs)
 
+        def read_bytes(path: Path, *args: object, **kwargs: object) -> bytes:
+            if path.resolve() == parent_manifest.resolve():
+                return json.dumps({"expert_genesis_sha256": genesis}).encode("utf-8")
+            return real_read_bytes(path, *args, **kwargs)
+
         def segment(**kwargs: object) -> dict[str, object]:
             segment_kwargs.update(kwargs)
             published_steps = callback_steps or (20,)
@@ -519,6 +541,7 @@ class RunnerPreflightTests(unittest.TestCase):
             return result
 
         with ExitStack() as stack:
+            stack.enter_context(patch("checkpoint_artifacts._is_link_or_reparse", return_value=False))
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=True))
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "mem_get_info", return_value=(32 * 1024**3, 32 * 1024**3)))
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "manual_seed_all"))
@@ -547,10 +570,16 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
-            stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", return_value={"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}}))
+            def load_checkpoint(_model: object, _optimizer: object, _root: Path, receipt: dict[str, object]) -> dict[str, object]:
+                if restored_receipts is not None:
+                    restored_receipts.append(dict(receipt))
+                return {"data_cursor": {"shard": "TOKEN-SHARDS-V0:prior", "record_index": 37, "global_step": 19, "tokens_seen": 19_456}}
+
+            stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", side_effect=load_checkpoint))
             stack.enter_context(patch.object(run_vertical_slice, "load_authorized_records", return_value=([{"active_expert": "shared"}], {"input_identity": {"shard_path": "TOKEN-SHARDS-V0:prior"}}, {"receipt": "bound"})))
             stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
             stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
+            stack.enter_context(patch.object(Path, "read_bytes", autospec=True, side_effect=read_bytes))
             stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="h" * 64))
             result = run_vertical_slice.run(
                 seed=84, artifact_root=Path("B:/vertical-artifacts"), resume_checkpoint=parent,
@@ -591,6 +620,19 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertTrue(str(specialist_kwargs["data_shard_id"]).startswith("VERIFIED_SPECIALIST:"))
         self.assertEqual(ordinary_writer.call_args.kwargs["max_serialized_bytes"], bound)
         self.assertEqual(specialist_writer.call_args.kwargs["max_serialized_bytes"], bound)
+    def test_vertical_resume_passes_frozen_manifest_identity_to_checkpoint_loader(self) -> None:
+        """The full runner resume handoff retains the disk manifest's identity receipt."""
+
+        receipts: list[dict[str, object]] = []
+        self._run_vertical_resume_with_mocks(specialist=False, restored_receipts=receipts)
+        manifest_bytes = json.dumps({"expert_genesis_sha256": {
+            name: (index.to_bytes(1, "little") * 32).hex()
+            for index, name in enumerate(("vision", "audio", "reasoning", "tool"), start=1)
+        }}).encode("utf-8")
+        self.assertEqual(len(receipts), 1)
+        self.assertEqual(receipts[0]["checkpoint_manifest_sha256"], hashlib.sha256(manifest_bytes).hexdigest())
+        self.assertEqual(receipts[0]["checkpoint"], {"byte_sha256": hashlib.sha256(manifest_bytes).hexdigest()})
+
     def test_specialist_run_requests_periodic_checkpoint_interval(self) -> None:
         _result, specialist_kwargs, _writer = self._run_vertical_resume_with_mocks(specialist=True)
         self.assertEqual(specialist_kwargs["checkpoint_every"], 8_192)

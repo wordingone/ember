@@ -25,7 +25,7 @@ from typing import Any, Callable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, write_checkpoint_artifacts
+from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -2063,10 +2063,8 @@ def run(
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
-        manifest_path = resume_checkpoint / "checkpoint-manifest.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
-        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
+        receipt = published_checkpoint_receipt(resume_checkpoint)
+        genesis_hashes = resume_expert_genesis(receipt, requested_seed=seed)
         resume_cursor = restore_authorized_checkpoint(model, optimizer, resume_checkpoint, receipt, resume_authority)["data_cursor"]
         for group in optimizer.param_groups:
             group["lr"] = 1e-5
