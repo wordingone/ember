@@ -10,6 +10,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,6 +19,38 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import verify_ember01_completion as completion  # noqa: E402
+
+
+def test_custody_legs_bind_census_to_remote_master_ref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[str] = []
+
+    monkeypatch.setattr(
+        completion,
+        "git",
+        lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+
+    def fake_run(args: list[str], **_: object) -> dict[str, object]:
+        captured.extend(args)
+        return {
+            "returncode": 2,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+        }
+
+    monkeypatch.setattr(completion, "run", fake_run)
+
+    completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+    )
+
+    ref_index = captured.index("--public-master-ref")
+    assert captured[ref_index + 1] == "refs/remotes/origin/master"
 
 
 def test_run_reports_missing_executable_without_aborting_receipt(
