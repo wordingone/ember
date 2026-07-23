@@ -31,6 +31,18 @@ jobs:
         run: |
           set -euo pipefail
           FAIL=0
+
+          require_count() {
+            local name="$1"
+            local value="$2"
+            case "$value" in
+              ''|*[!0-9]*)
+                printf 'FAIL [tracker] invalid %s count from stale report\n' "$name" >&2
+                exit 1
+                ;;
+            esac
+          }
+
           now=$(date +%s)
 
           # 1. trunk freshness
@@ -68,6 +80,8 @@ jobs:
           # 4. stale open issues / PRs derived from the exact census populations
           stale_pr=$(jq -er 'if (.counts.pull_requests | type) == "number" and (.counts.pull_requests >= 0) and ((.counts.pull_requests | floor) == .counts.pull_requests) then (.counts.pull_requests | tostring) else error("invalid pull_requests count") end' "${stale_report}")
           stale_is=$(jq -er 'if (.counts.issues | type) == "number" and (.counts.issues >= 0) and ((.counts.issues | floor) == .counts.issues) then (.counts.issues | tostring) else error("invalid issues count") end' "${stale_report}")
+          require_count "pull_requests" "$stale_pr"
+          require_count "issues" "$stale_is"
           if [ "$stale_pr" -gt 0 ] || [ "$stale_is" -gt 0 ]; then
             echo "FAIL [tracker] ${stale_pr} stale PRs + ${stale_is} stale issues (no update in ${MAX_ITEM_AGE_DAYS}d)"
             jq -r '.pull_requests[] | "  PR #\(.number) \(.updated_at[:10]) \(.title)"' "${stale_report}"
