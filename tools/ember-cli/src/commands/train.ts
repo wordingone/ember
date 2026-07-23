@@ -4,16 +4,12 @@
 
 // commands/train.ts — /train: the phase-gated pre-training spine surface.
 //
-// HARD PRE-TRAINING GATE (load-bearing): this command NEVER invokes GPU/training.
-// It runs the cond7 launch-packet readiness preflight
-// (tools/ember-restart-3b/launch_packet.py) FIRST, and only when EVERY preflight
-// passes (launch_packet exits 0) does it SURFACE the run_vertical_slice.py launch
-// command STRING for the operator to run themselves. On ANY preflight failure,
-// missing/malformed config, or unparseable output it FAILS CLOSED: no command is
-// surfaced and a non-zero exit code is returned. The launch command's identity is
-// read from launch_packet.py's own machine-readable summary
-// (`named_ember02_command.command`) -- never hardcoded here, so a wrong/false
-// entrypoint can never be printed as if it were the real governed one.
+// HARD PRE-TRAINING GATE (load-bearing): the default command is preflight-only.
+// Explicit `--execute` mode is available only with all three certificate paths,
+// after the same cond7 launch-packet readiness preflight succeeds, and invokes only
+// the fixed certified_train_launch.py consumer. The named run_vertical_slice.py
+// command from launch_packet output is never executed as a command string. On any
+// preflight, certificate-consumer, or response failure, execution fails closed.
 
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
@@ -32,6 +28,29 @@ export interface LaunchPacketRunResult {
   stdout: string;
 }
 
+export const PREFLIGHT_TIMEOUT_MS = 600_000;
+// The certificate permits at most 15 minutes of training. Keep one minute for
+// interpreter startup, final receipt emission, and orderly process exit.
+export const CERTIFIED_LAUNCH_TIMEOUT_MS = 16 * 60_000;
+
+function _runPythonProcess(
+  executable: string,
+  args: string[],
+  timeout: number,
+): LaunchPacketRunResult {
+  try {
+    const result = spawnSync(executable, args, {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    return { status: result.status, stdout: result.stdout ?? "" };
+  } catch {
+    return { status: null, stdout: "" };
+  }
+}
+
 /**
  * Real launch-packet runner: spawns `python launch_packet.py --config <cfg>`,
  * CPU-only, no GPU allocated (launch_packet.py itself allocates nothing). Any
@@ -45,19 +64,17 @@ export function _defaultLaunchPacketRunner(
   executable: string,
   args: string[],
 ): LaunchPacketRunResult {
-  try {
-    const result = spawnSync(executable, args, {
-      encoding: "utf8",
-      windowsHide: true,
-      // The clean-genesis + recovery preflights instantiate a tiny CPU model and
-      // round-trip a checkpoint, so allow generous headroom; still CPU-only.
-      timeout: 600_000,
-      maxBuffer: 16 * 1024 * 1024,
-    });
-    return { status: result.status, stdout: result.stdout ?? "" };
-  } catch {
-    return { status: null, stdout: "" };
-  }
+  // The clean-genesis + recovery preflights instantiate a tiny CPU model and
+  // round-trip a checkpoint, so allow generous headroom; still CPU-only.
+  return _runPythonProcess(executable, args, PREFLIGHT_TIMEOUT_MS);
+}
+
+/** Fixed certified-consumer runner with headroom above the 15-minute canary. */
+export function _defaultCertifiedLaunchRunner(
+  executable: string,
+  args: string[],
+): LaunchPacketRunResult {
+  return _runPythonProcess(executable, args, CERTIFIED_LAUNCH_TIMEOUT_MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +183,8 @@ interface TrainCommandDeps {
    * launch) is ever invoked. Defaults to _defaultLaunchPacketRunner.
    */
   runLaunchPacket?: (executable: string, args: string[]) => LaunchPacketRunResult;
+  /** Certified B7 consumer with a timeout separate from the CPU preflight. */
+  runCertifiedLaunch?: (executable: string, args: string[]) => LaunchPacketRunResult;
   /** Python executable; defaults to EMBER_PYTHON_BIN env, else "python". */
   pythonBin?: string;
   /** Ember repo root override; defaults to _defaultRepoRoot(ctx.cwd). */
@@ -174,6 +193,66 @@ interface TrainCommandDeps {
   configPath?: string;
   /** launch_packet.py path override; defaults to <repoRoot>/tools/ember-restart-3b/launch_packet.py. */
   scriptPath?: string;
+  /** certified_train_launch.py path override. */
+  certifiedLaunchScriptPath?: string;
+}
+
+interface TrainArgs {
+  execute: boolean;
+  certificate?: string;
+  declarationLedger?: string;
+  runSpec?: string;
+}
+
+function _parseTrainArgs(raw: string): TrainArgs {
+  const tokens = raw.trim() === "" ? [] : raw.trim().split(/\s+/);
+  const parsed: TrainArgs = { execute: false };
+  const seen = new Set<string>();
+  const valued = new Map<string, "certificate" | "declarationLedger" | "runSpec">([
+    ["--certificate", "certificate"],
+    ["--declaration-ledger", "declarationLedger"],
+    ["--run-spec", "runSpec"],
+  ]);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const option = tokens[index]!;
+    if (seen.has(option)) {
+      throw new Error(`duplicate train option: ${option}`);
+    }
+    seen.add(option);
+    if (option === "--execute") {
+      parsed.execute = true;
+      continue;
+    }
+    const field = valued.get(option);
+    if (field === undefined) {
+      throw new Error(`unknown train option: ${option}`);
+    }
+    const value = tokens[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new Error(`missing value for ${option}`);
+    }
+    parsed[field] = value;
+    index += 1;
+  }
+  if (
+    !parsed.execute &&
+    (parsed.certificate !== undefined ||
+      parsed.declarationLedger !== undefined ||
+      parsed.runSpec !== undefined)
+  ) {
+    throw new Error("authority paths require --execute");
+  }
+  if (
+    parsed.execute &&
+    (parsed.certificate === undefined ||
+      parsed.declarationLedger === undefined ||
+      parsed.runSpec === undefined)
+  ) {
+    throw new Error(
+      "usage: /train --execute --certificate <path> --declaration-ledger <path> --run-spec <path>",
+    );
+  }
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,31 +264,51 @@ interface TrainCommandDeps {
  *
  * Behavior (spec):
  *  1. Spawn the cond7 launch-packet preflight FIRST (never training).
- *  2. If it exits 0 AND its summary reports overall_ready with a named command:
- *     surface that run_vertical_slice.py launch COMMAND STRING as text.
- *  3. NEVER invoke the GPU/training launch itself.
- *  4. Any nonzero exit / missing-malformed config / unparseable output: FAIL
- *     CLOSED -- report the failure, surface NO command, non-zero exitCode.
+ *  2. Without `--execute`, surface the validated named command as text only.
+ *  3. With `--execute` and all certificate paths, invoke exactly one fixed
+ *     certified_train_launch.py consumer; never execute the named command string.
+ *  4. Any malformed input, nonzero exit, or invalid response fails closed.
  */
 export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand {
   const runLaunchPacket = deps.runLaunchPacket ?? _defaultLaunchPacketRunner;
+  const runCertifiedLaunch =
+    deps.runCertifiedLaunch ?? _defaultCertifiedLaunchRunner;
 
   return {
     name: "train",
-    description: "Preflight EMBER-02 training readiness (cond7 launch packet) and surface the launch command; never launches training",
+    description: "Preflight EMBER-02 training readiness; execute only through an explicit declared B7 certificate",
     isEnabled(): boolean {
       return true;
     },
-    async execute(_args: string, ctx: CommandContext) {
+    async execute(args: string, ctx: CommandContext) {
+      let trainArgs: TrainArgs;
+      try {
+        trainArgs = _parseTrainArgs(args);
+      } catch (error) {
+        return {
+          type: "message" as const,
+          message: `error: ${error instanceof Error ? error.message : "invalid /train arguments"}`,
+          exitCode: 1,
+        };
+      }
+
       const repoRoot = deps.repoRoot ?? _defaultRepoRoot(ctx.cwd);
       const pythonBin = deps.pythonBin ?? process.env["EMBER_PYTHON_BIN"] ?? "python";
       const configPath =
         deps.configPath ?? join(repoRoot, "configs", "ember-restart-3b.json");
       const scriptPath =
         deps.scriptPath ?? join(repoRoot, "tools", "ember-restart-3b", "launch_packet.py");
+      const certifiedLaunchScriptPath =
+        deps.certifiedLaunchScriptPath ??
+        join(
+          repoRoot,
+          "tools",
+          "ember-restart-3b",
+          "certified_train_launch.py",
+        );
 
-      // (1) Run the preflight FIRST. This is the ONLY subprocess this command
-      // ever spawns -- it never spawns a training/GPU launch.
+      // (1) Run the preflight first. It is the only subprocess in default mode;
+      // certified execute mode may invoke only the fixed consumer below.
       let result: LaunchPacketRunResult;
       try {
         result = runLaunchPacket(pythonBin, [scriptPath, "--config", configPath]);
@@ -261,6 +360,79 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           message:
             "error: launch-packet exited 0 but its readiness summary was missing/unparseable or named no launch command -- training is BLOCKED (fail-closed). No launch command surfaced.",
           exitCode: 1,
+        };
+      }
+
+      if (trainArgs.execute) {
+        let certifiedResult: LaunchPacketRunResult;
+        try {
+          certifiedResult = runCertifiedLaunch(pythonBin, [
+            certifiedLaunchScriptPath,
+            "--root",
+            repoRoot,
+            "--certificate",
+            trainArgs.certificate!,
+            "--declaration-ledger",
+            trainArgs.declarationLedger!,
+            "--run-spec",
+            trainArgs.runSpec!,
+          ]);
+        } catch {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified train consumer could not be started; no training process was authorized.",
+            exitCode: 1,
+          };
+        }
+        if (certifiedResult.status !== 0) {
+          const detail = certifiedResult.stdout.trim();
+          return {
+            type: "message" as const,
+            message: [
+              "error: certified train consumer refused or failed.",
+              detail || "No certified execution receipt was produced.",
+            ].join("\n"),
+            exitCode: certifiedResult.status ?? 1,
+          };
+        }
+        let execution: Record<string, unknown>;
+        try {
+          const parsedResult: unknown = JSON.parse(certifiedResult.stdout);
+          if (typeof parsedResult !== "object" || parsedResult === null) {
+            throw new Error("not an object");
+          }
+          execution = parsedResult as Record<string, unknown>;
+        } catch {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified train consumer exited 0 without a valid execution receipt response.",
+            exitCode: 1,
+          };
+        }
+        const executionReceipt = execution["execution_receipt"];
+        const artifactRoot = execution["artifact_root"];
+        if (
+          typeof executionReceipt !== "string" ||
+          executionReceipt === "" ||
+          typeof artifactRoot !== "string" ||
+          artifactRoot === ""
+        ) {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified train consumer response omitted execution_receipt or artifact_root.",
+            exitCode: 1,
+          };
+        }
+        return {
+          type: "message" as const,
+          message: [
+            "certified bounded canary process completed.",
+            `execution receipt: ${executionReceipt}`,
+            `artifact root: ${artifactRoot}`,
+          ].join("\n"),
         };
       }
 
