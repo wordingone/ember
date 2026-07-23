@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 
+EXECUTION_RECEIPT = Path(__file__).parents[1] / "receipts" / "lifecycle-census" / "ember-inherited-drawdown-002-execution-v1.json"
 MANIFEST = Path(__file__).parents[1] / "receipts" / "lifecycle-census" / "ember-inherited-drawdown-002-keep-manifest-v2.json"
 
 
@@ -69,3 +70,22 @@ def test_manifest_verifier_rejects_uncertain_row_marked_for_deletion() -> None:
     ).hexdigest()
     with __import__("pytest").raises(ManifestError, match="exact path/blob equivalence"):
         verified_delete_rows(tampered)
+
+
+def test_execution_receipt_is_canonical_noop_and_binds_manifest() -> None:
+    receipt = json.loads(EXECUTION_RECEIPT.read_text(encoding="utf-8"))
+    canonical = dict(receipt)
+    recorded = canonical.pop("receipt_sha256")
+    assert recorded == hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    assert receipt["decision"] == {
+        "candidate_count": 15,
+        "deletion_authority": "NOT_GRANTED",
+        "mutation_performed": False,
+        "verified_delete_count": 0,
+    }
+    assert receipt["manifest"]["manifest_sha256"] == _load()["manifest_sha256"]
+    assert receipt["before"]["remote_branch_count"] == 77
+    assert receipt["after"]["remote_branch_count"] == 78
+    assert "not attributed" in receipt["interpretation"]
