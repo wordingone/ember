@@ -3,12 +3,12 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-07-23T12:28:32Z",
-  "implementation_commit": "61b4a4060218b9971128ee3a435581499ba82682",
+  "generated_at": "2026-07-23T15:51:30Z",
+  "implementation_commit": "69aa165a83c181265e2505157892ef4e275efdfe",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "88d0ed9085ff2cb05db32f3d5a9bfa4eba216400c0efb7c22e58eea8ee267648"
+      "sha256": "211f285cecdddb507d46a57ca07bf19961ab16dbea744707dde9e95a8df06dc9"
     },
     "identity_validator": {
       "path": "scripts/ember_01_identity/validate_identity.py",
@@ -113,18 +113,29 @@
     }
   },
   "verification": {
-    "identity_and_completion_tests": {
-      "passed": 270,
+    "focused_completion_and_custody_tests": {
+      "passed": 48,
       "failed": 0
+    },
+    "clean_detached_replay": {
+      "checkout_commit": "69aa165a83c181265e2505157892ef4e275efdfe",
+      "external_receipt_sha256": "162ab1b0b445c844aa2f7f2a3b34c519fd9917242188a6af8faa88ae5ecff4e1",
+      "leg3_state": "resolved-true",
+      "leg4_state": "resolved-true",
+      "leg4_axis_count": 8,
+      "leg4_all_rejected": true,
+      "checkout_clean": true,
+      "checkout_detached": true,
+      "checkout_head_unchanged": true
     },
     "seeded_fail_open": {
       "axis": "tokenizer",
       "aggregate_state": "resolved-false",
       "named_failure": "tokenizer"
     },
-    "repository_guard": "PASS",
-    "github_guard_count": 2,
-    "github_guards": "PASS"
+    "repository_guard": "PENDING",
+    "github_guard_count": 0,
+    "github_guards": "PENDING"
   },
   "claim_boundary": {
     "supports_completion_condition": 4,
