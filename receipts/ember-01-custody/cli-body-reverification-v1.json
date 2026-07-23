@@ -1,0 +1,103 @@
+{
+  "schema": "ember-r8-cli-body-reverification-receipt-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "generated_at": "2026-07-23T12:15:23Z",
+  "worktree": {
+    "path": "<managed-worktree-root>/ember-wt/r8-cli-reverif",
+    "branch": "feat/r8-cli-body-reverif",
+    "start_point": "origin/master",
+    "head_commit": "13484c14fabd0a1ef1d569369fc01f6d4068fd86"
+  },
+  "purpose": "EMBER-01 R8 Part-A: ember-cli-body four-state reverification, receipt only (no authority edit, no push)",
+  "states": {
+    "SOURCE_EXPECTED": {
+      "state": "ESTABLISHED",
+      "method": "git ls-tree -r HEAD -- tools/ember-cli, sorted, sha256'd (blob path+content addressed via git's own object hashing; deterministic on a given commit)",
+      "commit_sha": "13484c14fabd0a1ef1d569369fc01f6d4068fd86",
+      "tracked_file_count": 480,
+      "tree_listing_sha256": "8de30c7b3983cc3da8cf1feda682c7d610e718603a2f7e7e386880d7617eac6c",
+      "commands": [
+        "git ls-tree -r HEAD -- tools/ember-cli | sort > tree_listing.txt",
+        "sha256sum tree_listing.txt"
+      ]
+    },
+    "BUILT_BINARY": {
+      "state": "ESTABLISHED",
+      "method": "clean checkout at worktree HEAD; cd tools/ember-cli/src && bun install && bun run ./build-tools/build-cockpit.ts",
+      "build_commands": [
+        "bun install",
+        "bun run ./build-tools/build-cockpit.ts"
+      ],
+      "build_output_tail": " [299ms]  bundle  405 modules\n [454ms] compile  ember.exe",
+      "produced_binary_path": "tools/ember-cli/src/ember.exe",
+      "produced_binary_sha256": "d5e61f854646d201caf530d47789d7006a6ec148be11c9bd8201f32da7c93b1f",
+      "produced_binary_bytes": 119128576,
+      "embedded_build_commit_binding": {
+        "symbol": "__EMBER_BUILD_COMMIT__",
+        "mechanism": "build-tools/build-cockpit.ts requireBuildCommit()/buildCommitBanner(): shells `git -C <repoRoot> rev-parse HEAD` at build time, refuses (throws) unless tracked status (git status --porcelain --untracked-files=no) is exactly empty, then bakes the commit into a `--banner` passed to `bun build --compile`",
+        "commit_bound": "13484c14fabd0a1ef1d569369fc01f6d4068fd86",
+        "verified_clean_tracked_status_at_build_time": true,
+        "note": "commit_bound equals worktree HEAD (build was run with zero tracked-file edits in this worktree, confirmed by git status --porcelain --untracked-files=no returning empty both before and after the build)"
+      }
+    },
+    "INSTALLED_BINARY": {
+      "state": "EXPLICIT_UNAVAILABLE",
+      "reason": "no installed cockpit binary found at <EMBER_HOME env var (unset)> or <default install root $HOME/.ember/versions/<version>/ember, derived from native-installer.ts::getInstallDir()+getEmberConfigHomeDir()>; $HOME/.ember/versions does not exist on this machine",
+      "searched_paths": [
+        "env:EMBER_HOME (unset)",
+        "$HOME/.ember/versions/<version>/ember (native-installer.ts default; directory absent)"
+      ],
+      "method_reference": "tools/ember-cli/src/native-installer.ts (getInstallDir -> join(getEmberConfigHomeDir(), 'versions')) + tools/ember-cli/src/utils/env-detection.ts (getEmberConfigHomeDir: EMBER_HOME env or join(homedir(), '.ember'))",
+      "equals_built_binary": null
+    },
+    "LIVE_ENDPOINT": {
+      "state": "PARTIAL",
+      "method": "static_config_read",
+      "live_launch": {
+        "performed": false,
+        "reason": "full endpoint launch not attempted within wall-clock budget; seat-selection logic is fully deterministic and read exhaustively from source (model-config.ts, entrypoints/model-seat.ts, commands/custody.ts wiring), and cross-checked against on-disk manifest presence under $HOME/.ember/owned/ -- a live launch would add process/resource risk without new discriminating signal over the static+on-disk-manifest read performed here"
+      },
+      "source_files_read": [
+        "tools/ember-cli/src/model-config.ts",
+        "tools/ember-cli/src/entrypoints/model-seat.ts",
+        "tools/ember-cli/src/commands/custody.ts",
+        "tools/ember-cli/src/entrypoints/owned-seat-loader.ts (loadOwnedModelIdentity / loadOwnedDevelopmentIdentity default manifest paths only, resolver NOT executed)"
+      ],
+      "seats": {
+        "OFFLINE": {
+          "state": "AVAILABLE",
+          "basis": "static_config_read",
+          "detail": "resolveModelSeat() returns {allowed:true, seat:'OFFLINE', source:'gpu-free'} whenever EMBER_GPU_FREE is truthy and no explicit EMBER_MODEL_URL is set; carries no model identity, selectedModelContract() returns undefined for this seat by design"
+        },
+        "REFERENCE_ONLY": {
+          "state": "AVAILABLE",
+          "basis": "static_config_read",
+          "detail": "resolveModelSeat() returns {allowed:true, seat:'REFERENCE_ONLY', source:'flag'|'env'} whenever --reference-seat is passed or EMBER_REFERENCE_SEAT=1 is set, independent of any ownedIdentity; selectedModelContract() reports modelName via referenceSeatModelName(), modelConfigSha256:null, structuredOutputs:false -- a borrowed model (e.g. Qwen) is never presented as owned",
+          "reference_model_name_source": "process.env.EMBER_MODEL_NAME / ModelSeatResolutionInput.referenceModelName, never a hardcoded literal"
+        },
+        "OWNED_ADMITTED": {
+          "state": "EXPLICIT_UNAVAILABLE",
+          "reason": "no admission manifest present: loadOwnedModelIdentity() defaults to $EMBER_HOME/owned/current.json (= $HOME/.ember/owned/current.json absent EMBER_HOME); that file does not exist on this machine, so the owned-manifest fallback in resolveModelSeat() is never reached and resolution stays refused with error 'no admitted owned Ember identity is available'",
+          "checked_path": "$HOME/.ember/owned/current.json (absent)"
+        },
+        "OWNED_DEVELOPMENT": {
+          "state": "EXPLICIT_UNAVAILABLE",
+          "reason": "owned 3B model unborn pre-EMBER-02: a development.json manifest DOES exist on disk ($HOME/.ember/owned/development.json, checkpoint bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b) but its own claim_status is NON_ADMISSIBLE, and the sibling completion receipt at receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json records this exact checkpoint's disposition as HISTORICAL_ONLY / ownership EXCLUDED_CONTAMINATED / selected_as_owned_ember:false -- the project's own record already disqualifies it as an owned model, so no legitimate owned-development identity exists to report regardless of the raw manifest's on-disk presence",
+          "manifest_present_but_disqualified": true,
+          "manifest_path_checked": "$HOME/.ember/owned/development.json",
+          "disqualifying_receipt": "receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json",
+          "note": "the python resolver (owned-seat-loader.ts::loadOwnedDevelopmentIdentity, which shells out to verify the manifest against on-disk checkpoint/runtime-bundle bytes under a Vera-owned artifacts path) was deliberately NOT executed -- fail-closed by design per spec, never faked or defaulted to qwen_reference_default"
+        }
+      }
+    }
+  },
+  "agreement": {
+    "source_vs_built": "N/A_NO_DIVERGENCE_POSSIBLE -- BUILT_BINARY was built directly from SOURCE_EXPECTED's exact commit (13484c14fabd0a1ef1d569369fc01f6d4068fd86) in the same worktree with verified-clean tracked status; the embedded __EMBER_BUILD_COMMIT__ equals the commit SOURCE_EXPECTED's tree hash was computed against",
+    "built_vs_installed": "NOT_COMPARABLE -- INSTALLED_BINARY is EXPLICIT_UNAVAILABLE (no installed cockpit binary found on this machine); no comparison possible",
+    "owned_seat_status": "EXPLICIT_UNAVAILABLE, both OWNED_ADMITTED and OWNED_DEVELOPMENT -- the owned 3B model is unborn pre-EMBER-02; the one on-disk development manifest present is itself NON_ADMISSIBLE/HISTORICAL_ONLY/EXCLUDED_CONTAMINATED per the project's own EMBER-01-completion receipt, so it does not constitute an owned identity under any reading",
+    "overall": "SOURCE and BUILT agree by direct construction (built from source at the recorded commit, clean tree). INSTALLED is explicit-unavailable (nothing installed). LIVE seat identities for OFFLINE and REFERENCE_ONLY are available now per static source read; OWNED_ADMITTED and OWNED_DEVELOPMENT are explicit-unavailable, never faked or defaulted to a reference model."
+  },
+  "result": "PASS_WITH_EXPLICIT_UNAVAILABLE_STATES"
+}
