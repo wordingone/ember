@@ -638,12 +638,15 @@ class LoadedOwnedRuntime:
         finally:
             config_snapshot.unlink(missing_ok=True)
         model = UnifiedDecoder(config, device=device, allow_production_allocation=True).eval()
-        from checkpoint_artifacts import load_checkpoint_artifacts
+        from checkpoint_artifacts import load_checkpoint_artifacts, published_checkpoint_receipt
+        checkpoint_receipt = published_checkpoint_receipt(checkpoint)
+        if checkpoint_receipt["checkpoint_manifest_sha256"] != checkpoint_sha256:
+            raise ValueError("checkpoint manifest changed during owned runtime construction")
         load_checkpoint_artifacts(
             model,
             None,
             checkpoint,
-            {**manifest, "checkpoint_manifest_sha256": checkpoint_sha256},
+            checkpoint_receipt,
         )
         # Post-load identity assert (cond3 inc2b): the architecture ties
         # lm_head.weight to token_embedding.weight at construction time
@@ -726,11 +729,26 @@ def load_development_shared_runtime(
         if path in records:
             raise ValueError("development checkpoint contains duplicate shard records")
         records[path] = record
-    shared_record = records.get("shared.pt")
+    schema_version = checkpoint_manifest.get("schema_version")
+    if schema_version == "ember-sparse-checkpoint-v5":
+        expected_paths = {
+            "shared-model.pt",
+            "optimizer-state.pt",
+            "replay-state.pt",
+            *(f"expert-{name}.pt" for name in model_module.EXPERT_NAMES),
+        }
+        if set(records) != expected_paths:
+            raise ValueError("development checkpoint closed v5 shard set is invalid")
+        shared_path = "shared-model.pt"
+    elif schema_version in {None, "ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
+        shared_path = "shared.pt"
+    else:
+        raise ValueError("development checkpoint has an unsupported schema version")
+    shared_record = records.get(shared_path)
     shared_sha256 = shared_record.get("sha256") if isinstance(shared_record, Mapping) else None
     if not isinstance(shared_sha256, str):
         raise ValueError("development checkpoint lacks shared shard identity")
-    payload = hash_and_load_torch(torch, checkpoint / "shared.pt", shared_sha256, device=device)
+    payload = hash_and_load_torch(torch, checkpoint / shared_path, shared_sha256, device=device)
     if not isinstance(payload, dict) or not isinstance(payload.get("model"), dict):
         raise ValueError("development shared checkpoint lacks a model state")
     expected = model.state_dict()

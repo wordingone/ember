@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -24,7 +25,7 @@ from typing import Any, Callable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, write_checkpoint_artifacts
+from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -43,6 +44,147 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def governed_resource_preflight() -> dict[str, object]:
+    """Run the repository-owned GPU governor before any CUDA allocation."""
+
+    governor_path = Path(__file__).resolve().parents[2] / "scripts" / "governor.py"
+    if not governor_path.is_file():
+        raise RuntimeError("repository resource governor is unavailable")
+    spec = importlib.util.spec_from_file_location("ember_governor_bound", governor_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("repository resource governor cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    preflight = getattr(module, "preflight", None)
+    if not callable(preflight):
+        raise RuntimeError("repository resource governor has no preflight")
+    receipt = preflight()
+    if not isinstance(receipt, Mapping):
+        raise RuntimeError("repository resource governor returned an invalid receipt")
+    return {**dict(receipt), "governor_source_sha256": _sha256(governor_path)}
+
+_CANONICAL_RUNNER_CACHE_ENV = ("TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME")
+_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES = 4 * 1024**3
+
+
+def _canonical_json_bytes(payload: Mapping[str, object]) -> bytes:
+    return json.dumps(dict(payload), sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _canonical_disk_budget_runner_authority() -> tuple[dict[str, object], Path]:
+    """Bind this process to the canonical runner's nonce-protected child assertion."""
+    assertion_raw = os.environ.get("EMBER_DISK_BUDGET_ENV_ASSERTION")
+    nonce = os.environ.get("EMBER_DISK_BUDGET_ENV_NONCE")
+    if not isinstance(assertion_raw, str) or not assertion_raw or not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{32}", nonce):
+        raise RuntimeError("vertical production launch requires the canonical disk budget runner assertion")
+    live_bindings = {name: os.environ.get(name) for name in _CANONICAL_RUNNER_CACHE_ENV}
+    if any(not isinstance(value, str) or not value for value in live_bindings.values()):
+        raise RuntimeError("canonical disk budget runner cache bindings are incomplete")
+    custody = Path(str(live_bindings["TEMP"])).resolve().parent
+    assertion_path = Path(assertion_raw).resolve(strict=True)
+    if assertion_path.name != "child-env-startup.json" or assertion_path.parent != custody:
+        raise RuntimeError("canonical disk budget runner assertion is not the custody startup assertion")
+    if not assertion_path.is_relative_to(custody):
+        raise RuntimeError("canonical disk budget runner assertion escapes the custody root")
+    try:
+        assertion_bytes = assertion_path.read_bytes()
+        assertion = json.loads(assertion_bytes.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("canonical disk budget runner assertion is unreadable") from error
+    if not isinstance(assertion, dict) or set(assertion) != {"schema_version", "nonce", "bindings"}:
+        raise RuntimeError("canonical disk budget runner assertion has an invalid schema")
+    bindings = assertion.get("bindings")
+    if assertion.get("schema_version") != 1 or assertion.get("nonce") != nonce or not isinstance(bindings, dict):
+        raise RuntimeError("canonical disk budget runner assertion does not match this launch")
+    if set(bindings) != set(_CANONICAL_RUNNER_CACHE_ENV) or bindings != live_bindings:
+        raise RuntimeError("canonical disk budget runner cache bindings do not match this launch")
+    try:
+        resolved_bindings = {name: Path(value).resolve(strict=True) for name, value in bindings.items()}
+    except OSError as error:
+        raise RuntimeError("canonical disk budget runner cache binding is unavailable") from error
+    if any(not value.is_relative_to(custody) for value in resolved_bindings.values()):
+        raise RuntimeError("canonical disk budget runner cache binding escapes custody")
+    return ({
+        "schema_version": "ember-canonical-disk-budget-startup-v1",
+        "assertion_sha256": hashlib.sha256(assertion_bytes).hexdigest(),
+        "cache_bindings_sha256": hashlib.sha256(_canonical_json_bytes(bindings)).hexdigest(),
+    }, custody)
+
+
+def canonical_disk_budget_runner_authority() -> dict[str, object]:
+    """Return only the path-free canonical runner authority projection."""
+
+    authority, _custody = _canonical_disk_budget_runner_authority()
+    return authority
+
+
+def governed_vertical_checkpoint_byte_bound(config_path: Path) -> int:
+    """Budget shared decoder state plus exactly one active expert before allocation."""
+
+    config = RestartDecoderConfig.from_contract(config_path)
+    specialist_parameters = config.layers * 12 * config.hidden_size * config.hidden_size
+    shared_active_parameters = config.structural_parameter_count() - len(config.expert_names) * specialist_parameters
+    return checkpoint_serialization_byte_bound(
+        config_path,
+        active_parameters=shared_active_parameters + specialist_parameters,
+    )
+
+
+def run_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None, resume_realization_registry: Path | None = None, resume_optimizer_transition_registry: Path | None = None, resume_optimizer_transition_registry_sha256: str | None = None) -> dict[str, object]:
+    """Canonical-runner entrypoint; check launch inputs before governor/CUDA admission."""
+    if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
+        raise ValueError("governed vertical launch requires a nonnegative seed and positive byte budget")
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
+    checkpoint_bound = governed_vertical_checkpoint_byte_bound(config_path)
+    if checkpoint_bound > write_budget_bytes:
+        raise ValueError("governed vertical checkpoint publication bound exceeds the declared write budget")
+    startup_authority, custody = _canonical_disk_budget_runner_authority()
+    resolved_artifact_root = artifact_root.resolve()
+    if not resolved_artifact_root.is_relative_to(custody):
+        raise ValueError("governed vertical artifact root escapes canonical runner custody")
+    authority = {
+        **startup_authority,
+        "config_sha256": _sha256(config_path),
+        "runner_source_sha256": _sha256(Path(__file__).resolve()),
+        "checkpoint_byte_bound": checkpoint_bound,
+        "write_budget_bytes": write_budget_bytes,
+    }
+    return run(seed=seed, artifact_root=resolved_artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt, resume_realization_registry=resume_realization_registry, resume_optimizer_transition_registry=resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256, write_budget_bytes=write_budget_bytes, max_records=max_records, canonical_runner_authority=authority)
+
+
+def preflight_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None) -> dict[str, object]:
+    """CPU-only canonical-runner child preflight; it never admits CUDA or a training step."""
+
+    if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
+        raise ValueError("governed vertical launch requires a nonnegative seed and positive byte budget")
+    if max_records is not None and (type(max_records) is not int or not 1 <= max_records <= 200):
+        raise ValueError("governed vertical max records must be in 1..200")
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
+    checkpoint_bound = governed_vertical_checkpoint_byte_bound(config_path)
+    if checkpoint_bound > write_budget_bytes:
+        raise ValueError("governed vertical checkpoint publication bound exceeds the declared write budget")
+    startup_authority, custody = _canonical_disk_budget_runner_authority()
+    resolved_artifact_root = artifact_root.resolve()
+    if not resolved_artifact_root.is_relative_to(custody):
+        raise ValueError("governed vertical artifact root escapes canonical runner custody")
+    return {
+        "decision": "PREFLIGHT_ONLY",
+        "canonical_disk_budget_runner": {
+            **startup_authority,
+            "config_sha256": _sha256(config_path),
+            "runner_source_sha256": _sha256(Path(__file__).resolve()),
+            "checkpoint_byte_bound": checkpoint_bound,
+            "write_budget_bytes": write_budget_bytes,
+        },
+        "max_records": max_records,
+    }
+
+
+def require_disk_budget_runner_contract() -> None:
+    """Refuse direct write-heavy CLI dispatch outside the canonical runner child."""
+    raise RuntimeError("vertical production launch requires the disk budget runner")
 
 
 def _json_sha256(payload: dict[str, Any]) -> str:
@@ -1750,6 +1892,11 @@ def restore_authorized_checkpoint(
 ) -> dict[str, Any]:
     """Restore model/replay state while enforcing explicit optimizer-state disposition."""
 
+    expected_manifest_sha256 = authority.get("checkpoint_manifest_sha256")
+    actual_manifest_sha256 = receipt.get("checkpoint_manifest_sha256")
+    if not _is_sha256(expected_manifest_sha256) or not _is_sha256(actual_manifest_sha256) or expected_manifest_sha256 != actual_manifest_sha256:
+        raise ValueError("resume authority checkpoint manifest SHA-256 mismatch")
+
     if authority.get("mode") == "MODEL_ONLY_OPTIMIZER_CONTRACT_TRANSITION":
         return load_checkpoint_model_only_transition(model, checkpoint, receipt)
     return load_checkpoint_artifacts(model, optimizer, checkpoint, receipt)
@@ -1924,6 +2071,8 @@ def run(
     specialist_lineage: dict[str, object] | None = None,
     checkpoint_interval: int | None = None,
     write_budget_bytes: int | None = None,
+    max_records: int | None = None,
+    canonical_runner_authority: dict[str, object] | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
     telemetry_path: Path | None = None,
@@ -1948,10 +2097,12 @@ def run(
                 or execution_slice.get("records_sha256") != specialist_execution_slice_receipt(records_override, source_start_record=start)["records_sha256"]
                 or execution_slice.get("tokens_sha256") != specialist_execution_slice_receipt(records_override, source_start_record=start)["tokens_sha256"]):
             raise ValueError("image specialist execution slice does not resolve the selected train records")
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is required for the production vertical slice")
-    if not isinstance(seed, int) or seed < 0:
+    if type(seed) is not int or seed < 0:
         raise ValueError("launch seed must be a nonnegative integer")
+    if max_records is not None and (type(max_records) is not int or max_records < 1 or max_records > 200):
+        raise ValueError("vertical canary max_records must be an integer from 1 through 200")
+    if records_override is not None and max_records is not None:
+        raise ValueError("vertical canary max_records applies only to the full authorized shard route")
     telemetry_values = (telemetry_path, telemetry_run_id, model_chat_restore_not_before)
     if any(value is not None for value in telemetry_values) and not all(value is not None for value in telemetry_values):
         raise ValueError("training telemetry requires path, run id, and model-chat restore time together")
@@ -1964,11 +2115,33 @@ def run(
     )
     root = Path(__file__).resolve().parents[2]
     config_path = root / "configs" / "ember-restart-3b.json"
+    if write_budget_bytes is not None:
+        if type(write_budget_bytes) is not int or write_budget_bytes < 1:
+            raise ValueError("vertical write budget must be a positive integer")
+        if checkpoint_serialization_byte_bound(config_path) > write_budget_bytes:
+            raise ValueError("vertical checkpoint publication bound exceeds the declared write budget")
+    if canonical_runner_authority is not None:
+        if type(write_budget_bytes) is not int:
+            raise RuntimeError("vertical canonical runner authority requires an explicit write budget")
+        expected_canonical_authority = {
+            **canonical_disk_budget_runner_authority(),
+            "config_sha256": _sha256(config_path),
+            "runner_source_sha256": _sha256(Path(__file__).resolve()),
+            "checkpoint_byte_bound": governed_vertical_checkpoint_byte_bound(config_path),
+            "write_budget_bytes": write_budget_bytes,
+        }
+        if not isinstance(canonical_runner_authority, Mapping) or dict(canonical_runner_authority) != expected_canonical_authority:
+            raise RuntimeError("vertical canonical runner authority does not match the live startup assertion")
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     config = RestartDecoderConfig.from_contract(config_path)
     memory_contract = load_memory_contract(config_path)
+    governor_receipt = governed_resource_preflight()
+    if canonical_runner_authority is not None:
+        governor_receipt = {**governor_receipt, "canonical_disk_budget_runner": dict(canonical_runner_authority)}
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the production vertical slice")
     episode_expert: str | None = None
     total_parameters = config.structural_parameter_count()
     active_parameters = total_parameters - (len(config.expert_names) - 1) * config.layers * 12 * config.hidden_size * config.hidden_size
@@ -2011,6 +2184,7 @@ def run(
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
     resume_authority: dict[str, object] | None = None
+    resume_receipt: dict[str, object] | None = None
     if resume_checkpoint is not None:
         resume_checkpoint, resume_authority = authorize_production_resume_checkpoint(
             resume_checkpoint,
@@ -2021,6 +2195,25 @@ def run(
             c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
             relocation_custody_root=relocation_custody_root,
         )
+        resume_receipt = published_checkpoint_receipt(resume_checkpoint)
+    frozen_resume_cursor: dict[str, object] | None = None
+    if resume_receipt is not None:
+        candidate_cursor = resume_receipt.get("data_cursor")
+        if not isinstance(candidate_cursor, Mapping):
+            raise RuntimeError("authorized production resume requires a frozen data cursor")
+        frozen_record_index = candidate_cursor.get("record_index")
+        frozen_global_step = candidate_cursor.get("global_step")
+        frozen_tokens_seen = candidate_cursor.get("tokens_seen")
+        if any(type(value) is not int or value < 0 for value in (frozen_record_index, frozen_global_step, frozen_tokens_seen)):
+            raise RuntimeError("authorized production resume has an invalid frozen cursor")
+        if records_override is None:
+            if frozen_record_index >= len(records):
+                raise RuntimeError("production resume cursor has no remaining authorized records")
+            if candidate_cursor.get("shard") != data_shard_id:
+                raise RuntimeError("production resume cursor does not bind the admitted input shard")
+            if candidate_cursor.get("input_identity_receipt_sha256") != _json_sha256(input_receipt):
+                raise RuntimeError("production resume cursor does not bind the admitted input receipt")
+        frozen_resume_cursor = dict(candidate_cursor)
 
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -2042,16 +2235,24 @@ def run(
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
-        manifest_path = resume_checkpoint / "checkpoint-manifest.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
-        receipt = {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}
-        resume_cursor = restore_authorized_checkpoint(model, optimizer, resume_checkpoint, receipt, resume_authority)["data_cursor"]
+        if resume_receipt is None or resume_authority is None:
+            raise RuntimeError("authorized production resume requires a frozen checkpoint receipt")
+        genesis_hashes = resume_expert_genesis(resume_receipt, requested_seed=seed)
+        resume_cursor = restore_authorized_checkpoint(model, optimizer, resume_checkpoint, resume_receipt, resume_authority)["data_cursor"]
+        if frozen_resume_cursor is not None and resume_cursor.get("record_index") != frozen_resume_cursor.get("record_index"):
+            raise RuntimeError("restored production resume cursor differs from its frozen receipt")
         for group in optimizer.param_groups:
             group["lr"] = 1e-5
         if records_override is not None:
             resume_cursor = specialist_resume_cursor(resume_cursor, data_shard_id=data_shard_id)
-        checkpoint_root = checkpoint_parent / f"checkpoint-continue-seed-{seed}-from-step-{resume_cursor['global_step'] + len(records)}"
+        remaining_records = len(records) - int(resume_cursor["record_index"])
+        if remaining_records < 1:
+            raise RuntimeError("production resume cursor has no remaining authorized records")
+        bounded_records = remaining_records if max_records is None else min(max_records, remaining_records)
+        checkpoint_root = checkpoint_parent / (
+            f"checkpoint-continue-seed-{seed}-from-step-"
+            f"{int(resume_cursor['global_step']) + bounded_records}"
+        )
     checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=active_parameters)
     specialist_plan: dict[str, int] | None = None
     if records_override is not None:
@@ -2070,6 +2271,7 @@ def run(
         nonlocal checkpoint, parameter_receipt, latest_parent_manifest, published_specialist_records
         data_cursor = dict(state["data_cursor"])
         data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
+        data_cursor["governor"] = governor_receipt
         if resume_authority is not None:
             data_cursor["resume_authority"] = resume_authority
         current_lineage: dict[str, object] | None = None
@@ -2116,6 +2318,7 @@ def run(
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
+                max_transient_scratch_bytes=_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES,
                 host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
                 pre_publish_verifier=verify_staging,
             )
@@ -2155,7 +2358,8 @@ def run(
         checkpoint_callback=checkpoint_callback, initial_global_step=int(resume_cursor["global_step"]),
         progress_callback=progress_callback,
         initial_tokens_seen=int(resume_cursor["tokens_seen"]), initial_data_cursor=int(resume_cursor["record_index"]),
-        data_shard_id=data_shard_id, require_complete_coverage=(records_override is None),
+        data_shard_id=data_shard_id, require_complete_coverage=(records_override is None and max_records is None),
+        max_records=max_records,
     )
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("training segment completed without a durable verified checkpoint")
@@ -2176,6 +2380,7 @@ def run(
         "input_identity_receipt": input_receipt, "post_step_checkpoint": checkpoint,
         "parameter_receipt": parameter_receipt, "publication_plan": specialist_plan,
         "resume_authority": resume_authority,
+        "governor": governor_receipt,
     }
 
 def specialist_lineage_request(
@@ -2292,24 +2497,26 @@ def run_semantic(
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
+    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
+        raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
     # Shared-text authority must be complete before even a CUDA availability probe.
     text_lab_preflight = run_text_lab_preflight(repo_root=Path(__file__).resolve().parents[2])
     if text_lab_preflight.get("result") != "VERIFIED":
         raise ValueError(str(text_lab_preflight.get("result", "text-lab authority was not admitted")))
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is required for the production semantic runner")
-    if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
-        raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
     artifact_root = production_artifact_root(artifact_root)
     root = Path(__file__).resolve().parents[2]
     config_path = root / "configs" / "ember-restart-3b.json"
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
+    config = RestartDecoderConfig.from_contract(config_path)
+    memory_contract = load_memory_contract(config_path)
+    governor_receipt = governed_resource_preflight()
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for the production semantic runner")
     stream = ManifestBoundTokenStream.from_receipt(
         receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path
     )
-    config = RestartDecoderConfig.from_contract(config_path)
     if stream.vocab_size != config.vocab_size:
         raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
     total_parameters = config.structural_parameter_count()
@@ -2318,10 +2525,11 @@ def run_semantic(
     memory_preflight = production_memory_preflight(
         total_parameters=total_parameters, active_parameters=shared_active_parameters, device_free_bytes=int(device_free_bytes)
     )
-    if memory_preflight["parameter_dtype"] != load_memory_contract(config_path)["parameter_dtype"]:
+    if memory_preflight["parameter_dtype"] != memory_contract["parameter_dtype"]:
         raise RuntimeError("memory preflight and production numerics disagree")
     checkpoint_parent = artifact_root / "checkpoints"
     resume_authority: dict[str, object] | None = None
+    resume_receipt: dict[str, object] | None = None
     if resume_checkpoint is not None:
         resume_checkpoint, resume_authority = authorize_production_resume_checkpoint(
             resume_checkpoint,
@@ -2330,6 +2538,7 @@ def run_semantic(
             optimizer_transition_registry=resume_optimizer_transition_registry,
             optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
         )
+        resume_receipt = published_checkpoint_receipt(resume_checkpoint)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     rng_state_before_init = _rng_state_hash(torch.device("cuda"))
@@ -2350,12 +2559,12 @@ def run_semantic(
     initial_global_step = 0
     initial_tokens_seen = 0
     if resume_checkpoint is not None:
-        manifest_path = resume_checkpoint / "checkpoint-manifest.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        genesis_hashes = resume_expert_genesis(manifest, requested_seed=seed)
+        if resume_receipt is None or resume_authority is None:
+            raise RuntimeError("authorized semantic resume requires a frozen checkpoint receipt")
+        genesis_hashes = resume_expert_genesis(resume_receipt, requested_seed=seed)
         loaded = restore_authorized_checkpoint(
             model, optimizer, resume_checkpoint,
-            {**manifest, "checkpoint_manifest_sha256": _sha256(manifest_path)}, resume_authority,
+            resume_receipt, resume_authority,
         )
         resume_cursor = dict(loaded["data_cursor"])
         initial_global_step = int(resume_cursor["global_step"])
@@ -2384,6 +2593,7 @@ def run_semantic(
 
         def publish_and_verify() -> tuple[dict[str, object], dict[str, object]]:
             data_cursor = dict(state["data_cursor"])
+            data_cursor["governor"] = governor_receipt
             if resume_authority is not None:
                 data_cursor["resume_authority"] = resume_authority
             published = write_checkpoint_artifacts(
@@ -2392,6 +2602,7 @@ def run_semantic(
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
                 max_serialized_bytes=checkpoint_byte_bound,
+                max_transient_scratch_bytes=_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES,
                 host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
                 pre_publish_verifier=verify_staging,
             )
@@ -2424,6 +2635,7 @@ def run_semantic(
     return {
         "segment": segment,
         "counts": counts,
+        "governor": governor_receipt,
         "memory_preflight": memory_preflight,
         "launch_seed": seed,
         "rng_state_before_init_sha256": rng_state_before_init,
@@ -2452,6 +2664,23 @@ def main() -> None:
     vertical_resume.add_argument("--resume-realization-registry", type=Path)
     vertical_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
     vertical.add_argument("--resume-optimizer-transition-registry-sha256")
+    governed_vertical = subparsers.add_parser("governed-vertical")
+    governed_vertical.add_argument("--seed", type=int, required=True)
+    governed_vertical.add_argument("--artifact-root", type=Path, required=True)
+    governed_vertical.add_argument("--write-budget-bytes", type=int, required=True)
+    governed_vertical.add_argument("--max-records", type=int)
+    governed_vertical.add_argument("--resume-checkpoint", type=Path)
+    governed_resume = governed_vertical.add_mutually_exclusive_group()
+    governed_resume.add_argument("--resume-counter-receipt", type=Path)
+    governed_resume.add_argument("--resume-realization-registry", type=Path)
+    governed_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
+    governed_vertical.add_argument("--resume-optimizer-transition-registry-sha256")
+    governed_preflight = subparsers.add_parser("governed-vertical-preflight")
+    governed_preflight.add_argument("--seed", type=int, required=True)
+    governed_preflight.add_argument("--artifact-root", type=Path, required=True)
+    governed_preflight.add_argument("--write-budget-bytes", type=int, required=True)
+    governed_preflight.add_argument("--max-records", type=int)
+
     specialist = subparsers.add_parser("specialist")
     specialist.add_argument("--seed", type=int, required=True)
     specialist.add_argument("--artifact-root", type=Path, required=True)
@@ -2492,7 +2721,11 @@ def main() -> None:
     semantic_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
     semantic.add_argument("--resume-optimizer-transition-registry-sha256")
     args = parser.parse_args()
-    if args.command == "specialist":
+    if args.command == "governed-vertical":
+        result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
+    elif args.command == "governed-vertical-preflight":
+        result = preflight_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records)
+    elif args.command == "specialist":
         result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
     elif args.command == "semantic":
         result = run_semantic(
@@ -2512,6 +2745,7 @@ def main() -> None:
             resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256,
         )
     else:
+        require_disk_budget_runner_contract()
         result = run(seed=args.seed, artifact_root=args.artifact_root, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
     print(json.dumps(result, sort_keys=True))
 if __name__ == "__main__":
