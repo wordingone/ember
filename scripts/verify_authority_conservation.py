@@ -78,6 +78,13 @@ WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
 EXPECTED_ACTIVE_GOAL_SUFFIX = (
     "goals/ember/ember-02-3b-foundation-birth/goal.md"
 )
+GOAL_GRAPH_SCHEMA = "ember-goal-graph-v1"
+GOAL_GRAPH_STATES = {
+    "ACTIVE",
+    "PRESTAGING",
+    "WAITING_ON_DEPENDENCY",
+    "CERTIFIED",
+}
 POLICY_RE = re.compile(
     r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
 )
@@ -731,7 +738,170 @@ def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> No
             )
 
 
-def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | None:
+def parse_graph_selection(
+    selection_path: Path,
+    active_path: str,
+    policy: dict[str, Any] | None,
+    errors: list[dict[str, Any]],
+) -> str | None:
+    valid = True
+    selected_graph = Path(active_path)
+    if not selected_graph.is_absolute():
+        selected_graph = (selection_path.parent / selected_graph).resolve()
+    if selected_graph.name != "EMBER-GOAL-GRAPH.json":
+        errors.append(
+            finding(4, "selection.graph_path_invalid", str(selected_graph))
+        )
+        valid = False
+    if not selected_graph.is_file():
+        errors.append(
+            finding(4, "selection.graph_file_missing", str(selected_graph))
+        )
+        return None
+    try:
+        graph = json.loads(read_text(selected_graph))
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
+        errors.append(finding(4, "selection.graph_invalid", str(exc)))
+        return None
+    if not isinstance(graph, dict):
+        errors.append(finding(4, "selection.graph_invalid", "root must be an object"))
+        return None
+    if graph.get("schema_version") != GOAL_GRAPH_SCHEMA:
+        errors.append(
+            finding(
+                4,
+                "selection.graph_schema",
+                str(graph.get("schema_version", "<missing>")),
+            )
+        )
+        valid = False
+    program = graph.get("program")
+    if (
+        not isinstance(program, dict)
+        or program.get("id") != "EMBER"
+        or program.get("state") != "ACTIVE"
+    ):
+        errors.append(
+            finding(4, "selection.graph_program", "EMBER program must be ACTIVE")
+        )
+        valid = False
+    if policy is None:
+        errors.append(
+            finding(4, "selection.graph_policy_missing", "GOAL.md policy is unavailable")
+        )
+        return None
+    expected_workstreams = policy.get("active_workstream_ids")
+    if (
+        not isinstance(expected_workstreams, list)
+        or not expected_workstreams
+        or not all(isinstance(item, str) and item for item in expected_workstreams)
+    ):
+        errors.append(
+            finding(
+                4,
+                "selection.graph_policy_workstreams",
+                "active workstream policy is invalid",
+            )
+        )
+        return None
+    nodes = graph.get("nodes")
+    if not isinstance(nodes, list):
+        errors.append(finding(4, "selection.graph_nodes", "nodes must be an array"))
+        return None
+    by_id: dict[str, list[dict[str, Any]]] = {}
+    for node in nodes:
+        if isinstance(node, dict) and isinstance(node.get("id"), str):
+            by_id.setdefault(node["id"], []).append(node)
+    graph_root = selected_graph.parent.parent.resolve()
+    for workstream in expected_workstreams:
+        matches = by_id.get(workstream, [])
+        if len(matches) != 1:
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_workstream",
+                    f"{workstream}: expected exactly one node, found {len(matches)}",
+                )
+            )
+            valid = False
+            continue
+        node = matches[0]
+        if node.get("state") not in GOAL_GRAPH_STATES:
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_workstream_state",
+                    f"{workstream}: {node.get('state', '<missing>')}",
+                )
+            )
+            valid = False
+        raw_goal_path = node.get("goal_path")
+        declared_hash = node.get("goal_sha256")
+        if (
+            not isinstance(raw_goal_path, str)
+            or not raw_goal_path
+            or Path(raw_goal_path).is_absolute()
+        ):
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_path",
+                    f"{workstream}: invalid goal_path",
+                )
+            )
+            valid = False
+            continue
+        goal_path = (graph_root / raw_goal_path).resolve()
+        try:
+            goal_path.relative_to(graph_root)
+        except ValueError:
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_path_escape",
+                    f"{workstream}: {raw_goal_path}",
+                )
+            )
+            valid = False
+            continue
+        if not goal_path.is_file():
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_file_missing",
+                    f"{workstream}: {goal_path}",
+                )
+            )
+            valid = False
+            continue
+        actual_hash = hashlib.sha256(goal_path.read_bytes()).hexdigest()
+        if (
+            not isinstance(declared_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", declared_hash)
+            or declared_hash != actual_hash
+        ):
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_hash_mismatch",
+                    f"{workstream}: declared goal bytes do not match",
+                )
+            )
+            valid = False
+    active_goal = policy.get("active_goal_id")
+    if not isinstance(active_goal, str) or not re.fullmatch(r"EMBER-\d{2}", active_goal):
+        errors.append(
+            finding(4, "selection.graph_policy_goal", str(active_goal or "<missing>"))
+        )
+        return None
+    return active_goal if valid else None
+
+
+def parse_selection(
+    path: Path | None,
+    errors: list[dict[str, Any]],
+    policy: dict[str, Any] | None = None,
+) -> str | None:
     if path is None:
         return None
     if not path.is_file():
@@ -753,10 +923,15 @@ def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | No
         errors.append(finding(4, "selection.not_active", "durable selection state must be active"))
         valid = False
     active_goal = values.get("active_goal", "")
+    active_path = values.get("active_goal_path", "")
+    if active_goal == "graph":
+        if not active_path or active_path == "none":
+            errors.append(finding(4, "selection.path_missing", "active_goal_path is absent"))
+            return None
+        return parse_graph_selection(path, active_path, policy, errors)
     if not re.fullmatch(r"EMBER-\d{2}", active_goal):
         errors.append(finding(4, "selection.goal_invalid", active_goal or "<missing>"))
         valid = False
-    active_path = values.get("active_goal_path", "")
     if not active_path or active_path == "none":
         errors.append(finding(4, "selection.path_missing", "active_goal_path is absent"))
         valid = False
@@ -1642,9 +1817,9 @@ def verify(
             return build_certificate(staged_payload["errors"] + binding_errors)
 
     errors: list[dict[str, Any]] = []
-    active_goal = parse_selection(selection, errors)
     policy = parse_goal_policy(root, errors)
     check_policy(policy, errors)
+    active_goal = parse_selection(selection, errors, policy)
     if active_goal is not None and policy is not None:
         expect(
             errors,

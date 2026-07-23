@@ -699,6 +699,70 @@ def test_exact_ember02_selection_and_goal_file_pass(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def write_graph_selection(root: Path) -> Path:
+    write_valid_fixture(root)
+    authority_root = root / "authority"
+    coordinator_root = authority_root / "coordinator"
+    nodes = []
+    for workstream in ("EMBER-02A", "EMBER-02B", "EMBER-02C"):
+        relative_goal = Path("coordinator") / "goals" / workstream / "goal.md"
+        goal = authority_root / relative_goal
+        goal.parent.mkdir(parents=True, exist_ok=True)
+        goal.write_text(f"# {workstream}\n", encoding="utf-8")
+        nodes.append(
+            {
+                "id": workstream,
+                "goal_path": relative_goal.as_posix(),
+                "goal_sha256": hashlib.sha256(goal.read_bytes()).hexdigest(),
+                "state": "PRESTAGING",
+            }
+        )
+    graph = coordinator_root / "EMBER-GOAL-GRAPH.json"
+    graph.parent.mkdir(parents=True, exist_ok=True)
+    graph.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-goal-graph-v1",
+                "program": {"id": "EMBER", "state": "ACTIVE"},
+                "nodes": nodes,
+            }
+        ),
+        encoding="utf-8",
+    )
+    selection = coordinator_root / "EMBER-GOAL-RESUME.md"
+    selection.write_text(
+        "state: active\n"
+        "active_goal: graph\n"
+        f"active_goal_path: {graph}\n",
+        encoding="utf-8",
+    )
+    return selection
+
+
+def test_graph_selection_binds_active_workstream_goal_bytes(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_graph_selection_rejects_stale_workstream_goal_hash(tmp_path: Path) -> None:
+    selection = write_graph_selection(tmp_path)
+    graph_path = selection.parent / "EMBER-GOAL-GRAPH.json"
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    graph["nodes"][1]["goal_sha256"] = "0" * 64
+    graph_path.write_text(json.dumps(graph), encoding="utf-8")
+
+    result = run_verifier(tmp_path, selection)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "selection.graph_goal_hash_mismatch" in {
+        item["code"] for item in payload["errors"]
+    }
+
+
 def test_hash_bound_external_classification_supports_protected_control_json(
     tmp_path: Path,
 ) -> None:
