@@ -626,16 +626,39 @@ def _verify_shared_expert_genesis(archive: zipfile.ZipFile, payload: Any, *, nam
 def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, active_expert: str, shape: Mapping[str, int]) -> dict[str, Any]:
     records = manifest.get("shards")
     if not isinstance(records, list): raise ValueError("checkpoint manifest lacks shard records")
-    required = {"shared.pt", "replay-state.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
+    schema_version = manifest.get("schema_version")
+    if schema_version == "ember-sparse-checkpoint-v5":
+        required = {
+            "shared-model.pt",
+            "optimizer-state.pt",
+            "replay-state.pt",
+            *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+        }
+    elif schema_version in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
+        required = {"shared.pt", "replay-state.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
+    else:
+        raise ValueError("checkpoint realization schema is unsupported")
     by_path: dict[str, dict[str, Any]] = {}
     for record in records:
         relative = record.get("path") if isinstance(record, dict) else None
         if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts or relative in by_path:
             raise ValueError("checkpoint shard path is not bundle-relative")
         by_path[relative] = record
-    if set(by_path) != required: raise ValueError("checkpoint realization must have one shared and four expert shards")
+    if set(by_path) != required: raise ValueError("checkpoint realization shard set is not closed for its schema")
+    if schema_version == "ember-sparse-checkpoint-v5":
+        if (
+            manifest.get("shared_model_shard_sha256") != by_path["shared-model.pt"].get("sha256")
+            or manifest.get("optimizer_state_shard_sha256") != by_path["optimizer-state.pt"].get("sha256")
+        ):
+            raise ValueError("checkpoint v5 split shard identity does not match its closed records")
+    elif manifest.get("shared_optimizer_shard_sha256") != by_path["shared.pt"].get("sha256"):
+        raise ValueError("legacy shared optimizer shard identity does not match its closed record")
     if manifest.get("active_expert_ids") != [active_expert]: raise ValueError("checkpoint active expert does not match executed counter argument")
-    if active_expert != "shared" and manifest.get("schema_version") != "ember-sparse-checkpoint-v4": raise ValueError("specialist-active realization requires a v4 lineage manifest")
+    if active_expert != "shared" and (
+        schema_version not in {"ember-sparse-checkpoint-v4", "ember-sparse-checkpoint-v5"}
+        or not isinstance(manifest.get("lineage"), Mapping)
+    ):
+        raise ValueError("specialist-active realization requires a lineage manifest")
     genesis, expert_hashes = manifest.get("expert_genesis_sha256"), manifest.get("expert_checkpoint_sha256")
     if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES) or not isinstance(expert_hashes, dict) or set(expert_hashes) != set(EXPERT_NAMES): raise ValueError("checkpoint lacks the four expert genesis/checkpoint hashes")
     for name, digest in genesis.items(): _sha256_value(digest, label=f"{name} genesis hash")
@@ -648,9 +671,12 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
                 if relative == "replay-state.pt": continue
                 with zipfile.ZipFile(handle) as archive:
                     payload = _load_checkpoint_metadata(archive)
-                    if relative == "shared.pt":
+                    if relative in {"shared.pt", "shared-model.pt"}:
+                        if relative == "shared.pt" and (not isinstance(payload, dict) or "optimizer" not in payload):
+                            raise ValueError("legacy shared checkpoint lacks optimizer realization")
+                        _validate_state(payload.get("model") if isinstance(payload, dict) else None, _expected_shared(shape), label="shared")
+                    elif relative == "optimizer-state.pt":
                         if not isinstance(payload, dict) or "optimizer" not in payload: raise ValueError("shared checkpoint lacks optimizer realization")
-                        _validate_state(payload.get("model"), _expected_shared(shape), label="shared")
                     else:
                         name = relative[len("expert-"):-len(".pt")]
                         if expert_hashes[name] != record["sha256"]: raise ValueError(f"checkpoint expert hash is not bound: {name}")
@@ -730,7 +756,7 @@ def execute_counter(
             external_manifests[label] = _inspect_realization(external_manifest, external, active_expert=external_active[0], shape=shape)
         parent_external, root_external = external_manifests["parent"], external_manifests["root"]
         parent_lineage = parent_external.get("lineage")
-        if parent_external.get("schema_version") == "ember-sparse-checkpoint-v3":
+        if not isinstance(parent_lineage, Mapping):
             if parent_sha256 != root_sha256:
                 raise ValueError("first specialist successor requires matching external parent and root")
             parent_history: list[str] = []

@@ -627,6 +627,58 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertNotIn("expert-vision.pt", str(load.call_args))
         self.assertEqual(model.active_expert, "shared")
         self.assertIs(model.lm_head.weight, model.token_embedding.weight)
+
+    def test_development_loader_reads_v5_split_shared_model_shard(self) -> None:
+        from model import RestartDecoderConfig, UnifiedDecoder
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=1, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, device="cpu")
+        payload = {
+            "model": {
+                key: value.detach().clone()
+                for key, value in model.state_dict().items()
+                if ".experts." not in key
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            with (
+                patch(
+                    "serve_owned_openai.RestartDecoderConfig.from_contract",
+                    return_value=config,
+                ),
+                patch(
+                    "serve_owned_openai.construct_runtime_model", return_value=model
+                ),
+                patch(
+                    "serve_owned_openai.tied_embeddings_from_contract",
+                    return_value=True,
+                ),
+                patch(
+                    "serve_owned_openai.hash_and_load_torch", return_value=payload
+                ) as load,
+            ):
+                loaded = load_development_shared_runtime(
+                    checkpoint=root,
+                    config_path=config_path,
+                    checkpoint_manifest={
+                        "schema_version": "ember-sparse-checkpoint-v5",
+                        "shards": [
+                            {"path": "shared-model.pt", "sha256": "b" * 64},
+                            {"path": "optimizer-state.pt", "sha256": "c" * 64},
+                        ],
+                    },
+                    device="cpu",
+                )
+        self.assertIs(loaded, model)
+        load.assert_called_once_with(
+            torch, root / "shared-model.pt", "b" * 64, device="cpu"
+        )
+        self.assertNotIn("optimizer-state.pt", str(load.call_args))
     def test_development_resolver_requires_exact_non_admissible_seat(self) -> None:
         payload = {"valid": True, "seat": "OWNED_DEVELOPMENT", "claim_status": "NON_ADMISSIBLE"}
         calls: list[list[str]] = []

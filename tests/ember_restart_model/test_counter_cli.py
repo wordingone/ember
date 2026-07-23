@@ -39,6 +39,46 @@ from parameter_counter import REALIZATION_RECEIPT_FIELDS, _CheckpointMetadataUnp
 
 
 class CounterCliTests(unittest.TestCase):
+    def test_counter_rejects_v5_top_level_split_shard_identity_drift(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=39)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps({
+                "architecture_revision": "ember-sparse-3b-v2",
+                "model": {
+                    "hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64,
+                    "tied_embeddings": True,
+                    "image_projection": {"input_shape": [48, 48, 3], "output_size": 32},
+                    "audio_projection": {"frame_samples": 640, "output_size": 32},
+                    "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
+                },
+            }), encoding="utf-8")
+            checkpoint = root / "checkpoint"
+            write_checkpoint_artifacts(
+                model, optimizer, checkpoint, launch_seed=39, rng_state={
+                    "cpu": torch.get_rng_state().clone(),
+                    "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8),
+                },
+                data_cursor={"shard": "owned", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                contract_sha256="d" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+            )
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["shared_model_shard_sha256"] = "0" * 64
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "split shard identity"):
+                execute_counter(
+                    model_config=config_path,
+                    checkpoint_manifest=manifest_path,
+                    active_expert="shared",
+                )
+
     def test_p2b_tokenizer_runtime_bundle_is_closed_and_path_free(self) -> None:
         """P2B imports only a caller-supplied, content-addressed tokenizer bundle."""
         runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
@@ -315,7 +355,25 @@ class CounterCliTests(unittest.TestCase):
             write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=71, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
             manifest_path = root / "checkpoint" / "checkpoint-manifest.json"
             expected_subject = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-            tracked = {path.resolve() for path in (config_path, manifest_path, *(root / "checkpoint" / name for name in ("shared.pt", "replay-state.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt")))}
+            tracked = {
+                path.resolve()
+                for path in (
+                    config_path,
+                    manifest_path,
+                    *(
+                        root / "checkpoint" / name
+                        for name in (
+                            "shared-model.pt",
+                            "optimizer-state.pt",
+                            "replay-state.pt",
+                            "expert-vision.pt",
+                            "expert-audio.pt",
+                            "expert-reasoning.pt",
+                            "expert-tool.pt",
+                        )
+                    ),
+                )
+            }
             original_open, original_text = Path.open, Path.read_text
             opens: dict[Path, int] = {}
 
@@ -578,7 +636,7 @@ class CounterCliTests(unittest.TestCase):
             config_path = root / "config.json"
             config_path.write_text(json.dumps({"architecture_revision": "ember-sparse-3b-v2", "model": {"hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64, "tied_embeddings": True, "image_projection": {"input_shape": [48, 48, 3], "output_size": 32}, "audio_projection": {"frame_samples": 640, "output_size": 32}, "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]}}}), encoding="utf-8")
             write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=41, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
-            with self.assertRaisesRegex(ValueError, "v4"):
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
                 execute_counter(model_config=config_path, checkpoint_manifest=root / "checkpoint" / "checkpoint-manifest.json", active_expert="reasoning")
 
     def test_counter_requires_external_parent_and_root_for_specialist_v4(self) -> None:
@@ -592,7 +650,7 @@ class CounterCliTests(unittest.TestCase):
             receipt = write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=43, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
             manifest_path = root / "checkpoint" / "checkpoint-manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            manifest.update({"schema_version": "ember-sparse-checkpoint-v4", "contract_version": 4, "expert_parameter_sha256": manifest["expert_genesis_sha256"], "lineage": {"parent_checkpoint_sha256": "a" * 64, "root_genesis_checkpoint_sha256": "b" * 64, "trained_expert_ids": ["reasoning"], "episode": {"active_expert": "reasoning", "data_verification_receipt": {}, "data_verification_receipt_sha256": "c" * 64}}})
+            manifest.update({"expert_parameter_sha256": manifest["expert_genesis_sha256"], "lineage": {"parent_checkpoint_sha256": "a" * 64, "root_genesis_checkpoint_sha256": "b" * 64, "trained_expert_ids": ["reasoning"], "episode": {"active_expert": "reasoning", "data_verification_receipt": {}, "data_verification_receipt_sha256": "c" * 64}}})
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "external parent and root"):
                 execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="reasoning")

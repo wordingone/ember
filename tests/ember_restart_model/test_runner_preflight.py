@@ -425,6 +425,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(retention_bounds, [run_vertical_slice.checkpoint_retention_budget_bytes(ROOT / "configs" / "ember-restart-3b.json")])
         self.assertEqual(writer.call_count, 1)
         self.assertEqual(writer.call_args.kwargs["max_serialized_bytes"], bound)
+        self.assertEqual(writer.call_args.kwargs["max_transient_scratch_bytes"], 4 * 1024**3)
         self.assertEqual(writer.call_args.kwargs["host_commit_reserve_bytes"], 8 * 1024**3)
         self.assertEqual(writer.call_args.kwargs["data_cursor"]["governor"], {"free_gb": 32.0})
         self.assertEqual(result["governor"], {"free_gb": 32.0})
@@ -437,6 +438,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(result["publication_plan"], {"publication_count": 2, "checkpoint_byte_bound": bound, "projected_write_bytes": 2 * bound})
         self.assertEqual(writer.call_count, 2)
         self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
+        self.assertTrue(all(call.kwargs["max_transient_scratch_bytes"] == 4 * 1024**3 for call in writer.call_args_list))
         self.assertTrue(all(call.kwargs["host_commit_reserve_bytes"] == 8 * 1024**3 for call in writer.call_args_list))
         receipt = self._semantic_restore_loader.call_args.args[3]
         self.assertIs(receipt, self._semantic_resume_receipt)
@@ -726,6 +728,8 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertTrue(str(specialist_kwargs["data_shard_id"]).startswith("VERIFIED_SPECIALIST:"))
         self.assertEqual(ordinary_writer.call_args.kwargs["max_serialized_bytes"], bound)
         self.assertEqual(specialist_writer.call_args.kwargs["max_serialized_bytes"], bound)
+        self.assertEqual(ordinary_writer.call_args.kwargs["max_transient_scratch_bytes"], 4 * 1024**3)
+        self.assertEqual(specialist_writer.call_args.kwargs["max_transient_scratch_bytes"], 4 * 1024**3)
     def test_vertical_resume_passes_frozen_manifest_identity_to_checkpoint_loader(self) -> None:
         """The full runner resume handoff retains the disk manifest's identity receipt."""
 
@@ -975,6 +979,10 @@ class RunnerPreflightTests(unittest.TestCase):
             run_vertical_slice.governed_vertical_checkpoint_byte_bound(config_path),
             12_202_530_816,
         )
+
+    def test_governed_vertical_refuses_successor_four_gib_checkpoint_envelope(self) -> None:
+        with self.assertRaisesRegex(ValueError, "checkpoint publication bound"):
+            run_vertical_slice.preflight_governed_vertical(seed=83, artifact_root=ROOT, write_budget_bytes=4 * 1024**3)
 
     def test_canonical_runner_assertion_outside_custody_is_rejected_before_launch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1505,5 +1513,128 @@ class RunnerPreflightTests(unittest.TestCase):
             with patch.object(run_vertical_slice, "run_launch", side_effect=admit_then_swap):
                 with self.assertRaisesRegex(RuntimeError, "changed after admission"):
                     run_vertical_slice.load_authorized_records(root)
+    def test_public_disk_budget_runner_creates_bound_assertion_and_invokes_child(self) -> None:
+        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        self.assertTrue(runner.is_file(), "public disk budget runner is missing")
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            artifact_root = custody / "artifacts"
+            custody.mkdir()
+            artifact_root.mkdir()
+            child = Path(directory) / "child.py"
+            capture = custody / "capture.json"
+            child.write_text(
+                "import json, os, pathlib\n"
+                "assertion = pathlib.Path(os.environ['EMBER_DISK_BUDGET_ENV_ASSERTION'])\n"
+                "payload = json.loads(assertion.read_text(encoding='utf-8'))\n"
+                "pathlib.Path(os.environ['GOVERNED_LAUNCH_CAPTURE']).write_text(json.dumps({'payload': payload, 'env': {key: os.environ[key] for key in payload['bindings']}}, sort_keys=True), encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+            receipt = custody / "runner-receipt.json"
+            with patch.dict(os.environ, {"GOVERNED_LAUNCH_CAPTURE": str(capture)}, clear=False):
+                completed = subprocess.run(
+                    [
+                        sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
+                        "--receipt", str(receipt), "--write-root", f"custody={custody}",
+                        "--write-root", f"artifacts={artifact_root}", "--", sys.executable, str(child),
+                    ],
+                    text=True, capture_output=True, check=False,
+                )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            observed = json.loads(capture.read_text(encoding="utf-8"))
+            runner_receipt = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(observed["payload"]["schema_version"], 1)
+        self.assertRegex(observed["payload"]["nonce"], r"^[0-9a-f]{32}$")
+        self.assertEqual(observed["payload"]["bindings"], observed["env"])
+        self.assertEqual(runner_receipt["outcome"], "COMPLETED")
+        self.assertTrue(capture.is_relative_to(custody))
+        self.assertEqual(runner_receipt["unredirected_cache_roots"], [])
+        self.assertEqual(runner_receipt["child_cache_assertion"], observed["payload"])
+
+    def test_public_disk_budget_runner_rejects_declared_write_that_crosses_reserve(self) -> None:
+        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        self.assertTrue(runner.is_file(), "public disk budget runner is missing")
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            custody.mkdir()
+            receipt = custody / "runner-receipt.json"
+            completed = subprocess.run(
+                [sys.executable, str(runner), "--max-c-write-gib", "99999", "--max-b-write-gib", "0.001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "raise AssertionError('child')"],
+                text=True, capture_output=True, check=False,
+            )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(completed.returncode, 125)
+        self.assertEqual(payload["outcome"], "PRELAUNCH_REJECTED")
+        self.assertIn("operating reserve", payload["stop_reason"])
+
+    def test_public_runner_reaches_real_governed_vertical_cpu_preflight_child(self) -> None:
+        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        child = ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            artifact_root = custody / "artifacts"
+            custody.mkdir()
+            artifact_root.mkdir()
+            receipt = custody / "runner-receipt.json"
+            completed = subprocess.run(
+                [
+                    sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
+                    "--receipt", str(receipt), "--write-root", f"custody={custody}", "--write-root", f"artifacts={artifact_root}", "--",
+                    sys.executable, str(child), "governed-vertical-preflight", "--seed", "83", "--artifact-root", str(artifact_root),
+                    "--write-budget-bytes", str(12 * 1024**3), "--max-records", "1",
+                ], text=True, capture_output=True, check=False,
+            )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn('"decision": "PREFLIGHT_ONLY"', completed.stdout)
+        self.assertEqual(payload["outcome"], "COMPLETED")
+        self.assertIsNotNone(payload["child_cache_assertion"])
+
+    def test_public_runner_accounts_final_receipt_bytes_inside_custody_growth(self) -> None:
+        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            custody.mkdir()
+            receipt = custody / "runner-receipt.json"
+            completed = subprocess.run(
+                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "pass"],
+                text=True, capture_output=True, check=False,
+            )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+            receipt_bytes = receipt.stat().st_size
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertGreaterEqual(payload["file_max_growth_bytes_by_root"]["custody"], receipt_bytes)
+
+    def test_public_runner_refuses_budget_that_cannot_reserve_final_receipt_before_child(self) -> None:
+        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            custody.mkdir()
+            marker = custody / "child-ran"
+            receipt = custody / "runner-receipt.json"
+            completed = subprocess.run(
+                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.00001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{marker}', 'w').write('ran')"],
+                text=True, capture_output=True, check=False,
+            )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("cannot reserve the final runner receipt", completed.stderr)
+        self.assertFalse(marker.exists())
+
+    def test_public_runner_combines_child_growth_and_final_receipt_reservation(self) -> None:
+        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = Path(directory) / "custody"
+            custody.mkdir()
+            receipt = custody / "runner-receipt.json"
+            child_file = custody / "child.bin"
+            completed = subprocess.run(
+                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.0001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{child_file}', 'wb').write(b'x' * 60000)"],
+                text=True, capture_output=True, check=False,
+            )
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(completed.returncode, 125, completed.stderr)
+        self.assertEqual(payload["outcome"], "STOPPED_BY_BUDGET")
+        self.assertIn("declared file write budget exceeded", payload["stop_reason"])
+
 if __name__ == "__main__":
     unittest.main()
