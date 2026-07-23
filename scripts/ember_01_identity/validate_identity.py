@@ -165,6 +165,7 @@ HASH_PATHS = (
 BINDING_PATHS = (
     "architecture",
     "architecture.sha256",
+    "parameters",
     "tokenizer",
     "tokenizer.sha256",
     "data",

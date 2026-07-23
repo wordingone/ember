@@ -146,10 +146,19 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
 
     def fake_verify(*_: object, checkpoint_manifest: Path, **__: object) -> None:
         verified_paths.append(checkpoint_manifest)
-        if checkpoint_manifest != tmp_path / "checkpoint-manifest.json":
-            raise completion.ParameterIdentityMismatch("tampered checkpoint manifest")
 
     monkeypatch.setattr(completion, "verify_parameter_identity_binding", fake_verify)
+    monkeypatch.setattr(
+        completion,
+        "_run_identity_tamper_battery",
+        lambda **_: {
+            "tool": "test",
+            "axis_count": 8,
+            "axes": {f"axis-{index}": {"rejected": True} for index in range(8)},
+            "failures": [],
+            "all_rejected": True,
+        },
+    )
 
     result = completion.identity_legs(
         tmp_path,
@@ -161,7 +170,126 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
 
     assert result["3"]["state"] == completion.RESOLVED_TRUE
     assert result["4"]["state"] == completion.RESOLVED_TRUE
-    assert len(verified_paths) == 2
+    assert len(verified_paths) == 1
     assert verified_paths[0] == checkpoint_manifest
-    assert verified_paths[1] != checkpoint_manifest
-    assert not verified_paths[1].exists()
+
+
+def _historical_identity_payload() -> dict[str, object]:
+    return json.loads(
+        (
+            REPO_ROOT
+            / "manifests"
+            / "ember-01-identity"
+            / "historical-checkpoint-semantic-seed83-step2-v1.json"
+        ).read_text(encoding="utf-8")
+    )
+
+
+def _battery_receipt(payload: dict[str, object]) -> dict[str, object]:
+    checkpoint = payload["checkpoint"]
+    parameters = payload["parameters"]
+    assert isinstance(checkpoint, dict)
+    assert isinstance(parameters, dict)
+    return {
+        "subject_checkpoint_sha256": checkpoint["byte_sha256"],
+        "allocated_parameters": parameters["allocated"],
+        "unique_parameters": parameters["unique"],
+        "trainable_parameters": parameters["trainable"],
+        "served_parameters": parameters["served"],
+        "active_parameters": parameters["active"],
+        "episode_trainable_parameters": parameters["actually_trained"],
+    }
+
+
+def test_tamper_battery_runs_all_eight_axes_through_real_validator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = _historical_identity_payload()
+    monkeypatch.setattr(
+        completion,
+        "verify_parameter_identity_binding",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            completion.ParameterIdentityMismatch("tampered checkpoint manifest")
+        ),
+    )
+
+    result = completion._run_identity_tamper_battery(
+        root=REPO_ROOT,
+        payload=payload,
+        receipt=_battery_receipt(payload),
+        checkpoint_bytes=b'{"real":"checkpoint-manifest"}',
+        model_config=tmp_path / "config.json",
+        scratch_root=tmp_path,
+    )
+
+    assert result["all_rejected"] is True
+    assert result["failures"] == []
+    assert set(result["axes"]) == {
+        "checkpoint_bytes",
+        "param_count",
+        "tokenizer",
+        "data_learned_signal",
+        "mechanism",
+        "backend",
+        "benchmark_id",
+        "comparator",
+    }
+    assert all(row["rejected"] is True for row in result["axes"].values())
+    assert list(tmp_path.glob(".ember01-cond4-*")) == []
+
+
+def test_tamper_battery_names_one_seeded_fail_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = _historical_identity_payload()
+    original_run = completion.run
+    monkeypatch.setattr(
+        completion,
+        "verify_parameter_identity_binding",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            completion.ParameterIdentityMismatch("tampered checkpoint manifest")
+        ),
+    )
+
+    def one_axis_accepts(args: list[str], **kwargs: object) -> dict[str, object]:
+        if kwargs.get("name") == "cond4_tokenizer":
+            return {
+                "returncode": 0,
+                "timed_out": False,
+                "stdout": '{"ok":true}',
+                "stderr": "",
+            }
+        return original_run(args, **kwargs)
+
+    monkeypatch.setattr(completion, "run", one_axis_accepts)
+
+    result = completion._run_identity_tamper_battery(
+        root=REPO_ROOT,
+        payload=payload,
+        receipt=_battery_receipt(payload),
+        checkpoint_bytes=b'{"real":"checkpoint-manifest"}',
+        model_config=tmp_path / "config.json",
+        scratch_root=tmp_path,
+    )
+
+    assert result["all_rejected"] is False
+    assert result["failures"] == ["tokenizer"]
+    assert result["axes"]["tokenizer"]["rejected"] is False
+
+
+def test_identity_legs_are_unresolved_without_real_checkpoint(
+    tmp_path: Path,
+) -> None:
+    result = completion.identity_legs(
+        REPO_ROOT,
+        REPO_ROOT
+        / "manifests"
+        / "ember-01-identity"
+        / "historical-checkpoint-semantic-seed83-step2-v1.json",
+        tmp_path / "missing-checkpoint-manifest.json",
+        tmp_path / "missing-config.json",
+        tmp_path,
+    )
+
+    assert result["3"]["state"] == completion.UNRESOLVED
+    assert result["4"]["state"] == completion.UNRESOLVED
