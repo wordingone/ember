@@ -361,10 +361,10 @@ export function assembleBenchmarkElement(repoRoot: string, deps: Element5Deps = 
 
 interface C0LedgerRow {
   class_id?: string;
-  status?: string;
+  state?: string;
 }
 interface C0LedgerFile {
-  failure_classes?: C0LedgerRow[];
+  classes?: C0LedgerRow[];
 }
 
 export interface Element6Deps {
@@ -400,10 +400,10 @@ export function assembleFailureClassElement(repoRoot: string, deps: Element6Deps
     };
   }
 
-  const classes = Array.isArray(ledger.failure_classes) ? ledger.failure_classes : [];
+  const classes = Array.isArray(ledger.classes) ? ledger.classes : [];
   const lines = [
     `${classes.length} failure class(es) recorded`,
-    ...classes.map((c) => `  ${c.class_id ?? "(unnamed)"}: ${c.status ?? "unknown"}`),
+    ...classes.map((c) => `  ${c.class_id ?? "(unnamed)"}: ${c.state ?? "unknown"}`),
     `source: ${path}`,
   ];
   return { n: 6, label: "failure-class state", status: "BOUND", lines };
