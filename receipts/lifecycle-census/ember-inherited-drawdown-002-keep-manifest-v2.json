@@ -10,38 +10,36 @@
       },
       "head_sha": "587072e683ddde883186ac4d29c0eaa2ed9071b1",
       "master_compare": {
-        "ahead_by": 687,
+        "ahead_by": 692,
         "base": "587072e683ddde883186ac4d29c0eaa2ed9071b1",
         "behind_by": 2,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "5de25720b63b947b09d92c2d0e737a410cefc96a",
         "status": "diverged",
-        "total_commits": 687
+        "total_commits": 692
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 361,
         "base_ref": "master",
         "base_sha": "5de25720b63b947b09d92c2d0e737a410cefc96a",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 4,
+        "commits": 1,
+        "deletions": 0,
         "head_sha": "ac7f83fca0fe77cadb1a1c49a2badba84017e2e3",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "122dc41d80ead0227dc8376a92642c4ab9160674",
         "merged_at": "2026-07-11T04:31:30Z",
         "number": 755,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/755"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/chore/735-lega-receipts-landing:refs/remotes/origin/chore/735-lega-receipts-landing && git rev-parse refs/remotes/origin/chore/735-lega-receipts-landing^{commit}",
         "expected_sha": "587072e683ddde883186ac4d29c0eaa2ed9071b1"
@@ -58,38 +56,36 @@
       },
       "head_sha": "c99cc95772e5132c10d9bbab3341e75968751eaf",
       "master_compare": {
-        "ahead_by": 859,
+        "ahead_by": 864,
         "base": "c99cc95772e5132c10d9bbab3341e75968751eaf",
         "behind_by": 3,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "5077a06bb891aac405c8e9567addddacf992a5b4",
         "status": "diverged",
-        "total_commits": 859
+        "total_commits": 864
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 225,
         "base_ref": "master",
         "base_sha": "5077a06bb891aac405c8e9567addddacf992a5b4",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 1,
+        "commits": 2,
+        "deletions": 0,
         "head_sha": "6c9047914663e9043d07f69e5fa4740dc5c486c4",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "c499ff6cd844d801ff1eda0234a2a5612368f478",
         "merged_at": "2026-07-08T10:48:20Z",
         "number": 436,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/436"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/docs/custody-disposition-415:refs/remotes/origin/docs/custody-disposition-415 && git rev-parse refs/remotes/origin/docs/custody-disposition-415^{commit}",
         "expected_sha": "c99cc95772e5132c10d9bbab3341e75968751eaf"
@@ -106,38 +102,36 @@
       },
       "head_sha": "d1bc5f82134a9b3dda15e6dfd7798a4b02fec2fb",
       "master_compare": {
-        "ahead_by": 802,
+        "ahead_by": 807,
         "base": "d1bc5f82134a9b3dda15e6dfd7798a4b02fec2fb",
         "behind_by": 2,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "6ee41673ec7880073a1db2e61d5ef9326509ba2e",
         "status": "diverged",
-        "total_commits": 802
+        "total_commits": 807
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 767,
         "base_ref": "master",
         "base_sha": "6ee41673ec7880073a1db2e61d5ef9326509ba2e",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 5,
+        "commits": 1,
+        "deletions": 0,
         "head_sha": "d258038cb7f116dffe11663847f8604db89692cc",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "403fca58eb91771ed352ff0e4847ced5f5b13c1e",
         "merged_at": "2026-07-09T08:48:48Z",
         "number": 532,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/532"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/exp/524-measured-cells:refs/remotes/origin/exp/524-measured-cells && git rev-parse refs/remotes/origin/exp/524-measured-cells^{commit}",
         "expected_sha": "d1bc5f82134a9b3dda15e6dfd7798a4b02fec2fb"
@@ -154,38 +148,36 @@
       },
       "head_sha": "dc088ea5f9da5a4ea22ac5ecac847ac6689b1f70",
       "master_compare": {
-        "ahead_by": 785,
+        "ahead_by": 790,
         "base": "dc088ea5f9da5a4ea22ac5ecac847ac6689b1f70",
         "behind_by": 3,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "4826c45e3741db17aa3a59feb6384e0d4251ad5a",
         "status": "diverged",
-        "total_commits": 785
+        "total_commits": 790
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 327,
         "base_ref": "master",
         "base_sha": "868814759359a10fef3225a69e56b03165fe704e",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 8,
+        "commits": 1,
+        "deletions": 104,
         "head_sha": "5f514195045db20c5be90b3301173238a1d83e49",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "b1ee102063b25be4ebf3801f8a75cdc3c5ae9b9c",
         "merged_at": "2026-07-09T15:45:04Z",
         "number": 571,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/571"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/485-activity-ledger-rung1:refs/remotes/origin/feat/485-activity-ledger-rung1 && git rev-parse refs/remotes/origin/feat/485-activity-ledger-rung1^{commit}",
         "expected_sha": "dc088ea5f9da5a4ea22ac5ecac847ac6689b1f70"
@@ -202,38 +194,36 @@
       },
       "head_sha": "372f5ca816b472972f1b54cec238b878c2e0222f",
       "master_compare": {
-        "ahead_by": 684,
+        "ahead_by": 689,
         "base": "372f5ca816b472972f1b54cec238b878c2e0222f",
         "behind_by": 3,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "7554dd214ae260f39e7cc7a2b4d3f8a3e8a451ca",
         "status": "diverged",
-        "total_commits": 684
+        "total_commits": 689
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 1989,
         "base_ref": "master",
         "base_sha": "7554dd214ae260f39e7cc7a2b4d3f8a3e8a451ca",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 3,
+        "commits": 2,
+        "deletions": 0,
         "head_sha": "a0dc2d0e9a1c1a594391bd07ba70ad0da29aa18d",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "574b4ac2e4ee2014d7c4e57bd151141d2b10bb29",
         "merged_at": "2026-07-11T07:21:30Z",
         "number": 765,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/765"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/757-legb-inprocess-scorer:refs/remotes/origin/feat/757-legb-inprocess-scorer && git rev-parse refs/remotes/origin/feat/757-legb-inprocess-scorer^{commit}",
         "expected_sha": "372f5ca816b472972f1b54cec238b878c2e0222f"
@@ -250,38 +240,36 @@
       },
       "head_sha": "c8a6b240d112f88b5dfc07cd7000bf92e70ef1e9",
       "master_compare": {
-        "ahead_by": 566,
+        "ahead_by": 571,
         "base": "c8a6b240d112f88b5dfc07cd7000bf92e70ef1e9",
         "behind_by": 1,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "1b05dd3c682667294d78868ccedf9689fd1109ed",
         "status": "diverged",
-        "total_commits": 566
+        "total_commits": 571
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 810,
         "base_ref": "master",
         "base_sha": "95d50a7c6969b1bf58c5fdc89984caf3390fd171",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 43,
+        "commits": 25,
+        "deletions": 54,
         "head_sha": "1b05dd3c682667294d78868ccedf9689fd1109ed",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "54dbd5ea79eeb12650bedb78d24d500bf5b8abf6",
         "merged_at": "2026-07-14T17:45:32Z",
         "number": 824,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/824"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-restart-vera-continuation:refs/remotes/origin/feat/ember-restart-vera-continuation && git rev-parse refs/remotes/origin/feat/ember-restart-vera-continuation^{commit}",
         "expected_sha": "c8a6b240d112f88b5dfc07cd7000bf92e70ef1e9"
@@ -298,38 +286,36 @@
       },
       "head_sha": "a7c88593d8c9dd2214a9580889b554dbebbd3284",
       "master_compare": {
-        "ahead_by": 559,
+        "ahead_by": 564,
         "base": "a7c88593d8c9dd2214a9580889b554dbebbd3284",
         "behind_by": 46,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "3b60ce5273ee9056a08e1e0fcf001dbd4536f120",
         "status": "diverged",
-        "total_commits": 559
+        "total_commits": 564
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 1657,
         "base_ref": "master",
         "base_sha": "b414debbb316b0a15a6c389ea054e33bc3b1ca41",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 67,
+        "commits": 43,
+        "deletions": 204,
         "head_sha": "7818ffa6268d571a5b6e17bc15c6c478607bc02e",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "057f6fe69b3254e2ced3d329555e8bee5a7ac933",
         "merged_at": "2026-07-15T02:01:22Z",
         "number": 828,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/828"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-restart-vera-loader:refs/remotes/origin/feat/ember-restart-vera-loader && git rev-parse refs/remotes/origin/feat/ember-restart-vera-loader^{commit}",
         "expected_sha": "a7c88593d8c9dd2214a9580889b554dbebbd3284"
@@ -346,38 +332,36 @@
       },
       "head_sha": "aa7050b23d0ce39ad7ec55b693a1f2152c9af852",
       "master_compare": {
-        "ahead_by": 424,
+        "ahead_by": 429,
         "base": "aa7050b23d0ce39ad7ec55b693a1f2152c9af852",
         "behind_by": 2,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "d327e69b04eaeff1e16155d63a120904efd96b3a",
         "status": "diverged",
-        "total_commits": 424
+        "total_commits": 429
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 190,
         "base_ref": "master",
         "base_sha": "b946e8602ce9557269db6b78ba4e3bc217acab5b",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 8,
+        "commits": 5,
+        "deletions": 10,
         "head_sha": "d327e69b04eaeff1e16155d63a120904efd96b3a",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "50da81d836d6c66b1acdefa1e6d728e010a57909",
         "merged_at": "2026-07-15T04:14:13Z",
         "number": 834,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/834"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-restart-vera-shared-raw-route:refs/remotes/origin/feat/ember-restart-vera-shared-raw-route && git rev-parse refs/remotes/origin/feat/ember-restart-vera-shared-raw-route^{commit}",
         "expected_sha": "aa7050b23d0ce39ad7ec55b693a1f2152c9af852"
@@ -394,38 +378,36 @@
       },
       "head_sha": "62f619f5a435b1bf2bc659cf1125dc3ba485ef2e",
       "master_compare": {
-        "ahead_by": 268,
+        "ahead_by": 273,
         "base": "62f619f5a435b1bf2bc659cf1125dc3ba485ef2e",
         "behind_by": 1,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "c5df5606e408a90e0eec903bbbc8929fbb8394ba",
         "status": "diverged",
-        "total_commits": 268
+        "total_commits": 273
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 226,
         "base_ref": "master",
         "base_sha": "c5df5606e408a90e0eec903bbbc8929fbb8394ba",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 6,
+        "commits": 1,
+        "deletions": 14,
         "head_sha": "07dfdd23964c1dfcbde1c826992b51ad8dcc1efb",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "d7b3bbe99b8bc7d6c6e01186775900f1215af578",
         "merged_at": "2026-07-17T06:15:08Z",
         "number": 890,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/890"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-semantic-contract-binding:refs/remotes/origin/feat/ember-semantic-contract-binding && git rev-parse refs/remotes/origin/feat/ember-semantic-contract-binding^{commit}",
         "expected_sha": "62f619f5a435b1bf2bc659cf1125dc3ba485ef2e"
@@ -442,38 +424,36 @@
       },
       "head_sha": "344fcd866d580869c0d563007f046f0a0a8f584b",
       "master_compare": {
-        "ahead_by": 284,
+        "ahead_by": 289,
         "base": "344fcd866d580869c0d563007f046f0a0a8f584b",
         "behind_by": 1,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "0f1a024936539653ab1a9bbc19779dc6e9495fed",
         "status": "diverged",
-        "total_commits": 284
+        "total_commits": 289
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 961,
         "base_ref": "master",
         "base_sha": "626a2c3911c8fa20e2541a26ea1d4c719745f5ac",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 7,
+        "commits": 8,
+        "deletions": 66,
         "head_sha": "0f1a024936539653ab1a9bbc19779dc6e9495fed",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "f8d32624965f7ddf9950c4b1ea90c88c5c84cb0a",
         "merged_at": "2026-07-16T22:06:20Z",
         "number": 870,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/870"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/ember-vision-v4-execution:refs/remotes/origin/feat/ember-vision-v4-execution && git rev-parse refs/remotes/origin/feat/ember-vision-v4-execution^{commit}",
         "expected_sha": "344fcd866d580869c0d563007f046f0a0a8f584b"
@@ -490,38 +470,36 @@
       },
       "head_sha": "2023c7c30160e9722537912267009b15c1f45226",
       "master_compare": {
-        "ahead_by": 1022,
+        "ahead_by": 1027,
         "base": "2023c7c30160e9722537912267009b15c1f45226",
         "behind_by": 2,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "f7e359433578f6bf13d639061c19980911b4ce3e",
         "status": "diverged",
-        "total_commits": 1022
+        "total_commits": 1027
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 9696,
         "base_ref": "master",
         "base_sha": "f7e359433578f6bf13d639061c19980911b4ce3e",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 12,
+        "commits": 1,
+        "deletions": 0,
         "head_sha": "3378b5252f7f82b28580970cff94ab492bb671fe",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "c51d4ae83ea1885de3e10e249ec9162af6b7bbce",
         "merged_at": "2026-07-05T10:22:07Z",
         "number": 127,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/127"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/freeze-preregs-board-cures:refs/remotes/origin/feat/freeze-preregs-board-cures && git rev-parse refs/remotes/origin/feat/freeze-preregs-board-cures^{commit}",
         "expected_sha": "2023c7c30160e9722537912267009b15c1f45226"
@@ -538,38 +516,36 @@
       },
       "head_sha": "1a37a7b8b8c355e01eccc71a2cc87be3e62436f5",
       "master_compare": {
-        "ahead_by": 844,
+        "ahead_by": 849,
         "base": "1a37a7b8b8c355e01eccc71a2cc87be3e62436f5",
         "behind_by": 3,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "7484b9311c3553c427389d9ac6a509262542ec75",
         "status": "diverged",
-        "total_commits": 844
+        "total_commits": 849
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 2097,
         "base_ref": "master",
         "base_sha": "7484b9311c3553c427389d9ac6a509262542ec75",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 3,
+        "commits": 2,
+        "deletions": 0,
         "head_sha": "20ffd56129312ae08a39f6614b8eabf83d7d4df5",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "3f9400f587ae93be9ae049ec4fb899b1a0f05fe5",
         "merged_at": "2026-07-08T23:12:14Z",
         "number": 460,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/460"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/heldout-v21-fcalib-440:refs/remotes/origin/feat/heldout-v21-fcalib-440 && git rev-parse refs/remotes/origin/feat/heldout-v21-fcalib-440^{commit}",
         "expected_sha": "1a37a7b8b8c355e01eccc71a2cc87be3e62436f5"
@@ -586,38 +562,36 @@
       },
       "head_sha": "3eec08bb3bbecfd3166900d19dbd35cc801cfeb4",
       "master_compare": {
-        "ahead_by": 974,
+        "ahead_by": 979,
         "base": "3eec08bb3bbecfd3166900d19dbd35cc801cfeb4",
         "behind_by": 2,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "9e0ded0b97ddaad6112048d5c25299e952d7dd5b",
         "status": "diverged",
-        "total_commits": 974
+        "total_commits": 979
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 8815,
         "base_ref": "master",
         "base_sha": "9e0ded0b97ddaad6112048d5c25299e952d7dd5b",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 14,
+        "commits": 1,
+        "deletions": 0,
         "head_sha": "f8ef5a5a60c9e0e67725c6364a3e5023814ddeea",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "82be6e7ee6214c067e6d0a3bcf352ee6285bbaf5",
         "merged_at": "2026-07-06T11:12:24Z",
         "number": 223,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/223"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/land-bitnet-phase45-210:refs/remotes/origin/feat/land-bitnet-phase45-210 && git rev-parse refs/remotes/origin/feat/land-bitnet-phase45-210^{commit}",
         "expected_sha": "3eec08bb3bbecfd3166900d19dbd35cc801cfeb4"
@@ -634,38 +608,36 @@
       },
       "head_sha": "50273f97794f404894599e647fe022d1685a5768",
       "master_compare": {
-        "ahead_by": 895,
+        "ahead_by": 900,
         "base": "50273f97794f404894599e647fe022d1685a5768",
         "behind_by": 2,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "b37de25131b5771a158955d5bc2a31bdd3506e53",
         "status": "diverged",
-        "total_commits": 895
+        "total_commits": 900
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 668,
         "base_ref": "master",
         "base_sha": "b37de25131b5771a158955d5bc2a31bdd3506e53",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 2,
+        "commits": 1,
+        "deletions": 17,
         "head_sha": "baa8424ff0ab189147d1520177898c237c4ff9c8",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "4e35651384013e84f6707d4ac39862ad114dc73a",
         "merged_at": "2026-07-07T12:39:10Z",
         "number": 361,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/361"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/feat/w1b-unwidened-continuation:refs/remotes/origin/feat/w1b-unwidened-continuation && git rev-parse refs/remotes/origin/feat/w1b-unwidened-continuation^{commit}",
         "expected_sha": "50273f97794f404894599e647fe022d1685a5768"
@@ -682,38 +654,36 @@
       },
       "head_sha": "adbc9dffdcf42bd1ad093d6bad940f8df19b642a",
       "master_compare": {
-        "ahead_by": 874,
+        "ahead_by": 879,
         "base": "adbc9dffdcf42bd1ad093d6bad940f8df19b642a",
         "behind_by": 5,
-        "head": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+        "head": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+        "merge_base": "3848c8feef4437688983273d8e8a0b732f02534d",
         "status": "diverged",
-        "total_commits": 874
+        "total_commits": 879
       },
       "open_head_prs": [],
       "path_diff_blob_equivalence": {
-        "reason": "current branch diverges from public master; no deletion row may be inferred from merged ancestry",
+        "reason": "current branch diverges from refreshed public master; no deletion row may be inferred from merged ancestry",
         "required": "compare exact branch head to merge/base and verify every terminal blob",
         "status": "NOT_PROVEN_KEEP"
       },
       "pr": {
-        "additions": null,
+        "additions": 114,
         "base_ref": "master",
         "base_sha": "3848c8feef4437688983273d8e8a0b732f02534d",
-        "changed_files": null,
-        "commits": null,
-        "deletions": null,
+        "changed_files": 7,
+        "commits": 4,
+        "deletions": 254,
         "head_sha": "20b7a30273e3c353e33ef1e2bb1ec2def8cb8c14",
-        "live_verified_at": "2026-07-23T09:58:00Z",
+        "live_verified_at": "2026-07-23T10:25:16Z",
         "merge_sha": "10596714349284a437cffa78f713929985df41c9",
         "merged_at": "2026-07-08T05:49:58Z",
         "number": 405,
         "state": "MERGED",
         "url": "https://github.com/wordingone/ember/pull/405"
       },
-      "protection": {
-        "protected": false,
-        "source": "live-api-refresh-20260723-2"
-      },
+      "protection": false,
       "reconstruction": {
         "command": "git fetch origin refs/heads/fix/badge-boot-surface:refs/remotes/origin/fix/badge-boot-surface && git rev-parse refs/remotes/origin/fix/badge-boot-surface^{commit}",
         "expected_sha": "adbc9dffdcf42bd1ad093d6bad940f8df19b642a"
@@ -722,64 +692,28 @@
       "verdict": "KEEP_UNCERTAIN_BRANCH_UNIQUE_OR_DIVERGED"
     }
   ],
-  "captured_branch_count": 78,
+  "captured_branch_count": 77,
   "captured_open_pr_count": 23,
   "claim_limits": [
     "No deletion or model/research claim follows.",
     "Diverged or incompletely evidenced refs remain KEEP."
   ],
   "deletion_authority": "NOT_GRANTED",
+  "goal_id": "EMBER-02",
   "live_refresh": {
-    "candidate_snapshot_branch_count": 79,
-    "candidate_snapshot_open_pr_count": 24,
+    "all_keep": true,
+    "candidate_count": 15,
+    "deletion_authority": "NOT_GRANTED",
     "open_pr_count": 23,
-    "prior_manifest_sha256": "7cfd91b25ce323f6036faf82d0436d1a614cbeebb70b91a0dd6a38c3a9e0579a",
-    "prior_open_pr_count": 24,
-    "prior_public_master_sha": "85cb8411befe02f0669a60aefadc8e5aa3a43c10",
-    "prior_remote_branch_count": 79,
-    "public_master_sha": "0825a69e36fd45584a5c503996004b29d3f1c88e",
-    "refresh_generation": 2,
-    "refresh_reason": "Public master advanced again; the same 15 bounded candidates were rechecked through the safe GitHub API.",
-    "refreshed_at": "2026-07-23T09:58:00Z",
-    "remote_branch_count": 78,
-    "unclassified_delta": {
-      "branch_items": [
-        {
-          "branch": "feat/certified-train-cli-02a",
-          "head_sha": "a1f4ff1f29c080201b8f73658f687da0004b8c29",
-          "protection": false
-        },
-        {
-          "branch": "fix/graph-selection-authority",
-          "head_sha": "bb8c511261e8742a6e3c5ac60dbcdc60ad1edb19",
-          "protection": false
-        }
-      ],
-      "branches": 2,
-      "open_pr_items": [
-        {
-          "branch": "feat/certified-train-cli-02a",
-          "draft": true,
-          "head_sha": "a1f4ff1f29c080201b8f73658f687da0004b8c29",
-          "number": 1021,
-          "state": "open"
-        },
-        {
-          "branch": "fix/graph-selection-authority",
-          "draft": true,
-          "head_sha": "bb8c511261e8742a6e3c5ac60dbcdc60ad1edb19",
-          "number": 1022,
-          "state": "open"
-        }
-      ],
-      "open_prs": 2,
-      "reason": "fresh delta was not admitted to the bounded candidate set; no deletion may infer safety from the older snapshot"
-    }
+    "public_master_sha": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+    "refresh_reason": "Bounded recheck of the existing 15 candidate refs after public master advanced.",
+    "refreshed_at": "2026-07-23T10:25:16Z",
+    "remote_branch_count": 77
   },
-  "manifest_sha256": "1f3739dc9e6c0fc3ae2759ea47acfc8fdee3724fb7dc080b71ad24d748b1ac14",
+  "manifest_sha256": "654af30daaa757065c43c7707df2deb60da0023a7a8f3d0b4898d39937c69fd5",
   "mutation_performed": false,
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "public_master_sha": "0825a69e36fd45584a5c503996004b29d3f1c88e",
+  "public_master_sha": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
   "registered_worktrees": {
     "count": 2,
     "deletion_authority": "NOT_GRANTED",
@@ -816,12 +750,31 @@
       "bytes": 10112256,
       "sha256": "5c4f9366d434056359e49798569f962c4456a5d8a55840abc97dc68f5bfc2786"
     },
+    "live-branches-20260723-27b7.json": {
+      "bytes": 34775,
+      "sha256": "062a8f2c23a2c9f57d1eaf656ae2175323bf7267d5e2e97ee2a594bfdc722d80"
+    },
+    "live-compares-20260723-27b7.json": {
+      "bytes": 4978,
+      "sha256": "8465b8507d3bb9aa8b69d5c399a65f3161352f0cc7c2cef9a26b6e42ddddb435"
+    },
+    "live-master-20260723-27b7.json": {
+      "bytes": 342,
+      "sha256": "204cb76d5d96684572b36476a85527d72c212d0d4abd196dd9d6a7779012f742"
+    },
+    "live-open-prs-20260723-27b7.json": {
+      "bytes": 3526,
+      "sha256": "667ae379a8d38042c34fe4ed478b32f0b5023554b1c053668b99a63628630769"
+    },
+    "live-prs-20260723-27b7.json": {
+      "bytes": 162032,
+      "sha256": "a2e7e537efd4a1d7950a7c7f7ce6278fc047ab80d59fcdfe70494462891331a2"
+    },
     "open-prs-pages.json": {
       "bytes": 441196,
       "sha256": "f0a2f962245cbf1da6a2cea551fd61d491a2a8eb0a4504e63e85a9fbb50085f9"
     }
   },
   "task_id": "EMBER-INHERITED-DRAWDOWN-002",
-  "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A"
 }
