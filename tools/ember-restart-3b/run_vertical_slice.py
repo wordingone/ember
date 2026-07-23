@@ -10,6 +10,7 @@ import ctypes
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import stat
@@ -64,6 +65,74 @@ def governed_resource_preflight() -> dict[str, object]:
     if not isinstance(receipt, Mapping):
         raise RuntimeError("repository resource governor returned an invalid receipt")
     return {**dict(receipt), "governor_source_sha256": _sha256(governor_path)}
+
+
+def governed_gpu_cap_preflight(
+    *,
+    requested_gpu_vram_gib: float,
+    required_bytes: int,
+    governor_receipt: Mapping[str, object],
+) -> dict[str, object]:
+    """Bind the declared cap to raw CUDA bytes before model construction."""
+
+    if (
+        isinstance(requested_gpu_vram_gib, bool)
+        or not isinstance(requested_gpu_vram_gib, (int, float))
+        or not math.isfinite(float(requested_gpu_vram_gib))
+        or requested_gpu_vram_gib <= 0
+        or type(required_bytes) is not int
+        or required_bytes < 1
+    ):
+        raise ValueError("governed GPU cap requires finite positive inputs")
+    fraction = governor_receipt.get("vram_fraction")
+    if (
+        isinstance(fraction, bool)
+        or not isinstance(fraction, (int, float))
+        or not math.isfinite(float(fraction))
+        or not 0 < float(fraction) <= 1
+    ):
+        raise ValueError("governor receipt has an invalid VRAM fraction")
+    governor_source_sha256 = governor_receipt.get("governor_source_sha256")
+    if (
+        not isinstance(governor_source_sha256, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", governor_source_sha256)
+    ):
+        raise ValueError("governor receipt lacks a source binding")
+
+    free_bytes, total_bytes = (int(value) for value in torch.cuda.mem_get_info())
+    requested_bytes = int(float(requested_gpu_vram_gib) * 1024**3)
+    if requested_bytes > total_bytes:
+        raise MemoryError(
+            f"requested GPU cap {float(requested_gpu_vram_gib)} GiB "
+            f"cannot be honored by {total_bytes} device bytes"
+        )
+    effective_cap_bytes = min(free_bytes, requested_bytes)
+    if required_bytes > effective_cap_bytes:
+        raise MemoryError(
+            f"GPU envelope requires {required_bytes} bytes but the measured "
+            f"declared cap exposes only {effective_cap_bytes}; refusing before allocation"
+        )
+    applied_fraction = min(float(fraction), requested_bytes / total_bytes)
+    torch.cuda.set_per_process_memory_fraction(applied_fraction)
+    evidence = {
+        "schema_version": "ember-governed-gpu-cap-preflight-v1",
+        "requested_gpu_vram_gib": float(requested_gpu_vram_gib),
+        "requested_gpu_vram_bytes": requested_bytes,
+        "measured_device_free_bytes": free_bytes,
+        "measured_device_total_bytes": total_bytes,
+        "governor_fraction": float(fraction),
+        "applied_fraction": applied_fraction,
+        "effective_cap_bytes": effective_cap_bytes,
+        "required_envelope_bytes": required_bytes,
+        "governor_source_sha256": governor_source_sha256,
+        "result": "PASS",
+    }
+    return {
+        **evidence,
+        "evidence_sha256": hashlib.sha256(
+            _canonical_json_bytes(evidence)
+        ).hexdigest(),
+    }
 
 _CANONICAL_RUNNER_CACHE_ENV = ("TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME")
 _MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES = 4 * 1024**3
@@ -132,10 +201,31 @@ def governed_vertical_checkpoint_byte_bound(config_path: Path) -> int:
     )
 
 
-def run_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None, resume_realization_registry: Path | None = None, resume_optimizer_transition_registry: Path | None = None, resume_optimizer_transition_registry_sha256: str | None = None) -> dict[str, object]:
+def run_governed_vertical(
+    *,
+    seed: int,
+    artifact_root: Path,
+    write_budget_bytes: int,
+    gpu_vram_gib: float,
+    max_records: int | None = None,
+    resume_checkpoint: Path | None = None,
+    resume_counter_receipt: Path | None = None,
+    resume_realization_registry: Path | None = None,
+    resume_optimizer_transition_registry: Path | None = None,
+    resume_optimizer_transition_registry_sha256: str | None = None,
+) -> dict[str, object]:
     """Canonical-runner entrypoint; check launch inputs before governor/CUDA admission."""
-    if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
-        raise ValueError("governed vertical launch requires a nonnegative seed and positive byte budget")
+    if (
+        type(seed) is not int
+        or seed < 0
+        or type(write_budget_bytes) is not int
+        or write_budget_bytes < 1
+        or isinstance(gpu_vram_gib, bool)
+        or not isinstance(gpu_vram_gib, (int, float))
+        or not math.isfinite(float(gpu_vram_gib))
+        or gpu_vram_gib <= 0
+    ):
+        raise ValueError("governed vertical launch requires a nonnegative seed and positive finite resource budgets")
     config_path = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
     checkpoint_bound = governed_vertical_checkpoint_byte_bound(config_path)
     if checkpoint_bound > write_budget_bytes:
@@ -150,8 +240,23 @@ def run_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes:
         "runner_source_sha256": _sha256(Path(__file__).resolve()),
         "checkpoint_byte_bound": checkpoint_bound,
         "write_budget_bytes": write_budget_bytes,
+        "gpu_vram_gib": float(gpu_vram_gib),
     }
-    return run(seed=seed, artifact_root=resolved_artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt, resume_realization_registry=resume_realization_registry, resume_optimizer_transition_registry=resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256, write_budget_bytes=write_budget_bytes, max_records=max_records, canonical_runner_authority=authority)
+    return run(
+        seed=seed,
+        artifact_root=resolved_artifact_root,
+        resume_checkpoint=resume_checkpoint,
+        resume_counter_receipt=resume_counter_receipt,
+        resume_realization_registry=resume_realization_registry,
+        resume_optimizer_transition_registry=resume_optimizer_transition_registry,
+        resume_optimizer_transition_registry_sha256=(
+            resume_optimizer_transition_registry_sha256
+        ),
+        write_budget_bytes=write_budget_bytes,
+        max_records=max_records,
+        requested_gpu_vram_gib=float(gpu_vram_gib),
+        canonical_runner_authority=authority,
+    )
 
 
 def preflight_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None) -> dict[str, object]:
@@ -2072,6 +2177,7 @@ def run(
     checkpoint_interval: int | None = None,
     write_budget_bytes: int | None = None,
     max_records: int | None = None,
+    requested_gpu_vram_gib: float | None = None,
     canonical_runner_authority: dict[str, object] | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
@@ -2103,6 +2209,13 @@ def run(
         raise ValueError("vertical canary max_records must be an integer from 1 through 200")
     if records_override is not None and max_records is not None:
         raise ValueError("vertical canary max_records applies only to the full authorized shard route")
+    if canonical_runner_authority is not None and (
+        isinstance(requested_gpu_vram_gib, bool)
+        or not isinstance(requested_gpu_vram_gib, (int, float))
+        or not math.isfinite(float(requested_gpu_vram_gib))
+        or requested_gpu_vram_gib <= 0
+    ):
+        raise ValueError("governed vertical requires a finite positive GPU cap")
     telemetry_values = (telemetry_path, telemetry_run_id, model_chat_restore_not_before)
     if any(value is not None for value in telemetry_values) and not all(value is not None for value in telemetry_values):
         raise ValueError("training telemetry requires path, run id, and model-chat restore time together")
@@ -2129,6 +2242,7 @@ def run(
             "runner_source_sha256": _sha256(Path(__file__).resolve()),
             "checkpoint_byte_bound": governed_vertical_checkpoint_byte_bound(config_path),
             "write_budget_bytes": write_budget_bytes,
+            "gpu_vram_gib": float(requested_gpu_vram_gib),
         }
         if not isinstance(canonical_runner_authority, Mapping) or dict(canonical_runner_authority) != expected_canonical_authority:
             raise RuntimeError("vertical canonical runner authority does not match the live startup assertion")
@@ -2145,12 +2259,30 @@ def run(
     episode_expert: str | None = None
     total_parameters = config.structural_parameter_count()
     active_parameters = total_parameters - (len(config.expert_names) - 1) * config.layers * 12 * config.hidden_size * config.hidden_size
-    device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
+    if requested_gpu_vram_gib is None:
+        device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
+        gpu_cap_preflight = None
+    else:
+        requested_gpu_vram_bytes = int(float(requested_gpu_vram_gib) * 1024**3)
+        device_free_bytes = requested_gpu_vram_bytes
     memory_preflight = production_memory_preflight(
         total_parameters=total_parameters,
         active_parameters=active_parameters,
         device_free_bytes=int(device_free_bytes),
     )
+    if requested_gpu_vram_gib is not None:
+        gpu_cap_preflight = governed_gpu_cap_preflight(
+            requested_gpu_vram_gib=float(requested_gpu_vram_gib),
+            required_bytes=int(memory_preflight["required_bytes"]),
+            governor_receipt=governor_receipt,
+        )
+        memory_preflight = {
+            **memory_preflight,
+            "device_free_bytes": int(
+                gpu_cap_preflight["measured_device_free_bytes"]
+            ),
+            "gpu_cap_evidence_sha256": gpu_cap_preflight["evidence_sha256"],
+        }
     if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
         append_training_telemetry(telemetry_path, kind="run_status", payload={
             "run_id": telemetry_run_id,
@@ -2272,6 +2404,8 @@ def run(
         data_cursor = dict(state["data_cursor"])
         data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
         data_cursor["governor"] = governor_receipt
+        if gpu_cap_preflight is not None:
+            data_cursor["gpu_cap_preflight"] = gpu_cap_preflight
         if resume_authority is not None:
             data_cursor["resume_authority"] = resume_authority
         current_lineage: dict[str, object] | None = None
@@ -2381,6 +2515,7 @@ def run(
         "parameter_receipt": parameter_receipt, "publication_plan": specialist_plan,
         "resume_authority": resume_authority,
         "governor": governor_receipt,
+        **({"gpu_cap_preflight": gpu_cap_preflight} if gpu_cap_preflight is not None else {}),
     }
 
 def specialist_lineage_request(
@@ -2668,6 +2803,7 @@ def main() -> None:
     governed_vertical.add_argument("--seed", type=int, required=True)
     governed_vertical.add_argument("--artifact-root", type=Path, required=True)
     governed_vertical.add_argument("--write-budget-bytes", type=int, required=True)
+    governed_vertical.add_argument("--gpu-vram-gib", type=float, required=True)
     governed_vertical.add_argument("--max-records", type=int)
     governed_vertical.add_argument("--resume-checkpoint", type=Path)
     governed_resume = governed_vertical.add_mutually_exclusive_group()
@@ -2722,7 +2858,7 @@ def main() -> None:
     semantic.add_argument("--resume-optimizer-transition-registry-sha256")
     args = parser.parse_args()
     if args.command == "governed-vertical":
-        result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
+        result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, gpu_vram_gib=args.gpu_vram_gib, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
     elif args.command == "governed-vertical-preflight":
         result = preflight_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records)
     elif args.command == "specialist":

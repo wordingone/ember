@@ -19,6 +19,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "certified_train_launch.py"
 SHA = "a" * 40
 EVIDENCE_SHA256 = "b" * 64
+CERTIFICATE_EVIDENCE_FIELDS = (
+    "config_sha256",
+    "input_identity_sha256",
+    "input_shard_sha256",
+    "input_admission_receipt_sha256",
+    "certified_consumer_sha256",
+    "disk_budget_runner_sha256",
+    "governed_runner_sha256",
+    "input_identity_validator_sha256",
+)
 
 
 def canonical_bytes(value: object) -> bytes:
@@ -47,7 +57,12 @@ def valid_completion_receipt() -> dict[str, object]:
         "schema": "ember-01-completion-receipt-v1",
         "ok": True,
         "verified_at_utc": "2026-07-23T08:00:00+00:00",
-        "goal_id": "EMBER-01",
+        "completed_goal_id": "EMBER-01",
+        # Production verify_ember01_completion.py runs after the authority
+        # selector has advanced to EMBER-02.  Its receipt records the active
+        # goal/workstream while the schema names the completed EMBER-01 spine.
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02A",
         "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         "certificate_legs": {str(index): "RESOLVED_TRUE" for index in range(1, 10)},
         "leg_detail": {},
@@ -72,7 +87,7 @@ def valid_completion_receipt() -> dict[str, object]:
             "status_before": "",
         },
         "selection": {
-            "goal_id": "EMBER-01",
+            "goal_id": "EMBER-02",
             "unchanged_during_verification": True,
         },
         "authority_certificate": {"ok": True},
@@ -139,27 +154,78 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
     write_json(completion_path, valid_completion_receipt())
     completion_sha256 = sha256_bytes(completion_path.read_bytes())
 
+    evidence_paths: dict[str, pathlib.Path] = {}
+    evidence_entries: dict[str, dict[str, str]] = {}
+    evidence_hashes: dict[str, str] = {}
+    for field in CERTIFICATE_EVIDENCE_FIELDS:
+        if field == "config_sha256":
+            path = repo / "configs" / "ember-restart-3b.json"
+            scope = "repo"
+            relative = "configs/ember-restart-3b.json"
+        elif field == "input_identity_sha256":
+            path = repo / "data" / "ember-restart-3b" / "input-identity.json"
+            scope = "repo"
+            relative = "data/ember-restart-3b/input-identity.json"
+        elif field == "input_shard_sha256":
+            relative = (
+                "data/ember-restart-3b/"
+                "owned-four-domain-production-rung-v1.json"
+            )
+            path = repo / pathlib.PurePosixPath(relative)
+            scope = "repo"
+        elif field == "input_admission_receipt_sha256":
+            relative = (
+                "data/ember-restart-3b/"
+                "owned-four-domain-production-rung-v1.receipt.json"
+            )
+            path = repo / pathlib.PurePosixPath(relative)
+            scope = "repo"
+        elif field == "certified_consumer_sha256":
+            relative = "tools/ember-restart-3b/certified_train_launch.py"
+            path = repo / pathlib.PurePosixPath(relative)
+            scope = "repo"
+        elif field == "disk_budget_runner_sha256":
+            relative = "tools/ember-restart-3b/disk_budget_runner.py"
+            path = repo / pathlib.PurePosixPath(relative)
+            scope = "repo"
+        elif field == "governed_runner_sha256":
+            relative = "tools/ember-restart-3b/run_vertical_slice.py"
+            path = repo / pathlib.PurePosixPath(relative)
+            scope = "repo"
+        elif field == "input_identity_validator_sha256":
+            relative = "tools/ember-restart-3b/input_identity.py"
+            path = repo / pathlib.PurePosixPath(relative)
+            scope = "repo"
+        else:
+            relative = f"evidence/{field}.json"
+            path = custody_root / relative
+            scope = "certificate"
+        write_json(path, {"field": field, "result": "BOUND"})
+        evidence_paths[field] = path
+        evidence_entries[field] = {"scope": scope, "path": relative}
+        evidence_hashes[field] = sha256_bytes(path.read_bytes())
+
+    evidence_bundle_path = custody_root / "certificate-evidence-bundle.json"
+    write_json(
+        evidence_bundle_path,
+        {
+            "schema_version": "ember-spine-certificate-evidence-bundle-v1",
+            "evidence": evidence_entries,
+        },
+    )
+
     certificate = {
         "schema_version": "ember-spine-certified-declaration-v1",
         "event_kind": "SPINE_CERTIFIED",
         "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
         "declared_at_utc": "2026-07-23T08:00:00+00:00",
         "superseded_by": None,
-        "completion_receipt_path": str(completion_path),
+        "completion_receipt_path": "ember-01-completion.json",
         "completion_receipt_sha256": completion_sha256,
+        "evidence_bundle_path": "certificate-evidence-bundle.json",
+        "evidence_bundle_sha256": sha256_bytes(evidence_bundle_path.read_bytes()),
         "public_master_sha": SHA,
-        "checkout_sha256": EVIDENCE_SHA256,
-        "config_sha256": EVIDENCE_SHA256,
-        "tokenizer_sha256": EVIDENCE_SHA256,
-        "input_authority_sha256": EVIDENCE_SHA256,
-        "cli_binary_sha256": EVIDENCE_SHA256,
-        "launch_packet_sha256": EVIDENCE_SHA256,
-        "board_receipt_sha256": EVIDENCE_SHA256,
-        "benchmark_registry_sha256": EVIDENCE_SHA256,
-        "failure_class_ledger_sha256": EVIDENCE_SHA256,
-        "subject_manifest_sha256": EVIDENCE_SHA256,
-        "seat_sha256": EVIDENCE_SHA256,
-        "root_summary_sha256": EVIDENCE_SHA256,
+        **evidence_hashes,
         "declaration_conjuncts": {
             "record_coherent": True,
             "nine_leg_completion": True,
@@ -194,6 +260,8 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
         "ledger": ledger_path,
         "run_spec": run_spec_path,
         "completion": completion_path,
+        "evidence_bundle": evidence_bundle_path,
+        "evidence_paths": evidence_paths,
         "artifact_root": artifact_root,
         "custody_root": custody_root,
     }
@@ -298,6 +366,67 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 "completion receipt hash",
                 SHA,
             ),
+            "arbitrary valid config hash": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "config_sha256", EVIDENCE_SHA256
+                    ),
+                ),
+                "certificate evidence hash mismatch: config_sha256",
+                SHA,
+            ),
+            "evidence bytes changed after certification": (
+                lambda paths: paths["evidence_paths"][
+                    "governed_runner_sha256"
+                ].write_bytes(b"changed after certification"),
+                "certificate evidence hash mismatch: governed_runner_sha256",
+                SHA,
+            ),
+            "absolute completion receipt path": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "completion_receipt_path",
+                        str(paths["completion"].resolve()),
+                    ),
+                ),
+                "completion receipt path must be a portable relative path",
+                SHA,
+            ),
+            "evidence bundle path escape": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "evidence_bundle_path", "../certificate-evidence-bundle.json"
+                    ),
+                ),
+                "certificate evidence bundle path must be a portable relative path",
+                SHA,
+            ),
+            "missing evidence bundle role": (
+                lambda paths: _rewrite_evidence_bundle(
+                    paths,
+                    lambda bundle: bundle["evidence"].pop(
+                        "governed_runner_sha256"
+                    ),
+                ),
+                "certificate evidence bundle entry keys mismatch",
+                SHA,
+            ),
+            "config role points at another repo artifact": (
+                lambda paths: _rewrite_evidence_bundle(
+                    paths,
+                    lambda bundle: bundle["evidence"][
+                        "config_sha256"
+                    ].__setitem__(
+                        "path",
+                        "data/ember-restart-3b/input-identity.json",
+                    ),
+                ),
+                "certificate evidence canonical path mismatch: config_sha256",
+                SHA,
+            ),
             "non-nine legs": (
                 lambda paths: _rewrite_completion(
                     paths,
@@ -321,6 +450,52 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     paths,
                     lambda receipt: receipt["selection"].__setitem__(
                         "unchanged_during_verification", False
+                    ),
+                ),
+                "selection integrity",
+                SHA,
+            ),
+            "stale EMBER-01 active identity": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt.__setitem__("goal_id", "EMBER-01"),
+                ),
+                "completed/active authority identity",
+                SHA,
+            ),
+            "wrong active workstream": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt.__setitem__(
+                        "workstream_id", "EMBER-02B"
+                    ),
+                ),
+                "completed/active authority identity",
+                SHA,
+            ),
+            "wrong completed goal": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt.__setitem__(
+                        "completed_goal_id", "EMBER-00"
+                    ),
+                ),
+                "completed/active authority identity",
+                SHA,
+            ),
+            "missing active workstream": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt.pop("workstream_id"),
+                ),
+                "completion receipt schema keys mismatch",
+                SHA,
+            ),
+            "stale EMBER-01 selection": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["selection"].__setitem__(
+                        "goal_id", "EMBER-01"
                     ),
                 ),
                 "selection integrity",
@@ -481,6 +656,62 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                                 paths["run_spec"],
                             )
 
+    def test_invalid_dead_scope_values_refuse_before_child_spawn(self) -> None:
+        module = load_module()
+        cases = {
+            "optimizer_steps": lambda request: request[
+                "requested_scope"
+            ].__setitem__("optimizer_steps", 0),
+            "active_expert_families": lambda request: request[
+                "requested_scope"
+            ].__setitem__("active_expert_families", 0),
+            "gpu_vram_gib": lambda request: request[
+                "requested_scope"
+            ].__setitem__("gpu_vram_gib", 0),
+            "gpu_vram_gib NaN": lambda request: request[
+                "requested_scope"
+            ].__setitem__("gpu_vram_gib", float("nan")),
+            "transient_checkpoint_gib": lambda request: request[
+                "requested_scope"
+            ].__setitem__("transient_checkpoint_gib", 0),
+            "wall_minutes": lambda request: request[
+                "requested_scope"
+            ].__setitem__("wall_minutes", 0),
+            "max_records": lambda request: request[
+                "requested_scope"
+            ].__setitem__("max_records", 0),
+            "write_budget_bytes": lambda request: request[
+                "requested_scope"
+            ].__setitem__("write_budget_bytes", 0),
+            "negative seed": lambda request: request.__setitem__("seed", -1),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths = write_valid_bundle(pathlib.Path(directory))
+                    request = json.loads(
+                        paths["run_spec"].read_text(encoding="utf-8")
+                    )
+                    mutate(request)
+                    write_json(paths["run_spec"], request)
+                    calls: list[object] = []
+                    with mock.patch.object(
+                        module, "read_current_master", return_value=SHA
+                    ):
+                        with self.assertRaisesRegex(
+                            ValueError, "positive|nonnegative|finite"
+                        ):
+                            module.certify_and_execute(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                                run_process=lambda *args, **kwargs: calls.append(
+                                    (args, kwargs)
+                                ),
+                            )
+                    self.assertEqual(calls, [])
+
     def test_run_spec_above_certificate_scope_fails_before_runner_construction(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as directory:
@@ -521,6 +752,14 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             )
             self.assertEqual(argv.count("governed-vertical"), 1)
             self.assertNotIn("semantic", argv)
+            self.assertEqual(
+                argv[argv.index("--max-wall-seconds") + 1],
+                "900.0",
+            )
+            self.assertEqual(
+                argv[argv.index("--gpu-vram-gib") + 1],
+                "20.0",
+            )
             self.assertEqual(argv[argv.index("--max-records") + 1], "1")
             self.assertEqual(
                 argv[argv.index("--write-budget-bytes") + 1],
@@ -637,15 +876,50 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_cli_scope_escalation_exits_before_runner_receipt(self) -> None:
-        current_master = subprocess.run(
-            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
-            check=True,
-            capture_output=True,
-            text=True,
-            shell=False,
-        ).stdout.strip()
         with tempfile.TemporaryDirectory() as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
+            for command in (
+                ["git", "init", str(paths["repo"])],
+                [
+                    "git",
+                    "-C",
+                    str(paths["repo"]),
+                    "config",
+                    "user.email",
+                    "ember-test@example.invalid",
+                ],
+                [
+                    "git",
+                    "-C",
+                    str(paths["repo"]),
+                    "config",
+                    "user.name",
+                    "Ember Test",
+                ],
+                ["git", "-C", str(paths["repo"]), "add", "."],
+                [
+                    "git",
+                    "-C",
+                    str(paths["repo"]),
+                    "commit",
+                    "-m",
+                    "test fixture",
+                ],
+            ):
+                subprocess.run(
+                    command,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    shell=False,
+                )
+            current_master = subprocess.run(
+                ["git", "-C", str(paths["repo"]), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+                shell=False,
+            ).stdout.strip()
             _rewrite_completion(
                 paths,
                 lambda receipt: receipt["checkout"].__setitem__(
@@ -667,7 +941,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     sys.executable,
                     str(MODULE_PATH),
                     "--root",
-                    str(ROOT),
+                    str(paths["repo"]),
                     "--certificate",
                     str(paths["certificate"]),
                     "--declaration-ledger",
@@ -703,6 +977,22 @@ def _rewrite_completion(
         paths,
         lambda certificate: certificate.__setitem__(
             "completion_receipt_sha256", completion_sha256
+        ),
+    )
+
+
+def _rewrite_evidence_bundle(
+    paths: dict[str, pathlib.Path],
+    mutate,
+) -> None:
+    bundle = json.loads(paths["evidence_bundle"].read_text(encoding="utf-8"))
+    mutate(bundle)
+    write_json(paths["evidence_bundle"], bundle)
+    bundle_sha256 = sha256_bytes(paths["evidence_bundle"].read_bytes())
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate.__setitem__(
+            "evidence_bundle_sha256", bundle_sha256
         ),
     )
 

@@ -514,48 +514,41 @@ def named_launch_command(cfg: dict) -> dict:
     `raise SystemExit(...)` at module import time (locked in commit
     4f758db "fix: lock Ember authority and totality" -- ANY import of that
     module, including for the shard-dir interlock fix, fails immediately).
-    Naming it here would be a FALSE command. tools/ember-restart-3b/pretrain.py
-    is a library (run_pretraining_segment/run_selection_pretraining_segment/
-    run_manifest_bound_semantic_segment) with no CLI of its own.
-
-    The real governed CLI entry for the clean-genesis 3B semantic-text
-    pretrain path is run_vertical_slice.py's "semantic" subcommand: it wires
-    ManifestBoundTokenStream -> UnifiedDecoder -> production_memory_preflight
-    -> run_manifest_bound_semantic_segment -> write_checkpoint_artifacts end
-    to end (run_vertical_slice.run_semantic), and itself requires CUDA
-    (torch.cuda.is_available() / torch.cuda.mem_get_info()) -- named from its
-    real argparse arg surface (run_vertical_slice.py:2478-2493).
+    Naming it here would be a FALSE command.  The `/train --execute` production
+    consumer never executes a command string from this packet; it invokes only
+    certified_train_launch.py, which validates the declaration, ledger, run
+    specification, current public master, and bounded execution scope before
+    constructing the fixed governed-vertical runner argv.  The surfaced command
+    must therefore name that same consumer boundary, not the separately
+    available semantic subcommand.
     """
-    ckpt_root = _dig(cfg, "namespaces", "checkpoints", "root")
     return {
         "note": (
             "scripts/timeshare_pretrain.py is EXECUTION-DENIED "
             "(EMBER_ARTIFACT_CLASS=historical_only, commit 4f758db "
             "'lock Ember authority and totality'); it is never the real "
-            "command. pretrain.py has no CLI. The real governed entry is "
-            "run_vertical_slice.py's semantic subcommand."
+            "command. Training authority enters only through "
+            "certified_train_launch.py, the same fixed consumer used by "
+            "/train --execute."
         ),
         "command": (
-            "python tools/ember-restart-3b/run_vertical_slice.py semantic "
-            "--seed <launch-seed> "
-            f"--artifact-root {ckpt_root}/<run-id> "
-            "--receipt <manifest-bound-stream-receipt.json> "
-            "--shards-root <token-shard-dir> "
-            "--tokenizer <tokenizer-path> "
-            "--steps <N> --sequence-length <seq-len> "
-            "--checkpoint-interval 50 --write-budget-gib <write-budget-gib>"
+            "python tools/ember-restart-3b/certified_train_launch.py "
+            "--root . "
+            "--certificate <spine-certified-declaration.json> "
+            "--declaration-ledger <declaration-ledger.jsonl> "
+            "--run-spec <certified-train-run.json>"
         ),
-        "library_entrypoint": "tools/ember-restart-3b/run_vertical_slice.py::run_semantic",
+        "library_entrypoint": (
+            "tools/ember-restart-3b/"
+            "certified_train_launch.py::certify_and_execute"
+        ),
     }
 
 
-def run(config_path: Path) -> int:
+def run(config_path: Path, *, receipt_root: Path | None = None) -> int:
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     root = _repo_root(config_path)
     ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    receipt_dir = root / "receipts" / "ember-01-launch-packet" / ts
-    receipt_dir.mkdir(parents=True, exist_ok=True)
-    receipt_path = receipt_dir / "packet.jsonl"
 
     rows: list[dict] = []
     for fn in IMPLEMENTED:
@@ -580,15 +573,21 @@ def run(config_path: Path) -> int:
         "named_ember02_command": cmd,
     }
 
-    with receipt_path.open("w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps({"record": "preflight", **r}) + "\n")
-        f.write(json.dumps(summary) + "\n")
+    receipt_path = None
+    if receipt_root is not None:
+        receipt_dir = Path(receipt_root) / ts
+        receipt_dir.mkdir(parents=True, exist_ok=False)
+        receipt_path = receipt_dir / "packet.jsonl"
+        with receipt_path.open("x", encoding="utf-8") as f:
+            for r in rows:
+                f.write(json.dumps({"record": "preflight", **r}) + "\n")
+            f.write(json.dumps(summary) + "\n")
 
     for r in rows:
         print(json.dumps(r))
     print(json.dumps(summary))
-    print(f"# receipt: {receipt_path}")
+    if receipt_path is not None:
+        print(f"# receipt: {receipt_path}")
     if all_pass and cmd:
         print("# EMBER-02 launch command:")
         print(cmd["command"])
@@ -598,8 +597,13 @@ def run(config_path: Path) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="EMBER-01 cond7 launch-packet readiness runner")
     ap.add_argument("--config", required=True, help="Path to configs/ember-restart-3b.json")
+    ap.add_argument(
+        "--receipt-root",
+        type=Path,
+        help="Explicit custody root for a durable packet; omitted observation mode never mutates the checkout",
+    )
     args = ap.parse_args(argv)
-    return run(Path(args.config))
+    return run(Path(args.config), receipt_root=args.receipt_root)
 
 
 if __name__ == "__main__":
