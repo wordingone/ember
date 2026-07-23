@@ -31,8 +31,10 @@
       "class_id": "BF16_SILENT_FREEZE",
       "title": "BF16 silent gradient freeze",
       "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): undetected gradient/loss saturation under BF16 produces a run that LOOKS like it trained but never learned, invalidating any completion claim.",
-      "state": "BLOCKING",
-      "blocking_reason": "No landed fail-closed guard on this checkout. Named directly in the class-kill law as spine-blocking OPEN work (BF16-preflight enforcement). Needs a BF16 preflight check plus per-step gradient-magnitude assertions with a synthetic-freeze regression guard before this row can close."
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/tests/test_screen792_bf16_momentum.py",
+      "guard_kind": "test",
+      "evidence": "#792 required negative fixture: sub-ULP EMA increments detectably STALL under naive in-place bf16 and PASS under the A1 fp32 read-modify-writeback dataflow, compared to two independent fp64 analytic references. Reclassified BLOCKING->CLOSED_GUARDED on landed-guard evidence (coordinator discriminating check 2026-07-23); the codex custody lane holds final classification authority."
     },
     {
       "class_id": "GOVERNED_ABORT_OBSERVABILITY",
@@ -45,8 +47,10 @@
       "class_id": "SHARD_DIR_WIRING",
       "title": "Shard-dir wiring / data-path misconfiguration",
       "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): silent redirection to the wrong shard directory corrupts the training signal without any visible symptom, invalidating the run's provenance.",
-      "state": "BLOCKING",
-      "blocking_reason": "No landed fail-closed guard on this checkout. Named directly in the class-kill law as spine-blocking OPEN work (still-can-recur set). Needs shard-directory binding to the identity manifest plus a cycle-start validation guard before this row can close."
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "scripts/test_v0_launch_gate_shard_dir_override.py",
+      "guard_kind": "test",
+      "evidence": "#682/#793 landed regression: g_shards()/gate() thread --shard-dir through validate_shards_receipt; an override at a missing/wrong dir fails closed (all three shapes + the wiring proven). Reclassified BLOCKING->CLOSED_GUARDED on landed-guard evidence (coordinator discriminating check 2026-07-23); the codex custody lane holds final classification authority."
     },
     {
       "class_id": "CRASH_SURVIVAL",
