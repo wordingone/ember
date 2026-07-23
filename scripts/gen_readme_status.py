@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """gen_readme_status.py — regenerate README.md's board-status block from the newest totality receipt.
 
 Reads the newest ember-totality-*.json under a receipts-totality directory (lexicographic sort of
@@ -40,12 +43,32 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")
+CONTINUITY_PATH = os.path.join(ROOT, "CONTINUITY.md")
+CURRENT_SUBJECT_PATH = os.path.join(ROOT, "manifests", "ember-current-subject-v1.json")
 BEGIN_MARKER = "<!-- BOARD-STATUS-BEGIN -->"
 END_MARKER = "<!-- BOARD-STATUS-END -->"
+SUBJECT_BEGIN_MARKER = "<!-- CURRENT-SUBJECT-BEGIN -->"
+SUBJECT_END_MARKER = "<!-- CURRENT-SUBJECT-END -->"
+CURRENT_SUBJECT_FIELDS = {
+    "active_route",
+    "capability_credit",
+    "checkpoint_custody",
+    "checkpoint_manifest_sha256",
+    "disposition",
+    "evidence_paths",
+    "model_config_sha256",
+    "optimizer_state_sha256",
+    "parameters",
+    "predecessor",
+    "sufficient_pretraining_proven",
+    "token_cursor",
+    "tokenizer_sha256",
+}
 
 
 def newest_receipt_path(data_root):
@@ -94,6 +117,275 @@ def render_block(receipt_path):
     return "\n".join(lines)
 
 
+def _closed_hash(value, field):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ValueError(f"current subject {field} must be lowercase SHA-256")
+    return value
+
+
+def load_current_subject(path):
+    with open(path, "r", encoding="utf-8") as stream:
+        payload = json.load(stream)
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema_version",
+        "authority",
+        "subject",
+    }:
+        raise ValueError("current subject root fields are not closed")
+    if payload.get("schema_version") != "ember-current-subject-v1":
+        raise ValueError("current subject schema_version must be ember-current-subject-v1")
+    authority = payload.get("authority")
+    if not isinstance(authority, dict) or set(authority) != {
+        "goal_id",
+        "workstream_id",
+        "next_executed_outcome",
+    }:
+        raise ValueError("current subject authority binding is not closed")
+    if authority != {
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02A",
+        "next_executed_outcome": (
+            "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+        ),
+    }:
+        raise ValueError("current subject authority binding is not current")
+    subject = payload.get("subject")
+    if not isinstance(subject, dict):
+        raise ValueError("current subject payload is missing")
+    if set(subject) != CURRENT_SUBJECT_FIELDS:
+        raise ValueError("current subject fields are not closed")
+    for field in (
+        "checkpoint_manifest_sha256",
+        "model_config_sha256",
+        "tokenizer_sha256",
+        "optimizer_state_sha256",
+    ):
+        _closed_hash(subject.get(field), field)
+    cursor = subject.get("token_cursor")
+    if not isinstance(cursor, dict) or set(cursor) != {
+        "global_step",
+        "record_index",
+        "token_offset",
+        "tokens_seen",
+    }:
+        raise ValueError("current subject token_cursor is not closed")
+    if not all(isinstance(value, int) and value >= 0 for value in cursor.values()):
+        raise ValueError("current subject token_cursor values must be nonnegative integers")
+    parameters = subject.get("parameters")
+    if not isinstance(parameters, dict) or set(parameters) != {
+        "active",
+        "allocated",
+        "episode_trainable",
+        "served",
+        "trainable",
+        "unique",
+    }:
+        raise ValueError("current subject parameter counts are not closed")
+    if not all(isinstance(value, int) and value > 0 for value in parameters.values()):
+        raise ValueError("current subject parameter counts must be positive integers")
+    if not (
+        parameters["active"] <= parameters["served"] <= parameters["allocated"]
+        and parameters["episode_trainable"]
+        <= parameters["trainable"]
+        <= parameters["allocated"]
+        and parameters["unique"] <= parameters["allocated"]
+    ):
+        raise ValueError("current subject parameter relationships are invalid")
+    if not isinstance(subject.get("active_route"), str) or not subject["active_route"]:
+        raise ValueError("current subject active_route must be non-empty")
+    if subject.get("disposition") != "CHECKPOINT_CANDIDATE_NOT_ADMITTED":
+        raise ValueError("current subject disposition exceeds the public evidence boundary")
+    if subject.get("capability_credit") != "none":
+        raise ValueError("current subject capability_credit exceeds the public evidence boundary")
+    if subject.get("sufficient_pretraining_proven") is not False:
+        raise ValueError("current subject cannot claim sufficient pretraining")
+    predecessor = subject.get("predecessor")
+    if not isinstance(predecessor, dict) or set(predecessor) != {
+        "checkpoint_manifest_sha256",
+        "relationship",
+        "tokens_seen",
+    }:
+        raise ValueError("current subject predecessor is not closed")
+    _closed_hash(
+        predecessor.get("checkpoint_manifest_sha256"),
+        "predecessor.checkpoint_manifest_sha256",
+    )
+    if (
+        predecessor["checkpoint_manifest_sha256"]
+        == subject["checkpoint_manifest_sha256"]
+        or predecessor.get("relationship") != "historical_step1_predecessor"
+        or not isinstance(predecessor.get("tokens_seen"), int)
+        or predecessor["tokens_seen"] < 0
+        or predecessor["tokens_seen"] >= cursor["tokens_seen"]
+    ):
+        raise ValueError("current subject predecessor relationship is invalid")
+    custody = subject.get("checkpoint_custody")
+    if not isinstance(custody, dict) or set(custody) != {
+        "class",
+        "locator_id",
+        "public_manifest_bytes_present",
+    }:
+        raise ValueError("current subject checkpoint_custody is not closed")
+    if (
+        custody.get("class") != "private_checkpoint_bytes"
+        or not isinstance(custody.get("locator_id"), str)
+        or not custody["locator_id"]
+        or custody.get("public_manifest_bytes_present") is not False
+    ):
+        raise ValueError("current subject checkpoint custody disclosure is invalid")
+    evidence = subject.get("evidence_paths")
+    if (
+        not isinstance(evidence, list)
+        or not evidence
+        or evidence != sorted(evidence)
+        or not all(
+            isinstance(item, str)
+            and item
+            and not os.path.isabs(item)
+            and not re.match(r"^[A-Za-z]:", item)
+            for item in evidence
+        )
+    ):
+        raise ValueError("current subject evidence_paths must be sorted repo-relative paths")
+    return payload
+
+
+def validate_current_subject_evidence(payload, root):
+    root = Path(root).resolve()
+    subject = payload["subject"]
+    identity = {
+        "checkpoint_manifest_sha256": subject["checkpoint_manifest_sha256"],
+        "model_config_sha256": subject["model_config_sha256"],
+        "tokenizer_sha256": subject["tokenizer_sha256"],
+    }
+    seen = set()
+    for relative in subject["evidence_paths"]:
+        candidate = (root / relative).resolve()
+        if root != candidate and root not in candidate.parents:
+            raise ValueError(f"current subject evidence path escapes root: {relative}")
+        if not candidate.is_file():
+            raise ValueError(f"current subject evidence path is missing: {relative}")
+        if candidate.suffix.lower() != ".json":
+            continue
+        with open(candidate, "r", encoding="utf-8") as stream:
+            evidence = json.load(stream)
+        schema = evidence.get("schema_version") if isinstance(evidence, dict) else None
+        if schema in {
+            "ember-anchor-cost-calibration-certificate-v1",
+            "ember-first-shared-raw-forward-v1",
+            "ember-restart-execution-authorities-v1",
+        } and (
+            evidence.get("goal_id") != payload["authority"]["goal_id"]
+            or evidence.get("next_executed_outcome")
+            != payload["authority"]["next_executed_outcome"]
+        ):
+            raise ValueError(
+                f"current subject conflicts with public evidence authority: {schema}"
+            )
+        if schema == "ember-first-shared-raw-forward-v1":
+            stamps = evidence.get("identity_stamps", {})
+            truth = evidence.get("truth_boundary", {})
+            prompt = evidence.get("prompt", {})
+            raw_identity = {
+                "checkpoint_sha256": subject["checkpoint_manifest_sha256"],
+                "model_config_sha256": subject["model_config_sha256"],
+                "tokenizer_sha256": subject["tokenizer_sha256"],
+            }
+            if (
+                any(stamps.get(field) != value for field, value in raw_identity.items())
+                or truth.get("training_tokens_seen") != subject["token_cursor"]["tokens_seen"]
+                or prompt.get("active_expert") != subject["active_route"]
+            ):
+                raise ValueError("current subject conflicts with public evidence: raw forward")
+            seen.add(schema)
+        elif schema == "ember-restart-execution-authorities-v1":
+            authorities = evidence.get("authorities")
+            if not isinstance(authorities, list) or not any(
+                isinstance(row, dict)
+                and all(row.get(field) == value for field, value in identity.items())
+                for row in authorities
+            ):
+                raise ValueError(
+                    "current subject conflicts with public evidence: execution registry"
+                )
+            seen.add(schema)
+        elif schema == "ember-anchor-cost-calibration-certificate-v1":
+            binding = evidence.get("receipt_binding", {})
+            if any(binding.get(field) != value for field, value in identity.items()):
+                raise ValueError(
+                    "current subject conflicts with public evidence: cost certificate"
+                )
+            seen.add(schema)
+    required = {
+        "ember-anchor-cost-calibration-certificate-v1",
+        "ember-first-shared-raw-forward-v1",
+        "ember-restart-execution-authorities-v1",
+    }
+    if seen != required:
+        raise ValueError(
+            "current subject public evidence classes are incomplete: "
+            + ", ".join(sorted(required - seen))
+        )
+
+
+def render_current_subject_block(payload):
+    subject = payload["subject"]
+    cursor = subject["token_cursor"]
+    parameters = subject["parameters"]
+    predecessor = subject["predecessor"]
+    return "\n".join(
+        [
+            SUBJECT_BEGIN_MARKER,
+            "<!-- GENERATED by scripts/gen_readme_status.py from manifests/ember-current-subject-v1.json -->",
+            f"**Current checkpoint subject:** `{subject['checkpoint_manifest_sha256']}`.",
+            "",
+            f"- Disposition: `{subject['disposition']}`; capability credit: `{subject['capability_credit']}`; sufficient pretraining proven: `{str(subject['sufficient_pretraining_proven']).lower()}`.",
+            f"- Config: `{subject['model_config_sha256']}`; tokenizer: `{subject['tokenizer_sha256']}`; optimizer state (custody-only, public bytes absent): `{subject['optimizer_state_sha256']}`.",
+            f"- Cursor: step `{cursor['global_step']}`, record `{cursor['record_index']}`, token offset `{cursor['token_offset']}`, tokens seen `{cursor['tokens_seen']}`; active route: `{subject['active_route']}`.",
+            f"- Parameters: `{parameters['unique']}` unique, `{parameters['trainable']}` trainable, `{parameters['served']}` served, `{parameters['active']}` active, `{parameters['episode_trainable']}` episode-trainable.",
+            f"- Historical predecessor: `{predecessor['checkpoint_manifest_sha256']}` at `{predecessor['tokens_seen']}` tokens (`{predecessor['relationship']}`).",
+            SUBJECT_END_MARKER,
+        ]
+    )
+
+
+def _replace_marked(text, begin, end, block, surface):
+    pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
+    matches = pattern.findall(text)
+    if len(matches) != 1:
+        raise ValueError(f"{surface} must contain exactly one {begin} ... {end} block")
+    return pattern.sub(lambda _: block, text, count=1)
+
+
+def subject_surfaces_current(payload, readme_path, continuity_path):
+    block = render_current_subject_block(payload)
+    try:
+        with open(readme_path, "r", encoding="utf-8") as stream:
+            readme = stream.read()
+        with open(continuity_path, "r", encoding="utf-8") as stream:
+            continuity = stream.read()
+        return (
+            _replace_marked(
+                readme,
+                SUBJECT_BEGIN_MARKER,
+                SUBJECT_END_MARKER,
+                block,
+                "README.md",
+            )
+            == readme
+            and _replace_marked(
+                continuity,
+                SUBJECT_BEGIN_MARKER,
+                SUBJECT_END_MARKER,
+                block,
+                "CONTINUITY.md",
+            )
+            == continuity
+        )
+    except (OSError, ValueError):
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -110,12 +402,15 @@ def main():
             "data tree to render against a receipt not yet committed here."
         ),
     )
+    parser.add_argument("--readme", default=README_PATH)
+    parser.add_argument("--continuity", default=CONTINUITY_PATH)
+    parser.add_argument("--subject-manifest", default=CURRENT_SUBJECT_PATH)
     args = parser.parse_args()
 
     receipt_path = newest_receipt_path(args.data_root)
     block = render_block(receipt_path)
 
-    with open(README_PATH, "r", encoding="utf-8") as f:
+    with open(args.readme, "r", encoding="utf-8") as f:
         readme = f.read()
 
     pattern = re.compile(re.escape(BEGIN_MARKER) + r".*?" + re.escape(END_MARKER), re.DOTALL)
@@ -125,17 +420,45 @@ def main():
         )
     new_readme = pattern.sub(lambda _: block, readme, count=1)
 
-    if new_readme == readme:
-        print(f"README.md board-status block already current ({os.path.basename(receipt_path)}).")
+    subject = load_current_subject(args.subject_manifest)
+    validate_current_subject_evidence(subject, ROOT)
+    subject_block = render_current_subject_block(subject)
+    new_readme = _replace_marked(
+        new_readme,
+        SUBJECT_BEGIN_MARKER,
+        SUBJECT_END_MARKER,
+        subject_block,
+        "README.md",
+    )
+    with open(args.continuity, "r", encoding="utf-8") as stream:
+        continuity = stream.read()
+    new_continuity = _replace_marked(
+        continuity,
+        SUBJECT_BEGIN_MARKER,
+        SUBJECT_END_MARKER,
+        subject_block,
+        "CONTINUITY.md",
+    )
+
+    if new_readme == readme and new_continuity == continuity:
+        print(
+            "README.md board-status and current-subject surfaces already current "
+            f"({os.path.basename(receipt_path)})."
+        )
         return 0
 
     if args.check:
-        print(f"README.md board-status block is STALE vs {os.path.basename(receipt_path)}.")
+        print("README.md or CONTINUITY.md generated status is STALE.")
         return 1
 
-    with open(README_PATH, "w", encoding="utf-8") as f:
+    with open(args.readme, "w", encoding="utf-8", newline="\n") as f:
         f.write(new_readme)
-    print(f"README.md board-status block regenerated from {os.path.basename(receipt_path)}.")
+    with open(args.continuity, "w", encoding="utf-8", newline="\n") as stream:
+        stream.write(new_continuity)
+    print(
+        "README.md and CONTINUITY.md status surfaces regenerated from "
+        f"{os.path.basename(receipt_path)} and {os.path.basename(args.subject_manifest)}."
+    )
     return 0
 
 
