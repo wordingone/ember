@@ -1548,6 +1548,75 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertFalse(verifier_called)
             self.assertFalse((parent / "published").exists())
 
+    def test_v5_admission_rejects_regular_file_declared_as_retained_hardlink(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=189)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "candidate"
+            write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=189,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            forged_path = "expert-vision.pt"
+            record = next(
+                item for item in manifest["shards"] if item["path"] == forged_path
+            )
+            self.assertEqual((root / forged_path).stat().st_nlink, 1)
+            record["publication_mode"] = "hardlink"
+            record["incremental_bytes"] = 0
+            projection = manifest["storage_projection"]
+            projection["retained_shard_paths"] = [forged_path]
+            projection["transient_new_write_peak_lower_bound_bytes"] = max(
+                bound
+                for path, bound in projection[
+                    "per_shard_tensor_storage_lower_bound_bytes"
+                ].items()
+                if path != forged_path
+            )
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {
+                    key: value
+                    for key, value in projection.items()
+                    if key != "projection_sha256"
+                }
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError, "hardlink identity"
+            ):
+                checkpoint_artifacts._checkpoint_candidate_receipt(root)
+
     def test_v5_copy_fallback_cannot_bypass_transient_cap(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
