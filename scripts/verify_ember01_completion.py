@@ -254,6 +254,7 @@ def custody_legs(
         "--root-spec", str(root_spec),
         "--benchmark-registry", str(bench),
         "--issue-census", str(issues),
+        "--issue-census-sha256", issue_census_sha_before,
         "--source-commit", head,
         "--public-master-ref", "refs/remotes/origin/master",
         "--output", str(out),

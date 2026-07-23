@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import hashlib
 from pathlib import Path
 
 
@@ -44,6 +45,18 @@ DIRECT_MANDATE = [
     "arc-agi-2",
     "arc-agi-3",
 ]
+
+
+def test_load_json_bound_rejects_digest_mismatch(tmp_path: Path) -> None:
+    payload = tmp_path / "payload.json"
+    payload.write_text('{"value":1}', encoding="utf-8")
+
+    try:
+        census_module._load_json_bound(payload, "0" * 64)
+    except ValueError as error:
+        assert "digest does not match expected bytes" in str(error)
+    else:
+        raise AssertionError("mismatched bound JSON digest was accepted")
 
 
 def benchmark_row(benchmark_id: str, provenance: str = "direct_mandate") -> dict:
