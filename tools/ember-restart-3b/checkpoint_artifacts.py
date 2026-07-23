@@ -1783,8 +1783,28 @@ def _validated_records(root: Path, receipt: Mapping[str, Any]) -> dict[str, dict
             raise ValueError(f"checkpoint shard is missing: {relative}")
         expected_size = item.get("bytes")
         expected_hash = item.get("sha256")
+        publication_mode = item.get("publication_mode")
+        incremental_bytes = item.get("incremental_bytes")
         if not isinstance(expected_size, int) or expected_size <= 0 or not isinstance(expected_hash, str):
             raise ValueError(f"checkpoint shard record is invalid: {relative}")
+        if (
+            publication_mode is not None
+            or incremental_bytes is not None
+            or receipt.get("storage_projection") is not None
+        ):
+            if (
+                publication_mode not in {"written", "hardlink", "copy"}
+                or type(incremental_bytes) is not int
+                or incremental_bytes
+                != (0 if publication_mode == "hardlink" else expected_size)
+            ):
+                raise ValueError(
+                    f"checkpoint shard publication record is invalid: {relative}"
+                )
+            if publication_mode == "hardlink" and path.stat().st_nlink < 2:
+                raise ValueError(
+                    f"checkpoint shard hardlink identity is not independently present: {relative}"
+                )
         if path.stat().st_size != expected_size or _sha256(path) != expected_hash:
             if relative.startswith("expert-") and relative.endswith(".pt"):
                 name = relative[len("expert-"):-len(".pt")]
