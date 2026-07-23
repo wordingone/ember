@@ -56,6 +56,89 @@ def emberd_source_sha256(repo: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def valid_emberd_preflight_receipt(
+    manifest: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "schema_version": "emberd-dispatch-preflight-v1",
+        "result": "PREFLIGHT_PASSED",
+        "job_id": manifest["job_id"],
+        "source_commit": manifest["source_commit"],
+        "observed_at_ms": manifest["not_before_ms"],
+        "not_before_ms": manifest["not_before_ms"],
+        "expires_at_ms": manifest["expires_at_ms"],
+        "dispatch_manifest_sha256": sha256_bytes(canonical_bytes(manifest)),
+        "program": manifest["program"],
+        "bindings": manifest["bindings"],
+        "args_sha256": "c" * 64,
+        "env_sha256": "d" * 64,
+        "custody_root": manifest["custody_root"],
+        "storage_reserves": manifest["storage_reserves"],
+        "vram_reserve": {
+            "minimum_free_bytes": manifest["minimum_free_vram_bytes"],
+            "available_free_bytes": manifest["minimum_free_vram_bytes"],
+        },
+        "maximum_job_memory_bytes": manifest["maximum_job_memory_bytes"],
+        "host_commit": {
+            "basis": "maximum_configured_capacity",
+            "required_available_maximum_commit_bytes": manifest[
+                "required_available_maximum_commit_bytes"
+            ],
+            "observed_available_maximum_commit_bytes": manifest[
+                "required_available_maximum_commit_bytes"
+            ],
+            "physical_ram_bytes": 64 * 1024**3,
+            "pagefile_maximum_bytes": 64 * 1024**3,
+            "pagefile_configuration_source": "native",
+            "pagefile_configuration_sha256": "e" * 64,
+            "commit_total_bytes": 1,
+            "current_commit_limit_bytes": 64 * 1024**3,
+            "maximum_commit_capacity_bytes": 128 * 1024**3,
+            "reserve_bytes": 8 * 1024**3,
+            "maximum_job_memory_bytes": manifest["maximum_job_memory_bytes"],
+            "simulated_peak_commit_bytes": manifest[
+                "simulated_peak_commit_bytes"
+            ],
+        },
+        "emberd_identity": {
+            "binary_sha256": manifest["canary_scope"][
+                "expected_emberd_binary_sha256"
+            ],
+            "source_sha256": manifest["canary_scope"][
+                "expected_emberd_source_sha256"
+            ],
+        },
+        "governed_canary": {
+            "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
+            "scope": manifest["canary_scope"],
+            "before": {},
+            "before_spawn": {},
+        },
+    }
+
+
+def successful_emberd_dispatch(
+    argv: list[str], *, pid: int = 1234
+) -> subprocess.CompletedProcess[str]:
+    manifest_path = pathlib.Path(argv[argv.index("--manifest") + 1])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    receipt_path = pathlib.Path(manifest["preflight_receipt"])
+    receipt_bytes = canonical_bytes(valid_emberd_preflight_receipt(manifest))
+    receipt_path.write_bytes(receipt_bytes)
+    return subprocess.CompletedProcess(
+        argv,
+        0,
+        stdout=json.dumps(
+            {
+                "pid": pid,
+                "preflight_receipt_path": str(receipt_path),
+                "preflight_receipt_sha256": sha256_bytes(receipt_bytes),
+            }
+        ),
+        stderr="",
+    )
+
+
 def write_json(path: pathlib.Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(canonical_bytes(value))
@@ -131,6 +214,7 @@ def valid_scope(artifact_root: pathlib.Path, custody_root: pathlib.Path) -> dict
         "persistent_worker_allowed": False,
         "docker_allowed": False,
         "expected_gpu_uuid": "GPU-EMBER-4090",
+        "emberd_pipe": r"\\.\pipe\emberd-governed-canary",
         "storage_reserves": [
             {"root": "B:\\", "minimum_free_bytes": 250 * 1024**3},
             {"root": "C:\\", "minimum_free_bytes": 150 * 1024**3},
@@ -838,7 +922,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
 
         def fake_run(argv, **kwargs):
             calls.append((argv, kwargs))
-            return subprocess.CompletedProcess(argv, 0)
+            return successful_emberd_dispatch(argv)
 
         with tempfile.TemporaryDirectory() as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
@@ -863,6 +947,10 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             self.assertIs(kwargs["shell"], False)
             self.assertIs(kwargs["check"], False)
             self.assertEqual(kwargs["cwd"], paths["repo"])
+            self.assertEqual(kwargs["capture_output"], True)
+            self.assertEqual(kwargs["text"], True)
+            self.assertEqual(argv[0], str(launch.emberd_binary_path))
+            self.assertEqual(argv[1], "dispatch")
             execution_receipt = (
                 paths["custody_root"] / "runner-receipt-certified-launch.json"
             )
@@ -950,6 +1038,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     "disk_budget_runner",
                     "governed_runner",
                     "tokenizer",
+                    "manifest",
                     "input",
                     "verifier",
                 },
@@ -959,7 +1048,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     binding["kind"] == "input"
                     for binding in manifest["bindings"]
                 ),
-                2,
+                1,
             )
             self.assertEqual(
                 sum(
@@ -1055,6 +1144,10 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 manifest["canary_scope"]["expected_gpu_uuid"],
                 "GPU-EMBER-4090",
             )
+            self.assertEqual(
+                launch.emberd_pipe,
+                r"\\.\pipe\emberd-governed-canary",
+            )
 
     def test_dispatch_manifest_refuses_emberd_source_drift_after_validation(
         self,
@@ -1079,7 +1172,9 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     now_ms=1_000_000,
                 )
 
-    def test_child_failure_is_propagated_and_receipted(self) -> None:
+    def test_emberd_dispatch_failure_is_propagated_without_success_receipt(
+        self,
+    ) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
@@ -1096,13 +1191,122 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     run_process=fail,
                 )
             self.assertEqual(exit_code, 17)
-            receipt = json.loads(
+            self.assertFalse(
+                (
+                    paths["custody_root"]
+                    / "runner-receipt-certified-launch.json"
+                ).exists()
+            )
+
+    def test_main_does_not_emit_success_response_after_dispatch_failure(
+        self,
+    ) -> None:
+        module = load_module()
+        with mock.patch.object(
+            module, "validate_certified_request", return_value=object()
+        ), mock.patch.object(
+            module, "execute_validated_launch", return_value=17
+        ), mock.patch.object(
+            module,
+            "_execution_response",
+            side_effect=AssertionError("success response must not be built"),
+        ):
+            exit_code = module.main(
+                [
+                    "--root",
+                    "repo",
+                    "--certificate",
+                    "certificate.json",
+                    "--declaration-ledger",
+                    "ledger.jsonl",
+                    "--run-spec",
+                    "run.json",
+                ]
+            )
+        self.assertEqual(exit_code, 17)
+
+    def test_execute_dispatches_only_through_bound_emberd_and_verifies_receipt(
+        self,
+    ) -> None:
+        module = load_module()
+        calls: list[list[str]] = []
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            emberd_binary = paths["evidence_paths"]["emberd_binary_sha256"]
+
+            def dispatch(argv, **kwargs):
+                calls.append(argv)
+                self.assertEqual(argv[0], str(emberd_binary))
+                self.assertEqual(
+                    argv[1:4],
+                    [
+                        "dispatch",
+                        "--pipe",
+                        r"\\.\pipe\emberd-governed-canary",
+                    ],
+                )
+                self.assertEqual(argv[4], "--manifest")
+                return successful_emberd_dispatch(argv)
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                exit_code = module.certify_and_execute(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    run_process=dispatch,
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(calls), 1)
+            certified = json.loads(
                 (
                     paths["custody_root"]
                     / "runner-receipt-certified-launch.json"
                 ).read_text(encoding="utf-8")
             )
-            self.assertEqual(receipt["exit_code"], 17)
+            self.assertEqual(certified["dispatch_job_id"], "owned-3b-canary-test")
+            self.assertEqual(certified["dispatch_pid"], 1234)
+            self.assertEqual(
+                certified["dispatch_manifest_sha256"],
+                valid_emberd_preflight_receipt(
+                    json.loads(
+                        pathlib.Path(calls[0][5]).read_text(encoding="utf-8")
+                    )
+                )["dispatch_manifest_sha256"],
+            )
+
+    def test_execute_refuses_missing_emberd_preflight_receipt(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+
+            def missing_receipt(argv, **kwargs):
+                manifest_path = pathlib.Path(argv[argv.index("--manifest") + 1])
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                return subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    stdout=json.dumps(
+                        {
+                            "pid": 1234,
+                            "preflight_receipt_path": manifest[
+                                "preflight_receipt"
+                            ],
+                            "preflight_receipt_sha256": "f" * 64,
+                        }
+                    ),
+                    stderr="",
+                )
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "preflight receipt"):
+                    module.certify_and_execute(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        run_process=missing_receipt,
+                    )
 
     def test_runner_receipt_outside_authorized_custody_fails_before_process(
         self,

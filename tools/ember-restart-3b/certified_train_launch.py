@@ -13,6 +13,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any, NamedTuple
 
 
@@ -135,6 +136,7 @@ AUTHORIZED_SCOPE_KEYS = {
     "persistent_worker_allowed",
     "docker_allowed",
     "expected_gpu_uuid",
+    "emberd_pipe",
     "storage_reserves",
     "required_available_maximum_commit_bytes",
     "maximum_job_memory_bytes",
@@ -179,6 +181,27 @@ PROVISIONAL_HOST_COMMIT_BOUNDS_BYTES = {
     "maximum_job": 32 * 1024**3,
     "required_available": 40 * 1024**3,
 }
+EMBERD_PREFLIGHT_RECEIPT_KEYS = {
+    "schema_version",
+    "result",
+    "job_id",
+    "source_commit",
+    "observed_at_ms",
+    "not_before_ms",
+    "expires_at_ms",
+    "dispatch_manifest_sha256",
+    "program",
+    "bindings",
+    "args_sha256",
+    "env_sha256",
+    "custody_root",
+    "storage_reserves",
+    "vram_reserve",
+    "maximum_job_memory_bytes",
+    "host_commit",
+    "emberd_identity",
+    "governed_canary",
+}
 
 
 class ValidatedLaunch(NamedTuple):
@@ -197,6 +220,7 @@ class ValidatedLaunch(NamedTuple):
     max_wall_seconds: float
     gpu_vram_gib: float
     expected_gpu_uuid: str
+    emberd_pipe: str
     emberd_binary_path: pathlib.Path
     expected_emberd_source_sha256: str
     tokenizer_path: pathlib.Path
@@ -686,6 +710,7 @@ def validate_certified_request(
     )
     _require_scope_subset(requested_scope, authorized_scope)
     expected_gpu_uuid = authorized_scope["expected_gpu_uuid"]
+    emberd_pipe = authorized_scope["emberd_pipe"]
     storage_reserves = authorized_scope["storage_reserves"]
     required_available_maximum_commit_bytes = authorized_scope[
         "required_available_maximum_commit_bytes"
@@ -696,6 +721,15 @@ def validate_certified_request(
     ]
     if not isinstance(expected_gpu_uuid, str) or not expected_gpu_uuid.strip():
         raise ValueError("certificate expected GPU UUID is invalid")
+    pipe_prefix = "\\\\.\\pipe\\"
+    if (
+        not isinstance(emberd_pipe, str)
+        or not emberd_pipe.startswith(pipe_prefix)
+        or len(emberd_pipe) <= len(pipe_prefix)
+        or any(character.isspace() for character in emberd_pipe)
+        or "/" in emberd_pipe
+    ):
+        raise ValueError("certificate emberd pipe is invalid")
     if not isinstance(storage_reserves, list):
         raise ValueError("certificate storage reserves are invalid")
     if (
@@ -735,6 +769,7 @@ def validate_certified_request(
         max_wall_seconds=float(requested_scope["wall_minutes"]) * 60.0,
         gpu_vram_gib=float(requested_scope["gpu_vram_gib"]),
         expected_gpu_uuid=expected_gpu_uuid,
+        emberd_pipe=emberd_pipe,
         emberd_binary_path=evidence_paths["emberd_binary_sha256"],
         expected_emberd_source_sha256=certificate["emberd_source_sha256"],
         tokenizer_path=evidence_paths["tokenizer_sha256"],
@@ -924,7 +959,7 @@ def build_emberd_dispatch_manifest(
         bound("disk_budget_runner", disk_budget_runner),
         bound("governed_runner", governed_runner),
         bound("tokenizer", tokenizer_path),
-        bound("input", launch.input_identity_path),
+        bound("manifest", launch.input_identity_path),
         bound("input", launch.input_shard_path),
         bound("verifier", launch.input_admission_receipt_path),
         bound("verifier", launch.input_identity_validator_path),
@@ -1000,8 +1035,30 @@ def build_emberd_dispatch_manifest(
     }
 
 
+def _write_atomic_bytes(path: pathlib.Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temporary_path = pathlib.Path(handle.name)
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary_path, path)
+
+
 def _write_execution_receipt(
-    launch: ValidatedLaunch, argv: list[str], exit_code: int
+    launch: ValidatedLaunch,
+    argv: list[str],
+    *,
+    dispatch_pid: int,
+    dispatch_manifest_sha256: str,
+    preflight_receipt_path: pathlib.Path,
+    preflight_receipt_sha256: str,
 ) -> pathlib.Path:
     receipt_path = _execution_receipt_path(launch)
     receipt = {
@@ -1010,9 +1067,18 @@ def _write_execution_receipt(
         "run_spec_sha256": launch.run_spec_sha256,
         "public_master_sha": launch.public_master_sha,
         "argv": argv,
-        "exit_code": exit_code,
+        "exit_code": 0,
         "artifact_root": str(launch.artifact_root),
         "runner_receipt": str(launch.runner_receipt),
+        "dispatch_job_id": launch.run_id,
+        "dispatch_pid": dispatch_pid,
+        "dispatch_manifest_sha256": dispatch_manifest_sha256,
+        "preflight_receipt": str(preflight_receipt_path),
+        "preflight_receipt_sha256": preflight_receipt_sha256,
+        "emberd_binary_sha256": _file_sha256(
+            launch.emberd_binary_path, "emberd binary"
+        ),
+        "emberd_source_sha256": launch.expected_emberd_source_sha256,
         "claim_scope": {
             "capability_claimed": False,
             "admission_claimed": False,
@@ -1021,19 +1087,7 @@ def _write_execution_receipt(
             "competitiveness_claimed": False,
         },
     }
-    receipt_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="wb",
-        dir=receipt_path.parent,
-        prefix=f".{receipt_path.name}.",
-        suffix=".tmp",
-        delete=False,
-    ) as handle:
-        temporary_path = pathlib.Path(handle.name)
-        handle.write(_canonical_bytes(receipt))
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary_path, receipt_path)
+    _write_atomic_bytes(receipt_path, _canonical_bytes(receipt))
     return receipt_path
 
 
@@ -1048,7 +1102,7 @@ def _execution_response(
 ) -> dict[str, object]:
     receipt_path = _execution_receipt_path(launch)
     return {
-        "outcome": "COMPLETED" if exit_code == 0 else "FAILED",
+        "outcome": "DISPATCHED" if exit_code == 0 else "FAILED",
         "execution_receipt": str(receipt_path),
         "execution_receipt_sha256": _file_sha256(
             receipt_path, "certified execution receipt"
@@ -1058,21 +1112,146 @@ def _execution_response(
     }
 
 
+def _verify_emberd_dispatch_result(
+    launch: ValidatedLaunch,
+    manifest: dict[str, object],
+    manifest_sha256: str,
+    result: object,
+) -> tuple[int, pathlib.Path, str]:
+    stdout = getattr(result, "stdout", None)
+    if not isinstance(stdout, str):
+        raise ValueError("emberd dispatch did not return strict JSON text")
+    try:
+        response = json.loads(stdout)
+    except (json.JSONDecodeError, UnicodeError) as error:
+        raise ValueError("emberd dispatch response is not strict JSON") from error
+    response = _require_object(response, "emberd dispatch response")
+    _require_keys(
+        response,
+        {"pid", "preflight_receipt_path", "preflight_receipt_sha256"},
+        "emberd dispatch response",
+    )
+    pid = response["pid"]
+    receipt_path_raw = response["preflight_receipt_path"]
+    receipt_sha256 = response["preflight_receipt_sha256"]
+    _require_sha256(receipt_sha256, "emberd preflight receipt")
+    if type(pid) is not int or pid < 1 or not isinstance(receipt_path_raw, str):
+        raise ValueError("emberd dispatch response identity is invalid")
+    try:
+        expected_path = pathlib.Path(str(manifest["preflight_receipt"])).resolve(
+            strict=True
+        )
+        receipt_path = pathlib.Path(receipt_path_raw).resolve(strict=True)
+    except OSError as error:
+        raise ValueError("emberd preflight receipt is unavailable") from error
+    if receipt_path != expected_path:
+        raise ValueError("emberd preflight receipt path does not match manifest")
+    try:
+        receipt_bytes = receipt_path.read_bytes()
+        receipt_text = receipt_bytes.decode("utf-8", errors="strict")
+        receipt = json.loads(receipt_text)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("emberd preflight receipt bytes are invalid") from error
+    if hashlib.sha256(receipt_bytes).hexdigest() != receipt_sha256:
+        raise ValueError("emberd preflight receipt hash does not match bytes")
+    receipt = _require_object(receipt, "emberd preflight receipt")
+    _require_keys(
+        receipt,
+        EMBERD_PREFLIGHT_RECEIPT_KEYS,
+        "emberd preflight receipt",
+    )
+    identity = _require_object(
+        receipt["emberd_identity"], "emberd preflight identity"
+    )
+    _require_keys(
+        identity,
+        {"binary_sha256", "source_sha256"},
+        "emberd preflight identity",
+    )
+    governed_canary = _require_object(
+        receipt["governed_canary"], "emberd governed canary receipt"
+    )
+    _require_keys(
+        governed_canary,
+        {"process_exclusivity", "scope", "before", "before_spawn"},
+        "emberd governed canary receipt",
+    )
+    if (
+        receipt["schema_version"] != "emberd-dispatch-preflight-v1"
+        or receipt["result"] != "PREFLIGHT_PASSED"
+        or receipt["job_id"] != launch.run_id
+        or receipt["source_commit"] != launch.public_master_sha
+        or receipt["dispatch_manifest_sha256"] != manifest_sha256
+        or identity["binary_sha256"]
+        != manifest["canary_scope"]["expected_emberd_binary_sha256"]
+        or identity["source_sha256"]
+        != launch.expected_emberd_source_sha256
+        or governed_canary["scope"] != manifest["canary_scope"]
+        or governed_canary["process_exclusivity"]
+        != "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED"
+    ):
+        raise ValueError("emberd preflight receipt does not bind dispatch")
+    return pid, receipt_path, receipt_sha256
+
+
 def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
     run_process=subprocess.run,
 ) -> int:
-    repo_root = pathlib.Path(repo_root)
-    argv = build_runner_argv(repo_root, launch)
+    repo_root = pathlib.Path(repo_root).resolve(strict=True)
+    now_ms = int(time.time() * 1000)
+    manifest = build_emberd_dispatch_manifest(
+        repo_root,
+        launch,
+        now_ms=now_ms,
+    )
+    manifest_bytes = _canonical_bytes(manifest)
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    manifest_path = launch.custody_root / f"{launch.run_id}-emberd-dispatch.json"
+    for cache_path in manifest["env"].values():
+        pathlib.Path(cache_path).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(str(manifest["preflight_receipt"])).parent.mkdir(
+        parents=True, exist_ok=True
+    )
+    _write_atomic_bytes(manifest_path, manifest_bytes)
+    argv = [
+        str(launch.emberd_binary_path),
+        "dispatch",
+        "--pipe",
+        launch.emberd_pipe,
+        "--manifest",
+        str(manifest_path),
+    ]
     result = run_process(
         argv,
         shell=False,
         check=False,
         cwd=repo_root,
+        capture_output=True,
+        text=True,
     )
     exit_code = int(result.returncode)
-    _write_execution_receipt(launch, argv, exit_code)
+    if exit_code != 0:
+        return exit_code
+    (
+        dispatch_pid,
+        preflight_receipt_path,
+        preflight_receipt_sha256,
+    ) = _verify_emberd_dispatch_result(
+        launch,
+        manifest,
+        manifest_sha256,
+        result,
+    )
+    _write_execution_receipt(
+        launch,
+        argv,
+        dispatch_pid=dispatch_pid,
+        dispatch_manifest_sha256=manifest_sha256,
+        preflight_receipt_path=preflight_receipt_path,
+        preflight_receipt_sha256=preflight_receipt_sha256,
+    )
     return exit_code
 
 
@@ -1115,6 +1294,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
+    if exit_code != 0:
+        print(
+            f"error: emberd dispatch failed with exit code {exit_code}",
+            file=sys.stderr,
+        )
+        return exit_code
     print(
         json.dumps(
             _execution_response(launch, exit_code),

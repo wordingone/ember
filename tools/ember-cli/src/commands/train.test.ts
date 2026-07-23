@@ -37,18 +37,59 @@ const REAL_LAUNCH_COMMAND =
   "--declaration-ledger <declaration-ledger.jsonl> " +
   "--run-spec <certified-train-run.json>";
 const EXECUTION_RECEIPT_PATH = "B:\\custody\\runner-certified-launch.json";
+const PREFLIGHT_RECEIPT_PATH = "B:\\custody\\emberd-preflight.json";
 const ARTIFACT_ROOT = "B:\\artifacts\\run";
+const DISPATCH_MANIFEST_SHA256 = "d".repeat(64);
+const EMBERD_BINARY_SHA256 = "f".repeat(64);
+const EMBERD_SOURCE_SHA256 = "1".repeat(64);
+
+function validPreflightReceiptBytes(): Buffer {
+  return Buffer.from(JSON.stringify({
+    schema_version: "emberd-dispatch-preflight-v1",
+    result: "PREFLIGHT_PASSED",
+    job_id: "owned-3b-canary-test",
+    source_commit: "c".repeat(40),
+    observed_at_ms: 1,
+    not_before_ms: 1,
+    expires_at_ms: 2,
+    dispatch_manifest_sha256: DISPATCH_MANIFEST_SHA256,
+    program: {},
+    bindings: [],
+    args_sha256: "2".repeat(64),
+    env_sha256: "3".repeat(64),
+    custody_root: "B:\\custody",
+    storage_reserves: [],
+    vram_reserve: {},
+    maximum_job_memory_bytes: 1,
+    host_commit: {},
+    emberd_identity: {
+      binary_sha256: EMBERD_BINARY_SHA256,
+      source_sha256: EMBERD_SOURCE_SHA256,
+    },
+    governed_canary: {},
+  }));
+}
 
 function validExecutionReceiptBytes(): Buffer {
+  const preflightBytes = validPreflightReceiptBytes();
   return Buffer.from(JSON.stringify({
     schema_version: "ember-certified-train-execution-v1",
     certificate_sha256: "a".repeat(64),
     run_spec_sha256: "b".repeat(64),
     public_master_sha: "c".repeat(40),
-    argv: ["python", "disk_budget_runner.py"],
+    argv: ["B:\\custody\\runtime\\emberd.exe", "dispatch"],
     exit_code: 0,
     artifact_root: ARTIFACT_ROOT,
     runner_receipt: "B:\\custody\\runner.json",
+    dispatch_job_id: "owned-3b-canary-test",
+    dispatch_pid: 1234,
+    dispatch_manifest_sha256: DISPATCH_MANIFEST_SHA256,
+    preflight_receipt: PREFLIGHT_RECEIPT_PATH,
+    preflight_receipt_sha256: createHash("sha256")
+      .update(preflightBytes)
+      .digest("hex"),
+    emberd_binary_sha256: EMBERD_BINARY_SHA256,
+    emberd_source_sha256: EMBERD_SOURCE_SHA256,
     claim_scope: {
       capability_claimed: false,
       admission_claimed: false,
@@ -62,7 +103,7 @@ function validExecutionReceiptBytes(): Buffer {
 function validCertifiedResponse(): string {
   const bytes = validExecutionReceiptBytes();
   return JSON.stringify({
-    outcome: "COMPLETED",
+    outcome: "DISPATCHED",
     execution_receipt: EXECUTION_RECEIPT_PATH,
     execution_receipt_sha256: createHash("sha256").update(bytes).digest("hex"),
     artifact_root: ARTIFACT_ROOT,
@@ -135,6 +176,7 @@ function makeExecuteCmd(
   preflight: LaunchPacketRunResult,
   certified: LaunchPacketRunResult,
   executionReceiptBytes: Buffer = validExecutionReceiptBytes(),
+  preflightReceiptBytes: Buffer = validPreflightReceiptBytes(),
 ) {
   const preflightSpawns: RecordedSpawn[] = [];
   const certifiedSpawns: RecordedSpawn[] = [];
@@ -152,8 +194,9 @@ function makeExecuteCmd(
       return certified;
     },
     readExecutionReceipt: (path) => {
-      if (path !== EXECUTION_RECEIPT_PATH) throw new Error("unexpected receipt path");
-      return executionReceiptBytes;
+      if (path === EXECUTION_RECEIPT_PATH) return executionReceiptBytes;
+      if (path === PREFLIGHT_RECEIPT_PATH) return preflightReceiptBytes;
+      throw new Error("unexpected receipt path");
     },
   });
   return { cmd, preflightSpawns, certifiedSpawns };
@@ -417,6 +460,8 @@ describe("train command", () => {
         REAL_LAUNCH_COMMAND,
       );
       expect(result?.message).toContain(EXECUTION_RECEIPT_PATH);
+      expect(result?.message).toContain("accepted by Emberd");
+      expect(result?.message).not.toContain("process completed");
       expect(result?.message).not.toContain("capability");
     });
 
@@ -426,7 +471,7 @@ describe("train command", () => {
         {
           status: 0,
           stdout: JSON.stringify({
-            outcome: "COMPLETED",
+            outcome: "DISPATCHED",
             execution_receipt: "receipt.json",
             artifact_root: "artifacts/run",
           }),
@@ -454,7 +499,7 @@ describe("train command", () => {
         {
           status: 0,
           stdout: JSON.stringify({
-            outcome: "COMPLETED",
+            outcome: "DISPATCHED",
             execution_receipt: EXECUTION_RECEIPT_PATH,
             execution_receipt_sha256: createHash("sha256")
               .update(bytes)
@@ -472,6 +517,45 @@ describe("train command", () => {
 
       expect(result?.exitCode).toBe(1);
       expect(result?.message).toContain("claim boundary");
+    });
+
+    it("refuses a content-addressed preflight receipt that does not bind the dispatch", async () => {
+      const preflight = JSON.parse(
+        validPreflightReceiptBytes().toString("utf8"),
+      ) as Record<string, unknown>;
+      preflight["dispatch_manifest_sha256"] = "9".repeat(64);
+      const preflightBytes = Buffer.from(JSON.stringify(preflight));
+      const execution = JSON.parse(
+        validExecutionReceiptBytes().toString("utf8"),
+      ) as Record<string, unknown>;
+      execution["preflight_receipt_sha256"] = createHash("sha256")
+        .update(preflightBytes)
+        .digest("hex");
+      const executionBytes = Buffer.from(JSON.stringify(execution));
+      const { cmd } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: JSON.stringify({
+            outcome: "DISPATCHED",
+            execution_receipt: EXECUTION_RECEIPT_PATH,
+            execution_receipt_sha256: createHash("sha256")
+              .update(executionBytes)
+              .digest("hex"),
+            artifact_root: ARTIFACT_ROOT,
+          }),
+        },
+        executionBytes,
+        preflightBytes,
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("does not bind");
     });
 
     it("preflight failure prevents certified consumer execution", async () => {
