@@ -360,7 +360,15 @@ describe("assembleLaunchPacketElement (element 4)", () => {
   it("mutating overall_ready changes the rendered value", () => {
     const list = () => ["20260101T000000Z"];
     const readReady = () =>
-      JSON.stringify({ record: "launch-packet-summary", overall_ready: true, implemented_all_pass: true, any_deferred: false, named_ember02_command: null });
+      JSON.stringify({
+        record: "launch-packet-summary",
+        overall_ready: true,
+        implemented_all_pass: true,
+        any_deferred: false,
+        // overall_ready===true requires a real named command (closed-schema invariant,
+        // PR #1027 round-2) -- null here would make this fixture itself invalid.
+        named_ember02_command: { command: "python run_vertical_slice.py --semantic" },
+      });
     const readNotReady = () =>
       JSON.stringify({ record: "launch-packet-summary", overall_ready: false, implemented_all_pass: false, any_deferred: false, named_ember02_command: null });
     const elReady = assembleLaunchPacketElement("/repo", { listLaunchPacketReceipts: list, readLaunchPacketReceipt: readReady });
@@ -455,6 +463,153 @@ describe("assembleLaunchPacketElement (element 4) -- real-filesystem receipt-dis
       const el = assembleLaunchPacketElement(repoRoot);
       expect(el.status).toBe("BLOCKED");
       expect(el.lines[0]).toContain("BLOCKED");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Element 4 -- closed summary schema (re-review, PR #1027 round-2 defect fix).
+// The prior fix accepted ANY object carrying record==="launch-packet-summary" as
+// valid without checking its fields; a malformed-but-tagged newest receipt was
+// assigned and stopped the walk instead of being skipped like an unreadable one.
+// Production-shaped: real directories/files on a real temp filesystem.
+// ---------------------------------------------------------------------------
+
+describe("assembleLaunchPacketElement (element 4) -- closed summary schema, real filesystem", () => {
+  function writeValidReceipt(dir: string, overallReady: boolean): void {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "packet.jsonl"),
+      JSON.stringify({
+        record: "launch-packet-summary",
+        overall_ready: overallReady,
+        implemented_all_pass: overallReady,
+        any_deferred: false,
+        named_ember02_command: overallReady ? { command: "python run_vertical_slice.py --semantic" } : null,
+      }) + "\n",
+      "utf8",
+    );
+  }
+
+  function writeRawSummary(dir: string, summary: Record<string, unknown>): void {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "packet.jsonl"), JSON.stringify(summary) + "\n", "utf8");
+  }
+
+  it("BOUND: newest packet's summary is missing overall_ready -- skipped, falls back to the older VALID receipt (never a false-default BOUND from the malformed newest)", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      writeValidReceipt(join(receiptsDir, "20260101T000000Z"), true);
+      // Newest by name, tagged correctly, but missing overall_ready entirely.
+      writeRawSummary(join(receiptsDir, "20260201T000000Z"), {
+        record: "launch-packet-summary",
+        implemented_all_pass: true,
+        any_deferred: false,
+        named_ember02_command: null,
+      });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).not.toContain("20260201T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: true");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BOUND: newest packet's overall_ready is wrong-typed (string, not boolean) -- skipped, falls back to the older VALID receipt", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      writeValidReceipt(join(receiptsDir, "20260101T000000Z"), false);
+      writeRawSummary(join(receiptsDir, "20260201T000000Z"), {
+        record: "launch-packet-summary",
+        overall_ready: "yes",
+        implemented_all_pass: true,
+        any_deferred: false,
+        named_ember02_command: null,
+      });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: false");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BOUND: overall_ready===true with an empty named command is INVALID (the named conditional invariant) -- skipped, falls back to the older VALID receipt", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      writeValidReceipt(join(receiptsDir, "20260101T000000Z"), false);
+      writeRawSummary(join(receiptsDir, "20260201T000000Z"), {
+        record: "launch-packet-summary",
+        overall_ready: true,
+        implemented_all_pass: true,
+        any_deferred: false,
+        named_ember02_command: null,
+      });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: false");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BOUND: overall_ready===true with a missing named_ember02_command.command is INVALID -- skipped, falls back to the older VALID receipt", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      writeValidReceipt(join(receiptsDir, "20260101T000000Z"), false);
+      writeRawSummary(join(receiptsDir, "20260201T000000Z"), {
+        record: "launch-packet-summary",
+        overall_ready: true,
+        implemented_all_pass: true,
+        any_deferred: false,
+        named_ember02_command: {},
+      });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BOUND");
+      expect(el.lines.join("\n")).toContain("20260101T000000Z");
+      expect(el.lines.join("\n")).toContain("overall_ready: false");
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("BLOCKED: ALL candidate receipts have malformed summaries -- honest blocked reason, never a false-default BOUND", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "spine-panel-schema-"));
+    try {
+      const receiptsDir = join(repoRoot, "receipts", "ember-01-launch-packet");
+      writeRawSummary(join(receiptsDir, "20260101T000000Z"), {
+        record: "launch-packet-summary",
+        overall_ready: true,
+        implemented_all_pass: true,
+        any_deferred: false,
+        // wrong-typed command field
+        named_ember02_command: { command: 42 },
+      });
+      writeRawSummary(join(receiptsDir, "20260201T000000Z"), {
+        record: "launch-packet-summary",
+        // missing any_deferred
+        overall_ready: false,
+        implemented_all_pass: false,
+      });
+
+      const el = assembleLaunchPacketElement(repoRoot);
+      expect(el.status).toBe("BLOCKED");
+      expect(el.lines[0]).toContain("BLOCKED");
+      expect(el.lines.join("\n")).not.toContain("overall_ready:");
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });
     }

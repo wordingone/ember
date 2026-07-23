@@ -290,6 +290,42 @@ function _defaultListLaunchPacketReceipts(dirPath: string): string[] {
   }
 }
 
+// Defect (re-review, PR #1027 round-2): the newest-to-oldest walk was hardened
+// to skip UNREADABLE entries, but its notion of "valid" summary was too weak --
+// `obj.record === "launch-packet-summary"` accepted ANY object carrying that tag,
+// fields unvalidated. A newest packet.jsonl containing only
+// `{"record":"launch-packet-summary"}` (or wrong-typed fields) was accepted as
+// valid, rendered BOUND with false-looking defaults (every boolean falling to
+// `false` via `=== true`), AND stopped the walk -- silently shadowing a
+// genuinely valid OLDER receipt the "newest READABLE VALID receipt" contract
+// promises. FAIL-CLOSED here: a summary counts as valid only against this closed
+// schema; anything else must be treated exactly like an unreadable entry (skip +
+// fall back, never assign-and-stop).
+function _isValidLaunchPacketSummary(obj: unknown): obj is LaunchPacketSummaryRow {
+  if (typeof obj !== "object" || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  if (o.record !== "launch-packet-summary") return false;
+  if (typeof o.overall_ready !== "boolean") return false;
+  if (typeof o.implemented_all_pass !== "boolean") return false;
+  if (typeof o.any_deferred !== "boolean") return false;
+
+  const cmd = o.named_ember02_command;
+  if (cmd !== null && cmd !== undefined) {
+    if (typeof cmd !== "object") return false;
+    const cmdObj = cmd as Record<string, unknown>;
+    if ("command" in cmdObj && typeof cmdObj.command !== "string") return false;
+  }
+
+  // Named conditional invariant (re-review, PR #1027 round-2): a claimed-ready summary is unactionable
+  // (and therefore invalid) without a real, non-empty named command.
+  if (o.overall_ready === true) {
+    const cmdObj = cmd as { command?: string } | null | undefined;
+    if (!cmdObj || typeof cmdObj.command !== "string" || cmdObj.command.length === 0) return false;
+  }
+
+  return true;
+}
+
 export function assembleLaunchPacketElement(repoRoot: string, deps: Element4Deps = {}): SpineElementState {
   const dirPath = join(repoRoot, LAUNCH_PACKET_RECEIPTS_DIR_REL);
   const listDirs = deps.listLaunchPacketReceipts ?? _defaultListLaunchPacketReceipts;
@@ -332,14 +368,14 @@ export function assembleLaunchPacketElement(repoRoot: string, deps: Element4Deps
       const trimmed = line.trim();
       if (!trimmed.startsWith("{")) continue;
       try {
-        const obj = JSON.parse(trimmed) as LaunchPacketSummaryRow;
-        if (obj.record === "launch-packet-summary") summary = obj;
+        const obj: unknown = JSON.parse(trimmed);
+        if (_isValidLaunchPacketSummary(obj)) summary = obj;
       } catch {
         // skip unparseable line -- mirrors train.ts's _parseLaunchPacketOutput tolerance.
       }
     }
     if (!summary) {
-      lastError = `${receiptPath} has no launch-packet-summary record`;
+      lastError = `${receiptPath} has no valid launch-packet-summary record`;
       continue;
     }
 
