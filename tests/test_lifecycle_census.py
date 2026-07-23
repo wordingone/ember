@@ -119,6 +119,17 @@ def test_workflow_tracker_shell_and_count_validation_fail_closed() -> None:
     assert "set -euo pipefail" in workflow
     assert "jq -er" in workflow
     assert "stale_pr" in workflow and "stale_is" in workflow
+
+
+def test_workflow_count_contract_rejects_missing_or_nonnumeric_shell_values() -> None:
+    workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
+    assert "require_count()" in workflow
+    assert 'case "$value" in' in workflow
+    assert "*[!0-9]*" in workflow
+    assert "stale_pr=" + "$" + "{stale_pr:-0}" not in workflow
+    assert "stale_is=" + "$" + "{stale_is:-0}" not in workflow
+
+
 def test_main_computes_stale_report_before_writing_receipt() -> None:
     source = (Path(__file__).parents[1] / "scripts" / "lifecycle_census.py").read_text(encoding="utf-8")
     assert source.index("stale_report = build_stale_report") < source.index("write_receipt(receipt, path)")
