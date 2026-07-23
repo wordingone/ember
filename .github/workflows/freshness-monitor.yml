@@ -1,4 +1,7 @@
 name: freshness-monitor
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 # The "never stale" ring. Runs daily and FAILS (red run = alarm) when the repo
 # drifts back toward the conditions this consolidation removed: a stale trunk,

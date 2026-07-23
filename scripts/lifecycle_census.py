@@ -131,6 +131,9 @@ def build_receipt(
     pr_items = _receipt_items(pull_requests)
     receipt: dict[str, Any] = {
         "schema_version": "ember-lifecycle-census-v1",
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02A",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         "repository": repository,
         "master_sha": master_sha,
         "collected_at": collected_at,
