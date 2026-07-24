@@ -1,0 +1,86 @@
+{
+  "schema": "ember-backlog-closure-verify-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "generated_at": "2026-07-23T20:45:00Z",
+  "checked_at_ref": "origin/master",
+  "checked_at_sha": "3a907fe82e45bc2ddaad3dbf18a13afae189304c",
+  "closures": [
+    {
+      "issue": 630,
+      "title": "C8 O5 run-ledger: accepts fake hashes, tz-naive time compare, counts rows not runs, no launcher binding",
+      "landed_by": {
+        "pr": 640,
+        "title": "fix: O5 run-ledger hardening + fail-closed launcher binding (refs #630)",
+        "merge_commit": "93c7877"
+      },
+      "artifact": {
+        "path": "scripts/c8_prelaunch/run_ledger.py",
+        "sha256": "2d6b18adada4277be867e3936e137f90fa80f6ae85e1f87060b730e761fe67d8"
+      },
+      "selftest_run": {
+        "command": "python scripts/c8_prelaunch/run_ledger.py --selftest",
+        "exit_code": 0,
+        "stdout_tail": "RUN_LEDGER_SELFTEST_PASS"
+      },
+      "clause_to_byte_map": [
+        {"clause": "strict 64-hex config_sha/admissibility_commit_sha validation", "bound_to": "_validate_sha256() L144-152; exercised RED4 L522-538, GREEN5 L540-546"},
+        {"clause": "timezone-aware ISO parsing, normalize instants before compare", "bound_to": "_parse_iso8601_aware() L155-175; exercised RED5 (tz-offset counterexample) L548-565"},
+        {"clause": "explicit resolution for unknown exclusion validity", "bound_to": "append_exclusion_row() valid=None branch L325-330; exercised GREEN4 L509-517, GREEN6 L589-604"},
+        {"clause": "count unique run_ids with valid=True only, not raw rows", "bound_to": "count_inadmissible_for_arm() L346-369; exercised RED6 (dup-row-one-run) L567-588, GREEN3/3b/3c L479-508"},
+        {"clause": "reject/dedupe duplicate exclusion rows per run", "bound_to": "append_exclusion_row() duplicate guard L318-321; exercised RED7 L605-621"},
+        {"clause": "integrate into the actual launcher, fail-closed on append failure", "bound_to": "assert_launch_recorded() L377-400 (fail-closed SystemExit); no C8 governed-run launcher exists yet in-repo (grepped scripts/+receipts/+docs/, none found) so this ships as the standalone pre-launch hook per the scripts/w2_heldout/launch_gate.py precedent named in the module docstring L87-99 -- same shape as that module's own not-yet-built-caller disclosure; exercised RED8/GREEN7 L623-647"},
+        {"clause": "atomic/locked append", "bound_to": "_ledger_lock() L182-230, used by both append_launch_row and append_exclusion_row; exercised GREEN8 (24-thread race, exactly 1 winner) L649-689"},
+        {"clause": "selftests reproduce all four counterexamples as failing-then-fixed", "bound_to": "RED4/C1 (fake hash), RED5/C2 (tz-offset), RED6/C3 (row-vs-run count), RED8/C4 (launcher hook) -- all four present and all pass at this head"}
+      ],
+      "verdict": "CLOSE",
+      "verdict_basis": "every clause in the #630 frozen cure (issue body, adopted per #123's disposition) is bound to exact current-master bytes and exercised by a passing selftest at this head; no clause premised on an unmerged artifact"
+    },
+    {
+      "issue": 537,
+      "title": "fix: C2 regression - landing redaction rewrote bytes inside hash-pinned evidence; restore byte-exact + hash-pin law",
+      "landed_by": {
+        "pr": 549,
+        "title": "fix(#537): C2 restore - byte-exact d3 evidence + gate revision",
+        "merge_commit": "539b856"
+      },
+      "clause_to_byte_map": [
+        {
+          "clause": "AC1: d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json byte-exact, sha256 == pinned 9acd3496...",
+          "bound_to": "receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json",
+          "measured_sha256": "9acd3496991193c93b9b770322805b5b8769e5e1c77ab54e06a1bc1ebcff35a0",
+          "pin_source": "receipts/ember-d3-native-loop/d3-native-loop-20260708T221708Z.json:46 fresh_rows_sha256",
+          "match": true
+        },
+        {
+          "clause": "URL field intact, not mangled to httplocal:",
+          "bound_to": "same file, source_url field = https://datasets-server.huggingface.co/rows?dataset=osunlp%2FD3-Gym&config=default&split=train&offset=20&length=12",
+          "match": true
+        },
+        {
+          "clause": "AC5: test_c2.py failure-list truncation disclosure ('-> {failures[:3]}' becomes 'first 3 of {len}')",
+          "bound_to": "scripts/ember_totality/test_c2.py:404 'f\"-> first 3 of {len(failures)}: {failures[:3]}\"'",
+          "match": true
+        },
+        {
+          "clause": "AC4: board C2 GREEN with git-anchor ANCHORED on next totality run",
+          "bound_to": "receipts/ember-totality-20260711T103912Z.json:85 'GREEN C2 ... frozen-rows sha256 9acd34969911 VERIFIED on disk and frozen ... git-anchor: frozen-rows last-commit POST-DATES candidate ts'",
+          "match": true
+        },
+        {
+          "clause": "redaction-utility half (pin-scan before rewrite, path-valued-fields-only)",
+          "bound_to": "PATHPAT_EXCLUDE Class-2 entries disclosed in REDACTIONS.md and tools/repo-guard.sh; issue body itself defers the FULL utility fix to #525/#502 ('one comment referencing this instance goes to #525/#502') so this is not a blocking clause of #537's own closure",
+          "match": true,
+          "note": "deferred-by-issue-text, not unbound"
+        }
+      ],
+      "second_file_check": {
+        "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json",
+        "measured_sha256": "51734926408c137a912194fb9142b11a3d485ee9987530a4813e4a9bea488111"
+      },
+      "verdict": "CLOSE",
+      "verdict_basis": "every AC in #537's frozen restore lane is bound to exact current-master bytes (matching sha256 vs the pin, intact URL, truncation-fix line, totality GREEN receipt); the sole non-blocking clause is explicitly deferred by the issue's own text to #525/#502"
+    }
+  ]
+}
