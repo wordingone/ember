@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c04_harness.py — c04 training harness scaffold (H3 leg 3).
 
 Engineering features (all config-driven, no hardcoded choices):
@@ -434,9 +437,27 @@ def bench_cell(cfg: HarnessConfig, warmup_steps: int = 8, timed_steps: int = 10)
             print(f"[c04]   warmup {i+1}/{warmup_steps}", flush=True)
 
         torch.cuda.synchronize()
+        # gh issue #244: mem_get_info() is a torch self-report -- on WDDM it
+        # includes cross-process oversubscribable memory, so ~17 GiB of a
+        # resident server's occupancy can go invisible here and this margin
+        # gate never fires when it should. Ground truth is nvidia-smi,
+        # queried cross-process; both numbers are receipted, labeled, so the
+        # discrepancy is visible instead of silent (fix contract, #244).
+        sys.path.insert(0, HERE)
+        from vram_ground_truth import VramGroundTruthError, nvidia_smi_free_mib
         free_b, _ = torch.cuda.mem_get_info()
-        free_gib = free_b / (1 << 30)
-        out["free_vram_gib_post_warmup"] = round(free_gib, 2)
+        out["free_vram_gib_post_warmup_torch_wddm"] = round(free_b / (1 << 30), 2)
+        try:
+            free_gib = nvidia_smi_free_mib(0) / 1024.0
+            out["free_vram_gib_post_warmup"] = round(free_gib, 2)
+        except VramGroundTruthError as e:
+            # Fail closed: no ground-truth read means no margin decision can
+            # be trusted, so treat it the same as an insufficient margin.
+            out["status"] = "SKIPPED-MARGIN"
+            out["skip_reason"] = f"nvidia-smi ground-truth read failed: {e}"
+            del backbone, head, mtp_heads, opts
+            torch.cuda.empty_cache()
+            return out
         if free_gib < MARGIN_GIB:
             out["status"] = "SKIPPED-MARGIN"
             del backbone, head, mtp_heads, opts
