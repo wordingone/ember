@@ -10,6 +10,7 @@ import json
 import math
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -161,7 +162,6 @@ COMPLETION_RECEIPT_KEYS = {
     "schema",
     "ok",
     "verified_at_utc",
-    "completed_goal_id",
     "goal_id",
     "workstream_id",
     "next_executed_outcome",
@@ -492,17 +492,13 @@ def _validate_completion_receipt(
     _require_keys(value, COMPLETION_RECEIPT_KEYS, "completion receipt")
     if value["schema"] != "ember-01-completion-receipt-v1" or value["ok"] is not True:
         raise ValueError("completion receipt is not a successful EMBER-01 receipt")
-    if (
-        value["completed_goal_id"] != "EMBER-01"
-        or value["goal_id"] != "EMBER-02"
-        or value["workstream_id"] != "EMBER-02A"
-    ):
-        raise ValueError("completion receipt completed/active authority identity")
+    if value["goal_id"] != "EMBER-02" or value["workstream_id"] != "EMBER-02A":
+        raise ValueError("completion receipt active authority identity")
 
     legs = _require_object(value["certificate_legs"], "completion certificate legs")
     expected_legs = {str(index) for index in range(1, 10)}
     if set(legs) != expected_legs or any(
-        state != "RESOLVED_TRUE" for state in legs.values()
+        state != "resolved-true" for state in legs.values()
     ):
         raise ValueError("completion receipt must contain exactly nine resolved-true legs")
 
@@ -522,8 +518,19 @@ def _validate_completion_receipt(
         raise ValueError("completion checkout integrity")
 
     selection = _require_object(value["selection"], "completion selection")
+    _require_keys(
+        selection,
+        {
+            "selected_goal_suffix",
+            "selector_sha256",
+            "unchanged_during_verification",
+        },
+        "completion selection",
+    )
     if (
-        selection.get("goal_id") != "EMBER-02"
+        selection.get("selected_goal_suffix") != "EMBER-GOAL-GRAPH.json"
+        or not isinstance(selection.get("selector_sha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", selection["selector_sha256"])
         or selection.get("unchanged_during_verification") is not True
     ):
         raise ValueError("completion selection integrity")

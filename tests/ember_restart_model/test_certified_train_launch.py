@@ -153,19 +153,51 @@ def load_module():
     return module
 
 
+def test_completion_consumer_accepts_real_verifier_receipt_schema() -> None:
+    module = load_module()
+    receipt_path = (
+        ROOT
+        / "receipts"
+        / "ember-01-completion"
+        / "live-census-verifier-replay-96d8c83-v1.json"
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+
+    # Preserve the exact production-emitted schema while lifting only the
+    # observed unresolved outcomes into the successful state that a future
+    # operator-machine replay must earn.
+    receipt["ok"] = True
+    receipt["certificate_legs"] = {
+        str(index): "resolved-true" for index in range(1, 10)
+    }
+    receipt["leg_summary"] = {
+        "resolved_true": [str(index) for index in range(1, 10)],
+        "resolved_false": [],
+        "unresolved": [],
+    }
+    receipt["checkout"]["head"] = SHA
+    receipt["checkout"]["clean"] = True
+    receipt["checkout"]["detached"] = True
+    receipt["checkout"]["head_unchanged"] = True
+    receipt["selection"]["unchanged_during_verification"] = True
+
+    module._validate_completion_receipt(receipt, SHA)
+
+
 def valid_completion_receipt() -> dict[str, object]:
     return {
         "schema": "ember-01-completion-receipt-v1",
         "ok": True,
         "verified_at_utc": "2026-07-23T08:00:00+00:00",
-        "completed_goal_id": "EMBER-01",
         # Production verify_ember01_completion.py runs after the authority
         # selector has advanced to EMBER-02.  Its receipt records the active
         # goal/workstream while the schema names the completed EMBER-01 spine.
         "goal_id": "EMBER-02",
         "workstream_id": "EMBER-02A",
         "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-        "certificate_legs": {str(index): "RESOLVED_TRUE" for index in range(1, 10)},
+        "certificate_legs": {
+            str(index): "resolved-true" for index in range(1, 10)
+        },
         "leg_detail": {},
         "leg_summary": {
             "resolved_true": [str(index) for index in range(1, 10)],
@@ -188,7 +220,8 @@ def valid_completion_receipt() -> dict[str, object]:
             "status_before": "",
         },
         "selection": {
-            "goal_id": "EMBER-02",
+            "selected_goal_suffix": "EMBER-GOAL-GRAPH.json",
+            "selector_sha256": "c" * 64,
             "unchanged_during_verification": True,
         },
         "authority_certificate": {"ok": True},
@@ -591,7 +624,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     paths,
                     lambda receipt: receipt.__setitem__("goal_id", "EMBER-01"),
                 ),
-                "completed/active authority identity",
+                "active authority identity",
                 SHA,
             ),
             "wrong active workstream": (
@@ -601,17 +634,17 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         "workstream_id", "EMBER-02B"
                     ),
                 ),
-                "completed/active authority identity",
+                "active authority identity",
                 SHA,
             ),
-            "wrong completed goal": (
+            "invented completed goal field": (
                 lambda paths: _rewrite_completion(
                     paths,
                     lambda receipt: receipt.__setitem__(
                         "completed_goal_id", "EMBER-00"
                     ),
                 ),
-                "completed/active authority identity",
+                "completion receipt schema keys mismatch",
                 SHA,
             ),
             "missing active workstream": (
@@ -626,7 +659,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 lambda paths: _rewrite_completion(
                     paths,
                     lambda receipt: receipt["selection"].__setitem__(
-                        "goal_id", "EMBER-01"
+                        "selected_goal_suffix", "ember-01-goal.md"
                     ),
                 ),
                 "selection integrity",
