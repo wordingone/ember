@@ -1621,7 +1621,7 @@ describe("process-entry -> session-init production wiring (PR948 round-9 repair)
     await main({
       argv:                  ["node", "ember", "-p", "hello"],
       loadOwnedIdentityFn:   () => ownedIdentity,
-      handshakeEmberdFn:     async () => {},
+      handshakeEmberLabFn:     async () => {},
       ensureOwnedServerFn:   async () => ({ outcome: "spawned", port: 29777, handle: { process: { pid: 1 }, port: 29777, kill: () => {} } as never }),
       verifyOwnedEndpointFn: async () => {},
       headlessRunner: async (_prompt, _io, _tools, _opts, deps) => {

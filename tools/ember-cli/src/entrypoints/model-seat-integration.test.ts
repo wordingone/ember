@@ -256,7 +256,7 @@ describe("process entry model-seat enforcement", () => {
             trustedVerifierRegistryPath: "C:\\owned\\trusted.json",
           },
         }),
-        handshakeEmberdFn: async () => { startupOrder.push("handshake"); },
+        handshakeEmberLabFn: async () => { startupOrder.push("handshake"); },
         ensureOwnedServerFn: async (ownedIdentity) => {
           expect(ownedIdentity.launch?.mode).toBe("INTERACTIVE");
           startupOrder.push("supervise");
@@ -350,7 +350,7 @@ describe("process entry model-seat enforcement", () => {
             tokenizerPath: "C:\\owned\\tokenizer.json",
           },
         }),
-        handshakeEmberdFn: async () => {},
+        handshakeEmberLabFn: async () => {},
         ensureOwnedServerFn: async () => {
           ensureCalls += 1;
           return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never };
@@ -425,7 +425,7 @@ describe("process entry model-seat enforcement", () => {
     expect(process.env["EMBER_MODEL_SEAT"]).toBe("REFERENCE_ONLY");
   });
 
-  it("requires emberd handshake before owned server supervision", async () => {
+  it("requires ember-lab handshake before owned server supervision", async () => {
     let exitCode = -1;
     let ensureCalls = 0;
     let initCalls = 0;
@@ -440,7 +440,7 @@ describe("process entry model-seat enforcement", () => {
           modelConfigSha256: "b".repeat(64), modelName: "ember-owned:" + "d".repeat(12), serverSourceSha256: "a".repeat(64), tokenizerSha256: "c".repeat(64),
           launch: { authorityKind: "ADMISSION", checkpointDir: "C:\\owned\\checkpoint", mode: "INTERACTIVE", modelConfigPath: "C:\\owned\\model-config.json", pythonExecutable: "python-owned", runManifestPath: "C:\\owned\\run.json", serverPath: "C:\\repo\\serve_owned_openai.py", tokenizerPath: "C:\\owned\\tokenizer.json", trustedVerifierRegistryPath: "C:\\owned\\trusted.json" },
         }),
-        handshakeEmberdFn: async () => { throw new Error("ping unavailable"); },
+        handshakeEmberLabFn: async () => { throw new Error("ping unavailable"); },
         ensureOwnedServerFn: async () => { ensureCalls += 1; return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never }; },
         initFn: async () => { initCalls += 1; },
         getLoopDepsFn: fakeDeps,
@@ -453,6 +453,6 @@ describe("process entry model-seat enforcement", () => {
     expect(exitCode).toBe(1);
     expect(ensureCalls).toBe(0);
     expect(initCalls).toBe(0);
-    expect(stderr).toContain("emberd handshake");
+    expect(stderr).toContain("ember-lab handshake");
   });
 });
