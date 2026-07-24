@@ -205,6 +205,8 @@ def run_governed_vertical(
     *,
     seed: int,
     artifact_root: Path,
+    config_path: Path,
+    tokenizer_path: Path,
     write_budget_bytes: int,
     gpu_vram_gib: float,
     max_records: int | None = None,
@@ -226,7 +228,23 @@ def run_governed_vertical(
         or gpu_vram_gib <= 0
     ):
         raise ValueError("governed vertical launch requires a nonnegative seed and positive finite resource budgets")
-    config_path = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
+    root = Path(__file__).resolve().parents[2]
+    expected_config_path = (root / "configs" / "ember-restart-3b.json").resolve(
+        strict=True
+    )
+    expected_tokenizer_path = (root / "tokenizer" / "tokenizer.json").resolve(
+        strict=True
+    )
+    try:
+        config_path = config_path.resolve(strict=True)
+        tokenizer_path = tokenizer_path.resolve(strict=True)
+    except OSError as error:
+        raise ValueError("governed vertical config/tokenizer binding is unavailable") from error
+    if (
+        config_path != expected_config_path
+        or tokenizer_path != expected_tokenizer_path
+    ):
+        raise ValueError("governed vertical config/tokenizer binding is not canonical")
     checkpoint_bound = governed_vertical_checkpoint_byte_bound(config_path)
     if checkpoint_bound > write_budget_bytes:
         raise ValueError("governed vertical checkpoint publication bound exceeds the declared write budget")
@@ -237,6 +255,7 @@ def run_governed_vertical(
     authority = {
         **startup_authority,
         "config_sha256": _sha256(config_path),
+        "tokenizer_sha256": _sha256(tokenizer_path),
         "runner_source_sha256": _sha256(Path(__file__).resolve()),
         "checkpoint_byte_bound": checkpoint_bound,
         "write_budget_bytes": write_budget_bytes,
@@ -2239,6 +2258,9 @@ def run(
         expected_canonical_authority = {
             **canonical_disk_budget_runner_authority(),
             "config_sha256": _sha256(config_path),
+            "tokenizer_sha256": _sha256(
+                root / "tokenizer" / "tokenizer.json"
+            ),
             "runner_source_sha256": _sha256(Path(__file__).resolve()),
             "checkpoint_byte_bound": governed_vertical_checkpoint_byte_bound(config_path),
             "write_budget_bytes": write_budget_bytes,
@@ -2802,6 +2824,8 @@ def main() -> None:
     governed_vertical = subparsers.add_parser("governed-vertical")
     governed_vertical.add_argument("--seed", type=int, required=True)
     governed_vertical.add_argument("--artifact-root", type=Path, required=True)
+    governed_vertical.add_argument("--config", type=Path, required=True)
+    governed_vertical.add_argument("--tokenizer", type=Path, required=True)
     governed_vertical.add_argument("--write-budget-bytes", type=int, required=True)
     governed_vertical.add_argument("--gpu-vram-gib", type=float, required=True)
     governed_vertical.add_argument("--max-records", type=int)
@@ -2858,7 +2882,7 @@ def main() -> None:
     semantic.add_argument("--resume-optimizer-transition-registry-sha256")
     args = parser.parse_args()
     if args.command == "governed-vertical":
-        result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, gpu_vram_gib=args.gpu_vram_gib, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
+        result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, config_path=args.config, tokenizer_path=args.tokenizer, write_budget_bytes=args.write_budget_bytes, gpu_vram_gib=args.gpu_vram_gib, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
     elif args.command == "governed-vertical-preflight":
         result = preflight_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records)
     elif args.command == "specialist":
