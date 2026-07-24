@@ -564,13 +564,16 @@ def _derive_checkpoint_storage_projection(
         raise ValueError(
             "checkpoint storage projection requires one post-update optimizer state"
         )
-    # Admission cannot recover the runtime parameter-to-route identity from a
-    # generic optimizer state_dict without trusting candidate-authored labels.
-    # Use the closed worst-case bound: every initialized byte may belong to the
-    # one active specialist and therefore exist once per specialist at full
-    # four-expert realization.
-    projected_optimizer = optimizer_actual * (
-        1 if model.active_expert == "shared" else len(EXPERT_NAMES)
+    if sum(routed_optimizer.values()) != optimizer_actual:
+        raise ValueError(
+            "checkpoint optimizer route projection does not cover serialized state"
+        )
+    # Shared optimizer state is initialized once and retained once.  Only the
+    # active specialist state is projected across the four specialist routes.
+    projected_optimizer = (
+        optimizer_actual
+        if model.active_expert == "shared"
+        else routed_optimizer["shared"] + active_bytes * len(EXPERT_NAMES)
     )
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
     projected_checkpoint_floor = (
@@ -744,10 +747,15 @@ def _validate_checkpoint_storage_projection(
     optimizer_actual = materialized[
         "optimizer_state_tensor_storage_lower_bound_bytes"
     ]
-    expected_projected_optimizer = optimizer_actual * (
-        1 if active_expert == "shared" else len(EXPERT_NAMES)
+    expected_projected_optimizer = (
+        optimizer_actual
+        if active_expert == "shared"
+        else route_bounds["shared"]
+        + route_bounds[active_expert] * len(EXPERT_NAMES)
     )
     if (
+        sum(route_bounds.values()) != optimizer_actual
+        or
         shard_bounds["optimizer-state.pt"] != optimizer_actual
         or materialized[
             "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
@@ -807,8 +815,17 @@ def _measure_candidate_storage_projection(
         del payload
 
     optimizer_actual = measured["optimizer-state.pt"]
-    projected_optimizer = optimizer_actual * (
-        1 if projection["active_expert"] == "shared" else len(EXPERT_NAMES)
+    route_bounds = projection["optimizer_state_tensor_storage_by_route_bytes"]
+    if sum(route_bounds.values()) != optimizer_actual:
+        raise ValueError(
+            "checkpoint independent tensor-storage measurement does not match "
+            "optimizer route projection"
+        )
+    projected_optimizer = (
+        optimizer_actual
+        if projection["active_expert"] == "shared"
+        else route_bounds["shared"]
+        + route_bounds[projection["active_expert"]] * len(EXPERT_NAMES)
     )
     projected_checkpoint = (
         sum(measured.values()) - optimizer_actual + projected_optimizer

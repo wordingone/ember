@@ -1183,11 +1183,19 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertGreater(
             projection["optimizer_state_tensor_storage_lower_bound_bytes"], 0
         )
-        self.assertGreaterEqual(
+        routed_optimizer = projection[
+            "optimizer_state_tensor_storage_by_route_bytes"
+        ]
+        self.assertEqual(
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+            routed_optimizer["shared"] + routed_optimizer["vision"],
+        )
+        self.assertEqual(
             projection[
                 "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
             ],
-            projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+            routed_optimizer["shared"]
+            + routed_optimizer["vision"] * len(checkpoint_artifacts.EXPERT_NAMES),
         )
         self.assertGreaterEqual(
             projection[
