@@ -165,6 +165,27 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(optimizer.state, {})
         self.assertTrue(all(torch.equal(value, before[name]) for name, value in model.state_dict().items()))
 
+    def test_forward_oom_happens_before_optimizer_mutation_or_checkpoint_handoff(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=67)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+        checkpoints: list[object] = []
+
+        def exhausted_forward(*_args: object, **_kwargs: object) -> torch.Tensor:
+            raise torch.OutOfMemoryError("injected forward OOM")
+
+        model.forward = exhausted_forward  # type: ignore[method-assign]
+        with self.assertRaisesRegex(torch.OutOfMemoryError, "forward OOM"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda _step, state: checkpoints.append(state), require_complete_coverage=False,
+            )
+        self.assertEqual(checkpoints, [])
+        self.assertEqual(optimizer.state, {})
+        self.assertTrue(all(torch.equal(value, before[name]) for name, value in model.state_dict().items()))
+
     def test_post_update_interruption_carries_the_exact_resume_cursor(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=62)
