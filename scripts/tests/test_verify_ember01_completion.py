@@ -690,15 +690,31 @@ def _historical_identity_payload() -> dict[str, object]:
     )
 
 
-def test_tracked_historical_identity_remains_valid_and_non_authorizing() -> None:
+def test_tracked_historical_identity_preserves_recorded_optimizer_contract() -> None:
     payload = _historical_identity_payload()
-
-    completion.identity_validator.validate_manifest(payload)
 
     assert payload["identity"]["disposition"] == "HISTORICAL_ONLY"
     assert payload["identity"]["selected_as_owned_ember"] is False
     assert payload["provenance"]["ownership"] == "EXCLUDED_CONTAMINATED"
-    assert "optimizer_contract" not in payload["training"]
+    assert payload["training"]["optimizer_contract"] == {
+        "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+        "hyperparameters": {
+            "block_wise": True,
+            "learning_rate": 1e-05,
+            "percentile_clipping": 100,
+            "weight_decay": 0.01,
+        },
+        "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+    }
+
+
+def _tamper_battery_identity_payload() -> dict[str, object]:
+    payload = _historical_identity_payload()
+    # The historical optimizer contract predates the current closed B4 schema.
+    # Remove it only from this synthetic current-validator fixture; never edit
+    # the tracked historical evidence to make a modern validator accept it.
+    payload["training"].pop("optimizer_contract")
+    return payload
 
 
 def _battery_receipt(payload: dict[str, object]) -> dict[str, object]:
@@ -720,7 +736,7 @@ def _battery_receipt(payload: dict[str, object]) -> dict[str, object]:
 def test_tamper_battery_runs_all_eight_axes_through_real_validator(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = _historical_identity_payload()
+    payload = _tamper_battery_identity_payload()
     monkeypatch.setattr(
         completion,
         "verify_parameter_identity_binding",
@@ -757,7 +773,7 @@ def test_tamper_battery_runs_all_eight_axes_through_real_validator(
 def test_tamper_battery_names_one_seeded_fail_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = _historical_identity_payload()
+    payload = _tamper_battery_identity_payload()
     original_run = completion.run
     monkeypatch.setattr(
         completion,

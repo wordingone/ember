@@ -133,6 +133,16 @@
       "status": "unresolved",
       "reason": "shared model and optimizer bytes were co-serialized and no optimizer-only digest was preserved"
     },
+    "optimizer_contract": {
+      "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+      "hyperparameters": {
+        "block_wise": true,
+        "learning_rate": 1e-05,
+        "percentile_clipping": 100,
+        "weight_decay": 0.01
+      },
+      "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1"
+    },
     "numerics": {
       "profile": "bfloat16-parameters-and-gradients-with-paged-8bit-optimizer",
       "sha256": {
