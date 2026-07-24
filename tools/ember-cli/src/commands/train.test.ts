@@ -42,6 +42,9 @@ const ARTIFACT_ROOT = "B:\\artifacts\\run";
 const DISPATCH_MANIFEST_SHA256 = "d".repeat(64);
 const EMBERD_BINARY_SHA256 = "f".repeat(64);
 const EMBERD_SOURCE_SHA256 = "1".repeat(64);
+const CERTIFICATE_BYTES = Buffer.from('{"certificate":"owned-canary"}\n');
+const DECLARATION_LEDGER_BYTES = Buffer.from('{"decision":"approved"}\n');
+const RUN_SPEC_BYTES = Buffer.from('{"run_id":"owned-3b-canary-test"}\n');
 
 function validPreflightReceiptBytes(): Buffer {
   return Buffer.from(JSON.stringify({
@@ -75,7 +78,15 @@ function validExecutionReceiptBytes(): Buffer {
   return Buffer.from(JSON.stringify({
     schema_version: "ember-certified-train-execution-v1",
     certificate_sha256: "a".repeat(64),
-    run_spec_sha256: "b".repeat(64),
+    certificate_file_sha256: createHash("sha256")
+      .update(CERTIFICATE_BYTES)
+      .digest("hex"),
+    declaration_ledger_sha256: createHash("sha256")
+      .update(DECLARATION_LEDGER_BYTES)
+      .digest("hex"),
+    run_spec_sha256: createHash("sha256")
+      .update(RUN_SPEC_BYTES)
+      .digest("hex"),
     public_master_sha: "c".repeat(40),
     argv: ["B:\\custody\\runtime\\emberd.exe", "dispatch"],
     exit_code: 0,
@@ -177,6 +188,11 @@ function makeExecuteCmd(
   certified: LaunchPacketRunResult,
   executionReceiptBytes: Buffer = validExecutionReceiptBytes(),
   preflightReceiptBytes: Buffer = validPreflightReceiptBytes(),
+  authorityBytes: Record<string, Buffer> = {
+    "c.json": CERTIFICATE_BYTES,
+    "d.jsonl": DECLARATION_LEDGER_BYTES,
+    "r.json": RUN_SPEC_BYTES,
+  },
 ) {
   const preflightSpawns: RecordedSpawn[] = [];
   const certifiedSpawns: RecordedSpawn[] = [];
@@ -196,6 +212,7 @@ function makeExecuteCmd(
     readExecutionReceipt: (path) => {
       if (path === EXECUTION_RECEIPT_PATH) return executionReceiptBytes;
       if (path === PREFLIGHT_RECEIPT_PATH) return preflightReceiptBytes;
+      if (path in authorityBytes) return authorityBytes[path]!;
       throw new Error("unexpected receipt path");
     },
   });
@@ -455,6 +472,12 @@ describe("train command", () => {
         "d.jsonl",
         "--run-spec",
         "r.json",
+        "--expected-certificate-file-sha256",
+        createHash("sha256").update(CERTIFICATE_BYTES).digest("hex"),
+        "--expected-declaration-ledger-sha256",
+        createHash("sha256").update(DECLARATION_LEDGER_BYTES).digest("hex"),
+        "--expected-run-spec-sha256",
+        createHash("sha256").update(RUN_SPEC_BYTES).digest("hex"),
       ]);
       expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(
         REAL_LAUNCH_COMMAND,
@@ -556,6 +579,93 @@ describe("train command", () => {
 
       expect(result?.exitCode).toBe(1);
       expect(result?.message).toContain("does not bind");
+    });
+
+    it("refuses an execution receipt bound to a different certificate", async () => {
+      const receipt = JSON.parse(
+        validExecutionReceiptBytes().toString("utf8"),
+      ) as Record<string, unknown>;
+      receipt["certificate_file_sha256"] = "9".repeat(64);
+      const bytes = Buffer.from(JSON.stringify(receipt));
+      const { cmd } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: JSON.stringify({
+            outcome: "DISPATCHED",
+            execution_receipt: EXECUTION_RECEIPT_PATH,
+            execution_receipt_sha256: createHash("sha256")
+              .update(bytes)
+              .digest("hex"),
+            artifact_root: ARTIFACT_ROOT,
+          }),
+        },
+        bytes,
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("certificate");
+    });
+
+    it("refuses an execution receipt bound to a different run specification", async () => {
+      const receipt = JSON.parse(
+        validExecutionReceiptBytes().toString("utf8"),
+      ) as Record<string, unknown>;
+      receipt["run_spec_sha256"] = "9".repeat(64);
+      const bytes = Buffer.from(JSON.stringify(receipt));
+      const { cmd } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: JSON.stringify({
+            outcome: "DISPATCHED",
+            execution_receipt: EXECUTION_RECEIPT_PATH,
+            execution_receipt_sha256: createHash("sha256")
+              .update(bytes)
+              .digest("hex"),
+            artifact_root: ARTIFACT_ROOT,
+          }),
+        },
+        bytes,
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("run specification");
+    });
+
+    it("refuses an execution receipt when the supplied declaration ledger bytes drift", async () => {
+      const { cmd } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: validCertifiedResponse(),
+        },
+        validExecutionReceiptBytes(),
+        validPreflightReceiptBytes(),
+        {
+          "c.json": CERTIFICATE_BYTES,
+          "d.jsonl": Buffer.from('{"decision":"substituted"}\n'),
+          "r.json": RUN_SPEC_BYTES,
+        },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("declaration ledger");
     });
 
     it("preflight failure prevents certified consumer execution", async () => {
