@@ -1,0 +1,51 @@
+name: python-tests
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+# Runs the repo's python test suites (tests/, scripts/tests/) on every push and
+# PR to master. Excludes the one file that hard-requires CUDA hardware
+# (tests/ember_restart_model/test_checkpoint_artifacts.py asserts
+# torch.cuda.is_available()) — no ubuntu-latest runner has a GPU. Everything
+# else in the suite is CPU-portable (verified: no operator-machine hardcoded
+# paths, no other unconditional cuda requirement, at time of authoring).
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          # CPU-only torch wheel — no CUDA on this runner, and the suite has
+          # no requirement for GPU acceleration to exercise correctness.
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install pytest jsonschema cryptography tokenizers pyyaml numpy
+
+      - name: Run scripts/tests
+        run: |
+          set -euo pipefail
+          timeout 1200 python -m pytest scripts/tests -x -q
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          # test_checkpoint_artifacts.py hard-asserts torch.cuda.is_available();
+          # no GPU on this runner, so it is excluded rather than xfailed.
+          timeout 1200 python -m pytest tests -x -q \
+            --ignore=tests/ember_restart_model/test_checkpoint_artifacts.py

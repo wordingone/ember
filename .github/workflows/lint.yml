@@ -1,0 +1,35 @@
+name: lint
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+# Python lint via ruff. No ruff config is checked in (no pyproject.toml /
+# ruff.toml at repo root at time of authoring) so this runs ruff's defaults;
+# tools/ember-cli/src/package.json defines no lint script and no linter
+# devDependency, so no JS/TS lint step is added rather than introducing a new
+# tool the repo hasn't configured — typecheck already runs in
+# ember-cli-tests.yml.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: ruff check
+        run: ruff check .

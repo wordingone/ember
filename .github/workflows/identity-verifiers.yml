@@ -1,0 +1,41 @@
+name: identity-verifiers
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+# Proves the identity/custody CERT tooling itself stays green: the
+# validate_identity unit tests, the c0 failure-class ledger verifier against
+# the checked-in ledger artifact, and the custody test suite.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pytest jsonschema cryptography
+
+      - name: validate_identity unit tests
+        run: timeout 300 python -m pytest tests/ember_01_identity/test_validate_identity.py -x -q
+
+      - name: verify_c0_failure_class_ledger against checked-in ledger
+        run: timeout 60 python scripts/ember_01_custody/verify_c0_failure_class_ledger.py
+
+      - name: ember_01_custody test suite
+        run: timeout 300 python -m pytest tests/ember_01_custody -x -q
