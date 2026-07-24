@@ -64,6 +64,7 @@ fn emberd_source_sha256() -> String {
         root.join("src").join("lib.rs"),
         root.join("src").join("rpc.rs"),
         root.join("src").join("main.rs"),
+        root.join("src").join("host_probe.rs"),
         root.join("Cargo.toml"),
         root.join("Cargo.lock"),
     ];
@@ -844,6 +845,54 @@ fn governed_canary_refuses_gpu_process_identity_drift_before_spawn() {
     ));
     assert_eq!(probes, 2);
     assert_eq!(daemon.job_state("governed-canary-drift").unwrap(), None);
+    assert_eq!(
+        daemon
+            .lease_owner("gpu:GPU-EMBER-CANARY:bounded-canary")
+            .unwrap(),
+        None
+    );
+}
+
+#[test]
+fn governed_canary_refuses_execution_file_replacement_after_final_host_probe() {
+    let root = sandbox("governed-canary-execution-file-replacement");
+    let job_id = "governed-canary-execution-file-replacement";
+    let manifest = write_governed_canary_manifest(&root, job_id);
+    let payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let governed_runner = PathBuf::from(
+        payload["canary_scope"]["governed_runner"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let mut probe_count = 0;
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || {
+            probe_count += 1;
+            if probe_count == 2 {
+                fs::write(&governed_runner, b"# replaced after admission\n").unwrap();
+            }
+            Ok(canary_snapshot(Vec::new()))
+        },
+    );
+    if result.is_ok() {
+        daemon.stop_job(job_id).unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::DispatchBindingMismatch { .. })
+    ));
+    assert_eq!(probe_count, 2);
+    assert_eq!(daemon.job_state(job_id).unwrap(), None);
     assert_eq!(
         daemon
             .lease_owner("gpu:GPU-EMBER-CANARY:bounded-canary")

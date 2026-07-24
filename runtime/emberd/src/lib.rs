@@ -2110,6 +2110,28 @@ impl Daemon {
         )? {
             return Ok(existing);
         }
+        if let Err(error) = verify_dispatch_execution_files(&manifest, &program, &verified_bindings)
+        {
+            let refusal = json!({
+                "schema_version": "emberd-dispatch-preflight-v1",
+                "result": "REFUSED_EXECUTION_BINDING_DRIFT",
+                "job_id": &job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": &manifest_sha256,
+                "governed_canary": canary_scope.as_ref().map(|_| json!({
+                    "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
+                    "before": &canary_before,
+                    "before_spawn": &canary_before_spawn,
+                })),
+            });
+            let receipt_result = atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?);
+            let rollback_result =
+                self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
+            receipt_result?;
+            rollback_result?;
+            return Err(error);
+        }
         let mut spec = JobSpec::new(
             job_id.clone(),
             program.to_string_lossy().into_owned(),
@@ -3477,6 +3499,40 @@ fn verify_dispatch_binding(binding: &DispatchFileBinding) -> Result<PathBuf> {
     verify_dispatch_file(&binding.path, &binding.sha256)
 }
 
+fn verify_dispatch_execution_files(
+    manifest: &DispatchManifest,
+    expected_program: &Path,
+    expected_bindings: &[(PathBuf, String, DispatchBindingKind)],
+) -> Result<()> {
+    let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
+    if program != expected_program {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "dispatch program canonical identity changed before execution".into(),
+        });
+    }
+    if manifest.bindings.len() != expected_bindings.len() {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "dispatch binding set changed before execution".into(),
+        });
+    }
+    for (binding, (expected_path, expected_sha256, expected_kind)) in
+        manifest.bindings.iter().zip(expected_bindings)
+    {
+        if binding.sha256 != *expected_sha256 || binding.kind != *expected_kind {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "dispatch binding identity changed before execution".into(),
+            });
+        }
+        let canonical = verify_dispatch_binding(binding)?;
+        if canonical != *expected_path {
+            return Err(EmberdError::InvalidDispatchManifest {
+                detail: "dispatch binding canonical path changed before execution".into(),
+            });
+        }
+    }
+    Ok(())
+}
+
 fn read_verified_json_snapshot(path: &Path, expected_sha256: &str) -> Result<Value> {
     let bytes = fs::read(path)?;
     let actual = hash_bytes(&bytes);
@@ -3915,10 +3971,11 @@ fn available_free_vram_bytes() -> Result<u64> {
         })
 }
 fn emberd_source_hash() -> String {
-    let sources: [&[u8]; 5] = [
+    let sources: [&[u8]; 6] = [
         include_bytes!("lib.rs"),
         include_bytes!("rpc.rs"),
         include_bytes!("main.rs"),
+        include_bytes!("host_probe.rs"),
         include_bytes!("../Cargo.toml"),
         include_bytes!("../Cargo.lock"),
     ];
@@ -5174,6 +5231,24 @@ fn terminate_process(pid: u32) -> Result<()> {
 #[cfg(test)]
 mod dispatch_binding_snapshot_tests {
     use super::*;
+
+    #[test]
+    fn emberd_source_identity_includes_host_probe_module() {
+        let sources: [&[u8]; 6] = [
+            include_bytes!("lib.rs"),
+            include_bytes!("rpc.rs"),
+            include_bytes!("main.rs"),
+            include_bytes!("host_probe.rs"),
+            include_bytes!("../Cargo.toml"),
+            include_bytes!("../Cargo.lock"),
+        ];
+        let mut digest = Sha256::new();
+        for source in sources {
+            digest.update((source.len() as u64).to_le_bytes());
+            digest.update(source);
+        }
+        assert_eq!(emberd_source_hash(), format!("{:x}", digest.finalize()));
+    }
 
     #[test]
     fn registry_replacement_between_initial_hash_and_parse_is_rejected() {
