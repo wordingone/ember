@@ -32,6 +32,39 @@ from train import run_launch as live_run_launch
 from verify_capability_record import expected_receipt
 
 
+_DETERMINISTIC_DISK_RUNNER_BOOTSTRAP = """
+import importlib.util
+import pathlib
+import sys
+
+runner_path = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("disk_budget_runner_under_test", runner_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.current_free_gib = lambda: {"C": 500.0, "B": 500.0}
+sys.argv = [str(runner_path), *sys.argv[2:]]
+raise SystemExit(module.main())
+"""
+
+
+def _run_disk_budget_runner_with_deterministic_capacity(
+    runner: Path,
+    arguments: list[str],
+    **kwargs: object,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            _DETERMINISTIC_DISK_RUNNER_BOOTSTRAP,
+            str(runner),
+            *arguments,
+        ],
+        **kwargs,
+    )
+
+
 class RunnerPreflightTests(unittest.TestCase):
     def test_specialist_execution_slice_binds_exact_contiguous_records_and_tokens(self) -> None:
         records = [
@@ -1712,9 +1745,10 @@ class RunnerPreflightTests(unittest.TestCase):
             )
             receipt = custody / "runner-receipt.json"
             with patch.dict(os.environ, {"GOVERNED_LAUNCH_CAPTURE": str(capture)}, clear=False):
-                completed = subprocess.run(
+                completed = _run_disk_budget_runner_with_deterministic_capacity(
+                    runner,
                     [
-                        sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
+                        "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
                         "--receipt", str(receipt), "--write-root", f"custody={custody}",
                         "--write-root", f"artifacts={artifact_root}", "--", sys.executable, str(child),
                     ],
@@ -1849,9 +1883,10 @@ class RunnerPreflightTests(unittest.TestCase):
             custody.mkdir()
             artifact_root.mkdir()
             receipt = custody / "runner-receipt.json"
-            completed = subprocess.run(
+            completed = _run_disk_budget_runner_with_deterministic_capacity(
+                runner,
                 [
-                    sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
+                    "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
                     "--receipt", str(receipt), "--write-root", f"custody={custody}", "--write-root", f"artifacts={artifact_root}", "--",
                     sys.executable, str(child), "governed-vertical-preflight", "--seed", "83", "--artifact-root", str(artifact_root),
                     "--write-budget-bytes", str(12 * 1024**3), "--max-records", "1",
@@ -1869,8 +1904,9 @@ class RunnerPreflightTests(unittest.TestCase):
             custody = Path(directory) / "custody"
             custody.mkdir()
             receipt = custody / "runner-receipt.json"
-            completed = subprocess.run(
-                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "pass"],
+            completed = _run_disk_budget_runner_with_deterministic_capacity(
+                runner,
+                ["--max-c-write-gib", "0", "--max-b-write-gib", "0.01", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "pass"],
                 text=True, capture_output=True, check=False,
             )
             payload = json.loads(receipt.read_text(encoding="utf-8"))
@@ -1900,8 +1936,9 @@ class RunnerPreflightTests(unittest.TestCase):
             custody.mkdir()
             receipt = custody / "runner-receipt.json"
             child_file = custody / "child.bin"
-            completed = subprocess.run(
-                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.0001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{child_file}', 'wb').write(b'x' * 60000)"],
+            completed = _run_disk_budget_runner_with_deterministic_capacity(
+                runner,
+                ["--max-c-write-gib", "0", "--max-b-write-gib", "0.0001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{child_file}', 'wb').write(b'x' * 60000)"],
                 text=True, capture_output=True, check=False,
             )
             payload = json.loads(receipt.read_text(encoding="utf-8"))
