@@ -1024,6 +1024,18 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             receipt = json.loads(execution_receipt.read_text(encoding="utf-8"))
             self.assertEqual(receipt["exit_code"], 0)
             self.assertEqual(receipt["argv"], argv)
+            self.assertEqual(
+                receipt["certificate_file_sha256"],
+                sha256_bytes(paths["certificate"].read_bytes()),
+            )
+            self.assertEqual(
+                receipt["declaration_ledger_sha256"],
+                sha256_bytes(paths["ledger"].read_bytes()),
+            )
+            self.assertEqual(
+                receipt["run_spec_sha256"],
+                sha256_bytes(paths["run_spec"].read_bytes()),
+            )
             self.assertFalse(
                 any(receipt["claim_scope"].values()),
                 "execution receipt must not claim capability or admission",
@@ -1040,6 +1052,44 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 response["execution_receipt_sha256"],
                 sha256_bytes(execution_receipt.read_bytes()),
             )
+
+    def test_authority_hash_binds_consumed_certificate_bytes_when_path_mutates(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            consumed_certificate_sha256 = sha256_bytes(
+                paths["certificate"].read_bytes()
+            )
+            validate_completion = module._validate_completion_receipt
+
+            def validate_then_mutate(*args, **kwargs):
+                result = validate_completion(*args, **kwargs)
+                paths["certificate"].write_text("{}\n", encoding="utf-8")
+                return result
+
+            with (
+                mock.patch.object(
+                    module,
+                    "read_current_master",
+                    return_value=SHA,
+                ),
+                mock.patch.object(
+                    module,
+                    "_validate_completion_receipt",
+                    side_effect=validate_then_mutate,
+                ),
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+
+        self.assertEqual(
+            launch.certificate_file_sha256,
+            consumed_certificate_sha256,
+        )
 
     def test_dispatch_manifest_binds_single_canary_authority_chain(self) -> None:
         module = load_module()
@@ -1326,8 +1376,13 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
         self,
     ) -> None:
         module = load_module()
+        launch = mock.Mock(
+            certificate_file_sha256="1" * 64,
+            declaration_ledger_sha256="2" * 64,
+            run_spec_sha256="3" * 64,
+        )
         with mock.patch.object(
-            module, "validate_certified_request", return_value=object()
+            module, "validate_certified_request", return_value=launch
         ), mock.patch.object(
             module, "execute_validated_launch", return_value=17
         ), mock.patch.object(
@@ -1345,9 +1400,34 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     "ledger.jsonl",
                     "--run-spec",
                     "run.json",
+                    "--expected-certificate-file-sha256",
+                    "1" * 64,
+                    "--expected-declaration-ledger-sha256",
+                    "2" * 64,
+                    "--expected-run-spec-sha256",
+                    "3" * 64,
                 ]
             )
         self.assertEqual(exit_code, 17)
+
+    def test_expected_authority_hash_mismatch_refuses_before_dispatch(
+        self,
+    ) -> None:
+        module = load_module()
+        launch = mock.Mock(
+            certificate_file_sha256="1" * 64,
+            declaration_ledger_sha256="2" * 64,
+            run_spec_sha256="3" * 64,
+        )
+        with self.assertRaisesRegex(
+            ValueError, "certificate bytes changed before certified dispatch"
+        ):
+            module._require_expected_authority_hashes(
+                launch,
+                expected_certificate_file_sha256="9" * 64,
+                expected_declaration_ledger_sha256="2" * 64,
+                expected_run_spec_sha256="3" * 64,
+            )
 
     def test_execute_dispatches_only_through_bound_emberd_and_verifies_receipt(
         self,
@@ -1532,6 +1612,12 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     str(paths["ledger"]),
                     "--run-spec",
                     str(paths["run_spec"]),
+                    "--expected-certificate-file-sha256",
+                    sha256_bytes(paths["certificate"].read_bytes()),
+                    "--expected-declaration-ledger-sha256",
+                    sha256_bytes(paths["ledger"].read_bytes()),
+                    "--expected-run-spec-sha256",
+                    sha256_bytes(paths["run_spec"].read_bytes()),
                 ],
                 check=False,
                 capture_output=True,

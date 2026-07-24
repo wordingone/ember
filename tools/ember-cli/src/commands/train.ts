@@ -197,7 +197,7 @@ interface TrainCommandDeps {
   scriptPath?: string;
   /** certified_train_launch.py path override. */
   certifiedLaunchScriptPath?: string;
-  /** Read exact certified receipt bytes; injectable so tests never touch disk. */
+  /** Read exact authority and receipt bytes; injectable so tests never touch disk. */
   readExecutionReceipt?: (path: string) => Buffer;
 }
 
@@ -211,6 +211,8 @@ interface TrainArgs {
 const CERTIFIED_EXECUTION_RECEIPT_FIELDS = [
   "schema_version",
   "certificate_sha256",
+  "certificate_file_sha256",
+  "declaration_ledger_sha256",
   "run_spec_sha256",
   "public_master_sha",
   "argv",
@@ -258,6 +260,11 @@ const CERTIFIED_EXECUTION_CLAIM_FIELDS = [
 function _verifyCertifiedExecutionReceipt(
   execution: Record<string, unknown>,
   readReceipt: (path: string) => Buffer,
+  expectedAuthoritySha256: {
+    certificateFile: string;
+    declarationLedger: string;
+    runSpec: string;
+  },
 ): { path: string; artifactRoot: string } {
   const path = execution["execution_receipt"];
   const expectedSha256 = execution["execution_receipt_sha256"];
@@ -299,9 +306,16 @@ function _verifyCertifiedExecutionReceipt(
   if (
     receipt["schema_version"] !== "ember-certified-train-execution-v1" ||
     receipt["exit_code"] !== 0 ||
-    receipt["artifact_root"] !== artifactRoot
+    receipt["artifact_root"] !== artifactRoot ||
+    receipt["certificate_file_sha256"] !==
+      expectedAuthoritySha256.certificateFile ||
+    receipt["declaration_ledger_sha256"] !==
+      expectedAuthoritySha256.declarationLedger ||
+    receipt["run_spec_sha256"] !== expectedAuthoritySha256.runSpec
   ) {
-    throw new Error("certified execution receipt does not bind the Emberd dispatch");
+    throw new Error(
+      "certified execution receipt does not bind the supplied certificate, declaration ledger, run specification, and Emberd dispatch",
+    );
   }
   const dispatchJobId = receipt["dispatch_job_id"];
   const dispatchPid = receipt["dispatch_pid"];
@@ -557,6 +571,31 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       }
 
       if (trainArgs.execute) {
+        let expectedAuthoritySha256: {
+          certificateFile: string;
+          declarationLedger: string;
+          runSpec: string;
+        };
+        try {
+          expectedAuthoritySha256 = {
+            certificateFile: createHash("sha256")
+              .update(readExecutionReceipt(trainArgs.certificate!))
+              .digest("hex"),
+            declarationLedger: createHash("sha256")
+              .update(readExecutionReceipt(trainArgs.declarationLedger!))
+              .digest("hex"),
+            runSpec: createHash("sha256")
+              .update(readExecutionReceipt(trainArgs.runSpec!))
+              .digest("hex"),
+          };
+        } catch {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified authority bytes could not be read before dispatch; no training process was authorized.",
+            exitCode: 1,
+          };
+        }
         let certifiedResult: LaunchPacketRunResult;
         try {
           certifiedResult = runCertifiedLaunch(pythonBin, [
@@ -569,6 +608,12 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             trainArgs.declarationLedger!,
             "--run-spec",
             trainArgs.runSpec!,
+            "--expected-certificate-file-sha256",
+            expectedAuthoritySha256.certificateFile,
+            "--expected-declaration-ledger-sha256",
+            expectedAuthoritySha256.declarationLedger,
+            "--expected-run-spec-sha256",
+            expectedAuthoritySha256.runSpec,
           ]);
         } catch {
           return {
@@ -609,6 +654,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           verifiedExecution = _verifyCertifiedExecutionReceipt(
             execution,
             readExecutionReceipt,
+            expectedAuthoritySha256,
           );
         } catch (error) {
           return {

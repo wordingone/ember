@@ -207,6 +207,8 @@ EMBERD_PREFLIGHT_RECEIPT_KEYS = {
 
 class ValidatedLaunch(NamedTuple):
     certificate_sha256: str
+    certificate_file_sha256: str
+    declaration_ledger_sha256: str
     run_spec_sha256: str
     public_master_sha: str
     run_id: str
@@ -305,12 +307,20 @@ def _require_git_sha(value: object, label: str) -> str:
     return value
 
 
-def _load_json(path: pathlib.Path, label: str) -> dict[str, Any]:
+def _load_json_snapshot(
+    path: pathlib.Path, label: str
+) -> tuple[dict[str, Any], bytes]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        payload = path.read_bytes()
+        value = json.loads(payload.decode("utf-8", errors="strict"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError(f"{label} is unreadable or invalid JSON") from error
-    return _require_object(value, label)
+    return _require_object(value, label), payload
+
+
+def _load_json(path: pathlib.Path, label: str) -> dict[str, Any]:
+    value, _payload = _load_json_snapshot(path, label)
+    return value
 
 
 def _load_bound_json(
@@ -421,9 +431,12 @@ def _validate_certificate_evidence(
     return resolved_paths
 
 
-def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
+def _load_ledger_snapshot(
+    path: pathlib.Path,
+) -> tuple[list[dict[str, Any]], bytes]:
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        payload = path.read_bytes()
+        lines = payload.decode("utf-8", errors="strict").splitlines()
     except (OSError, UnicodeError) as error:
         raise ValueError("declaration ledger is unreadable") from error
     rows: list[dict[str, Any]] = []
@@ -450,6 +463,11 @@ def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
             f"declaration ledger row {index} certificate_sha256",
         )
         rows.append(row)
+    return rows, payload
+
+
+def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
+    rows, _payload = _load_ledger_snapshot(path)
     return rows
 
 
@@ -644,7 +662,9 @@ def validate_certified_request(
     declaration_ledger_path = pathlib.Path(declaration_ledger_path)
     run_spec_path = pathlib.Path(run_spec_path)
 
-    certificate = _load_json(certificate_path, "certificate")
+    certificate, certificate_payload = _load_json_snapshot(
+        certificate_path, "certificate"
+    )
     _require_keys(certificate, CERTIFICATE_KEYS, "certificate")
     if certificate["schema_version"] != "ember-spine-certified-declaration-v1":
         raise ValueError("certificate schema")
@@ -664,7 +684,9 @@ def validate_certified_request(
     )
 
     certificate_sha256 = _canonical_sha256(certificate)
-    ledger_rows = _load_ledger(declaration_ledger_path)
+    ledger_rows, declaration_ledger_payload = _load_ledger_snapshot(
+        declaration_ledger_path
+    )
     if not any(
         row["certificate_sha256"] == certificate_sha256 for row in ledger_rows
     ):
@@ -693,7 +715,9 @@ def validate_certified_request(
     if certificate["public_master_sha"] != current_master:
         raise ValueError("certificate does not bind current public master")
 
-    run_spec = _load_json(run_spec_path, "run spec")
+    run_spec, run_spec_payload = _load_json_snapshot(
+        run_spec_path, "run spec"
+    )
     _require_keys(run_spec, RUN_SPEC_KEYS, "run spec")
     if run_spec["schema_version"] != "ember-certified-train-run-v1":
         raise ValueError("run spec schema")
@@ -765,7 +789,13 @@ def validate_certified_request(
 
     return ValidatedLaunch(
         certificate_sha256=certificate_sha256,
-        run_spec_sha256=_file_sha256(run_spec_path, "run spec"),
+        certificate_file_sha256=hashlib.sha256(
+            certificate_payload
+        ).hexdigest(),
+        declaration_ledger_sha256=hashlib.sha256(
+            declaration_ledger_payload
+        ).hexdigest(),
+        run_spec_sha256=hashlib.sha256(run_spec_payload).hexdigest(),
         public_master_sha=current_master,
         run_id=run_spec["run_id"],
         artifact_root=pathlib.Path(requested_scope["artifact_root"]),
@@ -1134,6 +1164,8 @@ def _write_execution_receipt(
     receipt = {
         "schema_version": "ember-certified-train-execution-v1",
         "certificate_sha256": launch.certificate_sha256,
+        "certificate_file_sha256": launch.certificate_file_sha256,
+        "declaration_ledger_sha256": launch.declaration_ledger_sha256,
         "run_spec_sha256": launch.run_spec_sha256,
         "public_master_sha": launch.public_master_sha,
         "argv": argv,
@@ -1341,6 +1373,39 @@ def certify_and_execute(
     return execute_validated_launch(repo_root, launch, run_process=run_process)
 
 
+def _require_expected_authority_hashes(
+    launch: ValidatedLaunch,
+    *,
+    expected_certificate_file_sha256: str,
+    expected_declaration_ledger_sha256: str,
+    expected_run_spec_sha256: str,
+) -> None:
+    expected = {
+        "certificate": _require_sha256(
+            expected_certificate_file_sha256,
+            "expected certificate file",
+        ),
+        "declaration ledger": _require_sha256(
+            expected_declaration_ledger_sha256,
+            "expected declaration ledger",
+        ),
+        "run specification": _require_sha256(
+            expected_run_spec_sha256,
+            "expected run specification",
+        ),
+    }
+    actual = {
+        "certificate": launch.certificate_file_sha256,
+        "declaration ledger": launch.declaration_ledger_sha256,
+        "run specification": launch.run_spec_sha256,
+    }
+    for label in expected:
+        if actual[label] != expected[label]:
+            raise ValueError(
+                f"{label} bytes changed before certified dispatch"
+            )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate a declared Ember canary certificate and execute its fixed runner."
@@ -1351,6 +1416,13 @@ def main(argv: list[str] | None = None) -> int:
         "--declaration-ledger", required=True, type=pathlib.Path
     )
     parser.add_argument("--run-spec", required=True, type=pathlib.Path)
+    parser.add_argument(
+        "--expected-certificate-file-sha256", required=True
+    )
+    parser.add_argument(
+        "--expected-declaration-ledger-sha256", required=True
+    )
+    parser.add_argument("--expected-run-spec-sha256", required=True)
     arguments = parser.parse_args(argv)
     try:
         launch = validate_certified_request(
@@ -1358,6 +1430,16 @@ def main(argv: list[str] | None = None) -> int:
             arguments.certificate,
             arguments.declaration_ledger,
             arguments.run_spec,
+        )
+        _require_expected_authority_hashes(
+            launch,
+            expected_certificate_file_sha256=(
+                arguments.expected_certificate_file_sha256
+            ),
+            expected_declaration_ledger_sha256=(
+                arguments.expected_declaration_ledger_sha256
+            ),
+            expected_run_spec_sha256=arguments.expected_run_spec_sha256,
         )
         exit_code = execute_validated_launch(arguments.root, launch)
     except ValueError as error:
