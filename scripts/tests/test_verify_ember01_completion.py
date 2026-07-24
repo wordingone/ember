@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 import base64
 from pathlib import Path
@@ -809,9 +810,20 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None
         ).read_text(encoding="utf-8")
     )
 
+    implementation_commit = receipt["implementation_commit"]
     for binding in receipt["implementation"].values():
-        path = REPO_ROOT / binding["path"]
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == binding["sha256"]
+        historical_bytes = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(REPO_ROOT),
+                "show",
+                f"{implementation_commit}:{binding['path']}",
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
+        assert hashlib.sha256(historical_bytes).hexdigest() == binding["sha256"]
     identity_binding = receipt["subject"]["identity_manifest"]
     assert (
         hashlib.sha256((REPO_ROOT / identity_binding["path"]).read_bytes()).hexdigest()
