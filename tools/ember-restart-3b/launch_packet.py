@@ -501,8 +501,137 @@ def preflight_recovery(cfg: dict, root: Path) -> dict:
     }
 
 
+def _identity_manifests_dir(root: Path) -> Path:
+    return root / "scripts" / "ember_01_identity"
+
+
+def _ensure_identity_validator_on_path(root: Path) -> None:
+    identity_dir = str(_identity_manifests_dir(root))
+    if identity_dir not in sys.path:
+        sys.path.insert(0, identity_dir)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = __import__("hashlib").sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
+    """cond3 GAP-3: the 3B launch path must round-trip the declared model/
+    experiment identity manifest (training.identity_manifest) through the
+    REAL cond3 validator (scripts/ember_01_identity/validate_identity.py's
+    validate_manifest -- imported, never reimplemented) before naming a
+    launch command, and cross-check the manifest's architecture/tokenizer/
+    corpus identity against the ACTUAL bytes this packet is about to launch.
+    Fails closed on: an absent config field/manifest file, a manifest that
+    fails validate_identity's own schema/structural checks, or any
+    architecture/tokenizer/corpus hash drift between the declared identity
+    and the real on-disk launch inputs.
+
+    checkpoint.byte_sha256 is NOT cross-checked against real bytes: this is
+    the clean-genesis PRE-training launch preflight and no checkpoint exists
+    yet (disposition OWNED_CANDIDATE, not OWNED_ADMITTED -- validate_identity
+    itself only binds checkpoint bytes for OWNED_ADMITTED manifests, which
+    this one correctly is not).
+    """
+    try:
+        manifest_rel = _dig(cfg, "training", "identity_manifest")
+    except MissingField as e:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"config missing field required for identity preflight: {e}"}
+
+    manifest_path = root / manifest_rel
+    if not manifest_path.is_file():
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"declared identity manifest is absent: {manifest_rel}"}
+
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity manifest {manifest_rel!r} unreadable: {type(e).__name__}: {e}"}
+
+    try:
+        _ensure_identity_validator_on_path(root)
+        from validate_identity import IdentityValidationError, validate_manifest  # noqa: PLC0415
+    except Exception as e:  # noqa: BLE001 - fail closed on any import defect
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity validator unavailable: {type(e).__name__}: {e}"}
+
+    try:
+        validate_manifest(payload, require_resolved=False)
+    except IdentityValidationError as e:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity manifest failed validation: {e}"}
+    except Exception as e:  # noqa: BLE001 - fail closed on any other validator defect
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity validator error: {type(e).__name__}: {e}"}
+
+    # Cross-check the cert manifest's architecture/tokenizer/corpus identity
+    # against the REAL bytes this packet is about to launch. validate_manifest
+    # only checks hash SHAPE (looks like sha256); it has no notion of "the
+    # real config file" -- that binding is this preflight's job.
+    problems: list[str] = []
+
+    architecture_source = _dig(payload, "architecture", "source")
+    architecture_path = root / architecture_source
+    if not architecture_path.is_file():
+        problems.append(f"declared architecture source is absent: {architecture_source}")
+    else:
+        actual = _sha256_file(architecture_path)
+        declared = _dig(payload, "architecture", "sha256")
+        if actual != declared:
+            problems.append(
+                f"architecture.sha256 drift: manifest={declared} actual={actual}")
+
+    tokenizer_path = root / "tokenizer" / "tokenizer.json"
+    if not tokenizer_path.is_file():
+        problems.append(f"declared tokenizer artifact is absent: {tokenizer_path}")
+    else:
+        actual = _sha256_file(tokenizer_path)
+        declared = _dig(payload, "tokenizer", "sha256")
+        if actual != declared:
+            problems.append(
+                f"tokenizer.sha256 drift: manifest={declared} actual={actual}")
+
+    corpus_id = _dig(payload, "data", "corpus_id")
+    corpus_path = root / "data" / "ember-restart-3b" / f"{corpus_id}.json"
+    if not corpus_path.is_file():
+        problems.append(f"declared corpus artifact is absent: {corpus_path}")
+    else:
+        actual = _sha256_file(corpus_path)
+        declared = _dig(payload, "data", "sha256")
+        if actual != declared:
+            problems.append(
+                f"data.sha256 drift: manifest={declared} actual={actual}")
+
+    disposition = _dig(payload, "identity", "disposition")
+    if disposition == "OWNED_ADMITTED":
+        problems.append(
+            "identity manifest declares OWNED_ADMITTED at a clean-genesis "
+            "pre-training launch -- no checkpoint exists to admit")
+
+    if problems:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": "; ".join(problems)}
+
+    return {
+        "name": "identity-manifest",
+        "status": "pass",
+        "manifest": manifest_rel,
+        "disposition": disposition,
+        "architecture_sha256": _dig(payload, "architecture", "sha256"),
+        "tokenizer_sha256": _dig(payload, "tokenizer", "sha256"),
+        "corpus_sha256": _dig(payload, "data", "sha256"),
+    }
+
+
 IMPLEMENTED = [preflight_storage, preflight_resource, preflight_no_sub_3b,
-               preflight_recovery, preflight_clean_genesis]
+               preflight_recovery, preflight_clean_genesis,
+               preflight_identity_manifest]
 DEFERRED: list = []
 
 
@@ -563,7 +692,7 @@ def run(config_path: Path) -> int:
     for fn in DEFERRED:
         rows.append(fn(cfg, root))
 
-    # All 5 preflights are now IMPLEMENTED (DEFERRED is empty); any "fail" or
+    # All 6 preflights are now IMPLEMENTED (DEFERRED is empty); any "fail" or
     # "deferred" row blocks the packet -- no name-list special-casing needed.
     implemented_fail = any(r["status"] == "fail" for r in rows)
     any_deferred = any(r["status"] == "deferred" for r in rows)

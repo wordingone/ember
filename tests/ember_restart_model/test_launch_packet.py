@@ -231,17 +231,145 @@ def test_clean_genesis_fail_closed_borrowed_loading_in_source(cfg, root, tmp_pat
     assert "load_state_dict" in r["reason"]
 
 
+# ---- identity-manifest (cond3 GAP-3) ---------------------------------------
+# The launch path must round-trip the declared model/experiment identity
+# manifest through the REAL cond3 validator (validate_identity.validate_manifest)
+# and cross-check its architecture/tokenizer/corpus hashes against the actual
+# on-disk launch inputs -- fail-closed on absent/mismatched identity.
+
+def test_identity_manifest_pass_real_config(cfg, root):
+    r = lp.preflight_identity_manifest(cfg, root)
+    assert r["status"] == "pass", r
+    assert r["disposition"] == "OWNED_CANDIDATE"
+    assert len(r["architecture_sha256"]) == 64
+    assert len(r["tokenizer_sha256"]) == 64
+    assert len(r["corpus_sha256"]) == 64
+
+
+def test_identity_manifest_fail_closed_missing_config_field(cfg, root):
+    broken = copy.deepcopy(cfg)
+    del broken["training"]["identity_manifest"]
+    r = lp.preflight_identity_manifest(broken, root)
+    assert r["status"] == "fail"
+    assert "missing" in r["reason"].lower()
+
+
+def test_identity_manifest_fail_closed_absent_manifest(cfg, root, tmp_path):
+    # A repo root with no manifest file at the declared path -> absent identity,
+    # never a silent pass.
+    empty_root = tmp_path
+    r = lp.preflight_identity_manifest(cfg, empty_root)
+    assert r["status"] == "fail"
+    assert "absent" in r["reason"].lower()
+
+
+def test_identity_manifest_fail_closed_schema_invalid(cfg, root, tmp_path):
+    # A manifest that fails validate_identity's own schema/structural checks
+    # (missing required top-level keys) must fail closed, never silently pass.
+    manifest_rel = cfg["training"]["identity_manifest"]
+    real_manifest = (root / manifest_rel).read_text(encoding="utf-8")
+    broken_payload = json.loads(real_manifest)
+    del broken_payload["provenance"]
+    dest = tmp_path / manifest_rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(broken_payload), encoding="utf-8")
+    # Mirror the real architecture/tokenizer/corpus files so we reach the
+    # validator call (not an earlier absent-file fail).
+    import shutil
+    for rel in (
+        "configs/ember-restart-3b.json",
+        "tokenizer/tokenizer.json",
+        f"data/ember-restart-3b/{broken_payload['data']['corpus_id']}.json",
+    ):
+        src = root / rel
+        d = tmp_path / rel
+        d.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, d)
+    r = lp.preflight_identity_manifest(cfg, tmp_path)
+    assert r["status"] == "fail"
+    assert "failed validation" in r["reason"]
+
+
+def test_identity_manifest_fail_closed_architecture_hash_drift(cfg, root, tmp_path):
+    # Tamper the declared architecture.sha256 so it no longer matches the real
+    # config bytes -> must fail closed as a drift/mismatch, never silently pass.
+    manifest_rel = cfg["training"]["identity_manifest"]
+    payload = json.loads((root / manifest_rel).read_text(encoding="utf-8"))
+    payload["architecture"]["sha256"] = "0" * 64
+    dest = tmp_path / manifest_rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(payload), encoding="utf-8")
+    import shutil
+    for rel in (
+        "configs/ember-restart-3b.json",
+        "tokenizer/tokenizer.json",
+        f"data/ember-restart-3b/{payload['data']['corpus_id']}.json",
+    ):
+        src = root / rel
+        d = tmp_path / rel
+        d.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, d)
+    r = lp.preflight_identity_manifest(cfg, tmp_path)
+    assert r["status"] == "fail"
+    assert "architecture.sha256 drift" in r["reason"]
+
+
+def test_identity_manifest_fail_closed_tokenizer_hash_drift(cfg, root, tmp_path):
+    manifest_rel = cfg["training"]["identity_manifest"]
+    payload = json.loads((root / manifest_rel).read_text(encoding="utf-8"))
+    payload["tokenizer"]["sha256"] = "1" * 64
+    dest = tmp_path / manifest_rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(payload), encoding="utf-8")
+    import shutil
+    for rel in (
+        "configs/ember-restart-3b.json",
+        "tokenizer/tokenizer.json",
+        f"data/ember-restart-3b/{payload['data']['corpus_id']}.json",
+    ):
+        src = root / rel
+        d = tmp_path / rel
+        d.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, d)
+    r = lp.preflight_identity_manifest(cfg, tmp_path)
+    assert r["status"] == "fail"
+    assert "tokenizer.sha256 drift" in r["reason"]
+
+
+def test_identity_manifest_fail_closed_owned_admitted_at_pretrain_launch(cfg, root, tmp_path):
+    # OWNED_ADMITTED would claim a checkpoint has been admitted -- impossible
+    # at a clean-genesis pre-training launch. Must fail closed.
+    manifest_rel = cfg["training"]["identity_manifest"]
+    payload = json.loads((root / manifest_rel).read_text(encoding="utf-8"))
+    payload["identity"]["disposition"] = "OWNED_ADMITTED"
+    dest = tmp_path / manifest_rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(payload), encoding="utf-8")
+    import shutil
+    for rel in (
+        "configs/ember-restart-3b.json",
+        "tokenizer/tokenizer.json",
+        f"data/ember-restart-3b/{payload['data']['corpus_id']}.json",
+    ):
+        src = root / rel
+        d = tmp_path / rel
+        d.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, d)
+    r = lp.preflight_identity_manifest(cfg, tmp_path)
+    assert r["status"] == "fail"
+
+
 # ---- overall exit ------------------------------------------------------------
 
-def test_all_five_implemented_no_deferred(cfg, root):
+def test_all_six_implemented_no_deferred(cfg, root):
     assert lp.DEFERRED == []
-    assert len(lp.IMPLEMENTED) == 5
+    assert len(lp.IMPLEMENTED) == 6
 
 
-def test_run_exits_zero_when_all_five_pass(root):
-    # Real config: all 5 preflights (storage, resource, no-sub-3B, recovery,
-    # clean-genesis) are implemented and pass -> packet exits 0 and prints
-    # the real EMBER-02 command.
+def test_run_exits_zero_when_all_six_pass(root):
+    # Real config: all 6 preflights (storage, resource, no-sub-3B, recovery,
+    # clean-genesis, identity-manifest) are implemented and pass -> packet
+    # exits 0 and prints the real EMBER-02 command.
     rc = lp.run(_CONFIG_PATH)
     assert rc == 0
 
