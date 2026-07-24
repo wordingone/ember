@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
     "tools/repo-guard.sh",
     "tools/check_line_endings.py",
+    "tools/check_encoding.py",
     "tools/check_names_hashed.py",
     "scripts/verify_authority_conservation.py",
     "INVARIANT.md",
@@ -180,6 +181,53 @@ def test_red_absolute_path_doubled_json_escape():
         cleanup(tmp)
 
 # ---------------------------------------------------------------------------
+# RED: non-UTF-8 tracked text file (issue #247) -- UTF-16LE-with-BOM blind
+# spot that the git-grep-based [names]/[paths]/[path-frags] scans below it
+# would otherwise silently pass straight through.
+# ---------------------------------------------------------------------------
+def test_red_utf16_encoding_blind_spot():
+    tmp = make_fixture("fix/selftest-red-encoding-utf16")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        # Ordinary prose, UTF-16LE with a BOM -- not itself a denylist hit,
+        # this proves the [encoding] check fires on the ENCODING alone, not
+        # on content the [names] scan would also have caught independently.
+        (tmp / "scripts" / "note.py").write_text(
+            "# just an ordinary comment, nothing sensitive\nx = 1\n",
+            encoding="utf-16",  # emits a BOM by default in Python
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "scripts/note.py" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# RED: single-byte non-UTF-8 sequence (issue #247 scope extension) -- the
+# cp1252-shaped defect class distinct from a UTF-16/32 BOM.
+# ---------------------------------------------------------------------------
+def test_red_single_byte_encoding_defect():
+    tmp = make_fixture("fix/selftest-red-encoding-cp1252")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        path = tmp / "scripts" / "note2.py"
+        # b"\x97" (a cp1252 em-dash) is not valid as a UTF-8 continuation or
+        # lead byte on its own -- an ordinary ASCII comment with exactly one
+        # such stray byte, same shape as the live test_c*.py defect.
+        path.write_bytes(b"# an em\x97dash snuck in here\nx = 1\n")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "scripts/note2.py" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
 # GREEN: clean fixture, no denylist needed at all
 # ---------------------------------------------------------------------------
 def test_green_clean_fixture():
@@ -315,11 +363,35 @@ def test_ci_fail_closed_empty_hashed_denylist():
         cleanup(tmp)
 
 
+# ---------------------------------------------------------------------------
+# GREEN: a genuinely binary tracked file (by extension) is never flagged by
+# [encoding] -- the check targets the git-grep blind spot in TEXT files,
+# never byte-pinned binary artifacts.
+# ---------------------------------------------------------------------------
+def test_green_binary_file_not_flagged():
+    tmp = make_fixture("fix/selftest-green-binary")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        # Arbitrary non-UTF-8 bytes, but a recognized binary extension --
+        # must never be scanned as text.
+        (tmp / "scripts" / "weights.bin").write_bytes(bytes(range(256)))
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected exit 0, got {rc}\n{out}"
+        assert "repo-guard: PASS" in out, out
+        assert "ok   [encoding]" in out, out
+    finally:
+        cleanup(tmp)
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
     test_red_absolute_path_doubled_json_escape,
+    test_red_utf16_encoding_blind_spot,
+    test_red_single_byte_encoding_defect,
     test_green_clean_fixture,
+    test_green_binary_file_not_flagged,
     test_green_hashed_denylist_no_match,
     test_ci_fail_closed_no_denylist,
     test_ci_fail_closed_empty_hashed_denylist,
