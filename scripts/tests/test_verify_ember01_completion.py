@@ -690,6 +690,17 @@ def _historical_identity_payload() -> dict[str, object]:
     )
 
 
+def test_tracked_historical_identity_remains_valid_and_non_authorizing() -> None:
+    payload = _historical_identity_payload()
+
+    completion.identity_validator.validate_manifest(payload)
+
+    assert payload["identity"]["disposition"] == "HISTORICAL_ONLY"
+    assert payload["identity"]["selected_as_owned_ember"] is False
+    assert payload["provenance"]["ownership"] == "EXCLUDED_CONTAMINATED"
+    assert "optimizer_contract" not in payload["training"]
+
+
 def _battery_receipt(payload: dict[str, object]) -> dict[str, object]:
     checkpoint = payload["checkpoint"]
     parameters = payload["parameters"]
@@ -825,8 +836,19 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None
         ).stdout
         assert hashlib.sha256(historical_bytes).hexdigest() == binding["sha256"]
     identity_binding = receipt["subject"]["identity_manifest"]
+    historical_identity_bytes = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO_ROOT),
+            "show",
+            f"{implementation_commit}:{identity_binding['path']}",
+        ],
+        check=True,
+        capture_output=True,
+    ).stdout
     assert (
-        hashlib.sha256((REPO_ROOT / identity_binding["path"]).read_bytes()).hexdigest()
+        hashlib.sha256(historical_identity_bytes).hexdigest()
         == identity_binding["sha256"]
     )
     assert receipt["leg4"]["axis_count"] == 8
