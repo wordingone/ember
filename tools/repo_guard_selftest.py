@@ -228,6 +228,31 @@ def test_red_single_byte_encoding_defect():
 
 
 # ---------------------------------------------------------------------------
+# RED: UTF-32 with a BOM (issue #247 thread amendment -- the acceptance
+# clause names UTF-16LE/UTF-32 as DISTINCT required fixtures, not just one
+# multi-byte encoding standing in for both; a strict-UTF-8 decode rejects a
+# UTF-32 stream for the same reason it rejects UTF-16 -- 3 NUL bytes out of
+# every 4 for plain ASCII content -- but that equivalence was asserted, not
+# receipted, until this fixture existed).
+# ---------------------------------------------------------------------------
+def test_red_utf32_encoding_blind_spot():
+    tmp = make_fixture("fix/selftest-red-encoding-utf32")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "note3.py").write_text(
+            "# just an ordinary comment, nothing sensitive\nx = 1\n",
+            encoding="utf-32",  # emits a BOM by default in Python
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "scripts/note3.py" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
 # GREEN: clean fixture, no denylist needed at all
 # ---------------------------------------------------------------------------
 def test_green_clean_fixture():
@@ -389,6 +414,7 @@ ALL_TESTS = [
     test_red_absolute_path_single_separator,
     test_red_absolute_path_doubled_json_escape,
     test_red_utf16_encoding_blind_spot,
+    test_red_utf32_encoding_blind_spot,
     test_red_single_byte_encoding_defect,
     test_green_clean_fixture,
     test_green_binary_file_not_flagged,
