@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
 #[cfg(not(windows))]
 use std::process::{Command, Stdio};
@@ -294,6 +294,7 @@ pub struct JobSpec {
     env: BTreeMap<String, String>,
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
+    execution_file_guards: Vec<Arc<fs::File>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -694,6 +695,7 @@ impl JobSpec {
             env: BTreeMap::new(),
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
+            execution_file_guards: Vec::new(),
         }
     }
     pub fn with_env<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
@@ -708,6 +710,11 @@ impl JobSpec {
 
     pub fn with_maximum_job_memory_bytes(mut self, maximum_job_memory_bytes: u64) -> Self {
         self.maximum_job_memory_bytes = Some(maximum_job_memory_bytes);
+        self
+    }
+
+    fn with_execution_file_guards(mut self, guards: Vec<Arc<fs::File>>) -> Self {
+        self.execution_file_guards = guards;
         self
     }
 }
@@ -747,6 +754,7 @@ struct LiveProcess {
     process: OwnedHandle,
     _stdout_log_guard: OwnedHandle,
     _stderr_log_guard: OwnedHandle,
+    _execution_file_guards: Vec<Arc<fs::File>>,
     pid: u32,
 }
 
@@ -2110,35 +2118,41 @@ impl Daemon {
         )? {
             return Ok(existing);
         }
-        if let Err(error) = verify_dispatch_execution_files(&manifest, &program, &verified_bindings)
-        {
-            let refusal = json!({
-                "schema_version": "emberd-dispatch-preflight-v1",
-                "result": "REFUSED_EXECUTION_BINDING_DRIFT",
-                "job_id": &job_id,
-                "source_commit": &manifest.source_commit,
-                "observed_at_ms": observed_at_ms,
-                "dispatch_manifest_sha256": &manifest_sha256,
-                "governed_canary": canary_scope.as_ref().map(|_| json!({
-                    "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
-                    "before": &canary_before,
-                    "before_spawn": &canary_before_spawn,
-                })),
-            });
-            let receipt_result = atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?);
-            let rollback_result =
-                self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
-            receipt_result?;
-            rollback_result?;
-            return Err(error);
-        }
+        let execution_file_guards =
+            match verify_and_lock_dispatch_execution_files(&manifest, &program, &verified_bindings)
+            {
+                Ok(guards) => guards,
+                Err(error) => {
+                    let refusal = json!({
+                        "schema_version": "emberd-dispatch-preflight-v1",
+                        "result": "REFUSED_EXECUTION_BINDING_DRIFT",
+                        "job_id": &job_id,
+                        "source_commit": &manifest.source_commit,
+                        "observed_at_ms": observed_at_ms,
+                        "dispatch_manifest_sha256": &manifest_sha256,
+                        "governed_canary": canary_scope.as_ref().map(|_| json!({
+                            "process_exclusivity": "EMPTY_PRESPAWN_GPU_COMPUTE_SET_REQUIRED",
+                            "before": &canary_before,
+                            "before_spawn": &canary_before_spawn,
+                        })),
+                    });
+                    let receipt_result =
+                        atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?);
+                    let rollback_result =
+                        self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
+                    receipt_result?;
+                    rollback_result?;
+                    return Err(error);
+                }
+            };
         let mut spec = JobSpec::new(
             job_id.clone(),
             program.to_string_lossy().into_owned(),
             manifest.args,
             resource_lease.clone(),
         )
-        .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes);
+        .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes)
+        .with_execution_file_guards(execution_file_guards);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
@@ -3499,17 +3513,20 @@ fn verify_dispatch_binding(binding: &DispatchFileBinding) -> Result<PathBuf> {
     verify_dispatch_file(&binding.path, &binding.sha256)
 }
 
-fn verify_dispatch_execution_files(
+fn verify_and_lock_dispatch_execution_files(
     manifest: &DispatchManifest,
     expected_program: &Path,
     expected_bindings: &[(PathBuf, String, DispatchBindingKind)],
-) -> Result<()> {
-    let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
+) -> Result<Vec<Arc<fs::File>>> {
+    let mut guards = Vec::with_capacity(manifest.bindings.len() + 1);
+    let (program, guard) =
+        open_verified_dispatch_file_guard(&manifest.program.path, &manifest.program.sha256)?;
     if program != expected_program {
         return Err(EmberdError::InvalidDispatchManifest {
             detail: "dispatch program canonical identity changed before execution".into(),
         });
     }
+    guards.push(guard);
     if manifest.bindings.len() != expected_bindings.len() {
         return Err(EmberdError::InvalidDispatchManifest {
             detail: "dispatch binding set changed before execution".into(),
@@ -3523,14 +3540,58 @@ fn verify_dispatch_execution_files(
                 detail: "dispatch binding identity changed before execution".into(),
             });
         }
-        let canonical = verify_dispatch_binding(binding)?;
+        let (canonical, guard) = open_verified_dispatch_file_guard(&binding.path, &binding.sha256)?;
         if canonical != *expected_path {
             return Err(EmberdError::InvalidDispatchManifest {
                 detail: "dispatch binding canonical path changed before execution".into(),
             });
         }
+        guards.push(guard);
     }
-    Ok(())
+    Ok(guards)
+}
+
+fn open_verified_dispatch_file_guard(
+    path: &Path,
+    expected_sha256: &str,
+) -> Result<(PathBuf, Arc<fs::File>)> {
+    validate_hash(expected_sha256).map_err(|_| EmberdError::InvalidDispatchManifest {
+        detail: format!(
+            "dispatch execution binding has an invalid SHA-256: {}",
+            path.display()
+        ),
+    })?;
+    let canonical =
+        fs::canonicalize(path).map_err(|error| EmberdError::InvalidDispatchManifest {
+            detail: format!(
+                "dispatch execution binding is unavailable at {}: {error}",
+                path.display()
+            ),
+        })?;
+    #[cfg(windows)]
+    let file = {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ_RIGHT: u32 = 0x0000_0001;
+        OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ_RIGHT)
+            .open(&canonical)?
+    };
+    #[cfg(not(windows))]
+    let file = OpenOptions::new().read(true).open(&canonical)?;
+    let mut reader = file.try_clone()?;
+    reader.rewind()?;
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes)?;
+    let actual = hash_bytes(&bytes);
+    if actual != expected_sha256 {
+        return Err(EmberdError::DispatchBindingMismatch {
+            path: canonical,
+            expected: expected_sha256.to_string(),
+            actual,
+        });
+    }
+    Ok((canonical, Arc::new(file)))
 }
 
 fn read_verified_json_snapshot(path: &Path, expected_sha256: &str) -> Result<Value> {
@@ -4217,6 +4278,7 @@ struct SpawnedProcess {
     thread: OwnedHandle,
     stdout_log_guard: OwnedHandle,
     stderr_log_guard: OwnedHandle,
+    execution_file_guards: Vec<Arc<fs::File>>,
     pid: u32,
     main_thread_id: u32,
     identity: ProcessIdentity,
@@ -4255,6 +4317,7 @@ impl SpawnedProcess {
             process: self.process,
             _stdout_log_guard: self.stdout_log_guard,
             _stderr_log_guard: self.stderr_log_guard,
+            _execution_file_guards: self.execution_file_guards,
             pid: self.pid,
         }
     }
@@ -4264,14 +4327,14 @@ impl SpawnedProcess {
 struct ProcThreadAttributeList {
     _storage: Vec<usize>,
     _jobs: Box<[windows_sys::Win32::Foundation::HANDLE; 1]>,
-    _handles: Box<[windows_sys::Win32::Foundation::HANDLE; 3]>,
+    _handles: Box<[windows_sys::Win32::Foundation::HANDLE]>,
     ptr: windows_sys::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST,
 }
 #[cfg(windows)]
 impl ProcThreadAttributeList {
     fn for_job_and_handles(
         job: windows_sys::Win32::Foundation::HANDLE,
-        handles: [windows_sys::Win32::Foundation::HANDLE; 3],
+        handles: Vec<windows_sys::Win32::Foundation::HANDLE>,
     ) -> Result<Self> {
         use windows_sys::Win32::System::Threading::{
             InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
@@ -4304,7 +4367,7 @@ impl ProcThreadAttributeList {
             unsafe { windows_sys::Win32::System::Threading::DeleteProcThreadAttributeList(ptr) };
             return Err(std::io::Error::last_os_error().into());
         }
-        let handles = Box::new(handles);
+        let handles = handles.into_boxed_slice();
         if unsafe {
             UpdateProcThreadAttribute(
                 ptr,
@@ -4512,14 +4575,25 @@ fn spawn_managed(
             return Err(error);
         }
     };
-    let attributes = match ProcThreadAttributeList::for_job_and_handles(
-        job,
-        [
-            inherited_stdin.raw(),
-            inherited_stdout.raw(),
-            inherited_stderr.raw(),
-        ],
-    ) {
+    let inherited_execution_files = match spec
+        .execution_file_guards
+        .iter()
+        .map(|file| duplicate_inheritable_file_handle(file))
+        .collect::<Result<Vec<_>>>()
+    {
+        Ok(handles) => handles,
+        Err(error) => {
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+            return Err(error);
+        }
+    };
+    let mut inherited_handles = vec![
+        inherited_stdin.raw(),
+        inherited_stdout.raw(),
+        inherited_stderr.raw(),
+    ];
+    inherited_handles.extend(inherited_execution_files.iter().map(OwnedHandle::raw));
+    let attributes = match ProcThreadAttributeList::for_job_and_handles(job, inherited_handles) {
         Ok(attributes) => attributes,
         Err(error) => {
             unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
@@ -4607,6 +4681,7 @@ fn spawn_managed(
         thread: OwnedHandle(info.hThread),
         stdout_log_guard: inherited_stdout,
         stderr_log_guard: inherited_stderr,
+        execution_file_guards: spec.execution_file_guards.clone(),
         pid: info.dwProcessId,
         main_thread_id: info.dwThreadId,
         identity,
@@ -4928,6 +5003,10 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
         process: OwnedHandle(process),
         _stdout_log_guard: stdout_log_guard,
         _stderr_log_guard: stderr_log_guard,
+        // Governed launches duplicate the read-only file-lock handles into
+        // the child process, so a daemon adoption does not need to recreate
+        // parent-side guards to preserve execution-byte immutability.
+        _execution_file_guards: Vec::new(),
         pid: row.pid,
     })
 }
@@ -5126,6 +5205,7 @@ struct SpawnedProcess {
     child: Option<std::process::Child>,
     pid: u32,
     identity: ProcessIdentity,
+    execution_file_guards: Vec<Arc<fs::File>>,
 }
 #[cfg(not(windows))]
 impl SpawnedProcess {
@@ -5155,8 +5235,10 @@ impl SpawnedProcess {
         Ok(())
     }
     fn detach_reaper(mut self) {
+        let execution_file_guards = std::mem::take(&mut self.execution_file_guards);
         if let Some(mut child) = self.child.take() {
             std::thread::spawn(move || {
+                let _execution_file_guards = execution_file_guards;
                 let _ = child.wait();
             });
         }
@@ -5194,6 +5276,7 @@ fn spawn_managed(
         child: Some(child),
         pid,
         identity,
+        execution_file_guards: spec.execution_file_guards.clone(),
     })
 }
 

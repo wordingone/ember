@@ -902,6 +902,48 @@ fn governed_canary_refuses_execution_file_replacement_after_final_host_probe() {
 }
 
 #[test]
+fn governed_canary_holds_execution_files_immutable_until_job_exit() {
+    let root = sandbox("governed-canary-execution-file-lock-lifetime");
+    let job_id = "governed-canary-execution-file-lock-lifetime";
+    let manifest = write_governed_canary_manifest(&root, job_id);
+    let payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let governed_runner = PathBuf::from(
+        payload["canary_scope"]["governed_runner"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let original = fs::read(&governed_runner).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+
+    daemon
+        .dispatch_governed_canary_manifest_bytes_at_with_probes(
+            &bytes,
+            &digest,
+            &manifest,
+            10_001,
+            |_root| Ok(u64::MAX),
+            || Ok(24 * GIB),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            || Ok(canary_snapshot(Vec::new())),
+        )
+        .unwrap();
+
+    let replacement = b"# replacement must be refused while governed job is live\n";
+    assert!(
+        fs::write(&governed_runner, replacement).is_err(),
+        "verified execution bytes must remain write-locked for the live job"
+    );
+    assert_eq!(fs::read(&governed_runner).unwrap(), original);
+
+    daemon.stop_job(job_id).unwrap();
+    fs::write(&governed_runner, replacement)
+        .expect("execution-file lock must release after governed job exit");
+    assert_eq!(fs::read(&governed_runner).unwrap(), replacement);
+}
+
+#[test]
 fn governed_canary_acquires_the_gpu_lease_before_the_final_host_probe() {
     let root = sandbox("governed-canary-lease-before-final-probe");
     let job_id = "governed-canary-lease-before-final-probe";
