@@ -188,6 +188,65 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertFalse(torch.equal(model.token_embedding.weight.detach(), before))
         self.assertTrue(optimizer.state)
 
+    def test_progress_failure_after_update_cannot_precede_checkpoint_handoff(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=65)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        checkpoints: list[tuple[int, dict[str, object]]] = []
+
+        def fail_progress(_event: dict[str, object]) -> None:
+            raise RuntimeError("injected progress sink failure")
+
+        with self.assertRaisesRegex(RuntimeError, "progress sink failure"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda step, state: checkpoints.append((step, state)),
+                progress_callback=fail_progress, require_complete_coverage=False,
+            )
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0][0], 1)
+        self.assertEqual(
+            checkpoints[0][1]["data_cursor"],
+            {"shard": "owned-pretraining", "record_index": 1, "global_step": 1, "tokens_seen": 3},
+        )
+
+    def test_selection_progress_failure_after_update_cannot_precede_checkpoint_handoff(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        record = self._record(config, expert="vision", sample_id="selection-progress-failure")
+
+        class OneRecordSelection:
+            receipt = {"schema_version": SELECTION_RECEIPT_SCHEMA_VERSION, "capability": "image"}
+
+            def iter_from(self, _cursor: object = None):
+                yield record, {
+                    "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                    "selection_receipt_sha256": "a" * 64,
+                    "selection_rule_id": "image_scene_split_train_v1",
+                    "selected_ordinal": 1,
+                    "next_source_index": 1,
+                }
+
+        model = UnifiedDecoder(config, genesis_seed=66)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        checkpoints: list[tuple[int, dict[str, object]]] = []
+
+        def fail_progress(_event: dict[str, object]) -> None:
+            raise RuntimeError("injected selection progress sink failure")
+
+        with self.assertRaisesRegex(RuntimeError, "selection progress sink failure"):
+            pretrain.run_selection_pretraining_segment(
+                model=model, optimizer=optimizer, selection=OneRecordSelection(), config=config,
+                device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda step, state: checkpoints.append((step, state)),
+                progress_callback=fail_progress, require_complete_coverage=False,
+            )
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0][0], 1)
+        self.assertEqual(checkpoints[0][1]["data_cursor"]["global_step"], 1)
+        self.assertEqual(checkpoints[0][1]["data_cursor"]["tokens_seen"], 3)
+        self.assertEqual(checkpoints[0][1]["data_cursor"]["selection_cursor"]["next_source_index"], 1)
+
     def test_empty_and_exhausted_segments_never_replay_or_synthesize_records(self) -> None:
         with self.assertRaisesRegex(ValueError, "at least one owned record"):
             run_pretraining_segment(
