@@ -4,7 +4,7 @@
 
 #![cfg(windows)]
 
-use emberd::{probe_host_commit_capacity, MAX_DISPATCH_MANIFEST_BYTES};
+use ember_lab::{probe_host_commit_capacity, MAX_DISPATCH_MANIFEST_BYTES};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -21,7 +21,7 @@ fn sandbox(name: &str) -> PathBuf {
         .unwrap()
         .as_nanos();
     let path =
-        std::env::temp_dir().join(format!("emberd-rpc-{name}-{}-{nonce}", std::process::id()));
+        std::env::temp_dir().join(format!("ember-lab-rpc-{name}-{}-{nonce}", std::process::id()));
     fs::create_dir_all(&path).unwrap();
     path
 }
@@ -47,10 +47,10 @@ fn bun_binary() -> PathBuf {
         .trim();
     PathBuf::from(path)
 }
-fn emberd_binary() -> PathBuf {
-    option_env!("CARGO_BIN_EXE_emberd")
+fn ember_lab_binary() -> PathBuf {
+    option_env!("CARGO_BIN_EXE_ember-lab")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("missing-emberd-binary"))
+        .unwrap_or_else(|| PathBuf::from("missing-ember-lab-binary"))
 }
 
 struct ServerGuard(Child);
@@ -115,7 +115,7 @@ fn wait_for_exit(server: &mut ServerGuard) {
         }
         assert!(
             Instant::now() < deadline,
-            "emberd did not exit after shutdown"
+            "ember-lab did not exit after shutdown"
         );
         thread::sleep(Duration::from_millis(20));
     }
@@ -125,7 +125,7 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
     let custody = root.join("custody");
     fs::create_dir_all(&custody).unwrap();
     let mut env = BTreeMap::new();
-    env.insert("EMBERD_RPC_FIXTURE_CHILD".to_string(), "1".to_string());
+    env.insert("EMBER_LAB_RPC_FIXTURE_CHILD".to_string(), "1".to_string());
     for key in [
         "TEMP",
         "TMP",
@@ -157,7 +157,7 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
     fs::write(
         &manifest,
         serde_json::to_vec(&json!({
-            "schema_version": "emberd-dispatch-manifest-v2",
+            "schema_version": "ember-lab-dispatch-manifest-v2",
             "job_id": job_id,
             "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
             "not_before_ms": now - 1_000,
@@ -189,7 +189,7 @@ fn pad_dispatch_manifest_to_exact_bytes(path: &Path, target_bytes: usize) {
     manifest["env"]
         .as_object_mut()
         .unwrap()
-        .insert("EMBERD_TEST_PADDING".into(), Value::String(String::new()));
+        .insert("EMBER_LAB_TEST_PADDING".into(), Value::String(String::new()));
     let encoded_without_padding = serde_json::to_vec(&manifest).unwrap();
     assert!(encoded_without_padding.len() <= target_bytes);
     let remaining = target_bytes - encoded_without_padding.len();
@@ -201,14 +201,14 @@ fn pad_dispatch_manifest_to_exact_bytes(path: &Path, target_bytes: usize) {
     manifest["env"]
         .as_object_mut()
         .unwrap()
-        .insert("EMBERD_TEST_PADDING".into(), Value::String(padding));
+        .insert("EMBER_LAB_TEST_PADDING".into(), Value::String(padding));
     let encoded = serde_json::to_vec(&manifest).unwrap();
     assert_eq!(encoded.len(), target_bytes);
     fs::write(path, encoded).unwrap();
 }
 #[test]
 fn fixture_rpc_child_process() {
-    if std::env::var("EMBERD_RPC_FIXTURE_CHILD").as_deref() == Ok("1") {
+    if std::env::var("EMBER_LAB_RPC_FIXTURE_CHILD").as_deref() == Ok("1") {
         thread::sleep(Duration::from_secs(30));
     }
 }
@@ -216,16 +216,16 @@ fn fixture_rpc_child_process() {
 #[test]
 fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
     let root = sandbox("dispatch-cli");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let pipe = format!(
-        r"\\.\pipe\emberd-dispatch-cli-test-{}-{}",
+        r"\\.\pipe\ember-lab-dispatch-cli-test-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos()
     );
-    let binary = emberd_binary();
+    let binary = ember_lab_binary();
     let manifest = write_dispatch_manifest(&root, "dispatch-cli-job");
     let mut server = start_server(&binary, &db, &pipe);
     assert_eq!(rpc(&pipe, 100, "ping", json!({}))["status"], "ok");
@@ -272,16 +272,16 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
 fn named_pipe_dispatch_accepts_the_exact_manifest_transport_ceiling() {
     const MAX_MANIFEST_TRANSPORT_BYTES: usize = MAX_DISPATCH_MANIFEST_BYTES;
     let root = sandbox("dispatch-transport-ceiling");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let pipe = format!(
-        r"\\.\pipe\emberd-dispatch-transport-ceiling-{}-{}",
+        r"\\.\pipe\ember-lab-dispatch-transport-ceiling-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos()
     );
-    let binary = emberd_binary();
+    let binary = ember_lab_binary();
     let manifest = write_dispatch_manifest(&root, "dispatch-transport-ceiling-job");
     pad_dispatch_manifest_to_exact_bytes(&manifest, MAX_MANIFEST_TRANSPORT_BYTES);
     assert_eq!(
@@ -319,16 +319,16 @@ fn named_pipe_dispatch_accepts_the_exact_manifest_transport_ceiling() {
 #[test]
 fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation() {
     let root = sandbox("dispatch-bytes");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let pipe = format!(
-        r"\\.\pipe\emberd-dispatch-bytes-test-{}-{}",
+        r"\\.\pipe\ember-lab-dispatch-bytes-test-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos()
     );
-    let binary = emberd_binary();
+    let binary = ember_lab_binary();
     let manifest = write_dispatch_manifest(&root, "dispatch-bytes-job");
     let manifest_bytes = fs::read(&manifest).unwrap();
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
@@ -378,7 +378,7 @@ fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation()
 #[test]
 fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     let root = sandbox("restart");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let identity = root.join("identity.json");
     let receipt = root.join("receipt.json");
     let alarm_path = root.join("schedule-alarms.json");
@@ -390,17 +390,17 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     .unwrap();
     let identity_hash = sha256(&identity);
     let pipe = format!(
-        r"\\.\pipe\emberd-rpc-test-{}-{}",
+        r"\\.\pipe\ember-lab-rpc-test-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos()
     );
-    let binary = emberd_binary();
+    let binary = ember_lab_binary();
     assert!(
         binary.is_file(),
-        "the resident emberd binary target must exist"
+        "the resident ember-lab binary target must exist"
     );
 
     let mut first = start_server(&binary, &db, &pipe);
@@ -423,7 +423,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     );
     let fixture = std::env::current_exe().unwrap();
     let mut env = BTreeMap::new();
-    env.insert("EMBERD_RPC_FIXTURE_CHILD", "1");
+    env.insert("EMBER_LAB_RPC_FIXTURE_CHILD", "1");
     let started = rpc(
         &pipe,
         4,
@@ -548,7 +548,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         json!({"path": alarm_path}),
     );
     let alarm: Value = serde_json::from_slice(&fs::read(&alarm_path).unwrap()).unwrap();
-    assert_eq!(alarm["schema_version"], "emberd-schedule-alarm-state-v1");
+    assert_eq!(alarm["schema_version"], "ember-lab-schedule-alarm-state-v1");
     assert_eq!(alarm["alarms"]["prediction_overrun"], false);
     assert_eq!(alarm["runs"][0]["measurement_outcome"], "COMPLETED");
     rpc(&pipe, 19, "shutdown", json!({}));
@@ -558,16 +558,16 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
 #[test]
 fn production_typescript_manifest_transport_reaches_the_real_named_pipe_daemon() {
     let root = sandbox("typescript-production-transport");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let pipe = format!(
-        r"\\.\pipe\emberd-typescript-production-{}-{}",
+        r"\\.\pipe\ember-lab-typescript-production-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos()
     );
-    let binary = emberd_binary();
+    let binary = ember_lab_binary();
     let manifest = write_dispatch_manifest(&root, "typescript-production-transport-job");
     let mut server = start_server(&binary, &db, &pipe);
     assert_eq!(rpc(&pipe, 220, "ping", json!({}))["status"], "ok");
@@ -581,8 +581,8 @@ fn production_typescript_manifest_transport_reaches_the_real_named_pipe_daemon()
         .args(["/D", "/S", "/C"])
         .arg(bun_binary())
         .current_dir(&repository)
-        .env("EMBERD_REAL_DAEMON_PIPE", &pipe)
-        .env("EMBERD_REAL_DAEMON_MANIFEST", &manifest)
+        .env("EMBER_LAB_REAL_DAEMON_PIPE", &pipe)
+        .env("EMBER_LAB_REAL_DAEMON_MANIFEST", &manifest)
         .args([
             "test",
             "tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts",

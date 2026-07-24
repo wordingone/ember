@@ -21,13 +21,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub mod rpc;
 pub mod scratch;
 
-pub type Result<T> = std::result::Result<T, EmberdError>;
+pub type Result<T> = std::result::Result<T, EmberLabError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
 
 #[derive(Debug)]
-pub enum EmberdError {
+pub enum EmberLabError {
     Sqlite(rusqlite::Error),
     Io(std::io::Error),
     Json(serde_json::Error),
@@ -163,23 +163,23 @@ pub enum EmberdError {
     Poisoned,
 }
 
-impl fmt::Display for EmberdError {
+impl fmt::Display for EmberLabError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
 }
-impl std::error::Error for EmberdError {}
-impl From<rusqlite::Error> for EmberdError {
+impl std::error::Error for EmberLabError {}
+impl From<rusqlite::Error> for EmberLabError {
     fn from(value: rusqlite::Error) -> Self {
         Self::Sqlite(value)
     }
 }
-impl From<std::io::Error> for EmberdError {
+impl From<std::io::Error> for EmberLabError {
     fn from(value: std::io::Error) -> Self {
         Self::Io(value)
     }
 }
-impl From<serde_json::Error> for EmberdError {
+impl From<serde_json::Error> for EmberLabError {
     fn from(value: serde_json::Error) -> Self {
         Self::Json(value)
     }
@@ -236,7 +236,7 @@ impl JobState {
             "stopped" => Ok(Self::Stopped),
             "exited" => Ok(Self::Exited),
             "failed" => Ok(Self::Failed),
-            _ => Err(EmberdError::InvalidTransition {
+            _ => Err(EmberLabError::InvalidTransition {
                 job_id: String::new(),
                 detail: format!("unknown persisted state {value}"),
             }),
@@ -261,7 +261,7 @@ impl RestartPolicy {
     fn parse(value: &str) -> Result<Self> {
         match value {
             "never" => Ok(Self::Never),
-            _ => Err(EmberdError::InvalidTransition {
+            _ => Err(EmberLabError::InvalidTransition {
                 job_id: String::new(),
                 detail: format!("unknown restart policy {value}"),
             }),
@@ -440,8 +440,8 @@ pub struct Daemon {
     _state_writer_lock: fs::File,
     log_dir: PathBuf,
     db: Arc<Mutex<Connection>>,
-    emberd_binary_sha256: String,
-    emberd_source_sha256: String,
+    ember_lab_binary_sha256: String,
+    ember_lab_source_sha256: String,
     #[cfg(windows)]
     live: Arc<Mutex<HashMap<String, RetainedProcess>>>,
     #[cfg(windows)]
@@ -470,7 +470,7 @@ impl Daemon {
         let state_writer_lock = acquire_state_writer_lock(path)?;
         let mut log_dir_name = path
             .file_name()
-            .unwrap_or_else(|| std::ffi::OsStr::new("emberd"))
+            .unwrap_or_else(|| std::ffi::OsStr::new("ember-lab"))
             .to_os_string();
         log_dir_name.push(".logs");
         let log_dir = path.with_file_name(log_dir_name);
@@ -478,8 +478,8 @@ impl Daemon {
         #[cfg(windows)]
         let monitor_shutdown = create_monitor_shutdown()?;
         let conn = Connection::open(path)?;
-        let emberd_binary_sha256 = hash_file(&std::env::current_exe()?)?;
-        let emberd_source_sha256 = emberd_source_hash();
+        let ember_lab_binary_sha256 = hash_file(&std::env::current_exe()?)?;
+        let ember_lab_source_sha256 = ember_lab_source_hash();
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
             CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -502,8 +502,8 @@ impl Daemon {
             _state_writer_lock: state_writer_lock,
             log_dir,
             db: Arc::new(Mutex::new(conn)),
-            emberd_binary_sha256,
-            emberd_source_sha256,
+            ember_lab_binary_sha256,
+            ember_lab_source_sha256,
             #[cfg(windows)]
             live: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(windows)]
@@ -514,7 +514,7 @@ impl Daemon {
     }
 
     fn conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
-        self.db.lock().map_err(|_| EmberdError::Poisoned)
+        self.db.lock().map_err(|_| EmberLabError::Poisoned)
     }
     pub fn journal_mode(&self) -> Result<String> {
         Ok(self
@@ -546,7 +546,7 @@ impl Daemon {
         let canonical = fs::canonicalize(path)?;
         let actual = hash_bytes(identity_blob);
         if actual != expected {
-            return Err(EmberdError::IdentityMismatch {
+            return Err(EmberLabError::IdentityMismatch {
                 job_id: job_id.into(),
                 expected: expected.into(),
                 actual,
@@ -565,7 +565,7 @@ impl Daemon {
             if old_path == canonical.to_string_lossy() && old_hash == expected {
                 return Ok(());
             }
-            return Err(EmberdError::IdentityAlreadyBound {
+            return Err(EmberLabError::IdentityAlreadyBound {
                 job_id: job_id.into(),
             });
         }
@@ -587,12 +587,12 @@ impl Daemon {
             )
             .optional()?;
         drop(conn);
-        let (path, expected) = row.ok_or_else(|| EmberdError::IdentityNotFound {
+        let (path, expected) = row.ok_or_else(|| EmberLabError::IdentityNotFound {
             job_id: job_id.into(),
         })?;
         let actual = hash_file(Path::new(&path))?;
         if actual != expected {
-            return Err(EmberdError::IdentityMismatch {
+            return Err(EmberLabError::IdentityMismatch {
                 job_id: job_id.into(),
                 expected,
                 actual,
@@ -626,7 +626,7 @@ impl Daemon {
             || prediction.absolute_deadline_ms <= 0
             || prediction.predicted_program_completion_ms <= 0
         {
-            return Err(EmberdError::InvalidSchedulePrediction {
+            return Err(EmberLabError::InvalidSchedulePrediction {
                 job_id: prediction.job_id,
                 detail: "closed artifact class and positive prediction fields are required".into(),
             });
@@ -640,7 +640,7 @@ impl Daemon {
             |row| row.get(0),
         )?;
         if !identity_exists {
-            return Err(EmberdError::IdentityNotFound {
+            return Err(EmberLabError::IdentityNotFound {
                 job_id: prediction.job_id,
             });
         }
@@ -654,8 +654,8 @@ impl Daemon {
                 prediction.predicted_tokens,
                 prediction.predicted_program_completion_ms,
                 prediction.absolute_deadline_ms,
-                self.emberd_binary_sha256,
-                self.emberd_source_sha256,
+                self.ember_lab_binary_sha256,
+                self.ember_lab_source_sha256,
             ],
         )?;
         tx.commit()?;
@@ -675,7 +675,7 @@ impl Daemon {
             || measured_tokens <= 0
             || !matches!(outcome, "COMPLETED" | "FAILED" | "ABORTED")
         {
-            return Err(EmberdError::InvalidSchedulePrediction {
+            return Err(EmberLabError::InvalidSchedulePrediction {
                 job_id: job_id.into(),
                 detail: "positive measured fields and a closed outcome are required".into(),
             });
@@ -691,12 +691,12 @@ impl Daemon {
                 measured_tokens,
                 outcome,
                 receipt_sha256,
-                self.emberd_binary_sha256,
-                self.emberd_source_sha256,
+                self.ember_lab_binary_sha256,
+                self.ember_lab_source_sha256,
             ],
         )?;
         if changed != 1 {
-            return Err(EmberdError::InvalidSchedulePrediction {
+            return Err(EmberLabError::InvalidSchedulePrediction {
                 job_id: job_id.into(),
                 detail: "prediction is missing or already measured".into(),
             });
@@ -792,11 +792,11 @@ impl Daemon {
             })
             .collect();
         Ok(json!({
-            "schema_version": "emberd-schedule-alarm-state-v1",
+            "schema_version": "ember-lab-schedule-alarm-state-v1",
             "generated_at_ms": at_ms,
-            "emberd_identity": {
-                "binary_sha256": self.emberd_binary_sha256,
-                "source_sha256": self.emberd_source_sha256,
+            "ember_lab_identity": {
+                "binary_sha256": self.ember_lab_binary_sha256,
+                "source_sha256": self.ember_lab_source_sha256,
             },
             "alarms": {
                 "prediction_overrun": prediction_overrun,
@@ -825,7 +825,7 @@ impl Daemon {
                 |row| row.get(0),
             )?;
             if !predicted {
-                return Err(EmberdError::SchedulePredictionRequired {
+                return Err(EmberLabError::SchedulePredictionRequired {
                     resource: resource.into(),
                     job_id: job_id.into(),
                 });
@@ -843,7 +843,7 @@ impl Daemon {
                 tx.commit()?;
                 Ok(())
             }
-            Some(owner) => Err(EmberdError::LeaseConflict {
+            Some(owner) => Err(EmberLabError::LeaseConflict {
                 resource: resource.into(),
                 owner,
                 requested_by: job_id.into(),
@@ -855,7 +855,7 @@ impl Daemon {
                     |r| r.get(0),
                 )?;
                 if !identity_exists {
-                    return Err(EmberdError::IdentityNotFound {
+                    return Err(EmberLabError::IdentityNotFound {
                         job_id: job_id.into(),
                     });
                 }
@@ -897,7 +897,7 @@ impl Daemon {
         reason: &str,
     ) -> Result<i64> {
         if resource.trim().is_empty() || reason.trim().is_empty() || ends_at_ms <= starts_at_ms {
-            return Err(EmberdError::InvalidPlannedOutage {
+            return Err(EmberLabError::InvalidPlannedOutage {
                 resource: resource.into(),
                 detail: "resource/reason must be non-empty and ends_at_ms must exceed starts_at_ms"
                     .into(),
@@ -955,7 +955,7 @@ impl Daemon {
                 },
             )
             .optional()?
-            .ok_or_else(|| EmberdError::JobNotFound {
+            .ok_or_else(|| EmberLabError::JobNotFound {
                 job_id: job_id.into(),
             })
     }
@@ -969,7 +969,7 @@ impl Daemon {
                 |row| row.get(0),
             )
             .optional()?
-            .ok_or_else(|| EmberdError::JobNotFound {
+            .ok_or_else(|| EmberLabError::JobNotFound {
                 job_id: job_id.into(),
             })?;
         RestartPolicy::parse(&policy)
@@ -1032,7 +1032,7 @@ impl Daemon {
         H: FnMut() -> Result<HostCommitCapacity>,
     {
         let canonical = fs::canonicalize(manifest_path).map_err(|error| {
-            EmberdError::InvalidDispatchManifest {
+            EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest is not a canonical file: {error}"),
             }
         })?;
@@ -1063,31 +1063,31 @@ impl Daemon {
     {
         if validate_hash(expected_sha256).is_err() || hash_bytes(manifest_bytes) != expected_sha256
         {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch manifest bytes do not match the supplied sha256".into(),
             });
         }
         const MAX_DISPATCH_MANIFEST_SNAPSHOTS: usize = 64;
         let manifest: DispatchManifest =
             serde_json::from_slice(manifest_bytes).map_err(|error| {
-                EmberdError::InvalidDispatchManifest {
+                EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
         if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_BYTES {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch manifest snapshot exceeds the daemon byte ceiling".into(),
             });
         }
         self.validate_dispatch_manifest_snapshot_preconditions(&manifest)?;
-        // This is emberd state, not candidate-selected custody. Candidate custody is
+        // This is ember-lab state, not candidate-selected custody. Candidate custody is
         // validated by the byte consumer before it writes a preflight receipt.
         let snapshot_dir = self.log_dir.join("dispatch-manifests");
         fs::create_dir_all(&snapshot_dir)?;
         let snapshot = snapshot_dir.join(format!("{expected_sha256}.json"));
         if snapshot.exists() {
             if hash_bytes(&fs::read(&snapshot)?) != expected_sha256 {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: "daemon dispatch snapshot conflicts with supplied sha256".into(),
                 });
             }
@@ -1126,7 +1126,7 @@ impl Daemon {
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if hash_bytes(&fs::read(&snapshot)?) != expected_sha256 {
-                    return Err(EmberdError::InvalidDispatchManifest {
+                    return Err(EmberLabError::InvalidDispatchManifest {
                         detail: "daemon dispatch snapshot conflicts with supplied sha256".into(),
                     });
                 }
@@ -1147,7 +1147,7 @@ impl Daemon {
         &self,
         manifest: &DispatchManifest,
     ) -> Result<()> {
-        if manifest.schema_version != "emberd-dispatch-manifest-v2"
+        if manifest.schema_version != "ember-lab-dispatch-manifest-v2"
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
@@ -1164,17 +1164,17 @@ impl Daemon {
             || manifest.maximum_job_memory_bytes == 0
             || manifest.simulated_peak_commit_bytes == 0
         {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch manifest requires the closed v2 schema, identities, window, bindings, and reserves".into(),
             });
         }
         let custody_root = fs::canonicalize(&manifest.custody_root).map_err(|error| {
-            EmberdError::InvalidDispatchManifest {
+            EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch custody root is unavailable: {error}"),
             }
         })?;
         if !custody_root.is_dir() {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch custody root is not a directory".into(),
             });
         }
@@ -1186,7 +1186,7 @@ impl Daemon {
         for binding in &manifest.bindings {
             let canonical = verify_dispatch_binding(binding)?;
             if !seen.insert(canonical.clone()) {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: "dispatch bindings contain a duplicate canonical path".into(),
                 });
             }
@@ -1196,7 +1196,7 @@ impl Daemon {
         if !kinds.contains(&DispatchBindingKind::Config)
             || !kinds.contains(&DispatchBindingKind::Manifest)
         {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch bindings must include at least one config and one manifest"
                     .into(),
             });
@@ -1215,15 +1215,15 @@ impl Daemon {
                 manifest
                     .env
                     .get(key)
-                    .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                         detail: format!("dispatch environment lacks custody binding {key}"),
                     })?;
             let cache =
-                fs::canonicalize(raw).map_err(|error| EmberdError::InvalidDispatchManifest {
+                fs::canonicalize(raw).map_err(|error| EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch cache {key} is unavailable: {error}"),
                 })?;
             if !cache.is_dir() || !cache.starts_with(&custody_root) {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch cache {key} escapes custody"),
                 });
             }
@@ -1231,17 +1231,17 @@ impl Daemon {
         let mut reserve_roots = std::collections::BTreeSet::new();
         for reserve in &manifest.storage_reserves {
             if reserve.minimum_free_bytes == 0 {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: "dispatch storage reserve must be positive".into(),
                 });
             }
             let root = fs::canonicalize(&reserve.root).map_err(|error| {
-                EmberdError::InvalidDispatchManifest {
+                EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch storage root is unavailable: {error}"),
                 }
             })?;
             if !reserve_roots.insert(root) {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: "dispatch storage roots must be unique".into(),
                 });
             }
@@ -1263,17 +1263,17 @@ impl Daemon {
         H: FnMut() -> Result<HostCommitCapacity>,
     {
         let manifest_path = fs::canonicalize(manifest_identity_path).map_err(|error| {
-            EmberdError::InvalidDispatchManifest {
+            EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest identity snapshot is unavailable: {error}"),
             }
         })?;
         let manifest: DispatchManifest =
             serde_json::from_slice(manifest_bytes).map_err(|error| {
-                EmberdError::InvalidDispatchManifest {
+                EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
-        if manifest.schema_version != "emberd-dispatch-manifest-v2"
+        if manifest.schema_version != "ember-lab-dispatch-manifest-v2"
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
@@ -1290,30 +1290,30 @@ impl Daemon {
             || manifest.maximum_job_memory_bytes == 0
             || manifest.simulated_peak_commit_bytes == 0
         {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch manifest requires the closed v2 schema, identities, window, bindings, and reserves".into(),
             });
         }
         if observed_at_ms < manifest.not_before_ms {
-            return Err(EmberdError::DispatchTooEarly {
+            return Err(EmberLabError::DispatchTooEarly {
                 not_before_ms: manifest.not_before_ms,
                 observed_at_ms,
             });
         }
         if observed_at_ms >= manifest.expires_at_ms {
-            return Err(EmberdError::DispatchExpired {
+            return Err(EmberLabError::DispatchExpired {
                 expires_at_ms: manifest.expires_at_ms,
                 observed_at_ms,
             });
         }
 
         let custody_root = fs::canonicalize(&manifest.custody_root).map_err(|error| {
-            EmberdError::InvalidDispatchManifest {
+            EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch custody root is unavailable: {error}"),
             }
         })?;
         if !custody_root.is_dir() {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch custody root is not a directory".into(),
             });
         }
@@ -1335,7 +1335,7 @@ impl Daemon {
             || manifest.simulated_peak_commit_bytes > manifest.maximum_job_memory_bytes
         {
             let refusal = json!({
-                "schema_version": "emberd-dispatch-preflight-v1",
+                "schema_version": "ember-lab-dispatch-preflight-v1",
                 "result": "REFUSED_HOST_COMMIT_CAP",
                 "job_id": &manifest.job_id,
                 "source_commit": &manifest.source_commit,
@@ -1358,7 +1358,7 @@ impl Daemon {
                 },
             });
             atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
-            return Err(EmberdError::DispatchHostCommitReserve {
+            return Err(EmberLabError::DispatchHostCommitReserve {
                 required_available_maximum_commit_bytes: manifest
                     .required_available_maximum_commit_bytes,
                 observed_available_maximum_commit_bytes,
@@ -1376,7 +1376,7 @@ impl Daemon {
         for binding in &manifest.bindings {
             let canonical = verify_dispatch_binding(binding)?;
             if !seen.insert(canonical.clone()) {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: "dispatch bindings contain a duplicate canonical path".into(),
                 });
             }
@@ -1386,7 +1386,7 @@ impl Daemon {
         if !kinds.contains(&DispatchBindingKind::Config)
             || !kinds.contains(&DispatchBindingKind::Manifest)
         {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch bindings must include at least one config and one manifest"
                     .into(),
             });
@@ -1407,15 +1407,15 @@ impl Daemon {
                 manifest
                     .env
                     .get(key)
-                    .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                         detail: format!("dispatch environment lacks custody binding {key}"),
                     })?;
             let cache =
-                fs::canonicalize(raw).map_err(|error| EmberdError::InvalidDispatchManifest {
+                fs::canonicalize(raw).map_err(|error| EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch cache {key} is unavailable: {error}"),
                 })?;
             if !cache.is_dir() || !cache.starts_with(&custody_root) {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch cache {key} escapes custody"),
                 });
             }
@@ -1425,23 +1425,23 @@ impl Daemon {
         let mut reserve_roots = std::collections::BTreeSet::new();
         for reserve in &manifest.storage_reserves {
             if reserve.minimum_free_bytes == 0 {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: "dispatch storage reserve must be positive".into(),
                 });
             }
             let root = fs::canonicalize(&reserve.root).map_err(|error| {
-                EmberdError::InvalidDispatchManifest {
+                EmberLabError::InvalidDispatchManifest {
                     detail: format!("dispatch storage root is unavailable: {error}"),
                 }
             })?;
             if !reserve_roots.insert(root.clone()) {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: "dispatch storage roots must be unique".into(),
                 });
             }
             let available = free_space(&root)?;
             if available < reserve.minimum_free_bytes {
-                return Err(EmberdError::DispatchStorageReserve {
+                return Err(EmberLabError::DispatchStorageReserve {
                     root,
                     minimum_free_bytes: reserve.minimum_free_bytes,
                     available_free_bytes: available,
@@ -1456,7 +1456,7 @@ impl Daemon {
 
         let available_vram = free_vram()?;
         if available_vram < manifest.minimum_free_vram_bytes {
-            return Err(EmberdError::DispatchVramReserve {
+            return Err(EmberLabError::DispatchVramReserve {
                 minimum_free_bytes: manifest.minimum_free_vram_bytes,
                 available_free_bytes: available_vram,
             });
@@ -1472,7 +1472,7 @@ impl Daemon {
         let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
         let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
         let receipt_payload = json!({
-            "schema_version": "emberd-dispatch-preflight-v1",
+            "schema_version": "ember-lab-dispatch-preflight-v1",
             "result": "PREFLIGHT_PASSED",
             "job_id": &manifest.job_id,
             "source_commit": &manifest.source_commit,
@@ -1506,9 +1506,9 @@ impl Daemon {
                 "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
                 "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
             },
-            "emberd_identity": {
-                "binary_sha256": &self.emberd_binary_sha256,
-                "source_sha256": &self.emberd_source_sha256,
+            "ember_lab_identity": {
+                "binary_sha256": &self.ember_lab_binary_sha256,
+                "source_sha256": &self.ember_lab_source_sha256,
             },
         });
         let receipt_bytes = serde_json::to_vec(&receipt_payload)?;
@@ -1553,7 +1553,7 @@ impl Daemon {
                 &receipt_path,
                 &receipt_bytes,
             )?;
-            return Err(EmberdError::DispatchReceiptRecoveryPending {
+            return Err(EmberLabError::DispatchReceiptRecoveryPending {
                 job_id,
                 receipt_path,
             });
@@ -1618,7 +1618,7 @@ impl Daemon {
                 != Some(manifest.job_id.as_str())
             || self.job_state(&manifest.job_id)? != Some(JobState::Running)
         {
-            return Err(EmberdError::ReceiptAlreadyExists {
+            return Err(EmberLabError::ReceiptAlreadyExists {
                 path: receipt_path.to_path_buf(),
             });
         }
@@ -1646,13 +1646,13 @@ impl Daemon {
         }
         let receipt_bytes = fs::read(receipt_path)?;
         let receipt: Value = serde_json::from_slice(&receipt_bytes).map_err(|_| {
-            EmberdError::ReceiptAlreadyExists {
+            EmberLabError::ReceiptAlreadyExists {
                 path: receipt_path.to_path_buf(),
             }
         })?;
         let manifest_sha256 = hash_bytes(manifest_bytes);
         if receipt.get("schema_version")
-            != Some(&Value::String("emberd-dispatch-preflight-v1".into()))
+            != Some(&Value::String("ember-lab-dispatch-preflight-v1".into()))
             || receipt.get("result") != Some(&Value::String("PREFLIGHT_PASSED".into()))
             || receipt.get("job_id") != Some(&Value::String(manifest.job_id.clone()))
             || receipt.get("dispatch_manifest_sha256")
@@ -1662,7 +1662,7 @@ impl Daemon {
                 != Some(manifest.job_id.as_str())
             || self.job_state(&manifest.job_id)? != Some(JobState::Running)
         {
-            return Err(EmberdError::ReceiptAlreadyExists {
+            return Err(EmberLabError::ReceiptAlreadyExists {
                 path: receipt_path.to_path_buf(),
             });
         }
@@ -1689,7 +1689,7 @@ impl Daemon {
             .optional()?;
         if let Some(state) = state {
             if !matches!(state.as_str(), "failed" | "stopped" | "exited") {
-                return Err(EmberdError::InvalidTransition {
+                return Err(EmberLabError::InvalidTransition {
                     job_id: job_id.into(),
                     detail: "dispatch rollback refuses a nonterminal job".into(),
                 });
@@ -1728,7 +1728,7 @@ impl Daemon {
                 )
                 .optional()?;
             if let Some((ends_at_ms, reason)) = outage {
-                return Err(EmberdError::PlannedOutageActive {
+                return Err(EmberLabError::PlannedOutageActive {
                     resource: spec.resource_lease.clone(),
                     ends_at_ms,
                     reason,
@@ -1741,12 +1741,12 @@ impl Daemon {
                     |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .optional()?;
-            let (owner, lease_epoch) = lease.ok_or_else(|| EmberdError::LeaseNotOwned {
+            let (owner, lease_epoch) = lease.ok_or_else(|| EmberLabError::LeaseNotOwned {
                 resource: spec.resource_lease.clone(),
                 job_id: spec.job_id.clone(),
             })?;
             if owner != spec.job_id {
-                return Err(EmberdError::LeaseNotOwned {
+                return Err(EmberLabError::LeaseNotOwned {
                     resource: spec.resource_lease,
                     job_id: spec.job_id,
                 });
@@ -1758,7 +1758,7 @@ impl Daemon {
                 .optional()?
                 .is_some()
             {
-                return Err(EmberdError::InvalidTransition {
+                return Err(EmberLabError::InvalidTransition {
                     job_id: spec.job_id,
                     detail: "job already exists".into(),
                 });
@@ -1791,7 +1791,7 @@ impl Daemon {
                 params![spec.job_id, pid, spawned.main_thread_id(), identity.start_token, identity.executable, spawned.stdout_child_handle(), spawned.stderr_child_handle(), now_ms()],
             )?;
             if changed != 1 {
-                return Err(EmberdError::InvalidTransition {
+                return Err(EmberLabError::InvalidTransition {
                     job_id: spec.job_id.clone(),
                     detail: "start reservation disappeared".into(),
                 });
@@ -1820,7 +1820,7 @@ impl Daemon {
                 )
                 .optional()?;
             if let Some((ends_at_ms, reason)) = outage {
-                return Err(EmberdError::PlannedOutageActive {
+                return Err(EmberLabError::PlannedOutageActive {
                     resource: spec.resource_lease.clone(),
                     ends_at_ms,
                     reason,
@@ -1831,7 +1831,7 @@ impl Daemon {
                 params![spec.job_id, launch_at_ms],
             )?;
             if fenced != 1 {
-                return Err(EmberdError::InvalidTransition {
+                return Err(EmberLabError::InvalidTransition {
                     job_id: spec.job_id.clone(),
                     detail: "prepared start lost its state or lease fence".into(),
                 });
@@ -1842,7 +1842,7 @@ impl Daemon {
                 params![spec.job_id, now_ms()],
             )?;
             if changed != 1 {
-                return Err(EmberdError::InvalidTransition {
+                return Err(EmberLabError::InvalidTransition {
                     job_id: spec.job_id.clone(),
                     detail: "resumed start lost its held state or lease fence".into(),
                 });
@@ -1888,7 +1888,7 @@ impl Daemon {
                 |row| row.get(0),
             )
             .optional()?
-            .ok_or_else(|| EmberdError::JobNotFound {
+            .ok_or_else(|| EmberLabError::JobNotFound {
                 job_id: job_id.into(),
             })
     }
@@ -1903,14 +1903,14 @@ impl Daemon {
             )
             .optional()?;
         if let Some(receipt_path) = pending_receipt_path {
-            return Err(EmberdError::DispatchReceiptRecoveryPending {
+            return Err(EmberLabError::DispatchReceiptRecoveryPending {
                 job_id: job_id.into(),
                 receipt_path: PathBuf::from(receipt_path),
             });
         }
         let row = self.job_process_row(job_id)?;
         if row.state != JobState::Running {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "only running jobs can be adopted".into(),
             });
@@ -1920,7 +1920,7 @@ impl Daemon {
             LiveStatus::Verified(live) => live,
             LiveStatus::Dead => {
                 let _ = self.mark_exited_unknown(job_id, &row, "job_reconciled_exited_unknown");
-                return Err(EmberdError::ProcessUnavailable {
+                return Err(EmberLabError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
                 });
@@ -1933,7 +1933,7 @@ impl Daemon {
                     "job_reconciled_orphaned",
                     &detail,
                 )?;
-                return Err(EmberdError::ProcessControlUncertain {
+                return Err(EmberLabError::ProcessControlUncertain {
                     job_id: job_id.into(),
                     pid: row.pid,
                     detail,
@@ -1947,7 +1947,7 @@ impl Daemon {
                     "job_reconciled_identity_conflict",
                     &detail,
                 )?;
-                return Err(EmberdError::ProcessControlUncertain {
+                return Err(EmberLabError::ProcessControlUncertain {
                     job_id: job_id.into(),
                     pid: row.pid,
                     detail,
@@ -1957,14 +1957,14 @@ impl Daemon {
         #[cfg(not(windows))]
         {
             let current =
-                inspect_process(row.pid).map_err(|_| EmberdError::ProcessUnavailable {
+                inspect_process(row.pid).map_err(|_| EmberLabError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
                 })?;
             if current.start_token != row.start_token
                 || !same_executable(&current.executable, &row.executable)
             {
-                return Err(EmberdError::ProcessIdentityMismatch {
+                return Err(EmberLabError::ProcessIdentityMismatch {
                     job_id: job_id.into(),
                     pid: row.pid,
                 });
@@ -1979,7 +1979,7 @@ impl Daemon {
     pub fn stop_job(&self, job_id: &str) -> Result<()> {
         let row = self.job_process_row(job_id)?;
         if !matches!(row.state, JobState::Running | JobState::Stopping) {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "only running or stopping jobs can be stopped".into(),
             });
@@ -1988,7 +1988,7 @@ impl Daemon {
         let live = self
             .live
             .lock()
-            .map_err(|_| EmberdError::Poisoned)?
+            .map_err(|_| EmberLabError::Poisoned)?
             .remove(job_id)
             .map(|retained| LiveStatus::Verified(retained.live))
             .unwrap_or_else(|| open_live_status(&row));
@@ -2001,7 +2001,7 @@ impl Daemon {
             }
             LiveStatus::Dead => {
                 self.mark_exited_unknown(job_id, &row, "job_exited_before_stop")?;
-                return Err(EmberdError::ProcessUnavailable {
+                return Err(EmberLabError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
                 });
@@ -2014,7 +2014,7 @@ impl Daemon {
                     "job_stop_orphaned",
                     &detail,
                 )?;
-                return Err(EmberdError::ProcessControlUncertain {
+                return Err(EmberLabError::ProcessControlUncertain {
                     job_id: job_id.into(),
                     pid: row.pid,
                     detail,
@@ -2028,7 +2028,7 @@ impl Daemon {
                     "job_stop_identity_conflict",
                     &detail,
                 )?;
-                return Err(EmberdError::ProcessControlUncertain {
+                return Err(EmberLabError::ProcessControlUncertain {
                     job_id: job_id.into(),
                     pid: row.pid,
                     detail,
@@ -2038,14 +2038,14 @@ impl Daemon {
         #[cfg(not(windows))]
         {
             let current =
-                inspect_process(row.pid).map_err(|_| EmberdError::ProcessUnavailable {
+                inspect_process(row.pid).map_err(|_| EmberLabError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
                 })?;
             if current.start_token != row.start_token
                 || !same_executable(&current.executable, &row.executable)
             {
-                return Err(EmberdError::ProcessIdentityMismatch {
+                return Err(EmberLabError::ProcessIdentityMismatch {
                     job_id: job_id.into(),
                     pid: row.pid,
                 });
@@ -2057,7 +2057,7 @@ impl Daemon {
                 let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
                 let changed = tx.execute("UPDATE jobs SET state='stopping',updated_at_ms=?2 WHERE job_id=?1 AND state='running' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)", params![job_id, now_ms(), row.lease_epoch])?;
                 if changed != 1 {
-                    return Err(EmberdError::InvalidTransition {
+                    return Err(EmberLabError::InvalidTransition {
                         job_id: job_id.into(),
                         detail: "stop lost its state or lease fence".into(),
                     });
@@ -2068,7 +2068,7 @@ impl Daemon {
         }
         #[cfg(windows)]
         if let Err(error) = terminate_live(&live) {
-            self.live.lock().map_err(|_| EmberdError::Poisoned)?.insert(
+            self.live.lock().map_err(|_| EmberLabError::Poisoned)?.insert(
                 job_id.into(),
                 RetainedProcess {
                     live,
@@ -2108,7 +2108,7 @@ impl Daemon {
                 },
             )
             .optional()?
-            .ok_or_else(|| EmberdError::JobNotFound {
+            .ok_or_else(|| EmberLabError::JobNotFound {
                 job_id: job_id.into(),
             })?;
         let mut stmt = tx.prepare(
@@ -2171,7 +2171,7 @@ impl Daemon {
                     ("stderr", expected_stderr, &stderr_sha256),
                 ] {
                     if expected != actual {
-                        return Err(EmberdError::LogEvidenceMismatch {
+                        return Err(EmberLabError::LogEvidenceMismatch {
                             job_id: job_id.into(),
                             stream: stream.into(),
                             expected: expected.clone(),
@@ -2189,16 +2189,16 @@ impl Daemon {
                 json!({"file_name":file_name(&stderr_path),"sealed":false,"sha256":Value::Null}),
             ),
             _ => {
-                return Err(EmberdError::LogEvidenceUnsealed {
+                return Err(EmberLabError::LogEvidenceUnsealed {
                     job_id: job_id.into(),
                 })
             }
         };
         let receipt = json!({
-            "schema":"emberd-operational-receipt-v1",
-            "emberd_identity":{
-                "binary_sha256":self.emberd_binary_sha256,
-                "source_sha256":self.emberd_source_sha256
+            "schema":"ember-lab-operational-receipt-v1",
+            "ember_lab_identity":{
+                "binary_sha256":self.ember_lab_binary_sha256,
+                "source_sha256":self.ember_lab_source_sha256
             },
             "job_id":job_id,
             "identity_sha256":row.identity_sha256,
@@ -2230,14 +2230,14 @@ impl Daemon {
     ) -> Result<ReceiptArtifact> {
         let state = self
             .job_state(job_id)?
-            .ok_or_else(|| EmberdError::JobNotFound {
+            .ok_or_else(|| EmberLabError::JobNotFound {
                 job_id: job_id.into(),
             })?;
         if !matches!(
             state,
             JobState::Stopped | JobState::Exited | JobState::Failed
         ) {
-            return Err(EmberdError::NonTerminalReceipt {
+            return Err(EmberLabError::NonTerminalReceipt {
                 job_id: job_id.into(),
                 state: state.as_str().into(),
             });
@@ -2250,15 +2250,15 @@ impl Daemon {
             if fs::read(&path)? == bytes {
                 return Ok(ReceiptArtifact { path, sha256 });
             }
-            return Err(EmberdError::ReceiptHashCollision { path });
+            return Err(EmberLabError::ReceiptHashCollision { path });
         }
         match atomic_create(&path, &bytes) {
             Ok(()) => Ok(ReceiptArtifact { path, sha256 }),
-            Err(EmberdError::ReceiptAlreadyExists { .. }) if fs::read(&path)? == bytes => {
+            Err(EmberLabError::ReceiptAlreadyExists { .. }) if fs::read(&path)? == bytes => {
                 Ok(ReceiptArtifact { path, sha256 })
             }
-            Err(EmberdError::ReceiptAlreadyExists { .. }) => {
-                Err(EmberdError::ReceiptHashCollision { path })
+            Err(EmberLabError::ReceiptAlreadyExists { .. }) => {
+                Err(EmberLabError::ReceiptHashCollision { path })
             }
             Err(error) => Err(error),
         }
@@ -2289,7 +2289,7 @@ impl Daemon {
                                     monitored: false,
                                 },
                             );
-                        Err(EmberdError::MonitorSetupCleanupFailed {
+                        Err(EmberLabError::MonitorSetupCleanupFailed {
                             job_id: job_id.into(),
                             setup: format!("{setup_error:?}"),
                             cleanup: format!("{cleanup_error:?}"),
@@ -2392,7 +2392,7 @@ impl Daemon {
                                             monitored: false,
                                         },
                                     );
-                                return Err(EmberdError::PreparedResumeCleanupFailed {
+                                return Err(EmberLabError::PreparedResumeCleanupFailed {
                                     job_id,
                                     transition: format!("{transition_error:?}"),
                                     cleanup: format!("{termination_error:?}"),
@@ -2401,7 +2401,7 @@ impl Daemon {
                             if let Err(cleanup_error) =
                                 self.mark_failed(&job_id, "job_recovered_resume_commit_failed")
                             {
-                                return Err(EmberdError::PreparedResumeCleanupFailed {
+                                return Err(EmberLabError::PreparedResumeCleanupFailed {
                                     job_id,
                                     transition: format!("{transition_error:?}"),
                                     cleanup: format!("{cleanup_error:?}"),
@@ -2468,7 +2468,7 @@ impl Daemon {
             params![job_id, now_ms(), row.lease_epoch],
         )?;
         if changed != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "adoption lost its state or lease fence".into(),
             });
@@ -2502,7 +2502,7 @@ impl Daemon {
         ).map_err(|error| PreparedTransitionError::BeforeResume(error.into()))?;
         if fenced != 1 {
             return Err(PreparedTransitionError::BeforeResume(
-                EmberdError::InvalidTransition {
+                EmberLabError::InvalidTransition {
                     job_id: job_id.into(),
                     detail: "prepared reconciliation lost its pre-resume state or lease fence"
                         .into(),
@@ -2538,7 +2538,7 @@ impl Daemon {
         ).map_err(|error| PreparedTransitionError::AfterResume(error.into()))?;
         if changed != 1 {
             return Err(PreparedTransitionError::AfterResume(
-                EmberdError::InvalidTransition {
+                EmberLabError::InvalidTransition {
                     job_id: job_id.into(),
                     detail: "prepared reconciliation lost its state or lease fence".into(),
                 },
@@ -2572,7 +2572,7 @@ impl Daemon {
             params![job_id, now_ms(), row.lease_epoch, stdout_sha256, stderr_sha256],
         )?;
         if changed != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "stop finalization lost its state or lease epoch fence".into(),
             });
@@ -2582,7 +2582,7 @@ impl Daemon {
             params![row.resource, job_id, row.lease_epoch],
         )?;
         if released != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "stop finalization lost its lease epoch".into(),
             });
@@ -2607,7 +2607,7 @@ impl Daemon {
             params![job_id, now_ms(), row.lease_epoch],
         )?;
         if fenced != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "starting reconciliation lost its state or lease epoch fence".into(),
             });
@@ -2618,7 +2618,7 @@ impl Daemon {
             params![job_id, now_ms(), row.lease_epoch],
         )?;
         if failed != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "starting reconciliation lost its held state fence".into(),
             });
@@ -2628,7 +2628,7 @@ impl Daemon {
             params![row.resource, job_id, row.lease_epoch],
         )?;
         if released != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "starting reconciliation lost its lease epoch".into(),
             });
@@ -2656,7 +2656,7 @@ impl Daemon {
             params![job_id, state.as_str(), now_ms(), row.state.as_str(), row.lease_epoch],
         )?;
         if changed != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "uncertain reconciliation lost its state or lease epoch fence".into(),
             });
@@ -2687,7 +2687,7 @@ impl Daemon {
             params![job_id, now_ms(), row.state.as_str(), row.lease_epoch],
         )?;
         if changed != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "unknown-exit reconciliation lost its state or lease epoch fence".into(),
             });
@@ -2697,7 +2697,7 @@ impl Daemon {
             params![row.resource, job_id, row.lease_epoch],
         )?;
         if released != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "unknown-exit reconciliation lost its lease epoch".into(),
             });
@@ -2723,7 +2723,7 @@ impl Daemon {
             params![job_id, now_ms(), row.state.as_str(), row.lease_epoch],
         )?;
         if changed != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "dead reconciliation lost its state or lease epoch fence".into(),
             });
@@ -2733,7 +2733,7 @@ impl Daemon {
             params![row.resource, job_id, row.lease_epoch],
         )?;
         if released != 1 {
-            return Err(EmberdError::InvalidTransition {
+            return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "dead reconciliation lost its lease epoch".into(),
             });
@@ -2770,7 +2770,7 @@ impl Daemon {
                 },
             )
             .optional()?
-            .ok_or_else(|| EmberdError::JobNotFound {
+            .ok_or_else(|| EmberLabError::JobNotFound {
                 job_id: job_id.into(),
             })
             .and_then(|row| {
@@ -2809,8 +2809,8 @@ struct JobProcessRow {
 
 #[cfg(windows)]
 enum PreparedTransitionError {
-    BeforeResume(EmberdError),
-    AfterResume(EmberdError),
+    BeforeResume(EmberLabError),
+    AfterResume(EmberLabError),
 }
 
 struct ReceiptRow {
@@ -2842,7 +2842,7 @@ fn validate_hash(value: &str) -> Result<()> {
     {
         Ok(())
     } else {
-        Err(EmberdError::InvalidIdentityHash {
+        Err(EmberLabError::InvalidIdentityHash {
             value: value.into(),
         })
     }
@@ -2862,27 +2862,27 @@ fn is_sha256(value: &str) -> bool {
 }
 
 fn verify_dispatch_file(path: &Path, sha256: &str) -> Result<PathBuf> {
-    validate_hash(sha256).map_err(|_| EmberdError::InvalidDispatchManifest {
+    validate_hash(sha256).map_err(|_| EmberLabError::InvalidDispatchManifest {
         detail: format!(
             "dispatch binding has an invalid SHA-256: {}",
             path.display()
         ),
     })?;
     let canonical =
-        fs::canonicalize(path).map_err(|error| EmberdError::InvalidDispatchManifest {
+        fs::canonicalize(path).map_err(|error| EmberLabError::InvalidDispatchManifest {
             detail: format!(
                 "dispatch binding is unavailable at {}: {error}",
                 path.display()
             ),
         })?;
     if !canonical.is_file() {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!("dispatch binding is not a file: {}", canonical.display()),
         });
     }
     let actual = hash_file(&canonical)?;
     if actual != sha256 {
-        return Err(EmberdError::DispatchBindingMismatch {
+        return Err(EmberLabError::DispatchBindingMismatch {
             path: canonical,
             expected: sha256.to_string(),
             actual,
@@ -2899,7 +2899,7 @@ fn read_verified_json_snapshot(path: &Path, expected_sha256: &str) -> Result<Val
     let bytes = fs::read(path)?;
     let actual = hash_bytes(&bytes);
     if actual != expected_sha256 {
-        return Err(EmberdError::DispatchBindingMismatch {
+        return Err(EmberLabError::DispatchBindingMismatch {
             path: path.to_path_buf(),
             expected: expected_sha256.to_string(),
             actual,
@@ -2910,26 +2910,26 @@ fn read_verified_json_snapshot(path: &Path, expected_sha256: &str) -> Result<Val
 
 fn absolute_under_root(path: &Path, root: &Path) -> Result<PathBuf> {
     if !path.is_absolute() {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!("dispatch output path must be absolute: {}", path.display()),
         });
     }
     let name = path
         .file_name()
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: format!("dispatch output path lacks a file name: {}", path.display()),
         })?;
     let parent = path
         .parent()
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: format!("dispatch output path lacks a parent: {}", path.display()),
         })?;
     let parent =
-        fs::canonicalize(parent).map_err(|error| EmberdError::InvalidDispatchManifest {
+        fs::canonicalize(parent).map_err(|error| EmberLabError::InvalidDispatchManifest {
             detail: format!("dispatch output parent is unavailable: {error}"),
         })?;
     if !parent.starts_with(root) {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!("dispatch output escapes custody: {}", path.display()),
         });
     }
@@ -2958,7 +2958,7 @@ fn validate_absolute_dispatch_args(
                 path.starts_with(custody_root)
             };
             if !allowed {
-                return Err(EmberdError::InvalidDispatchManifest {
+                return Err(EmberLabError::InvalidDispatchManifest {
                     detail: format!(
                         "absolute dispatch argument is neither hash-bound nor in custody: {raw}"
                     ),
@@ -2980,7 +2980,7 @@ fn validate_resume_registry_binding_closure(
         let candidate = if raw == "--resume-realization-registry" {
             index += 1;
             args.get(index).map(String::as_str).ok_or_else(|| {
-                EmberdError::InvalidDispatchManifest {
+                EmberLabError::InvalidDispatchManifest {
                     detail: "resume realization registry flag lacks its path".into(),
                 }
             })?
@@ -2991,7 +2991,7 @@ fn validate_resume_registry_binding_closure(
             continue;
         };
         if registry_argument.replace(candidate).is_some() {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "resume realization registry argument is duplicated".into(),
             });
         }
@@ -3004,18 +3004,18 @@ fn validate_resume_registry_binding_closure(
     let registry_binding = bindings
         .iter()
         .find(|(path, _, kind)| *path == registry && *kind == DispatchBindingKind::Manifest)
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "resume realization registry is not an exact manifest binding".into(),
         })?;
     let root = registry
         .parent()
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "resume realization registry lacks a parent directory".into(),
         })?;
     let payload = read_verified_json_snapshot(&registry, &registry_binding.1)?;
     let object = payload
         .as_object()
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "resume realization registry must be a JSON object".into(),
         })?;
     let expected_keys = [
@@ -3029,7 +3029,7 @@ fn validate_resume_registry_binding_closure(
         || object.get("schema_version").and_then(Value::as_str)
             != Some("ember-trusted-verifiers-v2")
     {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: "resume realization registry schema is not closed v2".into(),
         });
     }
@@ -3039,12 +3039,12 @@ fn validate_resume_registry_binding_closure(
         ("model_configs", DispatchBindingKind::Config),
     ] {
         let records = object.get(field).and_then(Value::as_array).ok_or_else(|| {
-            EmberdError::InvalidDispatchManifest {
+            EmberLabError::InvalidDispatchManifest {
                 detail: format!("resume realization registry {field} is not an array"),
             }
         })?;
         if records.len() != 1 {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: format!(
                     "resume realization registry {field} must contain exactly one file"
                 ),
@@ -3052,7 +3052,7 @@ fn validate_resume_registry_binding_closure(
         }
         let entry = records[0]
             .as_object()
-            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                 detail: format!("resume realization registry {field} entry is not an object"),
             })?;
         let expected_entry_keys: &[&str] = match field {
@@ -3073,7 +3073,7 @@ fn validate_resume_registry_binding_closure(
                 .iter()
                 .any(|key| !entry.contains_key(*key))
         {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: format!("resume realization registry {field} entry schema is not closed"),
             });
         }
@@ -3081,14 +3081,14 @@ fn validate_resume_registry_binding_closure(
             .get("path")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty() && !Path::new(value).is_absolute())
-            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                 detail: format!("resume realization registry {field} path is invalid"),
             })?;
         let declared_sha256 = entry
             .get("sha256")
             .and_then(Value::as_str)
             .filter(|value| is_sha256(value))
-            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                 detail: format!("resume realization registry {field} sha256 is invalid"),
             })?;
         let nested = fs::canonicalize(root.join(relative))?;
@@ -3097,7 +3097,7 @@ fn validate_resume_registry_binding_closure(
                 *path == nested && *binding_kind == kind && sha256 == declared_sha256
             })
         {
-            return Err(EmberdError::InvalidDispatchManifest {
+            return Err(EmberLabError::InvalidDispatchManifest {
                 detail: format!(
                     "resume realization registry {field} file is not hash-bound with its required kind"
                 ),
@@ -3131,7 +3131,7 @@ fn available_free_bytes(root: &Path) -> Result<u64> {
 
 #[cfg(not(windows))]
 fn available_free_bytes(_root: &Path) -> Result<u64> {
-    Err(EmberdError::InvalidDispatchManifest {
+    Err(EmberLabError::InvalidDispatchManifest {
         detail: "native disk reserve probing is currently Windows-only".into(),
     })
 }
@@ -3149,7 +3149,7 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
     let pages_to_bytes = |pages: usize, label: &str| {
         (pages as u64)
             .checked_mul(page_size)
-            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                 detail: format!("Windows host commit probe overflowed {label}"),
             })
     };
@@ -3161,16 +3161,16 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
         configured_pagefile_maximum_bytes()?;
     let maximum_commit_capacity_bytes = physical_ram_bytes
         .checked_add(pagefile_maximum_bytes)
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "Windows maximum commit capacity overflowed bytes".into(),
         })?;
     if maximum_commit_capacity_bytes < current_commit_limit_bytes {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: "configured pagefile maximum is below the live Windows commit limit".into(),
         });
     }
     if maximum_commit_capacity_bytes < commit_total_bytes {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: "live committed bytes exceed configured maximum commit capacity".into(),
         });
     }
@@ -3216,7 +3216,7 @@ fn configured_pagefile_maximum_bytes() -> Result<(u64, String)> {
         )
     };
     if first != ERROR_SUCCESS || bytes < 4 || bytes % 2 != 0 {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!("fixed pagefile maximum registry size probe failed: {first}"),
         });
     }
@@ -3233,7 +3233,7 @@ fn configured_pagefile_maximum_bytes() -> Result<(u64, String)> {
         )
     };
     if second != ERROR_SUCCESS {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!("fixed pagefile maximum registry read failed: {second}"),
         });
     }
@@ -3246,7 +3246,7 @@ fn configured_pagefile_maximum_bytes() -> Result<(u64, String)> {
         .filter(|entry| !entry.is_empty())
         .map(|entry| {
             let text =
-                String::from_utf16(entry).map_err(|_| EmberdError::InvalidDispatchManifest {
+                String::from_utf16(entry).map_err(|_| EmberLabError::InvalidDispatchManifest {
                     detail: "fixed pagefile maximum registry value is not UTF-16".into(),
                 })?;
             Ok(text)
@@ -3266,30 +3266,30 @@ fn pagefile_maximum_bytes_from_entries(entries: &[String]) -> Result<u64> {
             .next_back()
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|value| *value > 0)
-            .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                 detail: "pagefile setting is not a fixed positive maximum".into(),
             })?;
         total_mib = total_mib.checked_add(maximum_mib).ok_or_else(|| {
-            EmberdError::InvalidDispatchManifest {
+            EmberLabError::InvalidDispatchManifest {
                 detail: "pagefile maximum overflowed MiB".into(),
             }
         })?;
     }
     if total_mib == 0 {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: "no fixed pagefile maximum is configured".into(),
         });
     }
     total_mib
         .checked_mul(1024 * 1024)
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "pagefile maximum overflowed bytes".into(),
         })
 }
 
 #[cfg(not(windows))]
 pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
-    Err(EmberdError::InvalidDispatchManifest {
+    Err(EmberLabError::InvalidDispatchManifest {
         detail: "native host commit probing is currently Windows-only".into(),
     })
 }
@@ -3298,16 +3298,16 @@ fn available_free_vram_bytes() -> Result<u64> {
     let output = std::process::Command::new("nvidia-smi")
         .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
         .output()
-        .map_err(|error| EmberdError::InvalidDispatchManifest {
+        .map_err(|error| EmberLabError::InvalidDispatchManifest {
             detail: format!("nvidia-smi VRAM probe failed to start: {error}"),
         })?;
     if !output.status.success() {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!("nvidia-smi VRAM probe failed with {}", output.status),
         });
     }
     let stdout =
-        String::from_utf8(output.stdout).map_err(|error| EmberdError::InvalidDispatchManifest {
+        String::from_utf8(output.stdout).map_err(|error| EmberLabError::InvalidDispatchManifest {
             detail: format!("nvidia-smi VRAM output was not UTF-8: {error}"),
         })?;
     let values = stdout
@@ -3315,11 +3315,11 @@ fn available_free_vram_bytes() -> Result<u64> {
         .filter(|line| !line.trim().is_empty())
         .map(|line| line.trim().parse::<u64>())
         .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|error| EmberdError::InvalidDispatchManifest {
+        .map_err(|error| EmberLabError::InvalidDispatchManifest {
             detail: format!("nvidia-smi VRAM output was invalid: {error}"),
         })?;
     if values.len() != 1 {
-        return Err(EmberdError::InvalidDispatchManifest {
+        return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!(
                 "dispatch requires exactly one visible GPU, observed {}",
                 values.len()
@@ -3328,11 +3328,11 @@ fn available_free_vram_bytes() -> Result<u64> {
     }
     values[0]
         .checked_mul(1024 * 1024)
-        .ok_or_else(|| EmberdError::InvalidDispatchManifest {
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "nvidia-smi VRAM value overflowed bytes".into(),
         })
 }
-fn emberd_source_hash() -> String {
+fn ember_lab_source_hash() -> String {
     let sources: [&[u8]; 5] = [
         include_bytes!("lib.rs"),
         include_bytes!("rpc.rs"),
@@ -3427,7 +3427,7 @@ fn create_monitor_shutdown() -> Result<OwnedHandle> {
 fn state_writer_lock_path(path: &Path) -> PathBuf {
     let mut name = path
         .file_name()
-        .unwrap_or_else(|| std::ffi::OsStr::new("emberd"))
+        .unwrap_or_else(|| std::ffi::OsStr::new("ember-lab"))
         .to_os_string();
     name.push(".writer.lock");
     path.with_file_name(name)
@@ -3448,7 +3448,7 @@ fn acquire_state_writer_lock(path: &Path) -> Result<fs::File> {
     {
         Ok(lock) => Ok(lock),
         Err(error) if matches!(error.raw_os_error(), Some(32 | 33)) => {
-            Err(EmberdError::StateWriterBusy { path: lock_path })
+            Err(EmberLabError::StateWriterBusy { path: lock_path })
         }
         Err(error) => Err(error.into()),
     }
@@ -3542,7 +3542,7 @@ fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
             let error = std::io::Error::last_os_error();
             let _ = fs::remove_file(&temp);
             return match error.raw_os_error() {
-                Some(80 | 183) => Err(EmberdError::ReceiptAlreadyExists {
+                Some(80 | 183) => Err(EmberLabError::ReceiptAlreadyExists {
                     path: path.to_path_buf(),
                 }),
                 _ => Err(error.into()),
@@ -3554,7 +3554,7 @@ fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
         if let Err(error) = fs::hard_link(&temp, path) {
             let _ = fs::remove_file(&temp);
             return if error.kind() == std::io::ErrorKind::AlreadyExists {
-                Err(EmberdError::ReceiptAlreadyExists {
+                Err(EmberLabError::ReceiptAlreadyExists {
                     path: path.to_path_buf(),
                 })
             } else {
@@ -3708,7 +3708,7 @@ fn duplicate_remote_log_handle(
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
     if remote_handle_value == 0 {
-        return Err(EmberdError::InvalidTransition {
+        return Err(EmberLabError::InvalidTransition {
             job_id: String::new(),
             detail: "persisted child log handle is absent".into(),
         });
@@ -3744,7 +3744,7 @@ fn duplicate_remote_log_handle(
             .to_lowercase()
     };
     if normalize(&actual) != normalize(&fs::canonicalize(expected_path)?) {
-        return Err(EmberdError::InvalidTransition {
+        return Err(EmberLabError::InvalidTransition {
             job_id: String::new(),
             detail: format!(
                 "duplicated child log handle path mismatch: expected {}, got {}",
@@ -3806,7 +3806,7 @@ fn spawn_managed(
         .maximum_job_memory_bytes
         .map(usize::try_from)
         .transpose()
-        .map_err(|_| EmberdError::InvalidDispatchManifest {
+        .map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "maximum job memory does not fit the current Windows address space".into(),
         })?;
 
@@ -3818,7 +3818,7 @@ fn spawn_managed(
     }
     if std::io::Error::last_os_error().raw_os_error() == Some(183) {
         unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
-        return Err(EmberdError::InvalidTransition {
+        return Err(EmberLabError::InvalidTransition {
             job_id: spec.job_id.clone(),
             detail: "job object name already exists".into(),
         });
@@ -4013,7 +4013,7 @@ fn record_natural_exit(
     exit_code: u32,
     live: &LiveProcess,
 ) -> Result<()> {
-    let mut conn = db.lock().map_err(|_| EmberdError::Poisoned)?;
+    let mut conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let lease: Option<(String, i64)> = tx
         .query_row(
@@ -4022,7 +4022,7 @@ fn record_natural_exit(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?;
-    let (resource, lease_epoch) = lease.ok_or_else(|| EmberdError::InvalidTransition {
+    let (resource, lease_epoch) = lease.ok_or_else(|| EmberLabError::InvalidTransition {
         job_id: job_id.into(),
         detail: "natural-exit monitor lost its running state fence".into(),
     })?;
@@ -4042,7 +4042,7 @@ fn record_natural_exit(
         ],
     )?;
     if changed != 1 {
-        return Err(EmberdError::InvalidTransition {
+        return Err(EmberLabError::InvalidTransition {
             job_id: job_id.into(),
             detail: "natural-exit monitor lost its state or lease epoch fence".into(),
         });
@@ -4052,7 +4052,7 @@ fn record_natural_exit(
         params![resource, job_id, lease_epoch],
     )?;
     if released != 1 {
-        return Err(EmberdError::InvalidTransition {
+        return Err(EmberLabError::InvalidTransition {
             job_id: job_id.into(),
             detail: "natural-exit monitor lost its lease epoch".into(),
         });
@@ -4336,7 +4336,7 @@ fn inspect_handle(
     let (mut creation, mut exit, mut kernel, mut user): (FILETIME, FILETIME, FILETIME, FILETIME) =
         unsafe { zeroed() };
     if unsafe { GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user) } == 0 {
-        return Err(EmberdError::ProcessUnavailable {
+        return Err(EmberLabError::ProcessUnavailable {
             job_id: String::new(),
             pid,
         });
@@ -4344,7 +4344,7 @@ fn inspect_handle(
     let mut path = vec![0u16; 32768];
     let mut size = path.len() as u32;
     if unsafe { QueryFullProcessImageNameW(handle, 0, path.as_mut_ptr(), &mut size) } == 0 {
-        return Err(EmberdError::ProcessUnavailable {
+        return Err(EmberLabError::ProcessUnavailable {
             job_id: String::new(),
             pid,
         });
@@ -4380,7 +4380,7 @@ fn terminate_handles(
         return Err(std::io::Error::last_os_error().into());
     }
     if unsafe { WaitForSingleObject(process, 5000) } != WAIT_OBJECT_0 {
-        return Err(EmberdError::ProcessUnavailable {
+        return Err(EmberLabError::ProcessUnavailable {
             job_id: String::new(),
             pid,
         });
@@ -4404,7 +4404,7 @@ fn terminate_handles(
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    Err(EmberdError::ProcessUnavailable {
+    Err(EmberLabError::ProcessUnavailable {
         job_id: String::new(),
         pid,
     })
@@ -4467,7 +4467,7 @@ fn windows_environment(overrides: &BTreeMap<String, String>) -> Vec<u16> {
 #[cfg(windows)]
 fn job_object_name(job_id: &str) -> String {
     format!(
-        "Local\\emberd-{}-{}-{}",
+        "Local\\ember-lab-{}-{}-{}",
         std::process::id(),
         now_ms(),
         &hash_bytes(job_id.as_bytes())[..16]
@@ -4476,7 +4476,7 @@ fn job_object_name(job_id: &str) -> String {
 #[cfg(not(windows))]
 fn job_object_name(job_id: &str) -> String {
     format!(
-        "emberd-{}-{}",
+        "ember-lab-{}-{}",
         now_ms(),
         &hash_bytes(job_id.as_bytes())[..16]
     )
@@ -4565,7 +4565,7 @@ fn inspect_process(pid: u32) -> Result<ProcessIdentity> {
     let token = stat
         .split_whitespace()
         .nth(21)
-        .ok_or_else(|| EmberdError::ProcessUnavailable {
+        .ok_or_else(|| EmberLabError::ProcessUnavailable {
             job_id: String::new(),
             pid,
         })?;
@@ -4582,7 +4582,7 @@ fn terminate_process(pid: u32) -> Result<()> {
     if status.success() {
         Ok(())
     } else {
-        Err(EmberdError::ProcessUnavailable {
+        Err(EmberLabError::ProcessUnavailable {
             job_id: String::new(),
             pid,
         })
@@ -4610,7 +4610,7 @@ mod dispatch_binding_snapshot_tests {
         fs::write(&registry, br#"{"schema_version":"replaced"}"#).unwrap();
 
         let error = read_verified_json_snapshot(&registry, &initially_bound).unwrap_err();
-        assert!(matches!(error, EmberdError::DispatchBindingMismatch { .. }));
+        assert!(matches!(error, EmberLabError::DispatchBindingMismatch { .. }));
         fs::remove_dir_all(root).unwrap();
     }
 

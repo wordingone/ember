@@ -1,24 +1,24 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-// emberd-rpc.ts — strict Ember CLI client for the resident emberd named-pipe RPC.
+// ember-lab-rpc.ts — strict Ember CLI client for the resident ember-lab named-pipe RPC.
 
 import net from "node:net";
 
-const PIPE_PREFIX = "\\\\.\\pipe\\emberd-";
+const PIPE_PREFIX = "\\\\.\\pipe\\ember-lab-";
 const OPERATOR_PIPE_PREFIX = "\\\\.\\pipe\\ember-operator-";
 const MAX_FRAME_BYTES = 64 * 1024;
 const DEFAULT_RESPONSE_TIMEOUT_MS = 5_000;
 const OPEN_RETRY_INTERVAL_MS = 20;
 const OPEN_RETRY_WINDOW_MS = 10_000;
 
-export interface EmberdPingOptions {
+export interface EmberLabPingOptions {
   pipeName: string;
   requestId?: string;
   timeoutMs?: number;
 }
 
-export interface EmberdRequestOptions {
+export interface EmberLabRequestOptions {
   pipeName: string;
   method: string;
   params: Record<string, unknown>;
@@ -26,26 +26,26 @@ export interface EmberdRequestOptions {
   timeoutMs?: number;
 }
 
-export function configuredEmberdPipe(
+export function configuredEmberLabPipe(
   environment: Record<string, string | undefined> = process.env,
 ): string {
-  const pipeName = environment["EMBERD_PIPE"];
-  if (!pipeName) throw new Error("EMBERD_PIPE is required for a connected owned Ember seat");
+  const pipeName = environment["EMBER_LAB_PIPE"];
+  if (!pipeName) throw new Error("EMBER_LAB_PIPE is required for a connected owned Ember seat");
   if (pipeName.startsWith(OPERATOR_PIPE_PREFIX)) {
-    throw new Error("EMBERD_PIPE must not use the per-PID operator input pipe namespace");
+    throw new Error("EMBER_LAB_PIPE must not use the per-PID operator input pipe namespace");
   }
   if (
     !pipeName.startsWith(PIPE_PREFIX)
     || pipeName.length > 240
     || /[\r\n\0]/.test(pipeName)
   ) {
-    throw new Error("EMBERD_PIPE must be one exact local emberd named-pipe identity");
+    throw new Error("EMBER_LAB_PIPE must be one exact local ember-lab named-pipe identity");
   }
   return pipeName;
 }
 
 function responseError(message: string): Error {
-  return new Error("emberd RPC rejected: " + message);
+  return new Error("ember-lab RPC rejected: " + message);
 }
 
 function isAccessDenied(error: unknown): boolean {
@@ -55,7 +55,7 @@ function isAccessDenied(error: unknown): boolean {
   return code === "EACCES" || code === "EPERM";
 }
 
-async function openEmberdPipe(pipeName: string): Promise<net.Socket> {
+async function openEmberLabPipe(pipeName: string): Promise<net.Socket> {
   return new Promise<net.Socket>((resolve, reject) => {
     let settled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -100,21 +100,21 @@ async function openEmberdPipe(pipeName: string): Promise<net.Socket> {
   });
 }
 
-export async function callEmberd(options: EmberdRequestOptions): Promise<Record<string, unknown>> {
-  const pipeName = configuredEmberdPipe({ EMBERD_PIPE: options.pipeName });
+export async function callEmberLab(options: EmberLabRequestOptions): Promise<Record<string, unknown>> {
+  const pipeName = configuredEmberLabPipe({ EMBER_LAB_PIPE: options.pipeName });
   if (!options.method || /[\r\n\0]/.test(options.method)) {
-    throw new Error("emberd RPC method must be one nonempty framed token");
+    throw new Error("ember-lab RPC method must be one nonempty framed token");
   }
   const requestId = options.requestId ?? crypto.randomUUID();
   const timeoutMs = options.timeoutMs ?? DEFAULT_RESPONSE_TIMEOUT_MS;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > DEFAULT_RESPONSE_TIMEOUT_MS) {
-    throw new Error("emberd RPC response timeout must be a positive bounded integer");
+    throw new Error("ember-lab RPC response timeout must be a positive bounded integer");
   }
   const request = JSON.stringify({ jsonrpc: "2.0", id: requestId, method: options.method, params: options.params }) + "\n";
   if (Buffer.byteLength(request, "utf8") > MAX_FRAME_BYTES) {
     throw responseError("request exceeds 65536 bytes");
   }
-  const socket = await openEmberdPipe(pipeName);
+  const socket = await openEmberLabPipe(pipeName);
   return new Promise<Record<string, unknown>>((resolve, reject) => {
     let settled = false;
     const finish = (error?: Error, result?: Record<string, unknown>): void => {
@@ -203,8 +203,8 @@ export async function callEmberd(options: EmberdRequestOptions): Promise<Record<
   });
 }
 
-export async function pingEmberd(options: EmberdPingOptions): Promise<void> {
-  const result = await callEmberd({
+export async function pingEmberLab(options: EmberLabPingOptions): Promise<void> {
+  const result = await callEmberLab({
     pipeName: options.pipeName,
     requestId: options.requestId,
     timeoutMs: options.timeoutMs,
@@ -216,6 +216,6 @@ export async function pingEmberd(options: EmberdPingOptions): Promise<void> {
   }
 }
 
-export async function handshakeConfiguredEmberd(): Promise<void> {
-  await pingEmberd({ pipeName: configuredEmberdPipe() });
+export async function handshakeConfiguredEmberLab(): Promise<void> {
+  await pingEmberLab({ pipeName: configuredEmberLabPipe() });
 }

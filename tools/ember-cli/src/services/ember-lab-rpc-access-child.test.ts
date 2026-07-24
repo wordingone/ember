@@ -4,7 +4,7 @@
 // This test is only registered inside the parent-spawned process below.
 // It keeps the mocked transport isolated from normal Bun test discovery.
 
-if (process.env["EMBERD_ACCESS_CHILD"] === "1") {
+if (process.env["EMBER_LAB_ACCESS_CHILD"] === "1") {
   const { expect, mock, test } = await import("bun:test");
   const { EventEmitter } = await import("node:events");
 
@@ -27,9 +27,9 @@ if (process.env["EMBERD_ACCESS_CHILD"] === "1") {
       },
     }));
 
-    const { callEmberd } = await import("./emberd-rpc.ts?access-denied-regression");
-    await expect(callEmberd({
-      pipeName: "\\\\.\\pipe\\emberd-access-denied",
+    const { callEmberLab } = await import("./ember-lab-rpc.ts?access-denied-regression");
+    await expect(callEmberLab({
+      pipeName: "\\\\.\\pipe\\ember-lab-access-denied",
       requestId: "denied",
       method: "ping",
       params: {},
