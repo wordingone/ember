@@ -603,37 +603,69 @@ fn validate_canary_binding_closure(
             detail: format!("governed canary governed runner path is unavailable: {error}"),
         }
     })?;
+    let config = fs::canonicalize(&scope.config.path).map_err(|error| {
+        EmberdError::InvalidDispatchManifest {
+            detail: format!("governed canary config path is unavailable: {error}"),
+        }
+    })?;
+    let tokenizer = fs::canonicalize(&scope.tokenizer.path).map_err(|error| {
+        EmberdError::InvalidDispatchManifest {
+            detail: format!("governed canary tokenizer path is unavailable: {error}"),
+        }
+    })?;
     let separators = args
         .iter()
         .enumerate()
         .filter_map(|(index, arg)| (arg == "--").then_some(index))
         .collect::<Vec<_>>();
     let separator = separators.first().copied();
-    let disk_argument = args.first().map(PathBuf::from);
-    let child_program_argument = separator
-        .and_then(|index| args.get(index + 1))
-        .map(PathBuf::from);
-    let governed_argument = separator
-        .and_then(|index| args.get(index + 2))
-        .map(PathBuf::from);
+    let canonical_argument = |index: usize| {
+        args.get(index)
+            .and_then(|argument| fs::canonicalize(argument).ok())
+    };
+    let canonical_occurrences = |expected: &Path| {
+        args.iter()
+            .filter_map(|argument| fs::canonicalize(argument).ok())
+            .filter(|argument| argument == expected)
+            .count()
+    };
+    let disk_argument = canonical_argument(0);
+    let child_program_argument = separator.and_then(|index| canonical_argument(index + 1));
+    let governed_argument = separator.and_then(|index| canonical_argument(index + 2));
     if separators.len() != 1
         || disk_argument.as_deref() != Some(disk_budget_runner.as_path())
         || child_program_argument.as_deref() != Some(program)
         || governed_argument.as_deref() != Some(governed_runner.as_path())
-        || args
-            .iter()
-            .filter(|arg| Path::new(arg.as_str()) == disk_budget_runner)
-            .count()
-            != 1
-        || args
-            .iter()
-            .filter(|arg| Path::new(arg.as_str()) == governed_runner)
-            .count()
-            != 1
+        || canonical_occurrences(&disk_budget_runner) != 1
+        || canonical_occurrences(&governed_runner) != 1
         || validate_hash(program_sha256).is_err()
     {
         return Err(EmberdError::InvalidDispatchManifest {
             detail: "governed canary manifest does not bind the exact executable, disk-budget runner, and governed-runner argv chain".into(),
+        });
+    }
+    let governed_mode = separator.and_then(|index| args.get(index + 3));
+    let config_flag = separator.and_then(|index| args.get(index + 4));
+    let config_argument = separator.and_then(|index| canonical_argument(index + 5));
+    if governed_mode.map(String::as_str) != Some("governed-vertical")
+        || config_flag.map(String::as_str) != Some("--config")
+        || config_argument.as_deref() != Some(config.as_path())
+        || canonical_occurrences(&config) != 1
+    {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail:
+                "governed canary config argv binding must be exact and follow governed-vertical"
+                    .into(),
+        });
+    }
+    let tokenizer_flag = separator.and_then(|index| args.get(index + 6));
+    let tokenizer_argument = separator.and_then(|index| canonical_argument(index + 7));
+    if tokenizer_flag.map(String::as_str) != Some("--tokenizer")
+        || tokenizer_argument.as_deref() != Some(tokenizer.as_path())
+        || canonical_occurrences(&tokenizer) != 1
+    {
+        return Err(EmberdError::InvalidDispatchManifest {
+            detail: "governed canary tokenizer argv binding must be exact and follow config".into(),
         });
     }
     Ok(())

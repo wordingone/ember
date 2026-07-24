@@ -136,7 +136,17 @@ fn write_governed_canary_manifest(root: &Path, job_id: &str) -> PathBuf {
         .unwrap()
         .to_string();
     payload["program"] = json!({"path":&program,"sha256":sha256(&program)});
-    payload["args"] = json!([&disk_budget_runner, "--", &program, &governed_runner]);
+    payload["args"] = json!([
+        &disk_budget_runner,
+        "--",
+        &program,
+        &governed_runner,
+        "governed-vertical",
+        "--config",
+        &config_path,
+        "--tokenizer",
+        &tokenizer
+    ]);
     payload["env"]
         .as_object_mut()
         .unwrap()
@@ -600,6 +610,87 @@ fn governed_canary_refuses_a_bound_governed_runner_missing_from_argv() {
             .identity_hash("governed-canary-missing-governed-argv")
             .unwrap(),
         None
+    );
+}
+
+#[test]
+fn governed_canary_refuses_a_config_binding_not_equal_to_the_argv_chain() {
+    let root = sandbox("governed-canary-config-drift");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-config-drift");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let unrelated_config = root.join("unrelated-config.json");
+    fs::write(&unrelated_config, b"{\"model\":\"other\"}").unwrap();
+    payload["canary_scope"]["config"] =
+        json!({"path": unrelated_config, "sha256": sha256(&unrelated_config)});
+    for binding in payload["bindings"].as_array_mut().unwrap() {
+        if binding["kind"] == "config" {
+            binding["path"] = json!(unrelated_config);
+            binding["sha256"] = json!(sha256(&unrelated_config));
+        }
+    }
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon.stop_job("governed-canary-config-drift").unwrap();
+    }
+    assert!(matches!(
+        result,
+        Err(EmberdError::InvalidDispatchManifest { ref detail })
+            if detail.contains("config argv binding")
+    ));
+}
+
+#[test]
+fn governed_canary_refuses_a_tokenizer_binding_not_equal_to_the_argv_chain() {
+    let root = sandbox("governed-canary-tokenizer-drift");
+    let manifest = write_governed_canary_manifest(&root, "governed-canary-tokenizer-drift");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let unrelated_tokenizer = root.join("unrelated-tokenizer.json");
+    fs::write(&unrelated_tokenizer, b"{\"tokenizer\":\"other\"}").unwrap();
+    payload["canary_scope"]["tokenizer"] =
+        json!({"path": unrelated_tokenizer, "sha256": sha256(&unrelated_tokenizer)});
+    for binding in payload["bindings"].as_array_mut().unwrap() {
+        if binding["kind"] == "tokenizer" {
+            binding["path"] = json!(unrelated_tokenizer);
+            binding["sha256"] = json!(sha256(&unrelated_tokenizer));
+        }
+    }
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let bytes = fs::read(&manifest).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let result = daemon.dispatch_governed_canary_manifest_bytes_at_with_probes(
+        &bytes,
+        &digest,
+        &manifest,
+        10_001,
+        |_root| Ok(u64::MAX),
+        || Ok(24 * GIB),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        || Ok(canary_snapshot(Vec::new())),
+    );
+    if result.is_ok() {
+        daemon.stop_job("governed-canary-tokenizer-drift").unwrap();
+    }
+    assert!(
+        matches!(
+            result,
+            Err(EmberdError::InvalidDispatchManifest { ref detail })
+                if detail.contains("tokenizer argv binding")
+        ),
+        "unexpected result: {result:?}"
     );
 }
 
