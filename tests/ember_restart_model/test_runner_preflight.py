@@ -974,6 +974,8 @@ class RunnerPreflightTests(unittest.TestCase):
                     "run_vertical_slice.py", "governed-vertical", "--seed", "83",
                     "--artifact-root", str(artifact_root), "--write-budget-bytes", "4096",
                     "--gpu-vram-gib", "20.0", "--max-records", "3",
+                    "--config", str(ROOT / "configs" / "ember-restart-3b.json"),
+                    "--tokenizer", str(ROOT / "tokenizer" / "tokenizer.json"),
                 ]):
                     with patch.object(run_vertical_slice, "checkpoint_serialization_byte_bound", return_value=4096):
                         with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as vertical_run:
@@ -985,6 +987,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     json.dumps(bindings, sort_keys=True, separators=(",", ":")).encode("utf-8")
                 ).hexdigest(),
                 "config_sha256": hashlib.sha256((ROOT / "configs" / "ember-restart-3b.json").read_bytes()).hexdigest(),
+                "tokenizer_sha256": hashlib.sha256((ROOT / "tokenizer" / "tokenizer.json").read_bytes()).hexdigest(),
                 "runner_source_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py").read_bytes()).hexdigest(),
                 "checkpoint_byte_bound": 4096,
                 "write_budget_bytes": 4096,
@@ -1023,6 +1026,8 @@ class RunnerPreflightTests(unittest.TestCase):
                             run_vertical_slice.run_governed_vertical(
                                 seed=83, artifact_root=artifact_root, write_budget_bytes=12_202_530_816,
                                 gpu_vram_gib=20.0,
+                                config_path=ROOT / "configs" / "ember-restart-3b.json",
+                                tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                             )
             governor.assert_called_once_with()
 
@@ -1051,9 +1056,55 @@ class RunnerPreflightTests(unittest.TestCase):
                                 run_vertical_slice.run_governed_vertical(
                                     seed=83, artifact_root=outside_artifact_root,
                                     write_budget_bytes=4096, gpu_vram_gib=20.0,
+                                    config_path=ROOT / "configs" / "ember-restart-3b.json",
+                                    tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                                 )
             governor.assert_not_called()
             vertical_run.assert_not_called()
+
+    def test_governed_vertical_rejects_noncanonical_config_or_tokenizer_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            wrong_config = Path(directory) / "config.json"
+            wrong_tokenizer = Path(directory) / "tokenizer.json"
+            wrong_config.write_bytes(
+                (ROOT / "configs" / "ember-restart-3b.json").read_bytes()
+            )
+            wrong_tokenizer.write_bytes(
+                (ROOT / "tokenizer" / "tokenizer.json").read_bytes()
+            )
+            cases = (
+                (
+                    wrong_config,
+                    ROOT / "tokenizer" / "tokenizer.json",
+                ),
+                (
+                    ROOT / "configs" / "ember-restart-3b.json",
+                    wrong_tokenizer,
+                ),
+            )
+            for config_path, tokenizer_path in cases:
+                with self.subTest(
+                    config_path=config_path,
+                    tokenizer_path=tokenizer_path,
+                ):
+                    with patch.object(
+                        run_vertical_slice,
+                        "governed_vertical_checkpoint_byte_bound",
+                        side_effect=AssertionError("checkpoint bound"),
+                    ) as checkpoint_bound:
+                        with self.assertRaisesRegex(
+                            ValueError,
+                            "config/tokenizer binding is not canonical",
+                        ):
+                            run_vertical_slice.run_governed_vertical(
+                                seed=83,
+                                artifact_root=ROOT,
+                                config_path=config_path,
+                                tokenizer_path=tokenizer_path,
+                                write_budget_bytes=12_202_530_816,
+                                gpu_vram_gib=20.0,
+                            )
+                    checkpoint_bound.assert_not_called()
 
     def test_governed_checkpoint_bound_includes_one_active_expert(self) -> None:
         config_path = ROOT / "configs" / "ember-restart-3b.json"
@@ -1093,6 +1144,8 @@ class RunnerPreflightTests(unittest.TestCase):
                         run_vertical_slice.run_governed_vertical(
                             seed=83, artifact_root=ROOT,
                             write_budget_bytes=12_202_530_815, gpu_vram_gib=20.0,
+                            config_path=ROOT / "configs" / "ember-restart-3b.json",
+                            tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                         )
         governor.assert_not_called()
         vertical_run.assert_not_called()
@@ -1116,6 +1169,8 @@ class RunnerPreflightTests(unittest.TestCase):
                                 run_vertical_slice.run_governed_vertical(
                                     seed=83, artifact_root=custody,
                                     write_budget_bytes=4096, gpu_vram_gib=20.0,
+                                    config_path=ROOT / "configs" / "ember-restart-3b.json",
+                                    tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                                 )
             governor.assert_not_called()
             vertical_run.assert_not_called()

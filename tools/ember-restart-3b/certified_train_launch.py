@@ -21,6 +21,7 @@ EMBERD_SOURCE_PATHS = (
     "runtime/emberd/src/lib.rs",
     "runtime/emberd/src/rpc.rs",
     "runtime/emberd/src/main.rs",
+    "runtime/emberd/src/host_probe.rs",
     "runtime/emberd/Cargo.toml",
     "runtime/emberd/Cargo.lock",
 )
@@ -823,6 +824,10 @@ def build_runner_argv(
             / "run_vertical_slice.py"
         ),
         "governed-vertical",
+        "--config",
+        str(repo_root / "configs" / "ember-restart-3b.json"),
+        "--tokenizer",
+        str(launch.tokenizer_path),
         "--gpu-vram-gib",
         str(launch.gpu_vram_gib),
         "--seed",

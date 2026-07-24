@@ -47,6 +47,7 @@ def emberd_source_sha256(repo: pathlib.Path) -> str:
         "runtime/emberd/src/lib.rs",
         "runtime/emberd/src/rpc.rs",
         "runtime/emberd/src/main.rs",
+        "runtime/emberd/src/host_probe.rs",
         "runtime/emberd/Cargo.toml",
         "runtime/emberd/Cargo.lock",
     ):
@@ -263,6 +264,7 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
         "runtime/emberd/src/lib.rs",
         "runtime/emberd/src/rpc.rs",
         "runtime/emberd/src/main.rs",
+        "runtime/emberd/src/host_probe.rs",
         "runtime/emberd/Cargo.toml",
         "runtime/emberd/Cargo.lock",
     ):
@@ -894,6 +896,34 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 argv[argv.index("--write-budget-bytes") + 1],
                 str(16 * 1024**3),
             )
+            governed_index = argv.index("governed-vertical")
+            self.assertEqual(
+                argv[governed_index + 1 : governed_index + 5],
+                [
+                    "--config",
+                    str(
+                        paths["repo"]
+                        / "configs"
+                        / "ember-restart-3b.json"
+                    ),
+                    "--tokenizer",
+                    str(paths["evidence_paths"]["tokenizer_sha256"]),
+                ],
+            )
+
+    def test_emberd_source_contract_includes_host_probe(self) -> None:
+        module = load_module()
+        self.assertEqual(
+            module.EMBERD_SOURCE_PATHS,
+            (
+                "runtime/emberd/src/lib.rs",
+                "runtime/emberd/src/rpc.rs",
+                "runtime/emberd/src/main.rs",
+                "runtime/emberd/src/host_probe.rs",
+                "runtime/emberd/Cargo.toml",
+                "runtime/emberd/Cargo.lock",
+            ),
+        )
 
     def test_scope_failure_occurs_before_run_process(self) -> None:
         module = load_module()
@@ -1169,6 +1199,33 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             (
                 paths["repo"] / "runtime" / "emberd" / "src" / "rpc.rs"
             ).write_bytes(b"drifted source\n")
+            with self.assertRaisesRegex(ValueError, "emberd source"):
+                module.build_emberd_dispatch_manifest(
+                    paths["repo"],
+                    launch,
+                    now_ms=1_000_000,
+                )
+
+    def test_dispatch_manifest_refuses_host_probe_drift_after_validation(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            (
+                paths["repo"]
+                / "runtime"
+                / "emberd"
+                / "src"
+                / "host_probe.rs"
+            ).write_bytes(b"drifted host probe\n")
             with self.assertRaisesRegex(ValueError, "emberd source"):
                 module.build_emberd_dispatch_manifest(
                     paths["repo"],
