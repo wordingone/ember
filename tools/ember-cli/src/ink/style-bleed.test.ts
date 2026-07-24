@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // style-bleed.test.ts — team-lead's D4 rasterize-and-look pass found the ENTIRE welcome screen
 // rendering ember-orange body text that no Text node ever asked for (mock1: neutral body, orange
 // accent only). Root cause, traced from the raw capture: renderNodeToOutput's per-character text
@@ -261,7 +264,7 @@ describe("issue #310: cursor's inverse does not bleed into subsequent renders (#
         // Separator
         React.createElement(Text, null, "─".repeat(212)), // ~220 wide separator (narrow for 220w)
         // Status bar row — full inverse row like the real one from 291
-        React.createElement(Text, { inverse: true }, "○ observe · ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ctrl+t to show tasks"),
+        React.createElement(Text, { inverse: true }, "○ observe · ⏵⏵ bypass permissions on"),
       ),
       { stream, stdout: { columns: 220, rows: 60 } },
     );
@@ -273,7 +276,7 @@ describe("issue #310: cursor's inverse does not bleed into subsequent renders (#
         React.createElement(Text, null, "prompt> "),
         React.createElement(Text, { inverse: true }, "n"), // cursor moves
         React.createElement(Text, null, "─".repeat(212)),
-        React.createElement(Text, { inverse: true }, "○ observe · ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ctrl+t to show tasks"),
+        React.createElement(Text, { inverse: true }, "○ observe · ⏵⏵ bypass permissions on"),
       ),
     );
 
@@ -347,7 +350,7 @@ describe("issue #310: cursor's inverse does not bleed into subsequent renders (#
         React.createElement(Text, null, "prompt> "),
         React.createElement(Text, { inverse: true }, "C"),
         React.createElement(Text, null, "─".repeat(212)),
-        React.createElement(Text, { inverse: true }, "○ observe · ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ctrl+t to show tasks"),
+        React.createElement(Text, { inverse: true }, "○ observe · ⏵⏵ bypass permissions on"),
       ),
     );
 
