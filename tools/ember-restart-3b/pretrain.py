@@ -132,15 +132,18 @@ def run_pretraining_segment(
             "data_cursor": cursor, "modality_examples": dict(modality_examples),
             "expert_examples": dict(expert_examples), "active_expert": active_expert,
         }
+        progress_event = None
         if progress_callback is not None:
-            progress_callback({
+            progress_event = {
                 "step": global_step,
                 "total_steps": final_global_step,
                 "loss": losses[-1],
                 "step_ms": float((time.perf_counter() - step_started) * 1000.0),
-            })
+            }
         if global_step % checkpoint_every == 0 or local_step == len(remaining_records):
             checkpoint_callback(global_step, result)
+        if progress_event is not None:
+            progress_callback(progress_event)
     if require_complete_coverage:
         missing_capabilities = [name for name, value in modality_examples.items() if value <= 0]
         missing_experts = [name for name, value in expert_examples.items() if value <= 0]
@@ -236,14 +239,17 @@ def run_selection_pretraining_segment(
             "data_cursor": training_cursor, "modality_examples": dict(modality_examples),
             "expert_examples": dict(expert_examples), "active_expert": active_expert,
         }
+        progress_event = None
         if progress_callback is not None:
-            progress_callback({
+            progress_event = {
                 "step": global_step, "total_steps": None, "loss": losses[-1],
                 "step_ms": float((time.perf_counter() - step_started) * 1000.0),
-            })
+            }
         if global_step % checkpoint_every == 0:
             checkpoint_callback(global_step, last_result)
             last_checkpoint_step = global_step
+        if progress_event is not None:
+            progress_callback(progress_event)
         if max_records is not None and completed >= max_records:
             break
     if last_result is None or last_cursor is None:
