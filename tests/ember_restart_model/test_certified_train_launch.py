@@ -891,6 +891,10 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 argv[argv.index("--gpu-vram-gib") + 1],
                 "20.0",
             )
+            self.assertEqual(
+                argv[argv.index("--transient-checkpoint-gib") + 1],
+                "4.0",
+            )
             self.assertEqual(argv[argv.index("--max-records") + 1], "1")
             self.assertEqual(
                 argv[argv.index("--write-budget-bytes") + 1],
@@ -1227,6 +1231,32 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 / "host_probe.rs"
             ).write_bytes(b"drifted host probe\n")
             with self.assertRaisesRegex(ValueError, "emberd source"):
+                module.build_emberd_dispatch_manifest(
+                    paths["repo"],
+                    launch,
+                    now_ms=1_000_000,
+                )
+
+    def test_dispatch_manifest_refuses_certificate_evidence_drift_after_validation(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            paths["evidence_paths"]["input_shard_sha256"].write_bytes(
+                b"replacement-after-validation\n"
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "certificate evidence hash mismatch",
+            ):
                 module.build_emberd_dispatch_manifest(
                     paths["repo"],
                     launch,

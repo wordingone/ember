@@ -358,6 +358,34 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(receipt["effective_cap_bytes"], 16 * gib)
         self.assertEqual(receipt["applied_fraction"], 16.0 / 24.0)
 
+    def test_governed_gpu_cap_refuses_envelope_above_governor_fraction(self) -> None:
+        gib = 1024**3
+        governor_receipt = {
+            "vram_fraction": 0.5,
+            "governor_source_sha256": "a" * 64,
+        }
+        with (
+            patch.object(
+                run_vertical_slice.torch.cuda,
+                "mem_get_info",
+                return_value=(24 * gib, 24 * gib),
+            ),
+            patch.object(
+                run_vertical_slice.torch.cuda,
+                "set_per_process_memory_fraction",
+            ) as set_fraction,
+        ):
+            with self.assertRaisesRegex(
+                MemoryError,
+                "declared cap exposes only",
+            ):
+                run_vertical_slice.governed_gpu_cap_preflight(
+                    requested_gpu_vram_gib=20.0,
+                    required_bytes=19 * gib,
+                    governor_receipt=governor_receipt,
+                )
+        set_fraction.assert_not_called()
+
     def test_production_runner_refuses_retired_bootstrap_curriculum(self) -> None:
         packet = {
             "input_identity": {
@@ -594,6 +622,7 @@ class RunnerPreflightTests(unittest.TestCase):
                         run_vertical_slice.run(
                             seed=83, artifact_root=Path("B:/vertical-artifacts"),
                             requested_gpu_vram_gib=20.0,
+                            max_transient_checkpoint_scratch_bytes=4 * 1024**3,
                             canonical_runner_authority={"forged": "authority"},
                         )
         governor.assert_not_called()
@@ -974,6 +1003,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     "run_vertical_slice.py", "governed-vertical", "--seed", "83",
                     "--artifact-root", str(artifact_root), "--write-budget-bytes", "4096",
                     "--gpu-vram-gib", "20.0", "--max-records", "3",
+                    "--transient-checkpoint-gib", "1.0",
                     "--config", str(ROOT / "configs" / "ember-restart-3b.json"),
                     "--tokenizer", str(ROOT / "tokenizer" / "tokenizer.json"),
                 ]):
@@ -992,6 +1022,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 "checkpoint_byte_bound": 4096,
                 "write_budget_bytes": 4096,
                 "gpu_vram_gib": 20.0,
+                "transient_checkpoint_scratch_bytes": 1024**3,
             }
             vertical_run.assert_called_once_with(
                 seed=83, artifact_root=artifact_root, resume_checkpoint=None,
@@ -999,6 +1030,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 resume_optimizer_transition_registry=None,
                 resume_optimizer_transition_registry_sha256=None,
                 write_budget_bytes=4096, max_records=3, requested_gpu_vram_gib=20.0,
+                max_transient_checkpoint_scratch_bytes=1024**3,
                 canonical_runner_authority=assertion_authority,
             )
 
@@ -1026,6 +1058,7 @@ class RunnerPreflightTests(unittest.TestCase):
                             run_vertical_slice.run_governed_vertical(
                                 seed=83, artifact_root=artifact_root, write_budget_bytes=12_202_530_816,
                                 gpu_vram_gib=20.0,
+                                transient_checkpoint_gib=4.0,
                                 config_path=ROOT / "configs" / "ember-restart-3b.json",
                                 tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                             )
@@ -1056,6 +1089,7 @@ class RunnerPreflightTests(unittest.TestCase):
                                 run_vertical_slice.run_governed_vertical(
                                     seed=83, artifact_root=outside_artifact_root,
                                     write_budget_bytes=4096, gpu_vram_gib=20.0,
+                                    transient_checkpoint_gib=4.0,
                                     config_path=ROOT / "configs" / "ember-restart-3b.json",
                                     tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                                 )
@@ -1103,6 +1137,7 @@ class RunnerPreflightTests(unittest.TestCase):
                                 tokenizer_path=tokenizer_path,
                                 write_budget_bytes=12_202_530_816,
                                 gpu_vram_gib=20.0,
+                                transient_checkpoint_gib=4.0,
                             )
                     checkpoint_bound.assert_not_called()
 
@@ -1144,6 +1179,7 @@ class RunnerPreflightTests(unittest.TestCase):
                         run_vertical_slice.run_governed_vertical(
                             seed=83, artifact_root=ROOT,
                             write_budget_bytes=12_202_530_815, gpu_vram_gib=20.0,
+                            transient_checkpoint_gib=4.0,
                             config_path=ROOT / "configs" / "ember-restart-3b.json",
                             tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                         )
@@ -1169,6 +1205,7 @@ class RunnerPreflightTests(unittest.TestCase):
                                 run_vertical_slice.run_governed_vertical(
                                     seed=83, artifact_root=custody,
                                     write_budget_bytes=4096, gpu_vram_gib=20.0,
+                                    transient_checkpoint_gib=4.0,
                                     config_path=ROOT / "configs" / "ember-restart-3b.json",
                                     tokenizer_path=ROOT / "tokenizer" / "tokenizer.json",
                                 )

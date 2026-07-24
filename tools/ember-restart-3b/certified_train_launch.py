@@ -220,6 +220,7 @@ class ValidatedLaunch(NamedTuple):
     max_b_write_gib: float
     max_wall_seconds: float
     gpu_vram_gib: float
+    transient_checkpoint_gib: float
     expected_gpu_uuid: str
     emberd_pipe: str
     emberd_binary_path: pathlib.Path
@@ -229,6 +230,7 @@ class ValidatedLaunch(NamedTuple):
     input_shard_path: pathlib.Path
     input_admission_receipt_path: pathlib.Path
     input_identity_validator_path: pathlib.Path
+    certificate_evidence_sha256: dict[str, str]
     storage_reserves: list[dict[str, object]]
     required_available_maximum_commit_bytes: int
     maximum_job_memory_bytes: int
@@ -769,6 +771,9 @@ def validate_certified_request(
         max_b_write_gib=float(requested_scope["max_b_write_gib"]),
         max_wall_seconds=float(requested_scope["wall_minutes"]) * 60.0,
         gpu_vram_gib=float(requested_scope["gpu_vram_gib"]),
+        transient_checkpoint_gib=float(
+            requested_scope["transient_checkpoint_gib"]
+        ),
         expected_gpu_uuid=expected_gpu_uuid,
         emberd_pipe=emberd_pipe,
         emberd_binary_path=evidence_paths["emberd_binary_sha256"],
@@ -782,6 +787,10 @@ def validate_certified_request(
         input_identity_validator_path=evidence_paths[
             "input_identity_validator_sha256"
         ],
+        certificate_evidence_sha256={
+            field: certificate[field]
+            for field in sorted(CERTIFICATE_EVIDENCE_SHA256_KEYS)
+        },
         storage_reserves=storage_reserves,
         required_available_maximum_commit_bytes=(
             required_available_maximum_commit_bytes
@@ -830,6 +839,8 @@ def build_runner_argv(
         str(launch.tokenizer_path),
         "--gpu-vram-gib",
         str(launch.gpu_vram_gib),
+        "--transient-checkpoint-gib",
+        str(launch.transient_checkpoint_gib),
         "--seed",
         str(launch.seed),
         "--artifact-root",
@@ -951,23 +962,76 @@ def build_emberd_dispatch_manifest(
         )
     }
 
-    def bound(kind: str, path: pathlib.Path) -> dict[str, str]:
+    if (
+        set(launch.certificate_evidence_sha256)
+        != CERTIFICATE_EVIDENCE_SHA256_KEYS
+    ):
+        raise ValueError("certificate evidence hash set is incomplete")
+    emberd_binary_sha256 = _file_sha256(
+        emberd_binary_path,
+        "dispatch emberd binary binding",
+    )
+    if (
+        emberd_binary_sha256
+        != launch.certificate_evidence_sha256["emberd_binary_sha256"]
+    ):
+        raise ValueError(
+            "certificate evidence hash mismatch: emberd_binary_sha256"
+        )
+
+    def bound(
+        kind: str,
+        path: pathlib.Path,
+        evidence_field: str,
+    ) -> dict[str, str]:
+        actual_sha256 = _file_sha256(path, f"dispatch {kind} binding")
+        if (
+            actual_sha256
+            != launch.certificate_evidence_sha256[evidence_field]
+        ):
+            raise ValueError(
+                f"certificate evidence hash mismatch: {evidence_field}"
+            )
         return {
             "kind": kind,
             "path": str(path),
-            "sha256": _file_sha256(path, f"dispatch {kind} binding"),
+            "sha256": actual_sha256,
         }
 
     bindings = [
-        bound("config", config),
-        bound("certified_consumer", certified_consumer),
-        bound("disk_budget_runner", disk_budget_runner),
-        bound("governed_runner", governed_runner),
-        bound("tokenizer", tokenizer_path),
-        bound("manifest", launch.input_identity_path),
-        bound("input", launch.input_shard_path),
-        bound("verifier", launch.input_admission_receipt_path),
-        bound("verifier", launch.input_identity_validator_path),
+        bound("config", config, "config_sha256"),
+        bound(
+            "certified_consumer",
+            certified_consumer,
+            "certified_consumer_sha256",
+        ),
+        bound(
+            "disk_budget_runner",
+            disk_budget_runner,
+            "disk_budget_runner_sha256",
+        ),
+        bound(
+            "governed_runner",
+            governed_runner,
+            "governed_runner_sha256",
+        ),
+        bound("tokenizer", tokenizer_path, "tokenizer_sha256"),
+        bound(
+            "manifest",
+            launch.input_identity_path,
+            "input_identity_sha256",
+        ),
+        bound("input", launch.input_shard_path, "input_shard_sha256"),
+        bound(
+            "verifier",
+            launch.input_admission_receipt_path,
+            "input_admission_receipt_sha256",
+        ),
+        bound(
+            "verifier",
+            launch.input_identity_validator_path,
+            "input_identity_validator_sha256",
+        ),
     ]
     minimum_free_vram_bytes = int(launch.gpu_vram_gib * 1024**3)
     canary_scope = {
@@ -975,9 +1039,7 @@ def build_emberd_dispatch_manifest(
         "expected_gpu_uuid": expected_gpu_uuid,
         "minimum_free_vram_bytes": minimum_free_vram_bytes,
         "lease_id": lease_id,
-        "expected_emberd_binary_sha256": _file_sha256(
-            emberd_binary_path, "emberd binary"
-        ),
+        "expected_emberd_binary_sha256": emberd_binary_sha256,
         "expected_emberd_source_sha256": expected_emberd_source_sha256,
         "certified_consumer": {
             "path": str(certified_consumer),
