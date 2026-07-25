@@ -662,7 +662,10 @@ def validate_manifest(
                 else:
                     seen.add(name)
                 tensor_sha = tensor.get("sha256")
-                if not isinstance(tensor_sha, str) or not SHA256_RE.fullmatch(tensor_sha):
+                if (
+                    not _is_unresolved(tensor_sha)
+                    and not (isinstance(tensor_sha, str) and SHA256_RE.fullmatch(tensor_sha))
+                ):
                     findings.append(_finding("hash.invalid", f"{prefix}.sha256"))
 
     ancestry_present, ancestry = _get(payload, "checkpoint.ancestry")
