@@ -16,7 +16,6 @@ from test_contract import REPO_ROOT, _write_json
 # PRODUCTION default path makes into seat_identity_bridge.derive_seat_identity.
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "ember_restart"))
 import cli_seat  # noqa: E402  (path must be inserted first)
-from seat_identity_bridge import resolve_checkpoint_byte_identity  # noqa: E402
 
 RESOLVER = REPO_ROOT / "scripts" / "ember_restart" / "cli_seat.py"
 CERT_FIXTURE_PATH = (
@@ -31,35 +30,25 @@ def _write_cert_manifest(tmp_path: Path, cert: dict, name: str = "cert-manifest.
     return path, hashlib.sha256(data).hexdigest()
 
 
-def _matching_cert(manifest: dict, tmp_path: Path) -> dict:
-    """A real cert manifest whose identity-bearing hash fields exactly equal
-    THIS generated run manifest's own (real, already-computed) values --
-    reusing the checked-in model-identity fixture (known to pass
-    validate_identity.py per scripts/ember_restart/test_seat_identity_bridge.py)
-    and overriding only the overlapping hashes. No hash is invented: every
-    value copied in here was already produced by the admission fixture
-    builder or by hashing real fixture bytes.
-
-    checkpoint.byte_sha256 is set to the CANONICAL CHECKPOINT-BYTE identity
-    (resolve_checkpoint_byte_identity over the real checkpoint index +
-    shards this manifest references) -- NOT manifest["checkpoint"]["sha256"]
-    (the checkpoint INDEX JSON's own self-consistency digest). Copying the
-    index digest in here is the exact defect
-    state/failure-classes/semantic-validation-without-bytes-2026-07-25.md
-    names: it made every historical version of this fixture pass while
-    proving nothing about checkpoint bytes. See
-    test_shard_tamper_with_unchanged_index_json_refused_through_production_path
-    for the reproduction of that defect against a cert built the old way.
-    """
-    cert = json.loads(CERT_FIXTURE_PATH.read_text(encoding="utf-8"))
-    checkpoint_index_path = tmp_path / manifest["checkpoint"]["manifest_path"]
-    checkpoint_sha256, errors = resolve_checkpoint_byte_identity(checkpoint_index_path, root=tmp_path)
-    assert not errors, errors
-    cert["checkpoint"]["byte_sha256"] = checkpoint_sha256
-    cert["architecture"]["sha256"] = manifest["architecture"]["model_config"]["sha256"]
-    cert["tokenizer"]["sha256"] = manifest["tokenizer"]["sha256"]
-    cert["evaluation"]["subject_checkpoint_sha256"] = checkpoint_sha256
-    return cert
+# NOTE (rework 2026-07-25): an earlier draft of this file carried
+# _matching_cert / _single_shard_admission_manifest helpers meant to reach a
+# GREEN (or a cert-cross-check REFUSE) through the real cli_seat.py
+# production path with a single-shard checkpoint. They were removed:
+# contract.py's own _verify_architecture unconditionally requires exactly
+# the vision/audio/reasoning/tool expert banks, each bound to its own
+# checkpoint shard (contract.py: "architecture.expert_banks: requires
+# exactly vision/audio/reasoning/tool banks") -- so every manifest that can
+# pass Stage 1 (OWNED_ADMITTED) admission is structurally multi-shard, and
+# this rework's bridge refuses every multi-shard checkpoint outright (the
+# schema/contract gap -- see
+# test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_
+# unadmitted_cert below). No single-shard manifest can reach OWNED_ADMITTED
+# through the real production path at all under the current schema; that is
+# the ruling-request finding, not a gap in test coverage. The cert-content
+# / OWNED_ADMITTED-gap / cert-cross-check behaviors these helpers targeted
+# are verified directly against the bridge (bypassing contract.py Stage 1,
+# which is legitimate there since the bridge is unit-tested independently)
+# in scripts/ember_restart/test_seat_identity_bridge.py.
 
 
 def _resolve(manifest: Path) -> subprocess.CompletedProcess[str]:
@@ -83,33 +72,37 @@ def test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_unadmitted
     longer trusts the run manifest's own checkpoint/model-config/tokenizer
     hashes as an independent identity authority (goal line 95) -- it derives
     them from the referenced cert manifest via seat_identity_bridge, fail-
-    closed. This replaces the old GREEN happy-path test, which asserted
-    valid:True purely from the run manifest's own fields with no cert
-    involved at all -- exactly the independent-derivation this bridge removes.
+    closed.
 
-    This test proves the cross-check reaches production and passes (bridge
-    Step 1-5 GREEN) using a REAL matching cert -- the checked-in
-    model-identity fixture with its overlapping hashes overridden to the
-    real, already-computed run-manifest values (no invented hashes) -- then
-    documents a genuine, currently-open upstream gap: validate_identity.py's
-    OWNED_ADMITTED admission checks (evaluation receipt / checkpoint bytes /
-    artifact bundle) unconditionally require --receipt-bundle/--checkpoint/
-    --artifact-bundle CLI flags that NEITHER model.ts's _resolveModelIdentity
-    (tools/ember-cli/src/commands/model.ts:113, passes at most --checkpoint)
-    NOR seat_identity_bridge.derive_seat_identity (passes only the bare
-    manifest path) ever supply. No cert manifest can therefore currently
-    reach identity.disposition == OWNED_ADMITTED through this bridge, so the
-    only reachable passing disposition is OWNED_CANDIDATE, and
-    require_admitted_seat correctly REFUSES it (negative #6: never serve or
-    count a candidate as admitted). This is a real, disclosed gap in the
-    admission plumbing shared by model.ts and the bridge -- not a defect
-    introduced by this wiring -- and is out of scope for the production-
-    wiring leg (tracked separately from Artifact B / consumer replay).
+    REWORK FINDING (2026-07-25, supersedes this test's pre-rework body):
+    the STANDARD production admission fixture
+    (test_owned_admission_binds_sufficient_pretraining_evals_and_cli) is
+    genuinely 5-shard (1 model shard + 4 mandatory expert-bank shards --
+    contract.py._verify_architecture requires exactly the
+    vision/audio/reasoning/tool banks unconditionally, each bound to its own
+    checkpoint shard). Under the corrected bridge this is refused at
+    checkpoint resolution (Step 1.5, schema/contract gap) BEFORE the cert is
+    ever cross-checked -- so the downstream "OWNED_ADMITTED gap" this test
+    used to document is no longer independently reachable through the real
+    production path at all: contract.py's own architecture contract makes
+    every manifest that can pass Stage 1 admission multi-shard, and the
+    corrected bridge refuses every multi-shard checkpoint. That downstream
+    OWNED_ADMITTED gap is still real and still verified directly against the
+    bridge in scripts/ember_restart/test_seat_identity_bridge.py (which
+    calls derive_seat_identity directly, bypassing contract.py Stage 1) --
+    it is simply no longer observable end-to-end through cli_seat.py for
+    any manifest shaped the way real production data is shaped. See the
+    rework report's ruling-request section for the schema-gap writeup this
+    implies.
+
+    The cert content is irrelevant here (checkpoint resolution refuses
+    before the cert is cross-checked against anything) -- the checked-in
+    model-identity fixture is used unmodified.
     """
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
     manifest_path = tmp_path / "run.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    cert = _matching_cert(manifest, tmp_path)
+    cert = json.loads(CERT_FIXTURE_PATH.read_text(encoding="utf-8"))
     cert_path, digest = _write_cert_manifest(tmp_path, cert)
     manifest["cert_manifest_path"] = cert_path.name
     manifest["cert_manifest_digest"] = digest
@@ -121,7 +114,8 @@ def test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_unadmitted
     assert payload["valid"] is False
     assert payload["seat"] is None
     assert any(
-        "not OWNED_ADMITTED+selected" in error for error in payload["errors"]
+        "checkpoint index names 5 shards" in error and "schema/contract gap" in error
+        for error in payload["errors"]
     ), payload["errors"]
 
 
@@ -173,27 +167,36 @@ def test_axis6_production_path_reaches_seat_identity_bridge(tmp_path: Path, monk
     assert result == {"valid": False, "seat": None, "errors": ["spy: refused by design"]}
 
 
-def test_axis6_mismatched_cert_field_refused_through_production_path(tmp_path: Path):
-    """A seat whose identity fields disagree with the referenced cert
-    manifest is REFUSED through the REAL production path (subprocess, no
-    mocking) -- proving the new cross-check is load-bearing there, not
-    merely present in the bridge module. The run manifest here is internally
-    self-consistent (would have passed the OLD resolver unmodified); only the
-    cert cross-check this wiring introduces disagrees, isolating exactly the
-    new behavior."""
+def test_missing_shard_refused_through_production_path_naming_the_path(tmp_path: Path):
+    """Acceptance item 2 (cond3-1038-rework-2026-07-25): a checkpoint shard
+    a manifest names but that is not actually present on disk is REFUSED
+    through the REAL production path, naming the missing path -- not a
+    silent pass, not a generic error.
+
+    This is caught by contract.py's OWN Stage-1 file-existence check
+    (_verify_checkpoint -> _verify_file), before the manifest can even reach
+    OWNED_ADMITTED / the bridge -- which is correct and sufficient for this
+    acceptance item (it does not require a bridge-owned reason, unlike item
+    1). The bridge's OWN missing-shard handling (a single-shard index whose
+    one shard is absent) is separately covered directly against
+    derive_seat_identity in
+    scripts/ember_restart/test_seat_identity_bridge.py::
+    test_missing_shard_refused_naming_the_path -- contract.py's mandatory
+    4-expert-bank architecture requirement (contract.py's
+    _verify_architecture, "requires exactly vision/audio/reasoning/tool
+    banks") means every manifest that can pass Stage 1 admission is
+    multi-shard, so the bridge's own single-shard missing-file path is never
+    reachable through cli_seat.py for a real manifest -- the same schema
+    gap test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_
+    unadmitted_cert documents.
+    """
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
     manifest_path = tmp_path / "run.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    cert = _matching_cert(manifest, tmp_path)
-    # Deliberately mismatch ONE overlapping field: the cert's architecture
-    # hash disagrees with the run manifest's own (real, self-consistent)
-    # model_config sha256 -- swapped for the tokenizer sha256, another real
-    # value already present in the manifest, so nothing is invented.
-    cert["architecture"]["sha256"] = manifest["tokenizer"]["sha256"]
-    cert_path, digest = _write_cert_manifest(tmp_path, cert)
-    manifest["cert_manifest_path"] = cert_path.name
-    manifest["cert_manifest_digest"] = digest
-    _write_json(manifest_path, manifest)
+    checkpoint_index_path = tmp_path / manifest["checkpoint"]["manifest_path"]
+    index = json.loads(checkpoint_index_path.read_text(encoding="utf-8"))
+    missing_shard_path = tmp_path / index["shards"][0]["path"]
+    missing_shard_path.unlink()
 
     result = _resolve(manifest_path)
     assert result.returncode != 0, result.stdout + result.stderr
@@ -201,7 +204,8 @@ def test_axis6_mismatched_cert_field_refused_through_production_path(tmp_path: P
     assert payload["valid"] is False
     assert payload["seat"] is None
     assert any(
-        "does not equal cert-derived value" in error for error in payload["errors"]
+        "checkpoint.shards[0]" in error and "does not exist" in error
+        for error in payload["errors"]
     ), payload["errors"]
 
 
