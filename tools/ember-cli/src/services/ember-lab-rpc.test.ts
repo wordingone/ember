@@ -33,12 +33,16 @@ const winTest = process.platform === "win32" ? test : test.skip;
 winTest("callEmberLab uses one request per connection and reconnects for each call", async () => {
   const pipe = `\\\\.\\pipe\\ember-lab-p2c-reconnect-${process.pid}-${Math.random().toString(16).slice(2)}`;
   let connections = 0;
-  const requests: Array<{ id: string; method: string; params: unknown }> = [];
+  // jsonrpc is part of the real wire envelope (ember-lab-rpc.ts's callEmberLab always sends it --
+  // see the identical { id; jsonrpc; method; params } shape a few tests below) -- this type was
+  // missing that field even though the assertion below has always expected it on the captured
+  // value.
+  const requests: Array<{ id: string; jsonrpc: string; method: string; params: unknown }> = [];
   const server = net.createServer((socket) => {
     connections += 1;
     socket.setEncoding("utf8");
     socket.once("data", (line: string) => {
-      const request = JSON.parse(line) as { id: string; method: string; params: unknown };
+      const request = JSON.parse(line) as { id: string; jsonrpc: string; method: string; params: unknown };
       requests.push(request);
       socket.end(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { status: "ok" } }) + "\n");
     });

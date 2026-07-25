@@ -35,7 +35,7 @@ describe("model-lifecycle", () => {
         spawnModel: () => ({ pid: 4242 }),
         killPid: () => {},
         waitReady: async () => {},
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => true,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -83,7 +83,7 @@ describe("model-lifecycle", () => {
           callOrder.push(`killPid(${pid})`);
         },
         waitReady: async () => {},
-        writeKillReceipt: (rec: { pid: number; match_rule: string }) => {
+        writeKillReceipt: async (rec: { pid: number; match_rule: string }) => {
           callOrder.push(`writeKillReceipt(${rec.pid})`);
         },
         isExternal: () => false,
@@ -110,7 +110,7 @@ describe("model-lifecycle", () => {
         spawnModel: () => ({ pid: 4242 }),
         killPid: () => {},
         waitReady: async () => {},
-        writeKillReceipt: (rec: { pid: number; match_rule: string }) => {
+        writeKillReceipt: async (rec: { pid: number; match_rule: string }) => {
           receivedReceipt = rec;
         },
         isExternal: () => false,
@@ -139,7 +139,7 @@ describe("model-lifecycle", () => {
           callOrder.push(`killPid(${pid})`);
         },
         waitReady: async () => {},
-        writeKillReceipt: (rec: { pid: number; match_rule: string }) => {
+        writeKillReceipt: async (rec: { pid: number; match_rule: string }) => {
           callOrder.push(`writeKillReceipt(${rec.pid})`);
         },
         isExternal: () => false,
@@ -163,7 +163,7 @@ describe("model-lifecycle", () => {
           callOrder.push(`killPid(${pid})`);
         },
         waitReady: async () => {},
-        writeKillReceipt: (rec: { pid: number; match_rule: string }) => {
+        writeKillReceipt: async (rec: { pid: number; match_rule: string }) => {
           callOrder.push(`writeKillReceipt(${rec.pid})`);
         },
         isExternal: () => true,
@@ -195,7 +195,7 @@ describe("model-lifecycle", () => {
         waitReady: async (port?: number) => {
           callOrder.push(`waitReady(${port})`);
         },
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => false,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -217,7 +217,7 @@ describe("model-lifecycle", () => {
         waitReady: async () => {
           throw new Error("Server did not become ready");
         },
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => false,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -243,7 +243,7 @@ describe("model-lifecycle", () => {
         waitReady: async () => {
           throw new Error("Custom error message");
         },
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => false,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -280,7 +280,7 @@ describe("model-lifecycle", () => {
         waitReady: async () => {
           callOrder.push("waitReady()");
         },
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => false,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -309,7 +309,7 @@ describe("model-lifecycle", () => {
         waitReady: async () => {
           callOrder.push("waitReady()");
         },
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => true,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -334,7 +334,7 @@ describe("model-lifecycle", () => {
           killedPid = pid;
         },
         waitReady: async () => {},
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => false,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -354,7 +354,7 @@ describe("model-lifecycle", () => {
           killPidCalled = true;
         },
         waitReady: async () => {},
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => true,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -402,7 +402,9 @@ describe("model-lifecycle", () => {
     });
 
     it("falls back to deps.killPid when the registered handle carried no release()", async () => {
-      let killedPid: number | null = null;
+      let killedPid = 0; // sentinel distinct from the registered pid 7002 below (matches the AC3
+      // precedent above); avoids the `let x: T | null = null` control-flow narrowing trap where
+      // tsc collapses the variable's type to the literal `null` at the post-await usage site
 
       registerManagedModel({ pid: 7002 }); // no release — legacy/test seam
 
@@ -522,7 +524,7 @@ describe("model-lifecycle", () => {
         waitReady: async () => {
           states.push(`state before waitReady resolve: ${getModelState()}`);
         },
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => false,
         now: () => "2026-06-29T00:00:00Z",
       };
@@ -537,7 +539,7 @@ describe("model-lifecycle", () => {
         spawnModel: () => ({ pid: 1616 }),
         killPid: () => {},
         waitReady: async () => {},
-        writeKillReceipt: () => {},
+        writeKillReceipt: async () => {},
         isExternal: () => false,
         now: () => "2026-06-29T00:00:00Z",
       };
