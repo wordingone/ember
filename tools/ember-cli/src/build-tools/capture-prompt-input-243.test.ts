@@ -65,8 +65,11 @@ describe("redactHostPaths", () => {
     const source = Buffer.from("cwd D:\\other-private-long-enough\\ember");
     expect(() => redactHostPaths(source, ["C:\\private-long-enough"])).toThrow("unredacted absolute host path");
   });
-  test("rejects a host path too short for a non-path replacement token", () => {
-    expect(() => redactHostPaths(Buffer.from("C:\\x"), ["C:\\x"])).toThrow("too short");
+  test("redacts a short absolute path without changing byte length", () => {
+    const source = Buffer.from("cwd C:\\x");
+    const result = redactHostPaths(source, ["C:\\x"]);
+    expect(result.publicBytes.byteLength).toBe(source.byteLength);
+    expect(Buffer.from(result.publicBytes).toString("utf8")).not.toContain("C:\\x");
   });
 });
 describe("findClosedPromptRegion", () => {

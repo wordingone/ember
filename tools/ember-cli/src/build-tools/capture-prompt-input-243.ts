@@ -72,9 +72,10 @@ export function redactHostPaths(
   const uniquePaths = [...new Set(hostPaths)].sort((a, b) => b.length - a.length);
   for (const source of uniquePaths) {
     const sourceBytes = Buffer.byteLength(source);
-    const base = `{local-${sha256(source).slice(0, 12)}}`;
+    const longToken = `{local-${sha256(source).slice(0, 12)}}`;
+    const base = sourceBytes >= Buffer.byteLength(longToken) ? longToken : "<p>";
     if (sourceBytes < Buffer.byteLength(base)) {
-      throw new Error("host path is too short for a path-free fixed-width token");
+      throw new Error("host path is too short for a fixed-width token");
     }
     const replacement = base.padEnd(sourceBytes, "~");
     const occurrences = text.split(source).length - 1;
