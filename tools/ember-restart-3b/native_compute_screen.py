@@ -91,9 +91,9 @@ def screen_receipt(
     observed = [item.get("batch_size") for item in batch_measurements]
     if observed != required:
         raise ValueError("screen receipt requires exactly batch-1 then batch-2 full steps")
-    required_custody = {"hardware_runtime", "source_closure_sha256", "emberd_schedule_receipt_sha256", "disk_budget_receipt_sha256"}
+    required_custody = {"hardware_runtime", "source_closure_sha256", "ember_lab_schedule_receipt_sha256", "disk_budget_receipt_sha256"}
     if not isinstance(custody, dict) or set(custody) != required_custody:
-        raise ValueError("screen receipt custody must bind runtime, source closure, emberd, and disk evidence")
+        raise ValueError("screen receipt custody must bind runtime, source closure, ember-lab, and disk evidence")
     runtime = custody["hardware_runtime"]
     runtime_fields = {"gpu_name", "compute_capability", "torch_version", "cuda_version", "cudnn_version", "optimizer_implementation", "optimizer_version"}
     if not isinstance(runtime, dict) or not runtime_fields.issubset(runtime) or any(not isinstance(runtime[field], str) or not runtime[field].strip() for field in runtime_fields):
@@ -102,7 +102,7 @@ def screen_receipt(
     needed_sources = {"model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py"}
     if not isinstance(closure, dict) or set(closure) != needed_sources or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value) for value in closure.values()):
         raise ValueError("screen receipt custody source closure is incomplete")
-    if any(not isinstance(custody[key], str) or not re.fullmatch(r"[0-9a-f]{64}", custody[key]) for key in ("emberd_schedule_receipt_sha256", "disk_budget_receipt_sha256")):
+    if any(not isinstance(custody[key], str) or not re.fullmatch(r"[0-9a-f]{64}", custody[key]) for key in ("ember_lab_schedule_receipt_sha256", "disk_budget_receipt_sha256")):
         raise ValueError("screen receipt custody receipt hashes are invalid")
     return {
         "schema_version": "ember-native-compute-screen-v1",
@@ -221,35 +221,35 @@ def _validated_daemon_identity(value: object, label: str) -> dict[str, str]:
 
 
 def _validate_schedule_receipt(path: Path, *, now_ms: int | None = None) -> dict[str, object]:
-    payload, digest = _read_json_receipt(path, "emberd schedule receipt")
+    payload, digest = _read_json_receipt(path, "ember-lab schedule receipt")
     runs = payload.get("runs")
-    if payload.get("schema_version") != "emberd-schedule-alarm-state-v1" or not isinstance(runs, list):
-        raise ValueError("emberd schedule receipt has an invalid schema")
+    if payload.get("schema_version") != "ember-lab-schedule-alarm-state-v1" or not isinstance(runs, list):
+        raise ValueError("ember-lab schedule receipt has an invalid schema")
     if not isinstance(payload.get("generated_at_ms"), int) or payload["generated_at_ms"] <= 0:
-        raise ValueError("emberd schedule receipt lacks an integer generation timestamp")
-    top_identity = _validated_daemon_identity(payload.get("emberd_identity"), "emberd identity")
+        raise ValueError("ember-lab schedule receipt lacks an integer generation timestamp")
+    top_identity = _validated_daemon_identity(payload.get("ember_lab_identity"), "ember-lab identity")
     matches = [run for run in runs if isinstance(run, dict) and run.get("job_id") == _SCREEN_JOB_ID]
     if len(matches) != 1:
-        raise ValueError("emberd schedule receipt does not bind the native B1/B2 prediction")
+        raise ValueError("ember-lab schedule receipt does not bind the native B1/B2 prediction")
     run = matches[0]
     if run.get("artifact_class") != "compute-primitive" or run.get("predicted_tokens") != 3072 or run.get("predicted_duration_ms") != 720000:
-        raise ValueError("emberd schedule receipt does not bind the native B1/B2 prediction")
+        raise ValueError("ember-lab schedule receipt does not bind the native B1/B2 prediction")
     timestamps = ("predicted_at_ms", "predicted_program_completion_ms", "absolute_deadline_ms")
     if any(not isinstance(run.get(field), int) or run[field] <= 0 for field in timestamps):
-        raise ValueError("emberd schedule receipt lacks integer prediction timestamps and deadline")
+        raise ValueError("ember-lab schedule receipt lacks integer prediction timestamps and deadline")
     if not run["predicted_at_ms"] <= run["predicted_program_completion_ms"] <= run["absolute_deadline_ms"]:
-        raise ValueError("emberd schedule prediction timestamps are not ordered")
+        raise ValueError("ember-lab schedule prediction timestamps are not ordered")
     observed_now_ms = int(time.time() * 1000) if now_ms is None else now_ms
     if not isinstance(observed_now_ms, int) or isinstance(observed_now_ms, bool) or observed_now_ms <= 0:
         raise ValueError("schedule validation requires a positive current timestamp")
     maximum_issued_timestamp_ms = observed_now_ms + _MAX_SCHEDULE_FUTURE_SKEW_MS
     if payload["generated_at_ms"] > maximum_issued_timestamp_ms or run["predicted_at_ms"] > maximum_issued_timestamp_ms:
-        raise ValueError("emberd schedule exceeds bounded future clock skew")
+        raise ValueError("ember-lab schedule exceeds bounded future clock skew")
     if observed_now_ms >= run["absolute_deadline_ms"]:
-        raise ValueError("emberd schedule deadline has elapsed")
-    prediction_identity = _validated_daemon_identity(run.get("prediction_daemon_identity"), "emberd prediction identity")
+        raise ValueError("ember-lab schedule deadline has elapsed")
+    prediction_identity = _validated_daemon_identity(run.get("prediction_daemon_identity"), "ember-lab prediction identity")
     if prediction_identity != top_identity:
-        raise ValueError("emberd prediction identity does not match the schedule identity")
+        raise ValueError("ember-lab prediction identity does not match the schedule identity")
     return {
         "sha256": digest,
         "generated_at_ms": payload["generated_at_ms"],
@@ -281,13 +281,13 @@ def disk_preflight_receipt(
     *,
     free_bytes_by_drive: dict[str, int],
     source_closure_sha256: dict[str, str],
-    emberd_schedule_receipt_sha256: str,
+    ember_lab_schedule_receipt_sha256: str,
     dispatch_sha256: str,
     dispatch: dict[str, object],
 ) -> dict[str, object]:
     closure = _validate_source_closure(source_closure_sha256)
     canonical_dispatch = _validate_dispatch_payload(dispatch)
-    if not _is_sha256(emberd_schedule_receipt_sha256) or not _is_sha256(dispatch_sha256):
+    if not _is_sha256(ember_lab_schedule_receipt_sha256) or not _is_sha256(dispatch_sha256):
         raise ValueError("disk preflight must bind lowercase schedule and dispatch SHA-256 values")
     if dispatch_sha256 != _canonical_dispatch_sha256(canonical_dispatch):
         raise ValueError("disk preflight dispatch digest does not match its canonical dispatch")
@@ -307,7 +307,7 @@ def disk_preflight_receipt(
         "observed_free_gib": observed,
         "projected_end_free_gib": projected,
         "source_closure_sha256": closure,
-        "emberd_schedule_receipt_sha256": emberd_schedule_receipt_sha256,
+        "ember_lab_schedule_receipt_sha256": ember_lab_schedule_receipt_sha256,
         "dispatch_sha256": dispatch_sha256,
         "dispatch": canonical_dispatch,
     }
@@ -317,7 +317,7 @@ def write_disk_preflight(
     *,
     path: Path,
     source_closure_sha256: dict[str, str],
-    emberd_schedule_receipt_sha256: str,
+    ember_lab_schedule_receipt_sha256: str,
     dispatch_sha256: str,
     dispatch: dict[str, object],
     free_bytes_by_drive: dict[str, int] | None = None,
@@ -328,7 +328,7 @@ def write_disk_preflight(
     receipt = disk_preflight_receipt(
         free_bytes_by_drive=observed,
         source_closure_sha256=source_closure_sha256,
-        emberd_schedule_receipt_sha256=emberd_schedule_receipt_sha256,
+        ember_lab_schedule_receipt_sha256=ember_lab_schedule_receipt_sha256,
         dispatch_sha256=dispatch_sha256,
         dispatch=dispatch,
     )
@@ -351,7 +351,7 @@ def _validate_disk_preflight(
     closure = _validate_source_closure(payload.get("source_closure_sha256"))
     if expected_source_closure_sha256 is not None and closure != _validate_source_closure(expected_source_closure_sha256):
         raise ValueError("disk preflight source closure does not match the executable screen")
-    schedule_digest = payload.get("emberd_schedule_receipt_sha256")
+    schedule_digest = payload.get("ember_lab_schedule_receipt_sha256")
     dispatch_digest = payload.get("dispatch_sha256")
     if not _is_sha256(schedule_digest) or not _is_sha256(dispatch_digest):
         raise ValueError("disk preflight receipt lacks canonical schedule and dispatch digests")
@@ -359,7 +359,7 @@ def _validate_disk_preflight(
     if dispatch_digest != _canonical_dispatch_sha256(canonical_dispatch):
         raise ValueError("disk preflight dispatch digest does not match its canonical dispatch")
     if expected_schedule_sha256 is not None and schedule_digest != expected_schedule_sha256:
-        raise ValueError("disk preflight does not match the validated emberd schedule")
+        raise ValueError("disk preflight does not match the validated ember-lab schedule")
     if expected_dispatch_sha256 is not None and dispatch_digest != expected_dispatch_sha256:
         raise ValueError("disk preflight does not match the exact screen dispatch")
     observed = payload.get("observed_free_gib")
@@ -633,7 +633,7 @@ def _full_step(*, model: UnifiedDecoder, optimizer: torch.optim.Optimizer, recor
     }
 
 
-def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, reference_checkpoint_manifest: Path, emberd_schedule_receipt: Path, disk_budget_receipt: Path, output: Path, seed: int) -> dict[str, object]:
+def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, reference_checkpoint_manifest: Path, ember_lab_schedule_receipt: Path, disk_budget_receipt: Path, output: Path, seed: int) -> dict[str, object]:
     """Run both required clean-genesis batch arms; call only through disk_budget_runner."""
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the native full-step screen")
@@ -641,10 +641,10 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         raise ValueError("screen seed must be a nonnegative integer")
     if output.exists():
         raise FileExistsError("native screen output must be a fresh path")
-    if not reference_checkpoint_manifest.is_file() or not emberd_schedule_receipt.is_file() or not disk_budget_receipt.is_file():
-        raise ValueError("reference checkpoint, emberd schedule, and disk-budget receipts must exist")
+    if not reference_checkpoint_manifest.is_file() or not ember_lab_schedule_receipt.is_file() or not disk_budget_receipt.is_file():
+        raise ValueError("reference checkpoint, ember-lab schedule, and disk-budget receipts must exist")
     root = Path(__file__).resolve().parents[2]
-    schedule_binding = _validate_schedule_receipt(emberd_schedule_receipt)
+    schedule_binding = _validate_schedule_receipt(ember_lab_schedule_receipt)
     source_closure_before = _source_closure(root)
     dispatch_binding = _dispatch_binding(output=output, seed=seed)
     dispatch_sha256 = str(dispatch_binding["sha256"])
@@ -726,7 +726,7 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         source_sha256=_sha256(Path(__file__)),
         total_vram_bytes=int(total),
         available_vram_bytes=int(available),
-        custody={"hardware_runtime": {"gpu_name": torch.cuda.get_device_name(device), "compute_capability": ".".join(map(str, torch.cuda.get_device_capability(device))), "torch_version": torch.__version__, "cuda_version": torch.version.cuda or "unavailable", "cudnn_version": str(torch.backends.cudnn.version()), "optimizer_implementation": str(optimizer_contract["implementation"]), "optimizer_version": __import__("bitsandbytes").__version__}, "source_closure_sha256": source_closure_before, "emberd_schedule_receipt_sha256": str(schedule_binding["sha256"]), "disk_budget_receipt_sha256": str(disk_preflight_binding["sha256"])},
+        custody={"hardware_runtime": {"gpu_name": torch.cuda.get_device_name(device), "compute_capability": ".".join(map(str, torch.cuda.get_device_capability(device))), "torch_version": torch.__version__, "cuda_version": torch.version.cuda or "unavailable", "cudnn_version": str(torch.backends.cudnn.version()), "optimizer_implementation": str(optimizer_contract["implementation"]), "optimizer_version": __import__("bitsandbytes").__version__}, "source_closure_sha256": source_closure_before, "ember_lab_schedule_receipt_sha256": str(schedule_binding["sha256"]), "disk_budget_receipt_sha256": str(disk_preflight_binding["sha256"])},
         batch_measurements=steps,
     )
     result.update({
@@ -738,7 +738,7 @@ def run_screen(*, receipt_path: Path, shards_root: Path, tokenizer_path: Path, r
         "power_trace_path": power_trace_path.name,
         "energy_efficiency": efficiency,
         "validated_external": {
-            "emberd_schedule": schedule_binding,
+            "ember_lab_schedule": schedule_binding,
             "disk_preflight": disk_preflight_binding,
         },
     })
@@ -752,21 +752,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--shards-root", type=Path)
     parser.add_argument("--tokenizer", type=Path)
     parser.add_argument("--reference-checkpoint-manifest", type=Path)
-    parser.add_argument("--emberd-schedule-receipt", type=Path)
+    parser.add_argument("--ember-lab-schedule-receipt", type=Path)
     parser.add_argument("--disk-budget-receipt", type=Path)
     parser.add_argument("--emit-disk-preflight", type=Path)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.emit_disk_preflight is not None:
-        if args.emberd_schedule_receipt is None or args.output is None or args.seed is None:
-            parser.error("--emit-disk-preflight requires --emberd-schedule-receipt --output --seed")
+        if args.ember_lab_schedule_receipt is None or args.output is None or args.seed is None:
+            parser.error("--emit-disk-preflight requires --ember-lab-schedule-receipt --output --seed")
         root = Path(__file__).resolve().parents[2]
-        schedule_binding = _validate_schedule_receipt(args.emberd_schedule_receipt)
+        schedule_binding = _validate_schedule_receipt(args.ember_lab_schedule_receipt)
         result = write_disk_preflight(
             path=args.emit_disk_preflight,
             source_closure_sha256=_source_closure(root),
-            emberd_schedule_receipt_sha256=str(schedule_binding["sha256"]),
+            ember_lab_schedule_receipt_sha256=str(schedule_binding["sha256"]),
             dispatch_sha256=_dispatch_sha256(output=args.output, seed=args.seed),
             dispatch=dict(_dispatch_binding(output=args.output, seed=args.seed)["payload"]),
         )
@@ -777,7 +777,7 @@ def main(argv: list[str] | None = None) -> int:
         "--shards-root": args.shards_root,
         "--tokenizer": args.tokenizer,
         "--reference-checkpoint-manifest": args.reference_checkpoint_manifest,
-        "--emberd-schedule-receipt": args.emberd_schedule_receipt,
+        "--ember-lab-schedule-receipt": args.ember_lab_schedule_receipt,
         "--disk-budget-receipt": args.disk_budget_receipt,
         "--seed": args.seed,
         "--output": args.output,
@@ -791,7 +791,7 @@ def main(argv: list[str] | None = None) -> int:
             shards_root=args.shards_root,
             tokenizer_path=args.tokenizer,
             reference_checkpoint_manifest=args.reference_checkpoint_manifest,
-            emberd_schedule_receipt=args.emberd_schedule_receipt,
+            ember_lab_schedule_receipt=args.ember_lab_schedule_receipt,
             disk_budget_receipt=args.disk_budget_receipt,
             output=args.output,
             seed=args.seed,
