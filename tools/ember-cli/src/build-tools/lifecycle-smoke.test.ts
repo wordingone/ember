@@ -314,6 +314,20 @@ describe("compiled lifecycle action completion", () => {
       quote,
     )).toBe("stop run=smoke-run");
 
+    expect(driver.saveActionCompletionObserved).toBeFunction();
+    expect(driver.saveActionCompletionObserved!(
+      "prompt cleared after save submission",
+      "cursor repaint without save result",
+    )).toBe(false);
+    expect(driver.saveActionCompletionObserved!(
+      "prompt cleared",
+      "legacy checkpoint snapshot saved (not /model checkpoint load compatible)",
+    )).toBe(true);
+    expect(driver.saveActionCompletionObserved!(
+      "prompt cleared",
+      "error: failed to save checkpoint: identity refused",
+    )).toBe(true);
+
     expect(driver.redactPublicText).toBeFunction();
     const backslashProbe = `${String.fromCharCode(66, 58)}\\M\\ember`;
     const slashProbe = `${String.fromCharCode(67, 58)}/tmp/private`;

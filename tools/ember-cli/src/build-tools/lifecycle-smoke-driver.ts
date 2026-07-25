@@ -81,6 +81,14 @@ export function classifyActionFrame(frame: string): AttemptRow["status"] {
   return "PASS";
 }
 
+export function saveActionCompletionObserved(frame: string, delta: string): boolean {
+  const observed = `${frame}\n${delta}`;
+  return (
+    observed.includes("legacy checkpoint snapshot saved (not /model checkpoint load compatible)") ||
+    /error: failed to save checkpoint/i.test(observed)
+  );
+}
+
 export function actionOutputExcerpt(
   action: Exclude<LifecycleAction, "launch">,
   frame: string,
@@ -343,6 +351,7 @@ async function driveInput(
   flush: () => Promise<void>,
   input: string,
   timeoutMs: number,
+  action: Exclude<LifecycleAction, "launch">,
 ): Promise<{ before: string; after: string; delta: string }> {
   await flush();
   const before = `${visibleFrameLines(terminal).join("\n")}\n`;
@@ -372,7 +381,11 @@ async function driveInput(
         if (completedPromptFrame(afterLines, COLS, input)) {
           const delta = raw.join("").slice(rawStart);
           const nonEcho = delta.replaceAll(input, "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
-          if (sha256(before) !== sha256(after) && nonEcho.trim().length > 0) {
+          if (
+            sha256(before) !== sha256(after) &&
+            nonEcho.trim().length > 0 &&
+            (action !== "save" || saveActionCompletionObserved(after, delta))
+          ) {
             return { before, after, delta };
           }
         }
@@ -515,7 +528,15 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
             : TIMEOUT_MS;
       let driven: Awaited<ReturnType<typeof driveInput>>;
       try {
-        driven = await driveInput(child, terminal, raw, () => writes, input, actionTimeoutMs);
+        driven = await driveInput(
+          child,
+          terminal,
+          raw,
+          () => writes,
+          input,
+          actionTimeoutMs,
+          action,
+        );
       } catch (error) {
         attempts.push({
           action,
