@@ -36,7 +36,7 @@ import {
   type PromptInputState,
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
-import { Homescreen, type BoardSummary } from "../components/logo-homescreen.ts";
+import { Homescreen, homescreenRowCount, type BoardSummary, type HomescreenProps } from "../components/logo-homescreen.ts";
 import { SlashDropdown }                from "../components/slash-dropdown.ts";
 import {
   shouldShowSlashDropdown,
@@ -45,6 +45,7 @@ import {
   moveDropdownSelection,
   completeSlashSelection,
   computeSlashDropdownDisplay,
+  slashDropdownMaxVisible,
 } from "../services/slash-dropdown.ts";
 import { getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
@@ -626,6 +627,13 @@ export function ReplScreen({
   onExit:         _onExit,
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
+  // Hoisted from the render tree below (was computed just before the JSX return) so the palette's
+  // own row-budget computation (slashDropdownMaxVisible, near the dropdownDisplay decl)
+  // can use the SAME mainColumnWidth Homescreen actually renders at, rather than a second
+  // recomputation that could drift from it -- both operatorSurfaceWidth/mainColumnWidth are pure
+  // functions of terminalCols alone, so hoisting is safe this early.
+  const paneWidth = operatorSurfaceWidth(terminalCols);
+  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
 
   const useVirtualScroll = shouldUseVirtualScroll(env);
   const writeTitle       = shouldWriteTerminalTitle(env);
@@ -1074,7 +1082,30 @@ export function ReplScreen({
   const dropdownMatches = dropdownOpen
     ? filterSlashCommands(slashCommands, slashQueryFrom(inputState.text))
     : [];
-  const dropdownDisplay = computeSlashDropdownDisplay(dropdownMatches, dropdownSelectedIndex);
+  // Single source of truth for what <Homescreen> is actually given -- used below both to render
+  // it AND to size the palette against its real (not guessed) row count. Declared here (hoisted
+  // above the JSX return) so both use sites reference the exact same object; the JSX render call
+  // below reuses `homescreenProps` rather than re-literal-ing it, so they cannot drift apart.
+  const homescreenProps: HomescreenProps = {
+    state: {
+      model:   config.model,
+      cwd,
+      version: process.env["EMBER_VERSION"] ?? "0.0.0",
+      dataRoot: dataRoot ?? "",
+    },
+    viewportWidth: mainColumnWidth,
+    boardSummary,
+  };
+  // 2026-07-25 palette-overflow-render finding: cap by actual terminal geometry, not just the
+  // fixed SLASH_DROPDOWN_MAX_VISIBLE -- see slashDropdownMaxVisible's own comment for why a fixed
+  // cap alone isn't honest on a short terminal (silently clips instead of showing "+N more").
+  // bannerRows comes from the SAME homescreenProps the real <Homescreen> renders with below, so
+  // this never guesses a number the actual banner disagrees with.
+  const dropdownDisplay = computeSlashDropdownDisplay(
+    dropdownMatches,
+    dropdownSelectedIndex,
+    slashDropdownMaxVisible(terminalRows, homescreenRowCount(homescreenProps)),
+  );
 
   // Back to the top row whenever the composed query text changes (narrows/widens the match
   // list) -- never fires on a pure Up/Down navigation, since those only touch
@@ -1482,12 +1513,16 @@ export function ReplScreen({
     // (b22 item 1) -- Enter completes the highlighted command into the input instead of falling
     // through to message-submit below.
     if (dropdownOpen && dropdownDisplay.visible.length > 0) {
+      // 2026-07-25 palette-overflow-render finding: wrap over the FULL match list
+      // (dropdownMatches), not the visible-cap slice -- computeSlashDropdownDisplay now scrolls
+      // its window to follow the selection, so an entry beyond the visible cap is reachable by
+      // continuing to press Down instead of being permanently hidden.
       if (key.downArrow) {
-        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, 1));
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownMatches.length, 1));
         return;
       }
       if (key.upArrow) {
-        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, -1));
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownMatches.length, -1));
         return;
       }
       if (key.return) {
@@ -1555,9 +1590,6 @@ export function ReplScreen({
   // Render
   // ---------------------------------------------------------------------------
 
-  const paneWidth = operatorSurfaceWidth(terminalCols);
-  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
-
   return React.createElement(
     Box,
     { flexDirection: "row", width: terminalCols, height: terminalRows, overflow: "hidden" },
@@ -1567,16 +1599,7 @@ export function ReplScreen({
       React.createElement(
         Box,
         { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
-        React.createElement(Homescreen, {
-          state: {
-            model:   config.model,
-            cwd,
-            version: process.env["EMBER_VERSION"] ?? "0.0.0",
-            dataRoot: dataRoot ?? "",
-          },
-          viewportWidth: mainColumnWidth,
-          boardSummary,
-        }),
+        React.createElement(Homescreen, homescreenProps),
       ),
       React.createElement(
         Box,

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/slash-dropdown.ts — pure logic for the slash-command completion dropdown
 // (issue b22 item 1, ledgered since b14 as ember-cli-slash-dropdown). Exemplar: the field's own
 // "/" menu convention (Claude Code, Crush) per field-ux-map §8b/§9 — a filterable list of
@@ -98,19 +102,82 @@ export interface SlashDropdownDisplay {
   selectedIndex: number;
 }
 
-/** Assembles what the dropdown actually renders: the capped visible slice, how many matches are
- * hidden beyond the cap, and a selection index re-clamped into the (possibly truncated) visible
- * range — mirrors computeQueueDisplay's visible+overflowCount shape (prompt-input.ts) for
- * consistency with the codebase's existing "capped list + overflow count" convention. */
+/** Assembles what the dropdown actually renders: a scrolled WINDOW of `matches` that always
+ * contains the (clamped) selection, how many matches fall outside that window, and a selection
+ * index re-based to the window (0 = the window's own first row) for the renderer to highlight —
+ * mirrors computeQueueDisplay's visible+overflowCount shape (prompt-input.ts) for consistency with
+ * the codebase's existing "capped list + overflow count" convention.
+ *
+ * `selectedIndex` is an index into the FULL `matches` list, not the visible window -- this is what
+ * makes hidden entries reachable by keyboard at all (2026-07-25 palette-overflow-render finding:
+ * moveDropdownSelection used to wrap only over the previously-fixed first-N slice, so anything
+ * past the cap was unreachable regardless of how many times Down was pressed). The window is
+ * re-centered on the selection each call (a pure function of selectedIndex, not persisted scroll
+ * state), so wrap-around (moveDropdownSelection wrapping index length-1 -> 0) immediately scrolls
+ * the window back to the top on the very next render.
+ *
+ * `maxVisible` defaults to SLASH_DROPDOWN_MAX_VISIBLE (every existing call site keeps working
+ * unchanged) but a caller with real terminal-geometry knowledge should pass
+ * slashDropdownMaxVisible(terminalRows, bannerRows) instead -- see that function's own comment
+ * (2026-07-25 palette-overflow-render finding) for why a fixed 8 alone is not honest on a short
+ * terminal. `visible.length + overflowCount === matches.length` always, by construction,
+ * regardless of what `cap` resolves to -- the shared invariant with the prompt-region's own
+ * regression (visible count + shortfall count == full match count at every terminal size). */
 export function computeSlashDropdownDisplay(
   matches: RegistryCommand[],
   selectedIndex: number,
+  maxVisible: number = SLASH_DROPDOWN_MAX_VISIBLE,
 ): SlashDropdownDisplay {
-  const visible = matches.slice(0, SLASH_DROPDOWN_MAX_VISIBLE);
-  const overflowCount = Math.max(0, matches.length - SLASH_DROPDOWN_MAX_VISIBLE);
+  const cap = Math.max(1, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, maxVisible));
+  const total = matches.length;
+  const absoluteSelected = clampDropdownSelection(selectedIndex, total);
+  const maxWindowStart = Math.max(0, total - cap);
+  const windowStart = Math.min(Math.max(0, absoluteSelected - Math.floor(cap / 2)), maxWindowStart);
+  const visible = matches.slice(windowStart, windowStart + cap);
+  const overflowCount = Math.max(0, total - visible.length);
   return {
     visible,
     overflowCount,
-    selectedIndex: clampDropdownSelection(selectedIndex, visible.length),
+    selectedIndex: absoluteSelected - windowStart,
   };
+}
+
+/** Reserved rows for the prompt+status chrome below the dropdown -- deliberately a generous,
+ * documented CONSTANT rather than an analytically derived figure. Unlike the banner (whose exact
+ * height is now computed for real via homescreenRowCount), PromptInput/StatusLine are another
+ * founder's actively-rebuilt surface (issue #243) -- reading their code to derive an exact row
+ * count would create a dependency on internals mid-rework, and any change there could silently
+ * invalidate a "precise" number. Erring generous here can only make the dropdown show FEWER
+ * entries than the terminal could technically fit (always safe: visible+overflowCount still sums
+ * to the exact total by construction, so the shared count-plus-shortfall invariant never breaks);
+ * erring tight risks pushing that region off-screen, which is the one interaction with their lane
+ * this fix must never cause. 6 rows covers today's 1-2 rows each with headroom for a bordered
+ * input box (#243's own direction) without needing to track its exact shape. */
+const DROPDOWN_PROMPT_STATUS_RESERVE_ROWS = 6;
+const DROPDOWN_BORDER_ROWS = 2;
+
+/** 2026-07-25 palette-overflow-render finding (state/operability-finding-palette-renders-broken):
+ * components/slash-dropdown.ts's Box now carries flexShrink:0 + overflow:"hidden", which
+ * guarantees the panel is NEVER corrupted -- it renders exactly as many rows as it's TOLD to
+ * (border + one row per visible command, cleanly clipped at the terminal's own edge if that's
+ * still too many). What flexShrink:0 does NOT do is make the *decision* of how many commands to
+ * show honest on a short terminal: SLASH_DROPDOWN_MAX_VISIBLE(8) alone doesn't know whether 8
+ * rows plus the banner plus prompt/status chrome actually fit in `terminalRows`, so on a short
+ * terminal the app would ask for more rows than exist and the excess would be silently clipped by
+ * the terminal's own physical edge with no "+N more" -- the same "silently hiding entries" defect
+ * the acceptance bar names, just moved one layer up from rendering into the visible-count
+ * decision.
+ *
+ * `bannerRows` must come from components/logo-homescreen.ts's `homescreenRowCount(props)`, called
+ * with the SAME props object passed to the real <Homescreen> element -- banner height is NOT a
+ * fixed constant (recentFeedEntries appends one line per live boardSummary.topAttention entry
+ * with no cap), so a guessed number here would again silently over- or under-ask depending on
+ * live board state. Everything else this reserves is DROPDOWN_PROMPT_STATUS_RESERVE_ROWS (a
+ * deliberately generous constant -- see its own comment for why that region isn't measured) plus
+ * the dropdown's own 2 border rows. Erring toward reserving slightly more than strictly necessary
+ * (showing "+N more" a little early on an edge case) is the safe direction; erring the other way
+ * is the corruption/silent-drop defect this whole fix is for. */
+export function slashDropdownMaxVisible(terminalRows: number, bannerRows: number): number {
+  const available = terminalRows - bannerRows - DROPDOWN_PROMPT_STATUS_RESERVE_ROWS - DROPDOWN_BORDER_ROWS;
+  return Math.max(1, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, available));
 }

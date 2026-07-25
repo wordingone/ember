@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // logo-homescreen.ts — welcome/homescreen layout: logo, greeting, feeds, channels notice.
 // Bundle: components/logo-homescreen.ts (line 321680)
 //
@@ -20,7 +24,7 @@
 import React from "react";
 import { Box, Text, RawAnsi } from "../ink/components.ts";
 import { color, type FeatureFlags } from "./design-system.ts";
-import { renderFireballLines, FIREBALL_IDLE_POSE_FRAME } from "./fireball.ts";
+import { renderFireballLines, FIREBALL_IDLE_POSE_FRAME, FIREBALL_COLOR_LINES, FIREBALL_ASCII_LINES } from "./fireball.ts";
 import { formatReceiptAge, isReceiptStale } from "../core/receipt-age.ts";
 
 // ---------------------------------------------------------------------------
@@ -497,4 +501,56 @@ export function Homescreen({
   );
 
   return React.createElement(Box, { flexDirection: "column" }, panel);
+}
+
+/**
+ * 2026-07-25 palette-overflow-render finding (state/operability-finding-palette-renders-broken):
+ * how many rows Homescreen actually occupies is NOT a fixed constant -- recentFeedEntries() below
+ * appends one line per boardSummary.topAttention entry with no cap, so banner height genuinely
+ * varies with live board state. A caller (the command palette) that needs to know how much
+ * terminal height is left for itself cannot safely guess a constant here: too small under-reserves
+ * against real board data (risks asking for more room than exists); too large defensively starves
+ * the palette on ordinary terminals. This is the SAME arithmetic Homescreen's own render performs
+ * above, kept in lockstep with it deliberately (every term here names the exact render step it
+ * mirrors) rather than guessed independently.
+ *
+ * This is a second source of truth for the same fact, and mirrors drift -- so it is bound to the
+ * real render by homescreen-row-count.test.ts, which reconstructs an actually-rendered screen and
+ * asserts this function's return value equals the banner's genuinely occupied row count, across
+ * several boardSummary shapes. If Homescreen's structure changes here without this function
+ * changing too, that test fails loudly instead of a caller silently over- or under-asking again.
+ */
+export function homescreenRowCount(props: HomescreenProps): number {
+  const { state, flags = {}, viewportWidth = 80, boardSummary, nowMs = Date.now() } = props;
+
+  // Mirrors renderIdentityBlock: fireball line count is fixed-per-size (fireball.ts's own
+  // documented invariant, independent of tick/lit-cells), identityLines is always a 5-element
+  // array (some entries may be null, but the array's own length never changes), and the row is
+  // sized to whichever is taller.
+  const ascii = process.env["EMBER_ASCII"] === "1";
+  const fireballLineCount = ascii ? FIREBALL_ASCII_LINES : FIREBALL_COLOR_LINES.panel;
+  const identityLineCount = 5;
+  const identityBlockHeight = Math.max(fireballLineCount, identityLineCount);
+  const leftColHeight = (state.updateAvailable ? 1 : 0) + identityBlockHeight;
+
+  // Mirrors FeedComponent: title + underline + one row per entry (each entry is width-clipped,
+  // never wrapped -- clipToWidth truncates a single line, so entry count IS row count) + an
+  // optional footer row. onboardingFeed's entries array is a fixed 2-element literal with no
+  // footer; recentFeed always carries the "/resume for more" footer and its entry count is
+  // exactly recentFeedEntries(boardSummary, nowMs).length -- the one genuinely variable term.
+  const onboardingFeedHeight = 2 + 2;
+  const recentFeedHeight = 2 + recentFeedEntries(boardSummary, nowMs).length + 1;
+  const rightColHeight = onboardingFeedHeight + recentFeedHeight;
+
+  const channelsNoticeRows = channelsNoticePhase(state, flags) === "disabled" ? 0 : 1;
+
+  // Mirrors the panel Box: row-direction (wide viewport) lays leftCol/rightCol/ChannelsNotice
+  // side by side, so height is the tallest of the three; column-direction (the narrow/typical
+  // repl.ts two-pane case, viewportWidth < LEFT_PANEL_MAX_WIDTH*2) stacks them, so height sums.
+  const panelIsRow = viewportWidth >= LEFT_PANEL_MAX_WIDTH * 2;
+  const panelContentHeight = panelIsRow
+    ? Math.max(leftColHeight, rightColHeight, channelsNoticeRows)
+    : leftColHeight + rightColHeight + channelsNoticeRows;
+
+  return panelContentHeight + 2; // panel's own top+bottom border
 }
