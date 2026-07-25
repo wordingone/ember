@@ -309,6 +309,7 @@ describe("compiled lifecycle visible frame", () => {
       const lines = driver.visibleFrameLines!(terminal);
       expect(lines.some((line) => line.includes("five"))).toBe(true);
       expect(lines.some((line) => line.includes("one"))).toBe(false);
+      expect(lines.every((line) => line.length === 12)).toBe(true);
     } finally {
       terminal.dispose();
     }
