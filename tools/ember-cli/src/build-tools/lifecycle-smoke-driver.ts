@@ -505,7 +505,8 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
 
     const inputs = actionInputs(home, repoRoot);
     for (let index = 1; index < LIFECYCLE_ACTIONS.length; index += 1) {
-      const action = LIFECYCLE_ACTIONS[index]!;
+      const action = LIFECYCLE_ACTIONS[index]! as Exclude<
+        LifecycleAction, "launch">;
       const input = inputs[action as Exclude<LifecycleAction, "launch">];
       const actionTimeoutMs =
         action === "train"
