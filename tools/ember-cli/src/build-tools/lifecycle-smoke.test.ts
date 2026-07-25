@@ -3,6 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, test } from "bun:test";
+import xtermHeadless from "@xterm/headless";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import {
@@ -236,5 +237,24 @@ describe("compiled lifecycle action completion", () => {
     expect(completedPromptFrame(cleared, 20, "/train")).toBe(true);
     expect(completedPromptFrame([...pending, " ".repeat(20), ...cleared], 20, "/train"))
       .toBe(true);
+  });
+});
+
+describe("compiled lifecycle visible frame", () => {
+  test("reads the active viewport after terminal output scrolls", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.visibleFrameLines).toBeFunction();
+    const { Terminal } = xtermHeadless;
+    const terminal = new Terminal({ cols: 12, rows: 3, allowProposedApi: true });
+    try {
+      await new Promise<void>((done) => {
+        terminal.write("one\r\ntwo\r\nthree\r\nfour\r\nfive", done);
+      });
+      const lines = driver.visibleFrameLines!(terminal);
+      expect(lines.some((line) => line.includes("five"))).toBe(true);
+      expect(lines.some((line) => line.includes("one"))).toBe(false);
+    } finally {
+      terminal.dispose();
+    }
   });
 });

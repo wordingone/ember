@@ -208,11 +208,12 @@ function rebuildBinaryFromSource(
   }
 }
 
-function frameLines(terminal: HeadlessTerminal): string[] {
+export function visibleFrameLines(terminal: HeadlessTerminal): string[] {
   const lines: string[] = [];
   const buffer = terminal.buffer.active;
+  const start = buffer.viewportY;
   for (let row = 0; row < terminal.rows; row += 1) {
-    lines.push(buffer.getLine(row)?.translateToString(true) ?? "");
+    lines.push(buffer.getLine(start + row)?.translateToString(true) ?? "");
   }
   return lines;
 }
@@ -258,7 +259,7 @@ async function waitForReady(
   while (Date.now() - started < TIMEOUT_MS) {
     if (raw.join("").includes(READY_OSC)) {
       await flush();
-      const frame = `${frameLines(terminal).join("\n")}\n`;
+      const frame = `${visibleFrameLines(terminal).join("\n")}\n`;
       findClosedPromptRegion(frame.replace(/\n$/, "").split("\n"), COLS);
       return { elapsedMs: Date.now() - started, frameSha256: sha256(frame) };
     }
@@ -276,7 +277,7 @@ async function driveInput(
   timeoutMs: number,
 ): Promise<{ before: string; after: string; delta: string }> {
   await flush();
-  const before = `${frameLines(terminal).join("\n")}\n`;
+  const before = `${visibleFrameLines(terminal).join("\n")}\n`;
   const rawStart = raw.join("").length;
   let lastRawLength = rawStart;
   let lastChange = Date.now();
@@ -290,7 +291,7 @@ async function driveInput(
     }
     if (currentRawLength > rawStart && Date.now() - lastChange >= 200) {
       await flush();
-      const after = `${frameLines(terminal).join("\n")}\n`;
+      const after = `${visibleFrameLines(terminal).join("\n")}\n`;
       try {
         const afterLines = after.replace(/\n$/, "").split("\n");
         if (completedPromptFrame(afterLines, COLS, input)) {
@@ -398,7 +399,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     });
     child.onExit(() => { exitObserved = true; });
     const ready = await waitForReady(raw, () => writes, terminal);
-    const readyFrame = `${frameLines(terminal).join("\n")}\n`;
+    const readyFrame = `${visibleFrameLines(terminal).join("\n")}\n`;
     const launchArtifact = artifactPath(repoRoot, join(outDir, "action-1-launch.frame.txt"));
     writeFileSync(join(repoRoot, launchArtifact), readyFrame, "utf8");
     evidence.push({
@@ -445,7 +446,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
           frame_artifact: "",
           detail: error instanceof Error ? error.message : String(error),
         });
-        const failedFrame = `${frameLines(terminal).join("\n")}\n`;
+        const failedFrame = `${visibleFrameLines(terminal).join("\n")}\n`;
         const failedArtifact = artifactPath(
           repoRoot,
           join(outDir, `action-${index + 1}-${action}.frame.txt`),
