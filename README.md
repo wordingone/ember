@@ -88,6 +88,66 @@ headline hypothesis is Verified Expert Accretion. Borrowed learned or evaluative
 signals never enter the lineage. Negative evidence preserves research families
 and later synergy tests.
 
+## The actual stack
+
+The docs above are written in this project's own vocabulary, which tells you what
+Ember is for and nothing about what it runs on. This section is the other half.
+Every number here is a count over tracked files on master, not an intention.
+
+- **Training and modelling: PyTorch.** 559 `import torch` sites across tracked
+  Python, plus 41 `torch.nn`, 38 `torch.nn.functional`, 5 `torch.optim`. There is
+  no JAX and no TensorFlow anywhere in the tree.
+- **Tokenizer and model plumbing:** HuggingFace `transformers` (64 imports) and
+  `tokenizers` (50), with `sentencepiece` (4) and `safetensors` (1) at the edges.
+  NumPy (204) is the general array dependency.
+- **Attention kernels: PyTorch's own SDPA**, selected explicitly through
+  `torch.nn.attention.sdpa_kernel` (6 sites) with `SDPBackend.FLASH_ATTENTION` and
+  `SDPBackend.EFFICIENT_ATTENTION`. There is no vendored FlashAttention build and
+  no hand-written CUDA. One `import triton` exists; Triton on Windows is a research
+  note (`docs/research/triton-windows-research-2026-06-10.md`), not a load-bearing
+  dependency.
+- **Memory-pressure tooling:** `bitsandbytes` (8 imports) for `AdamW8bit` (47
+  sites) and `paged_adamw`; `torchao` for `Float8`; `nf4` quantization appears at
+  30 sites. `torch.compile` appears at 112.
+- **"Sparse" in *sparse checkpoint* is a storage format, not a kernel.** It means
+  the governed bundle rooted at `checkpoint-manifest.json`
+  (`ember-sparse-checkpoint-v3/v4/v5`) with a closed named shard set and per-shard
+  hash and size binding. It does not mean sparse matmul: no sparse-kernel path
+  exists in tracked Python at all — `torch.sparse`, `to_sparse`, `block_sparse`,
+  `grouped_gemm`, megablocks and sputnik each return zero hits.
+- **Target hardware: a single consumer RTX 4090, 24 GB VRAM** (119 mentions in
+  docs). Everything about the design follows from that constraint rather than from
+  a cluster budget.
+- **Custody, receipts and the process supervisor: Rust** (`runtime/ember-lab`,
+  4 crates: rusqlite, serde, serde_json, sha2 + windows-sys). **The operator
+  cockpit `ember-cli`: TypeScript on Bun** (`tools/ember-cli`).
+
+### What this section cannot yet tell you, honestly
+
+**There is no dependency manifest in the repository.** No `requirements.txt`, no
+`pyproject.toml`, no lockfile, no environment file — the only two manifests on
+master are the Rust `Cargo.toml` and the `ember-cli` `package.json`. The Torch
+version is stated in prose in scattered docs and the statements disagree: 2.6,
+2.6.0, 2.7, 2.7.0, `>=2.7`, `>=2.1.1` and 2.10.0 all appear, against CUDA builds
+cu124, cu126 and cu128. A newcomer cannot presently reconstruct a working Python
+environment from this repository, and no amount of reading the philosophy fixes
+that. Tracked as a defect rather than described as a design.
+
+### The vocabulary, in plain terms
+
+- **Clean-genesis** — the weights start from random initialization here, and no
+  pretrained checkpoint from another model is ever loaded into the lineage.
+- **Sovereign / owned** — the model this repository produces and holds the
+  identity record for. A **borrowed** model is any third-party model, usable only
+  as an explicitly requested reference seat, never as the default.
+- **Verified Expert Accretion** — the research hypothesis: grow capability by
+  adding expert modules whose contribution is measured before it is kept, rather
+  than by retraining one monolithic network.
+- **Birth floor** — the minimum training a model must have before it may be called
+  a model at all, so that "we have a 3B" cannot be claimed for an untrained shape.
+- **Admission / custody** — the record that a specific checkpoint is the owned one.
+  Saving or loading a checkpoint never grants it.
+
 ## Verify the authority tree
 
 Run:
