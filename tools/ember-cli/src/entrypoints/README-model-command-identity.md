@@ -17,7 +17,7 @@ from the outside, that what the supervisor actually launched is what actually go
    `modelConfigSha256`, `serverSourceSha256`, `tokenizerSha256`, `modelName`, and `seat`. This is
    the trust root: everything the supervisor is *about to launch*.
 2. **Launch.** `ensureOwnedServer()` either spawns the server directly
-   (`buildOwnedServerCommand` + `spawnServer`) or dispatches it through `emberd`
+   (`buildOwnedServerCommand` + `spawnServer`) or dispatches it through `ember-lab`
    (`dispatchManifest`), passing the checkpoint/tokenizer/config paths bound to those same
    hashes.
 3. **Served identity.** Once the endpoint is up, the server exposes `GET /v1/models`

@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use emberd::{rpc::serve_named_pipe, Daemon, MAX_DISPATCH_MANIFEST_BYTES};
+use ember_lab::{rpc::serve_named_pipe, Daemon, MAX_DISPATCH_MANIFEST_BYTES};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fs::OpenOptions;
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 fn usage() -> &'static str {
-    "usage:\n  emberd serve --db <path> --pipe <\\\\.\\pipe\\name>\n  emberd dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>"
 }
 
 enum Command {
@@ -86,12 +86,12 @@ fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Er
     BufReader::new(stream).read_line(&mut line)?;
     let response: Value = serde_json::from_str(&line)?;
     if let Some(error) = response.get("error") {
-        return Err(std::io::Error::other(format!("emberd dispatch failed: {error}")).into());
+        return Err(std::io::Error::other(format!("ember-lab dispatch failed: {error}")).into());
     }
     response
         .get("result")
         .cloned()
-        .ok_or_else(|| std::io::Error::other("emberd dispatch response lacks result").into())
+        .ok_or_else(|| std::io::Error::other("ember-lab dispatch response lacks result").into())
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -110,7 +110,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("emberd: {error}");
+        eprintln!("ember-lab: {error}");
         std::process::exit(1);
     }
 }
