@@ -925,14 +925,18 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             report = harness.run(root)
             check = report["checks"]["L1_root_launcher"]
             self.assertEqual(check["state"], "resolved-false", report)
-            receipt = check.get("receipts", {}).get("CopyRun.cmd", {})
-            if "entry_marker_content" in receipt:
-                self.assertFalse(
-                    receipt.get("entry_marker_path_matches_declared_entry", True), receipt
-                )
-                self.assertNotEqual(
-                    receipt["entry_marker_content"], receipt.get("expected_entry_path"), receipt
-                )
+            # Unconditional: resolved-false alone cannot distinguish "the copy ran
+            # and the marker fired at the wrong path" from "nothing ran at all",
+            # and only the former is what this decoy is written to exercise. A
+            # guarded version of these assertions passed while never executing.
+            receipt = check["receipts"]["CopyRun.cmd"]
+            self.assertIn("entry_marker_content", receipt, receipt)
+            self.assertFalse(
+                receipt.get("entry_marker_path_matches_declared_entry", True), receipt
+            )
+            self.assertNotEqual(
+                receipt["entry_marker_content"], receipt.get("expected_entry_path"), receipt
+            )
 
     def test_decoy_copy_entry_to_different_in_tree_directory_never_resolves_true(self):
         """Sibling of the copy-then-execute decoy: the copy destination is
@@ -956,14 +960,17 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             report = harness.run(root)
             check = report["checks"]["L1_root_launcher"]
             self.assertEqual(check["state"], "resolved-false", report)
-            receipt = check.get("receipts", {}).get("CopyRunInTree.cmd", {})
-            if "entry_marker_content" in receipt:
-                self.assertFalse(
-                    receipt.get("entry_marker_path_matches_declared_entry", True), receipt
-                )
-                self.assertNotEqual(
-                    receipt["entry_marker_content"], receipt.get("expected_entry_path"), receipt
-                )
+            # Unconditional, for the same reason as the sibling above: the
+            # location-exact claim in this docstring is only proved if the marker
+            # actually fired and its path still failed to match.
+            receipt = check["receipts"]["CopyRunInTree.cmd"]
+            self.assertIn("entry_marker_content", receipt, receipt)
+            self.assertFalse(
+                receipt.get("entry_marker_path_matches_declared_entry", True), receipt
+            )
+            self.assertNotEqual(
+                receipt["entry_marker_content"], receipt.get("expected_entry_path"), receipt
+            )
 
     def test_decoy_asking_runtime_version_never_resolves_true(self):
         """Round 4's original reproducer, re-verified under round 6: a
@@ -1013,9 +1020,14 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             report = harness.run(root)
             check = report["checks"]["L1_root_launcher"]
             self.assertEqual(check["state"], "resolved-false", report)
-            receipt = check.get("receipts", {}).get("Decoy2.cmd")
-            if receipt:
-                self.assertNotIn("entry_marker_content", receipt)
+            # Unconditional, and the most load-bearing of the three: resolved-false
+            # is reachable both by "the marker fired at a mismatched path" and by
+            # "the marker never fired", and ONLY the second is the round-5 claim --
+            # that an entry path handed to --version rather than to run executes
+            # nothing. Guarded, this assertion never ran, so the claim was asserted
+            # nowhere reachable.
+            receipt = check["receipts"]["Decoy2.cmd"]
+            self.assertNotIn("entry_marker_content", receipt, receipt)
 
     def test_decoy_entry_passed_to_unrelated_check_flag_never_resolves_true(self):
         """Sibling of the exact round-5 reproducer, with a different

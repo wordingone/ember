@@ -1271,9 +1271,6 @@ def run(root: Path) -> dict:
         checks["L1_root_launcher"] = check(
             "resolved-true", "; ".join(_combined_evidence(c) for c in launchers_true)
         )
-        checks["L1_root_launcher"]["receipts"] = {
-            str(c.name): probes[c]["receipt"] for c in launchers_true
-        }
     elif launchers_weak:
         checks["L1_root_launcher"] = check(
             "weak",
@@ -1289,6 +1286,26 @@ def run(root: Path) -> dict:
             "resolved-false",
             "no .cmd/.bat/.ps1/.exe/.sh or executable-named file at repo root",
         )
+
+    # Probe receipts for EVERY candidate, whatever the verdict. These were
+    # previously attached only on the resolved-true branch, which made the
+    # verdict unexplainable in exactly the case that matters: resolved-false
+    # is reachable two ways -- the entry marker fired but at a path that is
+    # not the declared entry (a laundering attempt, correctly refused), or
+    # nothing executed at all -- and with no receipt those are the same
+    # answer. The decoy tests could not tell them apart either, so three of
+    # them silently degraded to asserting the state string alone.
+    # A probe that could not execute at all (the "weak" shape) carries no
+    # receipt key; record that absence as its own receipt rather than
+    # inventing one, so "no receipt" and "receipt says nothing fired" stay
+    # distinguishable downstream.
+    if candidates:
+        checks["L1_root_launcher"]["receipts"] = {
+            str(c.name): probes[c].get(
+                "receipt", {"probe_produced_no_receipt": probes[c]["evidence"]}
+            )
+            for c in candidates
+        }
 
     # package.json fail-closed parse (evidence for the L1 verdict) --------
     pkg_path = root / PACKAGE_JSON
