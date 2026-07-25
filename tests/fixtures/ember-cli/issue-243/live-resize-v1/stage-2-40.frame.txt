@@ -1,0 +1,24 @@
+╭─ ember ───────────┌LIVE RUN / ACTIVIT┐
+│    ▀       ember  │ IDLE             │
+│   ▀▀▀      inferen│ [START] [PAUSE] [R
+│  ▀▀▀▀▀     OFFLINE│ SOURCE UNVERIFIED/
+│   ▀▀▀      <p>~~~~│ TRAINING/LOSS    │
+│    ▀       Data: B│ loss              
+│Tips for getting st│ RESOURCE EFFICIENC
+│───────────────────│ GPU utilization % 
+│Run /init to…      │ VRAM GiB          
+│Try "what…         │ tokens/s          
+                    │ learning rate     
+                    │ GPU watts         
+                    │ energy joules     
+                    │ step/time INSUFFIC
+                    │ checkpoint INSUFFI
+                    │ ACTIVITY/EVENT FEE
+                    │ activity: none obs
+                    │                  │
+                    │                  │
+                    │                  │
+╭──────────────────╮│                  │
+│ ❯                ││                  │
+│ ○ observe · ⏵⏵ b ││                  │
+╰──────────────────╯└──────────────────┘
