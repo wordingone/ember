@@ -1157,6 +1157,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   const exitPromise = new Promise<void>((r) => { resolveExit = r; });
 
   const { startStdinBridge } = await import("../ink/stdin-bridge.ts");
+  const { armReadySentinel } = await import("../cli/ready-sentinel.ts");
   const stopBridge            = startStdinBridge();
 
   const appProps: AppProps = {
@@ -1199,6 +1200,15 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       // the live context: its resize listener + 250ms/_refreshSize() poller (ink/components.ts)
       // now actually reach the REPL, so a live terminal resize reflows instead of leaving stale-
       // width content for the terminal to hard-wrap.
+      //
+      // Readiness sentinel: armed here — after every boot gate (seat resolution,
+      // dynamic imports of app-shell/repl) has passed and immediately before the
+      // initial render. Ink's first frame flush to stdout gets an invisible OSC
+      // sentinel appended (see cli/ready-sentinel.ts), giving headless ConPTY
+      // drivers a positive, product-emitted "ready for input" signal that a live
+      // repainting clock cannot erase. A boot that dies before this line, or a
+      // render tree that throws or never paints, emits nothing.
+      armReadySentinel(process.stdout);
       r.render(
         React.createElement(
           InkApp,
