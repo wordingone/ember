@@ -6,16 +6,67 @@ import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
+import { _deliverKeyEvent } from "../ink/hooks.ts";
+import { resetCommandRegistryForTests } from "../command-registry.ts";
 import { ReplScreen } from "./repl.ts";
 import { operatorSurfaceWidth } from "./repl.ts";
 
+async function flushRepl(): Promise<void> {
+  for (let index = 0; index < 5; index++) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+function renderedLines(raw: string, columns: number, rows: number): string[] {
+  const frame = buildFrame(columns, rows);
+  parseRenderedIntoFrame(raw, frame, new StylePool());
+  return frame.cells.map((line) => line.map((cell) => cell?.char ?? " ").join(""));
+}
+
+function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number): void {
+  const promptRow = lines.findIndex((line) => line.includes("❯"));
+  expect(promptRow).toBeGreaterThanOrEqual(0);
+  const promptTop = lines
+    .slice(0, promptRow)
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.startsWith("╭") && line.includes("╮"))
+    .at(-1)?.index ?? -1;
+  const promptBottomOffset = lines
+    .slice(promptRow + 1)
+    .findIndex((line) => line.startsWith("╰") && line.includes("╯"));
+  const promptBottom = promptBottomOffset < 0 ? -1 : promptRow + 1 + promptBottomOffset;
+
+  expect(promptTop).toBeGreaterThanOrEqual(0);
+  expect(promptBottom).toBeGreaterThan(promptRow);
+  expect(lines[promptTop]?.indexOf("╮")).toBe(width - 1);
+  expect(lines[promptBottom]?.indexOf("╯")).toBe(width - 1);
+
+  const commandRow = /\/(?:observatory|watch|finetune|model|train|goal|cockpit|custody|benchmark|spine)\b/;
+  const commandNames = [
+    "observatory", "watch", "finetune", "model", "train",
+    "goal", "cockpit", "custody", "benchmark", "spine",
+  ];
+  for (let row = promptTop; row <= promptBottom; row++) {
+    expect(lines[row] ?? "").not.toMatch(commandRow);
+  }
+  const renderedCommands = commandNames.filter((name) =>
+    lines.some((line) => new RegExp(`/${name}\\b`).test(line)),
+  ).length;
+  const shortfall = lines.reduce((count, line) => {
+    const match = line.match(/\+(\d+) more\b/);
+    return count + (match ? Number(match[1]) : 0);
+  }, 0);
+  expect(renderedCommands + shortfall).toBe(commandNames.length);
+}
+
 describe("repl operator surface layout", () => {
-  test("real REPL workspace keeps the bounded pane visible at 60x20 and live 80x24 to 40x24 to 80x24", () => {
+  test("keeps the pane and prompt bounded through live resize, including with the command palette open", async () => {
+    resetCommandRegistryForTests();
     let handle: ReturnType<typeof mountInk> | undefined;
     let raw = "";
-    for (const [columns, rows] of [[60, 20], [80, 24], [40, 24], [80, 24]] as const) {
-      const config = { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" };
-      const element = React.createElement(
+    const config = { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" };
+    const render = (columns: number, rows: number) =>
+      React.createElement(
         TerminalSizeContext.Provider,
         { value: { columns, rows } },
         React.createElement(ReplScreen, {
@@ -25,6 +76,9 @@ describe("repl operator surface layout", () => {
           onExit: () => {},
         }),
       );
+
+    for (const [columns, rows] of [[60, 20], [80, 24], [40, 24], [80, 24]] as const) {
+      const element = render(columns, rows);
       if (!handle) {
         handle = mountInk(element, { stream: { write(s: string) { raw += s; } }, stdout: { columns, rows } });
       } else {
@@ -35,12 +89,8 @@ describe("repl operator surface layout", () => {
         raw = "";
         handle.update(element);
       }
-      const frame = buildFrame(columns, rows);
-      parseRenderedIntoFrame(raw, frame, new StylePool());
-      const lines = frame.cells.map((line) => line.map((cell) => cell?.char ?? " ").join(""));
+      const lines = renderedLines(raw, columns, rows);
       expect(lines.length).toBe(rows);
-      // At these bounded heights the activity feed intentionally occupies the lower pane;
-      // assert the graph families that are actually paintable without changing that layout.
       for (const heading of columns <= 40
         ? ["TRAINING/LOSS", "RESOURCE EFFICIENC"]
         : ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
@@ -59,7 +109,28 @@ describe("repl operator surface layout", () => {
       expect(statusRows[0]?.[0]).toBe("│");
       expect(statusRows[0]?.indexOf("│", 1)).toBe(promptRightBorder);
     }
-    handle?.unmount();
+
+    await flushRepl();
+    raw = "";
+    _deliverKeyEvent("/", {});
+    await flushRepl();
+    for (const width of [80, 40, 80]) {
+      if (handle.container.stdout.columns !== width) {
+        raw = "";
+      }
+      handle.container.stdout.columns = width;
+      handle.container.stdout.rows = 24;
+      handle.container.rootNode.layout.width = width;
+      handle.container.rootNode.layout.height = 24;
+      handle.update(render(width, 24));
+      await flushRepl();
+      assertPaletteDoesNotContaminatePrompt(
+        renderedLines(raw, width, 24),
+        width - operatorSurfaceWidth(width),
+      );
+      raw = "";
+    }
+    handle.unmount();
   });
 
   test("keeps a bounded right pane while preserving a usable conversation column", () => {
