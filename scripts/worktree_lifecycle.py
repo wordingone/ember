@@ -219,6 +219,7 @@ def audit_state(
     state: dict[str, Any],
     *,
     ratchet: bool,
+    enforce_expiry: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     worktrees = list_worktrees(repo)
     live = {row.key: row for row in worktrees}
@@ -247,7 +248,7 @@ def audit_state(
             raise LifecycleError("MALFORMED_STATE", f"invalid managed lease: {key}") from exc
         if expiry < today:
             expired.append(record.get("path", key))
-    if expired:
+    if enforce_expiry and expired:
         raise LifecycleError("EXPIRED_WORKTREE", ", ".join(sorted(expired)))
 
     if ratchet:
@@ -336,7 +337,10 @@ def safe_ref_component(value: str) -> str:
 
 def retire_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[str, Any]:
     state = load_or_initialize(repo, state_file)
-    state, _ = audit_state(repo, state, ratchet=False)
+    # Expiry is a reason to retire, not a gate against retirement. Every other
+    # repository-integrity gate remains active, and the selected worktree still
+    # must be registered, non-main, and clean below.
+    state, _ = audit_state(repo, state, ratchet=False, enforce_expiry=False)
     key = path_key(requested_path)
     live = {row.key: row for row in list_worktrees(repo)}
     row = live.get(key)
