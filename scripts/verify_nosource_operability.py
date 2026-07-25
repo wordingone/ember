@@ -44,22 +44,39 @@ state/failure-classes/semantic-validation-without-bytes-2026-07-25.md,
 bytes the artifact does not control):
 
   L1  Root launcher exists AND its bytes resolve, hop by hop through the
-      string-literal path references it contains, to a target that lands
-      inside the repository's owned CLI entry (`tools/ember-cli`). A file's
-      extension or name is used only to decide which root files are worth
-      opening -- it is never authority for the verdict. A root file whose
-      bytes reference nothing resolvable is not a launcher, regardless of
-      its extension. A reference the harness cannot pin down statically
-      (a runtime-computed path, an unreadable or binary hop) yields `weak`,
-      never `resolved-true`. A literal is only evidence when it sits where
-      bytes can actually act on it: comment lines (REM/::/# ), print-
-      statement arguments (echo/Write-Host/Write-Output/printf), and code
-      after an unconditional top-level terminator (a bare `exit`/`exit /b`/
-      `return` at the current nesting depth) are excluded before extraction
-      -- rework 2026-07-25 round 3, after an independent probe on `dc6dcf3`
-      built a root `Ember.cmd` whose entire body was `@echo off` / a REM
-      comment naming the CLI entry / an echo that prints one line and
-      invokes nothing, and got a full PASS. See "round 3" below.
+      string-literal path references it contains, to a target that matches
+      the EXACT launcher grammar this repository generates: a variable
+      bound via `Join-Path` to a path landing inside the repository's owned
+      CLI entry (`tools/ember-cli`), that same variable later reached by a
+      `Push-Location`/`Set-Location`, and a call-operator invocation (`&
+      $var ...`) appearing after that -- all three within reachable code (see
+      below). A file's extension or name is used only to decide which root
+      files are worth opening -- it is never authority for the verdict. A
+      literal that merely NAMES the CLI entry without this causal shape
+      around it does not resolve true on its own; it is `weak`, undecided,
+      not reasoned about further -- round 3.1 (2026-07-25), after the round
+      3 cure's own "invocation position" heuristic (comment/print/dead-code
+      filtering, then ANY reachable literal containing the entry substring)
+      was flagged as the same class one level in: text presence, at a
+      slightly narrower position, still deciding the verdict. This narrows
+      the FINAL acceptance test from "does a reachable literal mention the
+      entry" to "does reachable code match the one grammar this repository's
+      own build actually emits" -- everything outside that grammar (a
+      different pattern this repo has never generated, an indirect binding,
+      a computed path, mere mention) is refused as weak, never accepted as a
+      guess about position. Reachability itself is unchanged from round 3:
+      comment lines (REM/::/#), print-statement arguments (echo/Write-Host/
+      Write-Output/printf), and code after an unconditional top-level
+      terminator (a bare `exit`/`exit /b`/`return` at the current nesting
+      depth) are excluded before the grammar is matched -- born from an
+      independent probe on `dc6dcf3` that built a root `Ember.cmd` whose
+      entire body was `@echo off` / a REM comment naming the CLI entry / an
+      echo that prints one line and invokes nothing, and got a full PASS.
+      A bounded runtime probe (substitute an owned sentinel at the CLI
+      entry, execute the launcher under a timeout in a scratch copy, observe
+      whether the sentinel actually fires) is the stronger form -- it stops
+      reasoning about text entirely and observes behavior -- and was judged,
+      not built, this round; see rework-harness-r3-1-report.md for why.
   L2  Launcher is documented: README.md or docs/START-HERE.md names a
       launcher that itself resolved-true, so a no-source reader can find a
       real one (documenting a decoy does not count).
@@ -83,18 +100,31 @@ WHAT IS NOT MEASURED (permanently undecidable here, human capture required):
     running UI (menu/palette rendering);
   - whether operating it takes one click/keystroke rather than typed flags;
   - whether the launched process reaches a usable first pixel.
-  - round 3 (2026-07-25) closes the comment/print/dead-code-after-exit
-    forms of "a string that never executes still counts". What remains
-    OPEN, disclosed rather than silently passed: (a) a literal inside a
-    CONDITIONAL block whose condition the harness does not evaluate (e.g.
-    `if 0 ( call "...tools\ember-cli..." )` at depth > 0 is not specially
-    detected as dead -- only depth-0 code after an unconditional bare
-    terminator is); (b) a literal that is a real invocation argument but
-    invokes a target with the WRONG semantics for its position (e.g. a
-    string passed to `-ArgumentList` versus `-File` in a way the harness
-    does not distinguish); (c) any shell form beyond batch/PowerShell/sh
-    comment and print syntax the two regexes above do not recognise. A
-    static reader cannot fully decide what a shell script does; this
+  - round 3 (2026-07-25) closed the comment/print/dead-code-after-exit
+    forms of "a string that never executes still counts". Round 3.1
+    (2026-07-25) closed the form that cure itself introduced -- "a
+    reachable literal that merely names the entry" -- by narrowing L1's
+    acceptance to one exact, causally-shaped grammar instead of a broader
+    guess about invocation position. What remains OPEN, disclosed rather
+    than silently passed: (a) a genuine launcher chain this repository has
+    never yet generated, using a DIFFERENT causal shape (a different
+    cmdlet, an indirect variable hop, a computed path) -- it is refused as
+    `weak`, an under-recognition rather than an over-acceptance, but it is
+    a real false-negative surface; (b) a literal inside a CONDITIONAL block
+    whose condition the harness does not evaluate (e.g. `if 0 ( ... )` at
+    depth > 0 is not specially detected as dead -- only depth-0 code after
+    an unconditional bare terminator is); (c) any shell form beyond batch/
+    PowerShell/sh comment and print syntax the recognised regexes cover.
+    None of these is decided by STATIC reading alone -- the harness reasons
+    about text shape, not observed behavior. A bounded runtime probe
+    (execute the launcher against a sentinel CLI entry, in a scratch copy,
+    under a timeout, and observe whether the sentinel fires) would close
+    all three by replacing the grammar guess with an actual execution
+    trace; it was judged reachable in principle for this repository (the
+    real `launch-ember-cli.ps1` already carries an `EMBER_LAUNCH_TEST_MODE`
+    hook) but was not built this round given the window and the risk of a
+    hastily-built subprocess-execution harness introducing its own defects.
+    A static reader cannot fully decide what a shell script does; this
     harness closes the forms of the gap that were demonstrated against it
     and names what is still open rather than claiming completeness.
 
@@ -231,15 +261,18 @@ _PRINT_LINE_RE = re.compile(
 _UNCONDITIONAL_EXIT_RE = re.compile(r"^(exit(\s*/b)?(\s+\S+)?|return)$", re.IGNORECASE)
 
 
-def extract_invoking_literals(text: str, suffix: str) -> list[str]:
-    """Like extract_path_like_literals, but bound to positions bytes can
-    actually reach and act on: comment lines, print-statement arguments, and
-    code after an unconditional top-level terminator are excluded before
-    extraction, never merely deprioritized. Depth is tracked with the block
-    delimiter each shell form actually uses -- parens for batch `if (...)`/
-    `for (...)` bodies, braces for PowerShell/shell `{ ... }` bodies -- so an
+def _reachable_lines(text: str, suffix: str) -> list[str]:
+    """The left-stripped text of every line bytes can actually reach and
+    act on: comment lines, print-statement arguments, and code after an
+    unconditional top-level terminator are excluded before extraction,
+    never merely deprioritized. Depth is tracked with the block delimiter
+    each shell form actually uses -- parens for batch `if (...)`/`for (...)`
+    bodies, braces for PowerShell/shell `{ ... }` bodies -- so an
     unconditional exit INSIDE a conditional block (depth > 0) is correctly
-    read as conditional, not as ending the file's reachability."""
+    read as conditional, not as ending the file's reachability. A line that
+    is itself a print statement (its whole line is excluded, not just its
+    trailing argument) is still walked for depth so a `Write-Host "... ) ..."`
+    line doesn't desynchronize the counter."""
     is_batch = suffix.lower() in (".cmd", ".bat")
     open_char, close_char = ("(", ")") if is_batch else ("{", "}")
     out: list[str] = []
@@ -263,11 +296,70 @@ def extract_invoking_literals(text: str, suffix: str) -> list[str]:
         depth += raw_line.count(open_char) - raw_line.count(close_char)
         if _PRINT_LINE_RE.search(raw_line):
             continue
-        for m in _STRING_LIT_RE.finditer(raw_line):
+        out.append(stripped)
+    return out
+
+
+def extract_invoking_literals(text: str, suffix: str) -> list[str]:
+    """Path-like quoted literals drawn only from reachable lines (see
+    `_reachable_lines`)."""
+    out: list[str] = []
+    for line in _reachable_lines(text, suffix):
+        for m in _STRING_LIT_RE.finditer(line):
             s = m.group(1) if m.group(1) is not None else m.group(2)
             if s and _PATH_LIKE_RE.search(s):
                 out.append(s)
     return out
+
+
+# --- Round 3.1: exact grammar for the launcher shape we actually generate --
+#
+# Round 3's "does this literal sit in an invocation position" check is
+# itself a text-presence proxy one level in from the extension/keyword
+# proxies this rework already closed twice: a better guess about which
+# token position means "invoking", still not evidence about what the
+# script does. Rather than generalize that guess further, this narrows the
+# FINAL acceptance test to the exact two-statement shape our own build
+# emits: a variable bound via `Join-Path` to a path landing inside
+# `tools/ember-cli`, that SAME variable later used in a `Push-Location`/
+# `Set-Location` statement, and a call-operator invocation (`& $x ...`)
+# appearing after that. A literal that merely CONTAINS the CLI-entry
+# substring, without this causal shape around it, no longer resolves true
+# on its own -- it is `weak`, not reasoned about further. Everything outside
+# this exact grammar -- a different launcher pattern this repo has never
+# generated, an indirect binding, a computed path -- is refused as weak.
+#
+# A bounded runtime probe (substitute a sentinel at the CLI entry, execute
+# the launcher under a timeout in a scratch copy, observe whether control
+# reaches the sentinel) is the stronger form and was not taken this round;
+# see rework-harness-r3-1-report.md for why.
+_JOIN_PATH_ASSIGN_RE = re.compile(
+    r'^\$(\w+)\s*=\s*Join-Path\s+\$\w+\s+"([^"]*)"', re.IGNORECASE
+)
+_CALL_OPERATOR_RE = re.compile(r"^&\s*\$\w+\b")
+
+
+def _matches_known_launcher_grammar(text: str, suffix: str) -> bool:
+    lines = _reachable_lines(text, suffix)
+    for i, line in enumerate(lines):
+        m = _JOIN_PATH_ASSIGN_RE.match(line)
+        if not m:
+            continue
+        varname, path_lit = m.group(1), m.group(2)
+        if CLI_ENTRY_MARKER not in path_lit.replace("\\", "/").lower():
+            continue
+        push_re = re.compile(
+            rf"^(push-location|set-location)\s+\${re.escape(varname)}\b", re.IGNORECASE
+        )
+        saw_push = False
+        for later in lines[i + 1 :]:
+            if not saw_push:
+                if push_re.match(later):
+                    saw_push = True
+                continue
+            if _CALL_OPERATOR_RE.match(later):
+                return True
+    return False
 
 
 def normalize_literal(lit: str) -> str:
@@ -327,14 +419,33 @@ def resolve_invocation(entry: Path, root: Path) -> dict:
         if current == entry:
             saw_literal_at_entry = bool(literals)
 
+        if _matches_known_launcher_grammar(text, current.suffix):
+            return check(
+                "resolved-true",
+                f"{entry.name}: invocation chain reaches {current.name}, whose "
+                f"reachable code binds a variable via Join-Path to a path "
+                f"inside {CLI_ENTRY_MARKER}, Push-Location's into it, and "
+                f"invokes via the call operator -- the exact launcher grammar "
+                f"this repository generates",
+            )
+
         for lit in literals:
             norm = normalize_literal(lit)
             if CLI_ENTRY_MARKER in norm.lower():
-                return check(
-                    "resolved-true",
-                    f'{entry.name}: invocation chain reaches "{lit}" (via '
-                    f"{current.name}), which lands inside {CLI_ENTRY_MARKER}",
+                # The literal names the CLI entry, but this file's reachable
+                # code does not match the known launcher grammar around it --
+                # a mention is not, on its own, evidence of invocation
+                # (round 3.1: text presence deciding the verdict is exactly
+                # the class this rework exists to close). Undecided, not
+                # false: something else might legitimately invoke this
+                # differently than the one grammar this harness recognises.
+                ambiguous.append(
+                    f'{current.name}: "{lit}" names {CLI_ENTRY_MARKER} but does '
+                    "not match the known launcher grammar (no Join-Path-bound "
+                    "variable Push-Location'd and then invoked) -- cannot "
+                    "confirm invocation from text alone"
                 )
+                continue
             if _VAR_MARKER_RE.search(norm):
                 ambiguous.append(
                     f'{current.name}: "{lit}" is a runtime-computed path, '
