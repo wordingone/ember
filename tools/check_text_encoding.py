@@ -121,7 +121,23 @@ def find_encoding_offenders(paths: Iterable[Path], root: Path) -> list[tuple[str
 
 def main(argv: list[str]) -> int:
     root = Path(argv[1]).resolve() if len(argv) > 1 else Path.cwd().resolve()
-    offenders = find_encoding_offenders(tracked_text_paths(root), root)
+    paths = tracked_text_paths(root)
+    # ZERO-HIT IS A FAILURE, NOT A PASS. This check's entire output when it finds
+    # nothing is "ok", and it finds nothing both when the tree is clean and when
+    # discovery broke -- two opposite states, one indistinguishable message. That
+    # is not hypothetical here: the \r\n stdin bug repaired above made this exact
+    # helper return [] on every Windows run, so the check reported ok while
+    # examining no files at all, for as long as it existed. A guard whose silent
+    # failure mode looks identical to success is the failure mode this whole
+    # issue is about, so refuse the empty set rather than bless it.
+    if not paths:
+        print(
+            "FAIL [encoding] discovered ZERO tracked text files, which cannot be "
+            "true for this repository. The discovery chain (git ls-files -> git "
+            "check-attr) is broken, not the tree. Do not read this as a pass."
+        )
+        return 1
+    offenders = find_encoding_offenders(paths, root)
     if offenders:
         print("FAIL [encoding] tracked text files are not valid UTF-8:")
         for name, reason in offenders[:50]:

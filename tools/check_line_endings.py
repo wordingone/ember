@@ -86,7 +86,19 @@ def tracked_text_paths(root: Path) -> list[Path]:
 
 def main(argv: list[str]) -> int:
     root = Path(argv[1]).resolve() if len(argv) > 1 else Path.cwd().resolve()
-    offenders = find_crlf_files(tracked_text_paths(root), root)
+    paths = tracked_text_paths(root)
+    # Same zero-hit refusal as check_text_encoding.py, and for the same reason:
+    # this check shares that discovery helper, so the \r\n stdin bug silenced
+    # BOTH of them identically -- each printed ok while examining no files. An
+    # empty discovery set is a broken chain, never a clean tree.
+    if not paths:
+        print(
+            "FAIL [line-endings] discovered ZERO tracked text files, which cannot "
+            "be true for this repository. The discovery chain (git ls-files -> git "
+            "check-attr) is broken, not the tree. Do not read this as a pass."
+        )
+        return 1
+    offenders = find_crlf_files(paths, root)
     if offenders:
         print("FAIL [line-endings] CRLF found in tracked text files:")
         for item in offenders[:50]:
