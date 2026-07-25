@@ -25,6 +25,8 @@ import React from "react";
 import { Box, Text, RawAnsi } from "../ink/components.ts";
 import { color, type FeatureFlags } from "./design-system.ts";
 import { renderFireballLines, FIREBALL_IDLE_POSE_FRAME } from "./fireball.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
+import { buildSpineRows, renderSpineBlock } from "./spine-first-screen.ts";
 import { formatReceiptAge, isReceiptStale } from "../core/receipt-age.ts";
 
 // ---------------------------------------------------------------------------
@@ -396,6 +398,36 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
 // Homescreen — root welcome/status composite
 // ---------------------------------------------------------------------------
 
+/** Path comparison for the launch-root disclosure. Windows gives us backslashes from one source
+ *  and forward slashes from another for the same directory, and case differs on drive letters, so
+ *  a raw string compare would fire the disclosure on two spellings of one path — a warning that
+ *  cries wolf is worse than no warning. Trailing separators are stripped for the same reason. */
+export function samePathForDisplay(a: string, b: string): boolean {
+  const norm = (p: string) =>
+    p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/** Change 3: say so, once, plainly, when state is bound somewhere other than where you launched.
+ *  Renders nothing when the two agree or when the caller did not supply a launch directory —
+ *  silence here means "no discrepancy", which is the only reading that stays honest as callers
+ *  are wired up one at a time. */
+export function rootDisclosure(
+  canonicalRoot: string | undefined,
+  launchDir: string | undefined,
+): React.ReactElement | null {
+  if (!canonicalRoot || !launchDir) return null;
+  if (samePathForDisplay(canonicalRoot, launchDir)) return null;
+  return React.createElement(
+    Text,
+    { key: "root-disclosure", dimColor: true },
+    clipToWidth(
+      `State is bound to ${canonicalRoot}, not the directory you launched from`,
+      LEFT_TEXT_WIDTH,
+    ),
+  );
+}
+
 export interface HomescreenProps {
   state:          LogoState;
   flags?:         FeatureFlags;
@@ -410,6 +442,17 @@ export interface HomescreenProps {
   /** #413: liveness-clock input, current wall-clock ms. Defaults to Date.now() at call time
    *  (never memoized) -- tests pass a fixed value for determinism; real callers never need to. */
   nowMs?:         number;
+  /** Live command registry, for the spine block. Omitted or empty -> six BLOCKED rows, which is
+   *  the honest reading: nothing was proven drivable. It never shrinks to fewer rows. */
+  spineCommands?: readonly RegistryCommand[] | null;
+  /** The directory the operator actually launched from, when it differs from the canonical repo
+   *  root the cockpit binds its state to. Change 3 of the spine-on-first-screen spec: the binding
+   *  itself is deliberate (utils/repo-root.ts canonicalizeThroughWorktree, issue #666 — "refusing
+   *  to bind state paths to a worktree root the watchdog will never poll") and stays. What was
+   *  wrong is that the operator was never told: header, data line and watchdog tail all showed the
+   *  canonical path, and the one console line that said so scrolled away before the first frame
+   *  settled. Undefined, or equal to the canonical root, renders nothing. */
+  launchDir?:     string;
 }
 
 /** D4: the fireball's raster lines interleaved 1:1 with the identity block's own text lines
@@ -481,6 +524,8 @@ export function Homescreen({
   fireballTick  = FIREBALL_IDLE_POSE_FRAME,
   boardSummary,
   nowMs         = Date.now(),
+  spineCommands,
+  launchDir,
 }: HomescreenProps): React.ReactElement {
   // D4: one outer titled panel wraps the whole hero -- replaces WelcomeV2's own border entirely
   // (the B2 root cause: a child border wider than its parent leftCol clipped in row-flex mode).
@@ -506,6 +551,7 @@ export function Homescreen({
 
   const leftCol = React.createElement(
     Box, { key: "left", flexDirection: "column", width: leftColWidth },
+    rootDisclosure(state.dataRoot, launchDir),
     state.updateAvailable
       ? React.createElement(
           Text, { key: "update", dimColor: true },
@@ -515,12 +561,42 @@ export function Homescreen({
     renderIdentityBlock(state, fireballTick, viewportWidth),
   );
 
+  // Change 1 of the spine-on-first-screen spec. The previous entries were
+  //   "Run /init to create an EMBER.md file with instructions for Ember"
+  //   `Try "what changed on the board today?"`
+  // Both are coding-assistant affordances. On a first launch they spent the most valuable real
+  // estate on the screen teaching a workflow that is not the spine, while custody, model,
+  // checkpoint, benchmark and train appeared nowhere at all. These name the spine instead, in the
+  // operator's words, and point at the block below rather than at an internal noun.
+  // Changes 1 and 2 of the spine-on-first-screen spec, merged into ONE feed rather than two.
+  //
+  // The previous entries here were
+  //   "Run /init to create an EMBER.md file with instructions for Ember"
+  //   `Try "what changed on the board today?"`
+  // Both are coding-assistant affordances, and on a first launch they spent the most valuable real
+  // estate on the screen teaching a workflow that is not the spine, while custody, model,
+  // checkpoint, benchmark and train appeared nowhere at all.
+  //
+  // Why merged: adding a separate six-row block BELOW the tips box pushed the panel past the
+  // bottom of an 80x20 terminal and the border's lower corners went off-screen —
+  // homescreen-border-clip.test.ts caught it. The honest response was not to relax that guard; a
+  // clipped panel is a real defect for a real operator on a real terminal. It was to notice that
+  // once the tips box's only remaining job is to point at the spine, the tips box and the spine
+  // block are the same thing. So the onboarding feed IS the spine now: net four lines rather than
+  // eight, and the first screen's teaching space finally teaches the product.
   const onboardingFeed: Feed = {
-    title:   "Tips for getting started",
-    entries: [
-      { text: "Run /init to create an EMBER.md file with instructions for Ember" },
-      { text: NATIVE_HINT },
-    ],
+    title:   "Spine — what Ember can be driven to do",
+    entries: renderSpineBlock(buildSpineRows(spineCommands), rightColWidth(viewportWidth))
+      .map((text) => ({ text })),
+    // No footer. It said "type any command shown", which the title already implies and each row
+    // demonstrates — and it cost the one row that put the panel at 21 in an 80x20 terminal, which
+    // pushed the bottom border off-screen. Measured, not guessed: bottom-border row 21, budget 20.
+    //
+    // MARGIN WARNING for whoever adds the next line here. The panel now lands at exactly 20 rows
+    // at 80x20. There is no slack. One more entry in this feed OR in the recent-activity feed
+    // clips the border again, and the failure surfaces as a corner-painting test rather than as
+    // anything that mentions height. If you need another line, take one back from somewhere in the
+    // same column — do not assume there is room.
   };
   const recentFeed: Feed = {
     title:   "Recent activity",

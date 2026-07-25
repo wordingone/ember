@@ -50,6 +50,7 @@ import {
 } from "../services/slash-dropdown.ts";
 import { getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildMessageLookups,
   UserTextMessage,
@@ -387,6 +388,10 @@ export function renderMsgDispatch(
   msg:           SessionMessage,
   lookups:       MessageLookups,
   viewportWidth: number = 80,
+  /** Live command registry, threaded through so the welcome screen's spine block resolves against
+   *  real commands. Omitted -> the block renders every spine function BLOCKED, which is honest but
+   *  useless; both call sites pass it. */
+  spineCommands?: readonly RegistryCommand[] | null,
 ): React.ReactElement {
   switch (msg.type) {
     case "welcome":
@@ -401,6 +406,8 @@ export function renderMsgDispatch(
         },
         viewportWidth,
         boardSummary: msg["boardSummary"] as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        spineCommands,
+        launchDir: process.cwd(),
       });
 
     case "user":
@@ -1055,7 +1062,7 @@ export function ReplScreen({
   // Render dispatch (memoised per lookups + viewport width)
   const renderMessage = useCallback(
     (msg: SessionMessage) =>
-      renderMsgDispatch(msg, lookups as MessageLookups, terminalCols),
+      renderMsgDispatch(msg, lookups as MessageLookups, terminalCols, slashCommands),
     [lookups, terminalCols],
   );
 
@@ -1133,6 +1140,13 @@ export function ReplScreen({
     },
     viewportWidth: mainColumnWidth,
     boardSummary,
+    // The spine block resolves against the SAME registry that drives the slash palette, so a
+    // command shown on the first screen is by construction a command the operator can type.
+    spineCommands: slashCommands,
+    // Change 3 of the spine-on-first-screen spec: the cockpit binds state to the canonical repo
+    // root even when launched elsewhere (utils/repo-root.ts, issue #666). That is deliberate and
+    // stays; being silent about it is what was wrong.
+    launchDir: process.cwd(),
   };
   // While slash composition is active, the render below collapses every variable chrome row:
   // banner, spinner, stash/shimmer/queue/notification rows and status details. The surviving
