@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # repo-guard — the structural-invariant kernel for this repository.
 #
 # One script, run identically by (1) the local pre-commit/pre-push hook,
@@ -29,7 +30,27 @@
 # Tunables (env): MAX_STATE_LINES (default 150), MAX_BRANCHES (default 25).
 
 set -u
-cd "$(git rev-parse --show-toplevel)" || { echo "repo-guard: not in a git repo"; exit 2; }
+SUBJECT_ROOT="${REPO_GUARD_SUBJECT_ROOT:-}"
+if [ -z "$SUBJECT_ROOT" ]; then
+  SUBJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+    echo "repo-guard: not in a git repo"
+    exit 2
+  }
+fi
+KERNEL_ROOT="${REPO_GUARD_KERNEL_ROOT:-$SUBJECT_ROOT}"
+SUBJECT_ROOT="$(cd "$SUBJECT_ROOT" 2>/dev/null && pwd -P)" || {
+  echo "repo-guard: subject root is unavailable"
+  exit 2
+}
+KERNEL_ROOT="$(cd "$KERNEL_ROOT" 2>/dev/null && pwd -P)" || {
+  echo "repo-guard: kernel root is unavailable"
+  exit 2
+}
+git -C "$SUBJECT_ROOT" rev-parse --show-toplevel >/dev/null 2>&1 || {
+  echo "repo-guard: subject root is not a git repository"
+  exit 2
+}
+cd "$SUBJECT_ROOT" || exit 2
 
 FAIL=0
 note() { printf '  - %s\n' "$1"; }
@@ -63,7 +84,7 @@ else
 fi
 
 # ---- 1b. tracked text files must be LF-only ------------------------------
-if python tools/check_line_endings.py; then
+if python "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -143,18 +164,19 @@ fi
 # SKIP all NAME checks if backup exemption is applied (exact-match private mirror only)
 if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
   NAMES_EXCLUDE_ARGS=()
-  if [ -f tools/repo-guard-names-exclude.txt ]; then
+  NAMES_EXCLUDE_FILE="$KERNEL_ROOT/tools/repo-guard-names-exclude.txt"
+  if [ -f "$NAMES_EXCLUDE_FILE" ]; then
     while IFS= read -r prefix; do
       prefix="$(printf '%s' "$prefix" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       [ -z "$prefix" ] && continue
       case "$prefix" in \#*) continue ;; esac
       NAMES_EXCLUDE_ARGS+=(":(exclude)${prefix}")
-    done < tools/repo-guard-names-exclude.txt
+    done < "$NAMES_EXCLUDE_FILE"
   fi
   NAMES=""
   if [ -n "${REPO_GUARD_NAMES:-}" ]; then
     NAMES="$REPO_GUARD_NAMES"
-  elif [ -f tools/.repo-guard-denylist ]; then
+  elif [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ] && [ -f tools/.repo-guard-denylist ]; then
     NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
   fi
   if [ -n "$NAMES" ]; then
@@ -164,8 +186,13 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
     else
       ok "names" "none found"
     fi
-  elif [ -f tools/repo-guard-denylist.sha256 ]; then
-    HASHED_OUT="$(python tools/check_names_hashed.py 2>&1)"
+  elif [ -f "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" ]; then
+    HASHED_OUT="$(
+      python "$KERNEL_ROOT/tools/check_names_hashed.py" \
+        --root "$SUBJECT_ROOT" \
+        --denylist "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" \
+        --names-exclude "$NAMES_EXCLUDE_FILE" 2>&1
+    )"
     HASHED_RC=$?
     case "$HASHED_RC" in
       0) ok "names" "none found (hashed denylist)" ;;
@@ -256,8 +283,8 @@ if [ -n "$RANGE" ]; then
 fi
 
 # ---- 9. authority and totality conservation -----------------------------
-if [ ! -f scripts/verify_authority_conservation.py ]; then
-  fail "authority" "scripts/verify_authority_conservation.py is missing"
+if [ ! -f "$KERNEL_ROOT/scripts/verify_authority_conservation.py" ]; then
+  fail "authority" "trusted scripts/verify_authority_conservation.py is missing"
 else
   AUTHORITY_ARGS=(--root .)
   if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
@@ -265,7 +292,7 @@ else
   elif [ -n "$RANGE" ]; then
     AUTHORITY_ARGS+=(--changed-range "$RANGE")
   fi
-  AUTHORITY_OUT="$(python scripts/verify_authority_conservation.py "${AUTHORITY_ARGS[@]}" 2>&1)"
+  AUTHORITY_OUT="$(python "$KERNEL_ROOT/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
   AUTHORITY_RC=$?
   if [ "$AUTHORITY_RC" -eq 0 ]; then
     ok "authority" "EMBER authority conservation certificate passes"

@@ -102,6 +102,35 @@ def run_guard(tmp: Path, extra_env: dict | None = None) -> tuple[int, str]:
     return proc.returncode, proc.stdout + proc.stderr
 
 
+def run_guard_from_trusted_kernel(
+    subject: Path,
+    kernel: Path,
+    extra_env: dict | None = None,
+) -> tuple[int, str]:
+    """Run the kernel's guard bytes against a separate subject checkout."""
+    import os
+    env = dict(os.environ)
+    env.pop("REPO_GUARD_NAMES", None)
+    env.update(
+        {
+            "CI": "true",
+            "GITHUB_ACTIONS": "true",
+            "REPO_GUARD_KERNEL_ROOT": kernel.as_posix(),
+            "REPO_GUARD_SUBJECT_ROOT": subject.as_posix(),
+        }
+    )
+    if extra_env:
+        env.update(extra_env)
+    proc = subprocess.run(
+        [GIT_BASH, (kernel / "tools" / "repo-guard.sh").as_posix()],
+        cwd=str(subject),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode, proc.stdout + proc.stderr
+
+
 def cleanup(tmp: Path) -> None:
     shutil.rmtree(tmp, ignore_errors=True)
 
@@ -315,6 +344,81 @@ def test_ci_fail_closed_empty_hashed_denylist():
         cleanup(tmp)
 
 
+# ---------------------------------------------------------------------------
+# RED: a subject cannot replace the guard/helper that judges itself
+# ---------------------------------------------------------------------------
+def test_trusted_kernel_ignores_subject_guard_and_helpers():
+    tmp = make_fixture("fix/selftest-trusted-kernel")
+    try:
+        (tmp / ".github" / "workflows").mkdir(parents=True)
+        (tmp / ".github" / "workflows" / "repo-guard.yml").write_text(
+            "name: candidate-bypass\n"
+            "on: pull_request\n"
+            "jobs:\n"
+            "  guard:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: exit 0\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (tmp / "tools" / "repo-guard.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            "printf 'CANDIDATE_GUARD_EXECUTED\\n'\n"
+            "exit 0\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (tmp / "scripts" / "verify_authority_conservation.py").write_text(
+            "from pathlib import Path\n"
+            "Path('candidate-helper-ran').write_text('unsafe', encoding='utf-8')\n"
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (tmp / "INVARIANT.md").unlink()
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc != 0, f"trusted kernel accepted a subject-bypassed authority failure\n{out}"
+        assert "FAIL [authority]" in out, out
+        assert "CANDIDATE_GUARD_EXECUTED" not in out, out
+        assert not (tmp / "candidate-helper-ran").exists(), (
+            "trusted guard executed the subject-authored authority helper"
+        )
+    finally:
+        cleanup(tmp)
+
+
+def test_required_workflow_uses_base_pinned_kernel():
+    text = (REPO_ROOT / ".github" / "workflows" / "repo-guard.yml").read_text(
+        encoding="utf-8"
+    )
+    required = (
+        "pull_request_target:",
+        "path: guard-kernel",
+        "path: guard-subject",
+        "REPO_GUARD_KERNEL_ROOT:",
+        "REPO_GUARD_SUBJECT_ROOT:",
+        'bash "${kernel}/tools/repo-guard.sh"',
+        'python "${kernel}/scripts/check_pr_authority_binding.py"',
+        "persist-credentials: false",
+        "permissions:",
+        "contents: read",
+        "pull-requests: read",
+    )
+    for marker in required:
+        assert marker in text, f"trusted workflow marker missing: {marker}"
+    assert "\n  pull_request:\n" not in text, (
+        "candidate-authored pull_request workflow cannot be the required trust gate"
+    )
+    assert text.count("persist-credentials: false") == 3
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -325,6 +429,8 @@ ALL_TESTS = [
     test_ci_fail_closed_empty_hashed_denylist,
     test_red_name_outside_exclude_scope,
     test_green_name_inside_excluded_path,
+    test_trusted_kernel_ignores_subject_guard_and_helpers,
+    test_required_workflow_uses_base_pinned_kernel,
 ]
 
 
