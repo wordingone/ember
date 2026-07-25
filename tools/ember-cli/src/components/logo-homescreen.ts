@@ -421,10 +421,10 @@ export function rootDisclosure(
   return React.createElement(
     Text,
     { key: "root-disclosure", dimColor: true },
-    clipToWidth(
-      `State is bound to ${canonicalRoot}, not the directory you launched from`,
-      LEFT_TEXT_WIDTH,
-    ),
+    // Short enough that the PATH survives the 40-column budget. The live frame read
+    // The live frame clipped it to "...not the…", losing the clause that mattered; the path
+    // itself is the informative half, so the prefix shrank instead.
+    clipToWidth(`State root: ${canonicalRoot} (not here)`, LEFT_TEXT_WIDTH),
   );
 }
 

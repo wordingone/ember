@@ -55,12 +55,12 @@ export interface SpineRow {
  * saying so.
  */
 export const SPINE_FUNCTIONS: readonly SpineFunctionDef[] = [
-  { label: 'custody and the identity manifest', command: 'custody' },
-  { label: 'data and tokenizer lineage',        command: 'model', verb: 'manifest inspect' },
-  { label: 'checkpoint save and load',          command: 'model', verb: 'checkpoint save|load' },
-  { label: 'the owned serving path',            command: 'model', verb: 'status' },
+  { label: 'custody + identity manifest',      command: 'custody' },
+  { label: 'data + tokenizer lineage',         command: 'model', verb: 'manifest inspect' },
+  { label: 'checkpoint save / load',           command: 'model', verb: 'checkpoint' },
+  { label: 'owned serving path',               command: 'model', verb: 'status' },
   { label: 'benchmarking',                      command: 'benchmark' },
-  { label: 'the 3B training launch',            command: 'train' },
+  { label: '3B training launch',               command: 'train' },
 ] as const;
 
 /**
@@ -148,8 +148,15 @@ const STATUS_WIDTH = 7; // 'BLOCKED'.length, the longest of the three
  */
 export function renderSpineRow(row: SpineRow, width: number): string {
   const status = row.status.padEnd(STATUS_WIDTH, ' ');
-  const tail = row.command !== '' ? row.command : row.reason;
-  const line = `${status} ${row.label}${tail ? `  ${tail}` : ''}`;
+  // Command BEFORE label, deliberately. Truncation eats the tail, so whatever is last is what an
+  // operator loses at a narrow width — and the command is the only text on this row they are meant
+  // to type. Measured, not assumed: a live launch rendered "BOUND custody and the identity
+  // manifest  /…", which names a function and then hides how to reach it, i.e. exactly the gap this
+  // whole block exists to close, reproduced inside the fix.
+  const head = row.command !== '' ? row.command : '';
+  const line = head
+    ? `${status} ${head}  ${row.label}`
+    : `${status} ${row.label}  ${row.reason}`;
   const max = Math.max(1, Math.floor(width));
   if (line.length <= max) return line;
   if (max <= 1) return line.slice(0, max);
