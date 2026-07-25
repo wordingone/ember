@@ -45,6 +45,11 @@ function valid(): CaptureReceiptInput {
     binaryArtifact: "tools/ember-cli/src/ember.exe",
     binarySha256Before: "b".repeat(64),
     binarySha256After: "b".repeat(64),
+    rebuildBinarySha256: "b".repeat(64),
+    builderExecutableBasename: "bun.exe",
+    builderExecutableSha256Before: "c".repeat(64),
+    builderExecutableSha256After: "c".repeat(64),
+    builderVersion: "1.3.12",
     stages: [stage(80, 1), stage(40, 2), stage(80, 3)],
   };
 }
@@ -117,6 +122,40 @@ describe("buildCaptureReceipt", () => {
     expect(receipt["evidence_class"]).toBe("LIVE_COMPILED_BINARY_CONPTY");
     expect(receipt["goal_id"]).toBe("EMBER-02");
     expect(receipt["workstream_id"]).toBe("EMBER-02A");
+    expect(receipt["binary"]).toEqual({
+      artifact: "tools/ember-cli/src/ember.exe",
+      sha256: "b".repeat(64),
+      reproducible_rebuild: {
+        source_commit: "a".repeat(40),
+        sha256: "b".repeat(64),
+        equals_captured_binary: true,
+      },
+    });
+    expect(receipt["claim_boundary"]).toEqual({
+      derived: [
+        "captured binary equals an independent rebuild from source_commit",
+        "independent rebuild used the recorded external builder executable",
+      ],
+      not_proven: [
+        "source_commit review acceptance",
+        "model, training, benchmark, or capability completion",
+      ],
+    });
+    expect(receipt["builder"]).toEqual({
+      executable_basename: "bun.exe",
+      sha256: "c".repeat(64),
+      version: "1.3.12",
+      invocation: [
+        "bun.exe",
+        "build",
+        "./entrypoints/main.ts",
+        "--compile",
+        "--outfile",
+        "<owned-temp>/ember.exe",
+        "--banner",
+        "<derived-from-source-commit>",
+      ],
+    });
     const stages = receipt["stages"] as Array<Record<string, unknown>>;
     expect(stages[0]!["raw_private_exact"]).toEqual({
       logical_locator: "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/stage-1-80.raw",
@@ -152,6 +191,29 @@ describe("buildCaptureReceipt", () => {
     const input = valid();
     input.binarySha256After = "c".repeat(64);
     expect(() => buildCaptureReceipt(input)).toThrow("binary changed during capture");
+  });
+
+  test("rejects a stale or hand-patched binary that differs from an independent rebuild", () => {
+    const input = valid();
+    input.rebuildBinarySha256 = "d".repeat(64);
+    expect(() => buildCaptureReceipt(input)).toThrow(
+      "captured binary does not equal independent rebuild",
+    );
+  });
+
+  test("rejects builder executable drift", () => {
+    const input = valid();
+    input.builderExecutableSha256After = "d".repeat(64);
+    expect(() => buildCaptureReceipt(input)).toThrow("builder executable changed");
+  });
+
+  test("rejects incomplete builder identity", () => {
+    const input = valid();
+    input.builderVersion = "";
+    expect(() => buildCaptureReceipt(input)).toThrow("builder version is invalid");
+    input.builderVersion = "1.3.12";
+    input.builderExecutableBasename = "../bun.exe";
+    expect(() => buildCaptureReceipt(input)).toThrow("builder executable basename is invalid");
   });
 
   test("rejects a dimension other than 80, 40, 80", () => {

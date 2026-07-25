@@ -21,6 +21,7 @@ import {
 } from "node:path";
 import { Terminal } from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
+import { buildCommitBanner } from "./build-cockpit.ts";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -51,6 +52,11 @@ export interface CaptureReceiptInput {
   binaryArtifact: string;
   binarySha256Before: string;
   binarySha256After: string;
+  rebuildBinarySha256: string;
+  builderExecutableBasename: string;
+  builderExecutableSha256Before: string;
+  builderExecutableSha256After: string;
+  builderVersion: string;
   stages: CaptureStageInput[];
 }
 
@@ -145,11 +151,36 @@ function safeArtifactPath(value: string, label: string): string {
 
 export function buildCaptureReceipt(input: CaptureReceiptInput): Record<string, unknown> {
   if (!COMMIT.test(input.sourceCommit)) throw new Error("source commit is invalid");
-  if (!SHA256.test(input.binarySha256Before) || !SHA256.test(input.binarySha256After)) {
+  if (
+    !SHA256.test(input.binarySha256Before) ||
+    !SHA256.test(input.binarySha256After) ||
+    !SHA256.test(input.rebuildBinarySha256)
+  ) {
     throw new Error("binary hash is invalid");
   }
   if (input.binarySha256Before !== input.binarySha256After) {
     throw new Error("binary changed during capture");
+  }
+  if (input.binarySha256Before !== input.rebuildBinarySha256) {
+    throw new Error("captured binary does not equal independent rebuild");
+  }
+  if (
+    !SHA256.test(input.builderExecutableSha256Before) ||
+    !SHA256.test(input.builderExecutableSha256After)
+  ) {
+    throw new Error("builder executable hash is invalid");
+  }
+  if (input.builderExecutableSha256Before !== input.builderExecutableSha256After) {
+    throw new Error("builder executable changed");
+  }
+  if (
+    input.builderExecutableBasename.length === 0 ||
+    basename(input.builderExecutableBasename) !== input.builderExecutableBasename
+  ) {
+    throw new Error("builder executable basename is invalid");
+  }
+  if (input.builderVersion.trim().length === 0) {
+    throw new Error("builder version is invalid");
   }
   safeArtifactPath(input.binaryArtifact, "binary artifact");
   if (
@@ -227,11 +258,41 @@ export function buildCaptureReceipt(input: CaptureReceiptInput): Record<string, 
     binary: {
       artifact: input.binaryArtifact,
       sha256: input.binarySha256Before,
+      reproducible_rebuild: {
+        source_commit: input.sourceCommit,
+        sha256: input.rebuildBinarySha256,
+        equals_captured_binary: true,
+      },
+    },
+    builder: {
+      executable_basename: input.builderExecutableBasename,
+      sha256: input.builderExecutableSha256Before,
+      version: input.builderVersion,
+      invocation: [
+        input.builderExecutableBasename,
+        "build",
+        "./entrypoints/main.ts",
+        "--compile",
+        "--outfile",
+        "<owned-temp>/ember.exe",
+        "--banner",
+        "<derived-from-source-commit>",
+      ],
     },
     transport: "windows-conpty/node-pty",
     argv: [basename(input.binaryArtifact)],
     dimensions: EXPECTED_COLUMNS.map((columns) => ({ columns, rows: ROWS })),
     stages,
+    claim_boundary: {
+      derived: [
+        "captured binary equals an independent rebuild from source_commit",
+        "independent rebuild used the recorded external builder executable",
+      ],
+      not_proven: [
+        "source_commit review acceptance",
+        "model, training, benchmark, or capability completion",
+      ],
+    },
     result: "PASS",
   };
 }
@@ -242,6 +303,54 @@ function commandText(args: string[], cwd: string): string {
     throw new Error(Buffer.from(result.stderr).toString("utf8").trim() || `${args[0]} failed`);
   }
   return Buffer.from(result.stdout).toString("utf8").trim();
+}
+
+interface ReproducibleBuildEvidence {
+  rebuildBinarySha256: string;
+  builderExecutableBasename: string;
+  builderExecutableSha256Before: string;
+  builderVersion: string;
+}
+
+function rebuildBinaryFromSource(repoRoot: string, sourceCommit: string): ReproducibleBuildEvidence {
+  const sourceRoot = join(repoRoot, "tools", "ember-cli", "src");
+  const ownedTemp = mkdtempSync(join(tmpdir(), "ember-issue-243-rebuild-"));
+  const rebuiltBinary = join(ownedTemp, "ember.exe");
+  const builderExecutableSha256Before = sha256(readFileSync(process.execPath));
+  const builderVersion = commandText([process.execPath, "--version"], sourceRoot);
+  try {
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "build",
+        "./entrypoints/main.ts",
+        "--compile",
+        "--outfile",
+        rebuiltBinary,
+        "--banner",
+        buildCommitBanner(sourceCommit),
+      ],
+      { cwd: sourceRoot, stdout: "pipe", stderr: "pipe" },
+    );
+    if (result.exitCode !== 0) {
+      throw new Error(
+        Buffer.from(result.stderr).toString("utf8").trim() ||
+          `independent cockpit rebuild failed with exit code ${result.exitCode}`,
+      );
+    }
+    const builderExecutableSha256After = sha256(readFileSync(process.execPath));
+    if (builderExecutableSha256Before !== builderExecutableSha256After) {
+      throw new Error("builder executable changed during independent rebuild");
+    }
+    return {
+      rebuildBinarySha256: sha256(readFileSync(rebuiltBinary)),
+      builderExecutableBasename: basename(process.execPath),
+      builderExecutableSha256Before,
+      builderVersion,
+    };
+  } finally {
+    rmSync(ownedTemp, { recursive: true, force: true });
+  }
 }
 
 function within(root: string, target: string, label: string): string {
@@ -320,6 +429,10 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
   }
   const binaryBefore = readFileSync(binary);
   const binarySha256Before = sha256(binaryBefore);
+  const buildEvidence = rebuildBinaryFromSource(repoRoot, sourceCommit);
+  if (buildEvidence.rebuildBinarySha256 !== binarySha256Before) {
+    throw new Error("captured binary does not equal independent rebuild");
+  }
   mkdirSync(outDir, { recursive: true });
   mkdirSync(dirname(receiptPath), { recursive: true });
   mkdirSync(privateOutDir, { recursive: true });
@@ -394,11 +507,20 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
     }
 
     const binarySha256After = sha256(readFileSync(binary));
+    const sourceCommitAfter = commandText(["git", "rev-parse", "HEAD"], repoRoot);
+    if (sourceCommitAfter !== sourceCommit) {
+      throw new Error("source commit changed during capture");
+    }
     const receipt = buildCaptureReceipt({
       sourceCommit,
       binaryArtifact,
       binarySha256Before,
       binarySha256After,
+      rebuildBinarySha256: buildEvidence.rebuildBinarySha256,
+      builderExecutableBasename: buildEvidence.builderExecutableBasename,
+      builderExecutableSha256Before: buildEvidence.builderExecutableSha256Before,
+      builderExecutableSha256After: sha256(readFileSync(process.execPath)),
+      builderVersion: buildEvidence.builderVersion,
       stages,
     });
     writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
