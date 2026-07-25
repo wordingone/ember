@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Reject CRLF in tracked text files.
 
 Git attributes should normalize text to LF, but this guard catches Windows
@@ -49,16 +52,28 @@ def tracked_text_paths(root: Path) -> list[Path]:
     names = [line for line in out.splitlines() if line]
     if not names:
         return []
+    # Binary mode (text=False) end to end: subprocess's text=True universal-
+    # newline translation rewrites every "\n" in `input` to os.linesep before
+    # the child ever sees it. On Windows that turns each pathname's stdin
+    # line into "<name>\r\n" -- git-check-attr then reads a filename with a
+    # trailing \r, cannot match it to any real tracked path, and the whole
+    # tracked-text population comes back empty regardless of file content
+    # (issue #247 fix review: this made this check a silent no-op on every
+    # Windows-local run, whatever line endings the tracked files actually
+    # had). Binary I/O with an explicit "\n" join sidesteps the translation.
+    stdin_bytes = ("\n".join(names) + "\n").encode("utf-8")
     proc = subprocess.run(
         ["git", "check-attr", "--stdin", "text"],
         cwd=root,
-        input="\n".join(names) + "\n",
-        text=True,
+        input=stdin_bytes,
         check=True,
         capture_output=True,
     )
     result: list[Path] = []
-    for line in proc.stdout.splitlines():
+    for line in proc.stdout.decode("utf-8", errors="replace").split("\n"):
+        line = line.rstrip("\r")
+        if not line:
+            continue
         parts = line.rsplit(": ", 2)
         if len(parts) != 3:
             continue

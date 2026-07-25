@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # repo-guard — the structural-invariant kernel for this repository.
 #
 # One script, run identically by (1) the local pre-commit/pre-push hook,
@@ -64,6 +65,17 @@ fi
 
 # ---- 1b. tracked text files must be LF-only ------------------------------
 if python tools/check_line_endings.py; then
+  :
+else
+  FAIL=1
+fi
+
+# ---- 1c. tracked text files must be valid UTF-8, no UTF-16/32 BOM --------
+# git's -I/text=auto binary heuristics silently exclude NUL-heavy content
+# from every text-based scan below (names/paths/path-frags all run via
+# `git grep -I`); a UTF-16-encoded (or otherwise mis-encoded) tracked file
+# rode through those scans invisibly (issue #247).
+if python tools/check_text_encoding.py; then
   :
 else
   FAIL=1

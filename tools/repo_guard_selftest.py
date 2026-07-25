@@ -21,8 +21,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
+    ".gitattributes",
     "tools/repo-guard.sh",
     "tools/check_line_endings.py",
+    "tools/check_text_encoding.py",
     "tools/check_names_hashed.py",
     "scripts/verify_authority_conservation.py",
     "INVARIANT.md",
@@ -180,6 +182,93 @@ def test_red_absolute_path_doubled_json_escape():
         cleanup(tmp)
 
 # ---------------------------------------------------------------------------
+# RED: tracked file carries a UTF-16LE BOM (issue #247 -- git's -I binary
+# heuristic treats this content as binary, so it never engages the names/
+# paths/path-frags scans at all; the encoding check must catch it directly).
+# ---------------------------------------------------------------------------
+def test_red_utf16le_bom():
+    tmp = make_fixture("fix/selftest-red-utf16le")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "note.py").write_bytes(
+            "# comment\nprint('hi')\n".encode("utf-16-le")
+        )
+        # utf-16-le encoding of ASCII text has no BOM by default; prepend one
+        # explicitly so this fixture matches a real UTF-16LE-with-BOM file.
+        raw = (tmp / "scripts" / "note.py").read_bytes()
+        (tmp / "scripts" / "note.py").write_bytes(b"\xff\xfe" + raw)
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "scripts/note.py" in out, out
+        assert "UTF-16LE BOM" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# RED: tracked file carries a UTF-32LE BOM.
+# ---------------------------------------------------------------------------
+def test_red_utf32le_bom():
+    tmp = make_fixture("fix/selftest-red-utf32le")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "note32.py").write_bytes(
+            b"\xff\xfe\x00\x00" + "print('hi')\n".encode("utf-32-le")
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "scripts/note32.py" in out, out
+        assert "UTF-32LE BOM" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# RED: tracked file has an invalid single-byte non-UTF-8 sequence (the #247
+# scope-extension shape: a cp1252-style em-dash byte, too few NUL bytes to
+# trip git's binary heuristic, still not valid UTF-8).
+# ---------------------------------------------------------------------------
+def test_red_invalid_single_byte_utf8():
+    tmp = make_fixture("fix/selftest-red-invalid-byte")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "test_bad.py").write_bytes(
+            b"# a stray cp1252 em\x97dash byte\nprint('hi')\n"
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "scripts/test_bad.py" in out, out
+        assert "invalid UTF-8" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# GREEN: valid UTF-8 with real non-ASCII content still passes cleanly.
+# ---------------------------------------------------------------------------
+def test_green_valid_utf8_non_ascii():
+    tmp = make_fixture("fix/selftest-green-utf8-nonascii")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "docs" / "note.md").write_text(
+            "Ordinary prose with real UTF-8: café, über, — em-dash.\n",
+            encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected exit 0, got {rc}\n{out}"
+        assert "ok   [encoding]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
 # GREEN: clean fixture, no denylist needed at all
 # ---------------------------------------------------------------------------
 def test_green_clean_fixture():
@@ -319,6 +408,10 @@ ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
     test_red_absolute_path_doubled_json_escape,
+    test_red_utf16le_bom,
+    test_red_utf32le_bom,
+    test_red_invalid_single_byte_utf8,
+    test_green_valid_utf8_non_ascii,
     test_green_clean_fixture,
     test_green_hashed_denylist_no_match,
     test_ci_fail_closed_no_denylist,
