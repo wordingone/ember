@@ -69,8 +69,7 @@ export function redactHostPaths(
 ): { publicBytes: Uint8Array; redactions: HostPathRedaction[] } {
   let text = Buffer.from(privateBytes).toString("utf8");
   const redactions: HostPathRedaction[] = [];
-  const uniquePaths = [...new Set(hostPaths)].sort((a, b) => b.length - a.length);
-  for (const source of uniquePaths) {
+  const replacePath = (source: string): void => {
     const sourceBytes = Buffer.byteLength(source);
     const longToken = `{local-${sha256(source).slice(0, 12)}}`;
     const base = sourceBytes >= Buffer.byteLength(longToken) ? longToken : "<p>";
@@ -83,8 +82,12 @@ export function redactHostPaths(
       text = text.split(source).join(replacement);
       redactions.push({ sourceSha256: sha256(source), replacement, occurrences });
     }
-  }
-  if (/[A-Za-z]:[\\/]/.test(text)) {
+  };
+  const uniquePaths = [...new Set(hostPaths)].sort((a, b) => b.length - a.length);
+  for (const source of uniquePaths) replacePath(source);
+  const residualPaths = [...new Set(text.match(/[A-Za-z]:[\\/][^\s\x1b\x07]+/g) ?? [])]
+    .sort((a, b) => b.length - a.length);
+  for (const source of residualPaths) replacePath(source);  if (/[A-Za-z]:[\\/]/.test(text)) {
     throw new Error("unredacted absolute host path remains in public evidence");
   }
   const publicBytes = Buffer.from(text, "utf8");

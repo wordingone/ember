@@ -61,9 +61,12 @@ describe("redactHostPaths", () => {
     expect(result.redactions).toHaveLength(2);
   });
 
-  test("rejects an unlisted absolute Windows path", () => {
+  test("redacts an unlisted absolute Windows path deterministically", () => {
     const source = Buffer.from("cwd D:\\other-private-long-enough\\ember");
-    expect(() => redactHostPaths(source, ["C:\\private-long-enough"])).toThrow("unredacted absolute host path");
+    const result = redactHostPaths(source, ["C:\\private-long-enough"]);
+    expect(result.publicBytes.byteLength).toBe(source.byteLength);
+    expect(Buffer.from(result.publicBytes).toString("utf8")).not.toContain("D:\\other-private");
+    expect(result.redactions).toHaveLength(1);
   });
   test("redacts a short absolute path without changing byte length", () => {
     const source = Buffer.from("cwd C:\\x");
