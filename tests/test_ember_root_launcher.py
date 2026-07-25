@@ -14,6 +14,7 @@ from pathlib import Path
 REPOSITORY = Path(__file__).resolve().parents[1]
 PUBLIC_LAUNCHER = REPOSITORY / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "launch-ember-cli.ps1"
+START_HERE = REPOSITORY / "docs" / "START-HERE.md"
 
 
 class EmberRootLauncherTests(unittest.TestCase):
@@ -73,6 +74,9 @@ class EmberRootLauncherTests(unittest.TestCase):
     def test_public_launcher_and_implementation_are_visible(self) -> None:
         self.assertTrue(PUBLIC_LAUNCHER.is_file())
         self.assertTrue(LAUNCH_IMPL.is_file())
+        documentation = START_HERE.read_text(encoding="utf-8")
+        self.assertIn("repository root", documentation)
+        self.assertIn("`Ember.cmd`", documentation)
 
     def test_no_argument_launch_discovers_repo_from_outside_and_handles_spaces(self) -> None:
         owner, root, runtime = self.make_fixture()
