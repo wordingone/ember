@@ -2429,11 +2429,20 @@ def run_and_emit_live() -> Path:
         reasons = _redact_models_root(reasons, _models_root_for_redaction)
         return write_failed_engagement_receipt(
             ticket="P5-RATIO-AUDIT", mode="live",
-            reason=(f"v1.2 checkpoint discovery MISSING for: {missing} "
-                    f"(EMBER_MODELS_ROOT={os.environ.get(MODELS_ROOT_ENV)!r}). "
-                    f"Fail-closed per spec INPUTS clause -- see "
-                    f"checkpoint_discovery in this receipt for every "
-                    f"manifest/receipt consulted per checkpoint."),
+            # The root goes through the same redaction as every other emitted
+            # string. Naming it in prose does not make it a different kind of
+            # byte: this reason field is written into a tracked receipt by
+            # checked_write, and checked_write performs no path sanitisation of
+            # its own (it is schema-only, as is validate_receipt). A structured
+            # field that is carefully redacted while an f-string beside it
+            # interpolates the same value raw is the whole leak.
+            reason=_redact_models_root(
+                (f"v1.2 checkpoint discovery MISSING for: {missing} "
+                 f"(EMBER_MODELS_ROOT={os.environ.get(MODELS_ROOT_ENV)!r}). "
+                 f"Fail-closed per spec INPUTS clause -- see "
+                 f"checkpoint_discovery in this receipt for every "
+                 f"manifest/receipt consulted per checkpoint."),
+                _models_root_for_redaction),
             extra={"checkpoint_discovery": discovery_summary, "missing_reasons": reasons,
                    "rung1_lineage_targets": {k: v["relative_path"] for k, v in RUNG1_LINEAGE.items()}})
 
@@ -2664,9 +2673,16 @@ def run_and_emit_live() -> Path:
         return Path(path)
 
     except Exception as e:
+        # An arbitrary exception's text is the least predictable string this
+        # function emits and the most likely to carry a path: a torch load
+        # failure, an OSError, or a traceback repr all name the file they were
+        # reaching for, and that file lives under EMBER_MODELS_ROOT. Redacting
+        # only the strings we compose ourselves covers exactly the cases we
+        # already thought about, which is not what fail-closed means.
         return write_failed_engagement_receipt(
             ticket="P5-RATIO-AUDIT", mode="live",
-            reason=f"forward+backward pass failed: {e}",
+            reason=_redact_models_root(
+                f"forward+backward pass failed: {e}", _models_root_for_redaction),
             extra={"checkpoint_discovery": discovery_summary})
 
 

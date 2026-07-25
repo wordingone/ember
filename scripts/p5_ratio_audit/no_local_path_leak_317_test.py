@@ -86,22 +86,52 @@ class TestNoLocalPathLeak317(unittest.TestCase):
         # exercise of the real code path.
         self.root = r"Q:\synthroot\synthetic-models-root"
 
+    def _iter_strings(self, node):
+        """Every string VALUE in the structure, decoded.
+
+        The obvious implementation compares forms of the root against
+        `json.dumps(payload)`, and it is wrong in a way that passes: dumps
+        escapes each backslash, so a leak written by `repr()` -- which has
+        already doubled them -- appears in the blob with four, matching none
+        of the forms being searched for. The assertion runs, finds nothing,
+        and reports clean over a receipt that carries the path. Verified by
+        reverting the cure and watching the blob-based test stay green.
+
+        Walking the decoded values removes the serialization layer from the
+        comparison entirely, which is the point: the question is what the
+        field HOLDS, not what one particular re-encoding of it looks like."""
+        if isinstance(node, str):
+            yield node
+        elif isinstance(node, dict):
+            for k, v in node.items():
+                yield str(k)
+                yield from self._iter_strings(v)
+        elif isinstance(node, (list, tuple)):
+            for v in node:
+                yield from self._iter_strings(v)
+        elif node is not None and not isinstance(node, (bool, int, float)):
+            yield str(node)
+
     def _assert_no_leak(self, payload) -> None:
-        import json
-        blob = json.dumps(payload)
-        self.assertIsNone(
-            re.search(self.pathpat, blob),
-            f"redacted payload still matches repo-guard PATHPAT: {blob!r}",
-        )
-        # Direct substring check against every raw/escaped form of the root
-        # (json.dumps doubles backslashes, so check all forms rather than
-        # the un-escaped root against the escaped blob).
         root_norm = os.path.normpath(self.root)
-        for form in (root_norm, root_norm.replace("\\", "\\\\"), root_norm.replace("\\", "/")):
-            self.assertNotIn(
-                form, blob,
-                f"redacted payload still contains root form {form!r}: {blob!r}",
+        # repr() of a Windows path doubles the separators in the VALUE itself,
+        # so the doubled form is a real distinct thing to look for here rather
+        # than an artifact of encoding.
+        forms = (
+            root_norm,
+            root_norm.replace("\\", "\\\\"),
+            root_norm.replace("\\", "/"),
+        )
+        for s in self._iter_strings(payload):
+            self.assertIsNone(
+                re.search(self.pathpat, s),
+                f"payload string matches repo-guard PATHPAT: {s!r}",
             )
+            for form in forms:
+                self.assertNotIn(
+                    form, s,
+                    f"payload string contains root form {form!r}: {s!r}",
+                )
 
     def test_redact_models_root_all_forms(self):
         root = self.root
@@ -157,18 +187,45 @@ class TestNoLocalPathLeak317(unittest.TestCase):
                 path = self.m.run_and_emit_live()
                 with open(path, "r", encoding="utf-8") as fh:
                     receipt = json.load(fh)
-                blob = json.dumps(receipt)
-                self.assertIsNone(
-                    re.search(self.pathpat, blob),
-                    f"BLOCKED receipt leaks an absolute local path: {blob!r}",
-                )
-                root_norm = os.path.normpath(self.root)
-                for form in (root_norm, root_norm.replace("\\", "\\\\"), root_norm.replace("\\", "/")):
-                    self.assertNotIn(
-                        form, blob,
-                        f"BLOCKED receipt still contains root form {form!r}: {blob!r}",
-                    )
+                self._assert_no_leak(receipt)
                 self.assertEqual(receipt["status"], "BLOCKED")
+        finally:
+            os.environ.clear()
+            os.environ.update(old_env)
+            self.m.RECEIPTS = old_receipts
+
+    def test_run_and_emit_live_authorized_missing_receipt_has_no_leak(self):
+        """The BLOCKED test above short-circuits at the authorization check,
+        so it never reaches the FAILED-ENGAGEMENT emitter -- which composes
+        its own reason string naming EMBER_MODELS_ROOT directly. Covering
+        only BLOCKED reads as covering run_and_emit_live, and does not: the
+        authorized-but-checkpoints-missing branch is a different exit with a
+        different emitter, and that is where the leak actually lived.
+
+        This is the skip-path question asked of the test rather than of the
+        code: on which input class does the existing assertion not run?"""
+        import json
+        import tempfile
+
+        old_env = dict(os.environ)
+        old_receipts = self.m.RECEIPTS
+        try:
+            os.environ["EMBER_GATE_AUTHORIZED"] = "1"
+            os.environ[self.m.MODELS_ROOT_ENV] = self.root
+            with tempfile.TemporaryDirectory() as td:
+                self.m.RECEIPTS = td
+                path = self.m.run_and_emit_live()
+                with open(path, "r", encoding="utf-8") as fh:
+                    receipt = json.load(fh)
+                # Assert we actually reached the intended branch. Without this
+                # the test passes vacuously if authorization is refused for an
+                # unrelated reason and we land back on BLOCKED.
+                self.assertEqual(
+                    receipt["status"], "FAILED-ENGAGEMENT",
+                    "expected the authorized checkpoints-missing path; the test "
+                    f"never reached the FAILED-ENGAGEMENT emitter: {receipt!r}",
+                )
+                self._assert_no_leak(receipt)
         finally:
             os.environ.clear()
             os.environ.update(old_env)
