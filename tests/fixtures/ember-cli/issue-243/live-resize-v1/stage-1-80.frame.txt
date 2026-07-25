@@ -3,10 +3,10 @@
 │   ▀▀▀      inference + training, on this mach│ [START] [PAUSE] [RESUME] [RESTA
 │  ▀▀▀▀▀     OFFLINE - no model · Local        │ SOURCE UNVERIFIED/UNBOUND     │
 │   ▀▀▀      <p>~~~~~~~                        │ TRAINING/LOSS                 │
-│    ▀       Data: <p>~~~~~~~                  │ loss                SOURCE UNBO
+│    ▀                                         │ loss                SOURCE UNBO
 │Tips for getting started                      │ RESOURCE EFFICIENCY           │
 │────────────────────────                      │ GPU utilization %   SOURCE UNBO
-│Run /init to create an EMBER.md file with…    │ VRAM GiB            SOURCE UNBO
+                                               │ VRAM GiB            SOURCE UNBO
                                                │ tokens/s            SOURCE UNBO
                                                │ learning rate       SOURCE UNBO
                                                │ GPU watts           SOURCE UNBO

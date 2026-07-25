@@ -7,7 +7,7 @@
 │Tips for getting st│ RESOURCE EFFICIENC
 │───────────────────│ GPU utilization % 
 │Run /init to…      │ VRAM GiB          
-│Try "what…         │ tokens/s          
+                    │ tokens/s          
                     │ learning rate     
                     │ GPU watts         
                     │ energy joules     
