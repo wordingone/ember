@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import xtermHeadless from "@xterm/headless";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import {
@@ -327,5 +328,21 @@ describe("compiled lifecycle visible frame", () => {
     } finally {
       terminal.dispose();
     }
+  });
+});
+
+describe("compiled lifecycle workflow authority", () => {
+  test("checks out the immutable event head and installs the identity-validator runtime", () => {
+    const workflow = readFileSync(
+      join(import.meta.dir, "..", "..", "..", "..", ".github", "workflows", "ember-cli-lifecycle-smoke.yml"),
+      "utf8",
+    );
+
+    expect(workflow).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
+    expect(workflow).toContain("uses: actions/setup-python@v5");
+    expect(workflow).toContain("python-version: \"3.12\"");
+    expect(workflow).toContain(
+      "name: ember-cli-lifecycle-smoke-${{ github.event.pull_request.head.sha || github.sha }}",
+    );
   });
 });
