@@ -176,3 +176,41 @@ are reparse points too, so the row is reachable here. The test skips explicitly 
 cannot be created rather than passing vacuously.
 
 Every row in this map is now exercised by an executed test.
+
+(The SKIP-PATH row above still describes the destination reparse check as deferred to the
+post-publish re-verify. That is the pre-cure behaviour; step 2a now refuses it before staging. The
+row is left as written because it is the record of what the map claimed when it shipped, and this
+addendum is where the correction belongs.)
+
+## Second addendum (2026-07-25) — two defects an independent review found in this PR
+
+Both are the same class, and it is a class this map is otherwise built to catch: **a check whose
+name promises one tree while its bytes come from another.**
+
+**1. The copy helper measured the source, not the destination.** The map's SKIP-PATH row for shard
+byte-counts says the save path "asserts `bytes` explicitly on every freshly-measured copy", and the
+production helper's own doc comment claimed it returned "the bytes actually landed at `dest`". The
+implementation hashed the read stream. So the map stated a property the code did not hold, and the
+caller's error text ("did not land intact") named a tree it had never read. A write-side corruption
+— short write, bad flush, failing disk — passed every staging check and surfaced only at the
+post-publish verifier, after publication. Cured by re-reading `dest` after the copy completes.
+
+The reason this survived the map's own enumeration is worth stating, because enumeration is what
+this document is for: **the unit tests could not have caught it.** The test fixture supplies its own
+`copyFileHashed`, which reads the destination and is correct. Only the production dep was wrong. A
+test that supplies its own version of the thing under test verifies the test's version — the same
+production-entry-is-a-chain error the map warns about elsewhere, arriving through the dependency
+seam instead of through the call stack. An acceptance map that enumerates conditions but not
+**which tree each measurement comes from** cannot see this class. Byte provenance — *for every byte
+a verdict depends on, who chose it and which tree did it come from* — is now a required column of
+thinking for any row in this map that asserts a measurement.
+
+**2. The post-publish re-verify ran outside the cleanup path.** Its failure left the divergent bundle
+standing at the target: a save reporting failure while publishing bytes that look load-compatible,
+with the no-replace guard then refusing the retry. Structurally identical to the ordering defect the
+first addendum cures, one layer further in — which is the tell that the first cure fixed an instance
+rather than the shape. The target is now removed before the error propagates, and the error names
+expected and read values instead of asserting the state was unreachable outside a race.
+
+Covered by an executed test (`removes the published directory when the post-publish re-verify
+diverges`), RED-proven by reverting the disposal.
