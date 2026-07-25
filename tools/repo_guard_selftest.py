@@ -394,6 +394,31 @@ def test_trusted_kernel_ignores_subject_guard_and_helpers():
         cleanup(tmp)
 
 
+def test_split_kernel_scans_subject_guard_for_runtime_names():
+    tmp = make_fixture("fix/selftest-split-subject-name")
+    try:
+        test_word = "subjectguardnametestonly"
+        (tmp / "tools" / "repo-guard.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            f"# candidate-smuggled marker: {test_word}\n"
+            "exit 0\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": test_word},
+        )
+        assert rc != 0, f"trusted split kernel accepted a name in subject guard bytes\n{out}"
+        assert "FAIL [names]" in out, out
+        assert "tools/repo-guard.sh:2" in out, out
+    finally:
+        cleanup(tmp)
+
+
 def test_required_workflow_uses_base_pinned_kernel():
     text = (REPO_ROOT / ".github" / "workflows" / "repo-guard.yml").read_text(
         encoding="utf-8"
@@ -417,6 +442,17 @@ def test_required_workflow_uses_base_pinned_kernel():
         "candidate-authored pull_request workflow cannot be the required trust gate"
     )
     assert text.count("persist-credentials: false") == 3
+    kernel_checkout = text.split(
+        "- name: Checkout trusted guard kernel", 1
+    )[1].split("- name: Checkout pull-request merge subject", 1)[0]
+    assert "ref:" not in kernel_checkout, (
+        "trusted kernel must resolve the current protected-base tip, not an event-stale base SHA"
+    )
+    assert (
+        "github.event_name == 'pull_request_target' && "
+        "github.event.pull_request.base.sha || github.event.before"
+    ) in text, "push and pull-request events must both bind an explicit changed-range base"
+    assert 'bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"' in text
 
 
 ALL_TESTS = [
@@ -430,6 +466,7 @@ ALL_TESTS = [
     test_red_name_outside_exclude_scope,
     test_green_name_inside_excluded_path,
     test_trusted_kernel_ignores_subject_guard_and_helpers,
+    test_split_kernel_scans_subject_guard_for_runtime_names,
     test_required_workflow_uses_base_pinned_kernel,
 ]
 

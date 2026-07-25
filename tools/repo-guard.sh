@@ -146,7 +146,15 @@ fi
 # ---- 2b. no local path fragments in tracked text (avir/, /mnt refs) -------
 # Detect patterns like /mnt/..../M/avir/ or /M/avir that carry developer-local context.
 PATHFRAG='(/mnt/[^/]*/M/avir/)|(/M/avir)'
-if git grep -nIE "$PATHFRAG" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/check_names_hashed.py' ':(exclude)tools/repo-guard-denylist.sha256' >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
+PATHFRAG_SELF_EXCLUDE_ARGS=()
+if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
+  PATHFRAG_SELF_EXCLUDE_ARGS=(
+    ':(exclude)tools/repo-guard.sh'
+    ':(exclude)tools/check_names_hashed.py'
+    ':(exclude)tools/repo-guard-denylist.sha256'
+  )
+fi
+if git grep -nIE "$PATHFRAG" -- . "${PATHFRAG_SELF_EXCLUDE_ARGS[@]}" >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
   fail "path-frags" "local WSL/mount path fragments in tracked files"
   sed 's/^/      /' /tmp/rg_pathfrags | head -20
 else
@@ -173,6 +181,13 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
       NAMES_EXCLUDE_ARGS+=(":(exclude)${prefix}")
     done < "$NAMES_EXCLUDE_FILE"
   fi
+  NAMES_SELF_EXCLUDE_ARGS=()
+  if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
+    NAMES_SELF_EXCLUDE_ARGS=(
+      ':(exclude)tools/repo-guard.sh'
+      ':(exclude)tools/.repo-guard-denylist'
+    )
+  fi
   NAMES=""
   if [ -n "${REPO_GUARD_NAMES:-}" ]; then
     NAMES="$REPO_GUARD_NAMES"
@@ -180,7 +195,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
     NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
   fi
   if [ -n "$NAMES" ]; then
-    if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
+    if git grep -nIiE "\b(${NAMES})\b" -- . "${NAMES_SELF_EXCLUDE_ARGS[@]}" "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
       fail "names" "operator names in tracked files"
       sed 's/^/      /' /tmp/rg_names | head -20
     else
