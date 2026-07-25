@@ -4,8 +4,8 @@
 
 import { createHash } from "crypto";
 import type { Stats } from "fs";
-import { lstat, open, readdir, realpath } from "fs/promises";
-import { basename, join, resolve } from "path";
+import { lstat, open, readdir } from "fs/promises";
+import { basename, dirname, join, resolve } from "path";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const MANIFEST_NAME = "checkpoint-manifest.json";
@@ -306,7 +306,38 @@ async function requireRegularPath(
     stat.isSymbolicLink() ||
     (kind === "file" ? !stat.isFile() : !stat.isDirectory())
   ) {
-    fail(`${label} must be a regular ${kind}, not a symlink or reparse path.`);
+    fail(`${label} must be a regular ${kind}, not an alias or reparse path.`);
+  }
+}
+
+/**
+ * Refuse a checkpoint directory that is reached through a symlink or junction.
+ *
+ * The property under test is "no component of this path is a reparse point", so it is tested
+ * directly — every ancestor is lstat'd — rather than through the textual proxy of comparing
+ * resolve() against realpath(). That proxy refuses legitimate directories whenever the two
+ * strings differ for reasons that are not reparse points at all: on Windows realpath returns
+ * the canonical on-disk casing while resolve preserves whatever casing the caller typed, and
+ * 8.3 short name components expand the same way. Both spellings name exactly the same
+ * directory, and both made the loader report a genuine bundle as corrupt.
+ */
+async function requireNoReparseAncestry(path: string): Promise<void> {
+  let current = path;
+  for (;;) {
+    let stat;
+    try {
+      stat = await lstat(current);
+    } catch {
+      fail("checkpoint directory is missing or unreadable.");
+    }
+    if (stat.isSymbolicLink()) {
+      fail("checkpoint directory resolves through an alias or reparse path.");
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return;
+    }
+    current = parent;
   }
 }
 
@@ -321,10 +352,12 @@ export async function verifyCheckpointBundle(
 
   const requestedDir = resolve(checkpointDir);
   await requireRegularPath(requestedDir, "directory", "checkpoint directory");
-  const canonicalDir = await realpath(requestedDir);
-  if (canonicalDir !== requestedDir) {
-    fail("checkpoint directory resolves through an alias or reparse path.");
-  }
+  await requireNoReparseAncestry(requestedDir);
+  // With every ancestor proven to be a real directory, requestedDir already names the same
+  // directory realpath() would return, so it is used directly. realpath() is deliberately not
+  // called here: on Windows its sync and async forms disagree about canonical casing, which
+  // would make the surfaced checkpointDir unstable for no verification benefit.
+  const canonicalDir = requestedDir;
 
   const manifestPath = join(canonicalDir, MANIFEST_NAME);
   await requireRegularPath(manifestPath, "file", MANIFEST_NAME);

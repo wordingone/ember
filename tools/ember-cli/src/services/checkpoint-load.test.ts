@@ -4,10 +4,17 @@
 
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "crypto";
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "fs";
+import {
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs";
 import { open } from "fs/promises";
 import { tmpdir } from "os";
-import { basename, join } from "path";
+import { basename, dirname, join } from "path";
 import {
   CHECKPOINT_HASH_CHUNK_BYTES,
   MAX_CHECKPOINT_MANIFEST_BYTES,
@@ -284,5 +291,38 @@ describe("verifyCheckpointBundle", () => {
     await expect(verifyCheckpointBundle(root)).rejects.toThrow(
       /checkpoint-manifest\.json is missing/i,
     );
+  });
+
+  it("accepts a bundle whose requested path differs from the on-disk canonical form", async () => {
+    const bundle = writeBundle("ember-sparse-checkpoint-v5");
+    const canonical = realpathSync(bundle.root);
+    const flipped =
+      canonical === canonical.toUpperCase()
+        ? canonical.toLowerCase()
+        : canonical.toUpperCase();
+    if (flipped === canonical || realpathSync(flipped) !== canonical) {
+      return; // case-sensitive filesystem: the two spellings are different directories
+    }
+
+    const verified = await verifyCheckpointBundle(flipped);
+
+    expect(verified.checkpointDir).toBe(canonical);
+    expect(verified.schemaVersion).toBe("ember-sparse-checkpoint-v5");
+  });
+
+  it("refuses a bundle reached through a symlinked ancestor", async () => {
+    const bundle = writeBundle("ember-sparse-checkpoint-v5");
+    const linkRoot = mkdtempSync(join(tmpdir(), "ember-checkpoint-link-"));
+    roots.push(linkRoot);
+    const link = join(linkRoot, "aliased-parent");
+    try {
+      symlinkSync(dirname(bundle.root), link, "junction");
+    } catch {
+      return; // no privilege to create a link on this host
+    }
+
+    await expect(
+      verifyCheckpointBundle(join(link, basename(bundle.root))),
+    ).rejects.toThrow(/alias or reparse path/i);
   });
 });
