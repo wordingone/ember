@@ -238,6 +238,8 @@ describe("compiled lifecycle action completion", () => {
     expect(completedPromptFrame(cleared, 20, "/train")).toBe(true);
     expect(completedPromptFrame([...pending, " ".repeat(20), ...cleared], 20, "/train"))
       .toBe(true);
+    const paddedCleared = cleared.map((line) => line.padEnd(30));
+    expect(completedPromptFrame(paddedCleared, 30, "/train")).toBe(true);
     expect(driver.slashCommandNeedsSecondEnter!(pending, 20, "/train")).toBe(true);
     expect(driver.slashCommandNeedsSecondEnter!(cleared, 20, "/train")).toBe(false);
   });
