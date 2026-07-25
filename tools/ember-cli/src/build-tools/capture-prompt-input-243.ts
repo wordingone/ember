@@ -182,12 +182,14 @@ function within(root: string, target: string, label: string): string {
 async function waitForRegion(
   terminal: Terminal,
   rawChunks: string[],
+  flushWrites: () => Promise<void>,
   timeoutMs: number,
 ): Promise<{ lines: string[]; region: ClosedPromptRegion }> {
   const deadline = Date.now() + timeoutMs;
   let lastError = "no terminal output";
   while (Date.now() < deadline) {
     if (rawChunks.length > 0) {
+      await flushWrites();
       const current = frameLines(terminal);
       try {
         return { lines: current, region: findClosedPromptRegion(current, terminal.cols) };
@@ -257,7 +259,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
         terminal.resize(columns, ROWS);
         child.resize(columns, ROWS);
       }
-      const observed = await waitForRegion(terminal, rawChunks, 15_000);
+      const observed = await waitForRegion(terminal, rawChunks, () => writes, 15_000);
       await writes;
       const rawBytes = Buffer.from(rawChunks.join(""), "utf8");
       const frameText = `${observed.lines.join("\n")}\n`;
@@ -298,10 +300,13 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
     }
     JSON.parse(readFileSync(receiptPath, "utf8"));
   } finally {
-    try {
-      child?.kill();
-    } catch {
-      // The owned PTY may already have exited; no foreign process is targeted.
+    if (child != null) {
+      // node-pty's Bun-hosted kill helper fails AttachConsole on this host. Terminate only
+      // the exact PTY root PID and its owned tree; never enumerate or target foreign PIDs.
+      Bun.spawnSync(["taskkill", "/PID", String(child.pid), "/T", "/F"], {
+        stdout: "ignore",
+        stderr: "ignore",
+      });
     }
     terminal.dispose();
     rmSync(home, { recursive: true, force: true });
@@ -309,8 +314,11 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
 }
 
 if (import.meta.main) {
-  capturePromptInput243(Bun.argv.slice(2)).catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  });
+  capturePromptInput243(Bun.argv.slice(2)).then(
+    () => process.exit(0),
+    (error) => {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    },
+  );
 }
