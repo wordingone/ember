@@ -145,10 +145,10 @@ class SeatIdentityBridgeNegatives(unittest.TestCase):
         result = derive_seat_identity(self._seat(), repo_root=REPO_ROOT)
         self._refused(result, "missing shard file")
         # Path casing may be OS-normalized by .resolve() inside the bridge
-        # (observed: tempfile.mkdtemp()'s C:\WINDOWS\TEMP\... vs the
-        # resolved C:\Windows\Temp\...) -- match on the shard's own
-        # filename, case-insensitively, plus the failure phrase, rather
-        # than an exact-cased full-path substring.
+        # (observed: the temp-dir allocator's uppercase drive/segment casing
+        # differs from the resolved mixed-case form) -- match on the
+        # shard's own filename, case-insensitively, plus the failure
+        # phrase, rather than an exact-cased full-path substring.
         self.assertTrue(
             any(
                 self.shard_path.name.lower() in error.lower() and "failed measurement" in error
