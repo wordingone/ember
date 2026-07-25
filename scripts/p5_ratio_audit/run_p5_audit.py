@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """run_p5_audit.py -- P0 PROBE P5: ratio-invariance + commutation audit
 (ember issue #207, P0 composition-law program).
 
@@ -548,6 +551,51 @@ def _resolve_models_root() -> str | None:
     EMBER_MODELS_ROOT (env). Never guessed, never hardcoded (leak-gate
     discipline: absolute local paths are never published in this source)."""
     return os.environ.get(MODELS_ROOT_ENV) or None
+
+
+def _redact_models_root(obj, models_root: str | None, placeholder: str = "<MODELS_ROOT>"):
+    """Recursively replace every occurrence of `models_root` (raw, forward-
+    slash, and JSON-escaped-backslash forms) with `placeholder` in a
+    receipt-shaped structure (dict/list/str), leaving non-string leaves and
+    keys untouched.
+
+    gh issue #317: discover_checkpoints()'s "consulted" lists and
+    "checkpoint_path" are absolute-by-design (EMBER_MODELS_ROOT-resolved) so
+    load_real_checkpoint() can actually open the file -- that absolute path
+    is legitimate for IN-MEMORY use but must never reach a tracked receipt.
+    Call this on any discovery-derived payload immediately before
+    checked_write()/write_failed_engagement_receipt(), never on the value
+    handed to load_real_checkpoint().
+    """
+    if not models_root:
+        return obj
+    root_norm = os.path.normpath(models_root)
+    forms = [
+        root_norm,
+        root_norm.replace("\\", "\\\\"),
+        root_norm.replace("\\", "/"),
+    ]
+    # De-dup while preserving order (normpath may equal the forward-slash
+    # form on POSIX, or various forms may coincide for a short root).
+    seen = set()
+    forms = [f for f in forms if not (f in seen or seen.add(f))]
+
+    def _redact_str(s: str) -> str:
+        for form in forms:
+            if form:
+                s = s.replace(form, placeholder)
+        return s
+
+    def _walk(node):
+        if isinstance(node, str):
+            return _redact_str(node)
+        if isinstance(node, dict):
+            return {k: _walk(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [_walk(v) for v in node]
+        return node
+
+    return _walk(obj)
 
 
 def _read_e2b_paired_receipt():
@@ -2342,8 +2390,16 @@ def run_and_emit_live() -> Path:
     authorized = os.environ.get("EMBER_GATE_AUTHORIZED", "") == "1"
 
     discovery = discover_checkpoints()
+    _models_root_for_redaction = _resolve_models_root()
+    # gh issue #317: discovery's "consulted"/"checkpoint_path" fields (and
+    # any "reason" string naming a manifest path) are absolute by design
+    # in-memory; redact EMBER_MODELS_ROOT out of every receipt-bound copy
+    # before it is ever written to disk. load_real_checkpoint() below is
+    # called against the un-redacted `discovery` dict, never the redacted
+    # summary.
     discovery_summary = {k: {kk: vv for kk, vv in v.items() if kk != "reason"}
                          for k, v in discovery.items()}
+    discovery_summary = _redact_models_root(discovery_summary, _models_root_for_redaction)
 
     if not authorized:
         msg = ("P5_AUDIT_INTERLOCK_REFUSED: requires EMBER_GATE_AUTHORIZED=1 "
@@ -2370,6 +2426,7 @@ def run_and_emit_live() -> Path:
     if not all_checkpoints_found(discovery):
         missing = [v["label"] for v in discovery.values() if not v["found"]]
         reasons = {k: v.get("reason") for k, v in discovery.items() if not v["found"]}
+        reasons = _redact_models_root(reasons, _models_root_for_redaction)
         return write_failed_engagement_receipt(
             ticket="P5-RATIO-AUDIT", mode="live",
             reason=(f"v1.2 checkpoint discovery MISSING for: {missing} "
