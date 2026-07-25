@@ -74,6 +74,33 @@ export interface CheckpointSaveModernDeps {
   stagingPath: (targetDir: string) => string;
 }
 
+/**
+ * The closest ancestor of `path` (including `path` itself) that exists on
+ * disk. Walks upward via the injected `pathExists` seam rather than a direct
+ * fs call, so tests reach it the same way production does.
+ *
+ * Terminates at the filesystem root even if nothing on the chain exists: the
+ * loop stops when dirname() stops changing the string, and the root is then
+ * returned unconditionally so the caller always gets a real path to check
+ * rather than an empty one.
+ */
+async function nearestExistingAncestor(
+  path: string,
+  deps: Pick<CheckpointSaveModernDeps, "pathExists">,
+): Promise<string> {
+  let current = path;
+  for (;;) {
+    if (await deps.pathExists(current)) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return current;
+    }
+    current = parent;
+  }
+}
+
 export class CheckpointSaveModernError extends Error {
   constructor(detail: string) {
     super(`modern checkpoint save refused: ${detail}`);
@@ -123,7 +150,20 @@ export async function saveModernCheckpoint(
   // The order is the whole fix: a strict check that can only be reached after
   // the lenient publish is not a check, it is a report. Reuses the loader's
   // own requireNoReparseAncestry rather than restating the rule here.
-  await requireNoReparseAncestry(dirname(targetDir));
+  //
+  // Walk to the NEAREST EXISTING ancestor first. requireNoReparseAncestry was
+  // written for the loader, whose directory always already exists, and it
+  // fails on ANY lstat error -- including ENOENT. Pointed at a target whose
+  // parent chain has not been created yet, it reports "missing or unreadable"
+  // for a perfectly legitimate new nested destination, which mkdir would
+  // otherwise have created. That is the loader's own premise, recorded in the
+  // acceptance map and then not applied here.
+  //
+  // Starting the walk at the nearest existing ancestor loses nothing: a path
+  // component that does not exist cannot be a reparse point, and the ones this
+  // save creates are plain directories it makes itself. Every component that
+  // will sit above the target and was NOT created by us is still checked.
+  await requireNoReparseAncestry(await nearestExistingAncestor(dirname(targetDir), deps));
 
   // 2b. Destination no-replace: refuse before any write, not merely at
   // rename time -- a named, fail-closed refusal instead of a raw fs error.

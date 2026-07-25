@@ -137,6 +137,57 @@ describe("saveModernCheckpoint (core)", () => {
     expect(readdirSync(root).sort()).toEqual(["source", "target"]);
   });
 
+  it("positive: a target whose parent chain does not exist yet still saves -- the ancestry check must not read ENOENT as a reparse refusal", async () => {
+    // Regression for the defect the ordering fix introduced. The loader's
+    // requireNoReparseAncestry was written for a directory that always exists
+    // and fails on ANY lstat error, ENOENT included. Called on the parent of a
+    // brand-new nested destination it reported "missing or unreadable" and
+    // refused a legitimate save that mkdir -p would have handled -- the
+    // acceptance map recorded that premise and the first cure did not apply it.
+    //
+    // Every earlier test builds targetDir directly under an already-created
+    // mkdtemp root, so none of them could see this: the parent always existed.
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-newparent-"));
+    roots.push(root);
+    const sourceDir = join(root, "source");
+    mkdirSync(sourceDir);
+    writeV5Bundle(sourceDir);
+
+    // Two levels of parent that have never been created.
+    const targetDir = join(root, "fresh", "nested", "target");
+    expect(existsSync(join(root, "fresh"))).toBe(false);
+
+    const result = await saveModernCheckpoint(sourceDir, targetDir, realFsDeps());
+
+    expect(result.schemaVersion).toBe("ember-sparse-checkpoint-v5");
+    const reverified = await verifyCheckpointBundle(targetDir);
+    expect(reverified.manifestSha256).toBe(result.manifestSha256);
+  });
+
+  it("negative: a reparse point ABOVE a not-yet-existing parent chain is still refused -- walking to the nearest existing ancestor does not skip real aliases", async () => {
+    // The other side of the cure: starting the ancestry walk at the nearest
+    // EXISTING ancestor must not become a way to smuggle a junction past the
+    // check by naming a target below a directory that does not exist yet.
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-newparent-alias-"));
+    roots.push(root);
+    const sourceDir = join(root, "source");
+    mkdirSync(sourceDir);
+    writeV5Bundle(sourceDir);
+
+    const realParent = join(root, "real");
+    mkdirSync(realParent);
+    const aliasParent = join(root, "alias");
+    symlinkSync(realParent, aliasParent, "junction");
+
+    // The immediate parents below the junction do not exist; the junction does.
+    const targetDir = join(aliasParent, "fresh", "nested", "target");
+
+    await expect(
+      saveModernCheckpoint(sourceDir, targetDir, realFsDeps()),
+    ).rejects.toThrow(/alias or reparse path/);
+    expect(existsSync(join(realParent, "fresh"))).toBe(false);
+  });
+
   it("negative: destination collision (no-replace) refuses before any staging write", async () => {
     const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-collision-"));
     roots.push(root);
