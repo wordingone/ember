@@ -125,10 +125,18 @@ fi
 
 # ---- 2b. no local path fragments in tracked text (avir/, /mnt refs) -------
 # Detect patterns like /mnt/..../M/avir/ or /M/avir that carry developer-local context.
+# Byte source under REPO_GUARD_SCOPE=staged is the git INDEX, not the
+# working tree -- `git grep --cached`, mirroring the emberd-legacy and
+# names checks. Non-staged scope is unchanged.
 PATHFRAG='(/mnt/[^/]*/M/avir/)|(/M/avir)'
-if git grep -nIE "$PATHFRAG" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/check_names_hashed.py' ':(exclude)tools/repo-guard-denylist.sha256' >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  PATHFRAG_HITS="$(git grep --cached -nIE "$PATHFRAG" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/check_names_hashed.py' ':(exclude)tools/repo-guard-denylist.sha256' 2>/dev/null || true)"
+else
+  PATHFRAG_HITS="$(git grep -nIE "$PATHFRAG" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/check_names_hashed.py' ':(exclude)tools/repo-guard-denylist.sha256' 2>/dev/null || true)"
+fi
+if [ -n "$PATHFRAG_HITS" ]; then
   fail "path-frags" "local WSL/mount path fragments in tracked files"
-  sed 's/^/      /' /tmp/rg_pathfrags | head -20
+  printf '%s\n' "$PATHFRAG_HITS" | sed 's/^/      /' | head -20
 else
   ok "path-frags" "no local path fragments"
 fi
@@ -159,9 +167,20 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
     NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
   fi
   if [ -n "$NAMES" ]; then
-    if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
+    # Byte source under REPO_GUARD_SCOPE=staged (what .githooks/pre-commit
+    # actually runs with) is the git INDEX, not the working tree -- `git
+    # grep --cached` here, mirroring the emberd-legacy check above. This is
+    # the operator-name denylist: a name staged then removed from the
+    # working tree before commit would previously grep clean while the
+    # commit that lands still carries it. Non-staged scope is unchanged.
+    if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+      NAMES_HIT="$(git grep --cached -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" 2>/dev/null || true)"
+    else
+      NAMES_HIT="$(git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" 2>/dev/null || true)"
+    fi
+    if [ -n "$NAMES_HIT" ]; then
       fail "names" "operator names in tracked files"
-      sed 's/^/      /' /tmp/rg_names | head -20
+      printf '%s\n' "$NAMES_HIT" | sed 's/^/      /' | head -20
     else
       ok "names" "none found"
     fi

@@ -34,6 +34,11 @@ _LEGACY_POLICY_REL = "tools/" + _LEGACY + "-legacy-exceptions.json"
 _LEGACY_CHECKER_REL = "tools/check_" + _LEGACY + "_legacy_exceptions.py"
 _LEGACY_ENV_OVERRIDE = _LEGACY.upper() + "_EXCEPTIONS_PATH"
 
+# Same dodge for the path-frags check's own trigger pattern (repo-guard.sh
+# section 2b) -- built by concatenation below so no contiguous run of this
+# tracked source matches what that check itself scans for.
+_AVIR_FRAG = "/M" + "/avir"
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
     "tools/repo-guard.sh",
@@ -594,6 +599,133 @@ def test_red_legacy_env_override_ignored():
             external.unlink()
 
 
+# ---------------------------------------------------------------------------
+# RED: the same staged-scope byte-provenance seam as the legacy-name check,
+# reproduced against the other three checks that read tracked-file content
+# unconditionally: names (plaintext/env mode), names (hashed mode), and
+# path-frags. Each follows the identical shape -- commit clean content,
+# stage a violation, restore the working tree to clean WITHOUT re-staging,
+# confirm REPO_GUARD_SCOPE=staged still fails on the staged bytes.
+# ---------------------------------------------------------------------------
+def test_red_names_staged_bypass_worktree_restore():
+    """Plaintext/env-var operator-name mode (repo-guard.sh's own `git grep`,
+    REPO_GUARD_NAMES set). Priority case: this is the standing rule about
+    what may never enter git history."""
+    tmp = make_fixture("fix/selftest-red-names-staged-bypass")
+    try:
+        test_word = "widgetcotestonly"
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = "Nothing sensitive here, just ordinary prose.\n"
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp, extra_env={"REPO_GUARD_NAMES": test_word})
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = f"This mentions {test_word} in passing.\n"
+        (tmp / "docs" / "note.md").write_text(tainted, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", "docs/note.md"], check=True)
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged", "REPO_GUARD_NAMES": test_word})
+        assert rc != 0, (
+            "expected nonzero exit: the staged name-bearing bytes diverge "
+            f"from the restored clean working tree, got {rc}\n{out}"
+        )
+        assert "FAIL [names]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_names_hashed_staged_bypass_worktree_restore():
+    """Same reproduction, hashed-denylist mode (check_names_hashed.py, the
+    path taken when REPO_GUARD_NAMES is unset and a committed .sha256
+    denylist exists)."""
+    tmp = make_fixture("fix/selftest-red-names-hashed-staged-bypass")
+    try:
+        test_word = "widgetcotestonly"
+        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+            "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
+            encoding="utf-8", newline="\n",
+        )
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = "Nothing sensitive here, just ordinary prose.\n"
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = f"This mentions {test_word} in passing.\n"
+        (tmp / "docs" / "note.md").write_text(tainted, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", "docs/note.md"], check=True)
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit (hashed-denylist mode): the staged "
+            f"name-bearing bytes diverge from the restored clean working "
+            f"tree, got {rc}\n{out}"
+        )
+        assert "FAIL [names]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_pathfrags_staged_bypass_worktree_restore():
+    """Local WSL/mount path-fragment check (repo-guard.sh section 2b)."""
+    tmp = make_fixture("fix/selftest-red-pathfrags-staged-bypass")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = "Nothing sensitive here, just ordinary prose.\n"
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = f"See {_AVIR_FRAG} for the local copy.\n"
+        (tmp / "docs" / "note.md").write_text(tainted, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", "docs/note.md"], check=True)
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit: the staged path-fragment bytes diverge "
+            f"from the restored clean working tree, got {rc}\n{out}"
+        )
+        assert "FAIL [path-frags]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_line_endings_staged_bypass_worktree_restore():
+    """CRLF-in-tracked-text check (tools/check_line_endings.py)."""
+    tmp = make_fixture("fix/selftest-red-line-endings-staged-bypass")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = b"ordinary LF-only prose\n"
+        (tmp / "docs" / "note.md").write_bytes(clean)
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = b"ordinary CRLF prose\r\n"
+        (tmp / "docs" / "note.md").write_bytes(tainted)
+        subprocess.run(["git", "-C", str(tmp), "add", "docs/note.md"], check=True)
+        (tmp / "docs" / "note.md").write_bytes(clean)
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit: the staged CRLF bytes diverge from the "
+            f"restored LF-only working tree, got {rc}\n{out}"
+        )
+        assert "FAIL [line-endings]" in out, out
+    finally:
+        cleanup(tmp)
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -615,6 +747,10 @@ ALL_TESTS = [
     test_green_legacy_legit_exception_still_passes,
     test_red_legacy_staged_bypass_worktree_restore,
     test_red_legacy_env_override_ignored,
+    test_red_names_staged_bypass_worktree_restore,
+    test_red_names_hashed_staged_bypass_worktree_restore,
+    test_red_pathfrags_staged_bypass_worktree_restore,
+    test_red_line_endings_staged_bypass_worktree_restore,
 ]
 
 
