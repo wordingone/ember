@@ -5,9 +5,14 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "crypto";
 import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "fs";
+import { open } from "fs/promises";
 import { tmpdir } from "os";
-import { join } from "path";
-import { verifyCheckpointBundle } from "./checkpoint-load.ts";
+import { basename, join } from "path";
+import {
+  CHECKPOINT_HASH_CHUNK_BYTES,
+  MAX_CHECKPOINT_MANIFEST_BYTES,
+  verifyCheckpointBundle,
+} from "./checkpoint-load.ts";
 
 const roots: string[] = [];
 
@@ -113,7 +118,46 @@ describe("verifyCheckpointBundle", () => {
     });
   }
 
+  it("streams shard hashing instead of using whole-file reads", async () => {
+    const bundle = writeBundle("ember-sparse-checkpoint-v5");
+    const largeBytes = Buffer.alloc(CHECKPOINT_HASH_CHUNK_BYTES * 2 + 17, 0xa5);
+    writeFileSync(join(bundle.root, "shared-model.pt"), largeBytes);
+    const shared = bundle.manifest.shards.find(
+      (row) => row.path === "shared-model.pt",
+    );
+    if (!shared) throw new Error("test bundle lacks shared-model.pt");
+    shared.bytes = largeBytes.length;
+    shared.sha256 = sha256(largeBytes);
+    rewriteManifest(bundle);
+    let boundedReadCalls = 0;
+    let largestBoundedRead = 0;
+    const openedPaths: string[] = [];
+
+    const verified = await verifyCheckpointBundle(bundle.root, {
+      open: async (path) => {
+        const handle = await open(path, "r");
+        openedPaths.push(basename(path));
+        return {
+          stat: () => handle.stat(),
+          read: async (buffer, offset, length, position) => {
+            boundedReadCalls += 1;
+            largestBoundedRead = Math.max(largestBoundedRead, length);
+            return handle.read(buffer, offset, length, position);
+          },
+          close: () => handle.close(),
+        };
+      },
+    });
+
+    expect(verified.schemaVersion).toBe("ember-sparse-checkpoint-v5");
+    expect(openedPaths[0]).toBe("checkpoint-manifest.json");
+    expect(openedPaths).toHaveLength(verified.artifacts.length + 1);
+    expect(boundedReadCalls).toBeGreaterThan(verified.artifacts.length + 1);
+    expect(largestBoundedRead).toBe(CHECKPOINT_HASH_CHUNK_BYTES);
+    expect(CHECKPOINT_HASH_CHUNK_BYTES).toBe(1024 * 1024);
+  });
   it("refuses an altered named shard while checkpoint-manifest.json is unchanged", async () => {
+
     const { root } = writeBundle("ember-sparse-checkpoint-v5");
     const manifestBefore = await Bun.file(
       join(root, "checkpoint-manifest.json"),
@@ -187,6 +231,16 @@ describe("verifyCheckpointBundle", () => {
     await expect(verifyCheckpointBundle(bundle.root)).rejects.toThrow(
       /checkpoint-manifest\.json is not strict UTF-8/i,
     );
+  });
+
+  it("refuses an oversized checkpoint manifest before parsing", async () => {
+    const bundle = writeBundle("ember-sparse-checkpoint-v5");
+    writeFileSync(
+      join(bundle.root, "checkpoint-manifest.json"),
+      Buffer.alloc(MAX_CHECKPOINT_MANIFEST_BYTES + 1, 0x20),
+    );
+
+    await expect(verifyCheckpointBundle(bundle.root)).rejects.toThrow(/manifest.*maximum/i);
   });
 
   it("refuses malformed checkpoint manifest JSON", async () => {
