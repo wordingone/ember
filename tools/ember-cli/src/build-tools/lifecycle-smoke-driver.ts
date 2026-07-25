@@ -33,7 +33,7 @@ import {
 const { Terminal } = xtermHeadless;
 type HeadlessTerminal = InstanceType<typeof Terminal>;
 
-const COLS = 100;
+const COLS = 160;
 const ROWS = 32;
 const TIMEOUT_MS = 15_000;
 
