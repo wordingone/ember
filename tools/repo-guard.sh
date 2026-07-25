@@ -216,7 +216,20 @@ fi
 # accidental mid-identifier substring, alnum on both sides) while catching
 # snake_case occurrences where "emberd" is its own semantic token.
 # See state/specs/ember-lab-absorption-contract-2026-07-25.md Part 4.
-EMBERD_HITS="$(git grep -nIiE '(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)' -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/emberd-legacy-exceptions.json' ':(exclude)tools/check_emberd_legacy_exceptions.py' 2>/dev/null || true)"
+# Byte source under REPO_GUARD_SCOPE=staged (what .githooks/pre-commit
+# actually runs with) is the git INDEX, not the working tree -- `git grep
+# --cached` here, and check_emberd_legacy_exceptions.py independently reads
+# `git show :path` for every matched-path digest and for the exceptions file
+# itself under the same scope. Reading working-tree bytes while committing
+# staged bytes was a real bypass: stage divergent content, restore the
+# working tree to the enumerated original, and a working-tree read never
+# sees what actually lands in the commit. Non-staged scope (default local/CI
+# run) is unchanged: working-tree bytes via plain `git grep`.
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  EMBERD_HITS="$(git grep --cached -nIiE '(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)' -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/emberd-legacy-exceptions.json' ':(exclude)tools/check_emberd_legacy_exceptions.py' 2>/dev/null || true)"
+else
+  EMBERD_HITS="$(git grep -nIiE '(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)' -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/emberd-legacy-exceptions.json' ':(exclude)tools/check_emberd_legacy_exceptions.py' 2>/dev/null || true)"
+fi
 if [ -z "$EMBERD_HITS" ]; then
   EMBERD_PATHS=""
 else

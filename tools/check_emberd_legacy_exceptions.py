@@ -19,11 +19,32 @@ for. This is a separate, narrower check; the existing NAMES check and its
 path-prefix exclude file are untouched.
 
 Reads:
-  - the exceptions file at EXCEPTIONS_PATH (default
-    tools/emberd-legacy-exceptions.json), schema "emberd-legacy-exceptions-v1"
+  - the exceptions file at EXCEPTIONS_PATH, ALWAYS
+    "tools/emberd-legacy-exceptions.json" -- hardcoded, never taken from an
+    environment variable. An earlier revision read this path from
+    EMBERD_EXCEPTIONS_PATH, which let anything invoking this script (an
+    inherited shell env, a stray export) point it at an attacker-controlled
+    policy file instead of the committed one; the fail-closed validation this
+    script performs is worthless if it can be pointed at bytes the subject
+    under test chose. See state/failure-classes/ (byte-provenance class).
   - the newline-separated list of tracked paths already found (by the caller,
     via `git grep -nIiE '\bemberd\b'`) to contain the legacy name, passed via
     the EMBERD_PATHS environment variable
+
+Byte source (both the exceptions file itself AND every matched path's
+content digest) depends on REPO_GUARD_SCOPE, mirroring the caller's own
+scope handling in repo-guard.sh:
+  - REPO_GUARD_SCOPE=staged (what the real pre-commit hook runs with, via
+    `env REPO_GUARD_SCOPE=staged bash tools/repo-guard.sh` in
+    .githooks/pre-commit): every byte comes from the git INDEX (`git show
+    :path`) -- the exact bytes about to be committed. Reading working-tree
+    bytes here instead was the earlier bug: stage divergent content, then
+    restore the working tree to the enumerated original, and a working-tree
+    read reports the ORIGINAL (excepted) digest while the commit that
+    actually lands carries the STAGED (unexcepted) bytes -- a green guard on
+    a commit whose real content was never adjudicated.
+  - any other scope (including unset, the default local/CI run): working-
+    tree bytes via the filesystem, exactly as before -- unchanged.
 
 FAIL CLOSED, always, on any of: exceptions file missing, empty, unparseable
 JSON, wrong/missing schema field, malformed entry, a matched path with no
@@ -52,17 +73,40 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
-EXCEPTIONS_PATH = os.environ.get("EMBERD_EXCEPTIONS_PATH", "tools/emberd-legacy-exceptions.json")
+# Hardcoded, never overridable by environment -- see the docstring above.
+EXCEPTIONS_PATH = "tools/emberd-legacy-exceptions.json"
 SCHEMA = "emberd-legacy-exceptions-v1"
+
+# Mirrors repo-guard.sh's own "${REPO_GUARD_SCOPE:-}" = "staged" test.
+_STAGED = os.environ.get("REPO_GUARD_SCOPE", "") == "staged"
+
+
+def _read_bytes(path: str) -> bytes | None:
+    """Bytes for `path` from the byte source this scope is bound to: the git
+    INDEX (stage 0 blob) under staged scope, the filesystem otherwise. Never
+    silently falls back from one source to the other -- a path absent from
+    the bound source is None, full stop, regardless of what the other source
+    holds."""
+    if _STAGED:
+        proc = subprocess.run(
+            ["git", "show", f":{path}"], capture_output=True,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout
+    try:
+        return Path(path).read_bytes()
+    except OSError:
+        return None
 
 
 def sha256_of(path: str) -> str | None:
-    try:
-        data = Path(path).read_bytes()
-    except OSError:
+    data = _read_bytes(path)
+    if data is None:
         return None
     return hashlib.sha256(data).hexdigest()
 
@@ -73,10 +117,9 @@ def load_exceptions(path: str) -> dict[str, str]:
     empty, unparseable, wrong schema, and malformed entries are distinct
     causes, not one generic 'bad file' bucket, so a fix targets the right
     thing."""
-    p = Path(path)
-    if not p.exists():
+    raw = _read_bytes(path)
+    if raw is None:
         raise ValueError(f"exceptions file {path!r} does not exist")
-    raw = p.read_bytes()
     if len(raw.strip()) == 0:
         raise ValueError(f"exceptions file {path!r} is empty")
     try:

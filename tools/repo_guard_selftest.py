@@ -32,6 +32,7 @@ _LEGACY_TAG = _LEGACY + "-legacy"
 _LEGACY_SCHEMA = _LEGACY + "-legacy-exceptions-v1"
 _LEGACY_POLICY_REL = "tools/" + _LEGACY + "-legacy-exceptions.json"
 _LEGACY_CHECKER_REL = "tools/check_" + _LEGACY + "_legacy_exceptions.py"
+_LEGACY_ENV_OVERRIDE = _LEGACY.upper() + "_EXCEPTIONS_PATH"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
@@ -495,6 +496,104 @@ def test_green_legacy_legit_exception_still_passes():
         cleanup(tmp)
 
 
+# ---------------------------------------------------------------------------
+# RED: staged-scope byte provenance. REPO_GUARD_SCOPE=staged is what
+# .githooks/pre-commit actually runs the guard with — the check must
+# adjudicate the bytes about to be COMMITTED (the git index), never the
+# working tree, or a commit can carry unexcepted bytes past a green guard.
+# ---------------------------------------------------------------------------
+def test_red_legacy_staged_bypass_worktree_restore():
+    """Reproduction: commit an excepted file at its enumerated digest, stage
+    DIFFERENT bytes over it, then restore the working tree back to the
+    enumerated original WITHOUT re-staging — the index still holds the
+    unexcepted bytes while the working tree shows the (still excepted)
+    original. Under REPO_GUARD_SCOPE=staged the guard must fail on the
+    staged bytes; reading the working tree instead would wrongly pass."""
+    tmp = make_fixture("fix/selftest-red-legacy-staged-bypass")
+    try:
+        # Deliberately NOT under receipts/ -- that prefix carries its own,
+        # unrelated authority-conservation goal-binding requirement (section
+        # 9) that would contaminate this reproduction with a second, real
+        # failure reason. docs/ has no such coupling.
+        rel = "docs/legacy-note.md"
+        (tmp / "docs").mkdir(exist_ok=True)
+        original = f"historical note mentioning {_LEGACY}, frozen bytes\n"
+        digest = hashlib.sha256(original.encode("utf-8")).hexdigest()
+        (tmp / rel).write_text(original, encoding="utf-8", newline="\n")
+        doc = json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": rel, "sha256": digest, "reason": "selftest fixture"}],
+        })
+        (tmp / _LEGACY_POLICY_REL).write_text(doc, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        # Sanity: green with the original bytes, no staged mutation yet.
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        # Stage DIFFERENT bytes over the excepted file...
+        modified = f"historical note mentioning {_LEGACY}, EDITED bytes\n"
+        (tmp / rel).write_text(modified, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", rel], check=True)
+        # ...then restore ONLY the working tree to the enumerated original,
+        # WITHOUT re-staging — the index keeps the modified bytes.
+        (tmp / rel).write_text(original, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit: the staged bytes diverge from the "
+            "enumerated digest even though the working tree was restored "
+            f"to the original, got {rc}\n{out}"
+        )
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "current content digest is" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# RED: exceptions-path byte provenance. The policy path must be hardcoded —
+# an inherited/attacker-set exceptions-path override env var must have zero
+# effect (see _LEGACY_ENV_OVERRIDE above for the exact variable name).
+# ---------------------------------------------------------------------------
+def test_red_legacy_env_override_ignored():
+    """Reproduction: commit a tree with a real, unlisted legacy-name hit, so
+    the COMMITTED policy correctly fails it. Point the exceptions-path
+    override env var at an external, more permissive policy that DOES
+    enumerate the hit at its correct digest. If the override were honoured
+    the guard would wrongly pass; it must still fail against the committed
+    policy."""
+    tmp = make_fixture("fix/selftest-red-legacy-env-override")
+    external = None
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        content = f"mentions {_LEGACY} here, not enumerated in the real policy\n"
+        (tmp / "docs" / "note.md").write_text(content, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 != 0, f"fixture baseline should fail (unlisted hit): {rc0}\n{out0}"
+
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        external = tmp.parent / f"{tmp.name}-external-policy.json"
+        external.write_text(json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": "docs/note.md", "sha256": digest, "reason": "attacker-controlled"}],
+        }), encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={_LEGACY_ENV_OVERRIDE: str(external)})
+        assert rc != 0, (
+            "expected the external policy override to be IGNORED (guard "
+            f"must still fail against the committed policy), got {rc}\n{out}"
+        )
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "docs/note.md" in out, out
+    finally:
+        cleanup(tmp)
+        if external is not None and external.exists():
+            external.unlink()
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -514,6 +613,8 @@ ALL_TESTS = [
     test_green_legacy_policy_valid_zero_hit,
     test_red_legacy_unlisted_hit_still_fails,
     test_green_legacy_legit_exception_still_passes,
+    test_red_legacy_staged_bypass_worktree_restore,
+    test_red_legacy_env_override_ignored,
 ]
 
 
