@@ -152,3 +152,27 @@ the actually-new surface.
 
 ## Rows exercised by tests (filled in Stage 3; see `checkpoint-save-modern.test.ts` /
 `checkpoint-save-modern-command.test.ts` for the actual assertions per row above).
+
+## Head-verify addendum (2026-07-25) — the one unexercised row, and what it hid
+
+The map above shipped with a single row disclosed as not covered by an executed test: the
+destination's reparse/symlink ancestry, deferred to the post-publish re-verify. The disclosure was
+honest and it was also the only row that mattered, because "it would throw" and "it does throw"
+diverge exactly where a check runs after the function has already written.
+
+I wrote the test, deliberately two-sided: the save must fail **and** leave nothing behind. The first
+half passed. The second failed — the published bundle survived at the aliased destination. Step 6 sat
+outside the try/catch that cleans up staging, so a throw there reported failure over a complete,
+loadable bundle. A retry would then refuse with "destination already exists", naming bytes the
+operator had been told were never written.
+
+Cure is ordering, not detection: `requireNoReparseAncestry` runs against the destination's parent
+before any staging write, exported from `checkpoint-load.ts` and reused rather than restated. This is
+the map's own ORDER invariant applied to itself — the lenient outcome must be reachable only after
+every strict check has passed, and a strict check placed after the publish is not a check.
+
+Platform note: Windows refuses unprivileged directory symlinks (EPERM) but permits junctions, which
+are reparse points too, so the row is reachable here. The test skips explicitly where reparse points
+cannot be created rather than passing vacuously.
+
+Every row in this map is now exercised by an executed test.
