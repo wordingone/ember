@@ -12,7 +12,7 @@ import {
   type LifecycleReceipt,
 } from "./lifecycle-smoke.ts";
 
-const SHA_A = "a".repeat(64);
+const GIT_COMMIT = "a".repeat(40);
 const SHA_B = "b".repeat(64);
 const SHA_C = "c".repeat(64);
 const SHA_D = "d".repeat(64);
@@ -21,7 +21,7 @@ function validReceipt(): LifecycleReceipt {
   return {
     schema_version: "ember-cli-lifecycle-smoke/v1",
     evidence_class: "LIVE_COMPILED_BINARY_CONPTY",
-    source_commit: SHA_A,
+    source_commit: GIT_COMMIT,
     binary: {
       artifact: "tools/ember-cli/dist/ember.exe",
       sha256_before: SHA_B,
@@ -78,7 +78,7 @@ function validReceipt(): LifecycleReceipt {
 }
 
 const expected = {
-  sourceCommit: SHA_A,
+  sourceCommit: GIT_COMMIT,
   binarySha256: SHA_B,
   builderSha256: SHA_C,
 };
@@ -214,5 +214,25 @@ describe("compiled lifecycle driver host", () => {
     );
     expect(result.stderr).not.toContain("Named export 'Terminal' not found");
     expect(result.stderr).not.toContain("ERR_SOCKET_CLOSED");
+  });
+});
+
+describe("compiled lifecycle action completion", () => {
+  test("does not grant completion while the submitted command remains in the prompt", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.completedPromptFrame).toBeFunction();
+    const completedPromptFrame = driver.completedPromptFrame!;
+
+    const row = (content: string): string => `│${content.padEnd(18)}│`;
+    const pending = [
+      `╭${"─".repeat(18)}╮`,
+      row(" ❯ /train"),
+      row(" ○ observe"),
+      `╰${"─".repeat(18)}╯`,
+    ];
+    const cleared = [pending[0]!, row(" ❯ "), row(" ○ observe"), pending[3]!];
+
+    expect(completedPromptFrame(pending, 20, "/train")).toBe(false);
+    expect(completedPromptFrame(cleared, 20, "/train")).toBe(true);
   });
 });
