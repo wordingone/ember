@@ -264,7 +264,8 @@ export function visibleFrameLines(terminal: HeadlessTerminal): string[] {
   const buffer = terminal.buffer.active;
   const start = buffer.viewportY;
   for (let row = 0; row < terminal.rows; row += 1) {
-    lines.push(buffer.getLine(start + row)?.translateToString(true) ?? "");
+    const visible = buffer.getLine(start + row)?.translateToString(true) ?? "";
+    lines.push(visible.padEnd(terminal.cols).slice(0, terminal.cols));
   }
   return lines;
 }
