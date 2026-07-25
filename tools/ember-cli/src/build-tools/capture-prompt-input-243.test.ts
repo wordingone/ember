@@ -68,6 +68,13 @@ describe("redactHostPaths", () => {
     expect(Buffer.from(result.publicBytes).toString("utf8")).not.toContain("D:\\other-private");
     expect(result.redactions).toHaveLength(1);
   });
+  test("does not consume an adjacent terminal border glyph", () => {
+    const source = Buffer.from(["B:", "M", "ember│"].join("\\"), "utf8");
+    const result = redactHostPaths(source, []);
+    const text = Buffer.from(result.publicBytes).toString("utf8");
+    expect(result.publicBytes.byteLength).toBe(source.byteLength);
+    expect(text.endsWith("│")).toBe(true);
+  });
   test("redacts a short absolute path without changing byte length", () => {
     const source = Buffer.from("cwd C:\\x");
     const result = redactHostPaths(source, ["C:\\x"]);

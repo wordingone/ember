@@ -85,7 +85,7 @@ export function redactHostPaths(
   };
   const uniquePaths = [...new Set(hostPaths)].sort((a, b) => b.length - a.length);
   for (const source of uniquePaths) replacePath(source);
-  const residualPaths = [...new Set(text.match(/[A-Za-z]:[\\/][^\s\x1b\x07]+/g) ?? [])]
+  const residualPaths = [...new Set(text.match(/[A-Za-z]:[\\/][A-Za-z0-9_.~\\/()-]+/g) ?? [])]
     .sort((a, b) => b.length - a.length);
   for (const source of residualPaths) replacePath(source);  if (/[A-Za-z]:[\\/]/.test(text)) {
     throw new Error("unredacted absolute host path remains in public evidence");
