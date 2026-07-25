@@ -10,7 +10,7 @@
 
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { copyFile, lstat, mkdir, rename, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -304,5 +304,50 @@ describe("saveModernCheckpoint (core)", () => {
 
     const reverified = await verifyCheckpointBundle(targetDir);
     expect(reverified.schemaVersion).toBe("ember-sparse-checkpoint-v3");
+  });
+
+  // The acceptance map's one SKIP-PATH row that shipped unexercised: the
+  // destination's reparse/symlink ancestry is not pre-checked before staging, so
+  // it is caught only by the mandatory post-publish re-verify. The map disclosed
+  // that honestly, which is right, but a disclosed row is still an unexercised
+  // row -- and this one is exactly the shape where "it would throw" and "it does
+  // throw" diverge, because the throw comes from a check running against a path
+  // the function has already written to.
+  //
+  // Windows blocks unprivileged directory symlinks (EPERM) but permits
+  // junctions, which are reparse points too, so the row IS reachable here. The
+  // assertion is deliberately two-sided: the save must fail, AND the bytes must
+  // be gone afterward -- a failure that leaves a published bundle behind at an
+  // aliased path would satisfy a one-sided "it refused" test while leaving
+  // exactly the artifact the check exists to prevent.
+  it("negative: a destination reached through a reparse point (junction) is refused by the post-publish re-verify, and leaves nothing behind", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-reparse-"));
+    roots.push(root);
+    const sourceDir = join(root, "source");
+    mkdirSync(sourceDir);
+    writeV5Bundle(sourceDir);
+
+    const realParent = join(root, "real-parent");
+    mkdirSync(realParent);
+    const aliasParent = join(root, "alias-parent");
+    try {
+      symlinkSync(realParent, aliasParent, "junction");
+    } catch (err) {
+      // No reparse points available on this filesystem: skip rather than assert
+      // a vacuous pass. A silently-skipped assertion that reads as green is the
+      // failure class this whole file is defending against.
+      expect((err as NodeJS.ErrnoException).code).toBeDefined();
+      return;
+    }
+
+    const targetDir = join(aliasParent, "target");
+    await expect(
+      saveModernCheckpoint(sourceDir, targetDir, realFsDeps()),
+    ).rejects.toThrow(/alias or reparse path/);
+
+    // Nothing may survive at the aliased destination, nor at the real path it
+    // aliases -- checking only the alias would miss a bundle published through it.
+    expect(existsSync(targetDir)).toBe(false);
+    expect(existsSync(join(realParent, "target"))).toBe(false);
   });
 });

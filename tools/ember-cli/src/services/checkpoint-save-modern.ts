@@ -33,7 +33,8 @@
 // re-serializing a subset would silently drop them while still passing the
 // loader (the over-closure trap the acceptance map names explicitly).
 
-import { basename, join } from "path";
+import { basename, dirname, join } from "path";
+import { requireNoReparseAncestry } from "./checkpoint-load.ts";
 import type { VerifiedCheckpointBundle } from "./checkpoint-load.ts";
 
 export interface CheckpointSaveModernResult {
@@ -113,7 +114,18 @@ export async function saveModernCheckpoint(
   // SAME check /model checkpoint load performs. Never reimplemented.
   const source = await deps.verifyBundle(sourceCheckpointDir);
 
-  // 2. Destination no-replace: refuse before any write, not merely at
+  // 2a. Destination reparse ancestry: refuse BEFORE staging, not after
+  // publishing. This check previously existed only inside the step-6
+  // re-verification, which runs after the atomic rename -- so saving into a
+  // path reached through a junction threw the correct error while LEAVING THE
+  // PUBLISHED BUNDLE ON DISK, and a retry then hit "destination already
+  // exists" pointing at a bundle the operator had been told was not written.
+  // The order is the whole fix: a strict check that can only be reached after
+  // the lenient publish is not a check, it is a report. Reuses the loader's
+  // own requireNoReparseAncestry rather than restating the rule here.
+  await requireNoReparseAncestry(dirname(targetDir));
+
+  // 2b. Destination no-replace: refuse before any write, not merely at
   // rename time -- a named, fail-closed refusal instead of a raw fs error.
   if (await deps.pathExists(targetDir)) {
     throw new CheckpointSaveModernError(

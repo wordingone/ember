@@ -339,7 +339,7 @@ async function requireRegularPath(
  * 8.3 short name components expand the same way. Both spellings name exactly the same
  * directory, and both made the loader report a genuine bundle as corrupt.
  */
-async function requireNoReparseAncestry(path: string): Promise<void> {
+export async function requireNoReparseAncestry(path: string): Promise<void> {
   let current = path;
   for (;;) {
     let stat;
