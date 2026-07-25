@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room launch/package gate for Ember's the predecessor CLI parity harness.
 
 The gate proves there is a runnable local launch path that hands off into the
@@ -22,8 +25,6 @@ from receipt_write import checked_write
 TICKET = "EMBER-GATE-LAUNCH-PACKAGING"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 DEFAULT_BACKEND_RECEIPT = Path(r"receipts\ember-preloop-resident-gate\backend-coordinator-agents-20260621T224002Z.json")
-DEFAULT_reference_PACKAGE = Path(r"<local-path>")
-DEFAULT_reference_EXE = Path(r"<local-path>")
 EXPECTED_BACKEND_VERDICT = "BACKEND_COORDINATOR_AGENTS_GATE_PASS"
 
 
@@ -180,8 +181,8 @@ def main() -> int:
     parser.add_argument("--repo", default=str(repo_root()))
     parser.add_argument("--launcher", default=r"tools\reference-launch\launch.ps1")
     parser.add_argument("--backend-receipt", default=str(DEFAULT_BACKEND_RECEIPT))
-    parser.add_argument("--reference-package-json", default=str(DEFAULT_reference_PACKAGE))
-    parser.add_argument("--reference-exe", default=str(DEFAULT_reference_EXE))
+    parser.add_argument("--reference-package-json", required=True)
+    parser.add_argument("--reference-exe", required=True)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     repo = Path(args.repo)

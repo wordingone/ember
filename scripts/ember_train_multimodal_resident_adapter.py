@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Verifier-conditioned train-multimodal resident adapter for Ember.
 
 This adapter imports `scripts/train_multimodal_v0.py`, runs its tiny multimodal
@@ -23,8 +26,6 @@ from receipt_write import checked_write
 
 TICKET = "EMBER-TRAIN-MULTIMODAL-RESIDENT-ADAPTER"
 SHA_CONVENTION = "bytes/tensors as-is; tensor hash includes name, shape, dtype, and CPU contiguous bytes"
-DEFAULT_TASKS = Path(r"<local-path>")
-DEFAULT_OUT_ROOT = Path(r"<local-path>")
 REQUIRED_ACTION_LOG_PRIMITIVES = ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"]
 OBSERVED_STEP_PRIMITIVES = ["emit-scalar", "emit-token", "commit"]
 
@@ -221,7 +222,7 @@ def split_tasks(tasks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list
     return tasks[:4], tasks[4:6], tasks[6:8]
 
 
-def run_adapter(out_dir: Path, tasks_path: Path = DEFAULT_TASKS) -> dict[str, Any]:
+def run_adapter(out_dir: Path, tasks_path: Path) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     root = repo_root()
     train_path = root / "scripts/train_multimodal_v0.py"
@@ -493,7 +494,11 @@ def run_adapter(out_dir: Path, tasks_path: Path = DEFAULT_TASKS) -> dict[str, An
 def selftest() -> int:
     with tempfile.TemporaryDirectory(prefix="ember-train-mm-adapter-") as td:
         out_dir = Path(td) / "out"
-        result = run_adapter(out_dir)
+        # Deliberately non-existent path: load_task_source() falls back to its
+        # built-in 8-task synthetic fixture when the tasks path does not
+        # exist on disk (see load_task_source docstring/body above).
+        no_external_tasks = Path(td) / "no-external-tasks-configured.json"
+        result = run_adapter(out_dir, no_external_tasks)
         receipt = result["receipt"]
         manifest = result["manifest"]
         assert receipt["status"] == "RESIDENT_TRAINING_CANDIDATE_PASS"
@@ -523,18 +528,28 @@ def selftest() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--selftest", action="store_true")
-    ap.add_argument("--tasks", default=str(DEFAULT_TASKS))
+    ap.add_argument("--tasks", default=None)
     ap.add_argument("--out-dir")
     ap.add_argument("--train-script", default="scripts\\train_multimodal_v0.py")
     args = ap.parse_args()
     if args.selftest:
         return selftest()
+    if not args.tasks:
+        ap.error(
+            "--tasks is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
+    if not args.out_dir:
+        ap.error(
+            "--out-dir is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
     train_script = Path(args.train_script)
     expected = repo_root() / "scripts" / "train_multimodal_v0.py"
     resolved = train_script if train_script.is_absolute() else repo_root() / train_script
     if resolved.resolve() != expected.resolve():
         raise SystemExit(f"--train-script must bind to {expected}, got {resolved}")
-    out_dir = Path(args.out_dir) if args.out_dir else DEFAULT_OUT_ROOT / ts()
+    out_dir = Path(args.out_dir)
     result = run_adapter(out_dir, Path(args.tasks))
     print(json.dumps({"receipt": result["receipt"], "manifest_path": str(out_dir / "resident_training_candidate_manifest.json")}, indent=2))
     return 0 if result["receipt"].get("status") == "RESIDENT_TRAINING_CANDIDATE_PASS" else 2
