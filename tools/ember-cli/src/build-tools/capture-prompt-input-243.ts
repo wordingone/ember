@@ -358,7 +358,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
         columns,
         rows: ROWS,
         rawPath: `${outArtifact}/${stem}.raw`,
-        privateRawLocator: `EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/${stem}.raw`,
+        privateRawLocator: `EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/${sourceCommit}/${stem}.raw`,
         privateRawBytes,
         redactions: rawRedaction.redactions,
         framePath: `${outArtifact}/${stem}.frame.txt`,
