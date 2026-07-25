@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # repo-guard — the structural-invariant kernel for this repository.
 #
 # One script, run identically by (1) the local pre-commit/pre-push hook,
@@ -191,6 +192,40 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
   fi
 else
   ok "names" "SKIPPED (backup-remote exemption)"
+fi
+
+# ---- 3b. emberd legacy-name: content-addressed exceptions only -----------
+# Separate from the [names] check above and from its path-prefix
+# tools/repo-guard-names-exclude.txt, which is left exactly as-is. A tracked
+# path matching the legacy name passes ONLY if it is enumerated in
+# tools/emberd-legacy-exceptions.json AND its current content's sha256 equals
+# the digest recorded there — path alone is never sufficient (anyone can
+# rename a file into an exempted prefix; they cannot forge its digest). A
+# missing, empty, malformed, or unparseable exceptions file is a hard FAIL,
+# never a silent pass, and is only even consulted when a match exists — a
+# clean tree with no legacy name anywhere passes regardless of the
+# exceptions file's state, since there is nothing to adjudicate.
+# Boundary is alnum-delimited, not \b: plain \b treats "_" as a word
+# character, so "emberd_schedule" (a real key in the receipt exception below)
+# would silently never match at all — invisible to the guard rather than
+# adjudicated. "(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)" still excludes the
+# two confirmed false positives ($EmberDir, toolsToEmberDefs — "emberd" as an
+# accidental mid-identifier substring, alnum on both sides) while catching
+# snake_case occurrences where "emberd" is its own semantic token.
+# See state/specs/ember-lab-absorption-contract-2026-07-25.md Part 4.
+EMBERD_HITS="$(git grep -nIiE '(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)' -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/emberd-legacy-exceptions.json' ':(exclude)tools/check_emberd_legacy_exceptions.py' 2>/dev/null || true)"
+if [ -z "$EMBERD_HITS" ]; then
+  ok "emberd-legacy" "no tracked content matches the legacy name"
+else
+  EMBERD_PATHS="$(printf '%s\n' "$EMBERD_HITS" | cut -d: -f1 | sort -u)"
+  EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" python tools/check_emberd_legacy_exceptions.py 2>&1)"
+  EMBERD_CHECK_RC=$?
+  if [ "$EMBERD_CHECK_RC" -eq 0 ]; then
+    ok "emberd-legacy" "$(printf '%s' "$EMBERD_CHECK_OUT" | head -1)"
+  else
+    fail "emberd-legacy" "legacy name present outside the content-addressed exceptions"
+    printf '%s\n' "$EMBERD_CHECK_OUT" | sed 's/^/      /'
+  fi
 fi
 
 # ---- 4. exactly one root goal document -----------------------------------
