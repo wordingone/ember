@@ -3,50 +3,88 @@ name: repo-guard
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-# Unbypassable server-side ring. Runs the same kernel as the local hook on every
-# push and PR. Make this a REQUIRED status check in branch protection so a change
-# that violates a structural invariant cannot merge — agents cannot --no-verify
-# their way past it.
+# Required server-side ring. Pull-request workflow and kernel bytes come from the
+# protected base, while the merge ref is data under test. Subject-authored guard,
+# helper, or workflow bytes are never executed by this job.
+# SECURITY: guard-subject is hostile data. Never run an action, package script,
+# executable, shell file, Python import, or other code from that root. Every
+# executable byte below must resolve from guard-kernel or the hosted runner.
 
 on:
   push:
-  pull_request:
     branches: [master]
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Disable symlink materialization
+        run: git config --global core.symlinks false
+
+      - name: Checkout trusted guard kernel
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0          # need full history for the --base range check
-      - name: Run repo-guard
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          path: guard-kernel
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout pull-request merge subject
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          path: guard-subject
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout master push subject
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: guard-subject
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run base-pinned repo-guard
         env:
-          # Operator-name denylist injected from a repo secret so the names are
-          # never committed. If unset, the kernel skips the name check and still
-          # enforces every structural invariant.
           REPO_GUARD_NAMES: ${{ secrets.REPO_GUARD_NAMES }}
+          REPO_GUARD_KERNEL_ROOT: ${{ github.workspace }}/guard-kernel
+          REPO_GUARD_SUBJECT_ROOT: ${{ github.workspace }}/guard-subject
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          chmod +x tools/repo-guard.sh
-          if git rev-parse --verify -q origin/master >/dev/null; then
-            bash tools/repo-guard.sh --base origin/master
+          kernel="${GITHUB_WORKSPACE}/guard-kernel"
+          subject="${GITHUB_WORKSPACE}/guard-subject"
+          chmod +x "${kernel}/tools/repo-guard.sh"
+          cd "${subject}"
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request_target" ]; then
+            git cat-file -e "${BASE_SHA}^{commit}"
+            bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"
           else
-            bash tools/repo-guard.sh
+            bash "${kernel}/tools/repo-guard.sh"
           fi
+
       - name: Validate PR authority binding
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request_target'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Read the LIVE PR body via the API rather than
-          # github.event.pull_request.body. The event-payload body is a snapshot
-          # frozen when the event fired; `gh run rerun` replays that same stale
-          # payload, so a body edit never reaches a rerun — only a fresh event
-          # (a new push = synchronize, or close/reopen) refreshes it. Fetching
-          # the body at run time makes reruns authoritative and matches the
-          # tools/pr_authbind_preflight.sh pre-handoff check.
+          kernel="${GITHUB_WORKSPACE}/guard-kernel"
+          subject="${GITHUB_WORKSPACE}/guard-subject"
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.body // ""' > "${RUNNER_TEMP}/pr_body.txt"
-          python scripts/check_pr_authority_binding.py \
+          cd "${subject}"
+          python "${kernel}/scripts/check_pr_authority_binding.py" \
+            --root "${subject}" \
             --body-file "${RUNNER_TEMP}/pr_body.txt" \
-            --changed-range origin/master..HEAD
+            --changed-range "${BASE_SHA}..HEAD"
