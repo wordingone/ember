@@ -264,6 +264,44 @@ describe("owned seat loader", () => {
       }
     });
 
+    it("test 2d (D2 RED, line 220 + ORDER): an unrecognised schema throws a plain Error even when the commit is ALSO stale -- schema is checked first and never demotes", () => {
+      // The schema check and the stale-commit check were split out of one compound
+      // condition, so the branch that decides which of them wins is exactly the byte a
+      // future refactor would fold back together. This test pins the ORDER, not just the
+      // disposition: the fixture is bad in BOTH ways at once, so a merged compound
+      // condition would throw the typed error and turn this RED. Testing schema-mismatch
+      // alone would leave the conjunction -- the case where a demotable defect and a
+      // non-demotable one are present together -- unproved, and that conjunction is the
+      // only input class on which the ordering is observable.
+      const root = mkdtempSync(join(tmpdir(), "ember-schema-order-test-"));
+      try {
+        const { index, readGitBlob } = buildFixture(root);
+        const wrongSchemaIndex = { ...index, schema_version: "ember-owned-runtime-bundle-v2" };
+        const wrongSchemaBytes = new TextEncoder().encode(JSON.stringify(wrongSchemaIndex));
+        writeFileSync(join(root, "runtime-bundle-index.json"), wrongSchemaBytes);
+        const manifest = {
+          runtime_bundle: {
+            index_path: "runtime-bundle-index.json",
+            sha256: new Bun.CryptoHasher("sha256").update(wrongSchemaBytes).digest("hex"),
+          },
+        };
+        const manifestPath = join(root, "development.json");
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+        let caught: unknown;
+        try {
+          // "b" x40 is a well-formed commit id that is NOT the fixture's source_commit,
+          // so the stale-commit branch is live and reachable at the same time.
+          captureDevelopmentResolver(manifestPath, root, "b".repeat(40), readGitBlob);
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+        expect((caught as Error).message).toBe("runtime bundle index schema is not recognised");
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+
     it("test 3 (D3 over-closure): a matching, valid bundle admits the owned seat unchanged -- no typed error, no throw", () => {
       const root = mkdtempSync(join(tmpdir(), "ember-matching-bundle-test-"));
       try {
