@@ -61,63 +61,68 @@ bytes the artifact does not control):
       non-invoking uses of a path is open-ended, and no exclusion list has
       a boundary. The runtime probe stops enumerating that set.
 
-      Mechanism, round 5 (2026-07-25) shape -- round 4 shipped with a defect
-      of its own found in one attempt: the CLI-entry stub and the
-      EMBER_LAUNCH_TEST_RUNTIME stub wrote to the SAME marker, and the
-      runtime stub fired on ANY invocation without inspecting its own
-      argv, so "the launcher called the substituted runtime with `--
-      version`" and "the launcher reached the CLI entry" produced an
-      identical, indistinguishable verdict -- one proxy standing in for
-      another, the same shape as every prior round, just one layer deeper.
-      Worse: on the REAL chain, `& $bun run entrypoints/main.ts` runs with
-      bun REPLACED by the runtime stub, so the entry stub was NEVER reached
-      at all -- round 4's real-master result rested on the same conflated
-      evidence as its own decoy. Two markers now, never sharing a file:
-        - an ENTRY marker, written only by code substituted INTO the CLI
-          entry file itself, firing only when that file's own bytes
-          execute -- DIRECT observation.
-        - a RUNTIME marker, written unconditionally by the substituted
-          `EMBER_LAUNCH_TEST_RUNTIME` stub together with its OWN ARGV
-          (`%*`, verbatim, unexamined by the stub) -- the stub records what
-          it was called with and makes no judgment; the harness reads that
-          record afterward and promotes a runtime-fire to `resolved-true`
-          ONLY when the recorded argv names the package.json-declared CLI
-          entry (matched against the `bin` field's own string, e.g. `run
-          entrypoints/main.ts` names it, `--version` or an unrelated script
-          path does not).
+      Mechanism, round 6 (2026-07-25) shape. Round 5 tried to close round
+      4's own defect (one shared marker for two substituted sentinels) by
+      splitting into two markers and matching the runtime marker's OWN
+      RECORDED ARGV against the declared entry -- and that argv-substring
+      test was itself defeated on the first attempt: `--version
+      entrypoints/main.ts` names the entry as an ARGUMENT TO --VERSION,
+      never runs it, and `norm_entry in norm_argv` could not tell the two
+      apart. Round 2's original defeat, "a mention anywhere in the bytes",
+      recurring one layer deeper in the runtime's arguments instead of the
+      launcher's text. The root cause was structural: the substituted
+      runtime was an INERT marker-writer, so a genuine chain (which
+      replaces bun, the thing that would have run the entry) could NEVER
+      reach the entry directly -- that forced a text-based rescue, and
+      every text-based rescue over an open-ended argument space has an open
+      set of ways to satisfy it without doing the thing.
+
+      Round 6 removes the proxy at its root: the substituted runtime is now
+      a FAITHFUL minimal proxy that implements the actual contract it
+      stands in for. Given `run <file>` as its first two tokens, it
+      DELEGATES to the real `bun` to execute `<file>`, for real. Given
+      anything else -- `--version`, `--help`, a bare flag, the entry path
+      handed to a flag that isn't `run` -- it executes nothing, exactly as
+      the real bun would not run a script it was never asked to run.
+      `resolved-true` for L1 now comes from EXACTLY ONE observation: the
+      ENTRY marker (written by code substituted directly into the CLI entry
+      file) firing because that file's own bytes actually executed. There
+      is no second path to true anymore -- the runtime marker and its
+      recorded argv are still captured in the receipt, explicitly labelled
+      `..._DIAGNOSTIC_ONLY_NOT_VERDICT_BEARING`, purely so a human reading
+      the receipt can see what the runtime was invoked with, but the
+      harness itself no longer reasons about that text at all.
+
       The CLI entry file (package.json's `bin` target -- the one
       spec-declared location, never a string a candidate happens to
       mention) is overwritten in the scratch copy with the entry stub.
-      `EMBER_LAUNCH_TEST_MODE=1` substitutes the runtime stub for `bun` at
-      this repository's own `& $bun run entrypoints/main.ts` call site --
-      the hook exists in `launch-ember-cli.ps1` precisely for this, letting
-      the probe avoid the real production path's git-identity and
+      `EMBER_LAUNCH_TEST_MODE=1` substitutes the faithful runtime proxy for
+      `bun` at this repository's own `& $bun run entrypoints/main.ts` call
+      site -- the hook exists in `launch-ember-cli.ps1` precisely for this,
+      letting the probe avoid the real production path's git-identity and
       built-desktop-app requirements, neither of which a bounded probe can
-      safely exercise. Any launcher that does not read these env vars
+      safely exercise, while still genuinely reaching the entry through
+      real delegation. Any launcher that does not read these env vars
       (every hostile/synthetic fixture) simply ignores them.
 
       Verdict: a probe that could not even be STARTED (no interpreter for
       the candidate's extension, the scratch stage failed, the OS refused
-      to launch it) is `weak` -- the environment told us nothing. A probe
-      that ran to completion or to its timeout, for real, with NEITHER
-      marker supporting entry invocation is `resolved-false` -- a definite
-      negative, not an absence of information. `resolved-true` comes from
-      either an observed entry-fire (direct, strongest) or a runtime-fire
-      whose recorded argv names the entry (one inference step short of
-      watching the entry's own bytes run -- the evidence string says
-      exactly that, not "control transferred to the CLI entry", since that
-      stronger phrase is precisely what round 4's overclaiming evidence
-      text got wrong). The receipt binds both stub byte sets, the launcher
-      bytes, cwd, argv, timeout, exit code, and whichever marker content
-      was actually observed, so the verdict is reproducible without
-      rerunning it.
+      to launch it) is `weak` -- the environment told us nothing. Every
+      other outcome without the entry marker firing is `resolved-false` --
+      a definite negative, not an absence of information, whether the
+      runtime was invoked with an unrelated command, invoked with `run` on
+      a different file, or never invoked at all. The receipt binds both
+      stub byte sets, the launcher bytes, cwd, argv, timeout, exit code,
+      the entry marker's content when it fired, and the runtime's
+      diagnostic-only argv when it fired, so the verdict is reproducible
+      without rerunning it.
 
       The round-3/3.1 static machinery (`resolve_invocation`,
       `_matches_known_launcher_grammar`, comment/print/dead-code exclusion)
       is KEPT but DEMOTED: it may narrow candidates or refuse outright as a
       pre-filter, and its evidence is still included for diagnostic value,
       but it may never independently grant `resolved-true` -- that
-      authority belongs to the runtime sentinel alone.
+      authority belongs to the entry marker alone.
   L2  Launcher is documented: README.md or docs/START-HERE.md names a
       launcher that itself resolved-true, so a no-source reader can find a
       real one (documenting a decoy does not count).
@@ -145,36 +150,39 @@ WHAT IS NOT MEASURED (permanently undecidable here, human capture required):
     forms of "a string that never executes still counts". Round 3.1
     narrowed acceptance to one exact grammar, defeated by `type
     "tools\ember-cli\src\main.ts"`. Round 4 replaced static text-reasoning
-    with actual execution, and shipped its OWN proxy: one shared marker for
-    two different substituted sentinels meant "the launcher invoked the
-    substituted runtime with any arguments" and "the launcher reached the
-    CLI entry" produced the same verdict -- caught in the reviewer's first
-    attempt, the same way round 3.1's grammar was. Round 5 (2026-07-25)
-    separates the two observations into two markers that are never
-    conflated, and states plainly which of the two it is observing in the
-    evidence text rather than inferring the stronger claim. What remains
-    OPEN, disclosed rather than silently passed: (a) a launcher whose real
-    invocation depends on interactive input, a specific OS/shell the
-    probe's runner table does not cover, or state outside the scratch copy
-    (a required system service, a mapped network drive) -- the probe reads
-    as `weak` for these; (b) a launcher that behaves differently when
-    actually invoked by a human than under the probe's non-interactive,
-    env-overridden, timeout-bounded execution -- the probe proves the CLI
-    entry is REACHABLE, not that the human experience is identical; (c) the
-    probe substitutes bytes at one well-defined location (package.json's
-    `bin` target) and one named env-var hook -- a launcher reaching a
-    genuinely different, undeclared entry point through a path this
-    harness cannot discover would not be instrumented at all; (d) the
-    runtime-argv path is, by construction, ONE STEP REMOVED from watching
-    the entry's own bytes run -- it proves the launcher invoked the
-    declared runtime with the entry as an argument, which is what a
-    genuine chain does, but it is not literally the entry executing (the
-    entry stub is never reached when this path fires, since the runtime
-    that would have run it was itself substituted). This is the honest,
-    disclosed version of the gap round 4's evidence text overclaimed past.
-    None of these is a text-shape guess; each is a scope boundary of what
-    one bounded, sandboxed execution, with two distinct instruments, can
-    observe.
+    with actual execution, and shipped its own proxy (one shared marker for
+    two substituted sentinels). Round 5 split the markers but tried to
+    rescue the genuine-chain case with an argv-substring match, defeated by
+    `--version entrypoints/main.ts` -- the entry named as an argument to a
+    flag that never runs it. Round 6 (2026-07-25) removes the proxy at its
+    structural root: the substituted runtime is now a faithful minimal
+    proxy that genuinely delegates `run <file>` to real `bun` and refuses
+    everything else, so `resolved-true` needs exactly one observation (the
+    entry marker) and no text-matching rescue is needed for the genuine
+    chain to reach it. What remains OPEN, disclosed rather than silently
+    passed: (a) a launcher whose real invocation depends on interactive
+    input, a specific OS/shell the probe's runner table does not cover, or
+    state outside the scratch copy (a required system service, a mapped
+    network drive) -- the probe reads as `weak` for these; (b) a launcher
+    that behaves differently when actually invoked by a human than under
+    the probe's non-interactive, env-overridden, timeout-bounded execution
+    -- the probe proves the CLI entry is REACHABLE, not that the human
+    experience is identical; (c) the probe substitutes bytes at one
+    well-defined location (package.json's `bin` target) and one named
+    env-var hook -- a launcher reaching a genuinely different, undeclared
+    entry point through a path this harness cannot discover would not be
+    instrumented at all; (d) THE BYTES THAT EXECUTE AT THE ENTRY, when the
+    entry marker fires, ARE THE PROBE'S OWN STUB, never the real
+    `main.ts`/`main.js` -- this is inherent and by design (L1 asks whether
+    control reaches the entry, not what the entry then does; L3 and the
+    undecidable UI-affordance items below cover what happens once code is
+    running), but it means a chain that reaches the entry through some
+    mechanism our stub's own syntax cannot execute (a shell form outside
+    the extension table, an entry file whose real content matters to
+    whether *later* code in the same file would also run) is outside this
+    check's reach. None of these is a text-shape guess any longer; each is
+    a scope boundary of what one bounded, sandboxed execution, with a
+    faithful runtime proxy, can observe.
 
 Usage:  python scripts/verify_nosource_operability.py [--root PATH] [--json]
 Exit 0 = PASS (of the measurable half), 1 = FAIL, 2 = harness error.
@@ -591,43 +599,47 @@ def resolve_invocation(entry: Path, root: Path) -> dict:
 #      safely exercise. For any launcher that does not read this env var
 #      (every hostile/synthetic fixture), it is inert.
 #
-# Verdict, per the reviewer's binding refinement: a probe that could not even
-# be started (no interpreter for this extension available, the scratch stage
-# failed, the OS refused to launch it) is WEAK -- the environment told us
-# nothing about the launcher. A probe that ran to completion or to its
-# timeout, for real, without either marker ever firing is RESOLVED-FALSE --
-# that is a definite negative, not an absence of information. An observed
-# entry-fire, or a runtime-fire whose OWN RECORDED ARGV names the CLI entry,
-# is RESOLVED-TRUE.
+# Verdict: a probe that could not even be started (no interpreter for this
+# extension available, the scratch stage failed, the OS refused to launch
+# it) is WEAK -- the environment told us nothing about the launcher. Every
+# other outcome is judged by ONE thing: did the ENTRY marker fire. Nothing
+# else grants resolved-true.
 #
-# Round 5 (2026-07-25): round 4 shipped with a defect the reviewer found in
-# one attempt, in the same shape as every prior round -- a proxy standing in
-# for the property. Both the CLI-entry stub and the EMBER_LAUNCH_TEST_RUNTIME
-# stub wrote to the SAME marker file, and the runtime stub fired on ANY
-# invocation without inspecting its own argv. A decoy launcher that only
-# asked the substituted runtime `--version` -- never touching the CLI entry
-# -- produced an identical fire to a launcher that genuinely ran the entry.
-# Worse: on the REAL chain, `& $bun run entrypoints/main.ts` runs with bun
-# REPLACED, so the entry stub is never reached at all -- the real-master
-# round-4 result was granted by the same conflated evidence as the decoy.
+# Round 5 (2026-07-25) tried a second instrument -- the substituted runtime's
+# own recorded argv -- to rescue the case where a genuine chain replaces the
+# real runtime (bun) and so can never reach the entry stub directly. That
+# rescue was itself defeated in one attempt: `--version entrypoints/main.ts`
+# passes the entry path as an ARGUMENT to a flag that never runs it, and
+# `norm_entry in norm_argv` -- a substring test -- could not tell "the entry
+# is what got run" from "the entry is merely present somewhere in the
+# argument list". Round 2's defeat ("a mention anywhere in the bytes"),
+# recurring one layer deeper, in the runtime's arguments instead of the
+# launcher's text. Seven rounds, and every one of them bound to TEXT about
+# execution rather than to execution.
 #
-# Two markers now, never conflated:
-#   ENTRY marker  -- written only by code inside the CLI entry file itself,
-#                    when that file's own bytes actually execute. Firing
-#                    this is DIRECT observation: the entry ran.
-#   RUNTIME marker -- written by the substituted EMBER_LAUNCH_TEST_RUNTIME
-#                    stub, ALWAYS, on every invocation, together with its
-#                    own argv verbatim (`%*`). The stub does not decide
-#                    anything; it records what it was called with and lets
-#                    the harness judge that record.
-# A runtime-fire is only promoted to resolved-true if the RECORDED ARGV
-# names the package.json-declared CLI entry -- e.g. `run entrypoints/
-# main.ts` names it, `--version` does not. This is one inference step
-# short of watching the entry's own bytes run (the runtime stub, not the
-# entry, executed) -- the evidence string says exactly that, not "control
-# transferred to the CLI entry", because that phrase is the one inference
-# step this round does NOT observe directly. See the module docstring's L1
-# section for the disclosed gap.
+# Round 6 (2026-07-25) removes the proxy at its root instead of patching it
+# again: the reason the argv rule was ever reachable is that the substituted
+# runtime was an INERT marker-writer, so a genuine chain could never actually
+# reach the entry through it -- that absence is what forced a text-based
+# rescue in the first place, and every text-based rescue has an open set of
+# ways to satisfy it without doing the thing. The runtime stub now
+# implements the actual contract it stands in for: given `run <file>`, it
+# DELEGATES to the real `bun` to execute `<file>`, for real. Given anything
+# else (`--version`, `--help`, a bare flag, an unrelated subcommand, `<file>`
+# passed to a flag that isn't `run`), it does nothing -- exactly as the real
+# bun would not execute a script it was never asked to run.
+#
+# `resolved-true` for L1 now comes from EXACTLY ONE observation: the ENTRY
+# marker, written by code substituted directly into the CLI entry file,
+# fired because that file's own bytes executed. On a genuine chain this now
+# happens through real delegation -- the substituted runtime is faithful, so
+# `& $bun run entrypoints/main.ts` genuinely reaches the sentinel-substituted
+# main.ts, for real, under bun. There is no second, weaker path to true
+# anymore. The runtime marker (and its recorded argv) is kept in the receipt
+# as diagnostic colour only -- explicitly labelled NOT verdict-bearing --
+# because a human reading the receipt still benefits from seeing what the
+# runtime was invoked with, even though the harness itself no longer reasons
+# about it.
 
 ENTRY_MARKER_NAME = "EMBER_PROBE_ENTRY_FIRED.txt"
 RUNTIME_MARKER_NAME = "EMBER_PROBE_RUNTIME_INVOKED.txt"
@@ -682,14 +694,23 @@ _ENTRY_STUB_BY_SUFFIX = {
 }
 
 # Standalone runtime executable substituted for `bun` via
-# EMBER_LAUNCH_TEST_RUNTIME. Unconditionally records its OWN argv (`%*`,
-# verbatim, unexamined) to the runtime marker -- it makes no judgment about
-# what it was called with; the harness reads the record afterward and
-# decides whether that argv names the CLI entry.
+# EMBER_LAUNCH_TEST_RUNTIME (round 6). ALWAYS records its own argv (`%*`,
+# verbatim) to the runtime marker -- diagnostic colour only, never
+# verdict-bearing. Then implements the actual contract it stands in for:
+# `run <file>` DELEGATES to the real `bun` to execute `<file>`, for real, so
+# a genuine chain's entry stub is genuinely reached. Anything else (a bare
+# flag, an unrelated subcommand, the entry path handed to a flag that isn't
+# `run`) executes nothing -- exactly as the real bun would not run a script
+# it was never asked to run. This is what makes the argv-substring rescue
+# from round 5 unnecessary: the entry marker can now fire on its own, for
+# real, through this proxy.
 _SENTINEL_RUNTIME_STUB = (
     "@echo off\r\n"
     'if defined EMBER_PROBE_RUNTIME_MARKER echo %*>"%EMBER_PROBE_RUNTIME_MARKER%"\r\n'
-    "exit /b 0\r\n"
+    'if /I not "%~1"=="run" exit /b 0\r\n'
+    'if "%~2"=="" exit /b 0\r\n'
+    'bun "%~2"\r\n'
+    "exit /b %ERRORLEVEL%\r\n"
 )
 
 _LAUNCHER_RUNNERS = {
@@ -746,27 +767,16 @@ def _probe_copy_ignore(_dirpath: str, names: list[str]) -> list[str]:
     ]
 
 
-def _runtime_argv_names_entry(argv_line: str, entry_bin_rel: str) -> bool:
-    """Does a runtime stub's OWN RECORDED argv (`%*`, unexamined by the stub
-    itself) name the package.json-declared CLI entry? Matched against the
-    bin field's own string, normalized -- that is exactly what a genuine
-    `& $bun run <bin-rel>` invocation passes, not a path re-derived some
-    other way. `--version`, an unrelated script, or no entry mention at
-    all does not match."""
-    norm_argv = argv_line.replace("\\", "/").lower()
-    norm_entry = entry_bin_rel.replace("\\", "/").lower()
-    return bool(norm_entry) and norm_entry in norm_argv
-
-
 def run_sentinel_probe(launcher: Path, root: Path) -> dict:
     """Execute `launcher` for real, under a timeout, in a scratch copy that
-    never touches `root`, with two DISTINCT owned sentinels: one substituted
-    at the CLI entry itself, one substituted as the runtime that would
-    invoke it. `resolved-true` requires an OBSERVED entry-fire, or a
-    runtime-fire whose own recorded argv names the entry -- nothing about
-    the launcher's own text is consulted for this verdict, and the two
-    markers are never conflated (round 5, after round 4 shipped with them
-    sharing one file)."""
+    never touches `root`, with the CLI entry substituted for an owned
+    sentinel and the runtime substituted for a FAITHFUL minimal proxy that
+    delegates `run <file>` to the real interpreter and refuses everything
+    else. `resolved-true` requires the ENTRY marker, and ONLY the entry
+    marker -- nothing about the launcher's own text, nor the runtime's argv,
+    is consulted for this verdict (round 6, after round 5's argv-substring
+    rescue was itself defeated by an entry path passed to an unrelated
+    flag)."""
     suffix = launcher.suffix.lower()
     runner_fn = _LAUNCHER_RUNNERS.get(suffix)
     if runner_fn is None:
@@ -895,8 +905,9 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
         )
 
     entry_fired = entry_marker.exists()
+    # Diagnostic colour only, from here down -- read and recorded for a
+    # human's benefit, never consulted for the verdict.
     runtime_argv_line: str | None = None
-    runtime_names_entry = False
     if runtime_marker.exists():
         try:
             runtime_argv_line = runtime_marker.read_text(
@@ -904,7 +915,6 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
             ).strip()
         except OSError:
             runtime_argv_line = "(unreadable)"
-        runtime_names_entry = _runtime_argv_names_entry(runtime_argv_line, entry_bin_rel)
 
     if entry_fired:
         try:
@@ -914,8 +924,7 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
         except OSError:
             receipt["entry_marker_content"] = "(unreadable)"
     if runtime_argv_line is not None:
-        receipt["runtime_marker_argv"] = runtime_argv_line
-        receipt["runtime_argv_names_entry"] = runtime_names_entry
+        receipt["runtime_marker_argv_DIAGNOSTIC_ONLY_NOT_VERDICT_BEARING"] = runtime_argv_line
 
     shutil.rmtree(scratch, ignore_errors=True)
 
@@ -926,44 +935,26 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
                 f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
                 f"timeout in a scratch copy; the CLI entry's OWN substituted "
                 f"bytes ({rel_entry}) executed and wrote the entry marker -- "
-                "direct execution observed"
+                "direct execution observed, the only observation this harness "
+                "grants resolved-true for"
             ),
             "receipt": receipt,
         }
-    if runtime_names_entry:
-        return {
-            "state": "resolved-true",
-            "evidence": (
-                f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
-                f"timeout in a scratch copy; the launcher invoked the substituted "
-                f"test-mode runtime with the CLI entry ({entry_bin_rel}) as its "
-                f"target -- recorded argv: {runtime_argv_line!r}. This observes the "
-                "launcher's real invocation and its real argument, one inference "
-                "step short of watching the entry's own bytes run (the runtime "
-                "stub, not the entry, executed)"
-            ),
-            "receipt": receipt,
-        }
-    if receipt["timed_out"] or "exit_code" in receipt:
-        kind = "timed out" if receipt["timed_out"] else f"exited {receipt['exit_code']}"
-        detail = (
-            f"the substituted runtime WAS invoked but its recorded argv "
-            f"({runtime_argv_line!r}) does not name the CLI entry ({entry_bin_rel})"
-            if runtime_argv_line is not None
-            else "the substituted runtime was never invoked at all"
-        )
-        return {
-            "state": "resolved-false",
-            "evidence": (
-                f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
-                f"timeout in a scratch copy; the probe {kind}, and {detail} -- neither "
-                "marker supports invocation of the CLI entry"
-            ),
-            "receipt": receipt,
-        }
+
+    kind = "timed out" if receipt["timed_out"] else f"exited {receipt['exit_code']}"
+    runtime_note = (
+        f"the substituted runtime WAS invoked (recorded argv: {runtime_argv_line!r}, "
+        "diagnostic only) but never executed the CLI entry's own bytes"
+        if runtime_argv_line is not None
+        else "the substituted runtime was never invoked at all"
+    )
     return {
         "state": "resolved-false",
-        "evidence": f"{launcher.name}: probe completed but observed no invocation of the CLI entry",
+        "evidence": (
+            f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
+            f"timeout in a scratch copy; the probe {kind}, and the entry marker "
+            f"never fired -- {runtime_note}"
+        ),
         "receipt": receipt,
     }
 
