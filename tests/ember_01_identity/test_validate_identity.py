@@ -41,7 +41,7 @@ ARTIFACT_BYTES = {
     "training.optimizer_state": b"owned optimizer state",
     "training.numerics": b"bf16 activations fp32 master",
     "backend.executable": b"owned backend executable",
-    "backend.command": b"emberd --manifest fixture-owned-admitted",
+    "backend.command": b"ember-lab --manifest fixture-owned-admitted",
     "evaluation.harness": b"owned benchmark harness",
     "evaluation.comparator": b"frozen comparator identity artifact",
     "ancestry:0": b"clean genesis parent checkpoint",

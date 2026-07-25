@@ -257,7 +257,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 62,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -270,7 +270,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 66,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -283,7 +283,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 70,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -296,7 +296,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 222,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -309,7 +309,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 228,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -322,7 +322,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 240,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -335,7 +335,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 258,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -348,7 +348,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 291,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -361,7 +361,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 347,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -374,7 +374,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 609,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -387,7 +387,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 615,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -400,7 +400,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 623,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -413,7 +413,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 628,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -426,7 +426,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 633,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -439,7 +439,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 651,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -452,7 +452,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 667,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -465,7 +465,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 673,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -478,7 +478,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 674,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -491,7 +491,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 684,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -504,7 +504,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 701,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -517,7 +517,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 707,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -530,7 +530,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 738,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -543,7 +543,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 753,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -556,7 +556,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 794,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -569,7 +569,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 807,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -582,7 +582,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 821,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -595,7 +595,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 829,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -608,7 +608,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 831,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -621,7 +621,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 838,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -634,7 +634,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 845,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -647,7 +647,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 875,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -660,7 +660,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 888,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -673,7 +673,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 902,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -686,7 +686,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 910,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -699,7 +699,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 912,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -712,7 +712,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 919,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -725,7 +725,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 934,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -738,7 +738,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 950,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -751,7 +751,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 954,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -764,7 +764,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 960,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -777,7 +777,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 968,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -790,7 +790,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1066,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -803,7 +803,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1067,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -816,7 +816,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1070,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -829,7 +829,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1072,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -842,7 +842,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1084,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -855,7 +855,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1088,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -868,7 +868,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1110,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -881,7 +881,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1166,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -894,7 +894,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1193,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -907,7 +907,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1346,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -920,7 +920,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1417,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -933,7 +933,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1460,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -946,7 +946,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1576,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -959,7 +959,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1617,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -972,7 +972,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1643,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -985,7 +985,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1661,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -998,7 +998,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1686,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1011,7 +1011,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1910,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1024,7 +1024,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1917,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1037,7 +1037,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1918,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1050,7 +1050,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1940,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1063,7 +1063,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 1948,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1076,7 +1076,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2288,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1089,7 +1089,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2329,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1102,7 +1102,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2337,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1115,7 +1115,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2338,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1128,7 +1128,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2350,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1141,7 +1141,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2353,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1154,7 +1154,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2382,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1167,7 +1167,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2396,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1180,7 +1180,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2431,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1193,7 +1193,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2464,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1206,7 +1206,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2471,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1219,7 +1219,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2481,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1232,7 +1232,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2491,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1245,7 +1245,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2494,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1258,7 +1258,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2504,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1271,7 +1271,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2551,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1284,7 +1284,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2609,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1297,7 +1297,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2648,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1310,7 +1310,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2658,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1323,7 +1323,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2666,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1336,7 +1336,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2680,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1349,7 +1349,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2687,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1362,7 +1362,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2702,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1375,7 +1375,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2726,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1388,7 +1388,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2805,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1401,7 +1401,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2810,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1414,7 +1414,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2811,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1427,7 +1427,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2869,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1440,7 +1440,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2870,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1453,7 +1453,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2873,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1466,7 +1466,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2879,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1479,7 +1479,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2880,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1492,7 +1492,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2881,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1505,7 +1505,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2887,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1518,7 +1518,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2895,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1531,7 +1531,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2897,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1544,7 +1544,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 2904,
-      "path": "runtime/emberd/src/lib.rs",
+      "path": "runtime/ember-lab/src/lib.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1557,7 +1557,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 0,
-      "path": "runtime/emberd/src/main.rs",
+      "path": "runtime/ember-lab/src/main.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1570,7 +1570,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 44,
-      "path": "runtime/emberd/src/rpc.rs",
+      "path": "runtime/ember-lab/src/rpc.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1583,7 +1583,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 152,
-      "path": "runtime/emberd/src/rpc.rs",
+      "path": "runtime/ember-lab/src/rpc.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -1596,7 +1596,7 @@
       "failure_behavior": "a process can be adopted without proving its model checkpoint",
       "integration_requirement": "require validated manifest digest and bind job, executable, lease, checkpoint, verifier, and receipts",
       "line": 159,
-      "path": "runtime/emberd/src/rpc.rs",
+      "path": "runtime/ember-lab/src/rpc.rs",
       "protocol": "SQLite launch/lease/reconcile/stop/receipt protocol"
     },
     {
@@ -185747,17 +185747,17 @@
     },
     {
       "content_sha256": "b1156d47590c0025664ebd6becdcd917022638c4f73ca65d4cf2f5055b493fac",
-      "path": "runtime/emberd/tests/control_plane.rs",
+      "path": "runtime/ember-lab/tests/control_plane.rs",
       "review_basis": "test or fixture only; no production identity/claim authority"
     },
     {
       "content_sha256": "8dd5ee1882c79e248559831ce2e74c10f380e403ee2898a0fd19d42ab81aa51b",
-      "path": "runtime/emberd/tests/rpc_named_pipe.rs",
+      "path": "runtime/ember-lab/tests/rpc_named_pipe.rs",
       "review_basis": "test or fixture only; no production identity/claim authority"
     },
     {
       "content_sha256": "b62198bfeeefb9ccf662a87b79e6f690b6c227f0ef8d9c3dca87cfaf686c1a87",
-      "path": "runtime/emberd/tests/rpc_resilience.rs",
+      "path": "runtime/ember-lab/tests/rpc_resilience.rs",
       "review_basis": "test or fixture only; no production identity/claim authority"
     },
     {

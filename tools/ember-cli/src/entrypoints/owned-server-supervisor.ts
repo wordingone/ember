@@ -10,7 +10,7 @@ import { createConnection } from "node:net";
 
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import { verifyOwnedEndpointIdentity } from "./owned-seat-loader.ts";
-import { callEmberd, configuredEmberdPipe } from "../services/emberd-rpc.ts";
+import { callEmberLab, configuredEmberLabPipe } from "../services/ember-lab-rpc.ts";
 
 export type OwnedServerDevice = "cpu" | "cuda";
 export type OwnedEndpointPresence = "absent" | "present";
@@ -279,7 +279,7 @@ export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, valu
   if (actualFields.length !== fields.length || actualFields.some((field, index) => field !== fields[index])) {
     throw new Error("dispatch manifest fields are not closed");
   }
-  if (manifest["schema_version"] !== "emberd-dispatch-manifest-v2") throw new Error("dispatch manifest schema is not emberd-dispatch-manifest-v2");
+  if (manifest["schema_version"] !== "ember-lab-dispatch-manifest-v2") throw new Error("dispatch manifest schema is not ember-lab-dispatch-manifest-v2");
   if (!/^[0-9a-f]{40}$/.test(expectedSourceCommit) || manifest["source_commit"] !== expectedSourceCommit) throw new Error("dispatch manifest source commit does not match the installed Ember CLI");
   const launch = identity.launch;
   if (!launch) throw new Error("owned identity lacks an interactive launch descriptor");
@@ -297,10 +297,10 @@ export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, valu
 
 
 export function verifyDispatchReceiptCustody(path: unknown, sha256: unknown, custodyRoot: unknown): { path: string; sha256: string } {
-  if (typeof path !== "string" || !isAbsolute(path) || typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256) || typeof custodyRoot !== "string" || !isAbsolute(custodyRoot)) throw new Error("emberd dispatch result lacks preflight receipt custody");
+  if (typeof path !== "string" || !isAbsolute(path) || typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256) || typeof custodyRoot !== "string" || !isAbsolute(custodyRoot)) throw new Error("ember-lab dispatch result lacks preflight receipt custody");
   const root = resolve(custodyRoot); const receipt = resolve(path); const inside = relative(root, receipt);
-  if (inside === "" || inside === ".." || inside.startsWith("..\\") || inside.startsWith("../")) throw new Error("emberd dispatch receipt escapes authorized custody");
-  const bytes = readFileSync(receipt); if (createHash("sha256").update(bytes).digest("hex") !== sha256) throw new Error("emberd dispatch receipt hash does not match custody bytes");
+  if (inside === "" || inside === ".." || inside.startsWith("..\\") || inside.startsWith("../")) throw new Error("ember-lab dispatch receipt escapes authorized custody");
+  const bytes = readFileSync(receipt); if (createHash("sha256").update(bytes).digest("hex") !== sha256) throw new Error("ember-lab dispatch receipt hash does not match custody bytes");
   return { path: receipt, sha256 };
 }
 
@@ -317,9 +317,9 @@ export function dispatchManifestParams(manifestBytes: Buffer): { manifest_utf8: 
   };
 }
 async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<OwnedDaemonDispatch> {
-  const manifest = process.env["EMBERD_DISPATCH_MANIFEST"];
+  const manifest = process.env["EMBER_LAB_DISPATCH_MANIFEST"];
   const sourceCommit = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
-  if (!manifest) throw new Error("connected owned seats require EMBERD_DISPATCH_MANIFEST");
+  if (!manifest) throw new Error("connected owned seats require EMBER_LAB_DISPATCH_MANIFEST");
   if (typeof sourceCommit !== "string" || !/^[0-9a-f]{40}$/.test(sourceCommit)) {
     throw new Error("compiled cockpit lacks an exact source-commit trust root");
   }
@@ -332,8 +332,8 @@ async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<Ow
     manifestPayload = JSON.parse(manifestParams.manifest_utf8);
   } catch (error) { throw new Error("cannot read dispatch manifest: " + (error instanceof Error ? error.message : String(error))); }
   validateOwnedDispatchManifest(identity, manifestPayload, sourceCommit);
-  const result = await callEmberd({
-    pipeName: configuredEmberdPipe(),
+  const result = await callEmberLab({
+    pipeName: configuredEmberLabPipe(),
     method: "dispatch_manifest",
     params: {
       ...manifestParams,
@@ -343,7 +343,7 @@ async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<Ow
   const preflightReceiptPath = result["preflight_receipt_path"];
   const preflightReceiptSha256 = result["preflight_receipt_sha256"];
   if (!Number.isSafeInteger(pid) || (pid as number) < 1) {
-    throw new Error("emberd dispatch result lacks a positive process id");
+    throw new Error("ember-lab dispatch result lacks a positive process id");
   }
   const receipt = verifyDispatchReceiptCustody(preflightReceiptPath, preflightReceiptSha256, manifestObject(manifestPayload, "dispatch manifest")["custody_root"]);
   return { pid: pid as number, preflightReceiptPath: receipt.path, preflightReceiptSha256: receipt.sha256 };
@@ -378,12 +378,12 @@ export async function ensureOwnedServer(
   if (!identity.launch) {
     throw new Error("owned identity lacks a launch descriptor");
   }
-  if (process.env["EMBERD_PIPE"] !== undefined) {
+  if (process.env["EMBER_LAB_PIPE"] !== undefined) {
     const dispatch = deps.dispatchManifest ?? defaultDispatchManifest;
     const dispatched = await dispatch(identity);
     if (typeof dispatched.preflightReceiptPath !== "string" || !isAbsolute(dispatched.preflightReceiptPath) ||
         typeof dispatched.preflightReceiptSha256 !== "string" || !/^[0-9a-f]{64}$/.test(dispatched.preflightReceiptSha256)) {
-      throw new Error("emberd dispatch result lacks preflight receipt custody");
+      throw new Error("ember-lab dispatch result lacks preflight receipt custody");
     }
     await (deps.waitForDispatchReady ?? defaultWaitForDispatchReady)(identity, verifyEndpoint);
     return { outcome: "dispatched", port, pid: dispatched.pid };
