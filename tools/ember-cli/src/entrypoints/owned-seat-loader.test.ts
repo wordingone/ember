@@ -11,6 +11,7 @@ import {
   captureDevelopmentResolver,
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
+  OwnedSeatStaleBindingError,
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
 import { emberScratchDir } from "../utils/ember-scratch.ts";
@@ -99,6 +100,287 @@ describe("owned seat loader", () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  // Acceptance map: state/specs/cockpit-stale-binding-demotion-acceptance-map-2026-07-25.md
+  // Section 5, tests 1-4. This describe block proves the loader-level half: exactly one of
+  // the 39 throws (line 209, stale source_commit) is the typed OwnedSeatStaleBindingError, and
+  // every other throw this fixture can reach -- including a plain Error whose message is
+  // byte-identical to line 209's string -- is NOT that type. process-entry.test.ts proves the
+  // consumer-level half (the catch demotes on instanceof and nothing else).
+  describe("OwnedSeatStaleBindingError -- typed, not message-matched (map section 3 + 5)", () => {
+    function buildFixture(root: string) {
+      const sourceCommit = "a".repeat(40);
+      const trustedSources = [
+        "configs/ember-restart-3b.json",
+        "scripts/ember_restart/development_cli_seat.py",
+        "scripts/ember_restart/prediction_contract.py",
+        "scripts/ember_restart_eval_checkpoint_consumer.py",
+        "scripts/ember_restart_eval_raw_forward.py",
+        "tokenizer/tokenizer.json",
+        "tools/ember-restart-3b/batch.py",
+        "tools/ember-restart-3b/checkpoint_artifacts.py",
+        "tools/ember-restart-3b/infer.py",
+        "tools/ember-restart-3b/model.py",
+        "tools/ember-restart-3b/parameter_counter.py",
+        "tools/ember-restart-3b/serve_owned_openai.py",
+      ];
+      const runtimeFiles = [
+        ...trustedSources,
+        "parameter-evidence/parameter_counter.py",
+        "parameter-evidence/step2-realization-receipt.json",
+        "parameter-evidence/trusted-verifiers.json",
+      ];
+      for (const relativePath of runtimeFiles) {
+        const path = join(root, relativePath);
+        mkdirSync(resolve(path, ".."), { recursive: true });
+        writeFileSync(path, relativePath === "scripts/ember_restart/development_cli_seat.py"
+          ? "# exact resolver\n"
+          : "exact:" + relativePath + "\n");
+      }
+      const files = Object.fromEntries(runtimeFiles.map((relativePath) => {
+        const payload = readFileSync(join(root, relativePath));
+        return [relativePath, {
+          bytes: payload.byteLength,
+          sha256: new Bun.CryptoHasher("sha256").update(payload).digest("hex"),
+        }];
+      }));
+      const index = {
+        schema_version: "ember-owned-runtime-bundle-v1",
+        source_commit: sourceCommit,
+        files,
+      };
+      const indexBytes = new TextEncoder().encode(JSON.stringify(index));
+      writeFileSync(join(root, "runtime-bundle-index.json"), indexBytes);
+      const manifest = {
+        runtime_bundle: {
+          index_path: "runtime-bundle-index.json",
+          sha256: new Bun.CryptoHasher("sha256").update(indexBytes).digest("hex"),
+        },
+      };
+      const manifestPath = join(root, "development.json");
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+      const readGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
+        readFileSync(join(root, relativePath));
+      return { sourceCommit, manifestPath, readGitBlob, index, indexBytes };
+    }
+
+    it("test 1 (D1 RED): stale source_commit throws OwnedSeatStaleBindingError, not a plain Error", () => {
+      const root = mkdtempSync(join(tmpdir(), "ember-stale-binding-test-"));
+      try {
+        const { manifestPath, readGitBlob } = buildFixture(root);
+        let caught: unknown;
+        try {
+          captureDevelopmentResolver(manifestPath, root, "b".repeat(40), readGitBlob);
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).toBeInstanceOf(OwnedSeatStaleBindingError);
+        expect((caught as Error).message).toContain("exact compiled cockpit commit");
+        // D4: the demotion banner names the remedy -- both escapes, in the operator's words.
+        expect((caught as Error).message).toContain("--reference-seat");
+        expect((caught as Error).message).toContain("EMBER_GPU_FREE=1");
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+
+    it("test 2a (D2 RED, line 201): index content hash mismatch throws a plain Error, not OwnedSeatStaleBindingError", () => {
+      const root = mkdtempSync(join(tmpdir(), "ember-tamper-index-test-"));
+      try {
+        const { manifestPath, readGitBlob } = buildFixture(root);
+        // Corrupt the index bytes on disk after the manifest's sha256 was computed against
+        // the original bytes -- this is the tamper case, not the stale-commit case.
+        writeFileSync(join(root, "runtime-bundle-index.json"), "{}");
+        let caught: unknown;
+        try {
+          captureDevelopmentResolver(manifestPath, root, "a".repeat(40), readGitBlob);
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+        expect((caught as Error).message).toBe("runtime bundle index content hash mismatch");
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+
+    it("test 2b (D2 RED, line 224): an invalid trusted-source binding throws a plain Error, not OwnedSeatStaleBindingError", () => {
+      const root = mkdtempSync(join(tmpdir(), "ember-tamper-binding-test-"));
+      try {
+        const { sourceCommit, index, readGitBlob } = buildFixture(root);
+        const corruptIndex = {
+          ...index,
+          files: {
+            ...index.files,
+            "tools/ember-restart-3b/model.py": { bytes: -1, sha256: "not-a-hash" },
+          },
+        };
+        const corruptIndexBytes = new TextEncoder().encode(JSON.stringify(corruptIndex));
+        writeFileSync(join(root, "runtime-bundle-index.json"), corruptIndexBytes);
+        const manifest = {
+          runtime_bundle: {
+            index_path: "runtime-bundle-index.json",
+            sha256: new Bun.CryptoHasher("sha256").update(corruptIndexBytes).digest("hex"),
+          },
+        };
+        const manifestPath = join(root, "development.json");
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+        let caught: unknown;
+        try {
+          captureDevelopmentResolver(manifestPath, root, sourceCommit, readGitBlob);
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+        expect((caught as Error).message).toBe(
+          "trusted runtime source binding is invalid: tools/ember-restart-3b/model.py",
+        );
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+
+    it("test 2c (D2 RED, line 239): a source-byte mismatch against the embedded Git commit throws a plain Error, not OwnedSeatStaleBindingError", () => {
+      const root = mkdtempSync(join(tmpdir(), "ember-tamper-source-test-"));
+      try {
+        const { sourceCommit, manifestPath } = buildFixture(root);
+        const forgingReadGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
+          relativePath === "tools/ember-restart-3b/model.py"
+            ? new TextEncoder().encode("forged\n")
+            : readFileSync(join(root, relativePath));
+        let caught: unknown;
+        try {
+          captureDevelopmentResolver(manifestPath, root, sourceCommit, forgingReadGitBlob);
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+        expect((caught as Error).message).toBe(
+          "runtime source does not match the embedded Git commit: tools/ember-restart-3b/model.py",
+        );
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+
+    it("test 2d (D2 RED, line 220 + ORDER): an unrecognised schema throws a plain Error even when the commit is ALSO stale -- schema is checked first and never demotes", () => {
+      // The schema check and the stale-commit check were split out of one compound
+      // condition, so the branch that decides which of them wins is exactly the byte a
+      // future refactor would fold back together. This test pins the ORDER, not just the
+      // disposition: the fixture is bad in BOTH ways at once, so a merged compound
+      // condition would throw the typed error and turn this RED. Testing schema-mismatch
+      // alone would leave the conjunction -- the case where a demotable defect and a
+      // non-demotable one are present together -- unproved, and that conjunction is the
+      // only input class on which the ordering is observable.
+      const root = mkdtempSync(join(tmpdir(), "ember-schema-order-test-"));
+      try {
+        const { index, readGitBlob } = buildFixture(root);
+        const wrongSchemaIndex = { ...index, schema_version: "ember-owned-runtime-bundle-v2" };
+        const wrongSchemaBytes = new TextEncoder().encode(JSON.stringify(wrongSchemaIndex));
+        writeFileSync(join(root, "runtime-bundle-index.json"), wrongSchemaBytes);
+        const manifest = {
+          runtime_bundle: {
+            index_path: "runtime-bundle-index.json",
+            sha256: new Bun.CryptoHasher("sha256").update(wrongSchemaBytes).digest("hex"),
+          },
+        };
+        const manifestPath = join(root, "development.json");
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+        let caught: unknown;
+        try {
+          // "b" x40 is a well-formed commit id that is NOT the fixture's source_commit,
+          // so the stale-commit branch is live and reachable at the same time.
+          captureDevelopmentResolver(manifestPath, root, "b".repeat(40), readGitBlob);
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+        expect((caught as Error).message).toBe("runtime bundle index schema is not recognised");
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+
+    it("test 2e (D2 RED, sibling traversal): a MALFORMED source_commit is fatal, not demotable -- every shape, each with a stale expectation", () => {
+      // The demotion branch is the only lenient outcome here, and `!==` gives
+      // the same answer for "different" and "malformed". Without a shape check
+      // ahead of it, null / an object / uppercase / non-hex / wrong-length all
+      // took the permitted OFFLINE demotion instead of staying fatal.
+      //
+      // Enumerated rather than sampled: one representative per way the field can
+      // be wrong. Test 2d pinned the schema-vs-stale traversal and this is its
+      // sibling -- proving one traversal is not proving the set.
+      const malformed: Array<[string, unknown]> = [
+        ["null", null],
+        ["object", { sha: "a".repeat(40) }],
+        ["uppercase hex", "A".repeat(40)],
+        ["non-hex", "z".repeat(40)],
+        ["too short", "a".repeat(39)],
+        ["empty string", ""],
+      ];
+      for (const [label, value] of malformed) {
+        const root = mkdtempSync(join(tmpdir(), "ember-badcommit-test-"));
+        try {
+          const { index, readGitBlob } = buildFixture(root);
+          const badIndex = { ...index, source_commit: value };
+          const badBytes = new TextEncoder().encode(JSON.stringify(badIndex));
+          writeFileSync(join(root, "runtime-bundle-index.json"), badBytes);
+          const manifestPath = join(root, "development.json");
+          writeFileSync(
+            manifestPath,
+            JSON.stringify({
+              runtime_bundle: {
+                index_path: "runtime-bundle-index.json",
+                sha256: new Bun.CryptoHasher("sha256").update(badBytes).digest("hex"),
+              },
+            }),
+          );
+          let caught: unknown;
+          try {
+            // A stale expectation too, so the demotion branch is live: this is
+            // the conjunction, not the malformed field alone.
+            captureDevelopmentResolver(manifestPath, root, "b".repeat(40), readGitBlob);
+          } catch (error) {
+            caught = error;
+          }
+          expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+          expect((caught as Error).message).toBe(
+            "runtime bundle index source commit is invalid",
+          );
+        } finally {
+          rmSync(root, { force: true, recursive: true });
+        }
+      }
+    });
+
+    it("test 3 (D3 over-closure): a matching, valid bundle admits the owned seat unchanged -- no typed error, no throw", () => {
+      const root = mkdtempSync(join(tmpdir(), "ember-matching-bundle-test-"));
+      try {
+        const { sourceCommit, manifestPath, readGitBlob } = buildFixture(root);
+        const captured = captureDevelopmentResolver(manifestPath, root, sourceCommit, readGitBlob);
+        expect(captured.manifestSha256).toMatch(/^[0-9a-f]{64}$/);
+        captured.cleanup();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+
+    it("test 4 (mandatory, section 5): a plain Error with a byte-identical message to line 209's string is NOT the typed class", () => {
+      // This is the test that makes the substring shortcut impossible to reintroduce.
+      // If a future refactor demotes on message text instead of `instanceof`, this proves
+      // the class boundary is still what the catch must key on -- a same-text plain Error
+      // is a different failure than the one the map allows to demote.
+      const impostor = new Error(
+        "runtime bundle is not bound to the exact compiled cockpit commit; the owned seat is " +
+        "refused and the cockpit continues OFFLINE. Use --reference-seat for explicit " +
+        "REFERENCE_ONLY parity testing or EMBER_GPU_FREE=1 for offline observation.",
+      );
+      expect(impostor).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+      expect(impostor.message).toBe(
+        new OwnedSeatStaleBindingError(impostor.message).message,
+      );
+    });
   });
 
   it("snapshots the owned development runtime under EMBER_HOME regardless of %TEMP% casing/validity (NO-TEMP regression)", () => {
