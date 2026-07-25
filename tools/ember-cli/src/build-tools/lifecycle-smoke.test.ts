@@ -241,6 +241,23 @@ describe("compiled lifecycle action completion", () => {
     expect(driver.slashCommandNeedsSecondEnter!(pending, 20, "/train")).toBe(true);
     expect(driver.slashCommandNeedsSecondEnter!(cleared, 20, "/train")).toBe(false);
   });
+
+  test("types prompt input as ordered keystrokes with bounded inter-key pacing", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.writePromptInput).toBeFunction();
+    const writes: string[] = [];
+    const waits: number[] = [];
+
+    await driver.writePromptInput!(
+      { write: (value: string) => writes.push(value) },
+      "/train",
+      20,
+      async (milliseconds: number) => { waits.push(milliseconds); },
+    );
+
+    expect(writes).toEqual(["/", "t", "r", "a", "i", "n"]);
+    expect(waits).toEqual([20, 20, 20, 20, 20]);
+  });
 });
 
 describe("compiled lifecycle visible frame", () => {
