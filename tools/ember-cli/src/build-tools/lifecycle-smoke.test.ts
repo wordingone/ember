@@ -3,6 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import {
   LIFECYCLE_ACTIONS,
   inspectLifecycleSurface,
@@ -184,5 +186,33 @@ describe("inspectLifecycleSurface", () => {
       status: "MISSING",
     });
     expect(report.filter((row) => row.status === "MISSING")).toHaveLength(1);
+  });
+});
+
+describe("compiled lifecycle driver host", () => {
+  test("loads under Node and reaches its own closed argument boundary", () => {
+    const located = spawnSync("where.exe", ["node"], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    expect(located.status).toBe(0);
+    const nodeExecutable = located.stdout
+      .split(/\r?\n/)
+      .find((line) => line.trim().toLowerCase().endsWith("node.exe"))
+      ?.trim();
+    expect(nodeExecutable).toBeTruthy();
+    const driver = join(import.meta.dir, "lifecycle-smoke-driver.ts");
+    const result = spawnSync(
+      nodeExecutable!,
+      ["--experimental-strip-types", driver],
+      { cwd: join(import.meta.dir, ".."), encoding: "utf8", windowsHide: true },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "--binary, --out-dir, and --receipt-path are required",
+    );
+    expect(result.stderr).not.toContain("Named export 'Terminal' not found");
+    expect(result.stderr).not.toContain("ERR_SOCKET_CLOSED");
   });
 });

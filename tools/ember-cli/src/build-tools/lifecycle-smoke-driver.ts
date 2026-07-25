@@ -10,22 +10,18 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { Terminal } from "@xterm/headless";
+import { pathToFileURL } from "node:url";
+import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import { READY_OSC } from "../cli/ready-sentinel.ts";
-import {
-  findClosedPromptRegion,
-  rebuildBinaryFromSource,
-  redactHostPaths,
-} from "./capture-prompt-input-243.ts";
+import { buildCommitBanner } from "./build-cockpit.ts";
 import {
   LIFECYCLE_ACTIONS,
   validateLifecycleReceipt,
@@ -33,6 +29,9 @@ import {
   type LifecycleActionEvidence,
   type LifecycleReceipt,
 } from "./lifecycle-smoke.ts";
+
+const { Terminal } = xtermHeadless;
+type HeadlessTerminal = InstanceType<typeof Terminal>;
 
 const COLS = 100;
 const ROWS = 32;
@@ -50,15 +49,144 @@ function sha256(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function commandText(args: string[], cwd: string): string {
-  const result = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe" });
-  if (result.exitCode !== 0) {
-    throw new Error(Buffer.from(result.stderr).toString("utf8").trim() || `${args[0]} failed`);
-  }
-  return Buffer.from(result.stdout).toString("utf8").trim();
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-function frameLines(terminal: Terminal): string[] {
+function commandText(args: string[], cwd: string): string {
+  const result = spawnSync(args[0]!, args.slice(1), {
+    cwd,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    throw new Error((result.stderr ?? "").trim() || `${args[0]} failed`);
+  }
+  return (result.stdout ?? "").trim();
+}
+
+function resolveBunExecutable(): string {
+  const result = spawnSync("where.exe", ["bun"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    throw new Error((result.stderr ?? "").trim() || "where.exe bun failed");
+  }
+  const located = (result.stdout ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const exe = located.find((line) => line.toLowerCase().endsWith(".exe"));
+  if (exe !== undefined) return exe;
+  const cmdShim = located.find((line) => line.toLowerCase().endsWith(".cmd"));
+  if (cmdShim !== undefined) {
+    const candidate = join(dirname(cmdShim), "node_modules", "bun", "bin", "bun.exe");
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `cannot resolve a directly-spawnable bun.exe from where output: ${JSON.stringify(located)}`,
+  );
+}
+
+function findClosedPromptRegion(frame: string[], width: number): void {
+  if (!Number.isInteger(width) || width < 2) throw new Error("terminal width is invalid");
+  if (frame.length === 0 || frame.some((line) => line.length !== width)) {
+    throw new Error("frame does not match terminal width");
+  }
+  for (let top = 0; top < frame.length; top += 1) {
+    if (!frame[top]!.startsWith("╭")) continue;
+    const right = frame[top]!.indexOf("╮", 1);
+    if (right <= 1 || right >= width) continue;
+    for (let bottom = top + 2; bottom < frame.length; bottom += 1) {
+      if (frame[bottom]![0] !== "╰" || frame[bottom]![right] !== "╯") continue;
+      const interior = frame.slice(top + 1, bottom);
+      if (!interior.some((line) => line.includes("❯"))) continue;
+      if (interior.length < 2) continue;
+      if (!interior.every((line) => line[0] === "│" && line[right] === "│")) continue;
+      return;
+    }
+  }
+  throw new Error("closed prompt region not found");
+}
+
+function redactHostPaths(
+  privateBytes: Uint8Array,
+  hostPaths: string[],
+): { publicBytes: Uint8Array } {
+  let text = Buffer.from(privateBytes).toString("utf8");
+  const replacePath = (source: string): void => {
+    const sourceBytes = Buffer.byteLength(source);
+    const token = `{local-${sha256(Buffer.from(source, "utf8")).slice(0, 12)}}`;
+    const base = sourceBytes >= Buffer.byteLength(token) ? token : "<p>";
+    if (sourceBytes < Buffer.byteLength(base)) return;
+    const replacement = base.padEnd(sourceBytes, "~");
+    text = text.split(source).join(replacement);
+  };
+  for (const source of [...new Set(hostPaths)].sort((a, b) => b.length - a.length)) {
+    replacePath(source);
+  }
+  const residual = [...new Set(text.match(/[A-Za-z]:[\\/][A-Za-z0-9_.~\\/()-]+/g) ?? [])]
+    .sort((a, b) => b.length - a.length);
+  for (const source of residual) replacePath(source);
+  return { publicBytes: Buffer.from(text, "utf8") };
+}
+
+interface ReproducibleBuildEvidence {
+  rebuildBinarySha256: string;
+  builderExecutableBasename: string;
+  builderExecutableSha256Before: string;
+  builderExecutableSha256After: string;
+  builderVersion: string;
+}
+
+function rebuildBinaryFromSource(
+  repoRoot: string,
+  sourceCommit: string,
+): ReproducibleBuildEvidence {
+  const sourceRoot = join(repoRoot, "tools", "ember-cli", "src");
+  const bunExecutable = resolveBunExecutable();
+  const ownedTemp = mkdtempSync(join(tmpdir(), "ember-lifecycle-rebuild-"));
+  const rebuiltBinary = join(ownedTemp, "ember.exe");
+  const builderExecutableSha256Before = sha256(readFileSync(bunExecutable));
+  const builderVersion = commandText([bunExecutable, "--version"], sourceRoot);
+  try {
+    const result = spawnSync(
+      bunExecutable,
+      [
+        "build",
+        "./entrypoints/main.ts",
+        "--compile",
+        "--outfile",
+        rebuiltBinary,
+        "--banner",
+        buildCommitBanner(sourceCommit),
+      ],
+      { cwd: sourceRoot, encoding: "utf8", windowsHide: true },
+    );
+    if (result.status !== 0) {
+      throw new Error(
+        (result.stderr ?? "").trim() ||
+          `independent lifecycle rebuild failed with status ${result.status}`,
+      );
+    }
+    const builderExecutableSha256After = sha256(readFileSync(bunExecutable));
+    if (builderExecutableSha256Before !== builderExecutableSha256After) {
+      throw new Error("builder executable changed during independent rebuild");
+    }
+    return {
+      rebuildBinarySha256: sha256(readFileSync(rebuiltBinary)),
+      builderExecutableBasename: basename(bunExecutable),
+      builderExecutableSha256Before,
+      builderExecutableSha256After,
+      builderVersion,
+    };
+  } finally {
+    rmSync(ownedTemp, { recursive: true, force: true });
+  }
+}
+
+function frameLines(terminal: HeadlessTerminal): string[] {
   const lines: string[] = [];
   const buffer = terminal.buffer.active;
   for (let row = 0; row < terminal.rows; row += 1) {
@@ -73,22 +201,6 @@ function artifactPath(repoRoot: string, path: string): string {
     throw new Error("public lifecycle artifact must remain inside repository");
   }
   return rel;
-}
-
-function newestReceipt(root: string): string | null {
-  if (!existsSync(root)) return null;
-  const files: string[] = [];
-  const walk = (dir: string): void => {
-    for (const name of readdirSync(dir)) {
-      const path = join(dir, name);
-      const stat = statSync(path);
-      if (stat.isDirectory()) walk(path);
-      else files.push(path);
-    }
-  };
-  walk(root);
-  files.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  return files[0] ?? null;
 }
 
 function parseArgs(argv: string[]): {
@@ -118,7 +230,7 @@ function parseArgs(argv: string[]): {
 async function waitForReady(
   raw: string[],
   flush: () => Promise<void>,
-  terminal: Terminal,
+  terminal: HeadlessTerminal,
 ): Promise<{ elapsedMs: number; frameSha256: string }> {
   const started = Date.now();
   while (Date.now() - started < TIMEOUT_MS) {
@@ -128,14 +240,14 @@ async function waitForReady(
       findClosedPromptRegion(frame.replace(/\n$/, "").split("\n"), COLS);
       return { elapsedMs: Date.now() - started, frameSha256: sha256(frame) };
     }
-    await Bun.sleep(25);
+    await sleep(25);
   }
   throw new Error("readiness marker was not observed");
 }
 
 async function driveInput(
   child: IPty,
-  terminal: Terminal,
+  terminal: HeadlessTerminal,
   raw: string[],
   flush: () => Promise<void>,
   input: string,
@@ -168,7 +280,7 @@ async function driveInput(
         // The product has not repainted a complete prompt yet.
       }
     }
-    await Bun.sleep(25);
+    await sleep(25);
   }
   throw new Error(`no effect-bearing frame delta for ${input}`);
 }
@@ -388,15 +500,15 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     }
 
     child.write("\u0003");
-    await Bun.sleep(200);
+    await sleep(200);
     cleanupAttempted = true;
-    Bun.spawnSync(["taskkill", "/PID", String(child.pid), "/T", "/F"], {
-      stdout: "ignore",
-      stderr: "ignore",
+    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: "ignore",
     });
     const exitDeadline = Date.now() + 2_000;
     while (!exitObserved && Date.now() < exitDeadline) {
-      await Bun.sleep(25);
+      await sleep(25);
     }
 
     const attemptArtifact = join(outDir, "attempt.json");
@@ -426,7 +538,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         sha256: build.rebuildBinarySha256,
         builder_basename: build.builderExecutableBasename,
         builder_sha256_before: build.builderExecutableSha256Before,
-        builder_sha256_after: sha256(readFileSync(process.execPath)),
+        builder_sha256_after: build.builderExecutableSha256After,
         builder_version: build.builderVersion,
       },
       readiness: {
@@ -466,9 +578,9 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
   } finally {
     if (child != null) {
       cleanupAttempted = true;
-      Bun.spawnSync(["taskkill", "/PID", String(child.pid), "/T", "/F"], {
-        stdout: "ignore",
-        stderr: "ignore",
+      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
       });
     }
     terminal.dispose();
@@ -478,8 +590,9 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
   }
 }
 
-if (import.meta.main) {
-  runLifecycleSmoke(Bun.argv.slice(2)).then(
+const invokedPath = process.argv[1] == null ? "" : pathToFileURL(resolve(process.argv[1])).href;
+if (import.meta.url === invokedPath) {
+  runLifecycleSmoke(process.argv.slice(2)).then(
     () => process.exit(0),
     (error) => {
       console.error(error instanceof Error ? error.message : String(error));
