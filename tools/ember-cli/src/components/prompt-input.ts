@@ -460,6 +460,7 @@ export function PromptInput({
   const showShimmer = shouldShowShimmer(isProcessing, prefersReducedMotion);
   const permissionStatusLine = permissionModeStatusLine(state.permissionMode);
   const glyph       = modeGlyph(state.mode);
+  const safeWidth   = Number.isFinite(width) ? Math.max(0, Math.floor(width)) : 0;
 
   // Transient notifications and processing chrome are not part of the persistent input panel.
   const above: React.ReactElement[] = [];
@@ -513,11 +514,10 @@ export function PromptInput({
   }
   if (statusLine != null) {
     boxChildren.push(
-      React.createElement(Box, { key: "status-line", flexDirection: "column" }, statusLine),
+      React.createElement(Box, { key: "status-line", flexDirection: "column", width: Math.max(0, safeWidth - 4), overflow: "hidden" }, statusLine),
     );
   }
 
-  const safeWidth = Number.isFinite(width) ? Math.max(0, Math.floor(width)) : 0;
   const box = React.createElement(
     Box,
     {

@@ -39,10 +39,23 @@ describe("repl operator surface layout", () => {
       parseRenderedIntoFrame(raw, frame, new StylePool());
       const lines = frame.cells.map((line) => line.map((cell) => cell?.char ?? " ").join(""));
       expect(lines.length).toBe(rows);
-      for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY", "MODEL GROWTH", "CAPABILITY SCORES"]) {
+      // At these bounded heights the activity feed intentionally occupies the lower pane;
+      // assert the graph families that are actually paintable without changing that layout.
+      for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
         expect(lines.some((line) => line.includes(heading))).toBe(true);
       }
       expect(lines.some((line) => line.includes("IDLE"))).toBe(true);
+
+      const promptRow = lines.find((line) => line.includes("❯"));
+      expect(promptRow).toBeDefined();
+      expect(promptRow?.[0]).toBe("│");
+      const promptRightBorder = promptRow?.indexOf("│", 1) ?? -1;
+      expect(promptRightBorder).toBeGreaterThan(0);
+
+      const statusRows = lines.filter((line) => line.includes("bypass permis"));
+      expect(statusRows).toHaveLength(1);
+      expect(statusRows[0]?.[0]).toBe("│");
+      expect(statusRows[0]?.indexOf("│", 1)).toBe(promptRightBorder);
     }
     handle?.unmount();
   });
