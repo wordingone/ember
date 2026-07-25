@@ -38,9 +38,9 @@ class NativeComputeScreenTests(unittest.TestCase):
         now_ms = int(time.time() * 1000)
         identity = {"binary_sha256": "a" * 64, "source_sha256": "b" * 64}
         return {
-            "schema_version": "ember-lab-schedule-alarm-state-v1",
+            "schema_version": "emberd-schedule-alarm-state-v1",
             "generated_at_ms": now_ms,
-            "ember_lab_identity": identity,
+            "emberd_identity": identity,
             "runs": [{
                 "job_id": "ember-02b-native-clean-genesis-screen-b1-b2-seed83",
                 "artifact_class": "compute-primitive",
@@ -226,7 +226,7 @@ class NativeComputeScreenTests(unittest.TestCase):
         receipt = disk_preflight_receipt(
             free_bytes_by_drive={"B": 251 * 1024**3, "C": 151 * 1024**3},
             source_closure_sha256=closure,
-            ember_lab_schedule_receipt_sha256="a" * 64,
+            emberd_schedule_receipt_sha256="a" * 64,
             dispatch_sha256=dispatch["sha256"],
             dispatch=dispatch["payload"],
         )
@@ -239,7 +239,7 @@ class NativeComputeScreenTests(unittest.TestCase):
             path.write_text(json.dumps(disk_preflight_receipt(
                 free_bytes_by_drive={"B": 251 * 1024**3, "C": 151 * 1024**3},
                 source_closure_sha256=closure,
-                ember_lab_schedule_receipt_sha256="a" * 64,
+                emberd_schedule_receipt_sha256="a" * 64,
                 dispatch_sha256=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["sha256"],
                 dispatch=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["payload"],
             )), encoding="utf-8")
@@ -249,7 +249,7 @@ class NativeComputeScreenTests(unittest.TestCase):
         custody = {
             "hardware_runtime": {"gpu_name": "", "compute_capability": "8.9", "torch_version": "x", "cuda_version": "x", "cudnn_version": "x", "optimizer_implementation": "x", "optimizer_version": "x"},
             "source_closure_sha256": {name: "F" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")},
-            "ember_lab_schedule_receipt_sha256": "a" * 64,
+            "emberd_schedule_receipt_sha256": "a" * 64,
             "disk_budget_receipt_sha256": "b" * 64,
         }
         with self.assertRaisesRegex(ValueError, "runtime identity|hash|source closure"):
@@ -259,7 +259,7 @@ class NativeComputeScreenTests(unittest.TestCase):
         custody = {
             "hardware_runtime": {"gpu_name": "gpu", "compute_capability": "8.9", "torch_version": "x", "cuda_version": "x", "cudnn_version": "x", "optimizer_implementation": "x", "optimizer_version": "x"},
             "source_closure_sha256": {name: "f" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")},
-            "ember_lab_schedule_receipt_sha256": "a" * 64,
+            "emberd_schedule_receipt_sha256": "a" * 64,
             "disk_budget_receipt_sha256": "b" * 64,
         }
         identities = {
@@ -312,7 +312,7 @@ class NativeComputeScreenTests(unittest.TestCase):
         custody = {
             "hardware_runtime": {"gpu_name": "", "compute_capability": "8.9", "torch_version": "x", "cuda_version": "x", "cudnn_version": "x", "optimizer_implementation": "x", "optimizer_version": "x"},
             "source_closure_sha256": {name: "f" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")},
-            "ember_lab_schedule_receipt_sha256": "a" * 64,
+            "emberd_schedule_receipt_sha256": "a" * 64,
             "disk_budget_receipt_sha256": "b" * 64,
         }
         with self.assertRaisesRegex(ValueError, "runtime identity"):
@@ -337,7 +337,7 @@ class NativeComputeScreenTests(unittest.TestCase):
             custody={
                 "hardware_runtime": {"gpu_name": "gpu", "compute_capability": "8.9", "torch_version": "x", "cuda_version": "x", "cudnn_version": "x", "optimizer_implementation": "x", "optimizer_version": "x"},
                 "source_closure_sha256": {name: "f" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")},
-                "ember_lab_schedule_receipt_sha256": "a" * 64,
+                "emberd_schedule_receipt_sha256": "a" * 64,
                 "disk_budget_receipt_sha256": "b" * 64,
             },
             batch_measurements=[
@@ -359,7 +359,7 @@ class NativeComputeScreenTests(unittest.TestCase):
         receipt = disk_preflight_receipt(
             free_bytes_by_drive={"B": 251 * 1024**3, "C": 151 * 1024**3},
             source_closure_sha256=closure,
-            ember_lab_schedule_receipt_sha256="a" * 64,
+            emberd_schedule_receipt_sha256="a" * 64,
             dispatch_sha256=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["sha256"],
                 dispatch=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["payload"],
         )
@@ -373,7 +373,7 @@ class NativeComputeScreenTests(unittest.TestCase):
             disk_preflight_receipt(
                 free_bytes_by_drive={"B": int(250.05 * 1024**3), "C": 151 * 1024**3},
                 source_closure_sha256=closure,
-                ember_lab_schedule_receipt_sha256="a" * 64,
+                emberd_schedule_receipt_sha256="a" * 64,
             dispatch_sha256=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["sha256"],
                 dispatch=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["payload"],
             )
@@ -384,7 +384,7 @@ class NativeComputeScreenTests(unittest.TestCase):
             schedule = root / "schedule.json"
             schedule.write_text(json.dumps(self._valid_schedule_payload()), encoding="utf-8")
             output = root / "preflight.json"
-            self.assertEqual(main(["--emit-disk-preflight", str(output), "--ember-lab-schedule-receipt", str(schedule), "--output", str(root / "screen.json"), "--seed", "83"]), 0)
+            self.assertEqual(main(["--emit-disk-preflight", str(output), "--emberd-schedule-receipt", str(schedule), "--output", str(root / "screen.json"), "--seed", "83"]), 0)
             self.assertTrue(output.is_file())
     def test_write_disk_preflight_persists_the_exact_semantic_receipt(self) -> None:
         closure = {name: "c" * 64 for name in ("model.py", "batch.py", "semantic_stream.py", "run_vertical_slice.py", "parameter_counter.py", "native_compute_screen.py")}
@@ -393,7 +393,7 @@ class NativeComputeScreenTests(unittest.TestCase):
             receipt = write_disk_preflight(
                 path=path,
                 source_closure_sha256=closure,
-                ember_lab_schedule_receipt_sha256="a" * 64,
+                emberd_schedule_receipt_sha256="a" * 64,
             dispatch_sha256=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["sha256"],
                 dispatch=_dispatch_binding(output=Path("B:/receipts/screen.json"), seed=83)["payload"],
                 free_bytes_by_drive={"B": 251 * 1024**3, "C": 151 * 1024**3},
