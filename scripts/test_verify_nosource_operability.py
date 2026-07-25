@@ -9,8 +9,9 @@ rework-2026-07-25.md): the harness's own acceptance for L1/L3 was a real-tree
 run plus a wrong-root run -- two HONEST trees. Neither is hostile. These
 tests are the hostile-artifact probes the rework's own acceptance map
 requires (items 1-5 of that spec): a synthetic minimal ember-shaped tree
-whose only content is the exact adversarial shape Kai's exact-head fixture
-used, so the artifact under measurement can never supply its own evidence.
+whose only content is the exact adversarial shape the reviewer's exact-head
+fixture used, so the artifact under measurement can never supply its own
+evidence.
 
 Item 6 (genuine Ember.cmd + genuinely registered commands still resolve
 true, on the REAL current tree) and item 7 (wrong-root exit 2, WEAK ranking
@@ -95,7 +96,7 @@ def _command_module(root: Path, stem: str, name: str, description: str) -> None:
 
 
 class HostileFixtureTests(unittest.TestCase):
-    """Item 1: Kai's exact-head fixture, reproduced as a permanent test."""
+    """Item 1: the reviewer's exact-head fixture, reproduced as a permanent test."""
 
     def test_decoy_root_script_and_orphan_module_never_resolve_true(self):
         with tempfile.TemporaryDirectory() as td:
@@ -103,7 +104,7 @@ class HostileFixtureTests(unittest.TestCase):
             _minimal_ember_root(root)
             # The decoy root script: content unrelated to ember, one line.
             _write(root / "unrelated-maintenance.ps1", "Write-Host not-ember\n")
-            # README names it, exactly as Kai's fixture did.
+            # README names it, exactly as the reviewer's fixture did.
             _write(root / "README.md", "See unrelated-maintenance.ps1 for maintenance tasks.\n")
             # The orphan module: right keywords, right shape, NOT imported
             # by command-registry.ts (which stays empty, per _minimal_ember_root).
