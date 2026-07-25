@@ -28,11 +28,15 @@ on:
   pull_request:
     branches: [master]
 
-permissions:
-  contents: write
+# Least privilege at the JOB level rather than the workflow level: a workflow-wide
+# contents:write would hand the read-only drift-check job a token that can push to
+# master, which it has no use for. Each job declares exactly what it needs.
+permissions: {}
 
 jobs:
   regenerate:
+    permissions:
+      contents: write
     if: >-
       github.event_name == 'push' &&
       !contains(github.event.head_commit.message, '[skip-changelog]')
@@ -65,6 +69,8 @@ jobs:
   drift-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
