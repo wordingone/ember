@@ -385,10 +385,9 @@ async function driveInput(
   throw new Error(`no effect-bearing frame delta for ${input}`);
 }
 
-function actionInputs(home: string, repoRoot: string): Record<Exclude<LifecycleAction, "launch">, string> {
+export function actionInputs(home: string, _repoRoot: string): Record<Exclude<LifecycleAction, "launch">, string> {
   const saveTarget = join(home, "saved-checkpoint");
   const source = join(
-    repoRoot,
     "tools",
     "ember-cli",
     "src",

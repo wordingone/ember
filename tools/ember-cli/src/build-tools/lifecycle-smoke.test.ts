@@ -217,6 +217,18 @@ describe("compiled lifecycle driver host", () => {
     expect(result.stderr).not.toContain("Named export 'Terminal' not found");
     expect(result.stderr).not.toContain("ERR_SOCKET_CLOSED");
   });
+
+  test("checkpoint fixture is driven through a repo-relative source path", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.actionInputs).toBeFunction();
+    const repoRoot = "D:\\a\\ember\\ember";
+    const inputs = driver.actionInputs!("C:\\temp\\ember-smoke", repoRoot);
+
+    expect(inputs.save).not.toContain(repoRoot);
+    expect(inputs.save).toContain(
+      "--source tools\\ember-cli\\src\\commands\\__fixtures__\\model-identity",
+    );
+  });
 });
 
 describe("compiled lifecycle action completion", () => {
