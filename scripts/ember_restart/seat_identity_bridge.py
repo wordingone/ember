@@ -19,10 +19,42 @@ Field derivation (frozen spec, state/specs/cond3-seat-bridge-spec.md):
   seat disposition       <- cert identity.disposition
 Operational-only seat fields (e.g. endpointUrl) are kept, never cert-derived.
 
-Checkpoint-byte identity (Step 5) is resolved by ``resolve_checkpoint_byte_identity``:
-the ACTUAL checkpoint bytes, never a checkpoint INDEX JSON's own digest --
-see that function's docstring for the singular-vs-sharded resolution rule
+Checkpoint-byte identity is resolved by ``resolve_checkpoint_byte_identity`` /
+``_resolve_checkpoint_envelope``: the ACTUAL checkpoint bytes, never a checkpoint
+INDEX JSON's own digest and never an aggregate invented inside this module --
+see that function's docstring for the resolution rule
 (state/failure-classes/semantic-validation-without-bytes-2026-07-25.md).
+
+Rework (2026-07-25, round-2 parked-cure correction): round 2 disambiguated
+checkpoint shape by sniffing the artifact bytes (JSON with a non-empty
+``shards`` list -> sharded; anything else -> singular, hashed RAW). The
+supplier of the checkpoint artifact also supplies the cert that names its
+expected digest, so a hostile supplier chooses which branch runs and
+therefore how hard they are checked -- rule 5 of the failure-class doc. The
+verifier proved this: a 3-byte file ``b"xyz"`` with the cert's
+``checkpoint.byte_sha256`` hand-set to ``sha256("xyz")`` took the singular
+branch and was admitted. Round 2's sharded branch was also a defect one
+level further in: its aggregate (sha256 over sorted ``path:sha256`` lines)
+appears nowhere but this module and its own tests -- an unratified
+reconstruction the real schema does not carry.
+
+This rework binds to the identity the cert schema already expresses instead:
+one checkpoint shard's canonical tensor envelope, measured via
+``ember_01_identity.checkpoint_save_load_identity_binding.measure_checkpoint_identity``
+(the trusted counter's own safe reader -- the same binding
+``ember_01_identity``'s own checkpoint-identity category uses everywhere
+else). There is no raw-file fallback: a ``checkpointPath`` that is not a
+JSON object with a ``shards`` list naming EXACTLY ONE shard is a refusal
+naming the shape it got and the shape it needs. A checkpoint index naming
+MORE than one shard is also refused -- the ``ember-model-experiment-identity-v1``
+schema's ``checkpoint`` object (manifests/ember-01-identity/schema-v1.json)
+carries exactly one ``byte_sha256`` for one measured envelope; it has no
+field for a multi-shard aggregate, and inventing one inside this bridge is
+exactly the defect class this rework closes. A genuinely multi-shard
+checkpoint (e.g. the MoE ``ember-sparse-checkpoint-v5`` production writer,
+which always emits a shared-model shard + an optimizer shard + one shard per
+expert bank) needs a schema/contract change, not a bridge-invented formula;
+see the rework report for the ruling-request writeup.
 """
 
 from __future__ import annotations
@@ -31,8 +63,18 @@ import hashlib
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
+
+_IDENTITY_DIR = Path(__file__).resolve().parents[1] / "ember_01_identity"
+if str(_IDENTITY_DIR) not in sys.path:
+    sys.path.insert(0, str(_IDENTITY_DIR))
+
+from checkpoint_save_load_identity_binding import (  # noqa: E402
+    CheckpointSaveLoadIdentityMismatch,
+    measure_checkpoint_identity,
+)
 
 VALIDATOR_RELPATH = Path("scripts") / "ember_01_identity" / "validate_identity.py"
 
@@ -52,113 +94,112 @@ def _refuse(errors: list[str]) -> dict[str, Any]:
     return {"valid": False, "seat": None, "errors": errors}
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def resolve_checkpoint_byte_identity(
+def _resolve_checkpoint_envelope(
     checkpoint_path: Path, *, root: Path | None = None
-) -> tuple[str | None, list[str]]:
-    """Resolve the checkpoint-BYTE identity at ``checkpoint_path``, fail-closed.
+) -> tuple[bytes | None, list[str]]:
+    """Resolve the checkpoint's canonical tensor-envelope bytes at
+    ``checkpoint_path``, fail-closed. Returns ``(envelope_bytes, errors)``.
 
-    ``root`` is the directory shard ``path`` entries are relative to (the run
-    manifest's own root, matching ``contract.py::_verify_checkpoint`` --
-    shard paths there are relative to the manifest root, NOT to the
+    ``root`` is the directory the index's shard ``path`` entry is relative to
+    (the run manifest's own root, matching ``contract.py::_verify_checkpoint``
+    -- shard paths there are relative to the manifest root, NOT to the
     checkpoint index file's own directory). Defaults to
     ``checkpoint_path.parent`` when not supplied.
 
-    Two shapes are supported, disambiguated by the artifact bytes themselves
-    (never by a caller-supplied flag, so there is no unchecked branch to lie
-    about which shape is in play):
+    Exactly ONE shape is recognised: ``checkpoint_path`` names a checkpoint
+    INDEX JSON carrying a ``shards`` list with EXACTLY ONE entry
+    (``{path, ...}`` -- the exact top-level shape ``contract.py`` enforces on
+    the run manifest side). There is no raw-file fallback and no branch
+    selected by sniffing the artifact's own bytes: an artifact whose shape
+    does not match this is refused, naming the shape it got and the shape it
+    needs. That is the whole fix -- round 2 let a hostile supplier of the
+    checkpoint artifact also choose (via the artifact's own shape) how hard
+    it was checked (state/failure-classes/semantic-validation-without-bytes-2026-07-25.md,
+    rule 5).
 
-    - **Singular**: ``checkpoint_path`` names the checkpoint bytes directly.
-      Returns the sha256 of the raw file.
-    - **Sharded**: ``checkpoint_path`` names a checkpoint INDEX JSON carrying
-      a non-empty ``shards`` list of ``{path, sha256, bytes}`` records (the
-      exact shape ``contract.py::_verify_checkpoint`` enforces on the run
-      manifest side). Every load-bearing shard's ACTUAL on-disk bytes are
-      hashed and must equal its OWN declared per-shard sha256 (and declared
-      size, when present) -- fail closed on any missing file, size mismatch,
-      or hash mismatch. The returned identity is the canonical aggregate
-      digest over the *verified* ``(path, sha256)`` pairs, sorted by path so
-      the identity is independent of on-disk shard ordering.
+    The one named shard's ACTUAL bytes are read via the trusted counter's own
+    safe reader (``checkpoint_save_load_identity_binding.measure_checkpoint_identity``)
+    and its canonical tensor-envelope bytes are returned -- fail closed
+    (empty bytes, no result) if the shard is missing or the trusted reader
+    cannot parse it as a real checkpoint.
 
-    The index JSON's OWN digest (its self-consistency hash) is NEVER
-    returned as the checkpoint-byte identity -- that substitution (index
-    self-consistency reported under a name that means checkpoint byte
-    identity) is exactly the defect class this function closes
-    (state/failure-classes/semantic-validation-without-bytes-2026-07-25.md).
-    A tampered shard is invisible to a check that only re-hashes the index.
+    A checkpoint index naming MORE than one shard is ALSO refused, not
+    silently aggregated: the ``ember-model-experiment-identity-v1`` schema's
+    ``checkpoint`` object expresses exactly one canonical envelope identity.
+    Binding N>1 shards to that one field would require this module to invent
+    an aggregate convention -- exactly the defect class this rework closes
+    (round 2's own ``path:sha256``-lines formula, appearing nowhere else in
+    the tree). That case is a schema/contract gap; it goes to a ruling
+    request, never into this function.
     """
     try:
         raw = checkpoint_path.read_bytes()
     except OSError as exc:
         return None, [f"checkpointPath: unreadable: {exc}"]
 
-    index: dict[str, Any] | None = None
     try:
         candidate = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        candidate = None
-    if (
-        isinstance(candidate, dict)
-        and isinstance(candidate.get("shards"), list)
-        and candidate["shards"]
-    ):
-        index = candidate
+        return None, [
+            "checkpointPath: not a recognised checkpoint shape -- expected a checkpoint "
+            "INDEX JSON with a 'shards' list naming exactly one real checkpoint shard; got "
+            "bytes that are not valid UTF-8 JSON. There is no raw-file fallback -- a "
+            "checkpoint artifact whose shape is not recognised is refused outright."
+        ]
+    shards = candidate.get("shards") if isinstance(candidate, dict) else None
+    if not isinstance(shards, list) or not shards:
+        return None, [
+            "checkpointPath: not a recognised checkpoint shape -- expected an object with a "
+            "non-empty 'shards' list. There is no raw-file fallback -- a checkpoint artifact "
+            "whose shape is not recognised is refused outright."
+        ]
+    if len(shards) != 1:
+        return None, [
+            f"checkpointPath: checkpoint index names {len(shards)} shards, but the "
+            "ember-model-experiment-identity-v1 cert schema's checkpoint object "
+            "(manifests/ember-01-identity/schema-v1.json) expresses exactly ONE canonical "
+            "tensor-envelope identity (checkpoint.byte_sha256 for a single measured shard) -- "
+            "it has no field for a multi-shard aggregate. Binding N>1 shards to that one field "
+            "would require inventing an aggregate convention inside this bridge, which is "
+            "exactly the defect class this rework closes. This is a schema/contract gap, not a "
+            "bridge defect -- it needs a ruling (the way GAP-3 was ruled), not a bridge-invented "
+            "identity."
+        ]
 
-    if index is None:
-        # Singular checkpoint: the named file IS the checkpoint bytes.
-        return hashlib.sha256(raw).hexdigest(), []
+    shard = shards[0]
+    if not isinstance(shard, dict):
+        return None, ["checkpointPath: shards[0]: expected object"]
+    shard_path_raw = shard.get("path")
+    if not isinstance(shard_path_raw, str) or not shard_path_raw:
+        return None, ["checkpointPath: shards[0].path: missing"]
 
     shard_root = root if root is not None else checkpoint_path.parent
-    errors: list[str] = []
-    canonical_pairs: list[tuple[str, str]] = []
-    for position, shard in enumerate(index["shards"]):
-        prefix = f"checkpoint.shards[{position}]"
-        if not isinstance(shard, dict):
-            errors.append(f"{prefix}: expected object")
-            continue
-        shard_path_raw = shard.get("path")
-        shard_sha256 = shard.get("sha256")
-        if not isinstance(shard_path_raw, str) or not shard_path_raw:
-            errors.append(f"{prefix}.path: missing")
-            continue
-        if not isinstance(shard_sha256, str) or not shard_sha256:
-            errors.append(f"{prefix}.sha256: missing")
-            continue
-        shard_path = (shard_root / shard_path_raw).resolve()
-        try:
-            actual_shard_sha256 = _sha256_file(shard_path)
-        except OSError as exc:
-            errors.append(f"{prefix}.path: unreadable: {exc}")
-            continue
-        if actual_shard_sha256 != shard_sha256:
-            errors.append(
-                f"{prefix}: shard bytes do not match declared sha256 "
-                f"(declared {shard_sha256}, actual {actual_shard_sha256})"
-            )
-            continue
-        shard_bytes = shard.get("bytes")
-        if isinstance(shard_bytes, int) and not isinstance(shard_bytes, bool):
-            actual_size = shard_path.stat().st_size
-            if actual_size != shard_bytes:
-                errors.append(
-                    f"{prefix}.bytes: size mismatch (declared {shard_bytes}, actual {actual_size})"
-                )
-                continue
-        canonical_pairs.append((shard_path_raw, shard_sha256))
+    shard_path = (shard_root / shard_path_raw).resolve()
+    try:
+        measured = measure_checkpoint_identity(shard_path)
+    except CheckpointSaveLoadIdentityMismatch as exc:
+        return None, [
+            f"checkpointPath: shards[0] at {shard_path} failed measurement via the trusted "
+            f"counter's safe reader ({exc}). The checkpoint-byte identity is always measured "
+            "from the real shard, never taken from the index's own declared digest or from "
+            "the shard file's raw bytes."
+        ]
+    return bytes.fromhex(measured["checkpoint_bytes_hex"]), []
 
+
+def resolve_checkpoint_byte_identity(
+    checkpoint_path: Path, *, root: Path | None = None
+) -> tuple[str | None, list[str]]:
+    """The checkpoint-BYTE identity at ``checkpoint_path``, fail-closed --
+    ``sha256`` of the canonical tensor envelope ``_resolve_checkpoint_envelope``
+    resolves (never a checkpoint INDEX JSON's own digest, never a bridge-
+    invented multi-shard aggregate). See that function's docstring for the
+    resolution rule."""
+    envelope_bytes, errors = _resolve_checkpoint_envelope(checkpoint_path, root=root)
     if errors:
         return None, errors
-
-    canonical_pairs.sort(key=lambda pair: pair[0])
-    canonical_blob = "\n".join(f"{path}:{sha}" for path, sha in canonical_pairs).encode("utf-8")
-    return hashlib.sha256(canonical_blob).hexdigest(), []
+    assert envelope_bytes is not None
+    return hashlib.sha256(envelope_bytes).hexdigest(), []
 
 
 def derive_seat_identity(
@@ -210,21 +251,57 @@ def derive_seat_identity(
     if not isinstance(cert, dict):
         return _refuse(["cert manifest: expected top-level object"])
 
+    # Step 1.5 (moved ahead of Step 2, rework 2026-07-25): resolve the
+    # checkpoint's canonical envelope bytes FIRST, fail-closed, so Step 2 can
+    # pass them to validate_identity.py's own --checkpoint re-derivation
+    # branch (validate_identity.py:686-687) -- which otherwise never fires,
+    # per rule 1 of the failure-class doc. checkpointPath always names a
+    # checkpoint INDEX JSON with exactly one shard; a raw file, a missing
+    # 'shards' list, or more than one shard is refused (see
+    # _resolve_checkpoint_envelope's docstring) -- never a bridge-invented
+    # fallback or aggregate.
+    checkpoint_path_raw = seat_config.get("checkpointPath")
+    if not isinstance(checkpoint_path_raw, str) or not checkpoint_path_raw:
+        return _refuse(["checkpointPath: missing — cannot bind cert to checkpoint bytes"])
+    checkpoint_path = Path(checkpoint_path_raw)
+    checkpoint_root_raw = seat_config.get("checkpointRoot")
+    checkpoint_root = Path(checkpoint_root_raw) if isinstance(checkpoint_root_raw, str) else None
+    checkpoint_envelope_bytes, checkpoint_errors = _resolve_checkpoint_envelope(
+        checkpoint_path, root=checkpoint_root
+    )
+    if checkpoint_errors:
+        return _refuse(checkpoint_errors)
+    assert checkpoint_envelope_bytes is not None
+    actual_checkpoint_sha256 = hashlib.sha256(checkpoint_envelope_bytes).hexdigest()
+
     # Step 2: the SAME validator the /model path uses — single authority.
+    # --checkpoint carries the SAME envelope bytes just resolved above, so
+    # validate_identity's own per-tensor re-hash branch always fires against
+    # the real shard -- never silently skipped (rule 1/5: a validator
+    # parameter that exists and is not passed is a defect, not a default).
     validator = (repo_root / VALIDATOR_RELPATH).resolve()
     if not validator.is_file():
         return _refuse([f"validate_identity.py: not found at {validator}"])
-    try:
-        completed = subprocess.run(
-            [sys.executable, str(validator), str(cert_path)],
-            cwd=repo_root,
-            text=True,
-            capture_output=True,
-            timeout=120,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        return _refuse([f"validate_identity.py: execution failed: {exc}"])
+    with tempfile.TemporaryDirectory(prefix="seat-bridge-checkpoint-") as scratch_dir:
+        scratch_checkpoint = Path(scratch_dir) / "checkpoint-envelope.bin"
+        scratch_checkpoint.write_bytes(checkpoint_envelope_bytes)
+        try:
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(validator),
+                    str(cert_path),
+                    "--checkpoint",
+                    str(scratch_checkpoint),
+                ],
+                cwd=repo_root,
+                text=True,
+                capture_output=True,
+                timeout=120,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return _refuse([f"validate_identity.py: execution failed: {exc}"])
     if completed.returncode != 0:
         detail = (completed.stdout or completed.stderr or "").strip()[:2000]
         return _refuse(
@@ -260,21 +337,9 @@ def derive_seat_identity(
     if errors:
         return _refuse(errors)
 
-    # Step 5 (negative #1): the ACTUAL checkpoint bytes must hash to the cert
-    # checkpoint.byte_sha256 -- resolved via resolve_checkpoint_byte_identity,
-    # which verifies every load-bearing shard when checkpointPath names a
-    # sharded checkpoint index (never the index's own self-consistency hash).
-    checkpoint_path_raw = seat_config.get("checkpointPath")
-    if not isinstance(checkpoint_path_raw, str) or not checkpoint_path_raw:
-        return _refuse(["checkpointPath: missing — cannot bind cert to checkpoint bytes"])
-    checkpoint_path = Path(checkpoint_path_raw)
-    checkpoint_root_raw = seat_config.get("checkpointRoot")
-    checkpoint_root = Path(checkpoint_root_raw) if isinstance(checkpoint_root_raw, str) else None
-    actual_checkpoint_sha256, checkpoint_errors = resolve_checkpoint_byte_identity(
-        checkpoint_path, root=checkpoint_root
-    )
-    if checkpoint_errors:
-        return _refuse(checkpoint_errors)
+    # Step 5 (negative #1): the ACTUAL checkpoint bytes (resolved at Step 1.5,
+    # above, and independently re-derived by validate_identity.py's own
+    # --checkpoint branch in Step 2) must hash to the cert checkpoint.byte_sha256.
     if actual_checkpoint_sha256 != derived["checkpointSha256"]:
         return _refuse(
             [

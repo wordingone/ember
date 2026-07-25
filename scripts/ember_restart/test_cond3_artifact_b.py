@@ -36,8 +36,12 @@ CHECKPOINT_PATH = FIXTURE_DIR / "checkpoint"
 VALIDATOR_PATH = REPO_ROOT / "scripts" / "ember_01_identity" / "validate_identity.py"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "ember_01_identity"))
 
-from seat_identity_bridge import derive_seat_identity, require_admitted_seat
+import torch  # noqa: E402
+
+from checkpoint_save_load_identity_binding import measure_checkpoint_identity  # noqa: E402
+from seat_identity_bridge import derive_seat_identity, require_admitted_seat  # noqa: E402
 
 
 def _sha256_file(path: Path) -> str:
@@ -129,33 +133,76 @@ class Cond3ArtifactBConsumerReplay(unittest.TestCase):
         )
 
     # -- Consumer 2/3: the seat bridge -- GREEN derivation, then REFUSED admission. --
-    def test_consumer_seat_bridge_green_derivation(self) -> None:
-        digest = hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest()
-        seat_config = {
-            "certManifestPath": str(MANIFEST_PATH),
-            "certManifestDigest": digest,
-            "checkpointPath": str(CHECKPOINT_PATH),
-            "endpointUrl": "http://127.0.0.1:8000",
+    #
+    # Rework note (2026-07-25, cond3-1038): the checked-in fixture's
+    # ``checkpoint`` file is 16 raw ``synthetic-bytes-v1`` bytes (this
+    # module's own ``_tensor_bytes()``), consumed elsewhere by
+    # validate_identity.py's own ``--checkpoint`` raw-bytes convention
+    # (still correct -- those consumers are untouched and still pass
+    # above). It is not a checkpoint INDEX JSON naming a real, measurable
+    # torch shard, so it is not the shape this rework's bridge accepts (no
+    # raw-file fallback -- see seat_identity_bridge._resolve_checkpoint_
+    # envelope). Rather than edit the checked-in fixture (shared with
+    # tools/ember-cli/src/entrypoints/cond3-artifact-b.test.ts, out of this
+    # Python-only rework's scope), these two bridge-level tests build a
+    # local, self-contained real single-shard checkpoint (same pattern as
+    # scripts/ember_restart/test_seat_identity_bridge.py::
+    # SeatIdentityBridgeNegatives.setUp) and override only the
+    # checkpoint/evaluation fields of a COPY of the checked-in manifest --
+    # every other field (identity/architecture/tokenizer/data/training/...)
+    # stays the real, unmodified checked-in fixture content.
+    def _seat_config_with_real_shard(self, tmp_path: Path) -> dict:
+        shard_path = tmp_path / "model-shard.pt"
+        torch.save({"model": {"cond3.artifact_b.weight": torch.tensor([[1.0, -1.0], [0.5, -0.5]])}}, shard_path)
+        measured = measure_checkpoint_identity(shard_path)
+        manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        manifest["checkpoint"] = {
+            "format": "ember-checkpoint-envelope-v1",
+            "byte_sha256": measured["checkpoint_byte_sha256"],
+            "tensors": measured["tensors"],
+            "ancestry": manifest["checkpoint"].get("ancestry", []),
+            "recovery_state": manifest["checkpoint"].get("recovery_state", "CLEAN"),
         }
+        manifest["evaluation"]["subject_checkpoint_sha256"] = measured["checkpoint_byte_sha256"]
+        manifest_path = tmp_path / "manifest.json"
+        manifest_bytes = json.dumps(manifest, indent=2).encode("utf-8")
+        manifest_path.write_bytes(manifest_bytes)
+        index_path = tmp_path / "checkpoint-manifest.json"
+        index_path.write_text(json.dumps({"shards": [{"path": shard_path.name}]}), encoding="utf-8")
+        return manifest, {
+            "certManifestPath": str(manifest_path),
+            "certManifestDigest": hashlib.sha256(manifest_bytes).hexdigest(),
+            "checkpointPath": str(index_path),
+            "checkpointRoot": str(tmp_path),
+        }
+
+    def test_consumer_seat_bridge_green_derivation(self) -> None:
+        import shutil
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp(prefix="cond3-artifact-b-bridge-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        manifest, seat_config = self._seat_config_with_real_shard(tmp)
+        seat_config["endpointUrl"] = "http://127.0.0.1:8000"
         result = derive_seat_identity(seat_config, repo_root=REPO_ROOT)
         self.assertTrue(result["valid"], f"expected GREEN derivation: {result.get('errors')}")
         seat = result["seat"]
-        self.assertEqual(seat["checkpointSha256"], self.manifest["checkpoint"]["byte_sha256"])
-        self.assertEqual(seat["modelConfigSha256"], self.manifest["architecture"]["sha256"])
-        self.assertEqual(seat["tokenizerSha256"], self.manifest["tokenizer"]["sha256"])
-        self.assertEqual(seat["id"], self.manifest["identity"]["model_id"])
+        self.assertEqual(seat["checkpointSha256"], manifest["checkpoint"]["byte_sha256"])
+        self.assertEqual(seat["modelConfigSha256"], manifest["architecture"]["sha256"])
+        self.assertEqual(seat["tokenizerSha256"], manifest["tokenizer"]["sha256"])
+        self.assertEqual(seat["id"], manifest["identity"]["model_id"])
         self.assertEqual(seat["disposition"], "OWNED_CANDIDATE")
         self.assertFalse(seat["admitted"])
         self.assertFalse(seat["creditBearing"])
         self.assertFalse(seat["selectedAsOwnedEmber"])
 
     def test_consumer_seat_bridge_refuses_admission_of_candidate(self) -> None:
-        digest = hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest()
-        seat_config = {
-            "certManifestPath": str(MANIFEST_PATH),
-            "certManifestDigest": digest,
-            "checkpointPath": str(CHECKPOINT_PATH),
-        }
+        import shutil
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp(prefix="cond3-artifact-b-bridge-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        _, seat_config = self._seat_config_with_real_shard(tmp)
         result = derive_seat_identity(seat_config, repo_root=REPO_ROOT)
         self.assertTrue(result["valid"], f"precondition GREEN failed: {result.get('errors')}")
         with self.assertRaises(PermissionError) as ctx:
