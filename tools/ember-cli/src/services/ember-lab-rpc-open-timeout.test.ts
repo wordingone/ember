@@ -8,8 +8,8 @@ import { join } from "node:path";
 test("open deadline rejects silent and late transports in fresh isolated clients", async () => {
   for (const testCase of ["silent", "late"]) {
     const child = Bun.spawn(
-      [process.execPath, "test", join(import.meta.dir, "emberd-rpc-open-timeout-child.test.ts")],
-      { stdout: "pipe", stderr: "pipe", env: { ...process.env, EMBERD_OPEN_TIMEOUT_CASE: testCase } },
+      [process.execPath, "test", join(import.meta.dir, "ember-lab-rpc-open-timeout-child.test.ts")],
+      { stdout: "pipe", stderr: "pipe", env: { ...process.env, EMBER_LAB_OPEN_TIMEOUT_CASE: testCase } },
     );
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,

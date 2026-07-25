@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { callEmberd } from "../services/emberd-rpc.ts";
+import { callEmberLab } from "../services/ember-lab-rpc.ts";
 
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import {
@@ -46,13 +46,13 @@ function identity(): OwnedModelIdentity {
   };
 }
 
-const realDaemonPipe = process.env["EMBERD_REAL_DAEMON_PIPE"];
-const realDaemonManifest = process.env["EMBERD_REAL_DAEMON_MANIFEST"];
+const realDaemonPipe = process.env["EMBER_LAB_REAL_DAEMON_PIPE"];
+const realDaemonManifest = process.env["EMBER_LAB_REAL_DAEMON_MANIFEST"];
 
-describe.skipIf(!(realDaemonPipe && realDaemonManifest))("owned server supervisor real emberd bridge", () => {
+describe.skipIf(!(realDaemonPipe && realDaemonManifest))("owned server supervisor real ember-lab bridge", () => {
   it("uses the production manifest_utf8 request type against the real Rust daemon", async () => {
     const manifestBytes = readFileSync(realDaemonManifest!);
-    const result = await callEmberd({
+    const result = await callEmberLab({
       pipeName: realDaemonPipe!,
       method: "dispatch_manifest",
       params: dispatchManifestParams(manifestBytes),
@@ -281,8 +281,8 @@ describe("owned server supervisor", () => {
   });
 
   it("routes an absent connected owned endpoint through daemon dispatch without CLI spawning", async () => {
-    const priorPipe = process.env["EMBERD_PIPE"];
-    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-test";
+    const priorPipe = process.env["EMBER_LAB_PIPE"];
+    process.env["EMBER_LAB_PIPE"] = "\\\\.\\pipe\\ember-lab-p2d-test";
     try {
       let spawned = 0;
       let dispatched = 0;
@@ -302,8 +302,8 @@ describe("owned server supervisor", () => {
       expect(dispatched).toBe(1);
       expect(spawned).toBe(0);
     } finally {
-      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
-      else process.env["EMBERD_PIPE"] = priorPipe;
+      if (priorPipe === undefined) delete process.env["EMBER_LAB_PIPE"];
+      else process.env["EMBER_LAB_PIPE"] = priorPipe;
     }
   });
   it("rejects receipts outside daemon custody and rehashes their exact bytes", () => {
@@ -326,19 +326,19 @@ describe("owned server supervisor", () => {
     }
   });
 
-  it("sends exact bound manifest bytes to emberd without CLI custody writes", async () => {
+  it("sends exact bound manifest bytes to ember-lab without CLI custody writes", async () => {
     const root = mkdtempSync(join(tmpdir(), "ember-p2d-dispatch-bound-"));
     const sourcePath = join(root, "source-dispatch.json");
-    const pipe = `\\\\.\\pipe\\emberd-p2d-dispatch-${process.pid}-${Math.random().toString(16).slice(2)}`;
-    const priorPipe = process.env["EMBERD_PIPE"];
-    const priorManifest = process.env["EMBERD_DISPATCH_MANIFEST"];
+    const pipe = `\\\\.\\pipe\\ember-lab-p2d-dispatch-${process.pid}-${Math.random().toString(16).slice(2)}`;
+    const priorPipe = process.env["EMBER_LAB_PIPE"];
+    const priorManifest = process.env["EMBER_LAB_DISPATCH_MANIFEST"];
     const priorCommit = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
     const owned = identity();
     const launch = owned.launch;
     if (!launch) throw new Error("missing launch");
     const command = buildOwnedServerCommand(owned, "cuda");
     const payload = {
-      schema_version: "emberd-dispatch-manifest-v2",
+      schema_version: "ember-lab-dispatch-manifest-v2",
       job_id: "owned-interactive",
       source_commit: "e".repeat(40),
       not_before_ms: 1,
@@ -391,8 +391,8 @@ describe("owned server supervisor", () => {
       server.once("listening", onListening);
       server.listen({ path: pipe });
     });
-    process.env["EMBERD_PIPE"] = pipe;
-    process.env["EMBERD_DISPATCH_MANIFEST"] = sourcePath;
+    process.env["EMBER_LAB_PIPE"] = pipe;
+    process.env["EMBER_LAB_DISPATCH_MANIFEST"] = sourcePath;
     (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = "e".repeat(40);
     try {
       const result = await ensureOwnedServer(owned, {
@@ -406,21 +406,21 @@ describe("owned server supervisor", () => {
         manifest_sha256: new Bun.CryptoHasher("sha256").update(manifestBytes).digest("hex"),
       });
       expect(readFileSync(sourcePath, "utf8")).toBe("{\"mutated\":true}");
-      expect(existsSync(join(root, ".emberd-dispatch-manifests"))).toBeFalse();
+      expect(existsSync(join(root, ".ember-lab-dispatch-manifests"))).toBeFalse();
     } finally {
       await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
-      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
-      else process.env["EMBERD_PIPE"] = priorPipe;
-      if (priorManifest === undefined) delete process.env["EMBERD_DISPATCH_MANIFEST"];
-      else process.env["EMBERD_DISPATCH_MANIFEST"] = priorManifest;
+      if (priorPipe === undefined) delete process.env["EMBER_LAB_PIPE"];
+      else process.env["EMBER_LAB_PIPE"] = priorPipe;
+      if (priorManifest === undefined) delete process.env["EMBER_LAB_DISPATCH_MANIFEST"];
+      else process.env["EMBER_LAB_DISPATCH_MANIFEST"] = priorManifest;
       if (priorCommit === undefined) delete (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
       else (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = priorCommit;
       rmSync(root, { recursive: true, force: true });
     }
   });
   it("rejects a daemon dispatch result without its preflight receipt custody", async () => {
-    const priorPipe = process.env["EMBERD_PIPE"];
-    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-missing-receipt";
+    const priorPipe = process.env["EMBER_LAB_PIPE"];
+    process.env["EMBER_LAB_PIPE"] = "\\\\.\\pipe\\ember-lab-p2d-missing-receipt";
     try {
       await expect(ensureOwnedServer(identity(), {
         probePresence: async () => "absent",
@@ -428,38 +428,38 @@ describe("owned server supervisor", () => {
         waitForDispatchReady: async () => {},
       })).rejects.toThrow("preflight receipt custody");
     } finally {
-      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
-      else process.env["EMBERD_PIPE"] = priorPipe;
+      if (priorPipe === undefined) delete process.env["EMBER_LAB_PIPE"];
+      else process.env["EMBER_LAB_PIPE"] = priorPipe;
     }
   });
   it("refuses a connected owned endpoint without a dispatch manifest before direct spawn", async () => {
-    const priorPipe = process.env["EMBERD_PIPE"];
-    const priorManifest = process.env["EMBERD_DISPATCH_MANIFEST"];
-    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-missing-manifest";
-    delete process.env["EMBERD_DISPATCH_MANIFEST"];
+    const priorPipe = process.env["EMBER_LAB_PIPE"];
+    const priorManifest = process.env["EMBER_LAB_DISPATCH_MANIFEST"];
+    process.env["EMBER_LAB_PIPE"] = "\\\\.\\pipe\\ember-lab-p2d-missing-manifest";
+    delete process.env["EMBER_LAB_DISPATCH_MANIFEST"];
     let spawned = 0;
     try {
       await expect(ensureOwnedServer(identity(), {
         probePresence: async () => "absent",
         spawnServer: () => { spawned += 1; throw new Error("must not spawn"); },
-      })).rejects.toThrow("EMBERD_DISPATCH_MANIFEST");
+      })).rejects.toThrow("EMBER_LAB_DISPATCH_MANIFEST");
       expect(spawned).toBe(0);
     } finally {
-      if (priorPipe === undefined) delete process.env["EMBERD_PIPE"];
-      else process.env["EMBERD_PIPE"] = priorPipe;
-      if (priorManifest === undefined) delete process.env["EMBERD_DISPATCH_MANIFEST"];
-      else process.env["EMBERD_DISPATCH_MANIFEST"] = priorManifest;
+      if (priorPipe === undefined) delete process.env["EMBER_LAB_PIPE"];
+      else process.env["EMBER_LAB_PIPE"] = priorPipe;
+      if (priorManifest === undefined) delete process.env["EMBER_LAB_DISPATCH_MANIFEST"];
+      else process.env["EMBER_LAB_DISPATCH_MANIFEST"] = priorManifest;
     }
   });
   it("rejects invalid UTF-8 dispatch manifest bytes before opening a daemon pipe", async () => {
     const root = mkdtempSync(join(tmpdir(), "ember-p2d-invalid-utf8-"));
     const manifest = join(root, "dispatch.json");
-    const previousPipe = process.env["EMBERD_PIPE"];
-    const previousManifest = process.env["EMBERD_DISPATCH_MANIFEST"];
+    const previousPipe = process.env["EMBER_LAB_PIPE"];
+    const previousManifest = process.env["EMBER_LAB_DISPATCH_MANIFEST"];
     const previousCommit = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
     writeFileSync(manifest, Buffer.from([0xff]));
-    process.env["EMBERD_PIPE"] = "\\\\.\\pipe\\emberd-p2d-invalid-utf8";
-    process.env["EMBERD_DISPATCH_MANIFEST"] = manifest;
+    process.env["EMBER_LAB_PIPE"] = "\\\\.\\pipe\\ember-lab-p2d-invalid-utf8";
+    process.env["EMBER_LAB_DISPATCH_MANIFEST"] = manifest;
     (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = "e".repeat(40);
     let spawned = 0;
     try {
@@ -469,10 +469,10 @@ describe("owned server supervisor", () => {
       })).rejects.toThrow("cannot read dispatch manifest");
       expect(spawned).toBe(0);
     } finally {
-      if (previousPipe === undefined) delete process.env["EMBERD_PIPE"];
-      else process.env["EMBERD_PIPE"] = previousPipe;
-      if (previousManifest === undefined) delete process.env["EMBERD_DISPATCH_MANIFEST"];
-      else process.env["EMBERD_DISPATCH_MANIFEST"] = previousManifest;
+      if (previousPipe === undefined) delete process.env["EMBER_LAB_PIPE"];
+      else process.env["EMBER_LAB_PIPE"] = previousPipe;
+      if (previousManifest === undefined) delete process.env["EMBER_LAB_DISPATCH_MANIFEST"];
+      else process.env["EMBER_LAB_DISPATCH_MANIFEST"] = previousManifest;
       if (previousCommit === undefined) delete (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
       else (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__ = previousCommit;
       rmSync(root, { recursive: true, force: true });
@@ -483,7 +483,7 @@ describe("owned server supervisor", () => {
     const launch = owned.launch;
     if (!launch) throw new Error("missing launch");
     const manifest = {
-      schema_version: "emberd-dispatch-manifest-v2",
+      schema_version: "ember-lab-dispatch-manifest-v2",
       job_id: "owned-interactive",
       source_commit: "e".repeat(40),
       not_before_ms: 1,

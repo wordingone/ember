@@ -1,16 +1,16 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-// emberd-rpc.test.ts — strict Ember CLI client for the resident emberd pipe.
+// ember-lab-rpc.test.ts — strict Ember CLI client for the resident ember-lab pipe.
 
 import { afterEach, describe, expect, test } from "bun:test";
 import net from "node:net";
 
 import {
-  callEmberd,
-  configuredEmberdPipe,
-  pingEmberd,
-} from "./emberd-rpc.ts";
+  callEmberLab,
+  configuredEmberLabPipe,
+  pingEmberLab,
+} from "./ember-lab-rpc.ts";
 import { operatorPipeName } from "./operator-pipe.ts";
 
 const servers: net.Server[] = [];
@@ -19,19 +19,19 @@ afterEach(() => {
   for (const server of servers.splice(0)) server.close();
 });
 
-describe("configuredEmberdPipe", () => {
-  test("requires the explicit emberd pipe and rejects the per-PID operator pipe", () => {
-    expect(() => configuredEmberdPipe({})).toThrow("EMBERD_PIPE");
-    expect(() => configuredEmberdPipe({ EMBERD_PIPE: operatorPipeName(1234) })).toThrow("operator");
-    expect(configuredEmberdPipe({ EMBERD_PIPE: "\\\\.\\pipe\\emberd-test-1234" }))
-      .toBe("\\\\.\\pipe\\emberd-test-1234");
+describe("configuredEmberLabPipe", () => {
+  test("requires the explicit ember-lab pipe and rejects the per-PID operator pipe", () => {
+    expect(() => configuredEmberLabPipe({})).toThrow("EMBER_LAB_PIPE");
+    expect(() => configuredEmberLabPipe({ EMBER_LAB_PIPE: operatorPipeName(1234) })).toThrow("operator");
+    expect(configuredEmberLabPipe({ EMBER_LAB_PIPE: "\\\\.\\pipe\\ember-lab-test-1234" }))
+      .toBe("\\\\.\\pipe\\ember-lab-test-1234");
   });
 });
 
 const winTest = process.platform === "win32" ? test : test.skip;
 
-winTest("callEmberd uses one request per connection and reconnects for each call", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-reconnect-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("callEmberLab uses one request per connection and reconnects for each call", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-reconnect-${process.pid}-${Math.random().toString(16).slice(2)}`;
   let connections = 0;
   const requests: Array<{ id: string; method: string; params: unknown }> = [];
   const server = net.createServer((socket) => {
@@ -46,8 +46,8 @@ winTest("callEmberd uses one request per connection and reconnects for each call
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(callEmberd({ pipeName: pipe, requestId: "first", method: "ping", params: {} })).resolves.toEqual({ status: "ok" });
-  await expect(callEmberd({ pipeName: pipe, requestId: "second", method: "ping", params: {} })).resolves.toEqual({ status: "ok" });
+  await expect(callEmberLab({ pipeName: pipe, requestId: "first", method: "ping", params: {} })).resolves.toEqual({ status: "ok" });
+  await expect(callEmberLab({ pipeName: pipe, requestId: "second", method: "ping", params: {} })).resolves.toEqual({ status: "ok" });
   expect(connections).toBe(2);
   expect(requests).toEqual([
     { jsonrpc: "2.0", id: "first", method: "ping", params: {} },
@@ -55,8 +55,8 @@ winTest("callEmberd uses one request per connection and reconnects for each call
   ]);
 });
 
-winTest("callEmberd writes the first request inside the daemon 500ms idle boundary", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-idle-boundary-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("callEmberLab writes the first request inside the daemon 500ms idle boundary", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-idle-boundary-${process.pid}-${Math.random().toString(16).slice(2)}`;
   let firstRequestDelayMs = Number.POSITIVE_INFINITY;
   const server = net.createServer((socket) => {
     const connectedAt = performance.now();
@@ -70,13 +70,13 @@ winTest("callEmberd writes the first request inside the daemon 500ms idle bounda
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(pingEmberd({ pipeName: pipe, requestId: "idle-boundary", timeoutMs: 500 })).resolves.toBeUndefined();
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "idle-boundary", timeoutMs: 500 })).resolves.toBeUndefined();
   expect(firstRequestDelayMs).toBeLessThan(500);
 });
 
-winTest("callEmberd retries a transient pipe-open failure within the bounded window", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-retry-${process.pid}-${Math.random().toString(16).slice(2)}`;
-  const pending = callEmberd({ pipeName: pipe, requestId: "retry", method: "ping", params: {} });
+winTest("callEmberLab retries a transient pipe-open failure within the bounded window", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-retry-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  const pending = callEmberLab({ pipeName: pipe, requestId: "retry", method: "ping", params: {} });
   await new Promise((resolve) => setTimeout(resolve, 60));
   const server = net.createServer((socket) => {
     socket.setEncoding("utf8");
@@ -90,16 +90,16 @@ winTest("callEmberd retries a transient pipe-open failure within the bounded win
   await expect(pending).resolves.toEqual({ status: "ok" });
 }, 15_000);
 
-test("callEmberd rejects a request above the daemon 65536-byte ceiling before connecting", async () => {
-  await expect(callEmberd({
-    pipeName: "\\\\.\\pipe\\emberd-p2c-too-large",
+test("callEmberLab rejects a request above the daemon 65536-byte ceiling before connecting", async () => {
+  await expect(callEmberLab({
+    pipeName: "\\\\.\\pipe\\ember-lab-p2c-too-large",
     requestId: "too-large",
     method: "ping",
     params: { padding: "x".repeat(70_000) },
   })).rejects.toThrow("request exceeds 65536 bytes");
 });
-winTest("pingEmberd sends one exact JSON-RPC ping and accepts only its matching response id", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("pingEmberLab sends one exact JSON-RPC ping and accepts only its matching response id", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const requests: unknown[] = [];
   const server = net.createServer((socket) => {
     socket.setEncoding("utf8");
@@ -112,33 +112,33 @@ winTest("pingEmberd sends one exact JSON-RPC ping and accepts only its matching 
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(pingEmberd({ pipeName: pipe, requestId: "p2c-ping", timeoutMs: 500 })).resolves.toBeUndefined();
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "p2c-ping", timeoutMs: 500 })).resolves.toBeUndefined();
   expect(requests).toEqual([{ jsonrpc: "2.0", id: "p2c-ping", method: "ping", params: {} }]);
 });
 
-winTest("pingEmberd rejects an idle response at the bounded deadline", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-idle-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("pingEmberLab rejects an idle response at the bounded deadline", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-idle-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const server = net.createServer(() => {});
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(pingEmberd({ pipeName: pipe, requestId: "idle", timeoutMs: 25 }))
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "idle", timeoutMs: 25 }))
     .rejects.toThrow("timeout");
 });
 
-winTest("pingEmberd rejects a response frame above the fixed 65536-byte bound", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-large-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("pingEmberLab rejects a response frame above the fixed 65536-byte bound", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-large-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const server = net.createServer((socket) => {
     socket.once("data", () => socket.end("x".repeat(65_537)));
   });
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(pingEmberd({ pipeName: pipe, requestId: "large", timeoutMs: 500 }))
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "large", timeoutMs: 500 }))
     .rejects.toThrow("65536");
 });
-winTest("pingEmberd rejects malformed JSON, malformed results, and multiple response frames", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-malformed-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("pingEmberLab rejects malformed JSON, malformed results, and multiple response frames", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-malformed-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const responses = [
     "not-json\n",
     "[]\n",
@@ -151,13 +151,13 @@ winTest("pingEmberd rejects malformed JSON, malformed results, and multiple resp
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(pingEmberd({ pipeName: pipe, requestId: "bad-json", timeoutMs: 500 })).rejects.toThrow("not JSON");
-  await expect(pingEmberd({ pipeName: pipe, requestId: "non-object", timeoutMs: 500 })).rejects.toThrow("not an object");
-  await expect(pingEmberd({ pipeName: pipe, requestId: "bad-result", timeoutMs: 500 })).rejects.toThrow("malformed");
-  await expect(pingEmberd({ pipeName: pipe, requestId: "multi", timeoutMs: 500 })).rejects.toThrow("multiple frames");
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "bad-json", timeoutMs: 500 })).rejects.toThrow("not JSON");
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "non-object", timeoutMs: 500 })).rejects.toThrow("not an object");
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "bad-result", timeoutMs: 500 })).rejects.toThrow("malformed");
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "multi", timeoutMs: 500 })).rejects.toThrow("multiple frames");
 });
-winTest("pingEmberd closes after one valid frame; delayed second frames are outside the one-request connection", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-delayed-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("pingEmberLab closes after one valid frame; delayed second frames are outside the one-request connection", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-delayed-${process.pid}-${Math.random().toString(16).slice(2)}`;
   let closedBeforeDelayedWrite = false;
   const server = net.createServer((socket) => {
     socket.once("data", () => {
@@ -169,12 +169,12 @@ winTest("pingEmberd closes after one valid frame; delayed second frames are outs
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(pingEmberd({ pipeName: pipe, requestId: "delayed", timeoutMs: 500 })).resolves.toBeUndefined();
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "delayed", timeoutMs: 500 })).resolves.toBeUndefined();
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(closedBeforeDelayedWrite).toBe(true);
 });
-winTest("pingEmberd rejects mismatched IDs and JSON-RPC errors", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-bad-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("pingEmberLab rejects mismatched IDs and JSON-RPC errors", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-bad-${process.pid}-${Math.random().toString(16).slice(2)}`;
   let connection = 0;
   const server = net.createServer((socket) => {
     socket.setEncoding("utf8");
@@ -189,9 +189,9 @@ winTest("pingEmberd rejects mismatched IDs and JSON-RPC errors", async () => {
   servers.push(server);
   await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
 
-  await expect(pingEmberd({ pipeName: pipe, requestId: "expected", timeoutMs: 500 }))
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "expected", timeoutMs: 500 }))
     .rejects.toThrow("response id");
-  await expect(pingEmberd({ pipeName: pipe, requestId: "error", timeoutMs: 500 }))
+  await expect(pingEmberLab({ pipeName: pipe, requestId: "error", timeoutMs: 500 }))
     .rejects.toThrow("JSON-RPC error");
 });
 function oneUtf8ResponseServer(pipe: string, response: Buffer, splitAt?: number): Promise<net.Server> {
@@ -208,29 +208,29 @@ function oneUtf8ResponseServer(pipe: string, response: Buffer, splitAt?: number)
   return new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject)).then(() => server);
 }
 
-winTest("callEmberd preserves one valid UTF-8 code point split across raw pipe chunks", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-utf8-valid-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("callEmberLab preserves one valid UTF-8 code point split across raw pipe chunks", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-utf8-valid-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const explosion = String.fromCodePoint(0x1f4a5);
   const explosionBytes = Buffer.from([0xf0, 0x9f, 0x92, 0xa5]);
   const response = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: "emoji", result: { note: explosion } }) + "\n", "utf8");
   const emoji = response.indexOf(explosionBytes);
   await oneUtf8ResponseServer(pipe, response, emoji + 2);
-  await expect(callEmberd({ pipeName: pipe, requestId: "emoji", method: "ping", params: {} }))
+  await expect(callEmberLab({ pipeName: pipe, requestId: "emoji", method: "ping", params: {} }))
     .resolves.toMatchObject({ note: explosion });
 });
 
-winTest("callEmberd rejects one malformed raw UTF-8 byte", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-utf8-malformed-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("callEmberLab rejects one malformed raw UTF-8 byte", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-utf8-malformed-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const response = Buffer.concat([Buffer.from('{"jsonrpc":"2.0","id":"malformed","result":{"note":"'), Buffer.from([0xff]), Buffer.from('"}}\n')]);
   await oneUtf8ResponseServer(pipe, response);
-  await expect(callEmberd({ pipeName: pipe, requestId: "malformed", method: "ping", params: {} }))
+  await expect(callEmberLab({ pipeName: pipe, requestId: "malformed", method: "ping", params: {} }))
     .rejects.toThrow("valid UTF-8");
 });
 
-winTest("callEmberd rejects one incomplete raw UTF-8 sequence", async () => {
-  const pipe = `\\\\.\\pipe\\emberd-p2c-utf8-incomplete-${process.pid}-${Math.random().toString(16).slice(2)}`;
+winTest("callEmberLab rejects one incomplete raw UTF-8 sequence", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-p2c-utf8-incomplete-${process.pid}-${Math.random().toString(16).slice(2)}`;
   const response = Buffer.concat([Buffer.from('{"jsonrpc":"2.0","id":"incomplete","result":{"note":"'), Buffer.from([0xf0, 0x9f, 0x92]), Buffer.from('"}}\n')]);
   await oneUtf8ResponseServer(pipe, response);
-  await expect(callEmberd({ pipeName: pipe, requestId: "incomplete", method: "ping", params: {} }))
+  await expect(callEmberLab({ pipeName: pipe, requestId: "incomplete", method: "ping", params: {} }))
     .rejects.toThrow("valid UTF-8");
 });
