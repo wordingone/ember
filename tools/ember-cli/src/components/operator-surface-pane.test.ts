@@ -23,7 +23,7 @@ describe("OperatorSurfacePane", () => {
   test("derives scalar status metrics and binds checkpoint to the active run", () => {
     const snapshot = buildOperatorSurfaceSnapshot({
       telemetry: telemetry({
-        recentEvents: [train("run-1", 12, "2026-07-17T17:30:00.000Z", 1.25, { step_ms: 500, total_steps: 100 })],
+        recentEvents: [train("run-1", 12, "2026-07-17T17:30:00.000Z", 1.25, { step_ms: 500, total_steps: 100, tokens_per_second: 240 })],
         activeRun: { runId: "run-1", step: 12, totalSteps: 100, loss: 1.25, stepMs: 500, lastTs: "2026-07-17T17:30:00.000Z" },
         lastGovernor: { runId: "run-1", vramUsedGib: 7.5, vramTotalGib: 24, fractionApplied: 0.5 },
         lastCheckpoint: { runId: "run-1", step: 10, checkpointManifestSha256: "a".repeat(64), lastTs: "2026-07-17T17:29:00.000Z" },
@@ -33,7 +33,7 @@ describe("OperatorSurfacePane", () => {
       nowMs: Date.parse("2026-07-17T17:30:01.000Z"),
     });
     expect(snapshot.status).toBe("RUNNING");
-    expect(snapshot.metrics).toEqual(["loss 1.25", "step 12/100", "throughput 120.0 step/min", "VRAM 7.5/24.0 GiB", `checkpoint step 10 ${"a".repeat(12)}${ellipsis}`]);
+    expect(snapshot.metrics).toEqual(["loss 1.25", "step 12/100", "tokens/s 240.0", "VRAM 7.5/24.0 GiB", `checkpoint step 10 ${"a".repeat(12)}${ellipsis}`]);
     expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
     expect(snapshot.agentLines[0]).toContain("[receipt] checkpoint receipt landed [receipts/run/checkpoint.json]");
   });
@@ -41,9 +41,9 @@ describe("OperatorSurfacePane", () => {
   test("renders exact plotted glyph rows with a shared step/time axis and checkpoint marker", () => {
     const graphTelemetry = telemetry({
       recentEvents: [
-        train("run-a", 2, "2026-07-17T17:30:01.000Z", 1.5, { step_ms: 500, free_gib: 10, total_gib: 24, gpu_utilization_pct: 60 }),
-        train("run-a", 1, "2026-07-17T17:30:02.000Z", 2.5, { step_ms: 1000, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 }),
-        train("run-a", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 250, free_gib: 8, total_gib: 24, gpu_utilization_pct: 70 }),
+        train("run-a", 2, "2026-07-17T17:30:01.000Z", 1.5, { step_ms: 500, tokens_per_second: 200, free_gib: 10, total_gib: 24, gpu_utilization_pct: 60 }),
+        train("run-a", 1, "2026-07-17T17:30:02.000Z", 2.5, { step_ms: 1000, tokens_per_second: 100, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 }),
+        train("run-a", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 250, tokens_per_second: 400, free_gib: 8, total_gib: 24, gpu_utilization_pct: 70 }),
         { ts: "2026-07-17T17:30:03.100Z", kind: "checkpoint", source: "journal", payload: { run_id: "run-a", step: 3, checkpoint_manifest_sha256: "a".repeat(64) } },
         { ts: "2026-07-17T17:30:03.200Z", kind: "checkpoint", source: "journal", payload: { run_id: "foreign", step: 77, checkpoint_manifest_sha256: "b".repeat(64) } },
         { ts: "2026-07-17T17:30:03.300Z", kind: "model_growth", source: "journal", payload: { run_id: "run-a", step: 1, value: 1 } },
@@ -64,7 +64,7 @@ describe("OperatorSurfacePane", () => {
     expect(graphs.loss).not.toContain("loss 2.50 1.50 1.00");
     expect(graphs.resource.find((line) => line.startsWith("GPU utilization % plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▄█");
     expect(graphs.resource.find((line) => line.startsWith("VRAM GiB plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▄▁█");
-    expect(graphs.resource.find((line) => line.startsWith("throughput plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▃█");
+    expect(graphs.resource.find((line) => line.startsWith("tokens/s plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▃█");
     expect(graphs.modelGrowth.find((line) => line.startsWith("model growth plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▄█");
     expect(graphs.capability.find((line) => line.startsWith("capability score plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▄█");
     expect(graphs.checkpoints).toEqual([{ step: 3, label: "checkpoint" }]);
@@ -78,7 +78,10 @@ describe("OperatorSurfacePane", () => {
     expect(graphs.loss.find((line) => line.startsWith("loss plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe(String.fromCodePoint(0x2588)+String.fromCodePoint(0x2581));
     expect(graphs.resource).toContain("GPU UTILIZATION: SOURCE UNBOUND");
     expect(graphs.resource).toContain("VRAM: SOURCE UNBOUND");
-    expect(graphs.resource).toContain("THROUGHPUT/SPEED: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("TOKENS/S: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("LEARNING RATE: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("GPU WATTS: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("ENERGY: SOURCE UNBOUND");
   });
 
   test("filters mixed runs, malformed points, and foreign checkpoint events", () => {
@@ -166,14 +169,14 @@ describe("OperatorSurfacePane", () => {
     const snapshot = buildOperatorSurfaceSnapshot({
       telemetry: telemetry({ recentEvents: [
         train("run-a", 100, "2026-07-17T17:30:00.000Z", 9, { step_ms: 1000 }),
-        train("run-a", 10, "2026-07-17T17:30:59.000Z", 1, { step_ms: 500 }),
+        train("run-a", 10, "2026-07-17T17:30:59.000Z", 1, { step_ms: 500, tokens_per_second: 222 }),
       ] }),
       activityLines: [],
       nowMs: Date.parse("2026-07-17T17:31:00.000Z"),
     });
     expect(snapshot.metrics).toContain("loss 1.00");
     expect(snapshot.metrics).toContain("step 10");
-    expect(snapshot.metrics).toContain("throughput 120.0 step/min");
+    expect(snapshot.metrics).toContain("tokens/s 222.0");
     expect(snapshot.metrics).not.toContain("loss 9.00");
     expect(snapshot.metrics).not.toContain("step 100");
   });
@@ -229,8 +232,8 @@ describe("OperatorSurfacePane", () => {
     expect(body.props.height).toBeLessThanOrEqual(20);
     expect(rows.some((row: string) => row.includes("TRAINING/LOSS"))).toBe(true);
     expect(rows.some((row: string) => row.includes("RESOURCE EFFICIENCY"))).toBe(true);
-    expect(rows.some((row: string) => row.includes("MODEL GROWTH"))).toBe(true);
-    expect(rows.some((row: string) => row.includes("CAPABILITY SCORES"))).toBe(true);
+    expect(rows.some((row: string) => row.includes("MODEL GROWTH"))).toBe(false);
+    expect(rows.some((row: string) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row: string) => row.includes("checkpoint ·▲"))).toBe(true);
     expect(rows).not.toContain("AGENT STREAM");
   });
@@ -258,9 +261,11 @@ describe("OperatorSurfacePane", () => {
     const frame = buildFrame(60, 20);
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
-    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY", "MODEL GROWTH", "CAPABILITY SCORES"]) {
+    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
       expect(rows.some((row) => row.includes(heading))).toBe(true);
     }
+    expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
+    expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row) => row.includes("STALE") || row.includes("RUNNING"))).toBe(true);
   });
 
@@ -286,9 +291,11 @@ describe("OperatorSurfacePane", () => {
     const frame = buildFrame(80, 24);
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
-    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY", "MODEL GROWTH", "CAPABILITY SCORES"]) {
+    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
       expect(rows.some((row) => row.includes(heading))).toBe(true);
     }
+    expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
+    expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row) => row.includes("step/time"))).toBe(true);
     expect(rows.some((row) => row.includes("checkpoint"))).toBe(true);
     expect(rows.filter((row) => row.includes("step/time")).length).toBe(1);
@@ -342,37 +349,31 @@ describe("OperatorSurfacePane", () => {
   test("parses resource-only events independently, bounds GPU utilization, and rejects future timestamps", () => {
     const graphs = buildOperatorSurfaceGraphs(telemetry({
       recentEvents: [
-        { ts: "2026-07-17T17:30:01.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 1, step_ms: 1000, free_gib: 10, total_gib: 24, gpu_utilization_pct: 120 } },
-        { ts: "2026-07-17T17:30:02.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 2, step_ms: 500, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 } },
+        { ts: "2026-07-17T17:30:01.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 1, step_ms: 1000, tokens_per_second: 100, free_gib: 10, total_gib: 24, gpu_utilization_pct: 120 } },
+        { ts: "2026-07-17T17:30:02.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 2, step_ms: 500, tokens_per_second: 200, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 } },
         { ts: "2099-01-01T00:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 3, step_ms: 250, free_gib: 8, total_gib: 24, gpu_utilization_pct: 50 } },
       ],
     }));
     expect(graphs.points.map((point) => point.step)).toEqual([1, 2]);
     expect(graphs.loss).toContain("LOSS: INSUFFICIENT REAL HISTORY");
-    expect(graphs.resource.some((line: string) => line.startsWith("throughput plot "))).toBe(true);
+    expect(graphs.resource.some((line: string) => line.startsWith("tokens/s plot "))).toBe(true);
     expect(graphs.resource).toContain("GPU UTILIZATION %: INSUFFICIENT REAL HISTORY");
   });
 
   test("uses one union step grid with gaps instead of left-packing families", () => {
     const events = [
-      train("run-grid", 1, "2026-07-17T17:30:01.000Z", 3, { step_ms: 1000 }),
-      train("run-grid", 2, "2026-07-17T17:30:02.000Z", 2, { step_ms: 900 }),
-      train("run-grid", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 800 }),
-      { ts: "2026-07-17T17:30:02.100Z", kind: "model_growth", source: "journal", payload: { run_id: "run-grid", step: 2, value: 20 } },
-      { ts: "2026-07-17T17:30:03.100Z", kind: "model_growth", source: "journal", payload: { run_id: "run-grid", step: 3, value: 30 } },
-      { ts: "2026-07-17T17:30:04.100Z", kind: "model_growth", source: "journal", payload: { run_id: "run-grid", step: 4, value: 40 } },
-      { ts: "2026-07-17T17:30:02.200Z", kind: "capability_score", source: "journal", payload: { run_id: "run-grid", step: 2, score: 0.2 } },
-      { ts: "2026-07-17T17:30:03.200Z", kind: "capability_score", source: "journal", payload: { run_id: "run-grid", step: 3, score: 0.3 } },
-      { ts: "2026-07-17T17:30:04.200Z", kind: "capability_score", source: "journal", payload: { run_id: "run-grid", step: 4, score: 0.4 } },
+      train("run-grid", 1, "2026-07-17T17:30:01.000Z", 3, { step_ms: 1000, tokens_per_second: 100 }),
+      train("run-grid", 2, "2026-07-17T17:30:02.000Z", 2, { step_ms: 900, learning_rate: 0.001 }),
+      train("run-grid", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 800, tokens_per_second: 300, learning_rate: 0.0005 }),
     ];
     const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
     const body = (element as any).props.children;
     const text = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string") as string[];
-    expect(text.find((line) => line.startsWith("step/time"))).toContain("1 2 3 4");
-    const modelLine = text.find((line) => line.startsWith("model growth"))!;
-    const capabilityLine = text.find((line) => line.startsWith("capability score"))!;
-    expect(modelLine.slice(20, 24).startsWith(String.fromCodePoint(0x00b7))).toBe(true);
-    expect(capabilityLine.slice(20, 24).startsWith(String.fromCodePoint(0x00b7))).toBe(true);
+    expect(text.find((line) => line.startsWith("step/time"))).toContain("1 2 3");
+    const tokenLine = text.find((line) => line.startsWith("tokens/s"))!;
+    const learningRateLine = text.find((line) => line.startsWith("learning rate"))!;
+    expect(tokenLine.slice(20, 23)).toContain(String.fromCodePoint(0x00b7));
+    expect(learningRateLine.slice(20, 23).startsWith(String.fromCodePoint(0x00b7))).toBe(true);
   });
 
   test("retains final point and latest checkpoint markers when markers exceed capacity", () => {
@@ -384,6 +385,46 @@ describe("OperatorSurfacePane", () => {
     expect(axis).toContain("20@");
     expect(marker.slice(PLOT_PREFIX_WIDTH).length).toBeLessThanOrEqual(4);
     expect(marker.slice(PLOT_PREFIX_WIDTH)).toContain(String.fromCodePoint(0x25b2));
+  });
+  test("uses direct tokens/s and measured LR/energy/watts, never step_ms-derived throughput", () => {
+    const graphs = buildOperatorSurfaceGraphs(telemetry({ recentEvents: [
+      train("run-measured", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000, tokens_per_second: 100, learning_rate: 0.001, gpu_watts: 200, board_energy_joules_total: 200 }),
+      train("run-measured", 2, "2026-07-17T17:30:02.000Z", 1, { step_ms: 500, tokens_per_second: 250, learning_rate: 0.0005, gpu_watts: 220, board_energy_joules_total: 420 }),
+    ] }), 80, Date.parse("2026-07-17T17:30:03.000Z"));
+    expect(graphs.points.map((point) => point.tokensPerSecond)).toEqual([100, 250]);
+    expect(graphs.points.map((point) => point.learningRate)).toEqual([0.001, 0.0005]);
+    expect(graphs.points.map((point) => point.gpuWatts)).toEqual([200, 220]);
+    expect(graphs.points.map((point) => point.boardEnergyJoulesTotal)).toEqual([200, 420]);
+    expect(graphs.points.map((point) => (point as any).throughput)).toEqual([undefined, undefined]);
+  });
+
+  test("rejects decreasing cumulative energy instead of plotting a fabricated reset", () => {
+    const graphs = buildOperatorSurfaceGraphs(telemetry({ recentEvents: [
+      train("run-energy", 1, "2026-07-17T17:30:01.000Z", 2, { board_energy_joules_total: 200 }),
+      train("run-energy", 2, "2026-07-17T17:30:02.000Z", 1.5, { board_energy_joules_total: 150 }),
+      train("run-energy", 3, "2026-07-17T17:30:03.000Z", 1, { board_energy_joules_total: 320 }),
+    ] }), 80, Date.parse("2026-07-17T17:30:04.000Z"));
+    expect(graphs.points.map((point) => point.boardEnergyJoulesTotal)).toEqual([200, undefined, 320]);
+    expect(graphs.resource.find((line) => line.startsWith("board energy joules plot "))!.slice("board energy joules plot ".length)).toHaveLength(2);
+  });
+
+  test("renders lifecycle controls and invokes the enabled action exactly once", () => {
+    const calls: Array<{ action: string; runId?: string }> = [];
+    const element = OperatorSurfacePane({
+
+      telemetry: telemetry({ recentEvents: [train("run-control", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 100 })] }),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: Date.parse("2026-07-17T17:30:02.000Z"),
+      onControl: (action, runId) => calls.push({ action, runId }),
+    });
+    const body = (element as any).props.children;
+    const controlRow = (body.props.children as any[]).find((child) => child?.key === "controls");
+    const controls = controlRow.props.children as any[];
+    expect(controls.map((control) => control.props.children.props.children)).toEqual(["[START]", "[PAUSE]", "[RESUME]", "[RESTART]"]);
+    const pause = controls.find((control) => control.props.children.props.children === "[PAUSE]");
+    expect(typeof pause.props.onClick).toBe("function");
+    pause.props.onClick();
+    expect(calls).toEqual([{ action: "PAUSE", runId: "run-control" }]);
   });
   test("renders a truthful activity pane title", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], width: 48 });
