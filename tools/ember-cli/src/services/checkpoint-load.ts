@@ -1,0 +1,251 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+import { createHash } from "crypto";
+import { lstat, readFile, readdir, realpath } from "fs/promises";
+import { basename, join, resolve } from "path";
+
+const SHA256_RE = /^[0-9a-f]{64}$/;
+const MANIFEST_NAME = "checkpoint-manifest.json";
+const EXPERT_NAMES = ["vision", "audio", "reasoning", "tool"] as const;
+const SUPPORTED_SCHEMAS = new Set([
+  "ember-sparse-checkpoint-v3",
+  "ember-sparse-checkpoint-v4",
+  "ember-sparse-checkpoint-v5",
+]);
+
+export interface VerifiedCheckpointArtifact {
+  path: string;
+  bytes: number;
+  sha256: string;
+}
+
+export interface VerifiedCheckpointBundle {
+  checkpointDir: string;
+  manifestPath: string;
+  manifestSha256: string;
+  schemaVersion: string;
+  artifacts: readonly VerifiedCheckpointArtifact[];
+}
+
+export class CheckpointBundleIntegrityError extends Error {
+  constructor(detail: string) {
+    super(
+      `This checkpoint bundle is corrupt, incomplete, or tampered. ${detail} ` +
+        "Restore or regenerate the bundle and retry; no model process was started.",
+    );
+    this.name = "CheckpointBundleIntegrityError";
+  }
+}
+
+function fail(detail: string): never {
+  throw new CheckpointBundleIntegrityError(detail);
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function objectRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    fail(`${label} must be a JSON object.`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function decodeManifest(bytes: Buffer): Record<string, unknown> {
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    fail(`${MANIFEST_NAME} is not strict UTF-8.`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    fail(`${MANIFEST_NAME} is not valid JSON.`);
+  }
+  return objectRecord(parsed, MANIFEST_NAME);
+}
+
+function expectedPaths(schemaVersion: string): Set<string> {
+  const experts = EXPERT_NAMES.map((name) => `expert-${name}.pt`);
+  if (schemaVersion === "ember-sparse-checkpoint-v5") {
+    return new Set([
+      "shared-model.pt",
+      "optimizer-state.pt",
+      "replay-state.pt",
+      ...experts,
+    ]);
+  }
+  return new Set(["shared.pt", "replay-state.pt", ...experts]);
+}
+
+function validateShardRecord(
+  value: unknown,
+  index: number,
+): VerifiedCheckpointArtifact {
+  const record = objectRecord(value, `shards[${index}]`);
+  const allowed = new Set([
+    "path",
+    "bytes",
+    "sha256",
+    "publication_mode",
+    "incremental_bytes",
+  ]);
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) fail(`shards[${index}] has unknown field ${key}.`);
+  }
+
+  const relative = record.path;
+  const bytes = record.bytes;
+  const digest = record.sha256;
+  if (
+    typeof relative !== "string" ||
+    relative.length === 0 ||
+    relative !== basename(relative) ||
+    relative.includes("/") ||
+    relative.includes("\\") ||
+    relative === "." ||
+    relative === ".."
+  ) {
+    fail(`shards[${index}].path is not a confined bundle-relative filename.`);
+  }
+  if (!Number.isSafeInteger(bytes) || (bytes as number) <= 0) {
+    fail(`${relative} has an invalid byte count.`);
+  }
+  if (typeof digest !== "string" || !SHA256_RE.test(digest)) {
+    fail(`${relative} has an invalid SHA-256.`);
+  }
+
+  const hasPublication = "publication_mode" in record || "incremental_bytes" in record;
+  if (hasPublication) {
+    const mode = record.publication_mode;
+    const incremental = record.incremental_bytes;
+    if (
+      !["written", "hardlink", "copy"].includes(String(mode)) ||
+      !Number.isSafeInteger(incremental) ||
+      (incremental as number) < 0 ||
+      (mode === "hardlink" ? incremental !== 0 : incremental !== bytes)
+    ) {
+      fail(`${relative} has an invalid publication record.`);
+    }
+  }
+
+  return { path: relative, bytes: bytes as number, sha256: digest };
+}
+
+async function requireRegularPath(
+  path: string,
+  kind: "file" | "directory",
+  label: string,
+): Promise<void> {
+  let stat;
+  try {
+    stat = await lstat(path);
+  } catch {
+    fail(`${label} is missing or unreadable.`);
+  }
+  if (
+    stat.isSymbolicLink() ||
+    (kind === "file" ? !stat.isFile() : !stat.isDirectory())
+  ) {
+    fail(`${label} must be a regular ${kind}, not a symlink or reparse path.`);
+  }
+}
+
+export async function verifyCheckpointBundle(
+  checkpointDir: string,
+): Promise<VerifiedCheckpointBundle> {
+  if (typeof checkpointDir !== "string" || checkpointDir.trim() === "") {
+    fail("A checkpoint directory is required.");
+  }
+
+  const requestedDir = resolve(checkpointDir);
+  await requireRegularPath(requestedDir, "directory", "checkpoint directory");
+  const canonicalDir = await realpath(requestedDir);
+  if (canonicalDir !== requestedDir) {
+    fail("checkpoint directory resolves through an alias or reparse path.");
+  }
+
+  const manifestPath = join(canonicalDir, MANIFEST_NAME);
+  await requireRegularPath(manifestPath, "file", MANIFEST_NAME);
+  let manifestBytes: Buffer;
+  try {
+    manifestBytes = await readFile(manifestPath);
+  } catch {
+    fail(`${MANIFEST_NAME} is unreadable.`);
+  }
+  const manifest = decodeManifest(manifestBytes);
+  const schemaVersion = manifest.schema_version;
+  if (
+    typeof schemaVersion !== "string" ||
+    !SUPPORTED_SCHEMAS.has(schemaVersion)
+  ) {
+    fail("checkpoint schema version is unsupported.");
+  }
+
+  if (!Array.isArray(manifest.shards)) {
+    fail("checkpoint manifest shards must be an array.");
+  }
+  const artifacts = manifest.shards.map(validateShardRecord);
+  const records = new Map<string, VerifiedCheckpointArtifact>();
+  for (const artifact of artifacts) {
+    if (records.has(artifact.path)) {
+      fail(`checkpoint contains duplicate shard path ${artifact.path}.`);
+    }
+    records.set(artifact.path, artifact);
+  }
+
+  const expected = expectedPaths(schemaVersion);
+  if (
+    records.size !== expected.size ||
+    [...expected].some((path) => !records.has(path))
+  ) {
+    fail(`checkpoint shard set is not closed for ${schemaVersion}.`);
+  }
+
+  let entries;
+  try {
+    entries = await readdir(canonicalDir, { withFileTypes: true });
+  } catch {
+    fail("checkpoint directory cannot be enumerated.");
+  }
+  const allowedEntries = new Set([MANIFEST_NAME, ...expected]);
+  for (const entry of entries) {
+    if (!allowedEntries.has(entry.name)) {
+      fail(`unexpected checkpoint bundle entry ${entry.name}.`);
+    }
+  }
+  if (entries.length !== allowedEntries.size) {
+    fail("checkpoint bundle is missing one or more required entries.");
+  }
+
+  for (const artifact of artifacts) {
+    const artifactPath = join(canonicalDir, artifact.path);
+    await requireRegularPath(artifactPath, "file", artifact.path);
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(artifactPath);
+    } catch {
+      fail(`${artifact.path} is unreadable.`);
+    }
+    if (bytes.length !== artifact.bytes) {
+      fail(`${artifact.path} byte size does not match the manifest.`);
+    }
+    if (sha256(bytes) !== artifact.sha256) {
+      fail(`${artifact.path} SHA-256 does not match the manifest.`);
+    }
+  }
+
+  return {
+    checkpointDir: canonicalDir,
+    manifestPath,
+    manifestSha256: sha256(manifestBytes),
+    schemaVersion,
+    artifacts,
+  };
+}
