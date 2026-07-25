@@ -31,7 +31,6 @@ jobs:
       - name: Checkout trusted guard kernel
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
           path: guard-kernel
           fetch-depth: 0
           persist-credentials: false
@@ -60,18 +59,14 @@ jobs:
           REPO_GUARD_NAMES: ${{ secrets.REPO_GUARD_NAMES }}
           REPO_GUARD_KERNEL_ROOT: ${{ github.workspace }}/guard-kernel
           REPO_GUARD_SUBJECT_ROOT: ${{ github.workspace }}/guard-subject
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           kernel="${GITHUB_WORKSPACE}/guard-kernel"
           subject="${GITHUB_WORKSPACE}/guard-subject"
           chmod +x "${kernel}/tools/repo-guard.sh"
           cd "${subject}"
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request_target" ]; then
-            git cat-file -e "${BASE_SHA}^{commit}"
-            bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"
-          else
-            bash "${kernel}/tools/repo-guard.sh"
-          fi
+          git cat-file -e "${BASE_SHA}^{commit}"
+          bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"
 
       - name: Validate PR authority binding
         if: github.event_name == 'pull_request_target'
