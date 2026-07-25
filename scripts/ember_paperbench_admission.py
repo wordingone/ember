@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """PaperBench admission probe for Ember's post-RE-Bench path."""
 from __future__ import annotations
 
@@ -12,7 +15,6 @@ from typing import Any
 
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 
-DEFAULT_FRONTIER_ROOT = Path(r"<local-path>")
 PAPERBENCH_GITHUB = "https://github.com/openai/frontier-evals/tree/main/project/paperbench"
 PAPERBENCH_ARXIV = "https://arxiv.org/abs/2504.01848"
 EXPECTED_PAPER_COUNT = 20
@@ -207,12 +209,17 @@ def build_admission_receipt(*, repo: Path, frontier_root: Path, out: Path) -> di
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
-    parser.add_argument("--frontier-root", default=str(DEFAULT_FRONTIER_ROOT))
+    parser.add_argument("--frontier-root", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
     if args.selftest:
         import ember_paperbench_admission_selftest
         return ember_paperbench_admission_selftest.main()
+    if not args.frontier_root:
+        parser.error(
+            "--frontier-root is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
     repo = Path.cwd().resolve()
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = Path(args.out) if args.out else Path("receipts/ember-post-resident-discovery") / f"paperbench-admission-{ts}.json"

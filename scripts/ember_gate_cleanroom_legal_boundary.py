@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room legal/provenance boundary gate for Ember's the predecessor CLI harness."""
 from __future__ import annotations
 
@@ -18,7 +21,6 @@ TICKET = "EMBER-GATE-CLEANROOM-LEGAL-BOUNDARY"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 DEFAULT_COMMUNICATION_RECEIPT = Path(r"receipts\ember-preloop-resident-gate\communication-mailbox-computer-use-20260622T002000Z.json")
 EXPECTED_COMMUNICATION_VERDICT = "COMMUNICATION_MAILBOX_COMPUTER_USE_GATE_PASS"
-DEFAULT_reference_ROOT = Path(r"<local-path>")
 REQUIRED_LEGAL_FILES = [
     "legal/origin.md",
     "legal/dependencies.md",
@@ -345,7 +347,7 @@ def write_receipt(path: Path, receipt: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=str(repo_root()))
-    parser.add_argument("--reference-root", default=str(DEFAULT_reference_ROOT))
+    parser.add_argument("--reference-root", required=True)
     parser.add_argument("--communication-mailbox-computer-use-receipt", default=str(DEFAULT_COMMUNICATION_RECEIPT))
     parser.add_argument("--out", required=True)
     args = parser.parse_args()

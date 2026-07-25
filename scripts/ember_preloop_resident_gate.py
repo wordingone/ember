@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail-closed inspector for Ember's pre-loop resident-training gate.
 
 This script does not implement the resident organs. It makes the current gate
@@ -22,8 +25,6 @@ from receipt_write import checked_write
 
 TICKET = "EMBER-PRELOOP-RESIDENT-GATE"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-DEFAULT_PAPER_ROOT = Path(r"<local-path>")
-DEFAULT_reference_ROOT = Path(r"<local-path>")
 INVALID_SUBSTITUTIONS = [
     "symbolic-template-policy",
     "prompt-only substitution",
@@ -410,8 +411,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True)
     parser.add_argument("--repo", default=str(repo_root()))
-    parser.add_argument("--paper-root", default=str(DEFAULT_PAPER_ROOT))
-    parser.add_argument("--reference-root", default=str(DEFAULT_reference_ROOT))
+    parser.add_argument("--paper-root", required=True)
+    parser.add_argument("--reference-root", required=True)
     args = parser.parse_args()
 
     out = Path(args.out)

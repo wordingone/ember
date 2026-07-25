@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Resident-training gate for Ember's non-killable RLM/iGRPO + the predecessor CLI precondition.
 
 This runner is intentionally fail-closed. It can validate paper-source preflight,
@@ -23,7 +26,6 @@ from loop_econ_gate import REQUIRED_FIELDS as DT6_REQUIRED_FIELDS, check_econ_ga
 
 TICKET = "EMBER-RESIDENT-TRAINING-GATE"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-PAPER_INDEX_DEFAULT = Path(r"<local-path>")
 REQUIRED_PAPERS = {"RLM", "iGRPO"}
 SUPERSEDED_PARALLEL_SPECS = [
     Path("docs/ember-mvp-v0.md"),
@@ -1173,7 +1175,7 @@ def _next_blocker(errors: list[str]) -> str:
 
 
 def _next_command(next_blocker: str, out_path: Path | None) -> str:
-    out = str(out_path) if out_path else r"<local-path><timestamp>.json"
+    out = str(out_path) if out_path else r"receipts\ember-resident-training-gate\<timestamp>.json"
     base = "python scripts\\ember_resident_training_gate.py --out " + out
     if (
         "candidate manifest" in next_blocker
@@ -1469,7 +1471,7 @@ def selftest() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--selftest", action="store_true")
-    ap.add_argument("--paper-index", default=str(PAPER_INDEX_DEFAULT))
+    ap.add_argument("--paper-index", default=None)
     ap.add_argument("--candidate-manifest")
     ap.add_argument("--full-parity-receipt")
     ap.add_argument("--out")
@@ -1480,6 +1482,11 @@ def main() -> int:
         return selftest()
     if not args.out:
         ap.error("--out is required unless --selftest is used")
+    if not args.paper_index:
+        ap.error(
+            "--paper-index is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
     repo = _repo_root()
     changed = [Path(p) for p in args.changed_path] or [
         Path("scripts/ember_resident_training_gate.py"),

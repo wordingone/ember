@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Build a resident-training candidate for Ember's RLM/iGRPO pre-loop gate.
 
 This is a deliberately small, executable symbolic proxy baseline. It uses
@@ -24,8 +27,6 @@ from receipt_write import checked_write
 
 TICKET = "EMBER-RESIDENT-TRAINING-CANDIDATE"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-DEFAULT_TASKS = Path(r"<local-path>")
-DEFAULT_OUT_ROOT = Path(r"<local-path>")
 TEMPLATES = ["instruction_only", "dataset_preview", "eval_script_recursive"]
 CHECK_KEYWORDS = {
     "existence": ["exists", "required_files", "missing required", "os.path.exists"],
@@ -417,12 +418,22 @@ def selftest() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--selftest", action="store_true")
-    ap.add_argument("--tasks", default=str(DEFAULT_TASKS))
+    ap.add_argument("--tasks", default=None)
     ap.add_argument("--out-dir")
     args = ap.parse_args()
     if args.selftest:
         return selftest()
-    out_dir = Path(args.out_dir) if args.out_dir else DEFAULT_OUT_ROOT / ts()
+    if not args.tasks:
+        ap.error(
+            "--tasks is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
+    if not args.out_dir:
+        ap.error(
+            "--out-dir is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
+    out_dir = Path(args.out_dir)
     manifest = build_candidate(Path(args.tasks), out_dir)
     print(json.dumps({"manifest_path": str(out_dir / "resident_training_candidate_manifest.json"), "candidate": manifest}, indent=2))
     return 2 if manifest.get("candidate_class") == "SYMBOLIC_PROXY_PASS" else 0

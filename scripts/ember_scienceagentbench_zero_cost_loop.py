@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Run ScienceAgentBench A/B/C/deleted loop with zero-cost deterministic/local re-grade surfaces."""
 from __future__ import annotations
 
@@ -15,7 +18,6 @@ from typing import Any
 
 TICKET = "EMBER-SCIENCEAGENTBENCH-ZERO-COST-REGRADE-LOOP"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-DEFAULT_BENCHMARK_ROOT = Path(r"<local-path>")
 DEFAULT_FROZEN_ROWS = Path("receipts/ember-post-resident-discovery/scienceagentbench-admission-20260622T165317Z.frozen_rows.json")
 DEFAULT_ADMISSION = Path("receipts/ember-post-resident-discovery/scienceagentbench-admission-20260622T165317Z.json")
 ARMS = ["A", "B", "C", "Deleted"]
@@ -405,7 +407,12 @@ def build_receipt(args: argparse.Namespace) -> dict[str, Any]:
     admission = load_json(admission_path)
     rows = frozen["rows"]
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_root = Path(args.run_root) if args.run_root else Path(r"<local-path>") / ts
+    if not args.run_root:
+        raise SystemExit(
+            "--run-root is required (no baked-in default; original path was "
+            "scrubbed for public export, see issue #261)"
+        )
+    run_root = Path(args.run_root)
     run_root.mkdir(parents=True, exist_ok=True)
     judgments = transcript_lookup(Path(args.visual_judgments) if args.visual_judgments else None)
     score_rows, visual_packets, blocked = [], [], []
@@ -462,7 +469,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--admission", default=str(DEFAULT_ADMISSION))
     ap.add_argument("--frozen-rows", default=str(DEFAULT_FROZEN_ROWS))
-    ap.add_argument("--benchmark-root", default=str(DEFAULT_BENCHMARK_ROOT))
+    ap.add_argument("--benchmark-root", required=True)
     ap.add_argument("--run-root", default=None)
     ap.add_argument("--visual-judgments", default=None)
     ap.add_argument("--before-receipt", default=None)
