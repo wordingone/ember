@@ -33,8 +33,8 @@ the PASS claim, which is therefore explicitly partial.
 WHAT IS MEASURED, AND HOW EVIDENCE IS BOUND (rework 2026-07-25; the previous
 version let the artifact under measurement supply its own evidence -- a root
 script counted as a launcher because of its FILE EXTENSION, and a module
-counted as a registered command because of a KEYWORD IN ITS OWN TEXT. Kai's
-exact-head hostile fixture at bcf1057 (a root `unrelated-maintenance.ps1`
+counted as a registered command because of a KEYWORD IN ITS OWN TEXT. The
+reviewer's exact-head hostile fixture at bcf1057 (a root `unrelated-maintenance.ps1`
 containing only `Write-Host not-ember`, named once in the README, plus one
 unregistered `all.ts` holding a keyword-bearing return object with no
 registry import anywhere) produced verdict PASS, L1 resolved-true, all six
