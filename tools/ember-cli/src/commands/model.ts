@@ -24,6 +24,10 @@ import {
   verifyOwnedEndpointIdentity,
 } from "../entrypoints/owned-seat-loader.ts";
 import type { OwnedModelIdentity } from "../entrypoints/model-seat.ts";
+import {
+  verifyCheckpointBundle,
+  type VerifiedCheckpointBundle,
+} from "../services/checkpoint-load.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 import { saveCheckpoint, type CheckpointSaveDeps } from "../services/checkpoint-save.ts";
@@ -316,6 +320,8 @@ interface ModelCommandDeps {
    * See services/checkpoint-save.ts -- the atomic-copy/fail-closed core for
    * `/model checkpoint save`. */
   checkpointSaveDeps?: CheckpointSaveDeps;
+  /** Injectable filesystem verifier for `/model checkpoint load`. */
+  verifyCheckpointBundle?: (checkpointDir: string) => Promise<VerifiedCheckpointBundle>;
 }
 
 /**
@@ -415,10 +421,11 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
   const doVerifyOwnedEndpointIdentity = deps.verifyOwnedEndpointIdentity ?? verifyOwnedEndpointIdentity;
   const doRegisterManagedModel = deps.registerManagedModel ?? registerManagedModel;
   const doCheckpointSaveDeps = deps.checkpointSaveDeps ?? _realCheckpointSaveDeps(doResolveModelIdentity);
+  const doVerifyCheckpointBundle = deps.verifyCheckpointBundle ?? verifyCheckpointBundle;
 
   return {
     name: "model",
-    description: "Control the local model: load|unload|status",
+    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save. Inspect data/tokenizer lineage; legacy checkpoint save is not checkpoint-load compatible.",
     isEnabled(): boolean {
       return true;
     },
@@ -532,6 +539,85 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
         const rest = args.trim().split(/\s+/).slice(1);
         const action = rest[0] ?? "";
 
+        if (action === "load") {
+          const checkpointDir = rest[1];
+          if (!checkpointDir || rest.length !== 2) {
+            return {
+              type: "message" as const,
+              message: "usage: /model checkpoint load <checkpoint-dir>",
+              exitCode: 1,
+            };
+          }
+
+          try {
+            // Integrity is established from the modern sparse checkpoint bundle's
+            // actual named bytes before any process or lifecycle operation.
+            const verified = await doVerifyCheckpointBundle(
+              resolve(ctx.cwd, checkpointDir),
+            );
+
+            // Authorization remains an independent gate. The command cannot mint
+            // ownership or rewrite the durable selector: it may only select bytes
+            // already designated by the governed owned-model admission workflow.
+            const ownedIdentity = doLoadOwnedIdentity(ctx.cwd);
+            const authorizationRefusal =
+              "This checkpoint bundle is intact but is not the currently authorized " +
+              "owned checkpoint. Designate it through the governed owned-model " +
+              "identity/admission workflow, then retry; /model checkpoint load cannot " +
+              "grant ownership.";
+            if (
+              ownedIdentity === null ||
+              ownedIdentity.launch === undefined ||
+              ownedIdentity.checkpointSha256 !== verified.manifestSha256
+            ) {
+              throw new Error(authorizationRefusal);
+            }
+
+            const selectedIdentity: OwnedModelIdentity = {
+              ...ownedIdentity,
+              launch: {
+                ...ownedIdentity.launch,
+                checkpointDir: verified.checkpointDir,
+              },
+            };
+            const modelLifecycleDeps: ModelLifecycleDeps = {
+              spawnModel: () => ({ pid: 0 }),
+              killPid: () => {},
+              waitReady: async () => {},
+              writeKillReceipt: async () => {},
+              isExternal: () => process.env["EMBER_MODEL_URL"] !== undefined,
+              now: () => new Date().toISOString(),
+              manifestPath,
+            };
+
+            const ensured = await doEnsureOwnedServer(selectedIdentity);
+            const servedPid =
+              ensured.outcome === "spawned"
+                ? (ensured.handle.process.pid ?? 0)
+                : ensured.pid;
+            const releaseServed =
+              ensured.outcome === "spawned"
+                ? () => ensured.handle.kill()
+                : undefined;
+            const status = await doLoadModel({
+              ...modelLifecycleDeps,
+              spawnModel: () => ({ pid: servedPid, release: releaseServed }),
+            });
+            doRegisterManagedModel({ pid: servedPid, release: releaseServed });
+            return {
+              type: "message" as const,
+              message: `${status}; checkpoint selected: ${verified.manifestSha256}`,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              type: "message" as const,
+              message: `error: failed to load checkpoint: ${msg}`,
+              exitCode: 1,
+            };
+          }
+        }
+
         if (action === "save") {
           const positionals: string[] = [];
           let sourceDir: string | undefined;
@@ -567,7 +653,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
             );
             return {
               type: "message" as const,
-              message: `checkpoint saved: ${result.byte_sha256} (${result.disposition}) -> ${result.targetDir}`,
+              message: `legacy checkpoint snapshot saved (not /model checkpoint load compatible): ${result.byte_sha256} (${result.disposition}) -> ${result.targetDir}`,
             };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -581,7 +667,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
 
         return {
           type: "message" as const,
-          message: `usage: /model checkpoint save <target-dir> [--source <dir>]`,
+          message: `usage: /model checkpoint load <checkpoint-dir> | /model checkpoint save <target-dir> [--source <dir>]`,
         };
       }
 
