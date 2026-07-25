@@ -225,7 +225,24 @@ export function captureDevelopmentResolver(
     // would let a malformed index ride the same demotion path).
     throw new Error("runtime bundle index schema is not recognised");
   }
-  if (index["source_commit"] !== expectedSourceCommit) {
+  // The demotion branch below is the ONLY lenient outcome in this function, and
+  // it is reachable only for an index that is otherwise honest and
+  // self-consistent -- a bundle that is truthfully bound to a DIFFERENT but
+  // well-formed commit. So the shape of source_commit has to be established
+  // first: without this, `source_commit: null`, an object, an uppercase or
+  // non-hex string, or arbitrary garbage all simply fail the equality test and
+  // ride the demotion path, because "malformed" and "different" are the same
+  // answer to `!==`. The comment on the schema check above states exactly this
+  // intent and the equality check immediately undid it for a sibling field.
+  //
+  // The general form, and the reason this was missed: enumerating one traversal
+  // (schema-vs-stale) does not enumerate its siblings. Every field the lenient
+  // branch reads needs its own strict check ahead of that branch.
+  const indexSourceCommit = index["source_commit"];
+  if (typeof indexSourceCommit !== "string" || !/^[0-9a-f]{40}$/.test(indexSourceCommit)) {
+    throw new Error("runtime bundle index source commit is invalid");
+  }
+  if (indexSourceCommit !== expectedSourceCommit) {
     throw new OwnedSeatStaleBindingError(
       "runtime bundle is not bound to the exact compiled cockpit commit; the owned seat is " +
       "refused and the cockpit continues OFFLINE. Use --reference-seat for explicit " +

@@ -302,6 +302,58 @@ describe("owned seat loader", () => {
       }
     });
 
+    it("test 2e (D2 RED, sibling traversal): a MALFORMED source_commit is fatal, not demotable -- every shape, each with a stale expectation", () => {
+      // The demotion branch is the only lenient outcome here, and `!==` gives
+      // the same answer for "different" and "malformed". Without a shape check
+      // ahead of it, null / an object / uppercase / non-hex / wrong-length all
+      // took the permitted OFFLINE demotion instead of staying fatal.
+      //
+      // Enumerated rather than sampled: one representative per way the field can
+      // be wrong. Test 2d pinned the schema-vs-stale traversal and this is its
+      // sibling -- proving one traversal is not proving the set.
+      const malformed: Array<[string, unknown]> = [
+        ["null", null],
+        ["object", { sha: "a".repeat(40) }],
+        ["uppercase hex", "A".repeat(40)],
+        ["non-hex", "z".repeat(40)],
+        ["too short", "a".repeat(39)],
+        ["empty string", ""],
+      ];
+      for (const [label, value] of malformed) {
+        const root = mkdtempSync(join(tmpdir(), "ember-badcommit-test-"));
+        try {
+          const { index, readGitBlob } = buildFixture(root);
+          const badIndex = { ...index, source_commit: value };
+          const badBytes = new TextEncoder().encode(JSON.stringify(badIndex));
+          writeFileSync(join(root, "runtime-bundle-index.json"), badBytes);
+          const manifestPath = join(root, "development.json");
+          writeFileSync(
+            manifestPath,
+            JSON.stringify({
+              runtime_bundle: {
+                index_path: "runtime-bundle-index.json",
+                sha256: new Bun.CryptoHasher("sha256").update(badBytes).digest("hex"),
+              },
+            }),
+          );
+          let caught: unknown;
+          try {
+            // A stale expectation too, so the demotion branch is live: this is
+            // the conjunction, not the malformed field alone.
+            captureDevelopmentResolver(manifestPath, root, "b".repeat(40), readGitBlob);
+          } catch (error) {
+            caught = error;
+          }
+          expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
+          expect((caught as Error).message).toBe(
+            "runtime bundle index source commit is invalid",
+          );
+        } finally {
+          rmSync(root, { force: true, recursive: true });
+        }
+      }
+    });
+
     it("test 3 (D3 over-closure): a matching, valid bundle admits the owned seat unchanged -- no typed error, no throw", () => {
       const root = mkdtempSync(join(tmpdir(), "ember-matching-bundle-test-"));
       try {
