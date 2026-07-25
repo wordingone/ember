@@ -18,6 +18,11 @@ Field derivation (frozen spec, state/specs/cond3-seat-bridge-spec.md):
   seat id                <- cert identity.model_id
   seat disposition       <- cert identity.disposition
 Operational-only seat fields (e.g. endpointUrl) are kept, never cert-derived.
+
+Checkpoint-byte identity (Step 5) is resolved by ``resolve_checkpoint_byte_identity``:
+the ACTUAL checkpoint bytes, never a checkpoint INDEX JSON's own digest --
+see that function's docstring for the singular-vs-sharded resolution rule
+(state/failure-classes/semantic-validation-without-bytes-2026-07-25.md).
 """
 
 from __future__ import annotations
@@ -53,6 +58,107 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def resolve_checkpoint_byte_identity(
+    checkpoint_path: Path, *, root: Path | None = None
+) -> tuple[str | None, list[str]]:
+    """Resolve the checkpoint-BYTE identity at ``checkpoint_path``, fail-closed.
+
+    ``root`` is the directory shard ``path`` entries are relative to (the run
+    manifest's own root, matching ``contract.py::_verify_checkpoint`` --
+    shard paths there are relative to the manifest root, NOT to the
+    checkpoint index file's own directory). Defaults to
+    ``checkpoint_path.parent`` when not supplied.
+
+    Two shapes are supported, disambiguated by the artifact bytes themselves
+    (never by a caller-supplied flag, so there is no unchecked branch to lie
+    about which shape is in play):
+
+    - **Singular**: ``checkpoint_path`` names the checkpoint bytes directly.
+      Returns the sha256 of the raw file.
+    - **Sharded**: ``checkpoint_path`` names a checkpoint INDEX JSON carrying
+      a non-empty ``shards`` list of ``{path, sha256, bytes}`` records (the
+      exact shape ``contract.py::_verify_checkpoint`` enforces on the run
+      manifest side). Every load-bearing shard's ACTUAL on-disk bytes are
+      hashed and must equal its OWN declared per-shard sha256 (and declared
+      size, when present) -- fail closed on any missing file, size mismatch,
+      or hash mismatch. The returned identity is the canonical aggregate
+      digest over the *verified* ``(path, sha256)`` pairs, sorted by path so
+      the identity is independent of on-disk shard ordering.
+
+    The index JSON's OWN digest (its self-consistency hash) is NEVER
+    returned as the checkpoint-byte identity -- that substitution (index
+    self-consistency reported under a name that means checkpoint byte
+    identity) is exactly the defect class this function closes
+    (state/failure-classes/semantic-validation-without-bytes-2026-07-25.md).
+    A tampered shard is invisible to a check that only re-hashes the index.
+    """
+    try:
+        raw = checkpoint_path.read_bytes()
+    except OSError as exc:
+        return None, [f"checkpointPath: unreadable: {exc}"]
+
+    index: dict[str, Any] | None = None
+    try:
+        candidate = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        candidate = None
+    if (
+        isinstance(candidate, dict)
+        and isinstance(candidate.get("shards"), list)
+        and candidate["shards"]
+    ):
+        index = candidate
+
+    if index is None:
+        # Singular checkpoint: the named file IS the checkpoint bytes.
+        return hashlib.sha256(raw).hexdigest(), []
+
+    shard_root = root if root is not None else checkpoint_path.parent
+    errors: list[str] = []
+    canonical_pairs: list[tuple[str, str]] = []
+    for position, shard in enumerate(index["shards"]):
+        prefix = f"checkpoint.shards[{position}]"
+        if not isinstance(shard, dict):
+            errors.append(f"{prefix}: expected object")
+            continue
+        shard_path_raw = shard.get("path")
+        shard_sha256 = shard.get("sha256")
+        if not isinstance(shard_path_raw, str) or not shard_path_raw:
+            errors.append(f"{prefix}.path: missing")
+            continue
+        if not isinstance(shard_sha256, str) or not shard_sha256:
+            errors.append(f"{prefix}.sha256: missing")
+            continue
+        shard_path = (shard_root / shard_path_raw).resolve()
+        try:
+            actual_shard_sha256 = _sha256_file(shard_path)
+        except OSError as exc:
+            errors.append(f"{prefix}.path: unreadable: {exc}")
+            continue
+        if actual_shard_sha256 != shard_sha256:
+            errors.append(
+                f"{prefix}: shard bytes do not match declared sha256 "
+                f"(declared {shard_sha256}, actual {actual_shard_sha256})"
+            )
+            continue
+        shard_bytes = shard.get("bytes")
+        if isinstance(shard_bytes, int) and not isinstance(shard_bytes, bool):
+            actual_size = shard_path.stat().st_size
+            if actual_size != shard_bytes:
+                errors.append(
+                    f"{prefix}.bytes: size mismatch (declared {shard_bytes}, actual {actual_size})"
+                )
+                continue
+        canonical_pairs.append((shard_path_raw, shard_sha256))
+
+    if errors:
+        return None, errors
+
+    canonical_pairs.sort(key=lambda pair: pair[0])
+    canonical_blob = "\n".join(f"{path}:{sha}" for path, sha in canonical_pairs).encode("utf-8")
+    return hashlib.sha256(canonical_blob).hexdigest(), []
 
 
 def derive_seat_identity(
@@ -155,15 +261,20 @@ def derive_seat_identity(
         return _refuse(errors)
 
     # Step 5 (negative #1): the ACTUAL checkpoint bytes must hash to the cert
-    # checkpoint.byte_sha256.
+    # checkpoint.byte_sha256 -- resolved via resolve_checkpoint_byte_identity,
+    # which verifies every load-bearing shard when checkpointPath names a
+    # sharded checkpoint index (never the index's own self-consistency hash).
     checkpoint_path_raw = seat_config.get("checkpointPath")
     if not isinstance(checkpoint_path_raw, str) or not checkpoint_path_raw:
         return _refuse(["checkpointPath: missing — cannot bind cert to checkpoint bytes"])
     checkpoint_path = Path(checkpoint_path_raw)
-    try:
-        actual_checkpoint_sha256 = _sha256_file(checkpoint_path)
-    except OSError as exc:
-        return _refuse([f"checkpointPath: unreadable: {exc}"])
+    checkpoint_root_raw = seat_config.get("checkpointRoot")
+    checkpoint_root = Path(checkpoint_root_raw) if isinstance(checkpoint_root_raw, str) else None
+    actual_checkpoint_sha256, checkpoint_errors = resolve_checkpoint_byte_identity(
+        checkpoint_path, root=checkpoint_root
+    )
+    if checkpoint_errors:
+        return _refuse(checkpoint_errors)
     if actual_checkpoint_sha256 != derived["checkpointSha256"]:
         return _refuse(
             [

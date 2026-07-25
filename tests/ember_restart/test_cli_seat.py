@@ -16,6 +16,7 @@ from test_contract import REPO_ROOT, _write_json
 # PRODUCTION default path makes into seat_identity_bridge.derive_seat_identity.
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "ember_restart"))
 import cli_seat  # noqa: E402  (path must be inserted first)
+from seat_identity_bridge import resolve_checkpoint_byte_identity  # noqa: E402
 
 RESOLVER = REPO_ROOT / "scripts" / "ember_restart" / "cli_seat.py"
 CERT_FIXTURE_PATH = (
@@ -30,16 +31,30 @@ def _write_cert_manifest(tmp_path: Path, cert: dict, name: str = "cert-manifest.
     return path, hashlib.sha256(data).hexdigest()
 
 
-def _matching_cert(manifest: dict) -> dict:
+def _matching_cert(manifest: dict, tmp_path: Path) -> dict:
     """A real cert manifest whose identity-bearing hash fields exactly equal
     THIS generated run manifest's own (real, already-computed) values --
     reusing the checked-in model-identity fixture (known to pass
     validate_identity.py per scripts/ember_restart/test_seat_identity_bridge.py)
     and overriding only the overlapping hashes. No hash is invented: every
     value copied in here was already produced by the admission fixture
-    builder or by hashing real fixture bytes."""
+    builder or by hashing real fixture bytes.
+
+    checkpoint.byte_sha256 is set to the CANONICAL CHECKPOINT-BYTE identity
+    (resolve_checkpoint_byte_identity over the real checkpoint index +
+    shards this manifest references) -- NOT manifest["checkpoint"]["sha256"]
+    (the checkpoint INDEX JSON's own self-consistency digest). Copying the
+    index digest in here is the exact defect
+    state/failure-classes/semantic-validation-without-bytes-2026-07-25.md
+    names: it made every historical version of this fixture pass while
+    proving nothing about checkpoint bytes. See
+    test_shard_tamper_with_unchanged_index_json_refused_through_production_path
+    for the reproduction of that defect against a cert built the old way.
+    """
     cert = json.loads(CERT_FIXTURE_PATH.read_text(encoding="utf-8"))
-    checkpoint_sha256 = manifest["checkpoint"]["sha256"]
+    checkpoint_index_path = tmp_path / manifest["checkpoint"]["manifest_path"]
+    checkpoint_sha256, errors = resolve_checkpoint_byte_identity(checkpoint_index_path, root=tmp_path)
+    assert not errors, errors
     cert["checkpoint"]["byte_sha256"] = checkpoint_sha256
     cert["architecture"]["sha256"] = manifest["architecture"]["model_config"]["sha256"]
     cert["tokenizer"]["sha256"] = manifest["tokenizer"]["sha256"]
@@ -94,7 +109,7 @@ def test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_unadmitted
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
     manifest_path = tmp_path / "run.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    cert = _matching_cert(manifest)
+    cert = _matching_cert(manifest, tmp_path)
     cert_path, digest = _write_cert_manifest(tmp_path, cert)
     manifest["cert_manifest_path"] = cert_path.name
     manifest["cert_manifest_digest"] = digest
@@ -116,10 +131,18 @@ def test_axis6_production_path_reaches_seat_identity_bridge(tmp_path: Path, monk
     seat_identity_bridge.derive_seat_identity -- a call-count/observable-
     effect assertion against the real function, not a unit test of the
     bridge module alone. derive_seat_identity is replaced with a spy so this
-    also proves WHAT it is called with: the manifest's own checkpoint/model-
-    config/tokenizer sha256 and the resolved checkpoint-manifest path are
-    handed through as bridge INPUT (cross-check material), never consumed
-    directly as final identity truth.
+    also proves WHAT it is called with: the manifest's own model-config/
+    tokenizer sha256 and the resolved checkpoint-manifest (index) path are
+    handed through as bridge INPUT (cross-check material / checkpoint-byte
+    resolution input), never consumed directly as final identity truth.
+
+    checkpointSha256 (manifest["checkpoint"]["sha256"], the checkpoint INDEX
+    JSON's own self-consistency digest) is asserted ABSENT from the bridge
+    call -- passing it as a checkpoint-byte cross-check is the exact defect
+    state/failure-classes/semantic-validation-without-bytes-2026-07-25.md
+    names (field reinterpretation: the index's digest reported as if it
+    named the checkpoint bytes). The bridge derives the real checkpoint-byte
+    identity itself from checkpointPath (Step 5, resolve_checkpoint_byte_identity).
     """
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
     manifest_path = tmp_path / "run.json"
@@ -135,7 +158,10 @@ def test_axis6_production_path_reaches_seat_identity_bridge(tmp_path: Path, monk
 
     assert len(calls) == 1, "production default path did not reach derive_seat_identity exactly once"
     seat_config, repo_root = calls[0]
-    assert seat_config["checkpointSha256"] == manifest["checkpoint"]["sha256"]
+    assert "checkpointSha256" not in seat_config, (
+        "the checkpoint INDEX digest must never be passed as checkpoint-byte "
+        "identity material -- resolve_checkpoint_byte_identity derives it"
+    )
     assert seat_config["modelConfigSha256"] == manifest["architecture"]["model_config"]["sha256"]
     assert seat_config["tokenizerSha256"] == manifest["tokenizer"]["sha256"]
     assert seat_config["checkpointPath"] == str(
@@ -158,7 +184,7 @@ def test_axis6_mismatched_cert_field_refused_through_production_path(tmp_path: P
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
     manifest_path = tmp_path / "run.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    cert = _matching_cert(manifest)
+    cert = _matching_cert(manifest, tmp_path)
     # Deliberately mismatch ONE overlapping field: the cert's architecture
     # hash disagrees with the run manifest's own (real, self-consistent)
     # model_config sha256 -- swapped for the tokenizer sha256, another real
@@ -196,3 +222,58 @@ def test_resolver_rejects_candidate_and_tampered_serving_bytes(tmp_path: Path):
     tampered = _resolve(manifest_path)
     assert tampered.returncode != 0
     assert "content hash mismatch" in tampered.stdout
+
+
+def test_shard_tamper_with_unchanged_index_json_refused_through_production_path(tmp_path: Path):
+    """THE discriminating test for the cond3-1038 defect class
+    (state/failure-classes/semantic-validation-without-bytes-2026-07-25.md):
+    leave the checkpoint-manifest INDEX JSON byte-identical and change the
+    artifact it names (one shard's bytes) -- the PRODUCTION path must fail
+    closed.
+
+    The cert here is built the OLD (defective) way on purpose:
+    checkpoint.byte_sha256 is set to manifest["checkpoint"]["sha256"], the
+    checkpoint INDEX JSON's own self-consistency digest -- exactly what
+    tests/test_cli_seat.py:42-46 did before this cure (and what PR #1038 was
+    rejected for at exact head 50f575a). Reproduced per the reject: this
+    value is unaffected by which shard bytes are on disk, so BEFORE the cure
+    the production resolver accepts a checkpoint whose real bytes were
+    swapped out from under it, because it only ever re-hashed the
+    (unchanged) index file and never touched a shard.
+    """
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    cert = json.loads(CERT_FIXTURE_PATH.read_text(encoding="utf-8"))
+    checkpoint_index_digest = manifest["checkpoint"]["sha256"]
+    cert["checkpoint"]["byte_sha256"] = checkpoint_index_digest
+    cert["architecture"]["sha256"] = manifest["architecture"]["model_config"]["sha256"]
+    cert["tokenizer"]["sha256"] = manifest["tokenizer"]["sha256"]
+    cert["evaluation"]["subject_checkpoint_sha256"] = checkpoint_index_digest
+    cert_path, digest = _write_cert_manifest(tmp_path, cert)
+    manifest["cert_manifest_path"] = cert_path.name
+    manifest["cert_manifest_digest"] = digest
+    _write_json(manifest_path, manifest)
+
+    # Tamper ONE shard's actual bytes. The checkpoint-manifest.json INDEX
+    # (checkpoint.manifest_path) stays byte-identical -- only a shard it
+    # references changes.
+    checkpoint_index_path = tmp_path / manifest["checkpoint"]["manifest_path"]
+    index_bytes_before = checkpoint_index_path.read_bytes()
+    index_payload = json.loads(index_bytes_before)
+    assert index_payload["shards"], "fixture must carry at least one shard"
+    tampered_shard_path = tmp_path / index_payload["shards"][0]["path"]
+    tampered_shard_path.write_bytes(b"TAMPERED-SHARD-BYTES-not-the-certified-checkpoint")
+    assert checkpoint_index_path.read_bytes() == index_bytes_before, (
+        "the index JSON must stay byte-identical -- only the shard changed"
+    )
+
+    result = _resolve(manifest_path)
+    assert result.returncode != 0, (
+        "production seat resolver served a checkpoint with a tampered shard "
+        f"while its index JSON stayed unchanged: {result.stdout + result.stderr}"
+    )
+    payload = json.loads(result.stdout)
+    assert payload["valid"] is False
+    assert payload["seat"] is None
