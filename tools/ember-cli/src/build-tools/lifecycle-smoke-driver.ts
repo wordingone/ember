@@ -338,8 +338,7 @@ async function driveInput(
   child.write("\r");
   await sleep(600);
   await flush();
-  const firstEnterFrame = visibleFrameLines(terminal);
-  if (slashCommandNeedsSecondEnter(firstEnterFrame, COLS, input)) {
+  if (input.startsWith("/")) {
     child.write("\r");
   }
   const deadline = Date.now() + timeoutMs;
