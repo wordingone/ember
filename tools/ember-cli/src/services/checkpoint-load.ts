@@ -3,7 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { createHash } from "crypto";
-import { lstat, readFile, readdir, realpath } from "fs/promises";
+import type { Stats } from "fs";
+import { lstat, open, readdir, realpath } from "fs/promises";
 import { basename, join, resolve } from "path";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -14,6 +15,20 @@ const SUPPORTED_SCHEMAS = new Set([
   "ember-sparse-checkpoint-v4",
   "ember-sparse-checkpoint-v5",
 ]);
+export const CHECKPOINT_HASH_CHUNK_BYTES = 1024 * 1024;
+export const MAX_CHECKPOINT_MANIFEST_BYTES = 1024 * 1024;
+
+
+export interface CheckpointLoadFsDeps {
+  open: (
+    path: string,
+    flags: "r",
+  ) => Promise<Pick<Awaited<ReturnType<typeof open>>, "stat" | "read" | "close">>;
+}
+
+const DEFAULT_FS_DEPS: CheckpointLoadFsDeps = {
+  open,
+};
 
 export interface VerifiedCheckpointArtifact {
   path: string;
@@ -45,6 +60,144 @@ function fail(detail: string): never {
 
 function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+function sameFileSnapshot(left: Stats, right: Stats): boolean {
+
+  return (
+    left.isFile() &&
+    right.isFile() &&
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+async function readManifestFile(path: string, fsDeps: CheckpointLoadFsDeps): Promise<Buffer> {
+  let handle;
+  try {
+    handle = await fsDeps.open(path, "r");
+  } catch {
+    fail(`${MANIFEST_NAME} is unreadable.`);
+  }
+
+  let openedBefore: Stats;
+  let openedAfter: Stats;
+  let bytes: Buffer;
+  try {
+    openedBefore = await handle.stat();
+    if (
+      !openedBefore.isFile() ||
+      openedBefore.size <= 0 ||
+      openedBefore.size > MAX_CHECKPOINT_MANIFEST_BYTES
+    ) {
+      fail(`${MANIFEST_NAME} exceeds the maximum allowed size or is empty.`);
+    }
+
+    bytes = Buffer.allocUnsafe(openedBefore.size);
+    let position = 0;
+    while (position < bytes.length) {
+      const { bytesRead } = await handle.read(
+        bytes,
+        position,
+        bytes.length - position,
+        position,
+      );
+      if (bytesRead <= 0 || bytesRead > bytes.length - position) {
+        fail(`${MANIFEST_NAME} changed or ended while it was being verified.`);
+      }
+      position += bytesRead;
+    }
+    openedAfter = await handle.stat();
+  } catch (error) {
+    if (error instanceof CheckpointBundleIntegrityError) throw error;
+    fail(`${MANIFEST_NAME} is unreadable.`);
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      fail(`${MANIFEST_NAME} could not be closed after verification.`);
+    }
+  }
+
+  let pathAfter: Stats;
+  try {
+    pathAfter = await lstat(path);
+  } catch {
+    fail(`${MANIFEST_NAME} changed or disappeared while it was being verified.`);
+  }
+  if (
+    pathAfter.isSymbolicLink() ||
+    !sameFileSnapshot(openedBefore, openedAfter) ||
+    !sameFileSnapshot(openedAfter, pathAfter)
+  ) {
+    fail(`${MANIFEST_NAME} changed while it was being verified.`);
+  }
+  return bytes;
+}
+
+
+async function hashArtifactFile(
+  artifactPath: string,
+  artifact: VerifiedCheckpointArtifact,
+  fsDeps: CheckpointLoadFsDeps,
+): Promise<string> {
+  let handle;
+  try {
+    handle = await fsDeps.open(artifactPath, "r");
+  } catch {
+    fail(`${artifact.path} is unreadable.`);
+  }
+
+  let openedBefore: Stats;
+  let openedAfter: Stats;
+  const digest = createHash("sha256");
+  const buffer = Buffer.allocUnsafe(
+    Math.min(CHECKPOINT_HASH_CHUNK_BYTES, artifact.bytes),
+  );
+
+  try {
+    openedBefore = await handle.stat();
+    if (!openedBefore.isFile() || openedBefore.size !== artifact.bytes) {
+      fail(`${artifact.path} byte size does not match the manifest.`);
+    }
+
+    let position = 0;
+    while (position < artifact.bytes) {
+      const length = Math.min(buffer.length, artifact.bytes - position);
+      const { bytesRead } = await handle.read(buffer, 0, length, position);
+      if (bytesRead <= 0 || bytesRead > length) {
+        fail(`${artifact.path} changed or ended while it was being verified.`);
+      }
+      digest.update(buffer.subarray(0, bytesRead));
+      position += bytesRead;
+    }
+    openedAfter = await handle.stat();
+  } catch (error) {
+    if (error instanceof CheckpointBundleIntegrityError) throw error;
+    fail(`${artifact.path} is unreadable.`);
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      fail(`${artifact.path} could not be closed after verification.`);
+    }
+  }
+
+  let pathAfter: Stats;
+  try {
+    pathAfter = await lstat(artifactPath);
+  } catch {
+    fail(`${artifact.path} changed or disappeared while it was being verified.`);
+  }
+  if (
+    pathAfter.isSymbolicLink() ||
+    !sameFileSnapshot(openedBefore, openedAfter) ||
+    !sameFileSnapshot(openedAfter, pathAfter)
+  ) {
+    fail(`${artifact.path} changed while it was being verified.`);
+  }
+  return digest.digest("hex");
 }
 
 function objectRecord(value: unknown, label: string): Record<string, unknown> {
@@ -159,7 +312,9 @@ async function requireRegularPath(
 
 export async function verifyCheckpointBundle(
   checkpointDir: string,
+  fsOverrides: Partial<CheckpointLoadFsDeps> = {},
 ): Promise<VerifiedCheckpointBundle> {
+  const fsDeps = { ...DEFAULT_FS_DEPS, ...fsOverrides };
   if (typeof checkpointDir !== "string" || checkpointDir.trim() === "") {
     fail("A checkpoint directory is required.");
   }
@@ -173,12 +328,7 @@ export async function verifyCheckpointBundle(
 
   const manifestPath = join(canonicalDir, MANIFEST_NAME);
   await requireRegularPath(manifestPath, "file", MANIFEST_NAME);
-  let manifestBytes: Buffer;
-  try {
-    manifestBytes = await readFile(manifestPath);
-  } catch {
-    fail(`${MANIFEST_NAME} is unreadable.`);
-  }
+  const manifestBytes = await readManifestFile(manifestPath, fsDeps);
   const manifest = decodeManifest(manifestBytes);
   const schemaVersion = manifest.schema_version;
   if (
@@ -227,16 +377,8 @@ export async function verifyCheckpointBundle(
   for (const artifact of artifacts) {
     const artifactPath = join(canonicalDir, artifact.path);
     await requireRegularPath(artifactPath, "file", artifact.path);
-    let bytes: Buffer;
-    try {
-      bytes = await readFile(artifactPath);
-    } catch {
-      fail(`${artifact.path} is unreadable.`);
-    }
-    if (bytes.length !== artifact.bytes) {
-      fail(`${artifact.path} byte size does not match the manifest.`);
-    }
-    if (sha256(bytes) !== artifact.sha256) {
+    const artifactSha256 = await hashArtifactFile(artifactPath, artifact, fsDeps);
+    if (artifactSha256 !== artifact.sha256) {
       fail(`${artifact.path} SHA-256 does not match the manifest.`);
     }
   }

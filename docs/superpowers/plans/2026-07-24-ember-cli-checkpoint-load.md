@@ -239,4 +239,3 @@ Add tests proving:
 ```powershell
 bun test tools/ember-cli/src/services/checkpoint-load.test.ts tools/ember-cli/src/commands/model.test.ts
 ```
-
