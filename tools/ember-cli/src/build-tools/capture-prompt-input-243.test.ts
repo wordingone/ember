@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildCaptureReceipt,
   findClosedPromptRegion,
+  redactHostPaths,
   type CaptureReceiptInput,
   type CaptureStageInput,
 } from "./capture-prompt-input-243.ts";
@@ -28,6 +29,9 @@ function stage(columns: number, index: number): CaptureStageInput {
     columns,
     rows: 24,
     rawPath: `receipts/ember-cli/issue-243/live-resize-v1/stage-${index}-${columns}.raw`,
+    privateRawLocator: `EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/stage-${index}-${columns}.raw`,
+    privateRawBytes: Buffer.from(`raw-${index}`),
+    redactions: [],
     framePath: `receipts/ember-cli/issue-243/live-resize-v1/stage-${index}-${columns}.frame.txt`,
     rawBytes: Buffer.from(`raw-${index}`),
     frameText,
@@ -45,6 +49,22 @@ function valid(): CaptureReceiptInput {
   };
 }
 
+describe("redactHostPaths", () => {
+  test("replaces every supplied host path without changing byte length", () => {
+    const source = Buffer.from(
+      "\u001b]0;C:\\private-long-enough-long-enough\\ember.exe\u0007 cwd C:\\private-long-enough and C:\\private-long-enough-long-enough\\ember.exe",
+      "utf8",
+    );
+    const result = redactHostPaths(source, ["C:\\private-long-enough", "C:\\private-long-enough-long-enough\\ember.exe"]);
+    expect(result.publicBytes.byteLength).toBe(source.byteLength);
+    expect(Buffer.from(result.publicBytes).toString("utf8")).not.toContain("C:\\private-long-enough");
+    expect(result.redactions).toHaveLength(2);
+  });
+
+  test("rejects a host path too short for a non-path replacement token", () => {
+    expect(() => redactHostPaths(Buffer.from("C:\\x"), ["C:\\x"])).toThrow("too short");
+  });
+});
 describe("findClosedPromptRegion", () => {
   test("accepts one closed prompt/status region", () => {
     expect(findClosedPromptRegion(frame(40).replace(/\n$/, "").split("\n"), 40)).toEqual({
@@ -78,6 +98,12 @@ describe("buildCaptureReceipt", () => {
     const receipt = buildCaptureReceipt(valid());
     expect(receipt["result"]).toBe("PASS");
     expect(receipt["evidence_class"]).toBe("LIVE_COMPILED_BINARY_CONPTY");
+    const stages = receipt["stages"] as Array<Record<string, unknown>>;
+    expect(stages[0]!["raw_private_exact"]).toEqual({
+      logical_locator: "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/stage-1-80.raw",
+      bytes: 5,
+      sha256: "e72e2581cffd8fef935b300f398a5a18bcb730d59ebd2fc267c5dfd7d5fe149e",
+    });
   });
 
   test("rejects missing raw output", () => {
@@ -86,6 +112,11 @@ describe("buildCaptureReceipt", () => {
     expect(() => buildCaptureReceipt(input)).toThrow("raw output is empty");
   });
 
+  test("rejects missing private raw output", () => {
+    const input = valid();
+    input.stages[1]!.privateRawBytes = new Uint8Array();
+    expect(() => buildCaptureReceipt(input)).toThrow("private raw output is empty");
+  });
   test("rejects a missing frame", () => {
     const input = valid();
     input.stages[1]!.frameText = "";

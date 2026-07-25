@@ -36,6 +36,9 @@ export interface CaptureStageInput {
   columns: number;
   rows: number;
   rawPath: string;
+  privateRawLocator: string;
+  privateRawBytes: Uint8Array;
+  redactions: HostPathRedaction[];
   framePath: string;
   rawBytes: Uint8Array;
   frameText: string;
@@ -52,6 +55,43 @@ export interface CaptureReceiptInput {
 
 function sha256(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+export interface HostPathRedaction {
+  sourceSha256: string;
+  replacement: string;
+  occurrences: number;
+}
+
+export function redactHostPaths(
+  privateBytes: Uint8Array,
+  hostPaths: string[],
+): { publicBytes: Uint8Array; redactions: HostPathRedaction[] } {
+  let text = Buffer.from(privateBytes).toString("utf8");
+  const redactions: HostPathRedaction[] = [];
+  const uniquePaths = [...new Set(hostPaths)].sort((a, b) => b.length - a.length);
+  for (const source of uniquePaths) {
+    const sourceBytes = Buffer.byteLength(source);
+    const base = `{local-${sha256(source).slice(0, 12)}}`;
+    if (sourceBytes < Buffer.byteLength(base)) {
+      throw new Error("host path is too short for a path-free fixed-width token");
+    }
+    const replacement = base.padEnd(sourceBytes, "~");
+    const occurrences = text.split(source).length - 1;
+    if (occurrences > 0) {
+      text = text.split(source).join(replacement);
+      redactions.push({ sourceSha256: sha256(source), replacement, occurrences });
+    }
+  }
+  const publicBytes = Buffer.from(text, "utf8");
+  if (publicBytes.byteLength !== privateBytes.byteLength) {
+    throw new Error("path redaction changed byte length");
+  }
+  for (const source of uniquePaths) {
+    if (Buffer.from(publicBytes).includes(Buffer.from(source))) {
+      throw new Error("path redaction left a supplied host path");
+    }
+  }
+  return { publicBytes, redactions };
 }
 
 function frameLines(terminal: Terminal): string[] {
@@ -113,8 +153,17 @@ export function buildCaptureReceipt(input: CaptureReceiptInput): Record<string, 
 
   const stages = input.stages.map((stage, index) => {
     safeArtifactPath(stage.rawPath, `stage ${index + 1} raw path`);
+    if (!stage.privateRawLocator.startsWith("EMBER_PRIVATE_EVIDENCE:")) {
+      throw new Error(`stage ${index + 1} private raw locator is invalid`);
+    }
     safeArtifactPath(stage.framePath, `stage ${index + 1} frame path`);
     if (stage.rawBytes.byteLength === 0) throw new Error(`stage ${index + 1} raw output is empty`);
+    if (stage.privateRawBytes.byteLength === 0) {
+      throw new Error(`stage ${index + 1} private raw output is empty`);
+    }
+    if (stage.privateRawBytes.byteLength !== stage.rawBytes.byteLength) {
+      throw new Error(`stage ${index + 1} public/private raw byte length differs`);
+    }
     if (stage.frameText.length === 0) throw new Error(`stage ${index + 1} frame is empty`);
     const lines = stage.frameText.replace(/\n$/, "").split("\n");
     const region = findClosedPromptRegion(lines, stage.columns);
@@ -132,10 +181,23 @@ export function buildCaptureReceipt(input: CaptureReceiptInput): Record<string, 
       stage: index + 1,
       columns: stage.columns,
       rows: stage.rows,
-      raw: {
+      raw_public_redacted: {
         path: stage.rawPath,
         bytes: stage.rawBytes.byteLength,
         sha256: sha256(stage.rawBytes),
+      },
+      raw_private_exact: {
+        logical_locator: stage.privateRawLocator,
+        bytes: stage.privateRawBytes.byteLength,
+        sha256: sha256(stage.privateRawBytes),
+      },
+      path_redaction: {
+        byte_length_preserved: true,
+        mappings: stage.redactions.map((row) => ({
+          source_sha256: row.sourceSha256,
+          replacement: row.replacement,
+          occurrences: row.occurrences,
+        })),
       },
       frame: {
         path: stage.framePath,
@@ -202,21 +264,25 @@ async function waitForRegion(
   throw new Error(`timed out waiting for closed prompt region: ${lastError}`);
 }
 
-function parseArgs(argv: string[]): { binary: string; outDir: string } {
+function parseArgs(argv: string[]): { binary: string; outDir: string; privateOutDir: string } {
   let binary = "";
   let outDir = "";
+  let privateOutDir = "";
   for (let index = 0; index < argv.length; index++) {
     if (argv[index] === "--binary") binary = argv[++index] ?? "";
     else if (argv[index] === "--out-dir") outDir = argv[++index] ?? "";
+    else if (argv[index] === "--private-out-dir") privateOutDir = argv[++index] ?? "";
     else throw new Error(`unknown argument: ${argv[index]}`);
   }
-  if (binary === "" || outDir === "") throw new Error("--binary and --out-dir are required");
-  return { binary: resolve(binary), outDir: resolve(outDir) };
+  if (binary === "" || outDir === "" || privateOutDir === "") {
+    throw new Error("--binary, --out-dir, and --private-out-dir are required");
+  }
+  return { binary: resolve(binary), outDir: resolve(outDir), privateOutDir: resolve(privateOutDir) };
 }
 
 export async function capturePromptInput243(argv: string[]): Promise<void> {
   if (process.platform !== "win32") throw new Error("compiled prompt capture requires Windows ConPTY");
-  const { binary, outDir } = parseArgs(argv);
+  const { binary, outDir, privateOutDir } = parseArgs(argv);
   const repoRoot = commandText(["git", "rev-parse", "--show-toplevel"], process.cwd());
   const sourceCommit = commandText(["git", "rev-parse", "HEAD"], repoRoot);
   if (commandText(["git", "status", "--porcelain", "--untracked-files=no"], repoRoot) !== "") {
@@ -224,9 +290,14 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
   }
   const binaryArtifact = within(repoRoot, binary, "binary artifact");
   const outArtifact = within(repoRoot, outDir, "output directory");
+  const privateRelative = relative(repoRoot, privateOutDir);
+  if (privateRelative === "" || (!privateRelative.startsWith("..") && !isAbsolute(privateRelative))) {
+    throw new Error("private output directory must be outside the public repository");
+  }
   const binaryBefore = readFileSync(binary);
   const binarySha256Before = sha256(binaryBefore);
   mkdirSync(outDir, { recursive: true });
+  mkdirSync(privateOutDir, { recursive: true });
 
   const home = mkdtempSync(join(tmpdir(), "ember-issue-243-"));
   const terminal = new Terminal({ cols: 80, rows: ROWS, allowProposedApi: true });
@@ -242,6 +313,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       env: {
         ...process.env,
         EMBER_HOME: home,
+        EMBER_REPO_ROOT: repoRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
       },
@@ -261,21 +333,38 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       }
       const observed = await waitForRegion(terminal, rawChunks, () => writes, 15_000);
       await writes;
-      const rawBytes = Buffer.from(rawChunks.join(""), "utf8");
-      const frameText = `${observed.lines.join("\n")}\n`;
+      const privateRawBytes = Buffer.from(rawChunks.join(""), "utf8");
+      const privateFrameText = `${observed.lines.join("\n")}\n`;
       const stem = `stage-${index + 1}-${columns}`;
       const rawPath = join(outDir, `${stem}.raw`);
+      const privateRawPath = join(privateOutDir, `${stem}.raw`);
       const framePath = join(outDir, `${stem}.frame.txt`);
+      const rawRedaction = redactHostPaths(privateRawBytes, [binary, repoRoot]);
+      const frameRedaction = redactHostPaths(Buffer.from(privateFrameText, "utf8"), [binary, repoRoot]);
+      const rawBytes = rawRedaction.publicBytes;
+      const frameText = Buffer.from(frameRedaction.publicBytes).toString("utf8");
+      const publicRegion = findClosedPromptRegion(frameText.replace(/\n$/, "").split("\n"), columns);
+      if (
+        publicRegion.top !== observed.region.top ||
+        publicRegion.bottom !== observed.region.bottom ||
+        publicRegion.contentColumns !== observed.region.contentColumns
+      ) {
+        throw new Error("path redaction changed prompt geometry");
+      }
+      writeFileSync(privateRawPath, privateRawBytes);
       writeFileSync(rawPath, rawBytes);
       writeFileSync(framePath, frameText, "utf8");
       stages.push({
         columns,
         rows: ROWS,
         rawPath: `${outArtifact}/${stem}.raw`,
+        privateRawLocator: `EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/${stem}.raw`,
+        privateRawBytes,
+        redactions: rawRedaction.redactions,
         framePath: `${outArtifact}/${stem}.frame.txt`,
         rawBytes,
         frameText,
-        region: observed.region,
+        region: publicRegion,
       });
     }
 
@@ -290,7 +379,11 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
     const receiptPath = join(outDir, "receipt.json");
     writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
 
-    for (const stage of stages) {
+    for (const [index, stage] of stages.entries()) {
+      const privateRawPath = join(privateOutDir, `stage-${index + 1}-${stage.columns}.raw`);
+      if (sha256(readFileSync(privateRawPath)) !== sha256(stage.privateRawBytes)) {
+        throw new Error("private raw capture changed after publication");
+      }
       if (sha256(readFileSync(resolve(repoRoot, stage.rawPath))) !== sha256(stage.rawBytes)) {
         throw new Error("raw capture changed after publication");
       }
