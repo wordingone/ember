@@ -264,5 +264,171 @@ class L3RegistryGraphTests(unittest.TestCase):
             self.assertEqual(report["spine"]["checkpoint_save_load"]["state"], "weak")
 
 
+class Round3TextPositionTests(unittest.TestCase):
+    """Round 3: an independent probe on dc6dcf3 fooled L1 with a root
+    Ember.cmd whose entire body was `@echo off` / a REM comment naming the
+    CLI entry / an echo printing one line -- run for real it invokes
+    nothing, but the harness's own string-literal scan credited the comment
+    text as evidence and returned a full PASS. These reproduce the probe's
+    fixture and its two named siblings (print-argument, unreachable branch)
+    as permanent tests, plus the secondary L3 duplicate-import finding."""
+
+    def test_probe_do_nothing_launcher_never_resolves_true(self):
+        """The probe's exact attack1b: @echo off / REM comment naming the
+        entry path / echo. Six genuinely registered spine commands sit
+        alongside it (nothing hostile in L2/L3) to isolate L1's own hole --
+        this must not resolve true, and must not reach an overall PASS."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "Ember.cmd",
+                "@echo off\r\n"
+                'REM stub, does nothing. "tools/ember-cli/anything-at-all" is never invoked.\r\n'
+                "echo This launcher performs no action.\r\n",
+            )
+            _write(root / "README.md", "Run Ember.cmd to start Ember.\n")
+            stems = ["custody", "tokenizer", "checkpoint", "owned", "benchmark", "train"]
+            for i, kw in enumerate(stems):
+                _command_module(
+                    root,
+                    f"spine{i}",
+                    f"spine{i}",
+                    "custody identity tokenizer lineage checkpoint owned serve seat "
+                    "benchmark train",
+                )
+            _registry_importing(root, [f"spine{i}" for i in range(len(stems))])
+
+            report = harness.run(root)
+            self.assertNotEqual(
+                report["checks"]["L1_root_launcher"]["state"], "resolved-true", report
+            )
+            self.assertFalse(report["verdict"].startswith("PASS"), report)
+
+    def test_probe_comment_only_marker_never_resolves_true(self):
+        """The probe's narrower attack1: a comment-only .cmd whose only
+        quoted string is a path that was never created."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "decoy.cmd",
+                '@echo off\r\nREM "tools/ember-cli/README-not-real.md" is only mentioned here.\r\n',
+            )
+            report = harness.run(root)
+            self.assertNotEqual(
+                report["checks"]["L1_root_launcher"]["state"], "resolved-true", report
+            )
+
+    def test_echo_print_argument_never_resolves_true(self):
+        """A launcher whose only mention of the entry path is inside an
+        echo argument -- prints it, never runs it."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "Ember.cmd",
+                '@echo off\r\necho "tools/ember-cli/src is where the code lives"\r\n',
+            )
+            report = harness.run(root)
+            self.assertNotEqual(
+                report["checks"]["L1_root_launcher"]["state"], "resolved-true", report
+            )
+
+    def test_write_host_print_argument_never_resolves_true(self):
+        """Same shape, PowerShell Write-Host instead of batch echo."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "Real.cmd",
+                '@echo off\r\npowershell.exe -File "%~dp0scripts\\launch.ps1"\r\n',
+            )
+            _write(
+                root / "scripts/launch.ps1",
+                'Write-Host "tools\\ember-cli\\src is where the code lives"\r\n',
+            )
+            report = harness.run(root)
+            self.assertNotEqual(
+                report["checks"]["L1_root_launcher"]["state"], "resolved-true", report
+            )
+
+    def test_unreachable_branch_never_resolves_true(self):
+        """A launcher whose entry-path mention sits after an unconditional
+        top-level exit -- control leaves the script before reaching it."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "Ember.cmd",
+                '@echo off\r\nexit /b 0\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n',
+            )
+            report = harness.run(root)
+            self.assertNotEqual(
+                report["checks"]["L1_root_launcher"]["state"], "resolved-true", report
+            )
+
+    def test_conditional_exit_inside_block_does_not_kill_reachability(self):
+        """Sanity control, and the real Ember.cmd's own shape: an exit
+        INSIDE an `if (...)` block must not be read as an unconditional
+        top-level terminator -- the real chain has exactly this pattern
+        (an early-arg-check exit before the real invocation line) and must
+        keep resolving true."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "Ember.cmd",
+                "@echo off\r\n"
+                'if not "%~1"=="" (\r\n'
+                "  echo no args allowed\r\n"
+                "  exit /b 2\r\n"
+                ")\r\n"
+                'call "%~dp0tools\\ember-cli\\src\\x.ts"\r\n',
+            )
+            report = harness.run(root)
+            self.assertEqual(report["checks"]["L1_root_launcher"]["state"], "resolved-true")
+
+    def test_duplicate_import_binding_credits_neither_module(self):
+        """Secondary L3 finding: two `import { createTrainCommand } from
+        ...}` statements binding the SAME local identifier to two different
+        modules -- invalid TypeScript, but the harness reads bytes, not a
+        build result. Neither the real module nor the decoy may be
+        credited; the row must stay unsatisfied and the ambiguity must be
+        named."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(root / "Real.cmd", '@echo off\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n')
+            _write(
+                root / "tools/ember-cli/src/commands/real-train.ts",
+                "export function createTrainCommand() {\n"
+                '  return { name: "train", description: "training launch 3b" };\n'
+                "}\n",
+            )
+            _write(
+                root / "tools/ember-cli/src/commands/decoy-orphan.ts",
+                "export function createTrainCommand() {\n"
+                '  return { name: "train-decoy", description: "not the real training launch" };\n'
+                "}\n",
+            )
+            _write(
+                root / "tools/ember-cli/src/command-registry.ts",
+                "import { createTrainCommand } from './commands/real-train.ts';\n"
+                "import { createTrainCommand } from './commands/decoy-orphan.ts';\n"
+                "const defaultDeps = {\n"
+                "  getBuiltinCommands: () => [\n"
+                "    createTrainCommand(),\n"
+                "  ],\n"
+                "};\n",
+            )
+            report = harness.run(root)
+            self.assertNotEqual(
+                report["spine"]["training_launch_3b"]["state"], "resolved-true", report
+            )
+            evidence = report["spine"]["training_launch_3b"]["evidence"]
+            self.assertNotIn("train-decoy", evidence)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
