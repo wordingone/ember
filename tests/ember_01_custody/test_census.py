@@ -445,9 +445,10 @@ def test_checked_in_registry_is_complete_and_claims_no_execution() -> None:
     )
 
 
-def test_checked_in_root_spec_names_every_known_required_surface() -> None:
+def test_checked_in_root_spec_distinguishes_owned_and_external_surfaces() -> None:
     path = REPO_ROOT / "manifests" / "ember-01-custody" / "root-spec.json"
     spec = json.loads(path.read_text(encoding="utf-8"))
+    rows = {row["root_id"]: row for row in spec["roots"]}
     required_ids = {row["root_id"] for row in spec["roots"] if row["required"]}
     assert {
         "public-repository",
@@ -468,15 +469,101 @@ def test_checked_in_root_spec_names_every_known_required_surface() -> None:
         "untracked-backup-root",
         "recovery-root",
         "durable-recovery-root",
+        "internal-execution-tree",
+        "auditor-stale-clone",
         "auditor-evidence-root",
         "collaborator-evidence-root",
-        "internal-execution-tree",
     } <= required_ids
+    for root_id in (
+        "auditor-stale-clone",
+        "auditor-evidence-root",
+        "collaborator-evidence-root",
+    ):
+        assert rows[root_id]["required"] is True
+        assert (
+            rows[root_id]["absence_policy"]
+            == "external_party_evidence_absent_by_design"
+        )
+    assert rows["internal-execution-tree"] == {
+        "root_id": "internal-execution-tree",
+        "binding": "EMBER_INTERNAL_EXECUTION_ROOT",
+        "required": True,
+        "scan": "git_repository",
+        "source_root_id": "local-execution-tree",
+        "provenance_class": "owned_lineage_candidate",
+        "lineage_admissibility": "unresolved_requires_item_review",
+        "mutability": "dirty_live_tree",
+        "owner": "operator",
+        "authority_status": "candidate_not_selected",
+        "disposition": "logical_alias_of_local_execution_tree",
+    }
     assert all(
         not any(token in json.dumps(row) for token in ("B:\\\\", "C:\\\\"))
         for row in spec["roots"]
     )
 
+
+def test_missing_required_external_root_with_closed_attestation_is_resolved() -> None:
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "external-auditor",
+                    "required": True,
+                    "scan": "files",
+                    "provenance_class": "evidence_receipt",
+                    "lineage_admissibility": "excluded_evidence_only",
+                    "mutability": "auditor_managed",
+                    "owner": "auditor",
+                    "authority_status": "noncanonical_evidence",
+                    "absence_policy": "external_party_evidence_absent_by_design",
+                }
+            ]
+        },
+        {},
+    )
+
+    assert result["roots"] == [
+        {
+            "root_id": "external-auditor",
+            "required": True,
+            "present": False,
+            "scan": "files",
+            "provenance_class": "evidence_receipt",
+            "lineage_admissibility": "excluded_evidence_only",
+            "absence_policy": "external_party_evidence_absent_by_design",
+            "absence_attested": True,
+        }
+    ]
+    assert result["contradictions"] == []
+
+
+
+def test_required_absence_policy_cannot_bypass_owned_root_custody() -> None:
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "owned-root",
+                    "required": True,
+                    "scan": "files",
+                    "provenance_class": "owned_lineage_candidate",
+                    "lineage_admissibility": "unresolved_requires_item_review",
+                    "mutability": "operator_managed",
+                    "owner": "operator",
+                    "authority_status": "candidate_not_selected",
+                    "absence_policy": "external_party_evidence_absent_by_design",
+                }
+            ]
+        },
+        {},
+    )
+
+    assert result["roots"][0]["absence_attested"] is False
+    assert {row["code"] for row in result["contradictions"]} == {
+        "invalid_required_absence_policy",
+        "required_root_missing",
+    }
 
 def git(root: Path, *args: str) -> str:
     result = subprocess.run(

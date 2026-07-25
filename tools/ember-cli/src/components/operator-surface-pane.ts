@@ -32,13 +32,17 @@ export interface OperatorSurfaceInput {
 }
 
 export type OperatorRunStatus = "RUNNING" | "STALE" | "IDLE" | "OFFLINE";
+export type OperatorControlAction = "START" | "PAUSE" | "RESUME" | "RESTART";
 
 export interface OperatorSeriesPoint {
   runId: string;
   step: number;
   loss?: number;
   totalSteps?: number;
-  throughput?: number;
+  tokensPerSecond?: number;
+  learningRate?: number;
+  gpuWatts?: number;
+  boardEnergyJoulesTotal?: number;
   vramUsedGib?: number;
   gpuUtilizationPct?: number;
   ts: string;
@@ -110,19 +114,23 @@ function validTrainStep(event: TelemetryEvent, nowMs: number = Date.now()): Oper
   if (!runId || !finiteNumber(step) || !Number.isInteger(step) || step < 1 || !finiteNumber(timestamp) || timestamp > nowMs) return undefined;
   const lossValue = event.payload["loss"];
   const loss = finiteNumber(lossValue) ? lossValue : undefined;
-  const stepMs = event.payload["step_ms"];
+  const directNonnegative = (value: unknown): number | undefined =>
+    finiteNumber(value) && value >= 0 ? value : undefined;
+  const tokensPerSecond = directNonnegative(event.payload["tokens_per_second"]);
+  const learningRate = directNonnegative(event.payload["learning_rate"]);
+  const gpuWatts = directNonnegative(event.payload["gpu_watts"]);
+  const boardEnergyJoulesTotal = directNonnegative(event.payload["board_energy_joules_total"]);
   const free = event.payload["free_gib"];
   const total = event.payload["total_gib"];
-  const throughput = finiteNumber(stepMs) && stepMs > 0 ? 60_000 / stepMs : undefined;
   const vramUsedGib = finiteNumber(free) && finiteNumber(total) && free >= 0 && total > 0 && free <= total
     ? total - free
     : undefined;
   const gpuValue = event.payload["gpu_utilization_pct"];
   const gpuUtilizationPct = finiteNumber(gpuValue) && gpuValue >= 0 && gpuValue <= 100 ? gpuValue : undefined;
-  if (loss === undefined && throughput === undefined && vramUsedGib === undefined && gpuUtilizationPct === undefined) return undefined;
+  if (loss === undefined && tokensPerSecond === undefined && learningRate === undefined && gpuWatts === undefined && boardEnergyJoulesTotal === undefined && vramUsedGib === undefined && gpuUtilizationPct === undefined) return undefined;
   const totalStepsValue = event.payload["total_steps"];
   const totalSteps = finiteNumber(totalStepsValue) && Number.isInteger(totalStepsValue) && totalStepsValue > 0 ? totalStepsValue : undefined;
-  return { runId, step, totalSteps, loss, throughput, vramUsedGib, gpuUtilizationPct, ts: event.ts };
+  return { runId, step, totalSteps, loss, tokensPerSecond, learningRate, gpuWatts, boardEnergyJoulesTotal, vramUsedGib, gpuUtilizationPct, ts: event.ts };
 }
 
 interface SelectedRunEvidence {
@@ -245,12 +253,22 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   const maxPoints = Math.max(2, Math.floor(plotWidth) - 8);
   const selection = selectedRunEvidence(telemetry, nowMs);
   const runId = selection?.runId;
-  const points = runId
+  const rawPoints = runId
     ? telemetry.recentEvents
         .map((event) => validTrainStep(event, nowMs))
         .filter((point): point is OperatorSeriesPoint => point?.runId === runId)
         .sort((left, right) => left.step - right.step || Date.parse(left.ts) - Date.parse(right.ts))
     : [];
+  let lastEnergy = Number.NEGATIVE_INFINITY;
+  const points = rawPoints.map((point) => {
+    if (point.boardEnergyJoulesTotal === undefined) return point;
+    if (point.boardEnergyJoulesTotal < lastEnergy) {
+      const { boardEnergyJoulesTotal: _rejected, ...truthfulPoint } = point;
+      return truthfulPoint;
+    }
+    lastEnergy = point.boardEnergyJoulesTotal;
+    return point;
+  });
   const checkpoints = runId
     ? telemetry.recentEvents
         .filter((event) => event.kind === "checkpoint" && eventRunId(event) === runId)
@@ -265,7 +283,10 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   const loss = plotLines("loss", valueSamples(points, (point) => point.loss), checkpointSteps, maxPoints);
   const gpu = valueSamples(points, (point) => point.gpuUtilizationPct);
   const vram = valueSamples(points, (point) => point.vramUsedGib);
-  const throughput = valueSamples(points, (point) => point.throughput);
+  const tokensPerSecond = valueSamples(points, (point) => point.tokensPerSecond);
+  const learningRate = valueSamples(points, (point) => point.learningRate);
+  const gpuWatts = valueSamples(points, (point) => point.gpuWatts);
+  const boardEnergy = valueSamples(points, (point) => point.boardEnergyJoulesTotal);
   const modelGrowth = eventMetricSamples(telemetry, runId, "model_growth", "value", nowMs);
   const capability = eventMetricSamples(telemetry, runId, "capability_score", "score", nowMs);
   const latestTrainTs = selection?.latestTs;
@@ -276,7 +297,10 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
     "RESOURCE EFFICIENCY",
     ...familyLines("GPU utilization %", gpu, "GPU UTILIZATION", maxPoints, checkpointSteps),
     ...familyLines("VRAM GiB", vram, "VRAM", maxPoints, checkpointSteps),
-    ...familyLines("throughput", throughput, "THROUGHPUT/SPEED", maxPoints, checkpointSteps),
+    ...familyLines("tokens/s", tokensPerSecond, "TOKENS/S", maxPoints, checkpointSteps),
+    ...familyLines("learning rate", learningRate, "LEARNING RATE", maxPoints, checkpointSteps),
+    ...familyLines("GPU watts", gpuWatts, "GPU WATTS", maxPoints, checkpointSteps),
+    ...familyLines("board energy joules", boardEnergy, "ENERGY", maxPoints, checkpointSteps),
   ]);
   const modelGrowthLines = decorate(familyLines("model growth", modelGrowth, "MODEL GROWTH", maxPoints, checkpointSteps));
   const capabilityLines = decorate(familyLines("capability score", capability, "CAPABILITY SCORES", maxPoints, checkpointSteps));
@@ -352,8 +376,8 @@ export function buildOperatorSurfaceSnapshot({
         ? `step ${latestPoint.step}/${latestPoint.totalSteps}`
         : `step ${latestPoint.step}`);
     }
-    if (finiteNumber(latestPoint.throughput)) {
-      metrics.push(`throughput ${latestPoint.throughput.toFixed(1)} step/min`);
+    if (finiteNumber(latestPoint.tokensPerSecond)) {
+      metrics.push(`tokens/s ${latestPoint.tokensPerSecond.toFixed(1)}`);
     }
   }
 
@@ -405,6 +429,7 @@ export function buildOperatorSurfaceSnapshot({
 }
 
 export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
+  onControl?: (action: OperatorControlAction, runId?: string) => void;
   width?: number;
   height?: number;
   terminalColumns?: number;
@@ -444,8 +469,6 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
   const checkpointSteps = new Set(snapshot.graphs.checkpoints.map((checkpoint) => checkpoint.step));
   const axisByStep = new Map<number, { step: number }>();
   for (const point of snapshot.graphs.points) axisByStep.set(point.step, { step: point.step });
-  for (const point of snapshot.graphs.modelGrowthPoints) axisByStep.set(point.step, { step: point.step });
-  for (const point of snapshot.graphs.capabilityPoints) axisByStep.set(point.step, { step: point.step });
   for (const step of checkpointSteps) axisByStep.set(step, { step });
   const axisSamples = sharedWindow([...axisByStep.values()].sort((left, right) => left.step - right.step), plotColumns, checkpointSteps);
   const stateTag = snapshot.status === "STALE" ? "STALE/HISTORICAL" : snapshot.status === "OFFLINE" ? "OFFLINE/HISTORICAL" : undefined;
@@ -454,8 +477,6 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
       const point = snapshot.graphs.points.find((candidate) => candidate.step === axisPoint.step);
       return { step: axisPoint.step, value: point ? value(point) : undefined };
     });
-  const eventMetric = (points: OperatorMetricPoint[]) =>
-    axisSamples.map((axisPoint) => ({ step: axisPoint.step, value: points.find((point) => point.step === axisPoint.step)?.value }));
   const axis = axisSamples.length > 0
     ? `step/time ${axisSamples.map((point) => point.step).join(" ")}`
     : "step/time INSUFFICIENT REAL HISTORY";
@@ -468,11 +489,10 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
     `RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`,
     compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag),
     compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag),
-    compactMetricLine("throughput/speed", pointMetric((point) => point.throughput), plotColumns, stateTag),
-    `MODEL GROWTH${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("model growth", eventMetric(snapshot.graphs.modelGrowthPoints), plotColumns, stateTag),
-    `CAPABILITY SCORES${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("capability score", eventMetric(snapshot.graphs.capabilityPoints), plotColumns, stateTag),
+    compactMetricLine("tokens/s", pointMetric((point) => point.tokensPerSecond), plotColumns, stateTag),
+    compactMetricLine("learning rate", pointMetric((point) => point.learningRate), plotColumns, stateTag),
+    compactMetricLine("GPU watts", pointMetric((point) => point.gpuWatts), plotColumns, stateTag),
+    compactMetricLine("energy joules", pointMetric((point) => point.boardEnergyJoulesTotal), plotColumns, stateTag),
     boundedSurfaceLine(axis, plotColumns + 20),
     boundedSurfaceLine(marker, plotColumns + 20),
   ];
@@ -482,6 +502,7 @@ export function OperatorSurfacePane({
   height,
   terminalColumns,
   terminalRows,
+  onControl,
   ...input
 }: OperatorSurfacePaneProps): React.ReactElement {
   const terminalWidth = finiteNumber(terminalColumns) ? terminalColumns : 1727;
@@ -514,6 +535,26 @@ export function OperatorSurfacePane({
       paddingX: 1,
     },
     React.createElement(Text, { key: "status", color: statusColor, bold: true }, snapshot.status),
+    React.createElement(
+      Box,
+      { key: "controls", flexDirection: "row", flexShrink: 0 },
+      ...(["START", "PAUSE", "RESUME", "RESTART"] as const).map((action) => {
+        const enabled = action === "START" ? snapshot.status === "IDLE"
+          : action === "PAUSE" ? snapshot.status === "RUNNING"
+          : action === "RESUME" ? input.telemetry.runStatus?.phase === "PAUSED"
+          : snapshot.status === "STALE" || snapshot.status === "OFFLINE";
+        return React.createElement(
+          Box,
+          {
+            key: `control-${action}`,
+            flexShrink: 0,
+            paddingRight: 1,
+            onClick: enabled ? () => onControl?.(action, snapshot.graphs.runId) : undefined,
+          },
+          React.createElement(Text, { color: enabled ? "green" : "gray" }, `[${action}]`),
+        );
+      }),
+    ),
     ...compactMetrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
     React.createElement(Text, { key: "source", dimColor: true }, snapshot.source),
     ...graphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),

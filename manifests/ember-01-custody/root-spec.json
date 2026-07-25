@@ -96,11 +96,13 @@
                       "binding":  "EMBER_INTERNAL_EXECUTION_ROOT",
                       "required":  true,
                       "scan":  "git_repository",
-                      "provenance_class":  "unresolved",
+                      "source_root_id":  "local-execution-tree",
+                      "provenance_class":  "owned_lineage_candidate",
                       "lineage_admissibility":  "unresolved_requires_item_review",
-                      "mutability":  "unknown",
-                      "owner":  "unresolved",
-                      "authority_status":  "missing_or_relocated"
+                      "mutability":  "dirty_live_tree",
+                      "owner":  "operator",
+                      "authority_status":  "candidate_not_selected",
+                      "disposition":  "logical_alias_of_local_execution_tree"
                   },
                   {
                       "root_id":  "auditor-stale-clone",
@@ -111,7 +113,8 @@
                       "lineage_admissibility":  "excluded_stale_audit_copy",
                       "mutability":  "auditor_managed",
                       "owner":  "auditor",
-                      "authority_status":  "noncanonical_evidence"
+                      "authority_status":  "noncanonical_evidence",
+                      "absence_policy":  "external_party_evidence_absent_by_design"
                   },
                   {
                       "root_id":  "auditor-evidence-root",
@@ -122,7 +125,8 @@
                       "lineage_admissibility":  "excluded_evidence_only",
                       "mutability":  "auditor_managed",
                       "owner":  "auditor",
-                      "authority_status":  "noncanonical_evidence"
+                      "authority_status":  "noncanonical_evidence",
+                      "absence_policy":  "external_party_evidence_absent_by_design"
                   },
                   {
                       "root_id":  "collaborator-evidence-root",
@@ -133,7 +137,8 @@
                       "lineage_admissibility":  "excluded_evidence_only",
                       "mutability":  "collaborator_managed",
                       "owner":  "collaborator",
-                      "authority_status":  "noncanonical_evidence"
+                      "authority_status":  "noncanonical_evidence",
+                      "absence_policy":  "external_party_evidence_absent_by_design"
                   },
                   {
                       "root_id":  "live-receipts-root",

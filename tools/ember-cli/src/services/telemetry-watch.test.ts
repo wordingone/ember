@@ -155,6 +155,25 @@ describe("training telemetry custody", () => {
       handle.stop();
     }
   });
+  test("retains measured learning, token throughput, and energy without deriving throughput from step time", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-measured-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    await writeFile(channel, JSON.stringify({
+      ts: "2026-07-17T05:00:00.000Z", kind: "train_step", source: "journal",
+      payload: { run_id: "run-measured", step: 1, loss: 2, step_ms: 1000,
+        tokens_per_second: 321.5, learning_rate: 0.0002, gpu_uuid: "GPU-1",
+        gpu_watts: 275.25, board_energy_joules_total: 550.5, energy_status: "MEASURED" },
+    }) + "\n", "utf8");
+    const handle = startTelemetryWatch({ channelPath: channel, now: () => Date.parse("2026-07-17T05:00:01.000Z") });
+    try {
+      await Bun.sleep(650);
+      expect(getState().activeRun).toMatchObject({
+        runId: "run-measured", tokensPerSecond: 321.5, learningRate: 0.0002,
+        gpuUuid: "GPU-1", gpuWatts: 275.25, boardEnergyJoulesTotal: 550.5,
+        energyStatus: "MEASURED",
+      });
+    } finally { handle.stop(); }
+  });
   test("rejects missing or invalid timestamps instead of fabricating evidence time", async () => {
     scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-missing-ts-"));
     const channel = join(scratch, "telemetry.jsonl");
