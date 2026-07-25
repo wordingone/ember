@@ -223,6 +223,7 @@ describe("compiled lifecycle action completion", () => {
     const driver = await import("./lifecycle-smoke-driver.ts");
     expect(driver.completedPromptFrame).toBeFunction();
     const completedPromptFrame = driver.completedPromptFrame!;
+    expect(driver.slashCommandNeedsSecondEnter).toBeFunction();
 
     const row = (content: string): string => `│${content.padEnd(18)}│`;
     const pending = [
@@ -237,6 +238,8 @@ describe("compiled lifecycle action completion", () => {
     expect(completedPromptFrame(cleared, 20, "/train")).toBe(true);
     expect(completedPromptFrame([...pending, " ".repeat(20), ...cleared], 20, "/train"))
       .toBe(true);
+    expect(driver.slashCommandNeedsSecondEnter!(pending, 20, "/train")).toBe(true);
+    expect(driver.slashCommandNeedsSecondEnter!(cleared, 20, "/train")).toBe(false);
   });
 });
 
