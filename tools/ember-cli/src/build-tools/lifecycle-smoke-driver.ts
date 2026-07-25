@@ -100,6 +100,7 @@ function findClosedPromptRegion(frame: string[], width: number): ClosedPromptReg
   if (frame.length === 0 || frame.some((line) => line.length !== width)) {
     throw new Error("frame does not match terminal width");
   }
+  let latest: ClosedPromptRegion | null = null;
   for (let top = 0; top < frame.length; top += 1) {
     if (!frame[top]!.startsWith("╭")) continue;
     const right = frame[top]!.indexOf("╮", 1);
@@ -110,9 +111,10 @@ function findClosedPromptRegion(frame: string[], width: number): ClosedPromptReg
       if (!interior.some((line) => line.includes("❯"))) continue;
       if (interior.length < 2) continue;
       if (!interior.every((line) => line[0] === "│" && line[right] === "│")) continue;
-      return { top, bottom, right };
+      latest = { top, bottom, right };
     }
   }
+  if (latest !== null) return latest;
   throw new Error("closed prompt region not found");
 }
 

@@ -234,5 +234,7 @@ describe("compiled lifecycle action completion", () => {
 
     expect(completedPromptFrame(pending, 20, "/train")).toBe(false);
     expect(completedPromptFrame(cleared, 20, "/train")).toBe(true);
+    expect(completedPromptFrame([...pending, " ".repeat(20), ...cleared], 20, "/train"))
+      .toBe(true);
   });
 });
