@@ -4,7 +4,7 @@
 
 import { createHash } from "crypto";
 import type { Stats } from "fs";
-import { lstat, open, readdir } from "fs/promises";
+import { lstat, open, readdir, realpath } from "fs/promises";
 import { basename, dirname, join, resolve } from "path";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -353,11 +353,12 @@ export async function verifyCheckpointBundle(
   const requestedDir = resolve(checkpointDir);
   await requireRegularPath(requestedDir, "directory", "checkpoint directory");
   await requireNoReparseAncestry(requestedDir);
-  // With every ancestor proven to be a real directory, requestedDir already names the same
-  // directory realpath() would return, so it is used directly. realpath() is deliberately not
-  // called here: on Windows its sync and async forms disagree about canonical casing, which
-  // would make the surfaced checkpointDir unstable for no verification benefit.
-  const canonicalDir = requestedDir;
+  // The surfaced path is canonical, not the caller's spelling: VerifiedCheckpointBundle is an
+  // authority object, so its checkpointDir must name the same string for the same directory no
+  // matter how the caller spelled it. Canonicalising is safe here precisely because the ancestry
+  // walk above already proved no component is a reparse point, so realpath cannot move this path
+  // to a different directory - it only fixes casing and expands short-name components.
+  const canonicalDir = await realpath(requestedDir);
 
   const manifestPath = join(canonicalDir, MANIFEST_NAME);
   await requireRegularPath(manifestPath, "file", MANIFEST_NAME);

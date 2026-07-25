@@ -6,13 +6,12 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { createHash } from "crypto";
 import {
   mkdtempSync,
-  realpathSync,
   rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from "fs";
-import { open } from "fs/promises";
+import { open, realpath } from "fs/promises";
 import { tmpdir } from "os";
 import { basename, dirname, join } from "path";
 import {
@@ -115,7 +114,7 @@ describe("verifyCheckpointBundle", () => {
       const verified = await verifyCheckpointBundle(bundle.root);
 
       expect(verified.schemaVersion).toBe(schema);
-      expect(verified.checkpointDir).toBe(bundle.root);
+      expect(verified.checkpointDir).toBe(await realpath(bundle.root));
       expect(verified.artifacts.map((row) => row.path).sort()).toEqual(
         bundle.manifest.shards.map((row) => row.path).sort(),
       );
@@ -293,22 +292,24 @@ describe("verifyCheckpointBundle", () => {
     );
   });
 
-  it("accepts a bundle whose requested path differs from the on-disk canonical form", async () => {
+  it.skipIf(process.platform !== "win32")(
+    "accepts a bundle whose requested path differs from the on-disk canonical form",
+    async () => {
     const bundle = writeBundle("ember-sparse-checkpoint-v5");
-    const canonical = realpathSync(bundle.root);
+    const canonical = await realpath(bundle.root);
     const flipped =
       canonical === canonical.toUpperCase()
         ? canonical.toLowerCase()
         : canonical.toUpperCase();
-    if (flipped === canonical || realpathSync(flipped) !== canonical) {
-      return; // case-sensitive filesystem: the two spellings are different directories
-    }
+    expect(flipped).not.toBe(canonical);
+    expect(await realpath(flipped)).toBe(canonical);
 
     const verified = await verifyCheckpointBundle(flipped);
 
     expect(verified.checkpointDir).toBe(canonical);
     expect(verified.schemaVersion).toBe("ember-sparse-checkpoint-v5");
-  });
+    },
+  );
 
   it("refuses a bundle reached through a symlinked ancestor", async () => {
     const bundle = writeBundle("ember-sparse-checkpoint-v5");
