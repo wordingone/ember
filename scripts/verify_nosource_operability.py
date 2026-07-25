@@ -43,40 +43,55 @@ state/failure-classes/semantic-validation-without-bytes-2026-07-25.md,
 "Fourth instance". Both L1 and L3 are rebuilt below to bind evidence to
 bytes the artifact does not control):
 
-  L1  Root launcher exists AND its bytes resolve, hop by hop through the
-      string-literal path references it contains, to a target that matches
-      the EXACT launcher grammar this repository generates: a variable
-      bound via `Join-Path` to a path landing inside the repository's owned
-      CLI entry (`tools/ember-cli`), that same variable later reached by a
-      `Push-Location`/`Set-Location`, and a call-operator invocation (`&
-      $var ...`) appearing after that -- all three within reachable code (see
-      below). A file's extension or name is used only to decide which root
-      files are worth opening -- it is never authority for the verdict. A
-      literal that merely NAMES the CLI entry without this causal shape
-      around it does not resolve true on its own; it is `weak`, undecided,
-      not reasoned about further -- round 3.1 (2026-07-25), after the round
-      3 cure's own "invocation position" heuristic (comment/print/dead-code
-      filtering, then ANY reachable literal containing the entry substring)
-      was flagged as the same class one level in: text presence, at a
-      slightly narrower position, still deciding the verdict. This narrows
-      the FINAL acceptance test from "does a reachable literal mention the
-      entry" to "does reachable code match the one grammar this repository's
-      own build actually emits" -- everything outside that grammar (a
-      different pattern this repo has never generated, an indirect binding,
-      a computed path, mere mention) is refused as weak, never accepted as a
-      guess about position. Reachability itself is unchanged from round 3:
-      comment lines (REM/::/#), print-statement arguments (echo/Write-Host/
-      Write-Output/printf), and code after an unconditional top-level
-      terminator (a bare `exit`/`exit /b`/`return` at the current nesting
-      depth) are excluded before the grammar is matched -- born from an
-      independent probe on `dc6dcf3` that built a root `Ember.cmd` whose
-      entire body was `@echo off` / a REM comment naming the CLI entry / an
-      echo that prints one line and invokes nothing, and got a full PASS.
-      A bounded runtime probe (substitute an owned sentinel at the CLI
-      entry, execute the launcher under a timeout in a scratch copy, observe
-      whether the sentinel actually fires) is the stronger form -- it stops
-      reasoning about text entirely and observes behavior -- and was judged,
-      not built, this round; see rework-harness-r3-1-report.md for why.
+  L1  `resolved-true` is granted ONLY by actually executing the candidate
+      root launcher, for real, under a bounded timeout, in a scratch copy
+      that never touches the real tree, with an owned SENTINEL substituted
+      at the CLI entry -- and observing that the sentinel fires (round 4,
+      2026-07-25). No reading of the launcher's text can grant true. This
+      followed three text-based cures each defeated by the next unenumerated
+      shape: extension (bcf1057) -> keyword mention (round 3, `dc6dcf3`) ->
+      comment/print/dead-code-filtered mention (round 3 cure) ->
+      "invocation position" grammar (round 3.1) -> defeated by `type
+      "tools\ember-cli\src\main.ts"` (round 4's own probe): printing a
+      path is neither a comment, a print-statement argument, nor dead code,
+      so it is not any exclusion written so far, and is not the recognised
+      grammar either -- it fell through to `ambiguous`/`weak` under round
+      3.1, one static miss short of a false PASS. `findstr`, `copy`,
+      `more`, `fc`, a redirection target are the same family: the set of
+      non-invoking uses of a path is open-ended, and no exclusion list has
+      a boundary. The runtime probe stops enumerating that set.
+
+      Mechanism: the CLI entry file (package.json's `bin` target -- the one
+      spec-declared location, never a string a candidate happens to
+      mention) is overwritten in the scratch copy with a tiny,
+      extension-appropriate stub that writes a marker file only if invoked
+      for real. `EMBER_LAUNCH_TEST_MODE=1` /
+      `EMBER_LAUNCH_TEST_RUNTIME=<owned sentinel>` are also set in the
+      probe's environment, substituting for `bun` at this repository's own
+      `& $bun run entrypoints/main.ts` call site -- the hook exists in
+      `launch-ember-cli.ps1` precisely for this, and lets the probe avoid
+      the real production path's git-identity and built-desktop-app
+      requirements, neither of which a bounded probe can safely exercise.
+      Any launcher that does not read that env var (every hostile/synthetic
+      fixture) simply ignores it.
+
+      Verdict, per the reviewer's binding refinement: a probe that could
+      not even be STARTED (no interpreter available for the candidate's
+      extension, the scratch stage failed, the OS refused to launch it) is
+      `weak` -- the environment told us nothing about the launcher. A probe
+      that ran to completion or to its timeout, for real, WITHOUT the
+      sentinel firing is `resolved-false` -- a definite negative, not an
+      absence of information. Only an observed fire is `resolved-true`, and
+      the receipt binds the sentinel bytes, the launcher bytes, the working
+      directory, the argv, the timeout, the exit code, and the observed
+      fire content, so the verdict is reproducible without rerunning it.
+
+      The round-3/3.1 static machinery (`resolve_invocation`,
+      `_matches_known_launcher_grammar`, comment/print/dead-code exclusion)
+      is KEPT but DEMOTED: it may narrow candidates or refuse outright as a
+      pre-filter, and its evidence is still included for diagnostic value,
+      but it may never independently grant `resolved-true` -- that
+      authority belongs to the runtime sentinel alone.
   L2  Launcher is documented: README.md or docs/START-HERE.md names a
       launcher that itself resolved-true, so a no-source reader can find a
       real one (documenting a decoy does not count).
@@ -102,31 +117,32 @@ WHAT IS NOT MEASURED (permanently undecidable here, human capture required):
   - whether the launched process reaches a usable first pixel.
   - round 3 (2026-07-25) closed the comment/print/dead-code-after-exit
     forms of "a string that never executes still counts". Round 3.1
-    (2026-07-25) closed the form that cure itself introduced -- "a
-    reachable literal that merely names the entry" -- by narrowing L1's
-    acceptance to one exact, causally-shaped grammar instead of a broader
-    guess about invocation position. What remains OPEN, disclosed rather
-    than silently passed: (a) a genuine launcher chain this repository has
-    never yet generated, using a DIFFERENT causal shape (a different
-    cmdlet, an indirect variable hop, a computed path) -- it is refused as
-    `weak`, an under-recognition rather than an over-acceptance, but it is
-    a real false-negative surface; (b) a literal inside a CONDITIONAL block
-    whose condition the harness does not evaluate (e.g. `if 0 ( ... )` at
-    depth > 0 is not specially detected as dead -- only depth-0 code after
-    an unconditional bare terminator is); (c) any shell form beyond batch/
-    PowerShell/sh comment and print syntax the recognised regexes cover.
-    None of these is decided by STATIC reading alone -- the harness reasons
-    about text shape, not observed behavior. A bounded runtime probe
-    (execute the launcher against a sentinel CLI entry, in a scratch copy,
-    under a timeout, and observe whether the sentinel fires) would close
-    all three by replacing the grammar guess with an actual execution
-    trace; it was judged reachable in principle for this repository (the
-    real `launch-ember-cli.ps1` already carries an `EMBER_LAUNCH_TEST_MODE`
-    hook) but was not built this round given the window and the risk of a
-    hastily-built subprocess-execution harness introducing its own defects.
-    A static reader cannot fully decide what a shell script does; this
-    harness closes the forms of the gap that were demonstrated against it
-    and names what is still open rather than claiming completeness.
+    narrowed acceptance to one exact grammar, and was itself defeated by
+    `type "tools\ember-cli\src\main.ts"` -- an unenumerated non-invoking
+    use of the path, one instance of an open-ended class no exclusion list
+    can bound. Round 4 (2026-07-25) closes the whole class at once by
+    replacing static text-reasoning with actual execution: L1's
+    `resolved-true` now comes ONLY from an owned sentinel, substituted at
+    the CLI entry, observed to fire when the candidate launcher is actually
+    run under a timeout in a scratch copy. What remains OPEN, disclosed
+    rather than silently passed: (a) a launcher whose real invocation
+    depends on interactive input, a specific OS/shell the probe's runner
+    table does not cover, or state outside the scratch copy (a required
+    system service, a mapped network drive) -- the probe reads as `weak`
+    for these, an under-confirmation rather than an over-acceptance, but a
+    real false-negative surface; (b) a launcher that behaves differently
+    when actually invoked by a human (interactive prompts, environment
+    inherited from a real shell session) than under the probe's
+    non-interactive, env-overridden, timeout-bounded execution -- the probe
+    proves the CLI entry is REACHABLE, not that the human experience is
+    identical; (c) the probe substitutes bytes at one well-defined location
+    (package.json's `bin` target) and one named env-var hook -- a launcher
+    that reaches a genuinely different, undeclared entry point through a
+    path this harness has no way to discover would not be instrumented at
+    all, and its true/false state would depend entirely on whether it
+    happens to touch the declared entry too. None of these is a text-shape
+    guess any longer; each is a scope boundary of what one bounded,
+    sandboxed execution can observe.
 
 Usage:  python scripts/verify_nosource_operability.py [--root PATH] [--json]
 Exit 0 = PASS (of the measurable half), 1 = FAIL, 2 = harness error.
@@ -136,8 +152,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from collections import deque
 from pathlib import Path
 
@@ -502,6 +522,320 @@ def resolve_invocation(entry: Path, root: Path) -> dict:
     )
 
 
+# --- Round 4: bounded runtime sentinel probe -----------------------------
+#
+# Round 3.1's exact grammar was itself defeated: `type "tools\ember-cli\src\
+# main.ts"` (or `findstr`/`copy`/`more`/`fc`/a redirection target -- any of
+# the open-ended non-invoking uses of a path) sits outside every exclusion
+# written so far and is not the causal grammar either, so it slipped past
+# both as an unrecognised-but-present literal. The reviewer's point: the set
+# of ways a string can appear without acting is open-ended, and no static
+# exclusion list has a boundary. Every static guess in this file -- about
+# extension, then mention, then position, then grammar -- has been a better
+# guess about what characters MEAN. This round stops guessing.
+#
+# The static machinery above (`resolve_invocation`, `_matches_known_launcher_
+# grammar`, comment/print/dead-code exclusion) is KEPT, but is no longer the
+# grantor of `resolved-true`. It may only narrow candidates or refuse
+# outright. `resolved-true` for L1 is reserved for one thing: an owned
+# sentinel, substituted for the real CLI entry, that is OBSERVED TO FIRE when
+# the candidate launcher is actually executed, for real, under a bounded
+# timeout, in a scratch copy that never touches the real tree.
+#
+# Two substitution points, both exercised on every probe:
+#   1. The CLI entry FILE itself (package.json's `bin` target, the one
+#      spec-declared location -- not any string a candidate launcher happens
+#      to mention) is overwritten with a tiny, extension-appropriate stub
+#      that writes a marker file when its bytes are actually executed. This
+#      catches any launcher shape, hostile or genuine, that does not know
+#      about this repository's own test-mode hook.
+#   2. `EMBER_LAUNCH_TEST_MODE=1` / `EMBER_LAUNCH_TEST_RUNTIME=<owned
+#      sentinel executable>` are set in the probe's environment. This
+#      repository's own `launch-ember-cli.ps1` carries this hook precisely
+#      so a substitute runtime can stand in for bun at the exact call site
+#      `& $bun run entrypoints/main.ts`, without requiring a real git
+#      identity or a built desktop app -- both of which the genuine
+#      production path needs and neither of which a bounded probe can
+#      safely exercise. For any launcher that does not read this env var
+#      (every hostile/synthetic fixture), it is inert.
+#
+# Verdict, per the reviewer's binding refinement: a probe that could not even
+# be started (no interpreter for this extension available, the scratch stage
+# failed, the OS refused to launch it) is WEAK -- the environment told us
+# nothing about the launcher. A probe that ran to completion or to its
+# timeout, for real, without the sentinel ever firing is RESOLVED-FALSE --
+# that is a definite negative, not an absence of information. Only an
+# observed fire is RESOLVED-TRUE.
+
+SENTINEL_MARKER_NAME = "EMBER_PROBE_SENTINEL_FIRED.txt"
+SENTINEL_TIMEOUT_SECONDS = 25
+
+# Extension-appropriate stub written INTO the package.json-declared CLI entry
+# file inside the scratch copy. Each writes the sentinel marker only if the
+# env var naming it is actually set (so accidentally running the unmodified
+# repo tree some other way never fires it) and does nothing else -- no
+# network, no other side effects.
+_SENTINEL_STUB_BY_SUFFIX = {
+    ".ts": (
+        "if (process.env.EMBER_PROBE_SENTINEL) {\n"
+        "  require('fs').writeFileSync(process.env.EMBER_PROBE_SENTINEL, 'fired');\n"
+        "}\n"
+    ),
+    ".js": (
+        "if (process.env.EMBER_PROBE_SENTINEL) {\n"
+        "  require('fs').writeFileSync(process.env.EMBER_PROBE_SENTINEL, 'fired');\n"
+        "}\n"
+    ),
+    ".mjs": (
+        "if (process.env.EMBER_PROBE_SENTINEL) {\n"
+        "  await import('fs').then(fs => fs.writeFileSync(process.env.EMBER_PROBE_SENTINEL, 'fired'));\n"
+        "}\n"
+    ),
+    ".cjs": (
+        "if (process.env.EMBER_PROBE_SENTINEL) {\n"
+        "  require('fs').writeFileSync(process.env.EMBER_PROBE_SENTINEL, 'fired');\n"
+        "}\n"
+    ),
+    ".py": (
+        "import os\n"
+        "if os.environ.get('EMBER_PROBE_SENTINEL'):\n"
+        "    open(os.environ['EMBER_PROBE_SENTINEL'], 'w').write('fired')\n"
+    ),
+    ".ps1": (
+        'if ($env:EMBER_PROBE_SENTINEL) { Set-Content -LiteralPath $env:EMBER_PROBE_SENTINEL -Value "fired" }\n'
+    ),
+    ".cmd": (
+        "@echo off\r\n"
+        'if defined EMBER_PROBE_SENTINEL echo fired>"%EMBER_PROBE_SENTINEL%"\r\n'
+    ),
+    ".bat": (
+        "@echo off\r\n"
+        'if defined EMBER_PROBE_SENTINEL echo fired>"%EMBER_PROBE_SENTINEL%"\r\n'
+    ),
+    ".sh": (
+        "#!/bin/sh\n"
+        'if [ -n "$EMBER_PROBE_SENTINEL" ]; then echo fired > "$EMBER_PROBE_SENTINEL"; fi\n'
+    ),
+}
+
+# Same idea, as a standalone runtime executable substituted for `bun` via
+# EMBER_LAUNCH_TEST_RUNTIME -- invoked with args (`run entrypoints/main.ts`)
+# it does not need to understand.
+_SENTINEL_RUNTIME_STUB = (
+    "@echo off\r\n"
+    'if defined EMBER_PROBE_SENTINEL echo fired>"%EMBER_PROBE_SENTINEL%"\r\n'
+    "exit /b 0\r\n"
+)
+
+_LAUNCHER_RUNNERS = {
+    ".cmd": lambda p: ["cmd.exe", "/c", str(p)],
+    ".bat": lambda p: ["cmd.exe", "/c", str(p)],
+    ".ps1": lambda p: [
+        "powershell.exe",
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(p),
+    ],
+    ".sh": lambda p: [shutil.which("bash") or shutil.which("sh") or "sh", str(p)],
+}
+
+# Directories never worth copying into a probe's scratch tree -- version
+# control, dependency caches, and this harness's own prior-round scratch
+# extractions (which would otherwise recurse into themselves).
+_PROBE_COPY_SKIP_NAMES = {".git", "node_modules", ".ember", "receipts", "models", "data"}
+_PROBE_COPY_SKIP_PREFIX_RE = re.compile(r"^_(wr|r3|r4|pr|fixture|master)")
+
+
+def _resolve_cli_entry_file(root: Path) -> Path | None:
+    """The one spec-declared CLI entry: package.json's `bin` target. Not any
+    string a candidate launcher happens to mention -- the sentinel always
+    substitutes this exact, well-defined location."""
+    pkg_path = root / PACKAGE_JSON
+    try:
+        pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        return None
+    bin_entry = pkg.get("bin")
+    if not isinstance(bin_entry, dict) or not bin_entry:
+        return None
+    rel = next(iter(bin_entry.values()), None)
+    if not isinstance(rel, str) or not rel:
+        return None
+    return pkg_path.parent / rel.lstrip("./").lstrip(".\\")
+
+
+def _probe_copy_ignore(_dirpath: str, names: list[str]) -> list[str]:
+    return [
+        n
+        for n in names
+        if n in _PROBE_COPY_SKIP_NAMES or _PROBE_COPY_SKIP_PREFIX_RE.match(n)
+    ]
+
+
+def run_sentinel_probe(launcher: Path, root: Path) -> dict:
+    """Execute `launcher` for real, under a timeout, in a scratch copy that
+    never touches `root`, with an owned sentinel substituted at the CLI
+    entry. `resolved-true` means the sentinel was OBSERVED to fire -- nothing
+    about the launcher's text is consulted for this verdict."""
+    suffix = launcher.suffix.lower()
+    runner_fn = _LAUNCHER_RUNNERS.get(suffix)
+    if runner_fn is None:
+        return check(
+            "weak",
+            f"{launcher.name}: no known way to execute a {suffix or '(no extension)'} "
+            "file for the runtime probe -- an environment that cannot run this "
+            "candidate has not told us the launcher is bad",
+        )
+
+    entry_file = _resolve_cli_entry_file(root)
+    if entry_file is None:
+        return check(
+            "weak",
+            f"{launcher.name}: cannot resolve a CLI entry target from "
+            f"{PACKAGE_JSON}'s bin field -- nothing to instrument",
+        )
+    entry_suffix = entry_file.suffix.lower()
+    stub = _SENTINEL_STUB_BY_SUFFIX.get(entry_suffix)
+    if stub is None:
+        return check(
+            "weak",
+            f"{launcher.name}: CLI entry {entry_file.name} has an unsupported "
+            f"extension {entry_suffix!r} for textual sentinel instrumentation",
+        )
+
+    scratch: Path | None = None
+    try:
+        scratch = Path(tempfile.mkdtemp(prefix="ember-sentinel-probe-"))
+        scratch_root = scratch / "repo"
+        shutil.copytree(root, scratch_root, ignore=_probe_copy_ignore)
+    except OSError as exc:
+        if scratch is not None:
+            shutil.rmtree(scratch, ignore_errors=True)
+        return check(
+            "weak",
+            f"{launcher.name}: could not stage a scratch copy for the probe "
+            f"({exc}) -- an environment that cannot run this candidate has "
+            "not told us the launcher is bad",
+        )
+
+    try:
+        rel_launcher = launcher.relative_to(root)
+        rel_entry = entry_file.relative_to(root)
+    except ValueError as exc:
+        shutil.rmtree(scratch, ignore_errors=True)
+        return check("weak", f"{launcher.name}: {exc}")
+
+    scratch_launcher = scratch_root / rel_launcher
+    scratch_entry = scratch_root / rel_entry
+    sentinel_runtime = scratch / "_sentinel_runtime.cmd"
+    marker = scratch / SENTINEL_MARKER_NAME
+
+    try:
+        scratch_entry.parent.mkdir(parents=True, exist_ok=True)
+        scratch_entry.write_text(stub, encoding="utf-8")
+        sentinel_runtime.write_text(_SENTINEL_RUNTIME_STUB, encoding="utf-8")
+        # Skip any real dependency install a genuine launcher chain might
+        # attempt -- a network-touching probe is refused by the rails
+        # regardless of what it would have found.
+        dummy_react = scratch_root / "tools/ember-cli/src/node_modules/react/package.json"
+        dummy_react.parent.mkdir(parents=True, exist_ok=True)
+        dummy_react.write_text('{"name":"react","version":"0.0.0-probe-stub"}\n', encoding="utf-8")
+    except OSError as exc:
+        shutil.rmtree(scratch, ignore_errors=True)
+        return check(
+            "weak",
+            f"{launcher.name}: could not write the sentinel stub ({exc}) -- "
+            "an environment that cannot run this candidate has not told us "
+            "the launcher is bad",
+        )
+
+    argv = runner_fn(scratch_launcher)
+    env = dict(os.environ)
+    env["EMBER_PROBE_SENTINEL"] = str(marker)
+    env["EMBER_LAUNCH_NONINTERACTIVE"] = "1"
+    env["EMBER_LAUNCH_TEST_MODE"] = "1"
+    env["EMBER_LAUNCH_TEST_RUNTIME"] = str(sentinel_runtime)
+    # Blackhole any accidental outbound call rather than trust every launcher
+    # shape to skip it -- "no network" is a hard rail on the probe itself,
+    # not just an expectation of what the dependency short-circuit prevents.
+    env["HTTP_PROXY"] = "http://127.0.0.1:1"
+    env["HTTPS_PROXY"] = "http://127.0.0.1:1"
+    env["NO_COLOR"] = "1"
+
+    receipt: dict = {
+        "launcher": str(rel_launcher),
+        "cli_entry": str(rel_entry),
+        "sentinel_stub_bytes": stub,
+        "sentinel_runtime_bytes": _SENTINEL_RUNTIME_STUB,
+        "cwd": str(scratch_root),
+        "argv": argv,
+        "timeout_s": SENTINEL_TIMEOUT_SECONDS,
+    }
+
+    try:
+        proc = subprocess.run(
+            argv,
+            cwd=str(scratch_root),
+            env=env,
+            capture_output=True,
+            timeout=SENTINEL_TIMEOUT_SECONDS,
+            text=True,
+            errors="replace",
+        )
+        receipt["exit_code"] = proc.returncode
+        receipt["timed_out"] = False
+        receipt["stdout_tail"] = (proc.stdout or "")[-400:]
+        receipt["stderr_tail"] = (proc.stderr or "")[-400:]
+    except subprocess.TimeoutExpired as exc:
+        receipt["exit_code"] = None
+        receipt["timed_out"] = True
+        receipt["stdout_tail"] = (exc.stdout or "")[-400:] if exc.stdout else ""
+        receipt["stderr_tail"] = (exc.stderr or "")[-400:] if exc.stderr else ""
+    except OSError as exc:
+        shutil.rmtree(scratch, ignore_errors=True)
+        return check(
+            "weak",
+            f"{launcher.name}: probe could not execute -- {argv[0]} unavailable "
+            f"or launch failed in this environment ({exc}); an environment "
+            "that could not run it has not told us the launcher is bad",
+        )
+
+    fired = marker.exists()
+    if fired:
+        try:
+            receipt["observed_fire_content"] = marker.read_text(
+                encoding="utf-8", errors="replace"
+            ).strip()
+        except OSError:
+            receipt["observed_fire_content"] = "(unreadable)"
+
+    shutil.rmtree(scratch, ignore_errors=True)
+
+    result_state = "resolved-true" if fired else "resolved-false"
+    if fired:
+        evidence = (
+            f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
+            f"timeout in a scratch copy, with the CLI entry ({rel_entry}) and the "
+            "test-mode runtime hook both substituted for an owned sentinel; the "
+            f"sentinel fired (exit {receipt['exit_code']}) -- control genuinely "
+            "transferred to the CLI entry"
+        )
+    else:
+        kind = "timed out" if receipt["timed_out"] else f"exited {receipt['exit_code']}"
+        evidence = (
+            f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
+            f"timeout in a scratch copy, with the CLI entry ({rel_entry}) and the "
+            f"test-mode runtime hook both substituted for an owned sentinel; the "
+            f"probe {kind} and the sentinel never fired -- control did not "
+            "transfer to the CLI entry"
+        )
+    return {"state": result_state, "evidence": evidence, "receipt": receipt}
+
+
 # --- L3 command-registry import-graph resolution ------------------------
 
 
@@ -635,28 +969,49 @@ def run(root: Path) -> dict:
     report: dict = {"root": str(root), "checks": {}, "spine": {}, "undecidable": []}
     checks = report["checks"]
 
-    # L1 root launcher -- byte-resolved, not extension-authored ------------
+    # L1 root launcher -- runtime-sentinel-bound, never text-bound ---------
+    # Round 4: the static walk below (`resolve_invocation`) is kept as a
+    # pre-filter/diagnostic ONLY. It may narrow or refuse; it may never grant
+    # resolved-true on its own -- that authority belongs to
+    # `run_sentinel_probe` alone, which actually executes the candidate and
+    # observes whether an owned sentinel fires. See the "Round 4" block above
+    # `run_sentinel_probe` for why (an independent probe defeated round
+    # 3.1's grammar with `type "tools\ember-cli\src\main.ts"`, one instance
+    # of the open-ended "non-invoking mention" class -- exclusion lists over
+    # that class have no boundary).
     candidates = find_root_launcher_candidates(root)
-    resolutions = {c: resolve_invocation(c, root) for c in candidates}
-    launchers_true = [c for c, r in resolutions.items() if r["state"] == "resolved-true"]
-    launchers_weak = [c for c, r in resolutions.items() if r["state"] == "weak"]
+    static_resolutions = {c: resolve_invocation(c, root) for c in candidates}
+    probes = {c: run_sentinel_probe(c, root) for c in candidates}
+
+    def _final_state(c: Path) -> str:
+        p = probes[c]["state"]
+        return p if p in ("resolved-true", "weak") else "resolved-false"
+
+    launchers_true = [c for c in candidates if _final_state(c) == "resolved-true"]
+    launchers_weak = [c for c in candidates if _final_state(c) == "weak"]
+
+    def _combined_evidence(c: Path) -> str:
+        return (
+            f"static pre-filter: {static_resolutions[c]['evidence']} || "
+            f"RUNTIME PROBE (authoritative): {probes[c]['evidence']}"
+        )
 
     if launchers_true:
         checks["L1_root_launcher"] = check(
-            "resolved-true",
-            "; ".join(resolutions[c]["evidence"] for c in launchers_true),
+            "resolved-true", "; ".join(_combined_evidence(c) for c in launchers_true)
         )
+        checks["L1_root_launcher"]["receipts"] = {
+            str(c.name): probes[c]["receipt"] for c in launchers_true
+        }
     elif launchers_weak:
         checks["L1_root_launcher"] = check(
             "weak",
-            "candidate root launcher(s) exist but their invocation could not "
-            "be resolved statically: "
-            + "; ".join(resolutions[c]["evidence"] for c in launchers_weak),
+            "candidate root launcher(s) exist but the runtime probe could not "
+            "resolve them: " + "; ".join(_combined_evidence(c) for c in launchers_weak),
         )
     elif candidates:
         checks["L1_root_launcher"] = check(
-            "resolved-false",
-            "; ".join(resolutions[c]["evidence"] for c in candidates),
+            "resolved-false", "; ".join(_combined_evidence(c) for c in candidates)
         )
     else:
         checks["L1_root_launcher"] = check(
