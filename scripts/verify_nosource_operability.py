@@ -271,7 +271,17 @@ SPINE_FUNCTIONS = {
     "custody_and_identity_manifest": ["custody", "identity"],
     "data_tokenizer_lineage": ["tokenizer", "lineage"],
     "checkpoint_save_load": ["checkpoint"],
-    "owned_serving_path": ["owned", "serve", "seat"],
+    # "seat" was dropped 2026-07-25: it is custody.ts's OWN classification
+    # noun and its declared alias, not a serving-path noun, so keeping it in
+    # an OR-of-three row let custody.ts win this row permanently on
+    # unrelated prose ("model seat classification") -- the live instance of
+    # the ambiguity-fix incident, caught by this file's over-closure check
+    # against real origin/master. There is no disjunctive slot in
+    # CONJUNCTION_FUNCTIONS ((owned AND (serve OR seat)) is not
+    # expressible), so the row is narrowed to the goal clause's own two
+    # nouns, both required: "owned" + "serv" (not "serve" -- "serving" does
+    # not contain the substring "serve", but does contain "serv").
+    "owned_serving_path": ["owned", "serv"],
     "benchmarking": ["benchmark"],
     "training_launch_3b": ["train"],
 }
@@ -279,8 +289,14 @@ SPINE_FUNCTIONS = {
 # Functions whose name carries two distinct required nouns: BOTH keywords
 # must be present, never just one ("custody alone" must not satisfy
 # custody_and_identity_manifest -- that was the second half of the bcf1057
-# defect, independent of the registration-graph half).
-CONJUNCTION_FUNCTIONS = {"custody_and_identity_manifest", "data_tokenizer_lineage"}
+# defect, independent of the registration-graph half). owned_serving_path
+# joined this set 2026-07-25 for the same reason (see the SPINE_FUNCTIONS
+# comment above): a single OR'd keyword let an unrelated module win the row.
+CONJUNCTION_FUNCTIONS = {
+    "custody_and_identity_manifest",
+    "data_tokenizer_lineage",
+    "owned_serving_path",
+}
 
 NAME_RE = re.compile(r'name:\s*"([a-z0-9-]+)"')
 DESC_RE = re.compile(r"description:")

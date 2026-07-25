@@ -365,6 +365,112 @@ class AmbiguousMatchTests(unittest.TestCase):
                 self.assertIn(name, row["evidence"], row)
 
 
+class OwnedServingConjunctionTests(unittest.TestCase):
+    """owned_serving_path's OR-of-three keywords (["owned","serve","seat"])
+    let "seat" -- custody's own subject noun and its declared alias -- win
+    the row via unrelated prose ("model seat classification"), permanently
+    colliding with the module that actually implements it. Team-lead's
+    measured verdict: `seat` cannot be dropped in favor of a disjunctive
+    (`serve`|`serving`|`seat`) slot -- CONJUNCTION_FUNCTIONS has no such
+    slot -- and keeping `seat` in the row keeps the collision permanent, so
+    the row becomes a conjunction of the goal clause's own two nouns:
+    `owned` AND `serv` (not `serve` -- "serving" does not contain "serve",
+    but does contain "serv")."""
+
+    def test_custody_1064_description_does_not_satisfy_the_row(self):
+        """The exact description text from PR #1064
+        (fix/custody-identity-discoverability, 15b3e211) contains "owned"
+        (via "owned model's identity" / "an owned seat is active") but no
+        "serv" substring anywhere -- the conjunction must still refuse it,
+        registered alone, with no competing module."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "custody", "custody",
+                "Show the current model seat classification (read-only): custody "
+                "status -- also reports the bound owned model's identity (sha256, "
+                "on-disk directory) when an owned seat is active; persist a "
+                "machine-local root path: custody set <root_id>=<path>",
+            )
+            _registry_importing(root, ["custody"])
+            report = harness.run(root)
+            row = report["spine"]["owned_serving_path"]
+            self.assertNotEqual(row["state"], "resolved-true", row)
+
+    def test_observatory_description_without_owned_does_not_satisfy_the_row(self):
+        """"observatory" contains the bare substring "serv" (ob-SERV-atory)
+        -- confirmed the only other such accidental hit among master's
+        registered command descriptions (world-state.ts, which mentions
+        "observatory" in its own description). Registered alone, with
+        "owned" absent, the conjunction must still refuse it."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "world-state", "world-state",
+                "c-obs observatory: monitor/understand/interact over the real "
+                "goal/ledger/receipts world-state adapter, with click-to-evidence "
+                "and a confirm-only encounter membrane",
+            )
+            _registry_importing(root, ["world-state"])
+            report = harness.run(root)
+            row = report["spine"]["owned_serving_path"]
+            self.assertNotEqual(row["state"], "resolved-true", row)
+
+    def test_master_shaped_model_description_without_serving_term_not_resolved(self):
+        """model.ts's actual current master description ("Control the local
+        owned model: status|load|unload|manifest inspect|checkpoint
+        load|checkpoint save...") carries "owned" but no "serv" substring
+        -- must not resolve true until a serving term is added."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "model", "model",
+                "Control the local owned model: status|load|unload|manifest "
+                "inspect|checkpoint load|checkpoint save. Inspect data/tokenizer "
+                "lineage; legacy checkpoint save is not checkpoint-load compatible.",
+            )
+            _registry_importing(root, ["model"])
+            report = harness.run(root)
+            row = report["spine"]["owned_serving_path"]
+            self.assertNotEqual(row["state"], "resolved-true", row)
+
+    def test_model_description_with_serving_term_resolves_true_as_sole_match(self):
+        """Sanity control / arm (b): once a serving term is present
+        alongside "owned" (here "serving", which contains "serv" but not
+        "serve" -- proving the "serv" substring choice, not "serve", is
+        what makes this resolve), the row resolves true and model.ts is the
+        SOLE match -- no collision with a custody-shaped module that lacks
+        "serv" entirely."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "model", "model",
+                "Control the local owned model, serving it for inference: "
+                "status|load|unload|manifest inspect|checkpoint load|checkpoint "
+                "save.",
+            )
+            _command_module(
+                root, "custody", "custody",
+                "Show the current model seat classification (read-only): custody "
+                "status -- also reports the bound owned model's identity when an "
+                "owned seat is active.",
+            )
+            _registry_importing(root, ["model", "custody"])
+            report = harness.run(root)
+            row = report["spine"]["owned_serving_path"]
+            self.assertEqual(row["state"], "resolved-true", row)
+            self.assertIn("model.ts", row["evidence"], row)
+            self.assertNotIn("custody.ts", row["evidence"], row)
+
+
 class Round3TextPositionTests(unittest.TestCase):
     """Round 3: an independent probe on dc6dcf3 fooled L1 with a root
     Ember.cmd whose entire body was `@echo off` / a REM comment naming the
