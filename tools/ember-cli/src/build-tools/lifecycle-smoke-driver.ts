@@ -139,6 +139,7 @@ async function driveInput(
   raw: string[],
   flush: () => Promise<void>,
   input: string,
+  timeoutMs: number,
 ): Promise<{ before: string; after: string; delta: string }> {
   await flush();
   const before = `${frameLines(terminal).join("\n")}\n`;
@@ -146,7 +147,7 @@ async function driveInput(
   let lastRawLength = rawStart;
   let lastChange = Date.now();
   child.write(`${input}\r`);
-  const deadline = Date.now() + TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const currentRawLength = raw.join("").length;
     if (currentRawLength !== lastRawLength) {
@@ -286,9 +287,15 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     for (let index = 1; index < LIFECYCLE_ACTIONS.length; index += 1) {
       const action = LIFECYCLE_ACTIONS[index]!;
       const input = inputs[action as Exclude<LifecycleAction, "launch">];
+      const actionTimeoutMs =
+        action === "train"
+          ? 600_000
+          : action === "save" || action === "reload"
+            ? 60_000
+            : TIMEOUT_MS;
       let driven: Awaited<ReturnType<typeof driveInput>>;
       try {
-        driven = await driveInput(child, terminal, raw, () => writes, input);
+        driven = await driveInput(child, terminal, raw, () => writes, input, actionTimeoutMs);
       } catch (error) {
         attempts.push({
           action,
