@@ -61,6 +61,12 @@ export interface ActiveRunState {
   totalSteps?: number;
   loss?: number;
   stepMs?: number;
+  tokensPerSecond?: number;
+  learningRate?: number;
+  gpuUuid?: string;
+  gpuWatts?: number;
+  boardEnergyJoulesTotal?: number;
+  energyStatus?: "MEASURED" | "UNAVAILABLE";
   lastTs: string;
 }
 
@@ -172,7 +178,23 @@ function processLine(line: string, clock: () => number): void {
       typeof payload["loss"] === "number" ? payload["loss"] : undefined;
     const stepMs =
       typeof payload["step_ms"] === "number" ? payload["step_ms"] : undefined;
-    _state.activeRun = { runId, step, totalSteps, loss, stepMs, lastTs: ts };
+    const nonnegative = (value: unknown): number | undefined =>
+      typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+    const tokensPerSecond = nonnegative(payload["tokens_per_second"]);
+    const learningRate = nonnegative(payload["learning_rate"]);
+    const gpuWatts = nonnegative(payload["gpu_watts"]);
+    const boardEnergyJoulesTotal = nonnegative(payload["board_energy_joules_total"]);
+    const gpuUuid = typeof payload["gpu_uuid"] === "string" && payload["gpu_uuid"].length > 0
+      ? payload["gpu_uuid"] : undefined;
+    const energyStatus = payload["energy_status"] === "MEASURED" || payload["energy_status"] === "UNAVAILABLE"
+      ? payload["energy_status"] : undefined;
+    const measuredEnergy = energyStatus === "MEASURED" && gpuUuid && gpuWatts !== undefined && boardEnergyJoulesTotal !== undefined;
+    _state.activeRun = {
+      runId, step, totalSteps, loss, stepMs, tokensPerSecond, learningRate,
+      ...(measuredEnergy ? { gpuUuid, gpuWatts, boardEnergyJoulesTotal, energyStatus: "MEASURED" as const }
+        : energyStatus === "UNAVAILABLE" ? { energyStatus: "UNAVAILABLE" as const } : {}),
+      lastTs: ts,
+    };
     const free = typeof payload["free_gib"] === "number" ? payload["free_gib"] : undefined;
     const total = typeof payload["total_gib"] === "number" ? payload["total_gib"] : undefined;
     const vram = validVram(free, total);
