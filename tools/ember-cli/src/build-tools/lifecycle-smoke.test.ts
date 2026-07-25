@@ -258,6 +258,24 @@ describe("compiled lifecycle action completion", () => {
     expect(writes).toEqual(["/", "t", "r", "a", "i", "n"]);
     expect(waits).toEqual([20, 20, 20, 20, 20]);
   });
+
+  test("isolates the current action output from prior full-screen repaint history", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.actionLocalDelta).toBeFunction();
+
+    const continued = driver.actionLocalDelta!(
+      "error: failed to load checkpoint\r\n/continue\r\nUnknown command: /continue\r\n",
+      "/continue",
+    );
+    expect(continued).toContain("Unknown command: /continue");
+    expect(continued).not.toContain("failed to load checkpoint");
+
+    const saved = driver.actionLocalDelta!(
+      "/model checkpoint save C:\\tmp\\saved\r\nlegacy checkpoint snapshot saved (not /model checkpoint load compatible)\r\n",
+      "/model checkpoint save C:\\tmp\\saved",
+    );
+    expect(saved).toContain("not /model checkpoint load compatible");
+  });
 });
 
 describe("compiled lifecycle visible frame", () => {
