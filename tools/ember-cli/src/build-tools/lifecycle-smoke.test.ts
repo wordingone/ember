@@ -1,0 +1,188 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+import { describe, expect, test } from "bun:test";
+import {
+  LIFECYCLE_ACTIONS,
+  inspectLifecycleSurface,
+  validateLifecycleReceipt,
+  type LifecycleReceipt,
+} from "./lifecycle-smoke.ts";
+
+const SHA_A = "a".repeat(64);
+const SHA_B = "b".repeat(64);
+const SHA_C = "c".repeat(64);
+const SHA_D = "d".repeat(64);
+
+function validReceipt(): LifecycleReceipt {
+  return {
+    schema_version: "ember-cli-lifecycle-smoke/v1",
+    evidence_class: "LIVE_COMPILED_BINARY_CONPTY",
+    source_commit: SHA_A,
+    binary: {
+      artifact: "tools/ember-cli/dist/ember.exe",
+      sha256_before: SHA_B,
+      sha256_after: SHA_B,
+    },
+    reproducible_rebuild: {
+      sha256: SHA_B,
+      builder_basename: "bun.exe",
+      builder_sha256_before: SHA_C,
+      builder_sha256_after: SHA_C,
+      builder_version: "1.2.3",
+    },
+    readiness: {
+      marker: "EMBER_READY;v1",
+      observed: true,
+      elapsed_ms: 17,
+      frame_sha256: SHA_D,
+    },
+    actions: LIFECYCLE_ACTIONS.map((action, index) => ({
+      action,
+      ordinal: index + 1,
+      input_sha256: String(index + 1).padStart(64, "0"),
+      before_frame_sha256: String(index + 11).padStart(64, "0"),
+      after_frame_sha256: String(index + 21).padStart(64, "0"),
+      effect_evidence_sha256: String(index + 31).padStart(64, "0"),
+      effect_kind: "durable-state-transition",
+      outcome: "PASS",
+      output_excerpt: `${action} effect observed`,
+      state_before: index,
+      state_after: index + 1,
+      frame_artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.frame.txt`,
+      repair_item: null,
+    })),
+    termination: {
+      explicit_requested: true,
+      child_exit_observed: true,
+      cleanup_attempted: true,
+      survivors: 0,
+    },
+    artifacts: {
+      receipt: "receipts/ember-cli-lifecycle-smoke/receipt.json",
+      diagnostics: "receipts/ember-cli-lifecycle-smoke/diagnostics",
+    },
+    operator_contract_mapping:
+      "compiled launch -> /train -> /watch -> /finetune -> /model -> unregistered resume",
+    accepted_instrument_run: true,
+    claim_boundary: {
+      model_capability: false,
+      training_quality: false,
+      checkpoint_sufficiency: false,
+      benchmark: false,
+    },
+  };
+}
+
+const expected = {
+  sourceCommit: SHA_A,
+  binarySha256: SHA_B,
+  builderSha256: SHA_C,
+};
+
+describe("validateLifecycleReceipt", () => {
+  test("accepts the exact ordered effect-bearing lifecycle", () => {
+    expect(validateLifecycleReceipt(validReceipt(), expected)).toEqual({
+      ok: true,
+      action_count: 9,
+    });
+  });
+
+  test("accepts truthful product-level red outcomes from a correct instrument", () => {
+    const receipt = validReceipt();
+    const save = receipt.actions.find((row) => row.action === "save")!;
+    save.output_excerpt =
+      "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
+    const reload = receipt.actions.find((row) => row.action === "reload")!;
+    reload.outcome = "REFUSED";
+    reload.effect_kind = "observable-refusal";
+    reload.output_excerpt = "error: failed to load checkpoint";
+    reload.state_before = null;
+    reload.state_after = null;
+    reload.repair_item = "EMBER-CLI-SAVE-RELOAD-COMPATIBILITY";
+    const continued = receipt.actions.find((row) => row.action === "continue")!;
+    continued.outcome = "MISSING";
+    continued.effect_kind = "observable-refusal";
+    continued.output_excerpt = "Unknown command: /continue";
+    continued.state_before = null;
+    continued.state_after = null;
+    continued.repair_item = "EMBER-CLI-CONTINUE-PRODUCTION-WIRING";
+
+    expect(validateLifecycleReceipt(receipt, expected)).toEqual({
+      ok: true,
+      action_count: 9,
+    });
+  });
+
+  test("refuses lexical-only credit", () => {
+    const receipt = validReceipt();
+    (receipt.actions[0] as unknown as { effect_kind: string }).effect_kind =
+      "command-echo";
+    expect(() => validateLifecycleReceipt(receipt, expected)).toThrow("effect");
+  });
+
+  test("refuses sleep-only readiness", () => {
+    const receipt = validReceipt();
+    receipt.readiness.observed = false;
+    expect(() => validateLifecycleReceipt(receipt, expected)).toThrow("readiness");
+  });
+
+  test("refuses a missing frame delta", () => {
+    const receipt = validReceipt();
+    receipt.actions[3]!.after_frame_sha256 =
+      receipt.actions[3]!.before_frame_sha256;
+    expect(() => validateLifecycleReceipt(receipt, expected)).toThrow("frame delta");
+  });
+
+  test("refuses skipped or reordered verbs", () => {
+    const skipped = validReceipt();
+    skipped.actions.splice(4, 1);
+    expect(() => validateLifecycleReceipt(skipped, expected)).toThrow("ordered actions");
+
+    const reordered = validReceipt();
+    [reordered.actions[1], reordered.actions[2]] = [
+      reordered.actions[2]!,
+      reordered.actions[1]!,
+    ];
+    expect(() => validateLifecycleReceipt(reordered, expected)).toThrow("ordered actions");
+  });
+
+  test("refuses a leaked child", () => {
+    const receipt = validReceipt();
+    receipt.termination.survivors = 1;
+    expect(() => validateLifecycleReceipt(receipt, expected)).toThrow("termination");
+  });
+
+  test("refuses forged source, binary, rebuild, or builder bindings", () => {
+    for (const mutate of [
+      (r: LifecycleReceipt) => { r.source_commit = SHA_D; },
+      (r: LifecycleReceipt) => { r.binary.sha256_after = SHA_D; },
+      (r: LifecycleReceipt) => { r.reproducible_rebuild.sha256 = SHA_D; },
+      (r: LifecycleReceipt) => { r.reproducible_rebuild.builder_sha256_after = SHA_D; },
+    ]) {
+      const receipt = validReceipt();
+      mutate(receipt);
+      expect(() => validateLifecycleReceipt(receipt, expected)).toThrow();
+    }
+  });
+});
+
+describe("inspectLifecycleSurface", () => {
+  test("reports the live command-registry gap instead of substituting a fixture", async () => {
+    const report = inspectLifecycleSurface([
+      { name: "train", aliases: [] },
+      { name: "watch", aliases: [] },
+      { name: "finetune", aliases: ["ft"] },
+      { name: "model", aliases: [] },
+    ]);
+    expect(report.map((row) => row.action)).toEqual([...LIFECYCLE_ACTIONS]);
+    expect(report.find((row) => row.action === "continue")).toEqual({
+      action: "continue",
+      input: "/continue",
+      command: "resume",
+      status: "MISSING",
+    });
+    expect(report.filter((row) => row.status === "MISSING")).toHaveLength(1);
+  });
+});

@@ -1,0 +1,50 @@
+name: ember-cli-lifecycle-smoke
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+jobs:
+  compiled-lifecycle:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install lockfile-pinned CLI dependencies
+        working-directory: tools/ember-cli/src
+        run: bun install --frozen-lockfile
+
+      - name: Verify lifecycle receipt refusal matrix
+        working-directory: tools/ember-cli/src
+        run: bun test build-tools/lifecycle-smoke.test.ts
+
+      - name: Build exact compiled Ember CLI
+        working-directory: tools/ember-cli/src
+        run: bun run build
+
+      - name: Drive real operator lifecycle through ConPTY
+        working-directory: tools/ember-cli/src
+        run: >
+          bun run build-tools/lifecycle-smoke-driver.ts
+          --binary ember.exe
+          --out-dir ../../../receipts/ember-cli-lifecycle-smoke
+          --receipt-path ../../../receipts/ember-cli-lifecycle-smoke/receipt.json
+
+      - name: Retain lifecycle evidence and failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ember-cli-lifecycle-smoke-${{ github.sha }}
+          path: receipts/ember-cli-lifecycle-smoke
+          if-no-files-found: error
