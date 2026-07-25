@@ -115,6 +115,8 @@ describe("buildCaptureReceipt", () => {
     const receipt = buildCaptureReceipt(valid());
     expect(receipt["result"]).toBe("PASS");
     expect(receipt["evidence_class"]).toBe("LIVE_COMPILED_BINARY_CONPTY");
+    expect(receipt["goal_id"]).toBe("EMBER-02");
+    expect(receipt["workstream_id"]).toBe("EMBER-02A");
     const stages = receipt["stages"] as Array<Record<string, unknown>>;
     expect(stages[0]!["raw_private_exact"]).toEqual({
       logical_locator: "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/stage-1-80.raw",

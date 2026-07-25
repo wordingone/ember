@@ -218,6 +218,9 @@ export function buildCaptureReceipt(input: CaptureReceiptInput): Record<string, 
 
   return {
     schema_version: "ember-cli-issue-243-live-resize/v1",
+    goal_id: "EMBER-02",
+    workstream_id: "EMBER-02A",
+    next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     issue: 243,
     evidence_class: "LIVE_COMPILED_BINARY_CONPTY",
     source_commit: input.sourceCommit,
@@ -272,25 +275,34 @@ async function waitForRegion(
   throw new Error(`timed out waiting for closed prompt region: ${lastError}`);
 }
 
-function parseArgs(argv: string[]): { binary: string; outDir: string; privateOutDir: string } {
+function parseArgs(argv: string[]): {
+  binary: string; outDir: string; privateOutDir: string; receiptPath: string;
+} {
   let binary = "";
   let outDir = "";
   let privateOutDir = "";
+  let receiptPath = "";
   for (let index = 0; index < argv.length; index++) {
     if (argv[index] === "--binary") binary = argv[++index] ?? "";
     else if (argv[index] === "--out-dir") outDir = argv[++index] ?? "";
     else if (argv[index] === "--private-out-dir") privateOutDir = argv[++index] ?? "";
+    else if (argv[index] === "--receipt-path") receiptPath = argv[++index] ?? "";
     else throw new Error(`unknown argument: ${argv[index]}`);
   }
-  if (binary === "" || outDir === "" || privateOutDir === "") {
-    throw new Error("--binary, --out-dir, and --private-out-dir are required");
+  if (binary === "" || outDir === "" || privateOutDir === "" || receiptPath === "") {
+    throw new Error("--binary, --out-dir, --private-out-dir, and --receipt-path are required");
   }
-  return { binary: resolve(binary), outDir: resolve(outDir), privateOutDir: resolve(privateOutDir) };
+  return {
+    binary: resolve(binary),
+    outDir: resolve(outDir),
+    privateOutDir: resolve(privateOutDir),
+    receiptPath: resolve(receiptPath),
+  };
 }
 
 export async function capturePromptInput243(argv: string[]): Promise<void> {
   if (process.platform !== "win32") throw new Error("compiled prompt capture requires Windows ConPTY");
-  const { binary, outDir, privateOutDir } = parseArgs(argv);
+  const { binary, outDir, privateOutDir, receiptPath } = parseArgs(argv);
   const repoRoot = commandText(["git", "rev-parse", "--show-toplevel"], process.cwd());
   const sourceCommit = commandText(["git", "rev-parse", "HEAD"], repoRoot);
   const resolvedEmberRoot = dirname(
@@ -301,6 +313,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
   }
   const binaryArtifact = within(repoRoot, binary, "binary artifact");
   const outArtifact = within(repoRoot, outDir, "output directory");
+  within(repoRoot, receiptPath, "receipt path");
   const privateRelative = relative(repoRoot, privateOutDir);
   if (privateRelative === "" || (!privateRelative.startsWith("..") && !isAbsolute(privateRelative))) {
     throw new Error("private output directory must be outside the public repository");
@@ -308,6 +321,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
   const binaryBefore = readFileSync(binary);
   const binarySha256Before = sha256(binaryBefore);
   mkdirSync(outDir, { recursive: true });
+  mkdirSync(dirname(receiptPath), { recursive: true });
   mkdirSync(privateOutDir, { recursive: true });
 
   const home = mkdtempSync(join(tmpdir(), "ember-issue-243-"));
@@ -387,7 +401,6 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       binarySha256After,
       stages,
     });
-    const receiptPath = join(outDir, "receipt.json");
     writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
 
     for (const [index, stage] of stages.entries()) {
