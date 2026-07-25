@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Materialize or block ScienceAgentBench verified benchmark artifacts."""
 from __future__ import annotations
 
@@ -13,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 GITHUB_README_URL = "https://raw.githubusercontent.com/OSU-NLP-Group/ScienceAgentBench/main/README.md"
-DEFAULT_ARTIFACT = Path(r"<local-path>")
 DEFAULT_OUT_DIR = Path("receipts/ember-post-resident-discovery")
 EXPECTED_ARTIFACT_SIZE_BYTES = 1_769_478_786
 SHA_CONVENTION = "bytes on disk/as fetched as-is; text hashes are UTF-8 encoded"
@@ -159,13 +161,18 @@ def build_blocked_receipt(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
-    parser.add_argument("--artifact", default=str(DEFAULT_ARTIFACT))
+    parser.add_argument("--artifact", default=None)
     parser.add_argument("--artifact-url", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
     if args.selftest:
         import ember_scienceagentbench_artifact_materialization_selftest
         return ember_scienceagentbench_artifact_materialization_selftest.main()
+    if not args.artifact:
+        parser.error(
+            "--artifact is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
 
     repo = Path.cwd().resolve()
     artifact = Path(args.artifact)

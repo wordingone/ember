@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room slash-command surface gate for Ember's the predecessor CLI parity harness.
 
 This gate does not import the predecessor CLI implementation code. It reads the legal UI
@@ -21,7 +24,6 @@ from receipt_write import checked_write
 
 TICKET = "EMBER-GATE-FUNCTION-SLASH-COMMANDS"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-DEFAULT_AUDIT = Path(r"<local-path>")
 DEFAULT_NATIVE_GOAL_RECEIPT = Path(r"receipts\ember-preloop-resident-gate\native-goal-organ-20260621T195504Z.json")
 
 LOCAL_ACTIONS = {
@@ -270,7 +272,7 @@ def write_receipt(path: Path, receipt: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=str(repo_root()))
-    parser.add_argument("--audit", default=str(DEFAULT_AUDIT))
+    parser.add_argument("--audit", required=True)
     parser.add_argument("--native-goal-receipt", default=str(DEFAULT_NATIVE_GOAL_RECEIPT))
     parser.add_argument("--out", required=True)
     args = parser.parse_args()

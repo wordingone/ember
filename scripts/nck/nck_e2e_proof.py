@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp-7: NC-K harness END-TO-END live proof (Closes #331).
 
 Proves the the predecessor CLI port has a functioning e2e chain by exercising six
@@ -7,8 +10,8 @@ consecutive stages with the ember mailbox identity:
   Stage 1:  boot-checksum       verify_at_boot() succeeds; records verified file shas
   Stage 2a: mail-consume-fix    MailSource reads a fixture DB; D1/D2 guards verified
   Stage 2b: mail-consume-live   MailSource reads a REAL mail from the production
-                                 mailbox DB (<local-path>) using the
-                                 real signals/ember file; sent via mailbox binary
+                                 mailbox DB (path from EMBER_MAILBOX_PROD_DB) using
+                                 the real signals/ember file; sent via mailbox binary
   Stage 3:  seat dispatch       mail event routed through seat_adapter.make_seat_core;
                                  stub generate_fn produces a completion; dispatch confirmed
   Stage 4:  CU console verb     ConsoleSource injected line echoes through registry;
@@ -20,7 +23,7 @@ AC:
 2. MailSource emits mail_arrived for test message; D1 cold-start no-flood proven;
    D2 non-integer signal format triggers DB poll
 2b. MailSource emits mail_arrived for a REAL mail sent to ember via the production
-    mailbox binary; DB path = <local-path>; signal path = signals/ember
+    mailbox binary; DB path = EMBER_MAILBOX_PROD_DB; signal path = signals/ember
 3. seat_adapter.make_seat_core routes event; stub generate_fn returns a completion;
    parse_actions returns list (empty = valid mute baseline)
 4. console_write dispatched for injected console line; echo confirmed in output
@@ -49,10 +52,15 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-# Production mailbox paths — Stage 2b (live-mailbox leg)
-_MAILBOX_BIN = Path("<local-path>")
-_MAILBOX_PROD_DB = "<local-path>"
-_MAILBOX_SIGNAL_DIR = "<local-path>"
+# Production mailbox paths — Stage 2b (live-mailbox leg). No baked-in default
+# (gh issue #261): these are machine-local absolute paths that must never be
+# tracked in source (gh issue #317, repo-guard's no-absolute-local-paths
+# check). Configure via env vars before running Stage 2b; the existing
+# is_file()/isfile() checks below already fail loud with a clear message
+# when unset or pointing at a missing path.
+_MAILBOX_BIN = Path(os.environ.get("EMBER_MAILBOX_BIN", ""))
+_MAILBOX_PROD_DB = os.environ.get("EMBER_MAILBOX_PROD_DB", "")
+_MAILBOX_SIGNAL_DIR = os.environ.get("EMBER_MAILBOX_SIGNAL_DIR", "")
 
 from nck.event_loop import (
     ConsoleSource,
@@ -296,11 +304,18 @@ def stage_mail_consume_live() -> dict:
 
     Sends a test mail to ember via the mailbox binary (JSON-RPC stdin),
     then verifies MailSource detects and emits the mail_arrived event using
-    the production DB (<local-path>) and real signal file
-    (<local-path>).
+    the production DB and real signal file configured via the
+    EMBER_MAILBOX_PROD_DB / EMBER_MAILBOX_SIGNAL_DIR / EMBER_MAILBOX_BIN
+    env vars (gh issue #261 — no baked-in machine-local default).
 
-    Fails closed: any assertion failure → exception → stage FAIL.
+    Fails closed: any assertion failure -> exception -> stage FAIL.
     """
+    if not _MAILBOX_BIN.is_file() or not os.path.isfile(_MAILBOX_PROD_DB):
+        raise RuntimeError(
+            "Stage-2b live-mailbox leg requires EMBER_MAILBOX_BIN, "
+            "EMBER_MAILBOX_PROD_DB, and EMBER_MAILBOX_SIGNAL_DIR to be set "
+            "to real paths on this machine (no baked-in default; see issue #261)."
+        )
     signal_path = os.path.join(_MAILBOX_SIGNAL_DIR, "ember")
 
     # Construct MailSource BEFORE sending — anchors _last_id to current max.
@@ -683,7 +698,7 @@ def main() -> int:
             "boot-checksum: real verify_at_boot() — no _skip_invariant_check",
             "mail-consume: fixture SQLite DB + signal file; D1 cold-start no-flood + D2 timestamp path",
             "mail-consume-live: REAL mail to ember via production mailbox binary; "
-            "DB=<local-path>; signal=signals/ember",
+            "DB=EMBER_MAILBOX_PROD_DB; signal=signals/ember",
             "seat-dispatch: stub generate_fn; mute output is valid baseline for raw pretrain core",
             "cu-console: ConsoleSource injected line → stub_core console_write → dispatched",
             "live run 12c050e7 NOT touched",

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Intake ScienceAgentBench benchmark_verified.zip into Ember's local benchmark root."""
 from __future__ import annotations
 
@@ -15,9 +18,6 @@ TICKET = "EMBER-SCIENCEAGENTBENCH-ARTIFACT-INTAKE"
 SHA_CONVENTION = "bytes on disk/as fetched as-is; text hashes are UTF-8 encoded"
 EXPECTED_SIZE_BYTES = 1_769_478_786
 PASSWORD = b"scienceagentbench"
-DEFAULT_SOURCE = Path(r"<local-path>")
-DEFAULT_TARGET = Path(r"<local-path>")
-DEFAULT_EXTRACT_DIR = Path(r"<local-path>")
 DEFAULT_OUT_DIR = Path("receipts/ember-post-resident-discovery")
 
 
@@ -148,7 +148,7 @@ def build_receipt(
             "python scripts\\ember_scienceagentbench_admission.py --full-artifact "
             f"{target} --out receipts\\ember-post-resident-discovery\\scienceagentbench-admission-<timestamp>.json"
             if not blocked_reasons
-            else "Acquire benchmark_verified.zip through the authorized browser session into <local-path> or the SAB benchmark root, then rerun this intake script."
+            else f"Acquire benchmark_verified.zip through the authorized browser session into {target} or the SAB benchmark root, then rerun this intake script."
         ),
         "code_vs_docs_metric": {
             "classification": "during-project artifact-intake command and receipt",
@@ -164,9 +164,9 @@ def build_receipt(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", default=str(DEFAULT_SOURCE))
-    parser.add_argument("--target", default=str(DEFAULT_TARGET))
-    parser.add_argument("--extract-dir", default=str(DEFAULT_EXTRACT_DIR))
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--target", required=True)
+    parser.add_argument("--extract-dir", required=True)
     parser.add_argument("--extract", action="store_true")
     parser.add_argument("--out", default=None)
     args = parser.parse_args()

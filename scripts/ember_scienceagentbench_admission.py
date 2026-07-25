@@ -1,4 +1,7 @@
 ﻿#!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ScienceAgentBench admission probe for the Ember post-D3 blocker."""
 from __future__ import annotations
 
@@ -26,7 +29,6 @@ HF_SIZE_URL = "https://datasets-server.huggingface.co/size?" + urllib.parse.urle
 GITHUB_README_URL = "https://raw.githubusercontent.com/OSU-NLP-Group/ScienceAgentBench/main/README.md"
 GITHUB_LICENSE_URL = "https://raw.githubusercontent.com/OSU-NLP-Group/ScienceAgentBench/main/LICENSE"
 GITHUB_API_MAIN_URL = "https://api.github.com/repos/OSU-NLP-Group/ScienceAgentBench/commits/main"
-DEFAULT_ARTIFACT = Path(r"<local-path>")
 
 
 @dataclass(frozen=True)
@@ -251,9 +253,10 @@ def build_receipt_from_materialized(
         ],
         "next_executable_command": (
             "Download benchmark_verified.zip from the README SharePoint artifact link into "
-            f"{DEFAULT_ARTIFACT.parent}, verify sha256, unzip locally without redistributing, then rerun: "
+            f"{full_artifact_local_path.parent if full_artifact_local_path else '<the intended --full-artifact directory>'}, "
+            "verify sha256, unzip locally without redistributing, then rerun: "
             "python scripts\\ember_scienceagentbench_admission.py --full-artifact "
-            f"{DEFAULT_ARTIFACT} --out receipts\\ember-post-resident-discovery\\scienceagentbench-admission-<timestamp>.json"
+            f"{full_artifact_local_path or '<local artifact path>'} --out receipts\\ember-post-resident-discovery\\scienceagentbench-admission-<timestamp>.json"
         ) if blocked_reasons else (
             "Run first ScienceAgentBench A/B/C/deleted heldout loop against frozen rows in " + str(frozen_rows_path)
         ),
@@ -312,7 +315,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--out", default=None)
-    parser.add_argument("--full-artifact", default=str(DEFAULT_ARTIFACT))
+    parser.add_argument("--full-artifact", default=None)
     args = parser.parse_args()
     if args.selftest:
         import ember_scienceagentbench_admission_selftest

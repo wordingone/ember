@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room full parity harness gate for Ember's the predecessor CLI resident body.
 
 This gate is intentionally fail-closed. The previous goal-mode adapter proves a
@@ -21,7 +24,6 @@ TICKET = "EMBER-GATE-FULL-PARITY-HARNESS"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 DEFAULT_INVENTORY_RECEIPT = Path(r"receipts\ember-preloop-resident-gate\gate-cleanroom-inventory-20260621T153049Z.json")
 DEFAULT_BOOTSTRAP_RECEIPT = Path(r"receipts\ember-preloop-resident-gate\gate-goal-mode-parity-adapter-20260621T155157Z.json")
-DEFAULT_reference_ROOT = Path(r"<local-path>")
 REAL_reference_OBSERVATION_PASS = "REAL_PREDECESSOR_CLI_UIUX_AX_OBSERVATION_PASS"
 
 SURFACE_SPECS: list[dict[str, Any]] = [
@@ -824,7 +826,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True)
     parser.add_argument("--repo", default=str(repo_root()))
-    parser.add_argument("--reference-root", default=str(DEFAULT_reference_ROOT))
+    parser.add_argument("--reference-root", required=True)
     parser.add_argument("--inventory-receipt", default=str(DEFAULT_INVENTORY_RECEIPT))
     parser.add_argument("--bootstrap-receipt", default=str(DEFAULT_BOOTSTRAP_RECEIPT))
     parser.add_argument("--native-goal-organ-receipt")
