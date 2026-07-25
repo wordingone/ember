@@ -81,16 +81,26 @@ export function classifyActionFrame(frame: string): AttemptRow["status"] {
   return "PASS";
 }
 
-export function actionOutputExcerpt(frame: string, delta: string): string {
+export function actionOutputExcerpt(
+  action: Exclude<LifecycleAction, "launch">,
+  frame: string,
+  delta: string,
+): string {
   const saveQuote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
-  if (delta.includes(saveQuote)) return saveQuote;
+  if (action === "save" && (frame.includes(saveQuote) || delta.includes(saveQuote))) return saveQuote;
   const lines = frame.split("\n");
-  const missing = lines.find((line) => /unknown command|not registered/i.test(line));
-  if (missing !== undefined) return missing.trim();
-  const refused = [...lines].reverse().find((line) => /error:|failed to/i.test(line));
-  if (refused !== undefined) return refused.trim();
-  const saved = [...lines].reverse().find((line) => line.includes("legacy checkpoint snapshot saved"));
-  if (saved !== undefined) return saved.trim();
+  const patterns: Record<Exclude<LifecycleAction, "launch">, RegExp> = {
+    train: /launch-packet/i,
+    observe: /watching state\/ember-telemetry/i,
+    pause: /pause run=/i,
+    resume: /resume run=/i,
+    save: /legacy checkpoint snapshot saved/i,
+    terminate: /stop run=/i,
+    reload: /error: failed to load checkpoint/i,
+    continue: /unknown command|not registered/i,
+  };
+  const observed = [...lines].reverse().find((line) => patterns[action].test(line));
+  if (observed !== undefined) return observed.trim();
   const trimmedDelta = delta.trim();
   if (trimmedDelta !== "") return trimmedDelta.slice(-2000);
   return frame.trim().slice(-2000);
@@ -204,6 +214,12 @@ function redactHostPaths(
   for (const source of residual) replacePath(source);
   return { publicBytes: Buffer.from(text, "utf8") };
 }
+
+export function redactPublicText(text: string, hostPaths: string[]): string {
+  return Buffer.from(redactHostPaths(Buffer.from(text, "utf8"), hostPaths).publicBytes)
+    .toString("utf8");
+}
+
 
 interface ReproducibleBuildEvidence {
   rebuildBinarySha256: string;
@@ -458,7 +474,10 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     });
     child.onExit(() => { exitObserved = true; });
     const ready = await waitForReady(raw, () => writes, terminal);
-    const readyFrame = `${visibleFrameLines(terminal).join("\n")}\n`;
+    const readyFrame = redactPublicText(
+      `${visibleFrameLines(terminal).join("\n")}\n`,
+      [repoRoot, home, binary],
+    );
     const launchArtifact = artifactPath(repoRoot, join(outDir, "action-1-launch.frame.txt"));
     writeFileSync(join(repoRoot, launchArtifact), readyFrame, "utf8");
     evidence.push({
@@ -549,10 +568,10 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
         .replaceAll(input.replaceAll(home, "<EMBER_SMOKE_HOME>").replaceAll(repoRoot, "<EMBER_REPO>"), "")
         .trim();
-      const publicDelta = actionOutputExcerpt(publicFrame, redactedDelta);
+      const publicDelta = actionOutputExcerpt(action, publicFrame, redactedDelta);
       attempts.push({
         action,
-        input: input.replaceAll(home, "<EMBER_SMOKE_HOME>").replaceAll(repoRoot, "<EMBER_REPO>"),
+        input: redactPublicText(input, [repoRoot, home, binary]),
         status,
         frame_artifact: frameArtifact,
         detail: status === "PASS" ? "effect-bearing frame delta observed" : "operator surface refused",
@@ -577,7 +596,13 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         state_before: status === "PASS" ? index : null,
         state_after: status === "PASS" ? index + 1 : null,
         frame_artifact: frameArtifact,
-        repair_item: status === "PASS" ? null : `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
+        repair_item: status === "PASS"
+          ? null
+          : action === "reload"
+            ? "EMBER-CLI-SAVE-RELOAD-COMPATIBILITY"
+            : action === "continue"
+              ? "EMBER-CLI-CONTINUE-PRODUCTION-WIRING"
+              : `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
       });
     }
 
@@ -627,7 +652,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         marker: "EMBER_READY;v1",
         observed: true,
         elapsed_ms: ready.elapsedMs,
-        frame_sha256: ready.frameSha256,
+        frame_sha256: sha256(readyFrame),
       },
       actions: evidence,
       termination: {

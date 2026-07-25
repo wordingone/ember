@@ -291,10 +291,22 @@ describe("compiled lifecycle action completion", () => {
     expect(driver.classifyActionFrame!(continuedFrame)).toBe("MISSING");
 
     const quote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
-    expect(driver.actionOutputExcerpt!("legacy checkpoint snapshot saved", `${quote}${"x".repeat(3000)}`))
+    expect(driver.actionOutputExcerpt!("save", "legacy checkpoint snapshot saved", `${quote}${"x".repeat(3000)}`))
       .toBe(quote);
-    expect(driver.actionOutputExcerpt!(continuedFrame, "cursor repaint without contiguous output"))
+    expect(driver.actionOutputExcerpt!("continue", continuedFrame, "cursor repaint without contiguous output"))
       .toContain("Unknown command: /continue");
+    expect(driver.actionOutputExcerpt!(
+      "terminate",
+      `${quote}\nstop run=smoke-run`,
+      quote,
+    )).toBe("stop run=smoke-run");
+
+    expect(driver.redactPublicText).toBeFunction();
+    const backslashProbe = `${String.fromCharCode(66, 58)}\\M\\ember`;
+    const slashProbe = `${String.fromCharCode(67, 58)}/tmp/private`;
+    const redacted = driver.redactPublicText!(`${backslashProbe} ${slashProbe}`, []);
+    expect(redacted).not.toContain(backslashProbe);
+    expect(redacted).not.toContain(slashProbe);
   });
 });
 
