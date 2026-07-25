@@ -22,6 +22,7 @@ import type { ModelSeatDecision, SelectedModelContract } from "./model-seat.ts";
 import {
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
+  OwnedSeatStaleBindingError,
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
 import { ensureOwnedServer } from "./owned-server-supervisor.ts";
@@ -722,7 +723,12 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // is unset. cmd.exe cannot produce an empty-string env var (`set VAR=` deletes it), so
   // this must key off "is GPU_FREE set" alone -- an empty-string EMBER_MODEL_URL is not a
   // reachable signal from a Windows .bat launcher.
-  const gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
+  // mutable: the stale-owned-binding demotion below (acceptance map section 3/4, D1) routes
+  // the seat construction AND the server-spawn decision below (the `serverUrl` branch that
+  // reads this same variable) through the identical GPU-free path -- otherwise the seat would
+  // report OFFLINE while the code below it still tried to spawn a managed server, which is
+  // exactly the half-demoted shape the map's D1 forbids.
+  let gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
   const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
   const seatInput = {
     argv: rawArgv,
@@ -758,10 +764,24 @@ export async function main(opts: MainOptions = {}): Promise<void> {
         seatDecision = resolveModelSeat({ ...seatInput, ownedIdentity });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write("[ember] ERROR: " + message + "\n");
-      doExitMain(1);
-      return;
+      // Demotion is gated on the error's TYPE, never on its message text -- a
+      // stale-but-honest owned binding must not take the whole process down (the
+      // owned seat is allowed to be offline until the model is born), but every
+      // other failure here (tamper, malformed manifest, missing files, resolver
+      // failure) is a genuine internal error and must still be fatal. See
+      // state/specs/cockpit-stale-binding-demotion-acceptance-map-2026-07-25.md
+      // section 3 -- a message-substring test is the textual-proxy failure class
+      // recorded in state/failure-classes/semantic-validation-without-bytes-2026-07-25.md.
+      if (error instanceof OwnedSeatStaleBindingError) {
+        process.stderr.write("[ember] NOTICE: " + error.message + "\n");
+        gpuFreeRequested = true;
+        seatDecision = resolveModelSeat({ ...seatInput, gpuFreeRequested: true });
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write("[ember] ERROR: " + message + "\n");
+        doExitMain(1);
+        return;
+      }
     }
   }
   const argv = seatDecision.argv;
