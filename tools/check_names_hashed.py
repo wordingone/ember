@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_names_hashed.py — hashed-denylist mode for tools/repo-guard.sh's names check.
 
 Purpose: the plaintext names check (REPO_GUARD_NAMES env var or the git-ignored
@@ -24,15 +27,36 @@ file:line); 3 = no usable denylist (file missing or empty after comment/blank
 stripping) — the caller decides whether that is fail-closed (CI) or skip (local).
 Exit codes (--generate mode): 0 = wrote the hash file; 3 = plaintext source missing
 or empty.
+
+Byte source for the scanned tracked-text CONTENT depends on REPO_GUARD_SCOPE,
+mirroring the sibling legacy-name policy checker under tools/ and
+tools/check_line_endings.py: under REPO_GUARD_SCOPE=staged (what
+.githooks/pre-commit actually runs with), each file's content comes from the
+git INDEX -- the exact bytes about to be committed, not the working tree.
+Reading working-tree bytes unconditionally was a real gap: stage a name,
+restore the working tree to a clean copy, and this check would scan the
+(now clean) working tree while the commit that lands still carries the
+staged name. The tracked-path LIST (`git ls-files`) is already index-derived
+either way; only the per-file content read needed the scope branch.
+
+Staged-scope reads are BATCHED via one `git cat-file --batch` process fed
+every needed blob sha at once (`git ls-files -s` supplies the shas), not one
+`git show :path` subprocess per file -- a per-file subprocess is correct but
+measured too slow across a repo of this size. Non-staged scope is unchanged:
+plain filesystem reads.
 """
 import argparse
 import hashlib
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 TOKEN_RE = re.compile(r"[A-Za-z]{3,}")
+
+# Mirrors repo-guard.sh's own "${REPO_GUARD_SCOPE:-}" = "staged" test.
+_STAGED = os.environ.get("REPO_GUARD_SCOPE", "") == "staged"
 
 # Files the check never scans: the guard script and the hash list both legitimately
 # mention the mechanism by name/shape without being a violation, and this script
@@ -99,15 +123,61 @@ def tracked_text_files(root: Path, exclude_prefixes: list[str] | None = None) ->
     return files
 
 
-def is_probably_text(path: Path) -> bool:
+def _staged_blob_shas(root: Path) -> dict[str, str]:
+    """path -> index (stage 0) blob sha, via one `git ls-files -s` call for
+    the whole tree -- avoids a subprocess per path."""
+    out = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-s"], capture_output=True, text=True, check=True,
+    )
+    shas: dict[str, str] = {}
+    for line in out.stdout.splitlines():
+        meta, _, path = line.partition("\t")
+        parts = meta.split()
+        if len(parts) < 2 or not path:
+            continue
+        shas[path] = parts[1]
+    return shas
+
+
+def _batch_read_blobs(root: Path, path_to_sha: dict[str, str]) -> dict[str, bytes]:
+    """path -> blob bytes, via one `git cat-file --batch` process for every
+    requested sha at once instead of one subprocess per file. Protocol per
+    requested object: "<sha> <type> <size>\\n<content>\\n", or
+    "<sha> missing\\n" if the object cannot be resolved (skipped)."""
+    if not path_to_sha:
+        return {}
+    paths = list(path_to_sha.keys())
+    stdin_data = ("\n".join(path_to_sha[p] for p in paths) + "\n").encode("utf-8")
+    proc = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "--batch"], input=stdin_data, capture_output=True,
+    )
+    out = proc.stdout
+    result: dict[str, bytes] = {}
+    pos = 0
+    for p in paths:
+        nl = out.find(b"\n", pos)
+        if nl == -1:
+            break
+        header = out[pos:nl].decode("utf-8", errors="replace").split()
+        if len(header) == 3:
+            _sha, _type, size_s = header
+            size = int(size_s)
+            start = nl + 1
+            result[p] = out[start:start + size]
+            pos = start + size + 1  # skip the object's trailing newline
+        else:
+            # "<sha> missing" (or any other unexpected shape) -- one line, no body.
+            pos = nl + 1
+    return result
+
+
+def is_probably_text(data: bytes) -> bool:
+    if b"\x00" in data[:8192]:
+        return False
     try:
-        with open(path, "rb") as fh:
-            chunk = fh.read(8192)
-        if b"\x00" in chunk:
-            return False
-        chunk.decode("utf-8")
+        data.decode("utf-8")
         return True
-    except (OSError, UnicodeDecodeError):
+    except UnicodeDecodeError:
         return False
 
 
@@ -118,15 +188,27 @@ def run_check(root: Path, denylist_path: Path, names_exclude_path: Path | None =
         return 3
 
     exclude_prefixes = load_names_exclude_prefixes(names_exclude_path or (root / DEFAULT_NAMES_EXCLUDE))
+    rel_paths = tracked_text_files(root, exclude_prefixes)
+
+    if _STAGED:
+        shas = _staged_blob_shas(root)
+        blobs = _batch_read_blobs(root, {rel: shas[rel] for rel in rel_paths if rel in shas})
+        reader = blobs.get
+    else:
+        def reader(rel: str) -> bytes | None:
+            try:
+                return (root / rel).read_bytes()
+            except OSError:
+                return None
 
     findings: list[str] = []
-    for rel in tracked_text_files(root, exclude_prefixes):
-        full = root / rel
-        if not full.is_file() or not is_probably_text(full):
+    for rel in rel_paths:
+        data = reader(rel)
+        if data is None or not is_probably_text(data):
             continue
         try:
-            lines = full.read_text(encoding="utf-8", errors="strict").splitlines()
-        except (OSError, UnicodeDecodeError):
+            lines = data.decode("utf-8", errors="strict").splitlines()
+        except UnicodeDecodeError:
             continue
         for lineno, line in enumerate(lines, start=1):
             for tok in TOKEN_RE.findall(line):
