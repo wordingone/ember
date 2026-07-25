@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // stdin-bridge — wires Node.js stdin keypress events into the hooks layer.
 // Call startStdinBridge() once at process startup; the returned function
 // tears down raw-mode and removes the listener.

@@ -8,8 +8,6 @@ mechanism_erasure=forbidden
 
 # Ember
 
-On Windows, double-click **`Ember.cmd`** at the repository root to open Ember CLI; no arguments or source paths are required.
-
 Ember is a clean-genesis sovereign foundation intelligence, a local
 foundation-model creation primitive, a continuously improving organism, its
 ember-cli body, and a general local AI laboratory. The target is an owned

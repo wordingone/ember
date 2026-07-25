@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // reconciler — custom React→terminal renderer.
 // Implements a react-reconciler HostConfig that maps React element trees
 // to the ink rendering-pipeline's RenderNode graph, then drives double-buffered
