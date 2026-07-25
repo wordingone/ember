@@ -225,17 +225,35 @@ export async function saveModernCheckpoint(
   // 6. Re-verify the PUBLISHED bytes with the production verifier -- the
   // same one /model checkpoint load will run. This is the round-trip proof,
   // not an assumption that steps 3-5 succeeded.
-  const published = await deps.verifyBundle(targetDir);
-  if (
-    published.manifestSha256 !== source.manifestSha256 ||
-    published.schemaVersion !== source.schemaVersion ||
-    published.artifacts.length !== source.artifacts.length
-  ) {
-    throw new CheckpointSaveModernError(
-      `published bundle at ${targetDir} diverges from the verified source ` +
-        `(unreachable outside a concurrent external mutation of targetDir ` +
-        `between the atomic rename and this re-verification)`,
-    );
+  // A failure here must not leave the divergent bundle standing at `targetDir`.
+  // Every earlier throw leaves the destination completely absent; if this one
+  // did not, a save that reported failure would still have published bytes that
+  // look load-compatible, and the retry would then be refused by the no-replace
+  // guard -- a failed operation holding the destination hostage. Remove what we
+  // published, then rethrow the original diagnosis unchanged.
+  let published: Awaited<ReturnType<typeof deps.verifyBundle>>;
+  try {
+    published = await deps.verifyBundle(targetDir);
+    if (
+      published.manifestSha256 !== source.manifestSha256 ||
+      published.schemaVersion !== source.schemaVersion ||
+      published.artifacts.length !== source.artifacts.length
+    ) {
+      throw new CheckpointSaveModernError(
+        `published bundle at ${targetDir} diverges from the verified source ` +
+          `(expected manifest sha256 ${source.manifestSha256}, schema ` +
+          `${source.schemaVersion}, ${source.artifacts.length} artifacts; read ` +
+          `${published.manifestSha256}, ${published.schemaVersion}, ` +
+          `${published.artifacts.length}). The published directory has been removed.`,
+      );
+    }
+  } catch (error) {
+    try {
+      await deps.rmStaging(targetDir);
+    } catch {
+      // Best-effort only; never masks the original error.
+    }
+    throw error;
   }
 
   return {

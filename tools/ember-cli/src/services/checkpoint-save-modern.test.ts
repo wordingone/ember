@@ -358,12 +358,11 @@ describe("saveModernCheckpoint (core)", () => {
   });
 
   // The acceptance map's one SKIP-PATH row that shipped unexercised: the
-  // destination's reparse/symlink ancestry is not pre-checked before staging, so
-  // it is caught only by the mandatory post-publish re-verify. The map disclosed
-  // that honestly, which is right, but a disclosed row is still an unexercised
-  // row -- and this one is exactly the shape where "it would throw" and "it does
-  // throw" diverge, because the throw comes from a check running against a path
-  // the function has already written to.
+  // destination's reparse/symlink ancestry. It was originally caught only by the
+  // post-publish re-verify -- a check running against a path the function had
+  // already written to. Step 2a now refuses it BEFORE staging, and this test
+  // covers the corrected ordering; the title and this comment used to describe
+  // the retired behaviour, which documented a fixed defect as current.
   //
   // Windows blocks unprivileged directory symlinks (EPERM) but permits
   // junctions, which are reparse points too, so the row IS reachable here. The
@@ -371,7 +370,7 @@ describe("saveModernCheckpoint (core)", () => {
   // be gone afterward -- a failure that leaves a published bundle behind at an
   // aliased path would satisfy a one-sided "it refused" test while leaving
   // exactly the artifact the check exists to prevent.
-  it("negative: a destination reached through a reparse point (junction) is refused by the post-publish re-verify, and leaves nothing behind", async () => {
+  it("negative: a destination reached through a reparse point (junction) is refused before staging, and leaves nothing behind", async () => {
     const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-reparse-"));
     roots.push(root);
     const sourceDir = join(root, "source");
@@ -400,5 +399,42 @@ describe("saveModernCheckpoint (core)", () => {
     // aliases -- checking only the alias would miss a bundle published through it.
     expect(existsSync(targetDir)).toBe(false);
     expect(existsSync(join(realParent, "target"))).toBe(false);
+  });
+
+  it("removes the published directory when the post-publish re-verify diverges", async () => {
+    // The re-verify is the only check that runs AFTER the atomic rename, so it
+    // is the only one whose failure can leave bytes at the destination. If it
+    // does, a save that reported failure has still published a bundle that
+    // looks load-compatible, and the no-replace guard then refuses the retry --
+    // a failed operation holding its own destination hostage.
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-diverge-"));
+    roots.push(root);
+    const sourceDir = join(root, "source");
+    mkdirSync(sourceDir);
+    writeV5Bundle(sourceDir);
+    const targetDir = join(root, "target");
+
+    await expect(
+      saveModernCheckpoint(
+        sourceDir,
+        targetDir,
+        realFsDeps({
+          // Divergence is injected at the verifier rather than by corrupting
+          // bytes, because the rename has already happened by this point and
+          // the published tree is exactly the staged one. What is under test is
+          // the disposal of the destination on a post-publish refusal.
+          // Only the POST-PUBLISH call diverges. The same verifier also reads
+          // the source at step 1, and poisoning that call trips the earlier
+          // staging check instead -- which is a different, already-covered
+          // path and would leave this test asserting nothing about disposal.
+          verifyBundle: async (dir) => {
+            const real = await verifyCheckpointBundle(dir);
+            return dir === targetDir ? { ...real, manifestSha256: "0".repeat(64) } : real;
+          },
+        }),
+      ),
+    ).rejects.toThrow(/diverges from the verified source/);
+
+    expect(existsSync(targetDir)).toBe(false);
   });
 });

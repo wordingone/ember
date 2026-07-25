@@ -417,21 +417,35 @@ async function _pathExists(path: string): Promise<boolean> {
   }
 }
 
-/** Streams `src` to `dest`, hashing the bytes AS THEY ARE WRITTEN, and
- * returns the freshly measured sha256 + byte count of what actually landed
- * at `dest` -- never the source's pre-recorded identity restated. `wx`
- * refuses to silently overwrite an existing file at `dest` (defense in
- * depth alongside the staging dir already being fresh/unique per call). */
+/** Streams `src` to `dest`, then re-reads `dest` and returns the sha256 +
+ * byte count OF THE DESTINATION BYTES -- never the source's identity
+ * restated. `wx` refuses to silently overwrite an existing file at `dest`
+ * (defense in depth alongside the staging dir already being fresh/unique
+ * per call).
+ *
+ * The hash is taken from a second pass over `dest` rather than from the
+ * read stream, and the difference is the whole point. Hashing the read
+ * stream measures the SOURCE tree while the caller's check
+ * ("did not land intact") is written to be about the destination tree, so
+ * a write-side corruption -- a short write, a bad flush, a failing disk --
+ * passes every staging check and is caught only by the post-publish
+ * verifier, after the bundle is already published. That is the same shape
+ * as the ordering defect this module's step 2a comment condemns: a strict
+ * check reachable only after the lenient publish is a report, not a check.
+ * A second read costs one pass over bytes that are still in page cache;
+ * the alternative costs the property the caller believes it has. */
 async function _copyFileHashed(src: string, dest: string): Promise<CopiedArtifact> {
-  const hash = createHash("sha256");
-  let bytes = 0;
   const readStream = createReadStream(src);
   const writeStream = createWriteStream(dest, { flags: "wx" });
-  readStream.on("data", (chunk: Buffer) => {
-    hash.update(chunk);
-    bytes += chunk.length;
-  });
   await pipeline(readStream, writeStream);
+
+  const hash = createHash("sha256");
+  let bytes = 0;
+  for await (const chunk of createReadStream(dest)) {
+    const buf = chunk as Buffer;
+    hash.update(buf);
+    bytes += buf.length;
+  }
   return { sha256: hash.digest("hex"), bytes };
 }
 
