@@ -353,6 +353,10 @@ describe("compiled lifecycle workflow authority", () => {
     expect(workflow).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
     expect(workflow).toContain("uses: actions/setup-python@v5");
     expect(workflow).toContain("python-version: \"3.12\"");
+    expect(workflow).toContain("Install pinned identity-validator dependencies");
+    expect(workflow).toContain(
+      'python -m pip install "cryptography==49.0.0" "jsonschema==4.26.0"',
+    );
     expect(workflow).toContain(
       "name: ember-cli-lifecycle-smoke-${{ github.event.pull_request.head.sha || github.sha }}",
     );
