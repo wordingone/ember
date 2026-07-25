@@ -112,8 +112,7 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # frozen-before. Enumerated individually -- NEVER directory globs. Each entry
 # has a REDACTIONS.md row. The operator-name checks still cover these files
 # in full (this exclusion applies ONLY to the paths grep).
-PATHPAT_EXCLUDE=(
-  ':(exclude)tools/repo-guard.sh'
+PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)scripts/test_w1b_continuation.py'
   ':(exclude)tools/ember-cli/src/core/monitor-render.test.ts'
   ':(exclude)tools/ember-cli/src/components/homescreen-mock1-parity.test.ts'
@@ -121,21 +120,25 @@ PATHPAT_EXCLUDE=(
   ':(exclude)receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json'
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
 )
+PATHPAT_SELF_EXCLUDE_ARGS=()
+if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
+  PATHPAT_SELF_EXCLUDE_ARGS=(':(exclude)tools/repo-guard.sh')
+fi
 # Commit-time invocation (REPO_GUARD_SCOPE=staged, set by .githooks/pre-commit)
 # scans only the ADDED lines of the staged diff, so a branch carrying
 # pre-existing tracked residue with this shape does not block every commit
 # regardless of what the commit actually introduces. The tree-wide scan
 # (default, no env var) is unchanged and is what CI / the freshness monitor
-# run. Same PATHPAT, same PATHPAT_EXCLUDE pathspecs, applied to the diff.
+# run. Same PATHPAT and conditional/fixture pathspecs, applied to the diff.
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
-  if git diff --cached -U0 --no-color -- . "${PATHPAT_EXCLUDE[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+  if git diff --cached -U0 --no-color -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
     fail "paths" "absolute local filesystem paths in staged changes"
     sed 's/^/      /' /tmp/rg_paths | head -20
   else
     ok "paths" "no absolute local paths (staged scope)"
   fi
 else
-  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_EXCLUDE[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
     fail "paths" "absolute local filesystem paths in tracked files"
     sed 's/^/      /' /tmp/rg_paths | head -20
   else
@@ -202,11 +205,15 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
       ok "names" "none found"
     fi
   elif [ -f "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" ]; then
+    HASHED_SELF_ARGS=()
+    if [ "$KERNEL_ROOT" != "$SUBJECT_ROOT" ]; then
+      HASHED_SELF_ARGS+=(--scan-guard-surfaces)
+    fi
     HASHED_OUT="$(
       python "$KERNEL_ROOT/tools/check_names_hashed.py" \
         --root "$SUBJECT_ROOT" \
         --denylist "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" \
-        --names-exclude "$NAMES_EXCLUDE_FILE" 2>&1
+        --names-exclude "$NAMES_EXCLUDE_FILE" "${HASHED_SELF_ARGS[@]}" 2>&1
     )"
     HASHED_RC=$?
     case "$HASHED_RC" in
