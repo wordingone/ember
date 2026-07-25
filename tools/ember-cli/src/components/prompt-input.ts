@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // prompt-input.ts — keyboard-driven text input component for the REPL prompt.
 // Bundle: components/prompt-input.ts (line 321412)
 
@@ -215,11 +219,16 @@ export function nextPermissionMode(current: PermissionMode): PermissionMode {
   return next ?? "regular";
 }
 
+// issue #1044: keybinding-hint chrome ("(shift+tab to cycle)", "esc to interrupt",
+// "ctrl+t to hide|show tasks") removed -- keybindings stay live via status-bar.ts's
+// useInput, only the always-on textual advertisement goes. This function is currently
+// DEAD in production (repl.ts:showStatusLine is always false) but kept in sync with
+// status-bar.ts's statusBarText() so no stale copy of the old hint string survives.
 export function permissionModeStatusLine(mode: PermissionMode): string {
   if (mode === "bypass") {
-    return "⏵⏵ bypass permissions on (shift+tab to cycle) \xB7 esc to interrupt \xB7 ctrl+t to hide tasks";
+    return "⏵⏵ bypass permissions on";
   }
-  return `${mode} mode (shift+tab to cycle) \xB7 esc to interrupt \xB7 ctrl+t to hide tasks`;
+  return `${mode} mode`;
 }
 
 export function handlePromptInputKey(

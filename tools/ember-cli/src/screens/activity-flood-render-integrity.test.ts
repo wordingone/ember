@@ -117,10 +117,13 @@ describe("issue #561 AC-1: flood(500 events) + resize keeps banner/input/status 
       expect(bannerRow).toBeLessThanOrEqual(2);
     });
 
-    test(`rows=${rows}: input (caret) and status ("esc to interrupt") regions are bottom-locked under the same flood`, () => {
+    test(`rows=${rows}: input (caret) and status ("bypass permissions on") regions are bottom-locked under the same flood`, () => {
       const { lines } = captureFrame(rows, makeFloodMessages(500));
       const caretRow = findRowContaining(lines, "❯"); // ❯
-      const statusRow = findRowContaining(lines, "esc to interrupt");
+      // #1044: the bottom-lock anchor was "esc to interrupt" (removed keybinding-hint chrome);
+      // re-anchored to the surviving mode label -- StatusLine's own useInput/keybindings are
+      // untouched by #1044, only the always-on hint TEXT is gone.
+      const statusRow = findRowContaining(lines, "bypass permissions on");
       // The regression this guards (operator report): 500 activity events proportionally shrank
       // PromptInput/StatusLine toward 0 rows via the shared flex-shrink pool, scrolling both out
       // of the visible frame entirely (caretRow/statusRow === -1 before the fix).
@@ -140,7 +143,7 @@ describe("issue #561 AC-1: flood(500 events) + resize keeps banner/input/status 
     for (const { rows, lines } of [{ rows: 30, lines: before.lines }, { rows: 20, lines: after.lines }]) {
       const bannerRow = findRowContaining(lines, "ember");
       const caretRow  = findRowContaining(lines, "❯");
-      const statusRow = findRowContaining(lines, "esc to interrupt");
+      const statusRow = findRowContaining(lines, "bypass permissions on");
       expect(bannerRow).toBeGreaterThanOrEqual(0);
       expect(bannerRow).toBeLessThanOrEqual(2);
       expect(caretRow).toBeGreaterThanOrEqual(0);

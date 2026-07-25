@@ -37,9 +37,15 @@ export const TASK_PENDING = "□";
 /** Prefix glyph for a completed task. */
 export const TASK_COMPLETE = "✓";
 
-/** Exact status-bar text in bypass-permissions mode when the task panel is visible. */
-export const BYPASS_STATUS_TEXT =
-  `${BYPASS_GLYPH} bypass permissions on (shift+tab to cycle)${SEGMENT_SEPARATOR}esc to interrupt${SEGMENT_SEPARATOR}ctrl+t to hide tasks`;
+/**
+ * Exact status-bar text in bypass-permissions mode. Issue #1044 (operator demand,
+ * 2026-07-24 screenshot): the always-on keybinding-advertisement chrome ("(shift+tab to
+ * cycle)", "esc to interrupt", "ctrl+t to hide|show tasks") is removed from the bar --
+ * the keybindings themselves stay live (useInput below is untouched). Only the minimal
+ * mode indicator (glyph + label) survives, per the "broken must LOOK broken" precedent
+ * (a bypass session must stay visually distinguishable from a regular one).
+ */
+export const BYPASS_STATUS_TEXT = `${BYPASS_GLYPH} bypass permissions on`;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,19 +117,17 @@ export function modeGlyph(mode: PermissionMode): string {
 }
 
 /**
- * Returns the full status bar text for the given permission mode and task-panel
- * visibility.  When mode is "bypass" and tasksVisible is true this equals
- * BYPASS_STATUS_TEXT exactly.
+ * Returns the status bar text for the given permission mode. `tasksVisible` is accepted
+ * for call-site compatibility (task-panel toggle still lives via ctrl+t, see useInput in
+ * StatusLine) but no longer changes the rendered text -- issue #1044 removed the
+ * keybinding-hint chrome ("(shift+tab to cycle)", "esc to interrupt", "ctrl+t to
+ * hide|show tasks") from the bar. When mode is "bypass" this equals BYPASS_STATUS_TEXT
+ * exactly.
  */
-export function statusBarText(mode: PermissionMode, tasksVisible: boolean): string {
+export function statusBarText(mode: PermissionMode, _tasksVisible: boolean): string {
   const glyph = modeGlyph(mode);
   const modeLabel = mode === "bypass" ? "bypass permissions on" : "regular mode";
-  const tasksHint = tasksVisible ? "ctrl+t to hide tasks" : "ctrl+t to show tasks";
-  return [
-    `${glyph} ${modeLabel} (shift+tab to cycle)`,
-    "esc to interrupt",
-    tasksHint,
-  ].join(SEGMENT_SEPARATOR);
+  return `${glyph} ${modeLabel}`;
 }
 
 /** Formats a task item as a prefixed label line. */
