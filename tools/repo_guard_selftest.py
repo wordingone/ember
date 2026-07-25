@@ -13,17 +13,33 @@ denylist cases use an obviously-fake test word so the test is self-contained.
 Run: python tools/repo_guard_selftest.py
 """
 import hashlib
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+# The legacy product/daemon name this repo migrated away from is never
+# written as a literal contiguous run anywhere in THIS tracked source file:
+# doing so would make this selftest source itself match the very repo-tree
+# scan it exercises (repo-guard.sh's own legacy-name check runs over the
+# real tracked tree, and this file is part of it). Same self-referential-
+# gate dodge already used below for the PATHPAT tests -- assembled at
+# runtime instead of written as a literal, including in path strings.
+_LEGACY = "ember" + "d"
+_LEGACY_TAG = _LEGACY + "-legacy"
+_LEGACY_SCHEMA = _LEGACY + "-legacy-exceptions-v1"
+_LEGACY_POLICY_REL = "tools/" + _LEGACY + "-legacy-exceptions.json"
+_LEGACY_CHECKER_REL = "tools/check_" + _LEGACY + "_legacy_exceptions.py"
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
     "tools/repo-guard.sh",
     "tools/check_line_endings.py",
     "tools/check_names_hashed.py",
+    _LEGACY_CHECKER_REL,
+    _LEGACY_POLICY_REL,
     "scripts/verify_authority_conservation.py",
     "INVARIANT.md",
     "GOAL.md",
@@ -315,6 +331,170 @@ def test_ci_fail_closed_empty_hashed_denylist():
         cleanup(tmp)
 
 
+# ---------------------------------------------------------------------------
+# legacy-name zero-hit policy validation (issue: policy validity must be
+# unconditional -- a corrupt tools/<legacy-name>-legacy-exceptions.json must
+# fail the guard even when the tree has zero legacy-name matches to
+# adjudicate). Every case here uses a fixture with NO legacy-name occurrence
+# anywhere, so the caller's matched-paths list is empty on every run -- only
+# the policy file's own validity is under test.
+#
+# The token/path constants (_LEGACY*) are defined once, near the top of this
+# file, and reused here — see the module-level comment there.
+# ---------------------------------------------------------------------------
+def _legacy_zero_hit_fixture(branch: str) -> Path:
+    tmp = make_fixture(branch)
+    (tmp / "docs").mkdir(exist_ok=True)
+    (tmp / "docs" / "note.md").write_text(
+        "Nothing sensitive here, just ordinary prose.\n", encoding="utf-8", newline="\n",
+    )
+    return tmp
+
+
+def test_red_legacy_policy_missing_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-missing")
+    try:
+        (tmp / _LEGACY_POLICY_REL).unlink()
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (missing policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "does not exist" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_empty_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-empty")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_text("", encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (empty policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "is empty" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_invalid_utf8_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-badutf8")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_bytes(b"\xff\xfe\x00invalid\x80\x81")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (invalid UTF-8 policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "not valid UTF-8 JSON" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_invalid_json_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-badjson")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_text(
+            "{ this is not valid json ", encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (invalid JSON policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "not valid UTF-8 JSON" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_wrong_schema_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-wrongschema")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_text(
+            '["not", "an", "object"]', encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (wrong-schema policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "top level is not a JSON object" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_malformed_entry_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-badentry")
+    try:
+        doc = json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": "some/file.json", "unexpected_key": "boom"}],
+        })
+        (tmp / _LEGACY_POLICY_REL).write_text(doc, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (malformed entry policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "no valid 'sha256'" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_legacy_policy_valid_zero_hit():
+    """The over-closure control: a genuinely valid policy on a zero-hit tree
+    must stay green both before and after the fix — this test must never go
+    red as a side effect of tightening zero-hit validation."""
+    tmp = _legacy_zero_hit_fixture("fix/selftest-green-legacy-valid")
+    try:
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected exit 0 (valid policy, zero hits), got {rc}\n{out}"
+        assert f"ok   [{_LEGACY_TAG}]" in out, out
+        assert "repo-guard: PASS" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_unlisted_hit_still_fails():
+    """Non-empty-hits path, unchanged: an unlisted legacy-name match still
+    fails the guard exactly as before this fix."""
+    tmp = make_fixture("fix/selftest-red-legacy-unlisted-hit")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "docs" / "note.md").write_text(
+            f"mentions {_LEGACY} here, not in the exceptions file\n",
+            encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (unlisted hit), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "docs/note.md" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_legacy_legit_exception_still_passes():
+    """Non-empty-hits path, unchanged: a hit exactly covered by an enumerated
+    (path, sha256) exception still passes the guard exactly as before this
+    fix."""
+    tmp = make_fixture("fix/selftest-green-legacy-legit-exception")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        content = f"mentions {_LEGACY} here, covered by an exception\n"
+        (tmp / "docs" / "note.md").write_text(content, encoding="utf-8", newline="\n")
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        doc = json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": "docs/note.md", "sha256": digest, "reason": "selftest fixture"}],
+        })
+        (tmp / _LEGACY_POLICY_REL).write_text(doc, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected exit 0 (legit enumerated exception), got {rc}\n{out}"
+        assert f"ok   [{_LEGACY_TAG}]" in out, out
+        assert "repo-guard: PASS" in out, out
+    finally:
+        cleanup(tmp)
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -325,6 +505,15 @@ ALL_TESTS = [
     test_ci_fail_closed_empty_hashed_denylist,
     test_red_name_outside_exclude_scope,
     test_green_name_inside_excluded_path,
+    test_red_legacy_policy_missing_zero_hit,
+    test_red_legacy_policy_empty_zero_hit,
+    test_red_legacy_policy_invalid_utf8_zero_hit,
+    test_red_legacy_policy_invalid_json_zero_hit,
+    test_red_legacy_policy_wrong_schema_zero_hit,
+    test_red_legacy_policy_malformed_entry_zero_hit,
+    test_green_legacy_policy_valid_zero_hit,
+    test_red_legacy_unlisted_hit_still_fails,
+    test_green_legacy_legit_exception_still_passes,
 ]
 
 
