@@ -573,15 +573,15 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             self.assertEqual(receipt["exit_code"], 0)
             self.assertEqual(receipt["entry_marker_content"], "fired")
 
-    def test_runtime_invoked_with_entry_argv_resolves_true_distinctly(self):
-        """Positive control for the OTHER path to resolved-true: a launcher
-        that reaches the CLI entry only through the substituted test-mode
-        runtime (as the real Ember.cmd chain does, since bun itself is
-        replaced) resolves true via the runtime marker's recorded argv,
-        and the receipt distinguishes this from a direct entry-fire --
-        entry_marker_content must be absent/None, proving the entry's own
-        bytes never ran and the verdict rests on the weaker, disclosed
-        observation."""
+    def test_runtime_delegation_to_genuine_run_resolves_true_via_entry_marker(self):
+        """Round 6 positive control: a launcher that reaches the CLI entry
+        only through the substituted test-mode runtime (as the real
+        Ember.cmd chain does, since bun itself is replaced) resolves true
+        via the ENTRY marker -- the faithful runtime stub genuinely
+        delegates `run <file>` to real bun, so the entry's own substituted
+        bytes execute for real. entry_marker_content must be present and
+        'fired'; the runtime's recorded argv is present only as disclosed,
+        non-verdict-bearing diagnostic colour."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -589,23 +589,26 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 root / "ViaRuntime.cmd",
                 "@echo off\r\n"
                 'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
-                "run entrypoints/main.js\r\n"
+                "run tools/ember-cli/src/entrypoints/main.js\r\n"
                 "exit /b 0\r\n",
             )
             report = harness.run(root)
             check = report["checks"]["L1_root_launcher"]
             self.assertEqual(check["state"], "resolved-true", report)
             receipt = check["receipts"]["ViaRuntime.cmd"]
-            self.assertTrue(receipt.get("runtime_argv_names_entry"))
-            self.assertIn("entrypoints/main.js", receipt.get("runtime_marker_argv", ""))
-            self.assertNotIn("entry_marker_content", receipt)
+            self.assertEqual(receipt.get("entry_marker_content"), "fired")
+            diag_key = "runtime_marker_argv_DIAGNOSTIC_ONLY_NOT_VERDICT_BEARING"
+            self.assertIn(
+                "tools/ember-cli/src/entrypoints/main.js", receipt.get(diag_key, "")
+            )
 
     def test_decoy_asking_runtime_version_never_resolves_true(self):
-        """Round 5's own reproducer: a launcher that invokes the substituted
-        test-mode runtime with an argument that does NOT name the CLI
-        entry (`--version`) must not resolve true -- the runtime marker
-        firing on ANY invocation, unexamined, is exactly the round-4
-        defect (two sentinels sharing one marker) this round closes."""
+        """Round 4's original reproducer, re-verified under round 6: a
+        launcher that invokes the substituted test-mode runtime with
+        `--version` -- not `run` -- must not resolve true. The faithful
+        runtime refuses to execute anything for a flag it doesn't
+        recognise as `run <file>`, exactly as real bun would not run a
+        script for `--version`."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -623,19 +626,68 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 report["checks"]["L1_root_launcher"]["state"], "resolved-false", report
             )
 
-    def test_decoy_runtime_invoked_with_unrelated_script_never_resolves_true(self):
-        """Sibling of the above: the runtime IS invoked with a real-looking
-        script argument, but one that is not the declared CLI entry --
-        proves the class closes (matching the declared entry specifically),
-        not just the one `--version` instance."""
+    def test_decoy_entry_passed_to_unrelated_flag_never_resolves_true(self):
+        """Round 5's own reproducer, and the reason round 6 exists: the
+        entry path IS present in the runtime's argv, but as an argument to
+        `--version`, not to `run` -- round 5's argv-substring test could
+        not tell these apart (`norm_entry in norm_argv` matched regardless
+        of position) and resolved this true. The faithful runtime only
+        executes for a literal `run <file>` first token; `--version
+        <entry>` runs nothing, and the entry marker -- the only thing that
+        can grant true now -- never fires."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
             _write(
                 root / "Decoy2.cmd",
                 "@echo off\r\n"
+                "rem Never executes the entry. Only mentions it as a flag "
+                "argument to the runtime.\r\n"
                 'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
-                "run unrelated/script.js\r\n"
+                "--version entrypoints/main.js\r\n"
+                "exit /b 0\r\n",
+            )
+            report = harness.run(root)
+            check = report["checks"]["L1_root_launcher"]
+            self.assertEqual(check["state"], "resolved-false", report)
+            receipt = check.get("receipts", {}).get("Decoy2.cmd")
+            if receipt:
+                self.assertNotIn("entry_marker_content", receipt)
+
+    def test_decoy_entry_passed_to_unrelated_check_flag_never_resolves_true(self):
+        """Sibling of the exact round-5 reproducer, with a different
+        non-`run` flag, so the class closes rather than the one `--version`
+        instance."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "Decoy3.cmd",
+                "@echo off\r\n"
+                'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
+                "--check entrypoints/main.js\r\n"
+                "exit /b 0\r\n",
+            )
+            report = harness.run(root)
+            self.assertEqual(
+                report["checks"]["L1_root_launcher"]["state"], "resolved-false", report
+            )
+
+    def test_decoy_runtime_run_of_unrelated_script_never_resolves_true(self):
+        """A launcher that genuinely invokes `run <file>` on the runtime,
+        but names a DIFFERENT file than the declared CLI entry -- the
+        faithful runtime genuinely executes that unrelated file for real
+        (proving delegation works), but since it is not the entry, the
+        entry marker never fires."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(root / "tools/ember-cli/src/unrelated.js", "// not the entry\n")
+            _write(
+                root / "Decoy4.cmd",
+                "@echo off\r\n"
+                'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
+                "run tools/ember-cli/src/unrelated.js\r\n"
                 "exit /b 0\r\n",
             )
             report = harness.run(root)
