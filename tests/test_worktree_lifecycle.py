@@ -352,6 +352,156 @@ def test_repeated_create_cannot_exceed_ceiling(tmp_path: Path) -> None:
     assert not (tmp_path / "m3").exists()
 
 
+def expire_managed_worktrees(repo: Path, *worktrees: Path) -> None:
+    path = state_path(repo)
+    state = json.loads(path.read_text(encoding="utf-8"))
+    for worktree in worktrees:
+        key = str(worktree.resolve()).casefold()
+        state["managed"][key]["expires"] = "2000-01-01"
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+
+def test_retire_removes_exactly_one_of_two_expired_worktrees(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    first = tmp_path / "expired-first"
+    second = tmp_path / "expired-second"
+    for path, branch in ((first, "expired-first"), (second, "expired-second")):
+        lifecycle(
+            repo,
+            "create",
+            "--path",
+            str(path),
+            "--branch",
+            branch,
+            "--owner",
+            "founder-one",
+            "--purpose",
+            "expiry-retirement-test",
+            "--expires",
+            "2099-01-01",
+        )
+    expire_managed_worktrees(repo, first, second)
+
+    result = lifecycle(repo, "retire", "--path", str(first), check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert not first.exists()
+    assert second.exists()
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    assert str(first.resolve()).casefold() not in state["managed"]
+    second_record = state["managed"][str(second.resolve()).casefold()]
+    assert second_record["expires"] == "2000-01-01"
+
+    audit = lifecycle(repo, "audit", check=False)
+    assert audit.returncode == 2
+    assert "EXPIRED_WORKTREE" in audit.stderr
+    assert str(second.resolve()) in audit.stderr
+
+
+def test_expiry_still_blocks_create(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    expired = tmp_path / "expired"
+    lifecycle(
+        repo,
+        "create",
+        "--path",
+        str(expired),
+        "--branch",
+        "expired",
+        "--owner",
+        "founder-one",
+        "--purpose",
+        "expiry-create-test",
+        "--expires",
+        "2099-01-01",
+    )
+    expire_managed_worktrees(repo, expired)
+
+    candidate = tmp_path / "must-not-create"
+    result = lifecycle(
+        repo,
+        "create",
+        "--path",
+        str(candidate),
+        "--branch",
+        "must-not-create",
+        "--owner",
+        "founder-one",
+        "--purpose",
+        "expiry-must-block-create",
+        "--expires",
+        "2099-01-01",
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "EXPIRED_WORKTREE" in result.stderr
+    assert not candidate.exists()
+
+
+def test_retire_still_refuses_dirty_expired_worktree(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "2")
+    expired = tmp_path / "expired-dirty"
+    lifecycle(
+        repo,
+        "create",
+        "--path",
+        str(expired),
+        "--branch",
+        "expired-dirty",
+        "--owner",
+        "founder-one",
+        "--purpose",
+        "dirty-expired-test",
+        "--expires",
+        "2099-01-01",
+    )
+    (expired / "untracked.bin").write_bytes(b"do not delete")
+    expire_managed_worktrees(repo, expired)
+
+    result = lifecycle(repo, "retire", "--path", str(expired), check=False)
+
+    assert result.returncode == 2
+    assert "DIRTY_WORKTREE" in result.stderr
+    assert expired.exists()
+    assert (expired / "untracked.bin").read_bytes() == b"do not delete"
+
+
+def test_retire_still_refuses_unmanaged_worktree_when_a_lease_is_expired(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "2")
+    expired = tmp_path / "expired-managed"
+    lifecycle(
+        repo,
+        "create",
+        "--path",
+        str(expired),
+        "--branch",
+        "expired-managed",
+        "--owner",
+        "founder-one",
+        "--purpose",
+        "unmanaged-guard-test",
+        "--expires",
+        "2099-01-01",
+    )
+    expire_managed_worktrees(repo, expired)
+    raw = tmp_path / "raw-unmanaged"
+    git(repo, "worktree", "add", "-b", "raw-unmanaged", str(raw))
+
+    result = lifecycle(repo, "retire", "--path", str(raw), check=False)
+
+    assert result.returncode == 2
+    assert "UNMANAGED_WORKTREE" in result.stderr
+    assert raw.exists()
+    assert expired.exists()
+
+
 def test_retire_refuses_dirty_worktree_without_force(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
     lifecycle(repo, "install", "--target", "2")
