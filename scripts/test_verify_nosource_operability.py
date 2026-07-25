@@ -471,6 +471,112 @@ class OwnedServingConjunctionTests(unittest.TestCase):
             self.assertNotIn("custody.ts", row["evidence"], row)
 
 
+class SingleMatchSubstringGuardTests(unittest.TestCase):
+    """The ambiguity fix (AmbiguousMatchTests) only fires on a COLLISION
+    between two matching modules. A row with exactly ONE matching module
+    still resolved true even when that single match was a coincidental
+    substring hit: `training_launch_3b`'s keyword `train` is a bare
+    substring of "constraint", "retrain", "restraint" -- so a lone
+    registered module whose description merely mentions a *constraint*
+    satisfied the row that certifies 3B training launch, with no collision
+    to catch it. These tests pin the guard: a keyword must begin at a word
+    boundary (word-stem match), so an interior-substring hit can never
+    satisfy a spine row -- and the three real master descriptions
+    (train.ts, benchmark.ts, model.ts) must still resolve their rows true,
+    so the guard does not over-close."""
+
+    def test_constraint_substring_sole_match_never_resolves_true(self):
+        """THE discriminating fixture: one registered, named+described
+        module whose description contains "constraint" and nothing else
+        train-related, alone in the registry -- no other module matches, so
+        the ambiguity check cannot fire. Pre-guard this resolved TRUE for
+        training_launch_3b; it must not."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "policy", "policy",
+                "Enforce the resource constraint budget before dispatch",
+            )
+            _registry_importing(root, ["policy"])
+            report = harness.run(root)
+            row = report["spine"]["training_launch_3b"]
+            self.assertNotEqual(row["state"], "resolved-true", row)
+
+    def test_retrain_style_interior_substring_never_resolves_true(self):
+        """Same class, different carrier word: "restraint" also contains
+        "train" as an interior substring."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "guard", "guard",
+                "Apply the output restraint filter to generated text",
+            )
+            _registry_importing(root, ["guard"])
+            report = harness.run(root)
+            row = report["spine"]["training_launch_3b"]
+            self.assertNotEqual(row["state"], "resolved-true", row)
+
+    def test_real_train_description_still_resolves_true(self):
+        """Over-closure control: train.ts's actual master name+description
+        must still satisfy training_launch_3b ("train" is the command name;
+        "training" begins with the stem at a word boundary)."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "train", "train",
+                "Preflight EMBER-02 training readiness; execute only through "
+                "an explicit declared B7 certificate",
+            )
+            _registry_importing(root, ["train"])
+            report = harness.run(root)
+            row = report["spine"]["training_launch_3b"]
+            self.assertEqual(row["state"], "resolved-true", row)
+
+    def test_real_benchmark_description_still_resolves_true(self):
+        """Over-closure control: benchmark.ts's actual master
+        name+description must still satisfy benchmarking."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "benchmark", "benchmark",
+                "Show the benchmark registry (read-only): /benchmark "
+                "status|list, /benchmark run <id>",
+            )
+            _registry_importing(root, ["benchmark"])
+            report = harness.run(root)
+            row = report["spine"]["benchmarking"]
+            self.assertEqual(row["state"], "resolved-true", row)
+
+    def test_real_model_description_still_resolves_checkpoint_true(self):
+        """Over-closure control: model.ts's actual master name+description
+        must still satisfy checkpoint_save_load ("checkpoint load" /
+        "checkpoint save" / "checkpoint-load" all begin the stem at a word
+        boundary)."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "model", "model",
+                "Control the local owned model: status|load|unload|manifest "
+                "inspect|checkpoint load|checkpoint save. Inspect "
+                "data/tokenizer lineage; legacy checkpoint save is not "
+                "checkpoint-load compatible.",
+            )
+            _registry_importing(root, ["model"])
+            report = harness.run(root)
+            row = report["spine"]["checkpoint_save_load"]
+            self.assertEqual(row["state"], "resolved-true", row)
+
+
 class Round3TextPositionTests(unittest.TestCase):
     """Round 3: an independent probe on dc6dcf3 fooled L1 with a root
     Ember.cmd whose entire body was `@echo off` / a REM comment naming the

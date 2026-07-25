@@ -265,8 +265,28 @@ MAX_INVOCATION_DEPTH = 6
 
 # Gate-named spine functions -> keywords that must appear in a NAMED,
 # REGISTERED command module (module name or declared description for the
-# STRONG pass; module body for the WEAK pass). Keywords are lowercase
-# substrings.
+# STRONG pass; module body for the WEAK pass). Keywords are lowercase WORD
+# STEMS, not bare substrings (2026-07-25): a keyword matches only where it
+# begins at a word boundary (not preceded by a letter or digit), with any
+# suffix allowed -- "train" matches "train"/"training"/"trainer", never the
+# interior of "constraint"/"retrain"/"restraint"; "serv" matches
+# "serving"/"serve"/"server", never the interior of "observatory". Why: the
+# ambiguity check below only fires on a COLLISION between two matching
+# modules, so a row with exactly ONE matching module still resolved true
+# when that single match was a coincidental interior-substring hit -- a lone
+# registered module whose description merely mentioned a *constraint*
+# satisfied training_launch_3b, the row that certifies the operator can
+# launch a 3B training run, with no collision to catch it (same family as
+# the "seat"/owned_serving_path and checkpoint_save_load near-misses, one
+# guard-gap over). Suffixes stay allowed on purpose: the stems are chosen as
+# the concept's own root, and forcing whole-word-only would over-close
+# ("serv" never appears as a whole word; "training" is how train.ts's
+# description names the concept). DISCLOSED RESIDUE, not covered: a genuine
+# word-prefix collision ("service" begins with "serv"; a hyphenated
+# "re-train" puts "train" at a boundary) is still a match -- boundary
+# anchoring kills the interior-substring class both incidents belong to, not
+# every coincidence expressible in English; a collision of that kind still
+# lands in the ambiguity check when a real competitor exists.
 SPINE_FUNCTIONS = {
     "custody_and_identity_manifest": ["custody", "identity"],
     "data_tokenizer_lineage": ["tokenizer", "lineage"],
@@ -297,6 +317,28 @@ CONJUNCTION_FUNCTIONS = {
     "data_tokenizer_lineage",
     "owned_serving_path",
 }
+
+# Word-stem matching for spine keywords (see the SPINE_FUNCTIONS comment):
+# the keyword must begin at a word boundary -- not preceded by [a-z0-9] --
+# with any suffix allowed. Compiled once per keyword.
+_KEYWORD_RE_CACHE: dict[str, re.Pattern] = {}
+
+
+def _keyword_re(keyword: str) -> re.Pattern:
+    pat = _KEYWORD_RE_CACHE.get(keyword)
+    if pat is None:
+        pat = re.compile(r"(?<![a-z0-9])" + re.escape(keyword))
+        _KEYWORD_RE_CACHE[keyword] = pat
+    return pat
+
+
+def keyword_in(keyword: str, hay_lower: str) -> bool:
+    return bool(_keyword_re(keyword).search(hay_lower))
+
+
+def keyword_count(keyword: str, hay_lower: str) -> int:
+    return len(_keyword_re(keyword).findall(hay_lower))
+
 
 NAME_RE = re.compile(r'name:\s*"([a-z0-9-]+)"')
 DESC_RE = re.compile(r"description:")
@@ -1332,7 +1374,7 @@ def run(root: Path) -> dict:
             if not m["names"] or not m["has_description"]:
                 continue
             hay = " ".join(m["names"]) + " " + m["desc_lower"]
-            matched = [k for k in keywords if k in hay]
+            matched = [k for k in keywords if keyword_in(k, hay)]
             satisfied = (len(matched) == len(keywords)) if require_all else bool(matched)
             if satisfied:
                 strong_matches.append(stem)
@@ -1357,9 +1399,9 @@ def run(root: Path) -> dict:
                 if not m["names"] or not m["has_description"]:
                     continue
                 hay = stem.lower() + " " + m["body_lower"]
-                matched = [k for k in keywords if k in hay]
+                matched = [k for k in keywords if keyword_in(k, hay)]
                 if matched:
-                    n = sum(hay.count(k) for k in matched)
+                    n = sum(keyword_count(k, hay) for k in matched)
                     label = ""
                     if require_all and len(matched) < len(keywords):
                         missing = [k for k in keywords if k not in matched]
@@ -1370,7 +1412,7 @@ def run(root: Path) -> dict:
                 orphan_hits = [
                     s
                     for s in unregistered_stems
-                    if any(k in modules[s]["body_lower"] for k in keywords)
+                    if any(keyword_in(k, modules[s]["body_lower"]) for k in keywords)
                 ]
                 if orphan_hits:
                     orphan_note = (
