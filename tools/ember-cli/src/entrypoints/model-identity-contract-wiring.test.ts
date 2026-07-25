@@ -156,7 +156,7 @@ describe("process-entry — selectedModelContract production wiring (PR #948 rep
           serverSourceSha256: "c".repeat(64),
           tokenizerSha256: "d".repeat(64),
         }),
-        handshakeEmberdFn: async () => {},
+        handshakeEmberLabFn: async () => {},
         ensureOwnedServerFn: async () => ({
           outcome: "spawned",
           port: 9,
