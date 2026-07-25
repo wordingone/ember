@@ -24,19 +24,24 @@ function renderedLines(raw: string, columns: number, rows: number): string[] {
 }
 
 function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number): void {
-  const promptRow = lines.findIndex((line) => line.includes("❯"));
-  expect(promptRow).toBeGreaterThanOrEqual(0);
+  // Both the palette selection and the actual input use ❯. Select the bottom-most closed
+  // region first (the prompt/status panel), then find its glyph inside that region.
+  const promptBottom = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.startsWith("╰") && line.includes("╯"))
+    .at(-1)?.index ?? -1;
   const promptTop = lines
-    .slice(0, promptRow)
+    .slice(0, promptBottom)
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.startsWith("╭") && line.includes("╮"))
     .at(-1)?.index ?? -1;
-  const promptBottomOffset = lines
-    .slice(promptRow + 1)
-    .findIndex((line) => line.startsWith("╰") && line.includes("╯"));
-  const promptBottom = promptBottomOffset < 0 ? -1 : promptRow + 1 + promptBottomOffset;
+  const promptRowOffset = lines
+    .slice(promptTop + 1, promptBottom)
+    .findIndex((line) => line.includes("❯"));
+  const promptRow = promptRowOffset < 0 ? -1 : promptTop + 1 + promptRowOffset;
 
   expect(promptTop).toBeGreaterThanOrEqual(0);
+  expect(promptRow).toBeGreaterThan(promptTop);
   expect(promptBottom).toBeGreaterThan(promptRow);
   expect(lines[promptTop]?.indexOf("╮")).toBe(width - 1);
   expect(lines[promptBottom]?.indexOf("╯")).toBe(width - 1);
@@ -110,19 +115,22 @@ describe("repl operator surface layout", () => {
       expect(statusRows[0]?.indexOf("│", 1)).toBe(promptRightBorder);
     }
 
+    expect(handle).toBeDefined();
+    const activeHandle = handle!;
     await flushRepl();
-    raw = "";
+    // Keep the last complete 80x24 paint and apply the palette's incremental ANSI delta to it.
+    // Parsing only the delta into a blank frame aliases the palette's own ❯ row as the prompt.
     _deliverKeyEvent("/", {});
     await flushRepl();
     for (const width of [80, 40, 80]) {
-      if (handle.container.stdout.columns !== width) {
+      if (activeHandle.container.stdout.columns !== width) {
         raw = "";
       }
-      handle.container.stdout.columns = width;
-      handle.container.stdout.rows = 24;
-      handle.container.rootNode.layout.width = width;
-      handle.container.rootNode.layout.height = 24;
-      handle.update(render(width, 24));
+      activeHandle.container.stdout.columns = width;
+      activeHandle.container.stdout.rows = 24;
+      activeHandle.container.rootNode.layout.width = width;
+      activeHandle.container.rootNode.layout.height = 24;
+      activeHandle.update(render(width, 24));
       await flushRepl();
       assertPaletteDoesNotContaminatePrompt(
         renderedLines(raw, width, 24),
@@ -130,7 +138,7 @@ describe("repl operator surface layout", () => {
       );
       raw = "";
     }
-    handle.unmount();
+    activeHandle.unmount();
   });
 
   test("keeps a bounded right pane while preserving a usable conversation column", () => {

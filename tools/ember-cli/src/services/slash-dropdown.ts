@@ -118,7 +118,7 @@ export interface SlashDropdownDisplay {
  *
  * `maxVisible` defaults to SLASH_DROPDOWN_MAX_VISIBLE (every existing call site keeps working
  * unchanged) but a caller with real terminal-geometry knowledge should pass
- * slashDropdownMaxVisible(terminalRows, bannerRows, matches.length) instead -- see that function's
+ * slashDropdownMaxVisible(terminalRows, matches.length) instead -- see that function's
  * own comment (2026-07-25 palette-overflow-render finding) for why a fixed 8 alone is not honest
  * on a short terminal. `visible.length + overflowCount === matches.length` always, by
  * construction, regardless of what `cap` resolves to -- the shared invariant with the
@@ -128,10 +128,11 @@ export interface SlashDropdownDisplay {
  * `maxVisible` (and therefore `cap`) may be 0 -- deliberately no forced floor of 1 (2026-07-25
  * counterparty finding): on a viewport too tight to show even a single entry honestly, the correct
  * disposition is zero rendered entries plus an honest full-count "+N more", not one entry painted
- * over a row that was never budgeted for it. repl.ts's own render gate
- * (`dropdownDisplay.visible.length > 0`) already suppresses the whole SlashDropdown box when cap
- * resolves to 0 with nothing to show -- see slashDropdownMaxVisible's own comment for how that
- * residual case is handled. */
+ * over a row that was never budgeted for it. slashDropdownCanRender separately distinguishes
+ * an honest indicator-only panel from a viewport too short even for that indicator; the REPL
+ * uses that structural gate rather than the visible-command count.
+ * When cap resolves to 0, slashDropdownCanRender distinguishes an honest indicator-only
+ * panel from a viewport too short even for that indicator. */
 export function computeSlashDropdownDisplay(
   matches: RegistryCommand[],
   selectedIndex: number,
@@ -154,87 +155,28 @@ export function computeSlashDropdownDisplay(
   };
 }
 
+/** The slash palette collapses prompt/status chrome to one bordered input row, one embedded
+ * compact status row, and the input box's two borders. This four-row total is a render contract,
+ * not a sampled estimate of live transient state. */
+export const DROPDOWN_COMPACT_CHROME_ROWS = 4;
 export const DROPDOWN_BORDER_ROWS = 2;
 
-/** 2026-07-25 counterparty finding, fourth round: DROPDOWN_PROMPT_STATUS_RESERVE_ROWS=6 (a
- * literal) is RETIRED. The production counterexample: components/prompt-input.ts's
- * QUEUE_MAX_VISIBLE=3 means a queue of 4+ already adds a visible row plus an overflow row; Ctrl+S
- * stash adds a persistent row; `isProcessing` (busy) adds a shimmer row; each notification adds
- * its own row -- none of those are exotic, they are ordinary live states. The test that "bound"
- * the retired constant reconstructed exactly one frame (idle), which proves the fixture, not the
- * budget -- the identical class of failure the constant was meant to prevent, one level up. The
- * caller now derives this reserve for real, from `promptInputRowCount(...) + statusLineRowCount(
- * ...)` (components/prompt-input.ts, components/status-bar.ts) called with the SAME props/state
- * passed to the real <PromptInput>/<StatusLine> elements, and passes the result in as
- * `promptStatusReserve` below -- see repl.ts's own wiring. */
-
-export interface SlashDropdownBudget {
-  /** Rows the dropdown will actually show entries in (0..SLASH_DROPDOWN_MAX_VISIBLE). */
-  cap: number;
-  /** Rows left, after borders + banner + prompt/status reserve are subtracted, for entries plus
-   * the overflow indicator combined -- may be negative (never clamped here; callers compare it
-   * against 0/1 directly, per the exact-accounting contract in this function's own comment). */
-  contentBudget: number;
-  /** True when the banner was collapsed to free rows (bannerRows recomputed as 0) because it
-   * would not otherwise have fit even the indicator row alongside the palette. */
-  collapseHomescreen: boolean;
-  /** Whether the dropdown box should render at all. False only when there is genuinely no room --
-   * not even for the 2 border rows plus a single "+N more" line -- even after the banner was
-   * collapsed; see this function's own comment for the disclosed residual case. */
-  showPanel: boolean;
+/** True when the fixed compact region leaves room for the palette border and at least one
+ * content row. That content row may be the honest overflow indicator with zero commands. */
+export function slashDropdownCanRender(terminalRows: number, matchCount: number): boolean {
+  return matchCount > 0
+    && terminalRows - DROPDOWN_COMPACT_CHROME_ROWS - DROPDOWN_BORDER_ROWS >= 1;
 }
 
-/** 2026-07-25 counterparty finding, second+third round: the exact no-room budget. Built to the
- * counterparty's own worked algorithm (verified below against their three worked cases).
- *
- * `contentBudget = terminalRows - promptStatusReserve - DROPDOWN_BORDER_ROWS - bannerRows` --
- * the room left for entries + the overflow indicator, borders and banner already subtracted.
- *
- * If matches exist and that first pass leaves `contentBudget < 1` (not even the indicator row
- * fits alongside a full banner), the banner is not essential while the operator is actively
- * composing a slash command -- collapse it (bannerRows -> 0) and recompute `contentBudget` once
- * more. This makes the banner the sacrificed region, never the prompt/status chrome, which stays
- * off-limits (another founder's lane, issue #243).
- *
- * The cap itself is sized with the same one-deterministic-recomputation discipline as before (no
- * iteration, no oscillation): first as though no indicator were needed
- * (`min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, max(0, contentBudget))`); if that cap doesn't
- * cover every match, the indicator WILL render, so recompute once more against one fewer row.
- *
- * Worked cases (counterparty's own, reproduced here so a future edit can check itself against
- * them): contentBudget=3, matchCount=10 -> cap=3 then 2, `2 borders + 2 + 1 indicator = 5` against
- * the 5 rows actually available (contentBudget + DROPDOWN_BORDER_ROWS) -- exact, no waste.
- * contentBudget=1, matchCount=10 -> cap=1 then 0, `2 + 0 + 1 = 3` against 3 available -- the
- * honest zero-visible render. contentBudget=8, matchCount=10 -> cap=8 then 7, `2 + 7 + 1 = 10`
- * against 10. contentBudget=8, matchCount=8 (exact fit, no overflow) -> cap=8, no indicator,
- * `2 + 8 + 0 = 10` against 10.
- *
- * `showPanel` is false (nothing renders, not even borders) only when `contentBudget < 1` after
- * the collapse attempt -- disclosed residual: on a terminal so short that even a fully collapsed
- * banner cannot free a single row for the indicator, the operator gets no on-screen signal a list
- * exists at all. There is genuinely no room at that point. */
-export function computeSlashDropdownBudget(
-  terminalRows: number,
-  promptStatusReserve: number,
-  bannerRows: number,
-  matchCount: number,
-): SlashDropdownBudget {
-  let effectiveBannerRows = bannerRows;
-  let collapseHomescreen = false;
-  let contentBudget = terminalRows - promptStatusReserve - DROPDOWN_BORDER_ROWS - effectiveBannerRows;
-
-  if (matchCount > 0 && contentBudget < 1) {
-    collapseHomescreen = true;
-    effectiveBannerRows = 0;
-    contentBudget = terminalRows - promptStatusReserve - DROPDOWN_BORDER_ROWS - effectiveBannerRows;
-  }
-
-  let cap = Math.min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, Math.max(0, contentBudget));
-  if (matchCount > cap) {
-    cap = Math.min(cap, Math.max(0, contentBudget - 1));
-  }
-
-  const showPanel = matchCount > 0 && contentBudget >= 1;
-
-  return { cap, contentBudget, collapseHomescreen, showPanel };
+export function slashDropdownMaxVisible(terminalRows: number, matchCount: number): number {
+  const contentRows = terminalRows - DROPDOWN_COMPACT_CHROME_ROWS - DROPDOWN_BORDER_ROWS;
+  const capWithoutIndicator = Math.max(
+    0,
+    Math.min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, contentRows),
+  );
+  if (capWithoutIndicator >= matchCount) return capWithoutIndicator;
+  return Math.max(
+    0,
+    Math.min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, contentRows - 1),
+  );
 }

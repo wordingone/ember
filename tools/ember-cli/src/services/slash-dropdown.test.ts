@@ -23,7 +23,9 @@ import {
   SLASH_DROPDOWN_MAX_VISIBLE,
   truncateWithEllipsis,
   slashDropdownDescriptionWidth,
-  computeSlashDropdownBudget,
+  slashDropdownMaxVisible,
+  slashDropdownCanRender,
+  DROPDOWN_COMPACT_CHROME_ROWS,
   DROPDOWN_BORDER_ROWS,
 } from "./slash-dropdown.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
@@ -206,103 +208,44 @@ describe("slashDropdownDescriptionWidth", () => {
   });
 });
 
-describe("computeSlashDropdownBudget — the exact no-room budget (2026-07-25 counterparty finding, second/third/fourth rounds)", () => {
-  // Team-lead's own worked cases, reproduced as tests rather than trusted as prose -- each checks
-  // both the resolved cap AND the exact-accounting invariant
-  // (DROPDOWN_BORDER_ROWS + cap + indicator == contentBudget + DROPDOWN_BORDER_ROWS).
-  it("contentBudget=3 (terminalRows=11, reserve=6, banner=0), 10 matches -> cap 2, exact accounting 5 against 5 available", () => {
-    const b = computeSlashDropdownBudget(11, 6, 0, 10);
-    expect(b.contentBudget).toBe(3);
-    expect(b.cap).toBe(2);
-    const requestedHeight = DROPDOWN_BORDER_ROWS + b.cap + (10 > b.cap ? 1 : 0);
-    expect(requestedHeight).toBe(b.contentBudget + DROPDOWN_BORDER_ROWS);
-  });
-
-  it("contentBudget=1 (terminalRows=9, reserve=6, banner=0), 10 matches -> cap 0, the honest zero-visible render, exact accounting 3 against 3", () => {
-    const b = computeSlashDropdownBudget(9, 6, 0, 10);
-    expect(b.contentBudget).toBe(1);
-    expect(b.cap).toBe(0);
-    const requestedHeight = DROPDOWN_BORDER_ROWS + b.cap + (10 > b.cap ? 1 : 0);
-    expect(requestedHeight).toBe(b.contentBudget + DROPDOWN_BORDER_ROWS);
-    expect(b.showPanel).toBe(true); // contentBudget>=1: box still renders, just the indicator
-  });
-
-  it("contentBudget=8 (terminalRows=16, reserve=6, banner=0), 10 matches -> cap 7, exact accounting 10 against 10", () => {
-    const b = computeSlashDropdownBudget(16, 6, 0, 10);
-    expect(b.contentBudget).toBe(8);
-    expect(b.cap).toBe(7);
-    const requestedHeight = DROPDOWN_BORDER_ROWS + b.cap + (10 > b.cap ? 1 : 0);
-    expect(requestedHeight).toBe(b.contentBudget + DROPDOWN_BORDER_ROWS);
-  });
-
-  it("contentBudget=8, exactly 8 matches (exact fit, no overflow) -> cap 8, no indicator reserved, exact accounting 10 against 10", () => {
-    const b = computeSlashDropdownBudget(16, 6, 0, 8);
-    expect(b.contentBudget).toBe(8);
-    expect(b.cap).toBe(8);
-    const requestedHeight = DROPDOWN_BORDER_ROWS + b.cap + (8 > b.cap ? 1 : 0);
-    expect(requestedHeight).toBe(10);
-    expect(b.contentBudget + DROPDOWN_BORDER_ROWS).toBe(10);
-  });
-
-  it("arithmetic-only: requested box height never exceeds the computed budget at a tight viewport that triggers overflow", () => {
-    // 10 matches at a 20-row terminal, no banner -- deliberately picked to force overflow
-    // (10 > SLASH_DROPDOWN_MAX_VISIBLE), the case where a naive budget (one that doesn't reserve
-    // the indicator row) over-asks by exactly one row.
+describe("slashDropdownMaxVisible — the '+N more' row's own height must be budgeted (2026-07-25 counterparty finding)", () => {
+  it("the requested box height never exceeds the computed budget at a tight viewport that triggers overflow", () => {
+    // 10 matches at a 20-row terminal with variable chrome suppressed -- deliberately picked
+    // to force overflow (10 > SLASH_DROPDOWN_MAX_VISIBLE),
+    // which is exactly the case where a naive budget (one that doesn't reserve the indicator row)
+    // over-asks by one row.
     const terminalRows = 20;
-    const promptStatusReserve = 6;
-    const bannerRows = 0;
     const matchCount = 10;
-    const b = computeSlashDropdownBudget(terminalRows, promptStatusReserve, bannerRows, matchCount);
-    const willOverflow = matchCount > b.cap;
-    const requestedHeight = DROPDOWN_BORDER_ROWS + b.cap + (willOverflow ? 1 : 0);
-    const available = terminalRows - promptStatusReserve - bannerRows;
-    expect(requestedHeight).toBeLessThanOrEqual(available);
+    const cap = slashDropdownMaxVisible(terminalRows, matchCount);
+    const willOverflow = cap < matchCount;
+    const requestedHeight = DROPDOWN_BORDER_ROWS + cap + (willOverflow ? 1 : 0);
+    const budget = terminalRows - DROPDOWN_COMPACT_CHROME_ROWS;
+    expect(requestedHeight).toBeLessThanOrEqual(budget);
   });
 
   it("resolves to 0 -- not floored to 1 -- when the budget cannot fit even a single entry plus its indicator row", () => {
-    // 8 total rows, no banner, 6 reserved for prompt/status leaves 2 for the dropdown's own
-    // border alone -- zero left for any entry or the indicator row it would need once there's
-    // overflow. A floor of 1 here would silently over-ask by exactly one row.
-    const b = computeSlashDropdownBudget(8, 6, 0, 10);
-    expect(b.cap).toBe(0);
+    // 7 total rows: four compact prompt/status rows plus two palette borders leave one content
+    // row -- zero entries can fit once the required overflow indicator owns that final row.
+    // overflow. A floor of 1 here would silently over-ask by exactly one row, in exactly the
+    // scenario this whole fix removed for entries.
+    const cap = slashDropdownMaxVisible(7, 10);
+    expect(cap).toBe(0);
+    expect(slashDropdownCanRender(7, 10)).toBe(true);
+    expect(slashDropdownCanRender(6, 10)).toBe(false);
+    expect(slashDropdownCanRender(20, 0)).toBe(false);
   });
 
   it("does not reserve the indicator row when every match already fits (no overflow, no indicator to budget for)", () => {
-    // Unlike the retired slashDropdownMaxVisible (a ceiling independent of matchCount),
-    // computeSlashDropdownBudget's cap already incorporates matchCount directly -- 3 matches
-    // against a generous budget resolves to cap=3, not the SLASH_DROPDOWN_MAX_VISIBLE ceiling.
-    const b = computeSlashDropdownBudget(40, 6, 0, 3);
-    expect(b.cap).toBe(3);
+    // 3 matches comfortably fit within a generous budget -- capNoIndicator alone already covers
+    // matchCount, so the one-time recomputation must NOT fire (it would needlessly shrink the cap
+    // by one row for an indicator that will never render). The cap is the exact visible count,
+    // bounded by both matchCount and SLASH_DROPDOWN_MAX_VISIBLE.
+    const cap = slashDropdownMaxVisible(40, 3);
+    expect(cap).toBe(3);
     // And downstream, the actual render only ever shows the 3 real matches, no phantom indicator.
     const commands = ["a", "b", "c"].map((name) => ({ name, description: "", isEnabled: () => true, execute: async () => ({ type: "message" as const, message: "" }) }));
-    const display = computeSlashDropdownDisplay(commands, 0, b.cap);
+    const display = computeSlashDropdownDisplay(commands, 0, cap);
     expect(display.visible.length).toBe(3);
     expect(display.overflowCount).toBe(0);
-  });
-
-  it("collapses the banner (collapseHomescreen=true) only when a full banner would leave less than 1 row of content budget, and never when there are no matches", () => {
-    // terminalRows=20, reserve=6, banner=16 -> first-pass contentBudget = 20-6-2-16 = -4 < 1:
-    // collapse triggers, recomputed contentBudget = 20-6-2-0 = 12.
-    const withMatches = computeSlashDropdownBudget(20, 6, 16, 5);
-    expect(withMatches.collapseHomescreen).toBe(true);
-    expect(withMatches.contentBudget).toBe(12);
-
-    // Same geometry but zero matches (dropdown not actually open on anything) -- must never
-    // collapse the banner for a palette that isn't showing anything.
-    const noMatches = computeSlashDropdownBudget(20, 6, 16, 0);
-    expect(noMatches.collapseHomescreen).toBe(false);
-
-    // A roomy terminal never needs to collapse even with a full banner.
-    const roomy = computeSlashDropdownBudget(60, 6, 16, 5);
-    expect(roomy.collapseHomescreen).toBe(false);
-  });
-
-  it("showPanel is false -- nothing renders, not even borders -- only when contentBudget stays below 1 after the collapse attempt (the disclosed residual)", () => {
-    // Even with the banner collapsed (bannerRows passed as 0 directly, i.e. already the collapsed
-    // case), reserve+borders alone exceed terminalRows: genuinely no room for anything.
-    const b = computeSlashDropdownBudget(6, 6, 0, 10);
-    expect(b.contentBudget).toBeLessThan(1);
-    expect(b.showPanel).toBe(false);
-    expect(b.cap).toBe(0);
   });
 });

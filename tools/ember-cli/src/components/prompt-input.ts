@@ -427,6 +427,8 @@ export interface PromptInputProps {
   notifications?:        Notification[];
   isProcessing?:         boolean;
   prefersReducedMotion?: boolean;
+  /** Collapse all transient rows while the slash palette owns vertical space. */
+  compact?:              boolean;
   showStatusLine?:       boolean;
   /** The real REPL StatusLine, supplied by screens/repl.ts and rendered inside the border. */
   statusLine?:           React.ReactNode;
@@ -451,20 +453,21 @@ export function PromptInput({
   notifications        = [],
   isProcessing         = false,
   prefersReducedMotion = false,
+  compact              = false,
   showStatusLine       = true,
   statusLine,
   suggestion,
   width                = 80,
 }: PromptInputProps): React.ReactElement {
-  const qDisplay    = computeQueueDisplay(queuedItems);
-  const showShimmer = shouldShowShimmer(isProcessing, prefersReducedMotion);
+  const qDisplay    = computeQueueDisplay(compact ? [] : queuedItems);
+  const showShimmer = !compact && shouldShowShimmer(isProcessing, prefersReducedMotion);
   const permissionStatusLine = permissionModeStatusLine(state.permissionMode);
   const glyph       = modeGlyph(state.mode);
   const safeWidth   = Number.isFinite(width) ? Math.max(0, Math.floor(width)) : 0;
 
   // Transient notifications and processing chrome are not part of the persistent input panel.
   const above: React.ReactElement[] = [];
-  for (const n of notifications) {
+  for (const n of compact ? [] : notifications) {
     above.push(
       React.createElement(Text, { key: n.id, color: n.kind === "error" ? "red" : "cyan" }, n.message),
     );
@@ -475,7 +478,7 @@ export function PromptInput({
 
   // Every persistent row owned by the input surface lives inside one closed rounded box.
   const boxChildren: (React.ReactElement | null)[] = [];
-  if (state.isStashed) {
+  if (!compact && state.isStashed) {
     boxChildren.push(React.createElement(Text, { key: "stash", dimColor: true }, state.stashNotice));
   }
 
@@ -494,7 +497,7 @@ export function PromptInput({
       React.createElement(Text, null, ` ${before}`),
       React.createElement(Text, { inverse: true }, atCursorChar),
       after ? React.createElement(Text, null, after) : null,
-      suggestion && cursorAtEnd
+      !compact && suggestion && cursorAtEnd
         ? React.createElement(Text, { dimColor: true }, suggestion)
         : null,
     ),
@@ -509,7 +512,7 @@ export function PromptInput({
       React.createElement(Text, { key: "overflow", dimColor: true }, `+ ${qDisplay.overflowCount} more`),
     );
   }
-  if (showStatusLine) {
+  if (!compact && showStatusLine) {
     boxChildren.push(React.createElement(Text, { key: "status", dimColor: true }, permissionStatusLine));
   }
   if (statusLine != null) {
@@ -533,48 +536,4 @@ export function PromptInput({
 
   // #561 P0-A: fixed bottom chrome, never a flex-shrink target.
   return React.createElement(Box, { flexDirection: "column", flexShrink: 0 }, ...above, box);
-}
-
-// ---------------------------------------------------------------------------
-// promptInputRowCount — analytically exact row count for PromptInput, mirroring
-// its own render term-for-term (2026-07-25 counterparty finding, fourth round:
-// the earlier DROPDOWN_PROMPT_STATUS_RESERVE_ROWS=6 constant was checked
-// against exactly one render state (idle) and broke on the live busy+stash
-// case -- "a binding against a single state proves the fixture, not the
-// budget". This replaces that constant: every term below is either derived
-// from the same pure helpers PromptInput's own render calls
-// (shouldShowShimmer, computeQueueDisplay) or a structural constant of the
-// component (the 2 rule rows, the 1 input row) that no render state changes.
-// Bound to the real render by prompt-region-row-count.test.ts across the
-// full state range PromptInput can occupy, not one frame of it.
-// ---------------------------------------------------------------------------
-
-export interface PromptInputRowCountProps {
-  queuedItems?:          string[];
-  notifications?:        Notification[];
-  isProcessing?:         boolean;
-  prefersReducedMotion?: boolean;
-  isStashed:             boolean;
-  showStatusLine?:       boolean;
-}
-
-export function promptInputRowCount({
-  queuedItems          = [],
-  notifications        = [],
-  isProcessing         = false,
-  prefersReducedMotion = false,
-  isStashed,
-  showStatusLine       = true,
-}: PromptInputRowCountProps): number {
-  const notificationRows = notifications.length;
-  const shimmerRows      = shouldShowShimmer(isProcessing, prefersReducedMotion) ? 1 : 0;
-  const stashRows        = isStashed ? 1 : 0;
-  const ruleRows         = 2; // rule-above + rule-below
-  const inputRow         = 1;
-  const qDisplay         = computeQueueDisplay(queuedItems);
-  const queueVisibleRows = qDisplay.visible.length;
-  const overflowRows     = qDisplay.overflowCount > 0 ? 1 : 0;
-  const statusRows       = showStatusLine ? 1 : 0;
-  return notificationRows + shimmerRows + stashRows + ruleRows + inputRow
-    + queueVisibleRows + overflowRows + statusRows;
 }
