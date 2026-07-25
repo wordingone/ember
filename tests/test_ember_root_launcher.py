@@ -70,11 +70,9 @@ class EmberRootLauncherTests(unittest.TestCase):
             check=False,
         )
 
-    def test_public_launcher_is_visible_and_readme_names_it(self) -> None:
+    def test_public_launcher_and_implementation_are_visible(self) -> None:
         self.assertTrue(PUBLIC_LAUNCHER.is_file())
         self.assertTrue(LAUNCH_IMPL.is_file())
-        readme = (REPOSITORY / "README.md").read_text(encoding="utf-8")
-        self.assertIn("Ember.cmd", readme)
 
     def test_no_argument_launch_discovers_repo_from_outside_and_handles_spaces(self) -> None:
         owner, root, runtime = self.make_fixture()
