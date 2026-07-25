@@ -549,7 +549,10 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
         through the test-mode runtime hook) must resolve true via the
         ENTRY marker specifically, and the receipt must bind the exact
         bytes/cwd/argv/exit code a reader would need to reproduce the
-        verdict without rerunning it."""
+        verdict without rerunning it. Round 7: the entry marker now
+        records the executing process's OWN resolved path (never a
+        caller-supplied value), and resolved-true requires that path to
+        equal the scratch tree's actual CLI entry."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -568,10 +571,15 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 "timeout_s",
                 "exit_code",
                 "entry_marker_content",
+                "entry_marker_path_matches_declared_entry",
+                "expected_entry_path",
             ):
                 self.assertIn(field, receipt, f"receipt missing {field}: {receipt}")
             self.assertEqual(receipt["exit_code"], 0)
-            self.assertEqual(receipt["entry_marker_content"], "fired")
+            self.assertTrue(receipt["entry_marker_path_matches_declared_entry"], receipt)
+            self.assertEqual(
+                receipt["entry_marker_content"], receipt["expected_entry_path"]
+            )
 
     def test_runtime_delegation_to_genuine_run_resolves_true_via_entry_marker(self):
         """Round 6 positive control: a launcher that reaches the CLI entry
@@ -579,9 +587,9 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
         Ember.cmd chain does, since bun itself is replaced) resolves true
         via the ENTRY marker -- the faithful runtime stub genuinely
         delegates `run <file>` to real bun, so the entry's own substituted
-        bytes execute for real. entry_marker_content must be present and
-        'fired'; the runtime's recorded argv is present only as disclosed,
-        non-verdict-bearing diagnostic colour."""
+        bytes execute for real, from their own declared (in-place)
+        location. The runtime's recorded argv is present only as
+        disclosed, non-verdict-bearing diagnostic colour."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -596,11 +604,77 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             check = report["checks"]["L1_root_launcher"]
             self.assertEqual(check["state"], "resolved-true", report)
             receipt = check["receipts"]["ViaRuntime.cmd"]
-            self.assertEqual(receipt.get("entry_marker_content"), "fired")
+            self.assertTrue(receipt.get("entry_marker_path_matches_declared_entry"), receipt)
+            self.assertEqual(
+                receipt.get("entry_marker_content"), receipt.get("expected_entry_path")
+            )
             diag_key = "runtime_marker_argv_DIAGNOSTIC_ONLY_NOT_VERDICT_BEARING"
             self.assertIn(
                 "tools/ember-cli/src/entrypoints/main.js", receipt.get(diag_key, "")
             )
+
+    def test_decoy_copy_entry_out_of_tree_and_execute_never_resolves_true(self):
+        """Round 6's defeat and round 7's reason to exist: the launcher
+        copies the CLI entry's OWN substituted bytes out of the tree (to
+        %TEMP%) and runs the copy. The entry marker DOES fire -- the
+        bytes genuinely executed -- but the process's own reported path is
+        the %TEMP% copy, not the declared CLI entry's in-place location,
+        so the verdict must be resolved-false, not resolved-true. This is
+        the exact reproducer that beat round 6 (CopyRun.cmd)."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "CopyRun.cmd",
+                "@echo off\r\n"
+                'copy /y "tools\\ember-cli\\src\\entrypoints\\main.js" '
+                '"%TEMP%\\stolen-entry.js" >nul\r\n'
+                'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
+                'run "%TEMP%\\stolen-entry.js"\r\n'
+                "exit /b 0\r\n",
+            )
+            report = harness.run(root)
+            check = report["checks"]["L1_root_launcher"]
+            self.assertEqual(check["state"], "resolved-false", report)
+            receipt = check.get("receipts", {}).get("CopyRun.cmd", {})
+            if "entry_marker_content" in receipt:
+                self.assertFalse(
+                    receipt.get("entry_marker_path_matches_declared_entry", True), receipt
+                )
+                self.assertNotEqual(
+                    receipt["entry_marker_content"], receipt.get("expected_entry_path"), receipt
+                )
+
+    def test_decoy_copy_entry_to_different_in_tree_directory_never_resolves_true(self):
+        """Sibling of the copy-then-execute decoy: the copy destination is
+        a DIFFERENT directory INSIDE the tree (not %TEMP%), so the
+        laundering can't be dismissed as merely 'outside the repo'. The
+        path-match requirement is location-exact, not tree-membership --
+        a copy one directory over is still not the entry's own place."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(root / "tools/ember-cli/decoy-landing/.keep", "")
+            _write(
+                root / "CopyRunInTree.cmd",
+                "@echo off\r\n"
+                'copy /y "tools\\ember-cli\\src\\entrypoints\\main.js" '
+                '"tools\\ember-cli\\decoy-landing\\main.js" >nul\r\n'
+                'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
+                'run "tools\\ember-cli\\decoy-landing\\main.js"\r\n'
+                "exit /b 0\r\n",
+            )
+            report = harness.run(root)
+            check = report["checks"]["L1_root_launcher"]
+            self.assertEqual(check["state"], "resolved-false", report)
+            receipt = check.get("receipts", {}).get("CopyRunInTree.cmd", {})
+            if "entry_marker_content" in receipt:
+                self.assertFalse(
+                    receipt.get("entry_marker_path_matches_declared_entry", True), receipt
+                )
+                self.assertNotEqual(
+                    receipt["entry_marker_content"], receipt.get("expected_entry_path"), receipt
+                )
 
     def test_decoy_asking_runtime_version_never_resolves_true(self):
         """Round 4's original reproducer, re-verified under round 6: a

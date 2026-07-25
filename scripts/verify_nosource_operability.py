@@ -123,6 +123,33 @@ bytes the artifact does not control):
       pre-filter, and its evidence is still included for diagnostic value,
       but it may never independently grant `resolved-true` -- that
       authority belongs to the entry marker alone.
+
+      Round 7 (2026-07-25) amendment. Round 6's own defeat: a launcher that
+      COPIES the CLI entry's substituted bytes out of the tree (`copy
+      tools\ember-cli\src\entrypoints\main.ts %TEMP%\stolen-entry.ts`) and
+      then genuinely delegates `run` on the COPY. The entry marker fires --
+      the bytes really did execute, that observation is not false -- but it
+      answers the wrong question: L1 asks whether the launcher invokes the
+      CLI *from where it lives*, and a copy run from `%TEMP%` (or any other
+      directory, in-tree or not) never does. "The bytes fired" and "the
+      bytes fired in place" are different claims, and round 6 only checked
+      the first one. The fix is not another exclusion list on the launcher's
+      text -- it is the SAME category of evidence as the fire itself: the
+      executing process reporting its own identity. Every entry stub now
+      writes its own resolved execution path into the marker -- `__filename`
+      for the JS-family stubs (never `process.argv[1]`, which is only the
+      string a caller happened to type and could name any path),
+      `os.path.abspath(__file__)` for Python, `$PSCommandPath` for
+      PowerShell, `%~f0` for cmd/bat, a `realpath`/`readlink -f` resolution
+      chain for sh -- always the interpreter's own report of what it is
+      currently running, never a caller-supplied value. `resolved-true` now
+      requires BOTH the entry marker firing AND that recorded path resolving
+      to the scratch tree's actual CLI entry (`entry_marker_path_matches_
+      declared_entry` in the receipt). Fired from anywhere else --
+      including a different directory still inside the tree -- is
+      `resolved-false`, with evidence naming the mismatch: the entry's bytes
+      executed, but not from where the CLI actually lives, so the launcher
+      did not invoke it in place.
   L2  Launcher is documented: README.md or docs/START-HERE.md names a
       launcher that itself resolved-true, so a no-source reader can find a
       real one (documenting a decoy does not count).
@@ -159,7 +186,14 @@ WHAT IS NOT MEASURED (permanently undecidable here, human capture required):
     proxy that genuinely delegates `run <file>` to real `bun` and refuses
     everything else, so `resolved-true` needs exactly one observation (the
     entry marker) and no text-matching rescue is needed for the genuine
-    chain to reach it. What remains OPEN, disclosed rather than silently
+    chain to reach it. Round 7 (2026-07-25) closed the remaining gap round 6
+    disclosed openly above (the entry marker firing was necessary but not
+    sufficient -- a launcher could copy the entry's substituted bytes
+    elsewhere and run the copy, firing the marker from the wrong place): the
+    entry stub now records its own resolved execution path from inside the
+    executing process, and `resolved-true` requires that path to equal the
+    scratch tree's actual CLI entry location, not merely that entry-shaped
+    bytes fired somewhere. What remains OPEN, disclosed rather than silently
     passed: (a) a launcher whose real invocation depends on interactive
     input, a specific OS/shell the probe's runner table does not cover, or
     state outside the scratch copy (a required system service, a mapped
@@ -651,45 +685,54 @@ SENTINEL_TIMEOUT_SECONDS = 25
 # tree some other way never fires it) and does nothing else -- no network,
 # no other side effects.
 _ENTRY_STUB_BY_SUFFIX = {
+    # Round 7: every JS-family stub reports __filename (or its ESM
+    # equivalent) -- Node/bun's OWN resolution of what file is currently
+    # executing -- never process.argv[1], which is only the string the
+    # caller happened to type on the command line and could name any path
+    # regardless of what actually ran.
     ".ts": (
         "if (process.env.EMBER_PROBE_ENTRY_MARKER) {\n"
-        "  require('fs').writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, 'fired');\n"
+        "  require('fs').writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, __filename);\n"
         "}\n"
     ),
     ".js": (
         "if (process.env.EMBER_PROBE_ENTRY_MARKER) {\n"
-        "  require('fs').writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, 'fired');\n"
+        "  require('fs').writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, __filename);\n"
         "}\n"
     ),
     ".mjs": (
         "if (process.env.EMBER_PROBE_ENTRY_MARKER) {\n"
-        "  await import('fs').then(fs => fs.writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, 'fired'));\n"
+        "  await import('url').then(u => import('fs').then(fs => "
+        "fs.writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, u.fileURLToPath(import.meta.url))));\n"
         "}\n"
     ),
     ".cjs": (
         "if (process.env.EMBER_PROBE_ENTRY_MARKER) {\n"
-        "  require('fs').writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, 'fired');\n"
+        "  require('fs').writeFileSync(process.env.EMBER_PROBE_ENTRY_MARKER, __filename);\n"
         "}\n"
     ),
     ".py": (
         "import os\n"
         "if os.environ.get('EMBER_PROBE_ENTRY_MARKER'):\n"
-        "    open(os.environ['EMBER_PROBE_ENTRY_MARKER'], 'w').write('fired')\n"
+        "    open(os.environ['EMBER_PROBE_ENTRY_MARKER'], 'w').write(os.path.abspath(__file__))\n"
     ),
     ".ps1": (
-        'if ($env:EMBER_PROBE_ENTRY_MARKER) { Set-Content -LiteralPath $env:EMBER_PROBE_ENTRY_MARKER -Value "fired" }\n'
+        'if ($env:EMBER_PROBE_ENTRY_MARKER) { Set-Content -LiteralPath $env:EMBER_PROBE_ENTRY_MARKER -Value $PSCommandPath }\n'
     ),
     ".cmd": (
         "@echo off\r\n"
-        'if defined EMBER_PROBE_ENTRY_MARKER echo fired>"%EMBER_PROBE_ENTRY_MARKER%"\r\n'
+        'if defined EMBER_PROBE_ENTRY_MARKER echo %~f0>"%EMBER_PROBE_ENTRY_MARKER%"\r\n'
     ),
     ".bat": (
         "@echo off\r\n"
-        'if defined EMBER_PROBE_ENTRY_MARKER echo fired>"%EMBER_PROBE_ENTRY_MARKER%"\r\n'
+        'if defined EMBER_PROBE_ENTRY_MARKER echo %~f0>"%EMBER_PROBE_ENTRY_MARKER%"\r\n'
     ),
     ".sh": (
         "#!/bin/sh\n"
-        'if [ -n "$EMBER_PROBE_ENTRY_MARKER" ]; then echo fired > "$EMBER_PROBE_ENTRY_MARKER"; fi\n'
+        'if [ -n "$EMBER_PROBE_ENTRY_MARKER" ]; then\n'
+        '  P=$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || echo "$0")\n'
+        '  echo "$P" > "$EMBER_PROBE_ENTRY_MARKER"\n'
+        "fi\n"
     ),
 }
 
@@ -916,6 +959,14 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
         except OSError:
             runtime_argv_line = "(unreadable)"
 
+    # Round 7: firing is not enough -- the entry stub also reports its OWN
+    # resolved path, from inside the executing process (never a value
+    # supplied by the caller), and the verdict requires that path to match
+    # the scratch tree's actual CLI entry. This is the same category of
+    # evidence as the fire itself (the process reporting its own identity),
+    # not a text rule about the launcher.
+    entry_marker_path_matches = False
+    expected_entry_resolved = str(scratch_entry.resolve())
     if entry_fired:
         try:
             receipt["entry_marker_content"] = entry_marker.read_text(
@@ -923,20 +974,46 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
             ).strip()
         except OSError:
             receipt["entry_marker_content"] = "(unreadable)"
+        recorded = receipt.get("entry_marker_content", "")
+        try:
+            entry_marker_path_matches = (
+                bool(recorded) and str(Path(recorded).resolve()) == expected_entry_resolved
+            )
+        except (OSError, ValueError):
+            entry_marker_path_matches = False
+        receipt["entry_marker_path_matches_declared_entry"] = entry_marker_path_matches
+        receipt["expected_entry_path"] = expected_entry_resolved
     if runtime_argv_line is not None:
         receipt["runtime_marker_argv_DIAGNOSTIC_ONLY_NOT_VERDICT_BEARING"] = runtime_argv_line
 
     shutil.rmtree(scratch, ignore_errors=True)
 
-    if entry_fired:
+    if entry_fired and entry_marker_path_matches:
         return {
             "state": "resolved-true",
             "evidence": (
                 f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
                 f"timeout in a scratch copy; the CLI entry's OWN substituted "
-                f"bytes ({rel_entry}) executed and wrote the entry marker -- "
-                "direct execution observed, the only observation this harness "
-                "grants resolved-true for"
+                f"bytes ({rel_entry}) executed FROM THEIR OWN DECLARED LOCATION "
+                "(the executing process's own reported path matches the scratch "
+                "tree's actual CLI entry) and wrote the entry marker -- direct "
+                "execution, in place, observed"
+            ),
+            "receipt": receipt,
+        }
+
+    if entry_fired and not entry_marker_path_matches:
+        return {
+            "state": "resolved-false",
+            "evidence": (
+                f"{launcher.name}: executed for real under a {SENTINEL_TIMEOUT_SECONDS}s "
+                f"timeout in a scratch copy; the entry marker fired, but the "
+                f"executing process reported its own path as "
+                f"{receipt.get('entry_marker_content')!r}, which does not resolve "
+                f"to the CLI entry's declared location ({expected_entry_resolved}) "
+                "-- the entry's bytes executed from a different location (e.g. "
+                "copied out of the tree and run from there), so the launcher did "
+                "not invoke the CLI in place"
             ),
             "receipt": receipt,
         }
