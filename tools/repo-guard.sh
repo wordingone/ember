@@ -200,11 +200,14 @@ fi
 # path matching the legacy name passes ONLY if it is enumerated in
 # tools/emberd-legacy-exceptions.json AND its current content's sha256 equals
 # the digest recorded there — path alone is never sufficient (anyone can
-# rename a file into an exempted prefix; they cannot forge its digest). A
-# missing, empty, malformed, or unparseable exceptions file is a hard FAIL,
-# never a silent pass, and is only even consulted when a match exists — a
-# clean tree with no legacy name anywhere passes regardless of the
-# exceptions file's state, since there is nothing to adjudicate.
+# rename a file into an exempted prefix; they cannot forge its digest).
+# Policy validity is unconditional: the exceptions file is parsed and
+# schema-validated on EVERY run, including a zero-hit tree — a missing,
+# empty, malformed, or unparseable exceptions file is a hard FAIL always,
+# never a silent pass, regardless of whether there is a legacy-name match to
+# adjudicate this run. Only the per-path adjudication is conditional on a
+# match existing; a clean tree with no legacy name anywhere still requires a
+# valid policy to pass.
 # Boundary is alnum-delimited, not \b: plain \b treats "_" as a word
 # character, so "emberd_schedule" (a real key in the receipt exception below)
 # would silently never match at all — invisible to the guard rather than
@@ -215,17 +218,25 @@ fi
 # See state/specs/ember-lab-absorption-contract-2026-07-25.md Part 4.
 EMBERD_HITS="$(git grep -nIiE '(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)' -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/emberd-legacy-exceptions.json' ':(exclude)tools/check_emberd_legacy_exceptions.py' 2>/dev/null || true)"
 if [ -z "$EMBERD_HITS" ]; then
-  ok "emberd-legacy" "no tracked content matches the legacy name"
+  EMBERD_PATHS=""
 else
   EMBERD_PATHS="$(printf '%s\n' "$EMBERD_HITS" | cut -d: -f1 | sort -u)"
-  EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" python tools/check_emberd_legacy_exceptions.py 2>&1)"
-  EMBERD_CHECK_RC=$?
-  if [ "$EMBERD_CHECK_RC" -eq 0 ]; then
+fi
+EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" python tools/check_emberd_legacy_exceptions.py 2>&1)"
+EMBERD_CHECK_RC=$?
+if [ "$EMBERD_CHECK_RC" -eq 0 ]; then
+  if [ -z "$EMBERD_HITS" ]; then
+    ok "emberd-legacy" "no tracked content matches the legacy name; exceptions policy validated"
+  else
     ok "emberd-legacy" "$(printf '%s' "$EMBERD_CHECK_OUT" | head -1)"
+  fi
+else
+  if [ -z "$EMBERD_HITS" ]; then
+    fail "emberd-legacy" "committed exceptions policy is invalid (zero-hit tree)"
   else
     fail "emberd-legacy" "legacy name present outside the content-addressed exceptions"
-    printf '%s\n' "$EMBERD_CHECK_OUT" | sed 's/^/      /'
   fi
+  printf '%s\n' "$EMBERD_CHECK_OUT" | sed 's/^/      /'
 fi
 
 # ---- 4. exactly one root goal document -----------------------------------
