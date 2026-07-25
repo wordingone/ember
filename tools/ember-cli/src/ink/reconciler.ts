@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // reconciler — custom React→terminal renderer.
 // Implements a react-reconciler HostConfig that maps React element trees
 // to the ink rendering-pipeline's RenderNode graph, then drives double-buffered
@@ -14,6 +17,9 @@ import {
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
 import type { BorderStyleName } from "./border-glyphs.ts";
+import { ClickEvent, type MouseModifiers, type TerminalEvent } from "./event-system.ts";
+import { _setMouseDispatcher } from "./hooks.ts";
+import type { SgrMousePress } from "./termio.ts";
 
 // ---------------------------------------------------------------------------
 // Internal node — extends RenderNode with reconciler bookkeeping
@@ -26,6 +32,8 @@ interface InternalNode extends RenderNode {
   // raw-ansi merging
   _rawChildren?: InternalNode[];
   _rawParent?:   InternalNode;
+  _parent?: InternalNode | RootNode;
+  onClick?: (event: TerminalEvent) => void;
 }
 
 interface RootNode {
@@ -209,6 +217,7 @@ function _stripAnsi(s: string): string {
 // ---------------------------------------------------------------------------
 
 function _attachChild(parent: InternalNode | RootNode, child: InternalNode): void {
+  child._parent = parent;
   if (parent.kind === "raw-ansi") {
     const rp = parent as InternalNode;
     if (child.kind === "text" && child.text !== undefined && !child.children.length) {
@@ -284,7 +293,109 @@ function _detachChild(
   const p = parent as { children: InternalNode[]; layout: ReturnType<typeof createLayoutNode> };
   const idx = p.children.indexOf(child);
   if (idx >= 0) p.children.splice(idx, 1);
+  child._parent = undefined;
   try { p.layout.removeChild(child.layout); } catch { /* ignore */ }
+}
+
+interface HitTarget {
+  node: InternalNode;
+  left: number;
+  top: number;
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function intersectRect(a: Rect, b: Rect): Rect {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  return {
+    x,
+    y,
+    width: Math.max(0, right - x),
+    height: Math.max(0, bottom - y),
+  };
+}
+
+function contains(rect: Rect, col: number, row: number): boolean {
+  return rect.width > 0 &&
+    rect.height > 0 &&
+    col >= rect.x &&
+    col < rect.x + rect.width &&
+    row >= rect.y &&
+    row < rect.y + rect.height;
+}
+
+function hitTestNode(
+  node: InternalNode,
+  col: number,
+  row: number,
+  parentLeft: number,
+  parentTop: number,
+  clip: Rect,
+): HitTarget | null {
+  const left = parentLeft + node.layout.computedLeft;
+  const top = parentTop + node.layout.computedTop;
+  const rect = {
+    x: left,
+    y: top,
+    width: node.layout.computedWidth,
+    height: node.layout.computedHeight,
+  };
+  if (!contains(intersectRect(rect, clip), col, row)) return null;
+
+  const childClip = node.layout.overflow === "hidden"
+    ? intersectRect(clip, rect)
+    : clip;
+  for (let index = node.children.length - 1; index >= 0; index--) {
+    const child = node.children[index] as InternalNode | undefined;
+    if (!child) continue;
+    const target = hitTestNode(child, col, row, left, top, childClip);
+    if (target) return target;
+  }
+
+  return node.onClick ? { node, left, top } : null;
+}
+
+function dispatchMousePress(container: InkContainer, input: SgrMousePress): void {
+  const clip = {
+    x: 0,
+    y: 0,
+    width: container.stdout.columns,
+    height: container.stdout.rows,
+  };
+  let target: HitTarget | null = null;
+  for (let index = container.rootNode.children.length - 1; index >= 0; index--) {
+    const child = container.rootNode.children[index];
+    if (!child) continue;
+    target = hitTestNode(child, input.col, input.row, 0, 0, clip);
+    if (target) break;
+  }
+  if (!target) return;
+
+  const event = new ClickEvent(
+    input.col,
+    input.row,
+    input.col - target.left,
+    input.row - target.top,
+    false,
+    input.button,
+    input.modifiers as MouseModifiers,
+    1,
+  );
+  let current: InternalNode | RootNode | undefined = target.node;
+  while (current && current.kind !== "root") {
+    const node = current as InternalNode;
+    node.onClick?.(event);
+    if (event.propagationStopped) break;
+    current = node._parent;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +452,9 @@ const hostConfig: any = {
     const style = extractStyle(props);
     const text  = extractInitialText(props);
     const node  = makeNode(kind, { style, text });
+    node.onClick = typeof props["onClick"] === "function"
+      ? props["onClick"] as (event: TerminalEvent) => void
+      : undefined;
     const s = props["style"];
     if (s && typeof s === "object") applyBoxStyle(node.layout, s as Record<string, unknown>);
     if (kind === "box") applyBorderProps(node, props);
@@ -401,6 +515,9 @@ const hostConfig: any = {
     _prevProps: Props,
     nextProps: Props,
   ) {
+    instance.onClick = typeof nextProps["onClick"] === "function"
+      ? nextProps["onClick"] as (event: TerminalEvent) => void
+      : undefined;
     const newStyle = extractStyle(nextProps);
     if (newStyle !== undefined) instance.style = newStyle;
     const newText = extractInitialText(nextProps);
@@ -551,12 +668,16 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
   }
 
   _syncRender(element);
+  const removeMouseDispatcher = _setMouseDispatcher(
+    (event) => dispatchMousePress(container, event),
+  );
 
   return {
     update(newElement: ReactElement): void {
       _syncRender(newElement);
     },
     unmount(): void {
+      removeMouseDispatcher();
       rec.updateContainer(null, root, null, null);
       renderer.unmount();
     },
