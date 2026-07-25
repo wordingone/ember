@@ -46,6 +46,38 @@ class CheckpointIdentityMismatch(ValueError):
     """
 
 
+class CheckpointDeferredLowCommit(RuntimeError):
+    """Host commit headroom is below the checkpoint's measured streaming peak plus
+    its frozen reserve at admission time (:func:`checkpoint_commit_preflight`).
+
+    Distinct from a writer, counter, or storage failure: no staging directory or
+    published bytes are ever created for this attempt (the preflight always runs
+    before ``root.mkdir()``), so the caller may defer this publication to the next
+    bounded checkpoint boundary -- preserving the last known-good checkpoint
+    untouched and selectable -- instead of aborting the run. Still a ``RuntimeError``
+    so any caller that only distinguishes failure-vs-success is unaffected; callers
+    that want DEFERRED_LOW_COMMIT semantics catch this subclass explicitly.
+    """
+
+    def __init__(
+        self,
+        *,
+        available_commit_bytes: int,
+        required_commit_bytes: int,
+        streaming_peak_bytes: int,
+        reserve_bytes: int,
+    ) -> None:
+        self.available_commit_bytes = available_commit_bytes
+        self.required_commit_bytes = required_commit_bytes
+        self.streaming_peak_bytes = streaming_peak_bytes
+        self.reserve_bytes = reserve_bytes
+        super().__init__(
+            "checkpoint host commit reserve is insufficient: "
+            f"available={available_commit_bytes}, required={required_commit_bytes}, "
+            f"streaming_peak={streaming_peak_bytes}, reserve={reserve_bytes}"
+        )
+
+
 def _is_link_or_reparse(path: Path) -> bool:
     try:
         info = path.lstat()
@@ -276,10 +308,11 @@ def checkpoint_commit_preflight(
         raise ValueError("checkpoint host commit values must be nonnegative integers")
     required = streaming_peak_bytes + reserve_bytes
     if available_commit_bytes < required:
-        raise RuntimeError(
-            "checkpoint host commit reserve is insufficient: "
-            f"available={available_commit_bytes}, required={required}, "
-            f"streaming_peak={streaming_peak_bytes}, reserve={reserve_bytes}"
+        raise CheckpointDeferredLowCommit(
+            available_commit_bytes=available_commit_bytes,
+            required_commit_bytes=required,
+            streaming_peak_bytes=streaming_peak_bytes,
+            reserve_bytes=reserve_bytes,
         )
     return {
         "status": "PASS",

@@ -1,0 +1,13 @@
+{
+    "authority": {
+        "artifact_class": "research_candidate",
+        "execution_authority": "operator_approved",
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02B",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    },
+    "low_commit_deferral": {
+        "max_deferrals": 3,
+        "max_uncheckpointed_step_distance": 2000
+    }
+}
