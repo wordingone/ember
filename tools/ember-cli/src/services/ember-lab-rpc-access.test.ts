@@ -1,15 +1,15 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-// emberd-rpc-access.test.ts — child-isolated client failure boundary for same-user pipe enforcement.
+// ember-lab-rpc-access.test.ts — child-isolated client failure boundary for same-user pipe enforcement.
 
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 
-test("callEmberd fails closed on same-user named-pipe access denial without retry", async () => {
+test("callEmberLab fails closed on same-user named-pipe access denial without retry", async () => {
   const child = Bun.spawn(
-    [process.execPath, "test", join(import.meta.dir, "emberd-rpc-access-child.test.ts")],
-    { stdout: "pipe", stderr: "pipe", env: { ...process.env, EMBERD_ACCESS_CHILD: "1" } },
+    [process.execPath, "test", join(import.meta.dir, "ember-lab-rpc-access-child.test.ts")],
+    { stdout: "pipe", stderr: "pipe", env: { ...process.env, EMBER_LAB_ACCESS_CHILD: "1" } },
   );
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),

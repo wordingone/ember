@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-if (process.env["EMBERD_POST_CONNECT_ERROR_CHILD"] === "1") {
+if (process.env["EMBER_LAB_POST_CONNECT_ERROR_CHILD"] === "1") {
   const { expect, mock, test } = await import("bun:test");
   const { EventEmitter } = await import("node:events");
 
@@ -27,10 +27,10 @@ if (process.env["EMBERD_POST_CONNECT_ERROR_CHILD"] === "1") {
       },
     }));
 
-    const { callEmberd } = await import("./emberd-rpc.ts?post-connect-error-regression");
+    const { callEmberLab } = await import("./ember-lab-rpc.ts?post-connect-error-regression");
     const startedAt = performance.now();
-    await expect(callEmberd({
-      pipeName: "\\\\.\\pipe\\emberd-post-connect-reset",
+    await expect(callEmberLab({
+      pipeName: "\\\\.\\pipe\\ember-lab-post-connect-reset",
       requestId: "reset",
       method: "ping",
       params: {},

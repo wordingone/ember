@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use emberd::{Daemon, EmberdError, JobSpec, JobState, RestartPolicy, SchedulePrediction};
+use ember_lab::{Daemon, EmberLabError, JobSpec, JobState, RestartPolicy, SchedulePrediction};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -18,7 +18,7 @@ fn sandbox(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let path = std::env::temp_dir().join(format!("emberd-{name}-{}-{nonce}", std::process::id()));
+    let path = std::env::temp_dir().join(format!("ember-lab-{name}-{}-{nonce}", std::process::id()));
     fs::create_dir_all(&path).unwrap();
     path
 }
@@ -41,30 +41,30 @@ fn write_identity(root: &Path) -> (PathBuf, String) {
 
 #[test]
 fn fixture_child_process() {
-    if std::env::var("EMBERD_FIXTURE_CHILD").as_deref() != Ok("1") {
+    if std::env::var("EMBER_LAB_FIXTURE_CHILD").as_deref() != Ok("1") {
         return;
     }
-    if std::env::var("EMBERD_FIXTURE_SPAWN_CHILD").as_deref() == Ok("1") {
+    if std::env::var("EMBER_LAB_FIXTURE_SPAWN_CHILD").as_deref() == Ok("1") {
         let child = Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "fixture_child_process", "--nocapture"])
-            .env("EMBERD_FIXTURE_CHILD", "1")
-            .env("EMBERD_FIXTURE_SLEEP_MS", "30000")
-            .env_remove("EMBERD_FIXTURE_SPAWN_CHILD")
-            .env_remove("EMBERD_FIXTURE_CHILD_PID_FILE")
+            .env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000")
+            .env_remove("EMBER_LAB_FIXTURE_SPAWN_CHILD")
+            .env_remove("EMBER_LAB_FIXTURE_CHILD_PID_FILE")
             .spawn()
             .unwrap();
         fs::write(
-            std::env::var_os("EMBERD_FIXTURE_CHILD_PID_FILE").unwrap(),
+            std::env::var_os("EMBER_LAB_FIXTURE_CHILD_PID_FILE").unwrap(),
             child.id().to_string(),
         )
         .unwrap();
         drop(child);
     }
-    let sleep_ms = std::env::var("EMBERD_FIXTURE_SLEEP_MS")
+    let sleep_ms = std::env::var("EMBER_LAB_FIXTURE_SLEEP_MS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(30_000);
-    if let Ok(message) = std::env::var("EMBERD_FIXTURE_LOG_MESSAGE") {
+    if let Ok(message) = std::env::var("EMBER_LAB_FIXTURE_LOG_MESSAGE") {
         println!("stdout:{message}");
         eprintln!("stderr:{message}");
     }
@@ -107,7 +107,7 @@ fn suspend_thread_id(thread_id: u32) {
 #[test]
 fn sqlite_wal_identity_binding_and_exclusive_lease_survive_reopen() {
     let root = sandbox("state");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
 
     let daemon = Daemon::open(&db).unwrap();
@@ -120,7 +120,7 @@ fn sqlite_wal_identity_binding_and_exclusive_lease_survive_reopen() {
         .unwrap();
     assert!(matches!(
         daemon.acquire_lease("heavy-workload", "other-job"),
-        Err(EmberdError::LeaseConflict { .. })
+        Err(EmberLabError::LeaseConflict { .. })
     ));
     drop(daemon);
 
@@ -137,14 +137,14 @@ fn sqlite_wal_identity_binding_and_exclusive_lease_survive_reopen() {
     fs::write(&identity, b"tampered").unwrap();
     assert!(matches!(
         reopened.verify_identity("fixture-job"),
-        Err(EmberdError::IdentityMismatch { .. })
+        Err(EmberLabError::IdentityMismatch { .. })
     ));
 }
 
 #[test]
 fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
     let root = sandbox("job");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let receipt = root.join("receipt.json");
     let (identity, identity_hash) = write_identity(&root);
 
@@ -160,8 +160,8 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
         ["--exact", "fixture_child_process", "--nocapture"],
         "cpu-fixture",
     )
-    .with_env("EMBERD_FIXTURE_CHILD", "1")
-    .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000");
+    .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+    .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000");
     let started = daemon.start_job(spec).unwrap();
     assert!(started.pid > 0);
     assert_eq!(
@@ -187,17 +187,17 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
     reopened.export_receipt("sleep-job", &receipt).unwrap();
     assert!(matches!(
         reopened.export_receipt("sleep-job", &receipt),
-        Err(EmberdError::ReceiptAlreadyExists { .. })
+        Err(EmberLabError::ReceiptAlreadyExists { .. })
     ));
 
     let payload: Value = serde_json::from_slice(&fs::read(&receipt).unwrap()).unwrap();
-    assert_eq!(payload["schema"], "emberd-operational-receipt-v1");
+    assert_eq!(payload["schema"], "ember-lab-operational-receipt-v1");
     assert_eq!(payload["job_id"], "sleep-job");
     assert_eq!(payload["identity_sha256"], identity_hash);
     assert_eq!(payload["resource_lease"], "cpu-fixture");
     assert_eq!(payload["state"], "stopped");
     for field in ["binary_sha256", "source_sha256"] {
-        let value = payload["emberd_identity"][field].as_str().unwrap();
+        let value = payload["ember_lab_identity"][field].as_str().unwrap();
         assert_eq!(value.len(), 64);
         assert!(value
             .bytes()
@@ -212,7 +212,7 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
 #[test]
 fn schedule_alarm_turns_red_after_seven_days_even_without_any_prediction() {
     let root = sandbox("schedule-empty-week");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let daemon = Daemon::open(&db).unwrap();
     let started_at_ms = daemon.schedule_monitor_started_at_ms().unwrap();
 
@@ -230,7 +230,7 @@ fn schedule_alarm_turns_red_after_seven_days_even_without_any_prediction() {
 #[test]
 fn schedule_lease_requires_prediction_and_measurement_drives_durable_alarms() {
     let root = sandbox("schedule-loop");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let alarm_path = root.join("schedule-alarms.json");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
@@ -240,7 +240,7 @@ fn schedule_lease_requires_prediction_and_measurement_drives_durable_alarms() {
 
     assert!(matches!(
         daemon.acquire_lease("schedule:compute-primitive", "screen-1"),
-        Err(EmberdError::SchedulePredictionRequired { .. })
+        Err(EmberLabError::SchedulePredictionRequired { .. })
     ));
 
     let now = SystemTime::now()
@@ -264,7 +264,7 @@ fn schedule_lease_requires_prediction_and_measurement_drives_durable_alarms() {
     let overdue = daemon
         .schedule_alarm_state_at(now + 7 * 24 * 60 * 60 * 1000 + 1)
         .unwrap();
-    assert_eq!(overdue["schema_version"], "emberd-schedule-alarm-state-v1");
+    assert_eq!(overdue["schema_version"], "ember-lab-schedule-alarm-state-v1");
     assert_eq!(overdue["alarms"]["prediction_overrun"], true);
     assert_eq!(overdue["alarms"]["zero_schedule_receipts_7d"], true);
     assert_eq!(overdue["alarms"]["absolute_deadline_drift"], true);
@@ -302,17 +302,17 @@ fn schedule_lease_requires_prediction_and_measurement_drives_durable_alarms() {
 #[test]
 fn unbound_owner_cannot_acquire_a_durable_lease() {
     let root = sandbox("unbound-lease");
-    let daemon = Daemon::open(&root.join("emberd.sqlite3")).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
     assert!(matches!(
         daemon.acquire_lease("heavy-workload", "missing-identity"),
-        Err(EmberdError::IdentityNotFound { .. })
+        Err(EmberLabError::IdentityNotFound { .. })
     ));
 }
 
 #[test]
 fn concurrent_lease_claims_have_exactly_one_winner() {
     let root = sandbox("lease-race");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let daemon = Arc::new(Daemon::open(&db).unwrap());
     for owner in ["worker-a", "worker-b"] {
         let (path, hash) = write_identity_for(&root, owner);
@@ -337,7 +337,7 @@ fn concurrent_lease_claims_have_exactly_one_winner() {
     assert_eq!(
         results
             .iter()
-            .filter(|result| matches!(result, Err(EmberdError::LeaseConflict { .. })))
+            .filter(|result| matches!(result, Err(EmberLabError::LeaseConflict { .. })))
             .count(),
         1
     );
@@ -357,7 +357,7 @@ fn write_identity_for(root: &Path, name: &str) -> (PathBuf, String) {
 #[test]
 fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
     let root = sandbox("dead-reconcile");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -373,8 +373,8 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
         )
         .unwrap();
     drop(daemon);
@@ -383,7 +383,7 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
     let reopened = Daemon::open(&db).unwrap();
     assert!(matches!(
         reopened.adopt_job("short-job"),
-        Err(EmberdError::ProcessUnavailable { .. })
+        Err(EmberLabError::ProcessUnavailable { .. })
     ));
     assert_eq!(
         reopened.job_state("short-job").unwrap(),
@@ -413,7 +413,7 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
 #[test]
 fn failed_launch_exports_stable_receipt_without_blessing_unsealed_logs() {
     let root = sandbox("failed-launch-receipt");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -447,7 +447,7 @@ fn failed_launch_exports_stable_receipt_without_blessing_unsealed_logs() {
 #[test]
 fn receipt_export_reverifies_bound_identity_bytes() {
     let root = sandbox("receipt-identity");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let receipt = root.join("receipt.json");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
@@ -457,7 +457,7 @@ fn receipt_export_reverifies_bound_identity_bytes() {
     fs::write(&identity, b"tampered after binding").unwrap();
     assert!(matches!(
         daemon.export_receipt("receipt-job", &receipt),
-        Err(EmberdError::IdentityMismatch { .. })
+        Err(EmberLabError::IdentityMismatch { .. })
     ));
     assert!(!receipt.exists());
 }
@@ -466,7 +466,7 @@ fn receipt_export_reverifies_bound_identity_bytes() {
 #[test]
 fn stopping_job_terminates_its_entire_process_cohort() {
     let root = sandbox("cohort");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let child_pid_file = root.join("child.pid");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
@@ -482,11 +482,11 @@ fn stopping_job_terminates_its_entire_process_cohort() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000")
-            .with_env("EMBERD_FIXTURE_SPAWN_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000")
+            .with_env("EMBER_LAB_FIXTURE_SPAWN_CHILD", "1")
             .with_env(
-                "EMBERD_FIXTURE_CHILD_PID_FILE",
+                "EMBER_LAB_FIXTURE_CHILD_PID_FILE",
                 child_pid_file.to_string_lossy(),
             ),
         )
@@ -511,7 +511,7 @@ fn stopping_job_terminates_its_entire_process_cohort() {
 #[test]
 fn failed_job_started_event_is_not_committed_and_child_is_cleaned_up() {
     let root = sandbox("event-atomicity");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -526,8 +526,8 @@ fn failed_job_started_event_is_not_committed_and_child_is_cleaned_up() {
             ["--exact", "fixture_child_process", "--nocapture"],
             "cpu-fixture",
         )
-        .with_env("EMBERD_FIXTURE_CHILD", "1")
-        .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+        .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+        .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
     );
     assert!(result.is_err());
     assert_eq!(
@@ -540,7 +540,7 @@ fn failed_job_started_event_is_not_committed_and_child_is_cleaned_up() {
 #[test]
 fn receipt_publication_never_replaces_an_existing_file() {
     let root = sandbox("receipt-no-replace");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let receipt = root.join("receipt.json");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
@@ -556,15 +556,15 @@ fn receipt_publication_never_replaces_an_existing_file() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
     daemon.stop_job("receipt-job").unwrap();
     fs::write(&receipt, b"pre-existing receipt bytes").unwrap();
     assert!(matches!(
         daemon.export_receipt("receipt-job", &receipt),
-        Err(EmberdError::ReceiptAlreadyExists { .. })
+        Err(EmberLabError::ReceiptAlreadyExists { .. })
     ));
     assert_eq!(fs::read(&receipt).unwrap(), b"pre-existing receipt bytes");
 }
@@ -589,7 +589,7 @@ fn force_terminate_process(pid: u32) {
 #[test]
 fn lifetime_handle_cannot_escape_from_root_to_descendant() {
     let root = sandbox("noninheritable-job-handle");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let child_pid_file = root.join("child.pid");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
@@ -605,11 +605,11 @@ fn lifetime_handle_cannot_escape_from_root_to_descendant() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25")
-            .with_env("EMBERD_FIXTURE_SPAWN_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25")
+            .with_env("EMBER_LAB_FIXTURE_SPAWN_CHILD", "1")
             .with_env(
-                "EMBERD_FIXTURE_CHILD_PID_FILE",
+                "EMBER_LAB_FIXTURE_CHILD_PID_FILE",
                 child_pid_file.to_string_lossy(),
             ),
         )
@@ -640,7 +640,7 @@ fn lifetime_handle_cannot_escape_from_root_to_descendant() {
 #[test]
 fn adoption_cannot_commit_after_a_newer_stopped_transition() {
     let root = sandbox("adopt-state-fence");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Arc::new(Daemon::open(&db).unwrap());
     daemon
@@ -655,8 +655,8 @@ fn adoption_cannot_commit_after_a_newer_stopped_transition() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
 
@@ -691,7 +691,7 @@ fn adoption_cannot_commit_after_a_newer_stopped_transition() {
     let events = daemon.job_event_kinds("race-job").unwrap();
     force_terminate_process(started.pid);
     assert!(
-        matches!(result, Err(EmberdError::InvalidTransition { .. })),
+        matches!(result, Err(EmberLabError::InvalidTransition { .. })),
         "stale adoption unexpectedly committed: {result:?}"
     );
     let stopped = events
@@ -709,7 +709,7 @@ fn adoption_cannot_commit_after_a_newer_stopped_transition() {
 #[test]
 fn stale_uncertain_reconciliation_cannot_overwrite_stopped_state() {
     let root = sandbox("uncertain-state-fence");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Arc::new(Daemon::open(&db).unwrap());
     daemon
@@ -726,8 +726,8 @@ fn stale_uncertain_reconciliation_cannot_overwrite_stopped_state() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
     rusqlite::Connection::open(&db)
@@ -769,7 +769,7 @@ fn stale_uncertain_reconciliation_cannot_overwrite_stopped_state() {
     let state = daemon.job_state("uncertain-race").unwrap();
     let events = daemon.job_event_kinds("uncertain-race").unwrap();
     force_terminate_process(started.pid);
-    assert!(matches!(result, Err(EmberdError::InvalidTransition { .. })));
+    assert!(matches!(result, Err(EmberLabError::InvalidTransition { .. })));
     assert_eq!(state, Some(JobState::Stopped));
     let stopped = events
         .iter()
@@ -787,7 +787,7 @@ fn stale_uncertain_reconciliation_cannot_overwrite_stopped_state() {
 #[test]
 fn stale_dead_reconciliation_cannot_overwrite_stopped_state() {
     let root = sandbox("dead-state-fence");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Arc::new(Daemon::open(&db).unwrap());
     daemon
@@ -802,8 +802,8 @@ fn stale_dead_reconciliation_cannot_overwrite_stopped_state() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
         )
         .unwrap();
     drop(daemon);
@@ -840,7 +840,7 @@ fn stale_dead_reconciliation_cannot_overwrite_stopped_state() {
     let result = reconciler.join().unwrap();
     let state = daemon.job_state("dead-race").unwrap();
     let events = daemon.job_event_kinds("dead-race").unwrap();
-    assert!(matches!(result, Err(EmberdError::InvalidTransition { .. })));
+    assert!(matches!(result, Err(EmberLabError::InvalidTransition { .. })));
     assert_eq!(state, Some(JobState::Stopped));
     let stopped = events
         .iter()
@@ -858,7 +858,7 @@ fn stale_dead_reconciliation_cannot_overwrite_stopped_state() {
 #[test]
 fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
     let root = sandbox("starting-kill-fence");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Arc::new(Daemon::open(&db).unwrap());
     daemon
@@ -875,8 +875,8 @@ fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
     rusqlite::Connection::open(&db)
@@ -918,13 +918,13 @@ fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
         alive_while_state_commit_is_fenced,
         "reconciliation killed the cohort before winning the starting-state DB fence"
     );
-    assert!(matches!(result, Err(EmberdError::InvalidTransition { .. })));
+    assert!(matches!(result, Err(EmberLabError::InvalidTransition { .. })));
 }
 #[cfg(windows)]
 #[test]
 fn resident_daemon_reaps_natural_exit_records_status_and_releases_lease() {
     let root = sandbox("resident-reaper");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -939,8 +939,8 @@ fn resident_daemon_reaps_natural_exit_records_status_and_releases_lease() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
         )
         .unwrap();
 
@@ -968,11 +968,11 @@ fn resident_daemon_reaps_natural_exit_records_status_and_releases_lease() {
 #[test]
 fn state_store_has_exactly_one_resident_writer_owner() {
     let root = sandbox("single-writer");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let first = Daemon::open(&db).unwrap();
     assert!(matches!(
         Daemon::open(&db),
-        Err(EmberdError::StateWriterBusy { .. })
+        Err(EmberLabError::StateWriterBusy { .. })
     ));
     drop(first);
     Daemon::open(&db).unwrap();
@@ -982,7 +982,7 @@ fn state_store_has_exactly_one_resident_writer_owner() {
 #[test]
 fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
     let root = sandbox("monitor-handoff");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -997,8 +997,8 @@ fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "250"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "250"),
         )
         .unwrap();
     drop(daemon);
@@ -1028,7 +1028,7 @@ fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
 #[test]
 fn planned_outage_blocks_launch_and_receipt_is_content_addressed() {
     let root = sandbox("outage-receipt");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let receipts = root.join("receipts");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
@@ -1055,12 +1055,12 @@ fn planned_outage_blocks_launch_and_receipt_is_content_addressed() {
             ["--exact", "fixture_child_process", "--nocapture"],
             "cpu-fixture",
         )
-        .with_env("EMBERD_FIXTURE_CHILD", "1")
-        .with_env("EMBERD_FIXTURE_SLEEP_MS", "25")
+        .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+        .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25")
     };
     assert!(matches!(
         daemon.start_job(spec()),
-        Err(EmberdError::PlannedOutageActive { .. })
+        Err(EmberLabError::PlannedOutageActive { .. })
     ));
     daemon.cancel_outages("cpu-fixture").unwrap();
     daemon.start_job(spec()).unwrap();
@@ -1094,7 +1094,7 @@ fn planned_outage_blocks_launch_and_receipt_is_content_addressed() {
 #[test]
 fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
     let root = sandbox("process-logs");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -1109,9 +1109,9 @@ fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_LOG_MESSAGE", "durable-output")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_LOG_MESSAGE", "durable-output")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
         )
         .unwrap();
     for _ in 0..200 {
@@ -1143,7 +1143,7 @@ fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
 #[test]
 fn nonterminal_job_cannot_publish_a_content_addressed_receipt() {
     let root = sandbox("nonterminal-receipt");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -1158,14 +1158,14 @@ fn nonterminal_job_cannot_publish_a_content_addressed_receipt() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
 
     assert!(matches!(
         daemon.export_content_addressed_receipt("running-job", &root.join("receipts")),
-        Err(EmberdError::NonTerminalReceipt { state, .. }) if state == "running"
+        Err(EmberLabError::NonTerminalReceipt { state, .. }) if state == "running"
     ));
     daemon.stop_job("running-job").unwrap();
 }
@@ -1174,7 +1174,7 @@ fn nonterminal_job_cannot_publish_a_content_addressed_receipt() {
 #[test]
 fn sealed_log_tampering_is_detected_instead_of_blessed() {
     let root = sandbox("sealed-log-tamper");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -1189,9 +1189,9 @@ fn sealed_log_tampering_is_detected_instead_of_blessed() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_LOG_MESSAGE", "sealed")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_LOG_MESSAGE", "sealed")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
         )
         .unwrap();
     for _ in 0..200 {
@@ -1209,7 +1209,7 @@ fn sealed_log_tampering_is_detected_instead_of_blessed() {
 
     assert!(matches!(
         daemon.export_content_addressed_receipt("tamper-job", &root.join("receipts")),
-        Err(EmberdError::LogEvidenceMismatch { stream, .. }) if stream == "stdout"
+        Err(EmberLabError::LogEvidenceMismatch { stream, .. }) if stream == "stdout"
     ));
 }
 
@@ -1217,7 +1217,7 @@ fn sealed_log_tampering_is_detected_instead_of_blessed() {
 #[test]
 fn terminal_receipt_ignores_outage_events_after_its_persisted_cutoff() {
     let root = sandbox("receipt-outage-cutoff");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let receipts = root.join("receipts");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
@@ -1233,8 +1233,8 @@ fn terminal_receipt_ignores_outage_events_after_its_persisted_cutoff() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "25"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
         )
         .unwrap();
     for _ in 0..200 {
@@ -1268,7 +1268,7 @@ fn terminal_receipt_ignores_outage_events_after_its_persisted_cutoff() {
 #[test]
 fn prepared_recovery_defers_resume_while_outage_is_active() {
     let root = sandbox("prepared-outage-recovery");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -1283,8 +1283,8 @@ fn prepared_recovery_defers_resume_while_outage_is_active() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
     let thread_id: u32 = rusqlite::Connection::open(&db)
@@ -1336,7 +1336,7 @@ fn prepared_recovery_defers_resume_while_outage_is_active() {
 #[test]
 fn prepared_recovery_terminates_process_when_running_commit_fails() {
     let root = sandbox("prepared-commit-failure");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -1353,8 +1353,8 @@ fn prepared_recovery_terminates_process_when_running_commit_fails() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
     let thread_id: u32 = rusqlite::Connection::open(&db)
@@ -1379,7 +1379,7 @@ fn prepared_recovery_terminates_process_when_running_commit_fails() {
         .unwrap();
 
     let reopened = Daemon::open(&db).unwrap();
-    assert!(matches!(reopened.reconcile(), Err(EmberdError::Sqlite(_))));
+    assert!(matches!(reopened.reconcile(), Err(EmberLabError::Sqlite(_))));
     assert_eq!(
         reopened.job_state("prepared-failure").unwrap(),
         Some(JobState::Failed)
@@ -1406,7 +1406,7 @@ fn prepared_recovery_terminates_process_when_running_commit_fails() {
 #[test]
 fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
     let root = sandbox("pre-resume-fence-failure");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -1423,8 +1423,8 @@ fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
                 ["--exact", "fixture_child_process", "--nocapture"],
                 "cpu-fixture",
             )
-            .with_env("EMBERD_FIXTURE_CHILD", "1")
-            .with_env("EMBERD_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
     let thread_id: u32 = rusqlite::Connection::open(&db)
@@ -1449,7 +1449,7 @@ fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
         .unwrap();
 
     let reopened = Daemon::open(&db).unwrap();
-    assert!(matches!(reopened.reconcile(), Err(EmberdError::Sqlite(_))));
+    assert!(matches!(reopened.reconcile(), Err(EmberLabError::Sqlite(_))));
     assert_eq!(
         reopened.job_state("pre-resume-failure").unwrap(),
         Some(JobState::Prepared)
@@ -1477,7 +1477,7 @@ fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
 #[test]
 fn pre_log_schema_migrates_without_reinterpreting_existing_job_identity() {
     let root = sandbox("schema-migration");
-    let db = root.join("emberd.sqlite3");
+    let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
     let connection = rusqlite::Connection::open(&db).unwrap();
     connection
@@ -1508,7 +1508,7 @@ fn pre_log_schema_migrates_without_reinterpreting_existing_job_identity() {
                job_object_name,argv_sha256,state,started_at_ms,updated_at_ms
              ) VALUES(
                'legacy-job','fixture.exe','[]','{}','cpu-fixture',7,
-               'emberd-job-legacy','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+               'ember-lab-job-legacy','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                'failed',1,1
              );",
         )

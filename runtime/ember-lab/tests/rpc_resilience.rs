@@ -1,5 +1,5 @@
-// goal_id: EMBER-01
-// workstream_id: EMBER-01A
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 #![cfg(windows)]
@@ -18,13 +18,13 @@ fn sandbox(name: &str) -> PathBuf {
         .unwrap()
         .as_nanos();
     let path =
-        std::env::temp_dir().join(format!("emberd-rpc-{name}-{}-{nonce}", std::process::id()));
+        std::env::temp_dir().join(format!("ember-lab-rpc-{name}-{}-{nonce}", std::process::id()));
     std::fs::create_dir_all(&path).unwrap();
     path
 }
 
-fn emberd_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_emberd"))
+fn ember_lab_binary() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_ember-lab"))
 }
 
 struct ServerGuard(Child);
@@ -50,7 +50,7 @@ fn start_server(binary: &Path, db: &Path, pipe: &str) -> ServerGuard {
 
 fn unique_pipe() -> String {
     format!(
-        r"\\.\pipe\emberd-resilience-{}-{}",
+        r"\\.\pipe\ember-lab-resilience-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -101,7 +101,7 @@ fn shutdown(pipe: &str) {
 fn connect_then_disconnect_does_not_terminate_server() {
     let root = sandbox("disconnect");
     let pipe = unique_pipe();
-    let _server = start_server(&emberd_binary(), &root.join("state.sqlite3"), &pipe);
+    let _server = start_server(&ember_lab_binary(), &root.join("state.sqlite3"), &pipe);
     ping(&pipe);
 
     drop(open_pipe(&pipe, Duration::from_secs(2)));
@@ -115,7 +115,7 @@ fn connect_then_disconnect_does_not_terminate_server() {
 fn oversized_request_is_rejected_without_terminating_server() {
     let root = sandbox("oversized");
     let pipe = unique_pipe();
-    let _server = start_server(&emberd_binary(), &root.join("state.sqlite3"), &pipe);
+    let _server = start_server(&ember_lab_binary(), &root.join("state.sqlite3"), &pipe);
     ping(&pipe);
 
     let request = json!({
@@ -137,7 +137,7 @@ fn oversized_request_is_rejected_without_terminating_server() {
 fn stalled_connection_does_not_monopolize_server() {
     let root = sandbox("stalled");
     let pipe = unique_pipe();
-    let _server = start_server(&emberd_binary(), &root.join("state.sqlite3"), &pipe);
+    let _server = start_server(&ember_lab_binary(), &root.join("state.sqlite3"), &pipe);
     ping(&pipe);
 
     let stalled = open_pipe(&pipe, Duration::from_secs(2));

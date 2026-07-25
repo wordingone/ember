@@ -47,7 +47,7 @@ ALLOWLIST_PATH = REPO_ROOT / "tools" / "no_temp_allowlist"
 # stack surfaces named in the policy.
 SCAN_DIRS = [
     "tools/ember-cli/src",
-    "runtime/emberd/src",
+    "runtime/ember-lab/src",
     "tools/ember-restart-3b",
     "scripts",
 ]

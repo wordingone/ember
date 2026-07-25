@@ -75,7 +75,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "emberd"
+name = "ember-lab"
 version = "0.1.0"
 dependencies = [
  "rusqlite",

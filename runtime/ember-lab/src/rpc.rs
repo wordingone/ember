@@ -130,7 +130,7 @@ fn operation_error(id: Value, error: impl std::fmt::Debug) -> Value {
     json!({
         "jsonrpc": "2.0",
         "id": id,
-        "error": {"code": -32000, "message": "emberd operation failed", "data": format!("{error:?}")},
+        "error": {"code": -32000, "message": "ember-lab operation failed", "data": format!("{error:?}")},
     })
 }
 
@@ -646,7 +646,7 @@ fn handle_connection(
         let response = json!({
             "jsonrpc": "2.0",
             "id": Value::Null,
-            "error": {"code": -32001, "message": "client user does not own this emberd"},
+            "error": {"code": -32001, "message": "client user does not own this ember-lab"},
         });
         write_response(&mut stream, &response)?;
         return Ok(false);
