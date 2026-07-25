@@ -50,10 +50,22 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
     server_path = (root / serving["server_implementation"]["path"]).resolve()
 
     # cond3 seat-chain bridge: derive identity from the referenced cert
-    # manifest. The run manifest's own checkpoint/model-config/tokenizer
-    # sha256 values are supplied ONLY as cross-check input (bridge Step 4) --
-    # they are never returned to callers except after the bridge confirms
-    # they equal the cert-derived value byte-for-byte.
+    # manifest. The run manifest's own model-config/tokenizer sha256 values
+    # are supplied ONLY as cross-check input (bridge Step 4) -- they are
+    # never returned to callers except after the bridge confirms they equal
+    # the cert-derived value byte-for-byte.
+    #
+    # checkpointSha256 is deliberately NOT supplied here.
+    # manifest["checkpoint"]["sha256"] is the sha256 of the checkpoint INDEX
+    # JSON at checkpoint_manifest_path (contract.py's own self-consistency
+    # check on that file) -- it identifies the index, not the checkpoint
+    # bytes the index lists. Passing it as checkpointSha256 cross-check
+    # material is exactly the field-reinterpretation this bridge closes
+    # (state/failure-classes/semantic-validation-without-bytes-2026-07-25.md):
+    # the bridge derives and verifies the real checkpoint-byte identity
+    # itself, from checkpointPath, via resolve_checkpoint_byte_identity
+    # (Step 5) -- every load-bearing shard hashed against its own declared
+    # digest, never the index's digest substituted for it.
     cert_manifest_path = manifest.get("cert_manifest_path")
     bridge_seat_config = {
         "certManifestPath": (
@@ -63,7 +75,10 @@ def resolve_owned_seat(manifest_path: Path, verifier_registry: Path) -> dict[str
         ),
         "certManifestDigest": manifest.get("cert_manifest_digest"),
         "checkpointPath": str(checkpoint_manifest_path),
-        "checkpointSha256": manifest["checkpoint"]["sha256"],
+        # Shard "path" entries inside the checkpoint index are relative to
+        # the run-manifest ROOT (contract.py's own convention), not to the
+        # index file's own directory -- root must travel with checkpointPath.
+        "checkpointRoot": str(root),
         "modelConfigSha256": manifest["architecture"]["model_config"]["sha256"],
         "tokenizerSha256": manifest["tokenizer"]["sha256"],
     }

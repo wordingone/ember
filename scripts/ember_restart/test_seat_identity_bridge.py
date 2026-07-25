@@ -145,5 +145,101 @@ class SeatIdentityBridgeNegatives(unittest.TestCase):
             require_admitted_seat(result["seat"])
 
 
+class SeatIdentityBridgeShardedCheckpoint(unittest.TestCase):
+    """cond3-1038 (state/failure-classes/semantic-validation-without-bytes-2026-07-25.md):
+    a SHARDED checkpoint's byte identity is the verified shards, never the
+    checkpoint-manifest INDEX JSON's own self-consistency digest. The
+    production wiring (cli_seat.py) always passes a sharded checkpoint
+    index as checkpointPath (manifest["checkpoint"]["manifest_path"]) --
+    this exercises that exact shape directly against the bridge, isolating
+    the bridge's own defect from contract.py's separate (and unrelated)
+    run-manifest self-consistency check.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="seat-bridge-sharded-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.cert_manifest = json.loads((FIXTURE_DIR / "manifest.json").read_text(encoding="utf-8"))
+        self.shard_a = self.tmp / "model-00001.safetensors"
+        self.shard_a.write_bytes(b"owned-random-init-checkpoint")
+        self.shard_b = self.tmp / "expert-vision.safetensors"
+        self.shard_b.write_bytes(b"owned-vision-expert-genesis-0")
+        self.index_path = self.tmp / "checkpoint-manifest.json"
+        self._write_index()
+
+    def _write_index(self) -> None:
+        shards = [
+            {
+                "path": shard.name,
+                "sha256": _sha256_bytes(shard.read_bytes()),
+                "bytes": shard.stat().st_size,
+            }
+            for shard in (self.shard_a, self.shard_b)
+        ]
+        self.index_path.write_text(json.dumps({"shards": shards}, indent=2), encoding="utf-8")
+
+    def _write_cert(self, byte_sha256: str) -> tuple[Path, str]:
+        cert = dict(self.cert_manifest)
+        cert["checkpoint"] = dict(cert["checkpoint"], byte_sha256=byte_sha256)
+        # validate_identity.py cross-checks evaluation.subject_checkpoint_sha256
+        # against checkpoint.byte_sha256 (unrelated to the bridge's own Step 5
+        # bytes check) -- keep it in sync so Step 2 doesn't refuse for a
+        # different reason than the one this test targets.
+        cert["evaluation"] = dict(cert["evaluation"], subject_checkpoint_sha256=byte_sha256)
+        data = json.dumps(cert, indent=2).encode("utf-8")
+        path = self.tmp / "cert-manifest.json"
+        path.write_bytes(data)
+        return path, _sha256_bytes(data)
+
+    def test_defect_repro_index_digest_as_checkpoint_byte_sha256_then_shard_tampered(self) -> None:
+        """THE discriminating test (cond3-1038): cert.checkpoint.byte_sha256 is
+        set to the checkpoint-manifest INDEX JSON's own digest -- exactly the
+        wrong mapping seat_identity_bridge.py:157-171 shipped with (and what
+        tests/test_cli_seat.py:42-46 encoded into its fixture, PR #1038 exact
+        head 50f575a). The index JSON is left BYTE-IDENTICAL; ONE shard's
+        actual bytes are then changed. The production derive_seat_identity
+        call must REFUSE.
+        """
+        index_digest = hashlib.sha256(self.index_path.read_bytes()).hexdigest()
+        cert_path, cert_digest = self._write_cert(index_digest)
+        index_bytes_before = self.index_path.read_bytes()
+
+        # Tamper one shard. The index JSON is NOT touched.
+        self.shard_a.write_bytes(b"TAMPERED-SHARD-BYTES-not-the-certified-checkpoint")
+        self.assertEqual(self.index_path.read_bytes(), index_bytes_before)
+
+        seat = {
+            "certManifestPath": str(cert_path),
+            "certManifestDigest": cert_digest,
+            "checkpointPath": str(self.index_path),
+        }
+        result = derive_seat_identity(seat, repo_root=REPO_ROOT)
+        self.assertFalse(
+            result["valid"],
+            "derive_seat_identity served a checkpoint with a tampered shard "
+            f"while the checkpoint-manifest index stayed byte-identical: {result}",
+        )
+        self.assertIsNone(result["seat"])
+
+    def test_green_sharded_checkpoint_untampered_verified_against_canonical_aggregate(self) -> None:
+        """Over-closure guard: an UNTAMPERED sharded checkpoint, certified
+        with the real canonical aggregate identity (resolve_checkpoint_byte_identity),
+        must still verify GREEN through Step 5 -- the cure must not false-RED
+        real unmodified sharded checkpoints."""
+        from seat_identity_bridge import resolve_checkpoint_byte_identity
+
+        canonical, errors = resolve_checkpoint_byte_identity(self.index_path)
+        self.assertFalse(errors, errors)
+        cert_path, cert_digest = self._write_cert(canonical)
+        seat = {
+            "certManifestPath": str(cert_path),
+            "certManifestDigest": cert_digest,
+            "checkpointPath": str(self.index_path),
+        }
+        result = derive_seat_identity(seat, repo_root=REPO_ROOT)
+        self.assertTrue(result["valid"], f"expected GREEN: {result.get('errors')}")
+        self.assertEqual(result["seat"]["checkpointSha256"], canonical)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
