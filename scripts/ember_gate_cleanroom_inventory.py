@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Inventory the predecessor CLI for Ember's clean-room resident harness precondition."""
 from __future__ import annotations
 
@@ -14,7 +17,6 @@ from receipt_write import checked_write
 
 TICKET = "EMBER-GATE-CLEANROOM-INVENTORY"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-DEFAULT_reference_ROOT = Path(r"<local-path>")
 DEFAULT_PRELOOP_RECEIPT = Path(r"receipts\ember-preloop-resident-gate\preloop-resident-gate-20260621T152149Z.json")
 EXCLUDED_DIRS = {
     ".git",
@@ -268,7 +270,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True)
     parser.add_argument("--repo", default=str(repo_root()))
-    parser.add_argument("--reference-root", default=str(DEFAULT_reference_ROOT))
+    parser.add_argument("--reference-root", required=True)
     parser.add_argument("--preloop-receipt", default=str(DEFAULT_PRELOOP_RECEIPT))
     args = parser.parse_args()
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Preflight/run boundary for the first ScienceAgentBench A/B/C/deleted loop."""
 from __future__ import annotations
 
@@ -16,7 +19,6 @@ from typing import Any
 
 TICKET = "EMBER-SCIENCEAGENTBENCH-FIRST-LOOP"
 SHA_CONVENTION = "bytes on disk/as fetched as-is; text hashes are UTF-8 encoded"
-DEFAULT_BENCHMARK_ROOT = Path(r"<local-path>")
 DEFAULT_FROZEN_ROWS = Path("receipts/ember-post-resident-discovery/scienceagentbench-admission-20260622T165317Z.frozen_rows.json")
 DEFAULT_ADMISSION = Path("receipts/ember-post-resident-discovery/scienceagentbench-admission-20260622T165317Z.json")
 DEFAULT_OUT_DIR = Path("receipts/ember-post-resident-discovery")
@@ -249,7 +251,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--admission", default=str(DEFAULT_ADMISSION))
     parser.add_argument("--frozen-rows", default=str(DEFAULT_FROZEN_ROWS))
-    parser.add_argument("--benchmark-root", default=str(DEFAULT_BENCHMARK_ROOT))
+    parser.add_argument("--benchmark-root", required=True)
     parser.add_argument("--budget-seconds", type=int, default=120)
     parser.add_argument("--allow-paid-visual-judge", action="store_true")
     parser.add_argument("--max-visual-judge-calls", type=int, default=0)

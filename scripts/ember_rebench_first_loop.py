@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """RE-Bench first-loop preflight for Ember's external heldout path."""
 from __future__ import annotations
 
@@ -13,7 +16,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-DEFAULT_REBENCH_ROOT = Path(r"<local-path>")
 DEFAULT_TASK_FAMILY = "ai_rd_rust_codecontests_inference"
 REQUIRED_ENV = "AI_RD_RUST_CODECONTESTS_INFERENCE_OPENAI_API_KEY"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
@@ -207,13 +209,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--task-family", default=DEFAULT_TASK_FAMILY)
-    parser.add_argument("--rebench-root", default=str(DEFAULT_REBENCH_ROOT))
+    parser.add_argument("--rebench-root", default=None)
     parser.add_argument("--frozen-slice", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
     if args.selftest:
         import ember_rebench_first_loop_selftest
         return ember_rebench_first_loop_selftest.main()
+    if not args.rebench_root:
+        parser.error(
+            "--rebench-root is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
     repo = Path.cwd().resolve()
     task_dir = Path(args.rebench_root) / args.task_family
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

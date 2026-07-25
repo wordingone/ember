@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Run the frozen stronger ScienceAgentBench transfer slice with zero-cost A/B/C/Deleted arms."""
 from __future__ import annotations
 
@@ -15,7 +18,6 @@ from typing import Any
 
 TICKET = "EMBER-SCIENCEAGENTBENCH-STRONGER-TRANSFER-LOOP"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-DEFAULT_BENCHMARK_ROOT = Path(r"<local-path>")
 DEFAULT_TRANSFER_SLICE = Path("receipts/ember-post-resident-discovery/scienceagentbench-stronger-transfer-slice-20260622T193500Z.json")
 DEFAULT_BEFORE = Path("receipts/ember-post-resident-discovery/scienceagentbench-zero-cost-regrade-loop-20260622T192500Z.json")
 DEFAULT_FIELD_EVAL = Path("receipts/ember-post-resident-discovery/field-level-breakthrough-evaluation-20260622T193500Z.json")
@@ -285,7 +287,12 @@ def build_receipt(args: argparse.Namespace) -> dict[str, Any]:
     field_eval_path = Path(args.field_eval)
     before = load_json(before_path)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_root = Path(args.run_root) if args.run_root else Path(r"<local-path>") / ts
+    if not args.run_root:
+        raise SystemExit(
+            "--run-root is required (no baked-in default; original path was "
+            "scrubbed for public export, see issue #261)"
+        )
+    run_root = Path(args.run_root)
     run_root.mkdir(parents=True, exist_ok=True)
     rows = transfer["rows"]
     score_rows = []
@@ -320,7 +327,7 @@ def build_receipt(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--benchmark-root", default=str(DEFAULT_BENCHMARK_ROOT))
+    ap.add_argument("--benchmark-root", required=True)
     ap.add_argument("--transfer-slice", default=str(DEFAULT_TRANSFER_SLICE))
     ap.add_argument("--before-receipt", default=str(DEFAULT_BEFORE))
     ap.add_argument("--field-eval", default=str(DEFAULT_FIELD_EVAL))

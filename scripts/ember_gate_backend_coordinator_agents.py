@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room coordinator/agent backend gate for Ember's the predecessor CLI parity harness.
 
 This gate does not import the predecessor CLI coordinator or agent code. It consumes the
@@ -31,7 +34,6 @@ DENYLIST: list[str] = (
     if _DENYLIST_PATH.exists() else []
 )
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-DEFAULT_AUDIT = Path(r"<local-path>")
 DEFAULT_UIUX_RECEIPT = Path(r"receipts\ember-preloop-resident-gate\uiux-repl-components-20260621T222342Z.json")
 
 REQUIRED_CAPABILITIES = {
@@ -390,7 +392,7 @@ def write_receipt(path: Path, receipt: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=str(repo_root()))
-    parser.add_argument("--audit", default=str(DEFAULT_AUDIT))
+    parser.add_argument("--audit", required=True)
     parser.add_argument("--uiux-receipt", default=str(DEFAULT_UIUX_RECEIPT))
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
