@@ -16,6 +16,11 @@ Every check carries one of:
 
     resolved-true    measured and holds
     resolved-false   measured and fails
+    weak             the capability exists but is undiscoverable to a reader
+                     with no source (implemented in a module body, absent from
+                     the command's name and declared description). This FAILS
+                     the gate: under a no-source bar an unfindable control is
+                     not a control.
     undecidable      cannot be decided statically; the receipt names exactly
                      what a human must look at
 
@@ -77,10 +82,34 @@ SPINE_FUNCTIONS = {
 
 NAME_RE = re.compile(r'name:\s*"([a-z0-9-]+)"')
 DESC_RE = re.compile(r"description:")
+# The declared description text itself -- for a reader with no source, the
+# description IS the discoverability surface, so a keyword that appears only in
+# the module body is NOT reachable knowledge.
+DESC_TEXT_RE = re.compile(r'description:\s*(?:\n\s*)?"((?:[^"\\]|\\.)*)"')
+
+# Files that must exist for a directory to be the ember repository. The harness
+# resolves its root as parent-of-script-dir, which silently judges whatever tree
+# a stray copy lands in: on 2026-07-24 a misplaced copy resolved to a user home
+# directory and reported three unrelated PowerShell scripts as "ember's root
+# launchers", which would have passed L1. Absence of every marker is a harness
+# error, not a verdict about ember.
+ROOT_MARKERS = ("INVARIANT.md", "GOAL.md", COMMANDS_DIR, PACKAGE_JSON)
 
 
 def check(state: str, evidence: str) -> dict:
     return {"state": state, "evidence": evidence}
+
+
+def assert_ember_root(root: Path) -> None:
+    """Fail closed unless `root` is recognisably the ember repository."""
+    present = [m for m in ROOT_MARKERS if (root / m).exists()]
+    if not present:
+        raise RuntimeError(
+            f"{root} carries none of the ember root markers {list(ROOT_MARKERS)}; "
+            "refusing to report a verdict about a tree that is not ember. Run "
+            "this harness from the repository root (scripts/ is its home) or "
+            "pass --root explicitly."
+        )
 
 
 def find_root_launchers(root: Path) -> list[str]:
@@ -117,6 +146,7 @@ def load_commands(root: Path) -> tuple[dict[str, dict], list[str]]:
         modules[f.stem] = {
             "names": names,
             "has_description": bool(DESC_RE.search(body)),
+            "desc_lower": " ".join(DESC_TEXT_RE.findall(body)).lower(),
             "body_lower": body.lower(),
         }
     if not modules:
@@ -194,25 +224,52 @@ def run(root: Path) -> dict:
     launch_ok = checks["L1_root_launcher"]["state"] == "resolved-true"
     for func, keywords in SPINE_FUNCTIONS.items():
         hit = None
-        # Pass 1: keyword in the command NAME or module stem (strong match).
-        # Pass 2: keyword only in the module body (weak match, flagged).
-        for strong in (True, False):
+        weak = False
+        # Pass 1 (STRONG): keyword in the command NAME or its declared
+        # DESCRIPTION -- the two things a reader with no source can actually
+        # see.
+        # Pass 2 (WEAK): keyword only in the module stem or body. The capability
+        # is implemented but undiscoverable: /model dispatches `manifest` and
+        # `checkpoint` while describing itself as "load|unload|status", so a
+        # stranger cannot find either. WEAK is its own verdict tier and it FAILS
+        # the gate -- reporting it inside a resolved-true line is what let it be
+        # read as "fine" on 2026-07-24.
+        for stem, m in modules.items():
+            if not m["names"] or not m["has_description"]:
+                continue
+            hay = " ".join(m["names"]) + " " + m["desc_lower"]
+            if any(k in hay for k in keywords):
+                hit = f"command {m['names']} in {stem}.ts (named + described)"
+                break
+        if hit is None:
+            # WEAK pass. Report EVERY module whose body mentions the keyword,
+            # ranked by hit count -- never an arbitrary first match. The first
+            # match is usually the wrong file: `checkpoint` appears in custody.ts
+            # only as a printed field while /model checkpoint save is the actual
+            # implementation, and naming custody.ts would send a builder to the
+            # wrong place.
+            ranked: list[tuple[int, str, list[str]]] = []
             for stem, m in modules.items():
                 if not m["names"] or not m["has_description"]:
                     continue
-                hay = stem.lower() + " " + " ".join(m["names"])
-                if strong and any(k in hay for k in keywords):
-                    hit = f"command {m['names']} in {stem}.ts (named + described)"
-                    break
-                if not strong and any(k in m["body_lower"] for k in keywords):
-                    hit = (
-                        f"command {m['names']} in {stem}.ts (named + described; "
-                        f"WEAK match: keyword only in module body)"
-                    )
-                    break
-            if hit:
-                break
-        if hit is None:
+                hay = stem.lower() + " " + m["body_lower"]
+                matched = [k for k in keywords if k in hay]
+                if matched:
+                    n = sum(hay.count(k) for k in matched)
+                    ranked.append((n, f"{stem}.ts ({m['names']})", matched))
+            if ranked:
+                ranked.sort(key=lambda r: (-r[0], r[1]))
+                where = "; ".join(f"{name} x{n} {ks}" for n, name, ks in ranked[:4])
+                hit = (
+                    f"implemented in module bodies [{where}] but no command's "
+                    f"name or declared description says so -- undiscoverable "
+                    f"without reading the source. Clears when a declared "
+                    f"description names it."
+                )
+                weak = True
+        if weak:
+            report["spine"][func] = check("weak", hit)
+        elif hit is None:
             report["spine"][func] = check(
                 "resolved-false",
                 f"no named+described command module matches {keywords}",
@@ -256,10 +313,13 @@ def main() -> int:
         print(f"FAIL: root not a directory: {root}", file=sys.stderr)
         return 1
     try:
+        assert_ember_root(root)
         report = run(root)
     except RuntimeError as exc:
-        print(f"FAIL (fail-closed): {exc}", file=sys.stderr)
-        return 1
+        # Exit 2, not 1: a harness that cannot identify its target has produced
+        # no verdict about ember at all, and must not be mistaken for a FAIL.
+        print(f"HARNESS ERROR (fail-closed): {exc}", file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(report, indent=2))
     else:
