@@ -73,6 +73,29 @@ export function actionLocalDelta(delta: string, input: string): string {
   return marker === -1 ? delta : delta.slice(marker + input.length);
 }
 
+
+export function classifyActionFrame(frame: string): AttemptRow["status"] {
+  const lower = frame.toLowerCase();
+  if (lower.includes("unknown command")) return "MISSING";
+  if (lower.includes("error:") || lower.includes("failed to")) return "REFUSED";
+  return "PASS";
+}
+
+export function actionOutputExcerpt(frame: string, delta: string): string {
+  const saveQuote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
+  if (delta.includes(saveQuote)) return saveQuote;
+  const lines = frame.split("\n");
+  const missing = lines.find((line) => /unknown command|not registered/i.test(line));
+  if (missing !== undefined) return missing.trim();
+  const refused = [...lines].reverse().find((line) => /error:|failed to/i.test(line));
+  if (refused !== undefined) return refused.trim();
+  const saved = [...lines].reverse().find((line) => line.includes("legacy checkpoint snapshot saved"));
+  if (saved !== undefined) return saved.trim();
+  const trimmedDelta = delta.trim();
+  if (trimmedDelta !== "") return trimmedDelta.slice(-2000);
+  return frame.trim().slice(-2000);
+}
+
 function commandText(args: string[], cwd: string): string {
   const result = spawnSync(args[0]!, args.slice(1), {
     cwd,
@@ -518,18 +541,15 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       );
       writeFileSync(join(repoRoot, frameArtifact), publicFrame, "utf8");
       const localDelta = actionLocalDelta(driven.delta, input);
-      const lower = localDelta.toLowerCase();
-      const missing = lower.includes("unknown command");
-      const refused = lower.includes("error:") || lower.includes("failed to");
-      const status = missing ? "MISSING" : refused ? "REFUSED" : "PASS";
-      const publicDelta = Buffer.from(
+      const status = classifyActionFrame(publicFrame);
+      const redactedDelta = Buffer.from(
         redactHostPaths(Buffer.from(localDelta, "utf8"), [repoRoot, home, binary]).publicBytes,
       )
         .toString("utf8")
         .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
         .replaceAll(input.replaceAll(home, "<EMBER_SMOKE_HOME>").replaceAll(repoRoot, "<EMBER_REPO>"), "")
-        .trim()
-        .slice(-2000);
+        .trim();
+      const publicDelta = actionOutputExcerpt(publicFrame, redactedDelta);
       attempts.push({
         action,
         input: input.replaceAll(home, "<EMBER_SMOKE_HOME>").replaceAll(repoRoot, "<EMBER_REPO>"),

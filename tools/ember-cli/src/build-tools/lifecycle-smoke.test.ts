@@ -276,6 +276,24 @@ describe("compiled lifecycle action completion", () => {
     );
     expect(saved).toContain("not /model checkpoint load compatible");
   });
+
+  test("classifies the rendered action and retains the exact save incompatibility", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.classifyActionFrame).toBeFunction();
+    expect(driver.actionOutputExcerpt).toBeFunction();
+
+    const continuedFrame = [
+      "error: failed to load checkpoint: historical row",
+      "Unknown command: /continue",
+    ].join("\n");
+    expect(driver.classifyActionFrame!(continuedFrame)).toBe("MISSING");
+
+    const quote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
+    expect(driver.actionOutputExcerpt!("legacy checkpoint snapshot saved", `${quote}${"x".repeat(3000)}`))
+      .toBe(quote);
+    expect(driver.actionOutputExcerpt!(continuedFrame, "cursor repaint without contiguous output"))
+      .toContain("Unknown command: /continue");
+  });
 });
 
 describe("compiled lifecycle visible frame", () => {
