@@ -517,6 +517,23 @@ def _current_discovery_snapshot(
     return snapshot
 
 
+_EXTERNAL_ABSENCE_POLICY = "external_party_evidence_absent_by_design"
+
+
+def _valid_required_absence_policy(root_spec: Mapping[str, Any]) -> bool:
+    """Allow absence only for closed, noncanonical external evidence surfaces."""
+    return (
+        root_spec.get("required") is True
+        and root_spec.get("absence_policy") == _EXTERNAL_ABSENCE_POLICY
+        and root_spec.get("provenance_class") == "evidence_receipt"
+        and root_spec.get("authority_status") == "noncanonical_evidence"
+        and root_spec.get("owner") in {"auditor", "collaborator"}
+        and root_spec.get("lineage_admissibility")
+        in {"excluded_evidence_only", "excluded_stale_audit_copy"}
+    )
+
+
+
 def build_root_census(
     specification: Mapping[str, Any],
     bindings: Mapping[str, Path],
@@ -566,6 +583,10 @@ def build_root_census(
         bound_value = bindings.get(binding_id)
         bound = Path(bound_value) if bound_value is not None else None
         present = bool(bound is not None and bound.exists())
+        absence_policy = root_spec.get("absence_policy")
+        absence_attested = bool(
+            not present and _valid_required_absence_policy(root_spec)
+        )
         root_row = {
             "root_id": root_id,
             "required": bool(root_spec.get("required")),
@@ -578,13 +599,25 @@ def build_root_census(
                 "lineage_admissibility", "unresolved"
             ),
         }
+        if isinstance(absence_policy, str):
+            root_row["absence_policy"] = absence_policy
+        if not present and absence_policy is not None:
+            root_row["absence_attested"] = absence_attested
         if isinstance(source_root_id, str):
             root_row["source_root_id"] = source_root_id
         if not isinstance(source_root_id, str) and bound is not None:
             root_row["normalized_bound_path"] = str(bound.resolve()).replace("\\", "/")
         roots.append(root_row)
         if not present:
-            if root_spec.get("required"):
+            if absence_policy is not None and not absence_attested:
+                contradictions.append(
+                    {
+                        "code": "invalid_required_absence_policy",
+                        "root_id": root_id,
+                        "resolution": "unresolved",
+                    }
+                )
+            if root_spec.get("required") and not absence_attested:
                 contradictions.append(
                     {
                         "code": (
