@@ -77,6 +77,7 @@ const MODEL_FREE_FAST_FLAGS = new Set([
   "--diag-startup",
   "--diagnostics",
   "--dump-system-prompt",
+  "--watch",
 ]);
 
 export function isModelFreeFastPath(argv: string[]): boolean {
