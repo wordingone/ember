@@ -31,6 +31,9 @@ jobs:
       - name: Checkout trusted guard kernel
         uses: actions/checkout@v4
         with:
+          # Intentionally omit the ref key: pull_request_target resolves the current
+          # protected-base tip; push resolves the triggering protected commit.
+          # The untrusted merge/push subject is checked out separately below.
           path: guard-kernel
           fetch-depth: 0
           persist-credentials: false
@@ -65,7 +68,10 @@ jobs:
           subject="${GITHUB_WORKSPACE}/guard-subject"
           chmod +x "${kernel}/tools/repo-guard.sh"
           cd "${subject}"
-          git cat-file -e "${BASE_SHA}^{commit}"
+          if ! git cat-file -e "${BASE_SHA}^{commit}"; then
+            echo "repo-guard: explicit range base is unavailable; refusing weaker tree-only fallback" >&2
+            exit 2
+          fi
           bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"
 
       - name: Validate PR authority binding
