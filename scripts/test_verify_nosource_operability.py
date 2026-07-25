@@ -83,6 +83,23 @@ def _camel(stem: str) -> str:
     return "".join(p.capitalize() for p in stem.replace("-", "_").split("_"))
 
 
+def _write_real_launcher_chain(root: Path, filename: str = "Real.cmd") -> None:
+    """Write a root launcher whose reachable code matches the exact grammar
+    `_matches_known_launcher_grammar` recognizes: a variable bound via
+    Join-Path to a path inside tools/ember-cli, Push-Location'd, then
+    invoked via the call operator. Used by every L3 fixture that needs L1
+    resolved-true as a precondition but is not itself testing L1's own
+    dead-code/reachability behavior (those write the grammar directly,
+    inline, so they can also control what sits before it)."""
+    _write(
+        root / filename,
+        "@echo off\r\n"
+        '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
+        "Push-Location $sourceRoot\r\n"
+        "& $bun run entrypoints/main.ts\r\n",
+    )
+
+
 def _command_module(root: Path, stem: str, name: str, description: str) -> None:
     _write(
         root / f"tools/ember-cli/src/commands/{stem}.ts",
@@ -178,8 +195,10 @@ class L1DecoyAndEmptyTests(unittest.TestCase):
 
     def test_real_launcher_chain_resolves_true(self):
         """Sanity control: a launcher that genuinely hops into the CLI entry
-        must still resolve true -- proves the RED cases above are RED
-        because of their content, not because L1 always fails now."""
+        via the exact known grammar (Join-Path-bound variable, Push-Location,
+        call-operator invocation -- the real Ember.cmd's own shape) must
+        still resolve true -- proves the RED cases above are RED because of
+        their content, not because L1 always fails now."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -189,7 +208,9 @@ class L1DecoyAndEmptyTests(unittest.TestCase):
             )
             _write(
                 root / "scripts/launch.ps1",
-                'bun run "tools\\ember-cli\\src\\entrypoints\\main.ts"\r\n',
+                '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
+                "Push-Location $sourceRoot\r\n"
+                "& $bun run entrypoints/main.ts\r\n",
             )
             report = harness.run(root)
             self.assertEqual(report["checks"]["L1_root_launcher"]["state"], "resolved-true")
@@ -231,7 +252,7 @@ class L3RegistryGraphTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "Real.cmd", '@echo off\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n')
+            _write_real_launcher_chain(root)
             _command_module(
                 root, "seatmod", "custody", "custody and identity manifest, read-only"
             )
@@ -361,7 +382,11 @@ class Round3TextPositionTests(unittest.TestCase):
             _minimal_ember_root(root)
             _write(
                 root / "Ember.cmd",
-                '@echo off\r\nexit /b 0\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n',
+                "@echo off\r\n"
+                "exit /b 0\r\n"
+                '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
+                "Push-Location $sourceRoot\r\n"
+                "& $bun run entrypoints/main.ts\r\n",
             )
             report = harness.run(root)
             self.assertNotEqual(
@@ -373,7 +398,8 @@ class Round3TextPositionTests(unittest.TestCase):
         INSIDE an `if (...)` block must not be read as an unconditional
         top-level terminator -- the real chain has exactly this pattern
         (an early-arg-check exit before the real invocation line) and must
-        keep resolving true."""
+        keep resolving true. The grammar lines after the block are the
+        exact shape `_matches_known_launcher_grammar` recognizes."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -384,7 +410,9 @@ class Round3TextPositionTests(unittest.TestCase):
                 "  echo no args allowed\r\n"
                 "  exit /b 2\r\n"
                 ")\r\n"
-                'call "%~dp0tools\\ember-cli\\src\\x.ts"\r\n',
+                '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
+                "Push-Location $sourceRoot\r\n"
+                "& $bun run entrypoints/main.ts\r\n",
             )
             report = harness.run(root)
             self.assertEqual(report["checks"]["L1_root_launcher"]["state"], "resolved-true")
