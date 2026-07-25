@@ -132,6 +132,14 @@ export function completedPromptFrame(
   return pendingProbe.length > 0 && !promptText.includes(pendingProbe);
 }
 
+export function slashCommandNeedsSecondEnter(
+  frame: string[],
+  width: number,
+  input: string,
+): boolean {
+  return input.startsWith("/") && !completedPromptFrame(frame, width, input);
+}
+
 function redactHostPaths(
   privateBytes: Uint8Array,
   hostPaths: string[],
@@ -281,7 +289,15 @@ async function driveInput(
   const rawStart = raw.join("").length;
   let lastRawLength = rawStart;
   let lastChange = Date.now();
-  child.write(`${input}\r`);
+  child.write(input);
+  await sleep(100);
+  child.write("\r");
+  await sleep(600);
+  await flush();
+  const firstEnterFrame = visibleFrameLines(terminal);
+  if (slashCommandNeedsSecondEnter(firstEnterFrame, COLS, input)) {
+    child.write("\r");
+  }
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const currentRawLength = raw.join("").length;
