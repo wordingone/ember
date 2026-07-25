@@ -534,3 +534,47 @@ export function PromptInput({
   // #561 P0-A: fixed bottom chrome, never a flex-shrink target.
   return React.createElement(Box, { flexDirection: "column", flexShrink: 0 }, ...above, box);
 }
+
+// ---------------------------------------------------------------------------
+// promptInputRowCount — analytically exact row count for PromptInput, mirroring
+// its own render term-for-term (2026-07-25 counterparty finding, fourth round:
+// the earlier DROPDOWN_PROMPT_STATUS_RESERVE_ROWS=6 constant was checked
+// against exactly one render state (idle) and broke on the live busy+stash
+// case -- "a binding against a single state proves the fixture, not the
+// budget". This replaces that constant: every term below is either derived
+// from the same pure helpers PromptInput's own render calls
+// (shouldShowShimmer, computeQueueDisplay) or a structural constant of the
+// component (the 2 rule rows, the 1 input row) that no render state changes.
+// Bound to the real render by prompt-region-row-count.test.ts across the
+// full state range PromptInput can occupy, not one frame of it.
+// ---------------------------------------------------------------------------
+
+export interface PromptInputRowCountProps {
+  queuedItems?:          string[];
+  notifications?:        Notification[];
+  isProcessing?:         boolean;
+  prefersReducedMotion?: boolean;
+  isStashed:             boolean;
+  showStatusLine?:       boolean;
+}
+
+export function promptInputRowCount({
+  queuedItems          = [],
+  notifications        = [],
+  isProcessing         = false,
+  prefersReducedMotion = false,
+  isStashed,
+  showStatusLine       = true,
+}: PromptInputRowCountProps): number {
+  const notificationRows = notifications.length;
+  const shimmerRows      = shouldShowShimmer(isProcessing, prefersReducedMotion) ? 1 : 0;
+  const stashRows        = isStashed ? 1 : 0;
+  const ruleRows         = 2; // rule-above + rule-below
+  const inputRow         = 1;
+  const qDisplay         = computeQueueDisplay(queuedItems);
+  const queueVisibleRows = qDisplay.visible.length;
+  const overflowRows     = qDisplay.overflowCount > 0 ? 1 : 0;
+  const statusRows       = showStatusLine ? 1 : 0;
+  return notificationRows + shimmerRows + stashRows + ruleRows + inputRow
+    + queueVisibleRows + overflowRows + statusRows;
+}

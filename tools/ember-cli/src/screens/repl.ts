@@ -23,6 +23,7 @@ import {
 } from "../components/app-shell.ts";
 import {
   StatusLine,
+  statusLineRowCount,
   type PermissionModeState,
   type InterruptHandler,
   type TaskPanelState,
@@ -33,6 +34,7 @@ import {
   PromptInput,
   usePromptInput,
   parseInputMode,
+  promptInputRowCount,
   type PromptInputState,
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
@@ -45,7 +47,7 @@ import {
   moveDropdownSelection,
   completeSlashSelection,
   computeSlashDropdownDisplay,
-  slashDropdownMaxVisible,
+  computeSlashDropdownBudget,
 } from "../services/slash-dropdown.ts";
 import { getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
@@ -628,7 +630,7 @@ export function ReplScreen({
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
   // Hoisted from the render tree below (was computed just before the JSX return) so the palette's
-  // own row-budget computation (slashDropdownMaxVisible, near the dropdownDisplay decl)
+  // own row-budget computation (computeSlashDropdownBudget, near the dropdownDisplay decl)
   // can use the SAME mainColumnWidth Homescreen actually renders at, rather than a second
   // recomputation that could drift from it -- both operatorSurfaceWidth/mainColumnWidth are pure
   // functions of terminalCols alone, so hoisting is safe this early.
@@ -1096,22 +1098,42 @@ export function ReplScreen({
     viewportWidth: mainColumnWidth,
     boardSummary,
   };
-  // 2026-07-25 counterparty finding (third round): even a maximally tight budget still needs 3
-  // rows for the box itself (2 borders + at least the "+N more" line) once bannerRows is nonzero,
-  // so on a genuinely short terminal the banner alone could make that unreachable. The banner is
-  // NOT essential while the operator is actively composing a slash command -- <Homescreen> is
-  // skipped entirely below whenever dropdownOpen, freeing 100% of its rows honestly (an
-  // analytically exact 0, not a partial collapse) rather than the palette silently losing a fight
-  // over rows the welcome screen was using for a purpose that isn't active right now.
-  const bannerRowsForDropdown = dropdownOpen ? 0 : homescreenRowCount(homescreenProps);
-  // 2026-07-25 palette-overflow-render finding: cap by actual terminal geometry, not just the
-  // fixed SLASH_DROPDOWN_MAX_VISIBLE -- see slashDropdownMaxVisible's own comment for why a fixed
-  // cap alone isn't honest on a short terminal (silently clips instead of showing "+N more"), and
-  // why matchCount is threaded through (the "+N more" row's own height needs to be budgeted too).
+  // 2026-07-25 counterparty finding, fourth round: `promptStatusReserve` is DERIVED from the same
+  // live props/state the real <PromptInput>/<StatusLine> elements below are constructed with --
+  // not a literal (the retired DROPDOWN_PROMPT_STATUS_RESERVE_ROWS=6 was checked against exactly
+  // one render state and broke on the live busy+stash case). `showStatusLine: false` mirrors the
+  // real <PromptInput> call below (its own status row is never used here; the real <StatusLine> is
+  // rendered as its own sibling and counted separately). `queuedItems`/`notifications` are omitted
+  // (default []) because the real <PromptInput> call below never receives them either -- if a
+  // future change wires either in, this reserve must be updated at that same call site or the two
+  // will drift, which is exactly the class prompt-region-row-count.test.ts binds against.
+  const promptStatusReserve =
+    promptInputRowCount({ isStashed: inputState.isStashed, isProcessing: busy, showStatusLine: false }) +
+    statusLineRowCount({
+      taskPanel: taskPanelState,
+      telemetry,
+      effort:    retryStatus,
+      degraded:  degradedBanner,
+      outage:    outageBanner,
+    });
+  // 2026-07-25 counterparty finding, second/third round: the exact no-room budget -- see
+  // computeSlashDropdownBudget's own comment for the full derivation, the worked cases, and the
+  // disclosed residual (a terminal so short that even a collapsed banner can't free a row for the
+  // indicator renders nothing at all). `bannerRows` is always the FULL homescreenRowCount here --
+  // computeSlashDropdownBudget itself decides whether to collapse it, and dropdownCollapsesBanner
+  // below is threaded back into the render so the two can never disagree about whether the banner
+  // is actually on screen.
+  const dropdownBudget = computeSlashDropdownBudget(
+    terminalRows,
+    promptStatusReserve,
+    homescreenRowCount(homescreenProps),
+    dropdownMatches.length,
+  );
+  const dropdownCollapsesBanner = dropdownOpen && dropdownBudget.collapseHomescreen;
   const dropdownDisplay = computeSlashDropdownDisplay(
     dropdownMatches,
     dropdownSelectedIndex,
-    slashDropdownMaxVisible(terminalRows, bannerRowsForDropdown, dropdownMatches.length),
+    dropdownBudget.cap,
   );
 
   // Back to the top row whenever the composed query text changes (narrows/widens the match
@@ -1629,7 +1651,7 @@ export function ReplScreen({
             startedAtMs: spinnerStartRef.current,
           })
         : null,
-      dropdownOpen && dropdownDisplay.visible.length > 0
+      dropdownOpen && dropdownBudget.showPanel
         ? React.createElement(SlashDropdown, {
             key:           "slash-dropdown",
             commands:      dropdownDisplay.visible,

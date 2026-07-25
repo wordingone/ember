@@ -154,58 +154,87 @@ export function computeSlashDropdownDisplay(
   };
 }
 
-/** Reserved rows for the prompt+status chrome below the dropdown -- deliberately a generous,
- * documented CONSTANT rather than an analytically derived figure. Unlike the banner (whose exact
- * height is now computed for real via homescreenRowCount), PromptInput/StatusLine are another
- * founder's actively-rebuilt surface (issue #243) -- reading their code to derive an exact row
- * count would create a dependency on internals mid-rework, and any change there could silently
- * invalidate a "precise" number. Erring generous here can only make the dropdown show FEWER
- * entries than the terminal could technically fit (always safe: visible+overflowCount still sums
- * to the exact total by construction, so the shared count-plus-shortfall invariant never breaks);
- * erring tight risks pushing that region off-screen, which is the one interaction with their lane
- * this fix must never cause. 6 rows covers today's 1-2 rows each with headroom for a bordered
- * input box (#243's own direction) without needing to track its exact shape. */
-export const DROPDOWN_PROMPT_STATUS_RESERVE_ROWS = 6;
 export const DROPDOWN_BORDER_ROWS = 2;
 
-/** 2026-07-25 palette-overflow-render finding (state/operability-finding-palette-renders-broken):
- * components/slash-dropdown.ts's Box now carries flexShrink:0 + overflow:"hidden", which
- * guarantees the panel is NEVER corrupted -- it renders exactly as many rows as it's TOLD to
- * (border + one row per visible command, cleanly clipped at the terminal's own edge if that's
- * still too many). What flexShrink:0 does NOT do is make the *decision* of how many commands to
- * show honest on a short terminal: SLASH_DROPDOWN_MAX_VISIBLE(8) alone doesn't know whether 8
- * rows plus the banner plus prompt/status chrome actually fit in `terminalRows`, so on a short
- * terminal the app would ask for more rows than exist and the excess would be silently clipped by
- * the terminal's own physical edge with no "+N more" -- the same "silently hiding entries" defect
- * the acceptance bar names, just moved one layer up from rendering into the visible-count
- * decision.
+/** 2026-07-25 counterparty finding, fourth round: DROPDOWN_PROMPT_STATUS_RESERVE_ROWS=6 (a
+ * literal) is RETIRED. The production counterexample: components/prompt-input.ts's
+ * QUEUE_MAX_VISIBLE=3 means a queue of 4+ already adds a visible row plus an overflow row; Ctrl+S
+ * stash adds a persistent row; `isProcessing` (busy) adds a shimmer row; each notification adds
+ * its own row -- none of those are exotic, they are ordinary live states. The test that "bound"
+ * the retired constant reconstructed exactly one frame (idle), which proves the fixture, not the
+ * budget -- the identical class of failure the constant was meant to prevent, one level up. The
+ * caller now derives this reserve for real, from `promptInputRowCount(...) + statusLineRowCount(
+ * ...)` (components/prompt-input.ts, components/status-bar.ts) called with the SAME props/state
+ * passed to the real <PromptInput>/<StatusLine> elements, and passes the result in as
+ * `promptStatusReserve` below -- see repl.ts's own wiring. */
+
+export interface SlashDropdownBudget {
+  /** Rows the dropdown will actually show entries in (0..SLASH_DROPDOWN_MAX_VISIBLE). */
+  cap: number;
+  /** Rows left, after borders + banner + prompt/status reserve are subtracted, for entries plus
+   * the overflow indicator combined -- may be negative (never clamped here; callers compare it
+   * against 0/1 directly, per the exact-accounting contract in this function's own comment). */
+  contentBudget: number;
+  /** True when the banner was collapsed to free rows (bannerRows recomputed as 0) because it
+   * would not otherwise have fit even the indicator row alongside the palette. */
+  collapseHomescreen: boolean;
+  /** Whether the dropdown box should render at all. False only when there is genuinely no room --
+   * not even for the 2 border rows plus a single "+N more" line -- even after the banner was
+   * collapsed; see this function's own comment for the disclosed residual case. */
+  showPanel: boolean;
+}
+
+/** 2026-07-25 counterparty finding, second+third round: the exact no-room budget. Built to the
+ * counterparty's own worked algorithm (verified below against their three worked cases).
  *
- * `bannerRows` must come from components/logo-homescreen.ts's `homescreenRowCount(props)`, called
- * with the SAME props object passed to the real <Homescreen> element -- banner height is NOT a
- * fixed constant (recentFeedEntries appends one line per live boardSummary.topAttention entry
- * with no cap), so a guessed number here would again silently over- or under-ask depending on
- * live board state. Everything else this reserves is DROPDOWN_PROMPT_STATUS_RESERVE_ROWS (a
- * deliberately generous constant -- see its own comment for why that region isn't measured) plus
- * the dropdown's own 2 border rows. Erring toward reserving slightly more than strictly necessary
- * (showing "+N more" a little early on an edge case) is the safe direction; erring the other way
- * is the corruption/silent-drop defect this whole fix is for.
+ * `contentBudget = terminalRows - promptStatusReserve - DROPDOWN_BORDER_ROWS - bannerRows` --
+ * the room left for entries + the overflow indicator, borders and banner already subtracted.
  *
- * `matchCount` (2026-07-25 counterparty finding, second round): the "+N more" overflow row itself
- * costs a row of height whenever it renders, and the budget above did not account for it -- the
- * over-ask came back exactly in the constrained case that matters. Whether the indicator row is
- * needed depends on whether the chosen cap causes overflow, which depends on the very budget being
- * computed -- resolving that circularity by iterating would oscillate, so this resolves it with
- * ONE deterministic recomputation instead: first size the cap against the budget as though no
- * indicator were needed; if that cap turns out to cover every match (no overflow), it's already
- * correct and no indicator row will render. If it doesn't (`capNoIndicator < matchCount`), the
- * indicator WILL render, so the true budget has one fewer row to spend on entries -- recompute
- * exactly once against that reduced budget and return it. Never re-checks its own output a second
- * time (that's the oscillation this deliberately avoids). May resolve to 0 -- see
- * computeSlashDropdownDisplay's own comment for why a floor of 1 was wrong. */
-export function slashDropdownMaxVisible(terminalRows: number, bannerRows: number, matchCount: number): number {
-  const baseAvailable = terminalRows - bannerRows - DROPDOWN_PROMPT_STATUS_RESERVE_ROWS - DROPDOWN_BORDER_ROWS;
-  const capNoIndicator = Math.max(0, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, baseAvailable));
-  if (capNoIndicator >= matchCount) return capNoIndicator;
-  const availableWithIndicator = baseAvailable - 1; // the "+N more" row itself
-  return Math.max(0, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, availableWithIndicator));
+ * If matches exist and that first pass leaves `contentBudget < 1` (not even the indicator row
+ * fits alongside a full banner), the banner is not essential while the operator is actively
+ * composing a slash command -- collapse it (bannerRows -> 0) and recompute `contentBudget` once
+ * more. This makes the banner the sacrificed region, never the prompt/status chrome, which stays
+ * off-limits (another founder's lane, issue #243).
+ *
+ * The cap itself is sized with the same one-deterministic-recomputation discipline as before (no
+ * iteration, no oscillation): first as though no indicator were needed
+ * (`min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, max(0, contentBudget))`); if that cap doesn't
+ * cover every match, the indicator WILL render, so recompute once more against one fewer row.
+ *
+ * Worked cases (counterparty's own, reproduced here so a future edit can check itself against
+ * them): contentBudget=3, matchCount=10 -> cap=3 then 2, `2 borders + 2 + 1 indicator = 5` against
+ * the 5 rows actually available (contentBudget + DROPDOWN_BORDER_ROWS) -- exact, no waste.
+ * contentBudget=1, matchCount=10 -> cap=1 then 0, `2 + 0 + 1 = 3` against 3 available -- the
+ * honest zero-visible render. contentBudget=8, matchCount=10 -> cap=8 then 7, `2 + 7 + 1 = 10`
+ * against 10. contentBudget=8, matchCount=8 (exact fit, no overflow) -> cap=8, no indicator,
+ * `2 + 8 + 0 = 10` against 10.
+ *
+ * `showPanel` is false (nothing renders, not even borders) only when `contentBudget < 1` after
+ * the collapse attempt -- disclosed residual: on a terminal so short that even a fully collapsed
+ * banner cannot free a single row for the indicator, the operator gets no on-screen signal a list
+ * exists at all. There is genuinely no room at that point. */
+export function computeSlashDropdownBudget(
+  terminalRows: number,
+  promptStatusReserve: number,
+  bannerRows: number,
+  matchCount: number,
+): SlashDropdownBudget {
+  let effectiveBannerRows = bannerRows;
+  let collapseHomescreen = false;
+  let contentBudget = terminalRows - promptStatusReserve - DROPDOWN_BORDER_ROWS - effectiveBannerRows;
+
+  if (matchCount > 0 && contentBudget < 1) {
+    collapseHomescreen = true;
+    effectiveBannerRows = 0;
+    contentBudget = terminalRows - promptStatusReserve - DROPDOWN_BORDER_ROWS - effectiveBannerRows;
+  }
+
+  let cap = Math.min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, Math.max(0, contentBudget));
+  if (matchCount > cap) {
+    cap = Math.min(cap, Math.max(0, contentBudget - 1));
+  }
+
+  const showPanel = matchCount > 0 && contentBudget >= 1;
+
+  return { cap, contentBudget, collapseHomescreen, showPanel };
 }
