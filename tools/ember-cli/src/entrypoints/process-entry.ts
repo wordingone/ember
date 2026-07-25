@@ -92,6 +92,7 @@ const FAST_PATH_FLAGS = new Set<string>([
   "--computer-use-mcp",
   "--daemon-worker",
   "--mcp",
+  "--watch",
 ]);
 
 const FAST_PATH_SUBCMDS = new Set<string>([
@@ -533,6 +534,8 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  --mcp                          Run as an MCP server over stdio\n` +
       `  --daemon-worker                Run as a background daemon worker\n` +
       `  --reference-seat               Explicitly run a borrowed model as REFERENCE_ONLY\n` +
+      `  --watch [--interval N]         Ambient observatory: refresh the /cockpit monitor board\n` +
+      `                                 every N seconds (default 5) until Ctrl-C\n` +
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
@@ -590,6 +593,47 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       debug:   args.includes("--debug"),
       verbose: args.includes("--verbose"),
     });
+    return true;
+  }
+
+  // gh issue #34 (C-OBS): non-interactive ambient observatory mode. Model-free (it only reads the
+  // goalforge contract tree -- no model call), so it belongs in dispatchFastPath rather than
+  // requiring a resolved model seat. Rebuilt against this real entrypoint after the #405 cleanup
+  // removed the previous unwired composer -- see core/watch-loop.ts's header for the full history.
+  if (first === "--watch") {
+    const { parseWatchArgs, runAmbientWatch, realSleep, registerRealSigint } =
+      await import("../core/watch-loop.ts");
+    const parsed = parseWatchArgs(argv);
+    if (parsed.error) {
+      process.stderr.write(`ember --watch: ${parsed.error}\n`);
+      process.exit(1);
+      return true;
+    }
+    const { GOALFORGE_ROOT, buildEmberWorldState } = await import("../core/ember-world-state.ts");
+    if (!GOALFORGE_ROOT) {
+      process.stderr.write(
+        "ember --watch: world-state source not configured -- set EMBER_GOALFORGE_ROOT to the goalforge contract tree's path.\n",
+      );
+      process.exit(1);
+      return true;
+    }
+    const { renderMonitorPanel, colorEnabledFor } = await import("../core/monitor-render.ts");
+    const { findNewestReceipts, renderReceiptsTail } = await import("../core/watch-render.ts");
+    await runAmbientWatch({
+      goalforgeRoot: GOALFORGE_ROOT,
+      intervalMs: parsed.intervalMs,
+      colorEnabled: colorEnabledFor(process.stdout.isTTY, process.env),
+      width: process.stdout.columns || 80,
+      write: (text: string) => { process.stdout.write(text); },
+      now: () => Date.now(),
+      sleep: realSleep,
+      registerSigint: registerRealSigint,
+      buildState: buildEmberWorldState,
+      findReceipts: findNewestReceipts,
+      renderPanel: renderMonitorPanel,
+      renderTail: renderReceiptsTail,
+    });
+    process.exit(0);
     return true;
   }
 

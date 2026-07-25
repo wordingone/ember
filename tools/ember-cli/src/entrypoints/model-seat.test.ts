@@ -21,6 +21,13 @@ describe("ember-cli model seat authority", () => {
     ).toBe(false);
   });
 
+  it("exempts --watch (gh issue #34, C-OBS: reads the goalforge tree, never calls a model)", () => {
+    expect(isModelFreeFastPath(["node", "ember", "--watch"])).toBe(true);
+    expect(
+      isModelFreeFastPath(["node", "ember", "--watch", "--interval", "10"]),
+    ).toBe(true);
+  });
+
   it("fails closed when ordinary launch has no admitted owned identity", () => {
     const decision = resolveModelSeat({
       argv: ["node", "ember", "-p", "hello"],

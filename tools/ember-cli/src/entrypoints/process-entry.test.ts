@@ -1836,3 +1836,197 @@ describe("process-entry -> session-init production wiring (PR948 round-9 repair)
     expect(result.stop_reason).toBe("end_turn");
   });
 });
+
+// ---------------------------------------------------------------------------
+// process-entry — `ember --watch [--interval N]` (gh issue #34, C-OBS)
+//
+// Execution-binding proof: this spawns a REAL subprocess through dispatchFastPath (the exact
+// function main() calls) against a fixture goalforge root, so it proves the production `--watch`
+// argv path actually reaches core/watch-loop.ts's real render code -- not just that watch-loop.ts
+// works when called directly (that unit coverage lives in core/watch-loop.test.ts). Subprocess
+// (not mock.module) for the same two reasons commands/world-state.test.ts uses one:
+// core/ember-world-state.ts's GOALFORGE_ROOT is a module-level const frozen at first import, and
+// bun:test's mock.module() corrupts the shared module registry for the rest of the test process.
+// ---------------------------------------------------------------------------
+
+describe("process-entry — dispatchFastPath('--watch') execution binding", () => {
+  const watchTmpDirs: string[] = [];
+
+  afterEach(async () => {
+    while (watchTmpDirs.length > 0) {
+      const dir = watchTmpDirs.pop()!;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  async function makeWatchFixtureRoot(): Promise<string> {
+    const root = join(
+      tmpdir(),
+      `ember-watch-fastpath-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    const boardDir = join(root, "scripts", "ember_totality", "receipts-totality");
+    await mkdir(boardDir, { recursive: true });
+    await mkdir(join(root, "docs"), { recursive: true });
+    await mkdir(join(root, "receipts"), { recursive: true });
+    await writeFile(join(root, "GOAL.md"), "# Watch Fixture Goal\n\n## Topology\n\nbody\n");
+    await writeFile(
+      join(root, "docs", "ember-debt-ledger.md"),
+      "## Current Blocker Packet\n\n(none)\n\n## Active Rows\n\n| ID | Class | Debt | X | Y | Status |\n| --- | --- | --- | --- | --- | --- |\n",
+    );
+    const receipt = {
+      ts: "20260725T000000Z",
+      rows: [{ condition: "C-OBS", status: "GREEN", reason: "fixture" }],
+      summary: { total: 1, green: 1, red: 0, completion_math: { pct_complete: 100 } },
+    };
+    await writeFile(
+      join(boardDir, "ember-totality-20260725T000000Z.json"),
+      JSON.stringify(receipt),
+    );
+    await writeFile(join(root, "receipts", "r1.json"), "{}");
+    watchTmpDirs.push(root);
+    return root;
+  }
+
+  const SRC_DIR = join(import.meta.dir, ".."); // tools/ember-cli/src
+
+  it(
+    "fires repeated refresh cycles through the real render path and exits cleanly on SIGINT",
+    async () => {
+      const root = await makeWatchFixtureRoot();
+      const specifier = join(SRC_DIR, "entrypoints", "process-entry.ts").split("\\").join("/");
+      const driverScript = [
+        `const { dispatchFastPath } = await import("file://${specifier}");`,
+        `const handled = await dispatchFastPath(["node", "ember", "--watch", "--interval", "0.2"]);`,
+        'if (!handled) { process.stderr.write("NOT_HANDLED" + String.fromCharCode(10)); process.exit(2); }',
+      ].join("\n");
+      const driverPath = join(root, "watch-driver.mjs");
+      await writeFile(driverPath, driverScript);
+
+      const proc = Bun.spawn({
+        cmd: ["node", driverPath],
+        cwd: SRC_DIR,
+        env: { ...process.env, EMBER_GOALFORGE_ROOT: root },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      // Let several refresh cycles fire (interval 0.2s), then send the real termination signal --
+      // this is the SIGINT lifecycle clause, exercised against the real process, not a fake.
+      await new Promise((r) => setTimeout(r, 900));
+      proc.kill("SIGINT");
+
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      expect(stderr).not.toContain("NOT_HANDLED");
+      // Real renderMonitorPanel/renderReceiptsTail output, not a placeholder: the fixture
+      // condition id and the fixture receipt path both must appear.
+      expect(stdout).toContain("C-OBS");
+      expect(stdout).toContain("r1.json");
+      // Repeated refresh: the bordered panel's top border must appear MORE THAN ONCE -- proof
+      // this is a loop, not a single render (the thing #405 explicitly warned never got wired).
+      const panelStarts = (stdout.match(/╭/g) ?? []).length;
+      expect(panelStarts).toBeGreaterThan(1);
+      // Clean SIGINT exit: no leftover process. Exit CODE is platform-dependent here --
+      // services/brain-server-supervisor.test.ts documents the same fact this codebase already
+      // knows: "on Windows this is an unconditional terminate" (Node's child.kill(signal) has no
+      // real POSIX signal to deliver on Windows, so the OS force-terminates rather than letting
+      // the child's own `process.on("SIGINT", ...)` handler run process.exit(0) -- the graceful
+      // in-process handler path is covered for real by core/watch-loop.test.ts's "clean SIGINT
+      // lifecycle" test, which invokes the actual registered handler function directly). What
+      // THIS test can assert cross-platform is the thing that actually matters operationally: the
+      // process is gone -- no orphaned ambient-watch process left running after termination.
+      expect(exitCode).not.toBeNull();
+      const isAlive = (): boolean => { try { process.kill(proc.pid!, 0); return true; } catch { return false; } };
+      expect(isAlive()).toBe(false);
+    },
+    20000,
+  );
+
+  it(
+    "refresh-error resilience: a missing board receipt reports an error line and the process is still alive to receive SIGINT",
+    async () => {
+      // No board receipt written -- buildEmberWorldState() throws every cycle; the loop must
+      // report it and keep running rather than crashing the ambient process.
+      const root = join(
+        tmpdir(),
+        `ember-watch-fastpath-error-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      await mkdir(root, { recursive: true });
+      watchTmpDirs.push(root);
+      const specifier = join(SRC_DIR, "entrypoints", "process-entry.ts").split("\\").join("/");
+      const driverScript = [
+        `const { dispatchFastPath } = await import("file://${specifier}");`,
+        `await dispatchFastPath(["node", "ember", "--watch", "--interval", "0.2"]);`,
+      ].join("\n");
+      const driverPath = join(root, "watch-driver-error.mjs");
+      await writeFile(driverPath, driverScript);
+
+      const proc = Bun.spawn({
+        cmd: ["node", driverPath],
+        cwd: SRC_DIR,
+        env: { ...process.env, EMBER_GOALFORGE_ROOT: root },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      await new Promise((r) => setTimeout(r, 700));
+      proc.kill("SIGINT");
+      const [stdout] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      expect(stdout).toContain("[watch] refresh error:");
+      // Same platform note as the sibling test above: exit CODE is not asserted here (Windows
+      // child.kill(signal) unconditionally terminates rather than invoking the in-process
+      // handler); what matters is the loop survived every erroring cycle up to this point
+      // (proven by the refresh-error line appearing, meaning it logged-and-continued rather than
+      // crashing) and left no process behind.
+      const isAlive = (): boolean => { try { process.kill(proc.pid!, 0); return true; } catch { return false; } };
+      expect(isAlive()).toBe(false);
+    },
+    20000,
+  );
+
+  it("rejects a hostile --interval before starting any loop (fail closed, non-zero exit, names the arg)", async () => {
+    const root = await makeWatchFixtureRoot();
+    const specifier = join(SRC_DIR, "entrypoints", "process-entry.ts").split("\\").join("/");
+    const driverScript = [
+      `const { dispatchFastPath } = await import("file://${specifier}");`,
+      `await dispatchFastPath(["node", "ember", "--watch", "--interval", "-3"]);`,
+    ].join("\n");
+    const driverPath = join(root, "watch-driver-bad-interval.mjs");
+    await writeFile(driverPath, driverScript);
+
+    const proc = Bun.spawn({
+      cmd: ["node", driverPath],
+      cwd: SRC_DIR,
+      env: { ...process.env, EMBER_GOALFORGE_ROOT: root },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--interval");
+    expect(stderr).toContain("greater than 0");
+  }, 10000);
+});
+
+describe("process-entry — --watch fast-path flag detection", () => {
+  it("isFastPath detects --watch", () => {
+    expect(isFastPath(["node", "ember", "--watch"])).toBe(true);
+  });
+
+  it("isFastPath detects --watch with --interval", () => {
+    expect(isFastPath(["node", "ember", "--watch", "--interval", "5"])).toBe(true);
+  });
+});
