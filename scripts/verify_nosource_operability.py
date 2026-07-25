@@ -4,6 +4,32 @@
 #!/usr/bin/env python3
 """Executable acceptance harness for the no-source operability gate.
 
+SCOPE LIMIT -- READ FIRST. This harness EXECUTES the root launcher scripts of
+the tree it is pointed at (see run_sentinel_probe). It is therefore only safe
+against a checkout whose launcher bytes you ALREADY TRUST -- our own repo at a
+pinned SHA is the intended and only sanctioned target.
+
+It must NOT be pointed at an unreviewed, third-party, or hostile checkout. The
+containment today is a scratch copy, a closed environment allowlist, a scratch
+TEMP, and a blackholed proxy. That is genuinely not a sandbox: a launcher can
+still write to absolute paths, open sockets directly, invoke arbitrary host
+executables, and leave descendants running past the timeout. Earlier text here
+described this as measuring a checkout nobody has read, which claimed a
+containment boundary that was never built.
+
+The real boundary is being built in four steps, and until step 4 lands the
+scope sentence above is the operative one:
+  1. this correction,
+  2. closed environment allowlist (landed with it),
+  3. route probe launch through runtime/ember-lab's managed dispatch and Job
+     Object, for exact process-tree ownership and a kill receipt,
+  4. an owned restricted-token / AppContainer-equivalent filesystem and network
+     boundary -- only after which the hostile-checkout scope may be restored.
+Note step 3 is not step 4: the Job Object gives descendant ownership,
+termination and resource ceilings. It does not give filesystem or network
+isolation, and crediting it with those would repeat the mistake this note
+exists to correct.
+
 The pre-training gate requires the spine to be operable through ember-cli by
 a person who has read no source file: every control a visible affordance, a
 mouse click or a single keystroke -- no flags, no script paths, no knowledge
@@ -966,7 +992,41 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
         )
 
     argv = runner_fn(scratch_launcher)
-    env = dict(os.environ)
+    # CLOSED ENVIRONMENT. This probe executes launcher bytes it did not write,
+    # so inheriting os.environ handed every candidate the whole ambient
+    # environment of whoever ran the harness -- GITHUB_TOKEN, GH_TOKEN, cloud
+    # credentials, session paths, anything present. A dead proxy is not
+    # containment when the process can also read the secrets it would exfiltrate.
+    #
+    # Allowlist, not denylist: a denylist has to predict every credential
+    # variable that will ever exist, and it is wrong the first time a new one is
+    # invented. Only the variables a Windows shell genuinely needs to start are
+    # carried, plus the probe's own markers.
+    #
+    # This is one of four steps and it is NOT the containment boundary. It
+    # removes credential inheritance. It does not stop a launcher writing to an
+    # absolute path, opening a socket directly, or invoking a host executable --
+    # see the scope note in this module's docstring.
+    env = {
+        name: os.environ[name]
+        for name in (
+            "SystemRoot",
+            "windir",
+            "SystemDrive",
+            "COMSPEC",
+            "PATH",
+            "PATHEXT",
+            "NUMBER_OF_PROCESSORS",
+            "PROCESSOR_ARCHITECTURE",
+            "OS",
+        )
+        if name in os.environ
+    }
+    # TEMP inside the scratch tree: a launcher that writes "somewhere temporary"
+    # lands in the directory this probe already owns and deletes, rather than in
+    # the host's shared temp where it outlives the run.
+    env["TEMP"] = str(scratch_root)
+    env["TMP"] = str(scratch_root)
     env["EMBER_PROBE_ENTRY_MARKER"] = str(entry_marker)
     env["EMBER_PROBE_RUNTIME_MARKER"] = str(runtime_marker)
     env["EMBER_LAUNCH_NONINTERACTIVE"] = "1"

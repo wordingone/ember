@@ -26,6 +26,7 @@ Run:  python scripts/test_verify_nosource_operability.py
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import tempfile
 import unittest
@@ -901,6 +902,40 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             self.assertIn(
                 "tools/ember-cli/src/entrypoints/main.js", receipt.get(diag_key, "")
             )
+
+    def test_probe_env_is_closed_ambient_secrets_are_not_inherited(self):
+        """The probe executes launcher bytes it did not write, so it must
+        not hand them the ambient environment of whoever ran the harness.
+        A launcher that reads a credential-shaped variable and writes what
+        it finds must find nothing.
+
+        Written as a positive capture rather than a negative assertion on
+        the code: the launcher itself reports what it can see, so this
+        fails if the allowlist ever regresses to inheritance, whatever the
+        implementation looks like at the time."""
+        secret = "leaked-" + "x" * 12
+        os.environ["EMBER_PROBE_TEST_FAKE_TOKEN"] = secret
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                _minimal_ember_root(root)
+                leak = root / "leak.txt"
+                _write(
+                    root / "Leak.cmd",
+                    "@echo off\r\n"
+                    f'echo [%EMBER_PROBE_TEST_FAKE_TOKEN%]> "{leak}"\r\n'
+                    'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
+                    'run "tools\\ember-cli\\src\\entrypoints\\main.js"\r\n'
+                    "exit /b 0\r\n",
+                )
+                harness.run(root)
+                # The launcher ran (that is the point -- an unrun launcher
+                # would prove nothing), and saw an empty variable.
+                self.assertTrue(leak.exists(), "launcher did not execute at all")
+                seen = leak.read_text(encoding="utf-8", errors="replace")
+                self.assertNotIn(secret, seen)
+        finally:
+            os.environ.pop("EMBER_PROBE_TEST_FAKE_TOKEN", None)
 
     def test_decoy_copy_entry_out_of_tree_and_execute_never_resolves_true(self):
         """Round 6's defeat and round 7's reason to exist: the launcher
