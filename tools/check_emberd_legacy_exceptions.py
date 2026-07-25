@@ -32,12 +32,19 @@ equal its enumerated digest. Absence of a working exceptions file is never
 read as permission -- the branch this script gets wrong if it is only
 exercised with a good file present.
 
-Exit 0: every matched path is covered by an exact (path, sha256) pair.
-Exit 1: not covered, for a reason printed to stdout (parseable, human-legible).
-Called only when the caller has already found at least one match; asked with
-zero paths it has nothing to adjudicate and exits 0 trivially (repo-guard.sh
-skips the call entirely in that case, but this script does the same if it
-were ever invoked directly with no input).
+Exit 0: the committed exceptions policy is present, valid, and schema-
+conformant, AND every matched path (if any) is covered by an exact
+(path, sha256) pair.
+Exit 1: the policy is invalid/missing/malformed, OR a matched path is not
+covered, for a reason printed to stdout (parseable, human-legible).
+
+Policy validity is unconditional; only match adjudication is conditional.
+The committed policy is always parsed and schema-validated on every
+invocation -- including a zero-hit run, where repo-guard.sh still calls this
+script (with EMBERD_PATHS empty) so a missing/corrupt policy cannot ride
+along silently on a tree with nothing to adjudicate. Asked with zero paths,
+this script validates the policy and then exits 0 trivially (nothing to
+adjudicate) ONLY if that validation passed.
 """
 
 from __future__ import annotations
@@ -107,15 +114,21 @@ def load_exceptions(path: str) -> dict[str, str]:
 def main() -> int:
     raw_paths = os.environ.get("EMBERD_PATHS", "")
     matched_paths = [line for line in raw_paths.splitlines() if line.strip()]
-    if not matched_paths:
-        print("no matched paths supplied; nothing to adjudicate")
-        return 0
 
+    # Policy validity is unconditional -- always parse and schema-validate the
+    # committed exceptions file, even when there are zero matched paths. A
+    # missing/empty/corrupt policy is a hard FAIL regardless of whether there
+    # is anything to adjudicate this run; only match adjudication below is
+    # conditional on matched_paths being non-empty.
     try:
         exceptions = load_exceptions(EXCEPTIONS_PATH)
     except ValueError as exc:
         print(f"FAIL CLOSED: {exc}")
         return 1
+
+    if not matched_paths:
+        print("policy valid; no matched paths supplied; nothing to adjudicate")
+        return 0
 
     failures: list[str] = []
     passes: list[str] = []
