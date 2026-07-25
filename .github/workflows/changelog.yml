@@ -9,10 +9,18 @@ name: changelog
 #     that changes nothing changelog-relevant produces no commit and the
 #     bot's own commit carries [skip-changelog] so it does not retrigger a
 #     second meaningful run of itself.
-#   - `drift-check` (pull_request into master): regenerates into a scratch
-#     copy and diffs it against the tracked CHANGELOG.md, read-only -- the
-#     half that keeps the file honest between pushes, without ever writing
-#     to the PR branch.
+#   - `drift-check` (pull_request into master): regenerates FROM the PR's
+#     merge-base with master (never from the PR branch's own tip, and never
+#     from master's current moving HEAD) and diffs the result against the
+#     CHANGELOG.md tracked on the PR branch, read-only -- the half that keeps
+#     the file honest between pushes. Two things NOT to check against, both
+#     deliberate: HEAD, because an ordinary PR carries its own commits on its
+#     own branch not yet reflected in CHANGELOG.md (that lands only once
+#     `regenerate` runs on the merge push); and origin/master's current tip,
+#     because master keeps moving after a PR branches and a PR is not
+#     expected to rebase just to keep a generated file current -- either
+#     would fail on nearly every ordinary PR for a reason that isn't actually
+#     drift. The merge-base is the one fixed point both branches agree on.
 
 on:
   push:
@@ -63,4 +71,8 @@ jobs:
           fetch-depth: 0
 
       - name: Check CHANGELOG.md is up to date (read-only)
-        run: python scripts/gen_changelog.py --check
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          base="$(git merge-base HEAD origin/master)"
+          python scripts/gen_changelog.py --ref "$base" --check
