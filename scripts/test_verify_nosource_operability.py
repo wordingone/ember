@@ -50,7 +50,7 @@ def _minimal_ember_root(root: Path) -> None:
     _write(root / "GOAL.md", "placeholder\n")
     _write(
         root / "tools/ember-cli/src/package.json",
-        '{"name": "ember-cli", "bin": {"ember": "./entrypoints/main.ts"}}\n',
+        '{"name": "ember-cli", "bin": {"ember": "./entrypoints/main.js"}}\n',
     )
     _write(
         root / "tools/ember-cli/src/command-registry.ts",
@@ -84,19 +84,20 @@ def _camel(stem: str) -> str:
 
 
 def _write_real_launcher_chain(root: Path, filename: str = "Real.cmd") -> None:
-    """Write a root launcher whose reachable code matches the exact grammar
-    `_matches_known_launcher_grammar` recognizes: a variable bound via
-    Join-Path to a path inside tools/ember-cli, Push-Location'd, then
-    invoked via the call operator. Used by every L3 fixture that needs L1
-    resolved-true as a precondition but is not itself testing L1's own
-    dead-code/reachability behavior (those write the grammar directly,
-    inline, so they can also control what sits before it)."""
+    """Write a root launcher that GENUINELY, executably invokes the
+    package.json-declared CLI entry via `node` -- round 4 grants
+    L1_root_launcher resolved-true only from the runtime sentinel probe
+    actually observing control reach that entry, so this (unlike round
+    3.1's fixtures) must be real, runnable code, not a text shape a
+    regex recognizes. The probe overwrites entrypoints/main.js with its
+    own sentinel stub before running this, so the file need not exist (or
+    hold any particular content) beforehand. Used by every L3 fixture that
+    needs L1 resolved-true as a precondition but is not itself testing L1's
+    own execution behavior."""
     _write(
         root / filename,
         "@echo off\r\n"
-        '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
-        "Push-Location $sourceRoot\r\n"
-        "& $bun run entrypoints/main.ts\r\n",
+        'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
     )
 
 
@@ -194,23 +195,25 @@ class L1DecoyAndEmptyTests(unittest.TestCase):
             )
 
     def test_real_launcher_chain_resolves_true(self):
-        """Sanity control: a launcher that genuinely hops into the CLI entry
-        via the exact known grammar (Join-Path-bound variable, Push-Location,
-        call-operator invocation -- the real Ember.cmd's own shape) must
-        still resolve true -- proves the RED cases above are RED because of
-        their content, not because L1 always fails now."""
+        """Sanity control: a launcher that genuinely, executably hops into
+        the CLI entry (a .cmd that shells to a .ps1 that runs `node` against
+        the package.json-declared entry) must still resolve true via the
+        round-4 runtime sentinel probe -- proves the RED cases above are RED
+        because control never actually reaches the entry, not because L1
+        always fails now."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
             _write(
                 root / "Real.cmd",
-                '@echo off\r\npowershell.exe -File "%~dp0scripts\\launch.ps1"\r\n',
+                '@echo off\r\npowershell.exe -NoLogo -NoProfile -NonInteractive '
+                '-ExecutionPolicy Bypass -File "%~dp0scripts\\launch.ps1"\r\n',
             )
             _write(
                 root / "scripts/launch.ps1",
-                '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
-                "Push-Location $sourceRoot\r\n"
-                "& $bun run entrypoints/main.ts\r\n",
+                '$repoRoot = Split-Path -Parent $PSScriptRoot\r\n'
+                '$entry = Join-Path $repoRoot "tools\\ember-cli\\src\\entrypoints\\main.js"\r\n'
+                "& node $entry\r\n",
             )
             report = harness.run(root)
             self.assertEqual(report["checks"]["L1_root_launcher"]["state"], "resolved-true")
@@ -375,8 +378,10 @@ class Round3TextPositionTests(unittest.TestCase):
             )
 
     def test_unreachable_branch_never_resolves_true(self):
-        """A launcher whose entry-path mention sits after an unconditional
-        top-level exit -- control leaves the script before reaching it."""
+        """A launcher whose entry invocation sits after an unconditional
+        top-level exit -- control leaves the script before reaching it. This
+        is now proven by REAL execution (`exit /b 0` genuinely stops cmd.exe
+        before the node line runs), not by static reachability tracking."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -384,9 +389,7 @@ class Round3TextPositionTests(unittest.TestCase):
                 root / "Ember.cmd",
                 "@echo off\r\n"
                 "exit /b 0\r\n"
-                '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
-                "Push-Location $sourceRoot\r\n"
-                "& $bun run entrypoints/main.ts\r\n",
+                'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
             )
             report = harness.run(root)
             self.assertNotEqual(
@@ -395,11 +398,10 @@ class Round3TextPositionTests(unittest.TestCase):
 
     def test_conditional_exit_inside_block_does_not_kill_reachability(self):
         """Sanity control, and the real Ember.cmd's own shape: an exit
-        INSIDE an `if (...)` block must not be read as an unconditional
-        top-level terminator -- the real chain has exactly this pattern
-        (an early-arg-check exit before the real invocation line) and must
-        keep resolving true. The grammar lines after the block are the
-        exact shape `_matches_known_launcher_grammar` recognizes."""
+        INSIDE an `if (...)` block must not stop the launcher from reaching
+        its real invocation when the condition is false (no args passed
+        here) -- proven now by REAL execution taking the correct branch,
+        not by a static depth-tracked reachability heuristic."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
@@ -410,9 +412,7 @@ class Round3TextPositionTests(unittest.TestCase):
                 "  echo no args allowed\r\n"
                 "  exit /b 2\r\n"
                 ")\r\n"
-                '$sourceRoot = Join-Path $repositoryRoot "tools\\ember-cli\\src"\r\n'
-                "Push-Location $sourceRoot\r\n"
-                "& $bun run entrypoints/main.ts\r\n",
+                'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
             )
             report = harness.run(root)
             self.assertEqual(report["checks"]["L1_root_launcher"]["state"], "resolved-true")
@@ -456,6 +456,132 @@ class Round3TextPositionTests(unittest.TestCase):
             )
             evidence = report["spine"]["training_launch_3b"]["evidence"]
             self.assertNotIn("train-decoy", evidence)
+
+
+class Round4RuntimeSentinelTests(unittest.TestCase):
+    """Round 4: an independent probe defeated round 3.1's exact grammar with
+    `type "tools\\ember-cli\\src\\main.ts"` -- printing the entry's path is
+    neither a comment, a print-statement argument, nor dead code, so every
+    static exclusion stepped aside and it resolved-true. The reviewer's
+    point generalizes: the set of non-invoking uses of a path (type,
+    findstr, copy, more, fc, a redirection target, ...) has no boundary a
+    static exclusion list can enumerate. These prove the round-4 runtime
+    sentinel probe -- which actually executes the candidate and observes
+    whether an owned sentinel fires, consulting no text at all for the
+    verdict -- closes the type attack and its equivalents, and that a
+    probe which cannot even be started reads as weak, not as a false
+    negative about the launcher."""
+
+    def test_type_command_prints_entry_never_resolves_true(self):
+        """The exact round-4 attack: `type` prints the CLI entry's path,
+        executing nothing. Must land resolved-false (the probe genuinely
+        ran, for real, and the sentinel never fired), not weak."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(
+                root / "Ember.cmd",
+                '@echo off\r\ntype "tools\\ember-cli\\src\\main.ts"\r\n',
+            )
+            report = harness.run(root)
+            self.assertEqual(
+                report["checks"]["L1_root_launcher"]["state"], "resolved-false", report
+            )
+
+    def test_type_findstr_copy_more_fc_are_all_non_fire_reds(self):
+        """The class the `type` attack names has no enumerable boundary --
+        rather than add one more exclusion per verb, prove the runtime
+        probe refuses the whole open-ended family at once by sweeping
+        several of the reviewer's named siblings."""
+        verbs = {
+            "type.cmd": 'type "tools\\ember-cli\\src\\main.ts"',
+            "findstr.cmd": 'findstr /c:"x" "tools\\ember-cli\\src\\main.ts"',
+            "copy.cmd": 'copy "tools\\ember-cli\\src\\main.ts" "%TEMP%\\out.ts" >nul',
+            "more.cmd": 'more < "tools\\ember-cli\\src\\main.ts"',
+        }
+        for filename, body in verbs.items():
+            with self.subTest(filename=filename):
+                with tempfile.TemporaryDirectory() as td:
+                    root = Path(td)
+                    _minimal_ember_root(root)
+                    _write(root / filename, f"@echo off\r\n{body}\r\n")
+                    report = harness.run(root)
+                    self.assertEqual(
+                        report["checks"]["L1_root_launcher"]["state"],
+                        "resolved-false",
+                        report,
+                    )
+
+    def test_comment_echo_deadcode_are_resolved_false_not_weak(self):
+        """Reviewer's binding refinement: an executed-but-never-fired probe
+        is a definite negative (resolved-false), never weak -- weak is
+        reserved for a probe that could not be run at all. Re-runs the
+        three round-3 siblings and asserts the tighter state."""
+        fixtures = {
+            "comment.cmd": (
+                "@echo off\r\n"
+                'REM stub, does nothing. "tools/ember-cli/anything-at-all" is never invoked.\r\n'
+                "echo This launcher performs no action.\r\n"
+            ),
+            "echo.cmd": '@echo off\r\necho "tools/ember-cli/src is where the code lives"\r\n',
+            "deadcode.cmd": (
+                "@echo off\r\n"
+                "exit /b 0\r\n"
+                'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n'
+            ),
+        }
+        for filename, body in fixtures.items():
+            with self.subTest(filename=filename):
+                with tempfile.TemporaryDirectory() as td:
+                    root = Path(td)
+                    _minimal_ember_root(root)
+                    _write(root / filename, body)
+                    report = harness.run(root)
+                    self.assertEqual(
+                        report["checks"]["L1_root_launcher"]["state"],
+                        "resolved-false",
+                        report,
+                    )
+
+    def test_genuine_executable_chain_resolves_true_with_bound_receipt(self):
+        """Positive control: a launcher that for real, executably, invokes
+        `node` against the package.json-declared CLI entry must resolve
+        true, and the receipt must bind the exact bytes/cwd/argv/exit code
+        a reader would need to reproduce the verdict without rerunning it."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root, "Real.cmd")
+            report = harness.run(root)
+            check = report["checks"]["L1_root_launcher"]
+            self.assertEqual(check["state"], "resolved-true", report)
+            receipt = check["receipts"]["Real.cmd"]
+            for field in (
+                "launcher",
+                "cli_entry",
+                "sentinel_stub_bytes",
+                "cwd",
+                "argv",
+                "timeout_s",
+                "exit_code",
+                "observed_fire_content",
+            ):
+                self.assertIn(field, receipt, f"receipt missing {field}: {receipt}")
+            self.assertEqual(receipt["exit_code"], 0)
+            self.assertEqual(receipt["observed_fire_content"], "fired")
+
+    def test_probe_cannot_execute_is_weak_not_resolved_false(self):
+        """An environment that cannot even run the candidate (here: an
+        extension the probe has no runner for) has told us nothing about
+        the launcher -- must be weak, never resolved-false."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write(root / "launch.exe", "not a real binary, just bytes\n")
+            report = harness.run(root)
+            self.assertEqual(
+                report["checks"]["L1_root_launcher"]["state"], "weak", report
+            )
 
 
 if __name__ == "__main__":
