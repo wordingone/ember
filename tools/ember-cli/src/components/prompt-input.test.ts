@@ -1,11 +1,13 @@
-// components/prompt-input.test.ts — B7 item 5 ("input affordance", operator regrade 2026-07-03):
-// the prompt was a bare '❯' with no structural presence, vs Claude Code's bordered input region
-// (a visible rule directly above the prompt row). mock1's own intent (state/design-mockups/
-// gen-mockups.mjs's mockup1()) frames the input between two thinRule() lines -- a full-width dim
-// "─" repeat -- before the status bar. This gives PromptInput that same rule-above/rule-below
-// structural presence, gated on a `width` prop (mirrors StatusLine's width convention).
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+// components/prompt-input.test.ts — issue #243: the persistent input surface is one closed,
+// rounded, full-width region containing the prompt-owned rows and the real REPL status line.
+// Transient notifications and processing shimmer remain outside it.
 
 import { describe, it, expect } from "bun:test";
+import React from "react";
 import {
   PromptInput,
   type PromptInputState,
@@ -14,6 +16,7 @@ import {
   deleteForward,
   moveCursorBy,
   computeInputViewport,
+  promptInputViewportWidth,
 } from "./prompt-input.ts";
 
 function children(el: any): any[] {
@@ -53,41 +56,42 @@ function baseState(overrides: Partial<PromptInputState> = {}): PromptInputState 
   };
 }
 
-describe("PromptInput — structural presence: rule above and below the input row (B7 item 5)", () => {
-  it("renders a full-width dim rule line directly above the input row", () => {
-    const el = PromptInput({ state: baseState(), width: 100 });
-    expect(findTextWhere(el, (s) => s === "─".repeat(100))).toBe(true);
+describe("PromptInput — closed rounded input region (issue #243)", () => {
+  it("renders one rounded full-width box instead of rule rows", () => {
+    const el = PromptInput({ state: baseState(), width: 40 });
+    const bordered = flatten(el).find((node) => node?.props?.borderStyle === "round");
+    expect(bordered).toBeTruthy();
+    expect(bordered?.props?.width).toBe(40);
+    expect(findTextWhere(el, (s) => s === "─".repeat(40))).toBe(false);
   });
 
-  it("the rule spans the supplied width, not a fixed constant", () => {
-    const el = PromptInput({ state: baseState(), width: 60 });
-    expect(findTextWhere(el, (s) => s === "─".repeat(60))).toBe(true);
-    expect(findTextWhere(el, (s) => s === "─".repeat(100))).toBe(false);
+  it("keeps transient chrome outside and input-owned rows inside", () => {
+    const status = React.createElement("span", null, "STATUS");
+    const el = PromptInput({
+      state: baseState({ text: "hello", isStashed: true, stashNotice: "STASH" }),
+      notifications: [{ id: "n", kind: "info", message: "NOTICE" }],
+      isProcessing: true,
+      queuedItems: ["queued"],
+      statusLine: status,
+      showStatusLine: false,
+      width: 40,
+    });
+    const rootChildren = children(el);
+    const bordered = rootChildren.find((node) => node?.props?.borderStyle === "round");
+    expect(bordered).toBeTruthy();
+    expect(findTextWhere(bordered, (s) => s === "STASH")).toBe(true);
+    expect(findTextWhere(bordered, (s) => s === "queued")).toBe(true);
+    expect(findTextWhere(bordered, (s) => s === "STATUS")).toBe(true);
+    expect(findTextWhere(bordered, (s) => s === "NOTICE")).toBe(false);
+    expect(rootChildren.some((node) => findTextWhere(node, (s) => s === "NOTICE"))).toBe(true);
   });
 
-  it("defaults to width 80 when no width prop is supplied", () => {
-    const el = PromptInput({ state: baseState() });
-    expect(findTextWhere(el, (s) => s === "─".repeat(80))).toBe(true);
-  });
-
-  it("a rule line sits immediately before the input row and another immediately after", () => {
-    const el = PromptInput({ state: baseState({ text: "hello" }), width: 80 });
-    const flat = flatten(el);
-    const rule = "─".repeat(80);
-    const isRuleNode = (n: any) => n?.props?.children === rule;
-    const isInputRow = (n: any) => {
-      const kids = Array.isArray(n?.props?.children) ? n.props.children : [n?.props?.children];
-      return kids.some((k: any) => k?.props?.children === "❯");
-    };
-    const ruleIdx = flat.findIndex(isRuleNode);
-    const inputIdx = flat.findIndex(isInputRow);
-    const secondRuleIdx = flat.findIndex((n, i) => i > inputIdx && isRuleNode(n));
-    expect(ruleIdx).toBeGreaterThanOrEqual(0);
-    expect(inputIdx).toBeGreaterThan(ruleIdx);
-    expect(secondRuleIdx).toBeGreaterThan(inputIdx);
+  it("leaves a positive viewport at width 40 and clamps tiny or invalid widths", () => {
+    expect(promptInputViewportWidth(40)).toBe(34);
+    expect(promptInputViewportWidth(5)).toBe(0);
+    expect(promptInputViewportWidth(Number.NaN)).toBe(0);
   });
 });
-
 // P0 #64 (operator, 2026-07-03): "typed a message into the input, could not erase it" -- real-PTY
 // receipt (scratchpad/overflow-diag-full.txt, backspace-probe-multi-result.json) proved the root
 // cause is NOT a dead backspace key: plain type+backspace on a SHORT line works correctly against
