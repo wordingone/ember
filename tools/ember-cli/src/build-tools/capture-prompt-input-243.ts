@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import {
   basename,
+  dirname,
   isAbsolute,
   join,
   relative,
@@ -81,6 +82,9 @@ export function redactHostPaths(
       text = text.split(source).join(replacement);
       redactions.push({ sourceSha256: sha256(source), replacement, occurrences });
     }
+  }
+  if (/[A-Za-z]:[\\/]/.test(text)) {
+    throw new Error("unredacted absolute host path remains in public evidence");
   }
   const publicBytes = Buffer.from(text, "utf8");
   if (publicBytes.byteLength !== privateBytes.byteLength) {
@@ -285,6 +289,9 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
   const { binary, outDir, privateOutDir } = parseArgs(argv);
   const repoRoot = commandText(["git", "rev-parse", "--show-toplevel"], process.cwd());
   const sourceCommit = commandText(["git", "rev-parse", "HEAD"], repoRoot);
+  const resolvedEmberRoot = dirname(
+    commandText(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], repoRoot),
+  );
   if (commandText(["git", "status", "--porcelain", "--untracked-files=no"], repoRoot) !== "") {
     throw new Error("tracked worktree must be clean before compiled capture");
   }
@@ -339,8 +346,8 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       const rawPath = join(outDir, `${stem}.raw`);
       const privateRawPath = join(privateOutDir, `${stem}.raw`);
       const framePath = join(outDir, `${stem}.frame.txt`);
-      const rawRedaction = redactHostPaths(privateRawBytes, [binary, repoRoot]);
-      const frameRedaction = redactHostPaths(Buffer.from(privateFrameText, "utf8"), [binary, repoRoot]);
+      const rawRedaction = redactHostPaths(privateRawBytes, [binary, repoRoot, resolvedEmberRoot]);
+      const frameRedaction = redactHostPaths(Buffer.from(privateFrameText, "utf8"), [binary, repoRoot, resolvedEmberRoot]);
       const rawBytes = rawRedaction.publicBytes;
       const frameText = Buffer.from(frameRedaction.publicBytes).toString("utf8");
       const publicRegion = findClosedPromptRegion(frameText.replace(/\n$/, "").split("\n"), columns);

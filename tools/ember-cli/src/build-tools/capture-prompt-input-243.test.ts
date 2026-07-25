@@ -61,6 +61,10 @@ describe("redactHostPaths", () => {
     expect(result.redactions).toHaveLength(2);
   });
 
+  test("rejects an unlisted absolute Windows path", () => {
+    const source = Buffer.from("cwd D:\\other-private-long-enough\\ember");
+    expect(() => redactHostPaths(source, ["C:\\private-long-enough"])).toThrow("unredacted absolute host path");
+  });
   test("rejects a host path too short for a non-path replacement token", () => {
     expect(() => redactHostPaths(Buffer.from("C:\\x"), ["C:\\x"])).toThrow("too short");
   });
