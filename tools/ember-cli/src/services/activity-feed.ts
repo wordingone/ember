@@ -21,7 +21,7 @@
 // machine-checkable instead of resting on the operator's own eyes.
 
 import { watch, readFileSync, type FSWatcher } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile, open } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
@@ -542,23 +542,55 @@ export interface PollTailResult {
   capped: boolean;
 }
 
+/**
+ * issue #1045 (operator report, 2026-07-24: 4.9GB cockpit working set correlated with the
+ * 871-row watchdog restart log): the tail poller used to `readFile(filePath)` -- the WHOLE
+ * file, every tick, forever -- then slice off the already-seen prefix. Bytes 0..byteOffset
+ * were re-read from disk and re-allocated into a fresh Buffer on every single tick for the
+ * life of the process, even though only the tail past byteOffset was ever new. On a
+ * long-lived cockpit against a log that only grows (never rotated), that per-tick
+ * allocation scales with the CURRENT file size, not with the tick's actual delta -- the
+ * exact "tail-poll re-reads re-parsing the whole log each tick" defect class the issue
+ * names as its prime suspect. Fixed: stat for the current size, then open+read ONLY the
+ * `size - byteOffset` new bytes via a positional fd read -- the per-tick allocation is now
+ * bounded by the tick's real delta, never by total file size.
+ */
 async function pollTail(
   filePath: string,
   state: TailState,
   onLine: (line: string) => void,
   onOverflow: (count: number) => void,
 ): Promise<PollTailResult | null> {
-  let buf: Buffer;
+  let size: number;
   try {
-    buf = await readFile(filePath);
+    size = (await stat(filePath)).size;
   } catch {
     return null;
   }
-  if (buf.length <= state.byteOffset) return null;
+
+  // File shrank beneath us (rotated/truncated/cleared) -- resync from the new start rather
+  // than reading a negative-length range or silently missing the file's new content.
+  if (size < state.byteOffset) {
+    state.byteOffset = 0;
+    state.lineBuffer = "";
+  }
+  if (size <= state.byteOffset) return null;
 
   const byteOffsetBefore = state.byteOffset;
-  const newBytes = buf.slice(state.byteOffset);
-  state.byteOffset = buf.length;
+  const readLength = size - state.byteOffset;
+  let newBytes: Buffer;
+  const handle = await open(filePath, "r").catch(() => null);
+  if (handle === null) return null;
+  try {
+    const buf = Buffer.alloc(readLength);
+    const { bytesRead } = await handle.read(buf, 0, readLength, state.byteOffset);
+    newBytes = buf.subarray(0, bytesRead);
+  } catch {
+    return null;
+  } finally {
+    await handle.close().catch(() => {});
+  }
+  state.byteOffset += newBytes.length;
 
   const text = state.lineBuffer + newBytes.toString("utf-8");
   const rawLines = text.split("\n");
@@ -573,7 +605,7 @@ async function pollTail(
   }
 
   return {
-    bytesRead: buf.length,
+    bytesRead: newBytes.length,
     byteOffsetBefore,
     byteOffsetAfter: state.byteOffset,
     lineCount: trimmedLines.length,
