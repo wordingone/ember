@@ -213,4 +213,26 @@ describe(`command palette at ${ROWS} rows (below the 28-row floor) does not corr
       ).toBe(true);
     }
   });
+
+  // 2026-07-25 counterparty finding (third round): a zero-cap render (or any other no-room
+  // disposition) must never come at the cost of clipping the input the operator still needs to
+  // see -- count conservation and region survival are two SEPARATE assertions, not one. Checked
+  // with minimal-width glyphs, not the full status phrase: BYPASS_GLYPH ("⏵⏵",
+  // components/status-bar.ts:29) and the prompt's own "❯" are single/near-single glyphs at the
+  // start of their own row, so they survive regardless of how narrow mainColumnWidth resolves to
+  // at this fixture's COLS -- unlike the full "bypass permissions on" phrase, which a tight
+  // column width can legitimately clip (a truncated-but-present status bar is not this defect).
+  it("the prompt and status regions are still present and intact, not clipped to make room for the palette", () => {
+    const fullOutput = chunks.join("");
+    const rows = reconstructRows(fullOutput);
+    const frameText = [...rows.values()].join("\n");
+    expect(
+      frameText.includes("❯"),
+      `prompt region ("❯" marker) not found in the current frame -- input region clipped`,
+    ).toBe(true);
+    expect(
+      frameText.includes("⏵⏵"),
+      `status region (bypass-mode glyph) not found in the current frame -- status region clipped`,
+    ).toBe(true);
+  });
 });

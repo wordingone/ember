@@ -71,7 +71,15 @@ async function flush(): Promise<void> {
 }
 
 /** Asserts the shared cross-lane contract against whatever is CURRENTLY on screen. `allNames` is
- * the ground-truth full registered command list (from the real getCommands(cwd), not assumed). */
+ * the ground-truth full registered command list (from the real getCommands(cwd), not assumed).
+ *
+ * 2026-07-25 counterparty finding (stale-shortfall bug): the indicator count and the rendered
+ * names must both come from the SAME reconstructed CURRENT frame (`rows`, built fresh from the
+ * full cumulative output on every call) -- never from a raw regex against the cumulative output
+ * string directly, which returns the FIRST historical "+N more" ever written, not the one in the
+ * frame being checked right now. Also requires exactly one indicator row when there is a
+ * shortfall, and none when there isn't -- more than one surviving in the current frame is its own
+ * defect (a stale row that repaint failed to clear), not something to silently sum away. */
 function assertContract(fullOutput: string, allNames: string[], stage: string): void {
   const rows = reconstructRows(fullOutput);
 
@@ -90,13 +98,41 @@ function assertContract(fullOutput: string, allNames: string[], stage: string): 
     for (const name of namesOnThisRow) renderedNames.add(name);
   }
 
-  // (b) rendered count + explicit shortfall == full match count.
-  const overflowMatch = fullOutput.match(/\+(\d+) more/);
-  const shortfall = overflowMatch ? parseInt(overflowMatch[1]!, 10) : 0;
+  // (b) rendered count + explicit shortfall == full match count, read from the CURRENT frame only.
+  const indicatorRows: { row: number; count: number }[] = [];
+  for (const [row, text] of rows) {
+    const m = text.match(/\+(\d+) more/);
+    if (m) indicatorRows.push({ row, count: parseInt(m[1]!, 10) });
+  }
+  const shortfallFromRendering = allNames.length - renderedNames.size;
+  expect(
+    indicatorRows.length,
+    `[${stage}] expected exactly ${shortfallFromRendering > 0 ? "one" : "zero"} "+N more" row in the current frame, found ${indicatorRows.length}: ${JSON.stringify(indicatorRows)}`,
+  ).toBe(shortfallFromRendering > 0 ? 1 : 0);
+  const shortfall = indicatorRows.length > 0 ? indicatorRows[0]!.count : 0;
   expect(
     renderedNames.size + shortfall,
     `[${stage}] rendered ${renderedNames.size} + shortfall ${shortfall} != total ${allNames.length} (renderedNames=${[...renderedNames].join(",")})`,
   ).toBe(allNames.length);
+
+  // (c) 2026-07-25 counterparty finding (third round): region survival, separate from count
+  // conservation -- a zero-cap render (or any no-room disposition) must never come at the cost of
+  // clipping the input the operator still needs to see. Checked with minimal-width glyphs rather
+  // than the full status phrase: at the 40-col cramped stage, mainColumnWidth resolves to 20 cols
+  // (operatorSurfaceWidth(40)=20 -- repl.ts:147-154), too narrow for the full "bypass permissions
+  // on" (22 chars) to survive a horizontal clip, so asserting the full phrase would false-fail on
+  // a status bar that DID render, just truncated -- the wrong kind of finding for this test.
+  // BYPASS_GLYPH ("⏵⏵", status-bar.ts:29) and the prompt's own "❯" are both single/near-single
+  // glyphs at the start of their row and survive any width this cycle exercises.
+  const frameText = [...rows.values()].join("\n");
+  expect(
+    frameText.includes("❯"),
+    `[${stage}] prompt region ("❯" marker) not found in the current frame -- input region clipped`,
+  ).toBe(true);
+  expect(
+    frameText.includes("⏵⏵"),
+    `[${stage}] status region (bypass-mode glyph) not found in the current frame -- status region clipped`,
+  ).toBe(true);
 }
 
 describe("palette resize cycle 80x24 -> 40x24 -> 80x24 (countersigned cross-lane contract)", () => {
@@ -105,51 +141,56 @@ describe("palette resize cycle 80x24 -> 40x24 -> 80x24 (countersigned cross-lane
     const allNames = allCommands.map((c) => c.name);
     expect(allNames.length).toBeGreaterThan(0);
 
-    Object.defineProperty(process.stdout, "columns", { value: 80, configurable: true });
-    Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
+    // 2026-07-25 counterparty finding: restore stdout's real dimensions in a `finally` so a
+    // failing assertion mid-cycle doesn't leave the terminal mutated for every test that runs
+    // after this one -- one real failure turning into a cascade of unrelated ones.
+    try {
+      Object.defineProperty(process.stdout, "columns", { value: 80, configurable: true });
+      Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
 
-    const chunks: string[] = [];
-    const captureStream = {
-      write(s: string | Uint8Array): void {
-        chunks.push(typeof s === "string" ? s : new TextDecoder().decode(s));
-      },
-    };
-    const config = { model: "qwen3.6-27b", permissionMode: "bypass" as const, baseSystemPrompt: "" };
+      const chunks: string[] = [];
+      const captureStream = {
+        write(s: string | Uint8Array): void {
+          chunks.push(typeof s === "string" ? s : new TextDecoder().decode(s));
+        },
+      };
+      const config = { model: "qwen3.6-27b", permissionMode: "bypass" as const, baseSystemPrompt: "" };
 
-    mountInk(
-      React.createElement(
-        App,
-        { onExit: () => {} },
-        React.createElement(ReplScreen, {
-          config,
-          cwd:    process.cwd(),
-          env:    { EMBER_DISABLE_TERMINAL_TITLE: "1" },
-          onExit: () => {},
-        }),
-      ),
-      { stream: captureStream as unknown as { write(s: string): void }, stdout: { columns: 80, rows: 24 } },
-    );
+      mountInk(
+        React.createElement(
+          App,
+          { onExit: () => {} },
+          React.createElement(ReplScreen, {
+            config,
+            cwd:    process.cwd(),
+            env:    { EMBER_DISABLE_TERMINAL_TITLE: "1" },
+            onExit: () => {},
+          }),
+        ),
+        { stream: captureStream as unknown as { write(s: string): void }, stdout: { columns: 80, rows: 24 } },
+      );
 
-    await flush();
-    _deliverKeyEvent("/", {});
-    await flush();
-    assertContract(chunks.join(""), allNames, "80x24 (initial)");
+      await flush();
+      _deliverKeyEvent("/", {});
+      await flush();
+      assertContract(chunks.join(""), allNames, "80x24 (initial)");
 
-    // Resize down to a genuinely cramped height.
-    Object.defineProperty(process.stdout, "columns", { value: 40, configurable: true });
-    Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
-    process.stdout.emit("resize");
-    await flush();
-    assertContract(chunks.join(""), allNames, "40x24 (cramped)");
+      // Resize down to a genuinely cramped height.
+      Object.defineProperty(process.stdout, "columns", { value: 40, configurable: true });
+      Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
+      process.stdout.emit("resize");
+      await flush();
+      assertContract(chunks.join(""), allNames, "40x24 (cramped)");
 
-    // Resize back up.
-    Object.defineProperty(process.stdout, "columns", { value: 80, configurable: true });
-    Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
-    process.stdout.emit("resize");
-    await flush();
-    assertContract(chunks.join(""), allNames, "80x24 (restored)");
-
-    Object.defineProperty(process.stdout, "columns", { value: origColumns, configurable: true });
-    Object.defineProperty(process.stdout, "rows",    { value: origRows,    configurable: true });
+      // Resize back up.
+      Object.defineProperty(process.stdout, "columns", { value: 80, configurable: true });
+      Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
+      process.stdout.emit("resize");
+      await flush();
+      assertContract(chunks.join(""), allNames, "80x24 (restored)");
+    } finally {
+      Object.defineProperty(process.stdout, "columns", { value: origColumns, configurable: true });
+      Object.defineProperty(process.stdout, "rows",    { value: origRows,    configurable: true });
+    }
   });
 });

@@ -1096,15 +1096,22 @@ export function ReplScreen({
     viewportWidth: mainColumnWidth,
     boardSummary,
   };
+  // 2026-07-25 counterparty finding (third round): even a maximally tight budget still needs 3
+  // rows for the box itself (2 borders + at least the "+N more" line) once bannerRows is nonzero,
+  // so on a genuinely short terminal the banner alone could make that unreachable. The banner is
+  // NOT essential while the operator is actively composing a slash command -- <Homescreen> is
+  // skipped entirely below whenever dropdownOpen, freeing 100% of its rows honestly (an
+  // analytically exact 0, not a partial collapse) rather than the palette silently losing a fight
+  // over rows the welcome screen was using for a purpose that isn't active right now.
+  const bannerRowsForDropdown = dropdownOpen ? 0 : homescreenRowCount(homescreenProps);
   // 2026-07-25 palette-overflow-render finding: cap by actual terminal geometry, not just the
   // fixed SLASH_DROPDOWN_MAX_VISIBLE -- see slashDropdownMaxVisible's own comment for why a fixed
-  // cap alone isn't honest on a short terminal (silently clips instead of showing "+N more").
-  // bannerRows comes from the SAME homescreenProps the real <Homescreen> renders with below, so
-  // this never guesses a number the actual banner disagrees with.
+  // cap alone isn't honest on a short terminal (silently clips instead of showing "+N more"), and
+  // why matchCount is threaded through (the "+N more" row's own height needs to be budgeted too).
   const dropdownDisplay = computeSlashDropdownDisplay(
     dropdownMatches,
     dropdownSelectedIndex,
-    slashDropdownMaxVisible(terminalRows, homescreenRowCount(homescreenProps)),
+    slashDropdownMaxVisible(terminalRows, bannerRowsForDropdown, dropdownMatches.length),
   );
 
   // Back to the top row whenever the composed query text changes (narrows/widens the match
@@ -1596,11 +1603,15 @@ export function ReplScreen({
     React.createElement(
       Box,
       { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
-      React.createElement(
-        Box,
-        { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
-        React.createElement(Homescreen, homescreenProps),
-      ),
+      // The palette owns the banner rows while slash composition is active. Outside the
+      // palette, retain #243's shrinkable banner so prompt/status chrome remains visible.
+      dropdownOpen
+        ? null
+        : React.createElement(
+            Box,
+            { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
+            React.createElement(Homescreen, homescreenProps),
+          ),
       React.createElement(
         Box,
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },

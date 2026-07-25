@@ -118,18 +118,30 @@ export interface SlashDropdownDisplay {
  *
  * `maxVisible` defaults to SLASH_DROPDOWN_MAX_VISIBLE (every existing call site keeps working
  * unchanged) but a caller with real terminal-geometry knowledge should pass
- * slashDropdownMaxVisible(terminalRows, bannerRows) instead -- see that function's own comment
- * (2026-07-25 palette-overflow-render finding) for why a fixed 8 alone is not honest on a short
- * terminal. `visible.length + overflowCount === matches.length` always, by construction,
- * regardless of what `cap` resolves to -- the shared invariant with the prompt-region's own
- * regression (visible count + shortfall count == full match count at every terminal size). */
+ * slashDropdownMaxVisible(terminalRows, bannerRows, matches.length) instead -- see that function's
+ * own comment (2026-07-25 palette-overflow-render finding) for why a fixed 8 alone is not honest
+ * on a short terminal. `visible.length + overflowCount === matches.length` always, by
+ * construction, regardless of what `cap` resolves to -- the shared invariant with the
+ * prompt-region's own regression (visible count + shortfall count == full match count at every
+ * terminal size).
+ *
+ * `maxVisible` (and therefore `cap`) may be 0 -- deliberately no forced floor of 1 (2026-07-25
+ * counterparty finding): on a viewport too tight to show even a single entry honestly, the correct
+ * disposition is zero rendered entries plus an honest full-count "+N more", not one entry painted
+ * over a row that was never budgeted for it. repl.ts's own render gate
+ * (`dropdownDisplay.visible.length > 0`) already suppresses the whole SlashDropdown box when cap
+ * resolves to 0 with nothing to show -- see slashDropdownMaxVisible's own comment for how that
+ * residual case is handled. */
 export function computeSlashDropdownDisplay(
   matches: RegistryCommand[],
   selectedIndex: number,
   maxVisible: number = SLASH_DROPDOWN_MAX_VISIBLE,
 ): SlashDropdownDisplay {
-  const cap = Math.max(1, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, maxVisible));
+  const cap = Math.max(0, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, maxVisible));
   const total = matches.length;
+  if (cap === 0) {
+    return { visible: [], overflowCount: total, selectedIndex: 0 };
+  }
   const absoluteSelected = clampDropdownSelection(selectedIndex, total);
   const maxWindowStart = Math.max(0, total - cap);
   const windowStart = Math.min(Math.max(0, absoluteSelected - Math.floor(cap / 2)), maxWindowStart);
@@ -153,8 +165,8 @@ export function computeSlashDropdownDisplay(
  * erring tight risks pushing that region off-screen, which is the one interaction with their lane
  * this fix must never cause. 6 rows covers today's 1-2 rows each with headroom for a bordered
  * input box (#243's own direction) without needing to track its exact shape. */
-const DROPDOWN_PROMPT_STATUS_RESERVE_ROWS = 6;
-const DROPDOWN_BORDER_ROWS = 2;
+export const DROPDOWN_PROMPT_STATUS_RESERVE_ROWS = 6;
+export const DROPDOWN_BORDER_ROWS = 2;
 
 /** 2026-07-25 palette-overflow-render finding (state/operability-finding-palette-renders-broken):
  * components/slash-dropdown.ts's Box now carries flexShrink:0 + overflow:"hidden", which
@@ -176,8 +188,24 @@ const DROPDOWN_BORDER_ROWS = 2;
  * deliberately generous constant -- see its own comment for why that region isn't measured) plus
  * the dropdown's own 2 border rows. Erring toward reserving slightly more than strictly necessary
  * (showing "+N more" a little early on an edge case) is the safe direction; erring the other way
- * is the corruption/silent-drop defect this whole fix is for. */
-export function slashDropdownMaxVisible(terminalRows: number, bannerRows: number): number {
-  const available = terminalRows - bannerRows - DROPDOWN_PROMPT_STATUS_RESERVE_ROWS - DROPDOWN_BORDER_ROWS;
-  return Math.max(1, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, available));
+ * is the corruption/silent-drop defect this whole fix is for.
+ *
+ * `matchCount` (2026-07-25 counterparty finding, second round): the "+N more" overflow row itself
+ * costs a row of height whenever it renders, and the budget above did not account for it -- the
+ * over-ask came back exactly in the constrained case that matters. Whether the indicator row is
+ * needed depends on whether the chosen cap causes overflow, which depends on the very budget being
+ * computed -- resolving that circularity by iterating would oscillate, so this resolves it with
+ * ONE deterministic recomputation instead: first size the cap against the budget as though no
+ * indicator were needed; if that cap turns out to cover every match (no overflow), it's already
+ * correct and no indicator row will render. If it doesn't (`capNoIndicator < matchCount`), the
+ * indicator WILL render, so the true budget has one fewer row to spend on entries -- recompute
+ * exactly once against that reduced budget and return it. Never re-checks its own output a second
+ * time (that's the oscillation this deliberately avoids). May resolve to 0 -- see
+ * computeSlashDropdownDisplay's own comment for why a floor of 1 was wrong. */
+export function slashDropdownMaxVisible(terminalRows: number, bannerRows: number, matchCount: number): number {
+  const baseAvailable = terminalRows - bannerRows - DROPDOWN_PROMPT_STATUS_RESERVE_ROWS - DROPDOWN_BORDER_ROWS;
+  const capNoIndicator = Math.max(0, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, baseAvailable));
+  if (capNoIndicator >= matchCount) return capNoIndicator;
+  const availableWithIndicator = baseAvailable - 1; // the "+N more" row itself
+  return Math.max(0, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, availableWithIndicator));
 }
