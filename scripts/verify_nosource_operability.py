@@ -51,7 +51,15 @@ bytes the artifact does not control):
       bytes reference nothing resolvable is not a launcher, regardless of
       its extension. A reference the harness cannot pin down statically
       (a runtime-computed path, an unreadable or binary hop) yields `weak`,
-      never `resolved-true`.
+      never `resolved-true`. A literal is only evidence when it sits where
+      bytes can actually act on it: comment lines (REM/::/# ), print-
+      statement arguments (echo/Write-Host/Write-Output/printf), and code
+      after an unconditional top-level terminator (a bare `exit`/`exit /b`/
+      `return` at the current nesting depth) are excluded before extraction
+      -- rework 2026-07-25 round 3, after an independent probe on `dc6dcf3`
+      built a root `Ember.cmd` whose entire body was `@echo off` / a REM
+      comment naming the CLI entry / an echo that prints one line and
+      invokes nothing, and got a full PASS. See "round 3" below.
   L2  Launcher is documented: README.md or docs/START-HERE.md names a
       launcher that itself resolved-true, so a no-source reader can find a
       real one (documenting a decoy does not count).
@@ -75,13 +83,20 @@ WHAT IS NOT MEASURED (permanently undecidable here, human capture required):
     running UI (menu/palette rendering);
   - whether operating it takes one click/keystroke rather than typed flags;
   - whether the launched process reaches a usable first pixel.
-  - a root script that merely mentions "tools/ember-cli" in a COMMENT
-    (never actually invoking it) can still statically resolve as a
-    launcher: the static string-literal check cannot distinguish an
-    invocation from a comment that quotes a path. This is a named, accepted
-    gap -- disclosed rather than silently passed, per the harness's own
-    honesty rule -- and it is not exercised by any of the fixtures this
-    harness is graded against.
+  - round 3 (2026-07-25) closes the comment/print/dead-code-after-exit
+    forms of "a string that never executes still counts". What remains
+    OPEN, disclosed rather than silently passed: (a) a literal inside a
+    CONDITIONAL block whose condition the harness does not evaluate (e.g.
+    `if 0 ( call "...tools\ember-cli..." )` at depth > 0 is not specially
+    detected as dead -- only depth-0 code after an unconditional bare
+    terminator is); (b) a literal that is a real invocation argument but
+    invokes a target with the WRONG semantics for its position (e.g. a
+    string passed to `-ArgumentList` versus `-File` in a way the harness
+    does not distinguish); (c) any shell form beyond batch/PowerShell/sh
+    comment and print syntax the two regexes above do not recognise. A
+    static reader cannot fully decide what a shell script does; this
+    harness closes the forms of the gap that were demonstrated against it
+    and names what is still open rather than claiming completeness.
 
 Usage:  python scripts/verify_nosource_operability.py [--root PATH] [--json]
 Exit 0 = PASS (of the measurable half), 1 = FAIL, 2 = harness error.
@@ -194,12 +209,64 @@ def find_root_launcher_candidates(root: Path) -> list[Path]:
     return found
 
 
-def extract_path_like_literals(text: str) -> list[str]:
-    out = []
-    for m in _STRING_LIT_RE.finditer(text):
-        s = m.group(1) if m.group(1) is not None else m.group(2)
-        if s and _PATH_LIKE_RE.search(s):
-            out.append(s)
+# A batch comment line (REM / ::) or a shell/PowerShell comment line (#).
+# Comment text never executes, so a literal inside one is not evidence of
+# anything -- it is excluded before extraction, not scored as ambiguous.
+_BATCH_COMMENT_RE = re.compile(r"^(rem\b|::)", re.IGNORECASE)
+_HASH_COMMENT_RE = re.compile(r"^#")
+
+# A print statement's argument is text the script DISPLAYS, never a target it
+# invokes -- "tools/ember-cli/src" inside an echo/Write-Host string proves
+# only that the string exists, the same shape as a comment.
+_PRINT_LINE_RE = re.compile(
+    r"write-host|write-output|write-warning|write-verbose|^\s*(echo\b|printf\b)",
+    re.IGNORECASE,
+)
+
+# A bare, unconditional terminator at the CURRENT nesting depth ends
+# reachability for the rest of the file. This is a narrow, disclosed
+# heuristic -- it catches the plain "dead code after an unconditional exit"
+# shape, not general control-flow reachability (an `if (0) ( ... )` block,
+# for example, is not specially detected; see the module docstring).
+_UNCONDITIONAL_EXIT_RE = re.compile(r"^(exit(\s*/b)?(\s+\S+)?|return)$", re.IGNORECASE)
+
+
+def extract_invoking_literals(text: str, suffix: str) -> list[str]:
+    """Like extract_path_like_literals, but bound to positions bytes can
+    actually reach and act on: comment lines, print-statement arguments, and
+    code after an unconditional top-level terminator are excluded before
+    extraction, never merely deprioritized. Depth is tracked with the block
+    delimiter each shell form actually uses -- parens for batch `if (...)`/
+    `for (...)` bodies, braces for PowerShell/shell `{ ... }` bodies -- so an
+    unconditional exit INSIDE a conditional block (depth > 0) is correctly
+    read as conditional, not as ending the file's reachability."""
+    is_batch = suffix.lower() in (".cmd", ".bat")
+    open_char, close_char = ("(", ")") if is_batch else ("{", "}")
+    out: list[str] = []
+    depth = 0
+    dead = False
+    for raw_line in text.splitlines():
+        if dead:
+            continue
+        stripped = raw_line.strip()
+        is_comment = (
+            bool(_BATCH_COMMENT_RE.match(stripped))
+            if is_batch
+            else bool(_HASH_COMMENT_RE.match(stripped))
+        )
+        if is_comment:
+            continue
+        pre_depth = depth
+        if pre_depth == 0 and _UNCONDITIONAL_EXIT_RE.match(stripped):
+            dead = True
+            continue
+        depth += raw_line.count(open_char) - raw_line.count(close_char)
+        if _PRINT_LINE_RE.search(raw_line):
+            continue
+        for m in _STRING_LIT_RE.finditer(raw_line):
+            s = m.group(1) if m.group(1) is not None else m.group(2)
+            if s and _PATH_LIKE_RE.search(s):
+                out.append(s)
     return out
 
 
@@ -256,7 +323,7 @@ def resolve_invocation(entry: Path, root: Path) -> dict:
             ambiguous.append(f"{current.name}: unreadable ({exc})")
             continue
 
-        literals = extract_path_like_literals(text)
+        literals = extract_invoking_literals(text, current.suffix)
         if current == entry:
             saw_literal_at_entry = bool(literals)
 
@@ -362,7 +429,16 @@ def load_registered_stems(root: Path) -> tuple[set[str], list[str]]:
         r"^import\s+(type\s+)?\{([^}]+)\}\s+from\s+['\"](\.[^'\"]+)['\"]",
         re.MULTILINE,
     )
-    ident_to_path: dict[str, str] = {}
+    # Local identifier -> every rel_path it is bound to. A local name bound
+    # to more than one DISTINCT path is a duplicate import binding, which is
+    # invalid TypeScript and would fail to compile as-shipped -- but the
+    # harness reads bytes, not a build result, so it does not get to assume
+    # that. Round-3 probe finding: last-write-wins credited a later decoy
+    # import over the real one for the same call site. Round-3 fix: any
+    # identifier with more than one distinct binding is excluded entirely --
+    # neither path is credited, rather than guessing which one a compiler
+    # would have picked.
+    ident_bindings: dict[str, set[str]] = {}
     for m in import_re.finditer(text):
         is_type_only = bool(m.group(1))
         if is_type_only:
@@ -374,7 +450,18 @@ def load_registered_stems(root: Path) -> tuple[set[str], list[str]]:
                 continue
             local_name = raw_ident.split(" as ")[-1].strip()
             if local_name:
-                ident_to_path[local_name] = rel_path
+                ident_bindings.setdefault(local_name, set()).add(rel_path)
+
+    ident_to_path: dict[str, str] = {}
+    for local_name, paths in ident_bindings.items():
+        if len(paths) == 1:
+            ident_to_path[local_name] = next(iter(paths))
+        else:
+            errors.append(
+                f"{local_name} is imported from {len(paths)} distinct paths in "
+                f"{COMMAND_REGISTRY} ({sorted(paths)}) -- invalid as shipped "
+                "TypeScript, so neither binding is credited"
+            )
 
     array_body = _extract_bracket_body(text, "getBuiltinCommands: () => [")
     if array_body is None:
