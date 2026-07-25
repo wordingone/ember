@@ -31,10 +31,16 @@ import {
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { saveCheckpoint, type CheckpointSaveDeps } from "../services/checkpoint-save.ts";
-import { appendFile, mkdir as fsMkdir, copyFile as fsCopyFile, rename as fsRename, rm as fsRm } from "fs/promises";
-import { existsSync } from "fs";
+import {
+  saveModernCheckpoint,
+  type CheckpointSaveModernDeps,
+  type CopiedArtifact,
+} from "../services/checkpoint-save-modern.ts";
+import { appendFile, mkdir as fsMkdir, copyFile as fsCopyFile, rename as fsRename, rm as fsRm, lstat as fsLstat } from "fs/promises";
+import { createReadStream, createWriteStream, existsSync } from "fs";
+import { pipeline } from "stream/promises";
 import { spawnSync } from "child_process";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { dirname, join, resolve } from "path";
 import { getGitRepositoryRoot } from "../utils/git.ts";
 
@@ -320,8 +326,15 @@ interface ModelCommandDeps {
    * See services/checkpoint-save.ts -- the atomic-copy/fail-closed core for
    * `/model checkpoint save`. */
   checkpointSaveDeps?: CheckpointSaveDeps;
-  /** Injectable filesystem verifier for `/model checkpoint load`. */
+  /** Injectable filesystem verifier for `/model checkpoint load`, ALSO reused
+   * (never a second implementation) by the modern `/model checkpoint save`
+   * path to verify both its source and its published target. */
   verifyCheckpointBundle?: (checkpointDir: string) => Promise<VerifiedCheckpointBundle>;
+  /** See services/checkpoint-save-modern.ts -- the atomic-copy/fail-closed
+   * core for the MODERN `/model checkpoint save` (round-trips through
+   * `/model checkpoint load`). Defaults to real fs ops bound to
+   * `doVerifyCheckpointBundle`. */
+  checkpointSaveModernDeps?: CheckpointSaveModernDeps;
 }
 
 /**
@@ -391,6 +404,58 @@ function _realCheckpointSaveDeps(
   };
 }
 
+/** True when `path` already exists (file, directory, or symlink) -- an
+ * `lstat` probe, never a `stat` that would silently follow a dangling or
+ * malicious symlink into reporting "does not exist". Used by the modern
+ * checkpoint save's no-replace destination guard. */
+async function _pathExists(path: string): Promise<boolean> {
+  try {
+    await fsLstat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Streams `src` to `dest`, hashing the bytes AS THEY ARE WRITTEN, and
+ * returns the freshly measured sha256 + byte count of what actually landed
+ * at `dest` -- never the source's pre-recorded identity restated. `wx`
+ * refuses to silently overwrite an existing file at `dest` (defense in
+ * depth alongside the staging dir already being fresh/unique per call). */
+async function _copyFileHashed(src: string, dest: string): Promise<CopiedArtifact> {
+  const hash = createHash("sha256");
+  let bytes = 0;
+  const readStream = createReadStream(src);
+  const writeStream = createWriteStream(dest, { flags: "wx" });
+  readStream.on("data", (chunk: Buffer) => {
+    hash.update(chunk);
+    bytes += chunk.length;
+  });
+  await pipeline(readStream, writeStream);
+  return { sha256: hash.digest("hex"), bytes };
+}
+
+/** Real filesystem deps for `saveModernCheckpoint` (see
+ * services/checkpoint-save-modern.ts). `verifyBundle` is bound to whichever
+ * verifier the command is using (production `verifyCheckpointBundle`, or an
+ * injected test double) -- the SAME verifier `/model checkpoint load` uses,
+ * never a second/reimplemented one. */
+function _realCheckpointSaveModernDeps(
+  verifyBundle: (checkpointDir: string) => Promise<VerifiedCheckpointBundle>,
+): CheckpointSaveModernDeps {
+  return {
+    verifyBundle,
+    pathExists: _pathExists,
+    mkdir: async (path) => {
+      await fsMkdir(path, { recursive: true });
+    },
+    copyFileHashed: _copyFileHashed,
+    rename: (from, to) => fsRename(from, to),
+    rmStaging: (path) => fsRm(path, { recursive: true, force: true }),
+    stagingPath: _defaultStagingPath,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Real implementations of injected deps
 // ---------------------------------------------------------------------------
@@ -422,10 +487,12 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
   const doRegisterManagedModel = deps.registerManagedModel ?? registerManagedModel;
   const doCheckpointSaveDeps = deps.checkpointSaveDeps ?? _realCheckpointSaveDeps(doResolveModelIdentity);
   const doVerifyCheckpointBundle = deps.verifyCheckpointBundle ?? verifyCheckpointBundle;
+  const doCheckpointSaveModernDeps =
+    deps.checkpointSaveModernDeps ?? _realCheckpointSaveModernDeps(doVerifyCheckpointBundle);
 
   return {
     name: "model",
-    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save. Inspect data/tokenizer lineage; legacy checkpoint save is not checkpoint-load compatible. Owned serving path: a validated owned identity takes the default owned seat, a borrowed model serves only as an explicitly requested reference seat, and with no owned identity the launch refuses unless you explicitly ask for model-free offline observation.",
+    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save|checkpoint save-legacy. Inspect data/tokenizer lineage; checkpoint save produces a modern sparse bundle that round-trips through checkpoint load, checkpoint save-legacy is retained only for migration and is not checkpoint-load compatible. Owned serving path: a validated owned identity takes the default owned seat, a borrowed model serves only as an explicitly requested reference seat, and with no owned identity the launch refuses unless you explicitly ask for model-free offline observation.",
     isEnabled(): boolean {
       return true;
     },
@@ -522,19 +589,32 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
         };
       }
 
-      // /model checkpoint save <target-dir> [--source <dir>]
+      // /model checkpoint save <target-dir> [--source <dir>]           (MODERN, issue #1056)
+      // /model checkpoint save-legacy <target-dir> [--source <dir>]    (LEGACY, migration-only)
       //
-      // Snapshots an ALREADY-EXISTING checkpoint (pre-training spine surface --
-      // no training, no new weights) to a target directory and writes its
-      // identity manifest alongside it. Pairs with the checkpoint-LOAD wiring
-      // above (PR #983). Source defaults to the currently-loaded checkpoint
-      // (the same manifestPath convention /model status|load already use);
-      // --source <dir> points at an explicit reference checkpoint directory
-      // instead (a directory holding `manifest.json` + `checkpoint`, the same
-      // fixture layout __fixtures__/model-identity/ uses).
+      // `checkpoint save` snapshots an ALREADY-GOVERNED modern sparse checkpoint
+      // bundle (checkpoint-manifest.json + its closed named shard set -- the
+      // same shape `checkpoint load` verifies) into a target directory,
+      // byte-for-byte, and re-verifies the published result with the SAME
+      // production verifier before reporting success -- so its output always
+      // round-trips through `/model checkpoint load`. Source defaults to the
+      // currently-loaded owned identity's checkpoint directory; --source <dir>
+      // points at an explicit reference modern bundle directory instead.
+      // FAIL-CLOSED + ATOMIC: see services/checkpoint-save-modern.ts for the
+      // core -- this handler only resolves source/target paths and reports
+      // the result.
       //
-      // FAIL-CLOSED + ATOMIC: see services/checkpoint-save.ts for the core --
-      // this handler only resolves source/target paths and reports the result.
+      // `checkpoint save-legacy` retains the PRE-#1056 behavior: it snapshots
+      // an already-existing single-file `manifest.json` + `checkpoint` pair
+      // (pre-training spine surface -- no training, no new weights) to a
+      // target directory. Its output is explicitly NOT `/model checkpoint
+      // load` compatible and is kept only under this explicit legacy name
+      // during migration (issue #1056). Source defaults to the currently-
+      // loaded checkpoint (the same manifestPath convention /model status|
+      // load already use); --source <dir> points at an explicit reference
+      // checkpoint directory instead (a directory holding `manifest.json` +
+      // `checkpoint`, the same fixture layout __fixtures__/model-identity/
+      // uses). FAIL-CLOSED + ATOMIC: see services/checkpoint-save.ts.
       if (subcommand === "checkpoint") {
         const rest = args.trim().split(/\s+/).slice(1);
         const action = rest[0] ?? "";
@@ -638,6 +718,65 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
             };
           }
 
+          // No --source: the currently-loaded owned identity's checkpoint
+          // directory is the modern bundle to snapshot -- the same directory
+          // /model checkpoint load already set up when this seat was selected.
+          // Fail closed (usage-shaped, not a crash) when neither is available;
+          // never silently falls back to the legacy single-file convention.
+          const sourceCheckpointDir = sourceDir
+            ? resolve(ctx.cwd, sourceDir)
+            : doLoadOwnedIdentity(ctx.cwd)?.launch?.checkpointDir;
+          if (!sourceCheckpointDir) {
+            return {
+              type: "message" as const,
+              message:
+                "error: failed to save checkpoint: no currently-loaded modern checkpoint " +
+                "directory is known; pass --source <dir> naming a modern sparse checkpoint bundle",
+              exitCode: 1,
+            };
+          }
+          const resolvedTargetDir = resolve(ctx.cwd, targetDir);
+
+          try {
+            const result = await saveModernCheckpoint(
+              sourceCheckpointDir,
+              resolvedTargetDir,
+              doCheckpointSaveModernDeps,
+            );
+            return {
+              type: "message" as const,
+              message: `modern checkpoint bundle saved (/model checkpoint load compatible): ${result.manifestSha256} (${result.schemaVersion}, ${result.artifactCount} shards) -> ${result.targetDir}`,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              type: "message" as const,
+              message: `error: failed to save checkpoint: ${msg}`,
+              exitCode: 1,
+            };
+          }
+        }
+
+        if (action === "save-legacy") {
+          const positionals: string[] = [];
+          let sourceDir: string | undefined;
+          for (let i = 1; i < rest.length; i++) {
+            if (rest[i] === "--source") {
+              sourceDir = rest[i + 1];
+              i++;
+            } else if (rest[i] !== undefined && rest[i] !== "") {
+              positionals.push(rest[i] as string);
+            }
+          }
+          const targetDir = positionals[0];
+          if (!targetDir) {
+            return {
+              type: "message" as const,
+              message: `usage: /model checkpoint save-legacy <target-dir> [--source <dir>]`,
+              exitCode: 1,
+            };
+          }
+
           const sourceManifestPath = sourceDir ? join(sourceDir, "manifest.json") : manifestPath;
           const sourceCheckpointPath = sourceDir
             ? join(sourceDir, "checkpoint")
@@ -667,7 +806,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
 
         return {
           type: "message" as const,
-          message: `usage: /model checkpoint load <checkpoint-dir> | /model checkpoint save <target-dir> [--source <dir>]`,
+          message: `usage: /model checkpoint load <checkpoint-dir> | /model checkpoint save <target-dir> [--source <dir>] | /model checkpoint save-legacy <target-dir> [--source <dir>]`,
         };
       }
 

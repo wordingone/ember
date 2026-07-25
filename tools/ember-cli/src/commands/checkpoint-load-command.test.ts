@@ -226,7 +226,7 @@ describe("/model discoverability", () => {
       "unload",
     ]);
     expect(manifestActions).toEqual(["inspect"]);
-    expect(checkpointActions).toEqual(["load", "save"]);
+    expect(checkpointActions).toEqual(["load", "save", "save-legacy"]);
     for (const visible of [
       "status",
       "load",
@@ -234,6 +234,7 @@ describe("/model discoverability", () => {
       "manifest inspect",
       "checkpoint load",
       "checkpoint save",
+      "checkpoint save-legacy",
       "data/tokenizer lineage",
     ]) {
       expect(String(command.description)).toContain(visible);

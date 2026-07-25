@@ -19,7 +19,7 @@ import type { EnsureOwnedServerResult } from "../entrypoints/owned-server-superv
 // status-report binding is exercised against its actual comparison logic,
 // with only the network fetch stubbed.
 import { verifyOwnedEndpointIdentity as realVerifyOwnedEndpointIdentity } from "../entrypoints/owned-seat-loader.ts";
-import { join } from "path";
+import { join, resolve } from "path";
 
 const FIXTURE_DIR = join(import.meta.dir, "__fixtures__", "model-identity");
 const FIXTURE_MANIFEST = join(FIXTURE_DIR, "manifest.json");
@@ -578,12 +578,15 @@ describe("model command", () => {
   });
 
   // =========================================================================
-  // /model checkpoint save -- CLI routing/wiring only. The atomic-copy/
-  // fail-closed CORE is covered against a fixture in
+  // /model checkpoint save-legacy -- CLI routing/wiring only. The
+  // atomic-copy/fail-closed CORE is covered against a fixture in
   // services/checkpoint-save.test.ts; these tests only prove the subcommand
-  // parses args and wires them into saveCheckpoint correctly.
+  // parses args and wires them into saveCheckpoint correctly. Renamed from
+  // plain "save" -> "save-legacy" by issue #1056: "save" now names the
+  // MODERN, /model checkpoint load-compatible path (see the next describe
+  // block); this legacy path is retained only under its explicit name.
   // =========================================================================
-  describe("/model checkpoint save", () => {
+  describe("/model checkpoint save-legacy", () => {
     it("resolves source from the currently-loaded manifestPath convention by default", async () => {
       const cmd = createModelCommand({
         manifestPath: FIXTURE_MANIFEST,
@@ -600,11 +603,12 @@ describe("model command", () => {
         },
       });
 
-      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+      const result = await cmd.execute("checkpoint save-legacy /tmp/target-dir", mockCtx);
 
       expect(result?.exitCode).toBeUndefined();
       expect(result?.message).toContain(fakeIdentity.byte_sha256);
       expect(result?.message).toContain("target-dir");
+      expect(result?.message).toContain("not /model checkpoint load compatible");
     });
 
     it("honors --source to override the default currently-loaded manifest", async () => {
@@ -624,7 +628,7 @@ describe("model command", () => {
         },
       });
 
-      await cmd.execute("checkpoint save /tmp/target-dir --source /tmp/reference-checkpoint", mockCtx);
+      await cmd.execute("checkpoint save-legacy /tmp/target-dir --source /tmp/reference-checkpoint", mockCtx);
 
       expect(resolvedManifest).toBe(join("/tmp/reference-checkpoint", "manifest.json"));
     });
@@ -645,7 +649,152 @@ describe("model command", () => {
         },
       });
 
+      const result = await cmd.execute("checkpoint save-legacy /tmp/target-dir", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("error");
+      expect(mkdirCalled).toBe(false);
+    });
+
+    it("usage line when target-dir is missing", async () => {
+      const cmd = createModelCommand();
+      const result = await cmd.execute("checkpoint save-legacy", mockCtx);
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("usage:");
+    });
+
+    it("usage line for an unknown checkpoint action", async () => {
+      const cmd = createModelCommand();
+      const result = await cmd.execute("checkpoint frobnicate", mockCtx);
+      expect(result?.message).toContain("usage:");
+    });
+  });
+
+  // =========================================================================
+  // /model checkpoint save -- MODERN, /model checkpoint load-compatible path
+  // (issue #1056). CLI routing/wiring only; the atomic-copy/fail-closed CORE
+  // (verify source -> stage+hash-bind -> manifest-last -> atomic publish ->
+  // re-verify published) is covered against real fs fixtures in
+  // services/checkpoint-save-modern.test.ts and the full command-level
+  // round-trip (through a real saveModernCheckpoint AND a real subsequent
+  // /model checkpoint load) is covered in
+  // commands/checkpoint-save-modern-command.test.ts.
+  // =========================================================================
+  describe("/model checkpoint save (modern)", () => {
+    it("resolves source from the currently-loaded owned identity's checkpoint dir by default", async () => {
+      let resolvedSource: string | undefined;
+      const cmd = createModelCommand({
+        loadOwnedIdentity: () =>
+          ({
+            checkpointSha256: "a".repeat(64),
+            endpointUrl: "http://127.0.0.1:29777/",
+            launch: {
+              mode: "INTERACTIVE",
+              authorityKind: "ADMISSION",
+              checkpointDir: "/current/checkpoint",
+              tokenizerPath: "/tokenizer.json",
+            },
+          }) as unknown as OwnedModelIdentity,
+        checkpointSaveModernDeps: {
+          // saveModernCheckpoint calls verifyBundle TWICE (source, then the
+          // published target) -- only the FIRST call is the source resolution
+          // this test is asserting on.
+          verifyBundle: async (dir) => {
+            if (resolvedSource === undefined) resolvedSource = dir;
+            return {
+              checkpointDir: dir,
+              manifestPath: join(dir, "checkpoint-manifest.json"),
+              manifestSha256: "b".repeat(64),
+              schemaVersion: "ember-sparse-checkpoint-v5",
+              artifacts: [],
+            };
+          },
+          pathExists: async () => false,
+          mkdir: async () => {},
+          copyFileHashed: async () => ({ sha256: "b".repeat(64), bytes: 0 }),
+          rename: async () => {},
+          rmStaging: async () => {},
+          stagingPath: (target) => `${target}.tmp`,
+        },
+      });
+
       const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+
+      expect(resolvedSource).toBe("/current/checkpoint");
+      expect(result?.exitCode).toBeUndefined();
+      expect(result?.message).toContain("b".repeat(64));
+      expect(result?.message).toContain("/model checkpoint load compatible");
+    });
+
+    it("honors --source to override the default currently-loaded checkpoint dir", async () => {
+      let resolvedSource: string | undefined;
+      const cmd = createModelCommand({
+        loadOwnedIdentity: () => {
+          throw new Error("must not be consulted when --source is given");
+        },
+        checkpointSaveModernDeps: {
+          // Same first-call-only capture as the previous test (see comment there).
+          verifyBundle: async (dir) => {
+            if (resolvedSource === undefined) resolvedSource = dir;
+            return {
+              checkpointDir: dir,
+              manifestPath: join(dir, "checkpoint-manifest.json"),
+              manifestSha256: "b".repeat(64),
+              schemaVersion: "ember-sparse-checkpoint-v5",
+              artifacts: [],
+            };
+          },
+          pathExists: async () => false,
+          mkdir: async () => {},
+          copyFileHashed: async () => ({ sha256: "b".repeat(64), bytes: 0 }),
+          rename: async () => {},
+          rmStaging: async () => {},
+          stagingPath: (target) => `${target}.tmp`,
+        },
+      });
+
+      await cmd.execute(
+        "checkpoint save /tmp/target-dir --source /tmp/reference-checkpoint",
+        mockCtx,
+      );
+
+      expect(resolvedSource).toBe(resolve(mockCtx.cwd, "/tmp/reference-checkpoint"));
+    });
+
+    it("fails closed (usage-shaped, non-zero exit) when no source is known and none is given", async () => {
+      const cmd = createModelCommand({
+        loadOwnedIdentity: () => null,
+      });
+
+      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("error");
+      expect(result?.message).toContain("no currently-loaded modern checkpoint");
+    });
+
+    it("fails closed (non-zero exit) when the source bundle does not verify, and never writes", async () => {
+      let mkdirCalled = false;
+      const cmd = createModelCommand({
+        checkpointSaveModernDeps: {
+          verifyBundle: async () => {
+            throw new Error("This checkpoint bundle is corrupt, incomplete, or tampered.");
+          },
+          pathExists: async () => false,
+          mkdir: async () => {
+            mkdirCalled = true;
+          },
+          copyFileHashed: async () => ({ sha256: "b".repeat(64), bytes: 0 }),
+          rename: async () => {},
+          rmStaging: async () => {},
+          stagingPath: (target) => `${target}.tmp`,
+        },
+      });
+
+      const result = await cmd.execute(
+        "checkpoint save /tmp/target-dir --source /tmp/reference-checkpoint",
+        mockCtx,
+      );
 
       expect(result?.exitCode).toBe(1);
       expect(result?.message).toContain("error");
@@ -656,12 +805,6 @@ describe("model command", () => {
       const cmd = createModelCommand();
       const result = await cmd.execute("checkpoint save", mockCtx);
       expect(result?.exitCode).toBe(1);
-      expect(result?.message).toContain("usage:");
-    });
-
-    it("usage line for an unknown checkpoint action", async () => {
-      const cmd = createModelCommand();
-      const result = await cmd.execute("checkpoint frobnicate", mockCtx);
       expect(result?.message).toContain("usage:");
     });
   });
