@@ -493,6 +493,66 @@ def test_split_kernel_hashed_scan_covers_every_subject_guard_surface():
             cleanup(tmp)
 
 
+def test_split_kernel_accepts_byte_identical_inherited_guard_surfaces():
+    tmp = make_fixture("fix/selftest-split-identical-guard")
+    try:
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc == 0, (
+            "trusted split kernel rejected byte-identical inherited guard surfaces\n"
+            + out
+        )
+        assert "repo-guard: PASS" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_split_kernel_rejects_absolute_path_in_non_guard_file():
+    tmp = make_fixture("fix/selftest-split-non-guard-path")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        bad_path = "C" + ":" + "/Users/example/private"
+        (tmp / "docs" / "note.md").write_text(
+            "candidate-smuggled path: " + bad_path + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc != 0, f"trusted split kernel accepted a non-guard path\n{out}"
+        assert "FAIL [paths]" in out, out
+        assert "docs/note.md:1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_split_kernel_rejects_deleted_subject_guard():
+    tmp = make_fixture("fix/selftest-split-deleted-guard")
+    try:
+        (tmp / "tools" / "repo-guard.sh").unlink()
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc != 0, f"trusted split kernel accepted a deleted subject guard\n{out}"
+        assert "FAIL [guard-kernel] subject guard surface is missing" in out, out
+    finally:
+        cleanup(tmp)
+
+
 def test_split_kernel_scans_subject_guard_for_absolute_paths():
     tmp = make_fixture("fix/selftest-split-subject-path")
     try:
@@ -569,7 +629,10 @@ ALL_TESTS = [
     test_trusted_kernel_ignores_subject_guard_and_helpers,
     test_split_kernel_scans_subject_guard_for_runtime_names,
     test_split_kernel_hashed_scan_covers_every_subject_guard_surface,
+    test_split_kernel_accepts_byte_identical_inherited_guard_surfaces,
+    test_split_kernel_rejects_absolute_path_in_non_guard_file,
     test_split_kernel_scans_subject_guard_for_absolute_paths,
+    test_split_kernel_rejects_deleted_subject_guard,
     test_required_workflow_uses_base_pinned_kernel,
 ]
 
