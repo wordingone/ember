@@ -209,7 +209,7 @@ export function createCustodyCommand(deps: CustodyCommandDeps = {}): RegistryCom
   return {
     name: "custody",
     description:
-      "Show the current model seat classification (read-only): custody status; persist a machine-local root path: custody set <root_id>=<path>",
+      "Show the current model seat classification and owned model identity (read-only): custody status reports the seat plus the owned identity fields (model, checkpoint hash, checkpoint dir, claim status, tokens seen); persist a machine-local root path: custody set <root_id>=<path>",
     aliases: ["seat"],
     isEnabled(): boolean {
       return true;
