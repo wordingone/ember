@@ -53,6 +53,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
+export async function writePromptInput(
+  writer: { write(value: string): void },
+  input: string,
+  interKeyDelayMs = 20,
+  pause: (milliseconds: number) => Promise<void> = sleep,
+): Promise<void> {
+  for (let index = 0; index < input.length; index += 1) {
+    writer.write(input[index]!);
+    if (index + 1 < input.length && interKeyDelayMs > 0) {
+      await pause(interKeyDelayMs);
+    }
+  }
+}
+
 function commandText(args: string[], cwd: string): string {
   const result = spawnSync(args[0]!, args.slice(1), {
     cwd,
@@ -289,7 +303,7 @@ async function driveInput(
   const rawStart = raw.join("").length;
   let lastRawLength = rawStart;
   let lastChange = Date.now();
-  child.write(input);
+  await writePromptInput(child, input);
   await sleep(100);
   child.write("\r");
   await sleep(600);
