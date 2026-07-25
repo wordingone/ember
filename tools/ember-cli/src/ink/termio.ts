@@ -38,6 +38,120 @@ export const ENABLE_MOUSE_TRACKING  = "\x1b[?1000h\x1b[?1006h";
 /** Disable mouse tracking. */
 export const DISABLE_MOUSE_TRACKING = "\x1b[?1000l\x1b[?1006l";
 
+export interface SgrMousePress {
+  col: number;
+  row: number;
+  button: number;
+  modifiers: {
+    ctrl: boolean;
+    shift: boolean;
+    alt: boolean;
+    meta: boolean;
+  };
+}
+
+export interface SgrMouseDecodeResult {
+  events: SgrMousePress[];
+  passthrough: string;
+}
+
+export interface SgrMouseDecoder {
+  push(chunk: string | Buffer): SgrMouseDecodeResult;
+  reset(): void;
+}
+
+const SGR_MOUSE_PREFIX = "\x1b[<";
+const SGR_MOUSE_SEQUENCE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/;
+
+function retainedPrefixLength(value: string): number {
+  const max = Math.min(value.length, SGR_MOUSE_PREFIX.length - 1);
+  for (let length = max; length > 0; length--) {
+    if (SGR_MOUSE_PREFIX.startsWith(value.slice(-length))) return length;
+  }
+  return 0;
+}
+
+/**
+ * Incrementally decodes xterm SGR extended mouse input. Only a left-button
+ * press is actionable; release, motion, wheel, extra-button, malformed, and
+ * non-positive-coordinate sequences are consumed or passed through without
+ * producing an activation.
+ */
+export function createSgrMouseDecoder(): SgrMouseDecoder {
+  let pending = "";
+
+  return {
+    push(chunk: string | Buffer): SgrMouseDecodeResult {
+      pending += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      const events: SgrMousePress[] = [];
+      let passthrough = "";
+      let cursor = 0;
+
+      while (cursor < pending.length) {
+        const start = pending.indexOf(SGR_MOUSE_PREFIX, cursor);
+        if (start < 0) {
+          const remainder = pending.slice(cursor);
+          const retained = retainedPrefixLength(remainder);
+          passthrough += remainder.slice(0, remainder.length - retained);
+          pending = retained > 0 ? remainder.slice(-retained) : "";
+          return { events, passthrough };
+        }
+
+        passthrough += pending.slice(cursor, start);
+        const candidate = pending.slice(start);
+        const match = SGR_MOUSE_SEQUENCE.exec(candidate);
+        if (!match) {
+          if (/^\x1b\[<[\d;]*$/.test(candidate)) {
+            pending = candidate;
+            return { events, passthrough };
+          }
+          passthrough += pending[start]!;
+          cursor = start + 1;
+          continue;
+        }
+
+        cursor = start + match[0].length;
+        const code = Number(match[1]);
+        const terminalCol = Number(match[2]);
+        const terminalRow = Number(match[3]);
+        const terminator = match[4];
+        const unsupportedBits = code & ~(1 | 2 | 4 | 8 | 16 | 32 | 64);
+        const isLeftPress =
+          terminator === "M" &&
+          Number.isSafeInteger(code) &&
+          code >= 0 && code <= 31 &&
+          Number.isSafeInteger(terminalCol) &&
+          Number.isSafeInteger(terminalRow) &&
+          terminalCol > 0 &&
+          terminalRow > 0 &&
+          (code & 3) === 0 &&
+          (code & (32 | 64)) === 0 &&
+          unsupportedBits === 0;
+
+        if (isLeftPress) {
+          events.push({
+            col: terminalCol - 1,
+            row: terminalRow - 1,
+            button: 0,
+            modifiers: {
+              shift: (code & 4) !== 0,
+              alt: (code & 8) !== 0,
+              ctrl: (code & 16) !== 0,
+              meta: false,
+            },
+          });
+        }
+      }
+
+      pending = "";
+      return { events, passthrough };
+    },
+    reset(): void {
+      pending = "";
+    },
+  };
+}
+
 // SGR code range starts (ANSI / xterm)
 const NAMED_FG_START  = 30;
 const NAMED_BG_START  = 40;

@@ -3,7 +3,9 @@
 // tears down raw-mode and removes the listener.
 
 import readline from "readline";
-import { _deliverKeyEvent } from "./hooks.ts";
+import { PassThrough } from "node:stream";
+import { _deliverKeyEvent, _deliverMouseEvent } from "./hooks.ts";
+import { createSgrMouseDecoder } from "./termio.ts";
 
 /** Modifier flags delivered by Node's keypress events. */
 interface NodeKey {
@@ -13,6 +15,16 @@ interface NodeKey {
   shift?: boolean;
 }
 
+type StdinLike = NodeJS.ReadableStream & {
+  isTTY?: boolean;
+  setRawMode?: (mode: boolean) => void;
+};
+
+export interface StdinBridgeOptions {
+  stdin?: StdinLike;
+  emitKeypressEvents?: (stream: NodeJS.ReadableStream) => void;
+}
+
 /**
  * Puts stdin into raw mode, enables keypress events via readline, and routes
  * each keypress into the ink hooks layer via `_deliverKeyEvent`.
@@ -20,26 +32,34 @@ interface NodeKey {
  * Returns a cleanup function that restores cooked mode and pauses stdin.
  * If stdin is not a TTY (e.g. piped input / CI), returns a no-op cleanup.
  */
-export function startStdinBridge(): () => void {
-  if (!process.stdin.isTTY) {
+export function startStdinBridge(options: StdinBridgeOptions = {}): () => void {
+  const stdin = options.stdin ?? process.stdin;
+  const emitKeypressEvents = options.emitKeypressEvents ??
+    ((stream: NodeJS.ReadableStream) => readline.emitKeypressEvents(stream));
+
+  if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
     return () => {};
   }
+  const rawInput = stdin as NodeJS.ReadableStream;
+  const setRawMode = stdin.setRawMode.bind(stdin);
 
   try {
-    process.stdin.setRawMode(true);
+    setRawMode(true);
   } catch {
     return () => {};
   }
 
-  process.stdin.resume();
+  stdin.resume();
 
-  try {
-    readline.emitKeypressEvents(process.stdin);
-  } catch {
-    try { process.stdin.setRawMode(false); } catch { /* ignore */ }
-    process.stdin.pause();
-    return () => {};
-  }
+  const mouseDecoder = createSgrMouseDecoder();
+  const keyboardStream = new PassThrough();
+  const onData = (chunk: string | Buffer): void => {
+    const decoded = mouseDecoder.push(chunk);
+    for (const event of decoded.events) {
+      _deliverMouseEvent(event);
+    }
+    if (decoded.passthrough.length > 0) keyboardStream.write(decoded.passthrough);
+  };
 
   const onKeypress = (str: string | undefined, key: NodeKey | undefined) => {
     if (!key) return;
@@ -66,14 +86,27 @@ export function startStdinBridge(): () => void {
     }
   };
 
-  process.stdin.on("keypress", onKeypress);
+  try {
+    emitKeypressEvents(keyboardStream);
+  } catch {
+    try { setRawMode(false); } catch { /* ignore */ }
+    stdin.pause();
+    keyboardStream.end();
+    return () => {};
+  }
+
+  rawInput.on("data", onData);
+  keyboardStream.on("keypress", onKeypress);
 
   let stopped = false;
   return () => {
     if (stopped) return;
     stopped = true;
-    process.stdin.off("keypress", onKeypress);
-    try { process.stdin.setRawMode(false); } catch { /* ignore */ }
-    process.stdin.pause();
+    rawInput.off("data", onData);
+    keyboardStream.off("keypress", onKeypress);
+    mouseDecoder.reset();
+    keyboardStream.end();
+    try { setRawMode(false); } catch { /* ignore */ }
+    stdin.pause();
   };
 }
