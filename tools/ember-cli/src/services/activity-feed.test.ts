@@ -801,6 +801,66 @@ describe("startActivityFeed — engine (real fs)", () => {
     },
     8000,
   );
+
+  // issue #1045 (operator report, 2026-07-24: 4.9GB working set correlated with the 871-row
+  // watchdog restart-log): pollTail used to `readFile(filePath)` -- the WHOLE file, every tick,
+  // forever -- even though only the bytes past byteOffset were ever new. The first tick after
+  // boot legitimately reads the whole file (freshTailState starts at offset 0, "baseline
+  // replay" is intended per issue #576); the DEFECT is every tick AFTER that also re-reading
+  // the whole (now-large) file for a tiny delta. RED-first: on pre-fix master this assertion
+  // fails (second tick's bytesRead == the ~200KB file size, not the ~60-byte delta).
+  it(
+    "a later tick reads only the new delta, never the whole (large) file again",
+    async () => {
+      const tailPollDebugLogPath = path.join(scratchDir, "tailpoll-bounded-debug.jsonl");
+      const deps = baseDeps({ tailPollDebugLogPath });
+
+      // Seed a LARGE pre-existing log (~200KB) so the first-tick "baseline replay" is big --
+      // that tick's bytesRead is EXPECTED to be large and is not asserted on here.
+      const paddingRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 0,
+        pad: "x".repeat(180),
+      });
+      const paddingLines = Array.from({ length: 1000 }, () => paddingRow); // ~200KB
+      fs.writeFileSync(deps.restartLogPath, paddingLines.join("\n") + "\n");
+      const fileSizeAfterSeed = fs.statSync(deps.restartLogPath).size;
+      expect(fileSizeAfterSeed).toBeGreaterThan(150_000);
+
+      handle = startActivityFeed(deps);
+      await sleep(1300); // first tick: consumes the ~200KB seed (baseline replay, expected)
+
+      // A single small append -- the real-world "one more watchdog row landed" case.
+      const smallRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 1,
+      });
+      fs.appendFileSync(deps.restartLogPath, smallRow + "\n");
+      const fileSizeAfterAppend = fs.statSync(deps.restartLogPath).size;
+
+      await sleep(1300); // second tick: should see ONLY the appended delta
+
+      const raw = fs.readFileSync(tailPollDebugLogPath, "utf-8");
+      const ticks = raw
+        .split("\n")
+        .filter((l) => l.trim().length > 0)
+        .map((l) => JSON.parse(l) as Record<string, unknown>)
+        .filter((r) => r["event"] === "pollTail" && r["file"] === "restart-log");
+
+      // Exactly two ticks observed real bytes: the seed replay, then the small append.
+      expect(ticks.length).toBe(2);
+      const secondTick = ticks[1] as { bytesRead: number };
+      // Bounded by the append's real size, with generous headroom -- NOT anywhere near the
+      // full (now ~200KB+) file size. This is the line that fails on pre-fix master.
+      expect(secondTick.bytesRead).toBeLessThan(1000);
+      expect(secondTick.bytesRead).toBeLessThan(fileSizeAfterAppend - fileSizeAfterSeed + 500);
+    },
+    8000,
+  );
 });
 
 // ---------------------------------------------------------------------------

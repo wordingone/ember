@@ -18,6 +18,8 @@ import {
   formatRoundtripAgeDuration,
   formatRoundtripAgeText,
   RoundtripAgeIndicator,
+  statusBarText,
+  BYPASS_STATUS_TEXT,
   type ModelMetrics,
   type DegradedBannerState,
   type OutageBannerState,
@@ -369,5 +371,41 @@ describe("RoundtripAgeIndicator component — always renders, never hidden like 
     const el = RoundtripAgeIndicator({ roundtripAge: { lastSuccessAt: 1000 }, now: 3000 });
     const text = (el as { props: { children: string } }).props.children;
     expect(text).toBe("last roundtrip 2s ago");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issue #1044: keybinding-hint chrome removed from the status bar text.
+// Keybindings themselves (shift+tab, esc, ctrl+t) stay live via StatusLine's own
+// useInput -- only the always-on textual advertisement goes. RED-first: these
+// assertions fail on pre-#1044 master (the old strings were always present).
+// ---------------------------------------------------------------------------
+describe("issue #1044: statusBarText carries no keybinding-hint chrome", () => {
+  it("bypass mode: no hint substrings, mode indicator survives", () => {
+    const text = statusBarText("bypass", true);
+    expect(text).not.toContain("shift+tab");
+    expect(text).not.toContain("esc to interrupt");
+    expect(text).not.toContain("ctrl+t");
+    expect(text).toContain("bypass permissions on");
+  });
+
+  it("regular mode: no hint substrings, mode indicator survives", () => {
+    const text = statusBarText("regular", false);
+    expect(text).not.toContain("shift+tab");
+    expect(text).not.toContain("esc to interrupt");
+    expect(text).not.toContain("ctrl+t");
+    expect(text).toContain("regular mode");
+  });
+
+  it("tasksVisible no longer changes the rendered text (dead param, kept for call-site compat)", () => {
+    expect(statusBarText("bypass", true)).toBe(statusBarText("bypass", false));
+    expect(statusBarText("regular", true)).toBe(statusBarText("regular", false));
+  });
+
+  it("BYPASS_STATUS_TEXT matches statusBarText('bypass', ...) exactly and carries no hint chrome", () => {
+    expect(BYPASS_STATUS_TEXT).toBe(statusBarText("bypass", true));
+    expect(BYPASS_STATUS_TEXT).not.toContain("shift+tab");
+    expect(BYPASS_STATUS_TEXT).not.toContain("esc to interrupt");
+    expect(BYPASS_STATUS_TEXT).not.toContain("ctrl+t");
   });
 });
