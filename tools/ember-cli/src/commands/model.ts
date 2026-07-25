@@ -425,7 +425,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
 
   return {
     name: "model",
-    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save. Inspect data/tokenizer lineage; legacy checkpoint save is not checkpoint-load compatible.",
+    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save. Inspect data/tokenizer lineage; legacy checkpoint save is not checkpoint-load compatible. Owned serving path: the owned model is the default seat and borrowed models are explicit reference seats only, so the owned seat may be serving offline until the model is born.",
     isEnabled(): boolean {
       return true;
     },
