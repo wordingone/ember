@@ -25,10 +25,23 @@ Every check carries one of:
                      or unconfirmable control is not a control.
     undecidable      cannot be decided statically; the receipt names exactly
                      what a human must look at
+    ambiguous        (L3 spine rows only, added 2026-07-25) more than one
+                     registered, named+described module satisfies the same
+                     row's keywords. Never resolved by picking a winner --
+                     alphabetical dict-iteration first-match previously did
+                     this silently and once actually reassigned a spine row
+                     to a command that does not implement it (a one-line
+                     description edit made custody.ts win checkpoint_save_load
+                     over the module that actually implements save/load,
+                     caught by the editing lane's own re-run before it
+                     shipped). The evidence names EVERY matching module so a
+                     reviewer sees the competition; this FAILS the gate like
+                     weak/undecidable -- an instrument that cannot tell which
+                     module implements a row has not confirmed the row.
 
 Overall verdict is FAIL unless every gating check is resolved-true. An
-undecidable check never silently passes; it is reported and excluded from
-the PASS claim, which is therefore explicitly partial.
+undecidable or ambiguous check never silently passes; each is reported and
+excluded from the PASS claim, which is therefore explicitly partial.
 
 WHAT IS MEASURED, AND HOW EVIDENCE IS BOUND (rework 2026-07-25; the previous
 version let the artifact under measurement supply its own evidence -- a root
@@ -1279,10 +1292,26 @@ def run(root: Path) -> dict:
         require_all = func in CONJUNCTION_FUNCTIONS
         hit = None
         weak = False
+        ambiguous = False
         orphan_note = ""
         # Pass 1 (STRONG): keyword(s) in the command NAME or its declared
         # DESCRIPTION -- the two things a reader with no source can actually
         # see -- of a module command-registry.ts actually registers.
+        #
+        # Ambiguity fix (2026-07-25, near-miss incident: a one-line
+        # description edit made custody.ts win the checkpoint_save_load row
+        # on alphabetical dict-iteration first-match, reassigning the row to
+        # a command that only displays identity read-only). Every satisfying
+        # registered module is collected, not just the first one iteration
+        # order happens to reach. More than one match is a DEFECT, not a
+        # tiebreak: the STRONG pass has no scoring signal at all (a keyword
+        # either appears in a module's name+description or it does not), so
+        # there is no principled "strongest evidence" to credit here --
+        # inventing one would just be a different arbitrary guess replacing
+        # the alphabetical one. The row refuses resolved-true and names
+        # every competing module until the collision is resolved by hand
+        # (narrowing the keyword, or rewording the losing description).
+        strong_matches: list[str] = []
         for stem, m in registered_modules.items():
             if not m["names"] or not m["has_description"]:
                 continue
@@ -1290,8 +1319,20 @@ def run(root: Path) -> dict:
             matched = [k for k in keywords if k in hay]
             satisfied = (len(matched) == len(keywords)) if require_all else bool(matched)
             if satisfied:
-                hit = f"command {m['names']} in {stem}.ts (named + described, registered)"
-                break
+                strong_matches.append(stem)
+        if len(strong_matches) > 1:
+            ambiguous = True
+            named = ", ".join(f"{s}.ts" for s in sorted(strong_matches))
+            hit = (
+                f"AMBIGUOUS: {len(strong_matches)} registered, named+described "
+                f"modules all match {keywords}: [{named}] -- refusing to "
+                "resolve true; narrow the keyword or reword the losing "
+                "module's name/description so only one module matches"
+            )
+        elif len(strong_matches) == 1:
+            stem = strong_matches[0]
+            m = registered_modules[stem]
+            hit = f"command {m['names']} in {stem}.ts (named + described, registered)"
         if hit is None:
             # WEAK pass. Report EVERY registered module whose body mentions a
             # keyword, ranked by hit count -- never an arbitrary first match.
@@ -1338,7 +1379,9 @@ def run(root: Path) -> dict:
                 # satisfy. Report it as a plain miss, with the orphan noted
                 # as diagnostic evidence only -- never as a match.
                 hit = None
-        if weak:
+        if ambiguous:
+            report["spine"][func] = check("ambiguous", hit)
+        elif weak:
             report["spine"][func] = check("weak", hit)
         elif hit is None:
             report["spine"][func] = check(

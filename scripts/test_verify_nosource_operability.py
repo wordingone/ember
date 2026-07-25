@@ -288,6 +288,83 @@ class L3RegistryGraphTests(unittest.TestCase):
             self.assertEqual(report["spine"]["checkpoint_save_load"]["state"], "weak")
 
 
+class AmbiguousMatchTests(unittest.TestCase):
+    """The near-miss defect (found by another lane, no defect shipped): a
+    one-line command-description edit accidentally made `custody.ts` win the
+    `checkpoint_save_load` row on alphabetical first-match, because that
+    row's keyword ("checkpoint") is a bare substring with no conjunction
+    guard -- silently reassigning a spine function to a command that only
+    displays identity read-only and does not implement save/load at all.
+    The harness reported the theft as a pass. Ambiguity must be reported as
+    a defect: the row names every matching module and refuses to resolve
+    true, rather than silently crediting whichever module `dict.items()`
+    (insertion order == `sorted(cmd_dir.glob("*.ts"))`, i.e. alphabetical)
+    happens to reach first."""
+
+    def test_two_registered_modules_matching_one_row_never_resolve_alphabetical_winner(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            # Alphabetically FIRST ("custody" < "save-load"): a read-only
+            # identity display that happens to mention "checkpoint" in its
+            # description -- the exact shape of the near-miss (a
+            # description edit, not an implementation).
+            _command_module(
+                root, "custody", "custody",
+                "shows identity and last checkpoint timestamp, read-only",
+            )
+            # Alphabetically LATER: the module that actually implements
+            # save/load.
+            _command_module(
+                root, "save-load", "checkpoint",
+                "save and load model checkpoints",
+            )
+            _registry_importing(root, ["custody", "save-load"])
+            report = harness.run(root)
+            row = report["spine"]["checkpoint_save_load"]
+            # The defect this reproduces: silently resolving true, crediting
+            # only the alphabetically-first module (custody.ts) and saying
+            # nothing about the competing module.
+            self.assertNotEqual(row["state"], "resolved-true", row)
+            self.assertIn("custody.ts", row["evidence"], row)
+            self.assertIn("save-load.ts", row["evidence"], row)
+
+    def test_single_unambiguous_match_still_resolves_true(self):
+        """Sanity control: exactly one registered, named+described module
+        matching a row must still resolve true -- the ambiguity fix must
+        not turn every match into a false collision."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(
+                root, "save-load", "checkpoint",
+                "save and load model checkpoints",
+            )
+            _registry_importing(root, ["save-load"])
+            report = harness.run(root)
+            row = report["spine"]["checkpoint_save_load"]
+            self.assertEqual(row["state"], "resolved-true", row)
+
+    def test_three_way_collision_names_all_three(self):
+        """The collision report must name every matching module, not just
+        the first two -- a reviewer needs to see the full competition."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(root, "aaa-decoy", "aaa", "mentions checkpoint in passing")
+            _command_module(root, "bbb-decoy", "bbb", "also has checkpoint text")
+            _command_module(root, "ccc-real", "checkpoint", "save and load checkpoints")
+            _registry_importing(root, ["aaa-decoy", "bbb-decoy", "ccc-real"])
+            report = harness.run(root)
+            row = report["spine"]["checkpoint_save_load"]
+            self.assertNotEqual(row["state"], "resolved-true", row)
+            for name in ("aaa-decoy.ts", "bbb-decoy.ts", "ccc-real.ts"):
+                self.assertIn(name, row["evidence"], row)
+
+
 class Round3TextPositionTests(unittest.TestCase):
     """Round 3: an independent probe on dc6dcf3 fooled L1 with a root
     Ember.cmd whose entire body was `@echo off` / a REM comment naming the
