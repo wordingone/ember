@@ -89,7 +89,13 @@ function resolveBunExecutable(): string {
   );
 }
 
-function findClosedPromptRegion(frame: string[], width: number): void {
+interface ClosedPromptRegion {
+  top: number;
+  bottom: number;
+  right: number;
+}
+
+function findClosedPromptRegion(frame: string[], width: number): ClosedPromptRegion {
   if (!Number.isInteger(width) || width < 2) throw new Error("terminal width is invalid");
   if (frame.length === 0 || frame.some((line) => line.length !== width)) {
     throw new Error("frame does not match terminal width");
@@ -104,10 +110,24 @@ function findClosedPromptRegion(frame: string[], width: number): void {
       if (!interior.some((line) => line.includes("❯"))) continue;
       if (interior.length < 2) continue;
       if (!interior.every((line) => line[0] === "│" && line[right] === "│")) continue;
-      return;
+      return { top, bottom, right };
     }
   }
   throw new Error("closed prompt region not found");
+}
+
+export function completedPromptFrame(
+  frame: string[],
+  width: number,
+  input: string,
+): boolean {
+  const region = findClosedPromptRegion(frame, width);
+  const promptText = frame
+    .slice(region.top + 1, region.bottom)
+    .map((line) => line.slice(1, region.right))
+    .join("\n");
+  const pendingProbe = input.slice(0, Math.min(24, input.length));
+  return pendingProbe.length > 0 && !promptText.includes(pendingProbe);
 }
 
 function redactHostPaths(
@@ -270,14 +290,16 @@ async function driveInput(
       await flush();
       const after = `${frameLines(terminal).join("\n")}\n`;
       try {
-        findClosedPromptRegion(after.replace(/\n$/, "").split("\n"), COLS);
-        const delta = raw.join("").slice(rawStart);
-        const nonEcho = delta.replaceAll(input, "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
-        if (sha256(before) !== sha256(after) && nonEcho.trim().length > 0) {
-          return { before, after, delta };
+        const afterLines = after.replace(/\n$/, "").split("\n");
+        if (completedPromptFrame(afterLines, COLS, input)) {
+          const delta = raw.join("").slice(rawStart);
+          const nonEcho = delta.replaceAll(input, "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+          if (sha256(before) !== sha256(after) && nonEcho.trim().length > 0) {
+            return { before, after, delta };
+          }
         }
       } catch {
-        // The product has not repainted a complete prompt yet.
+        // The product has not repainted a complete cleared prompt yet.
       }
     }
     await sleep(25);

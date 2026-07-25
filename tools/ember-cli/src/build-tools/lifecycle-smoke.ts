@@ -8,6 +8,7 @@
 // binary, rebuild, and builder bindings.
 
 const SHA256 = /^[0-9a-f]{64}$/;
+const GIT_COMMIT = /^[0-9a-f]{40}$/;
 const SAFE_ARTIFACT = /^(?!\/)(?![A-Za-z]:)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/;
 
 export const LIFECYCLE_ACTIONS = [
@@ -155,6 +156,10 @@ function requireSha(value: string, label: string): void {
   if (!SHA256.test(value)) throw new Error(`${label} must be lowercase SHA-256`);
 }
 
+function requireGitCommit(value: string, label: string): void {
+  if (!GIT_COMMIT.test(value)) throw new Error(`${label} must be a lowercase 40-hex Git commit`);
+}
+
 function requireArtifact(value: string, label: string): void {
   if (!SAFE_ARTIFACT.test(value) || value.includes("\\")) {
     throw new Error(`${label} must be a path-free repository artifact`);
@@ -189,8 +194,8 @@ export function validateLifecycleReceipt(
   if (receipt.evidence_class !== "LIVE_COMPILED_BINARY_CONPTY") {
     throw new Error("wrong evidence class");
   }
-  requireSha(receipt.source_commit, "source commit");
-  requireSha(expected.sourceCommit, "expected source commit");
+  requireGitCommit(receipt.source_commit, "source commit");
+  requireGitCommit(expected.sourceCommit, "expected source commit");
   requireSha(expected.binarySha256, "expected binary");
   requireSha(expected.builderSha256, "expected builder");
   if (receipt.source_commit !== expected.sourceCommit) {
