@@ -21,7 +21,7 @@ from checkpoint_artifacts import load_checkpoint_artifacts
 from pretrain import run_pretraining_segment
 from verify_capability_record import expected_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
-from checkpoint_fixture import write_checkpoint_artifacts
+from .checkpoint_fixture import write_checkpoint_artifacts
 
 
 
