@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // hooks — React hooks for terminal interaction.
 // Covers keyboard input, app context, animation, stdin, focus, title,
 // viewport, text selection, and tab-status queries.

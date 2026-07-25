@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // termio — terminal I/O primitives: ANSI sequence builders, color type system,
 // and style application from raw SGR codes.
 
