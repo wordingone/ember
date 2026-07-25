@@ -67,6 +67,12 @@ export async function writePromptInput(
   }
 }
 
+
+export function actionLocalDelta(delta: string, input: string): string {
+  const marker = delta.indexOf(input);
+  return marker === -1 ? delta : delta.slice(marker + input.length);
+}
+
 function commandText(args: string[], cwd: string): string {
   const result = spawnSync(args[0]!, args.slice(1), {
     cwd,
@@ -511,12 +517,13 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         join(outDir, `action-${index + 1}-${action}.frame.txt`),
       );
       writeFileSync(join(repoRoot, frameArtifact), publicFrame, "utf8");
-      const lower = driven.delta.toLowerCase();
+      const localDelta = actionLocalDelta(driven.delta, input);
+      const lower = localDelta.toLowerCase();
       const missing = lower.includes("unknown command");
       const refused = lower.includes("error:") || lower.includes("failed to");
       const status = missing ? "MISSING" : refused ? "REFUSED" : "PASS";
       const publicDelta = Buffer.from(
-        redactHostPaths(Buffer.from(driven.delta, "utf8"), [repoRoot, home, binary]).publicBytes,
+        redactHostPaths(Buffer.from(localDelta, "utf8"), [repoRoot, home, binary]).publicBytes,
       )
         .toString("utf8")
         .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
