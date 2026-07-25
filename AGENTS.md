@@ -17,6 +17,7 @@
 | `receipts` | Executed job receipts in JSON format — ground truth for all board verdicts | data |
 | `receipts-local` | Local receipt drafts and redaction-pending artifacts staged before landing in `receipts/` via PR; machine-local, untracked | data |
 | `runs` | Per-experiment training/eval run output (logs, checkpoints, metrics); machine-local, untracked | data |
+| `runtime` | `ember-lab` Rust crate (control-plane/RPC named-pipe runtime); tracked | tool |
 | `scratch` | Ephemeral working notes and one-off analysis artifacts; machine-local, untracked | tool |
 | `scratchpad` | Ephemeral agent scratch workspace for in-flight investigation; machine-local, untracked | tool |
 | `scripts` | Probe runners, verification checkers, and utility scripts | tool |
