@@ -217,10 +217,15 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
   }
 
   const home = mkdtempSync(join(tmpdir(), "ember-lifecycle-smoke-"));
-  const stateDir = join(home, "state");
+  const stateDir = join(repoRoot, "state");
   mkdirSync(stateDir, { recursive: true });
+  const controlPath = join(stateDir, "ember-finetune-control.jsonl");
+  const telemetryPath = join(stateDir, "ember-telemetry.jsonl");
+  if (existsSync(controlPath) || existsSync(telemetryPath)) {
+    throw new Error("lifecycle smoke state channels already exist; refusing overwrite");
+  }
   writeFileSync(
-    join(stateDir, "ember-telemetry.jsonl"),
+    telemetryPath,
     `${JSON.stringify({
       ts: new Date().toISOString(),
       kind: "train_step",
@@ -242,7 +247,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       name: "xterm-256color",
       cols: COLS,
       rows: ROWS,
-      cwd: home,
+      cwd: repoRoot,
       env: {
         ...process.env,
         EMBER_HOME: home,
@@ -358,7 +363,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         frame_artifact: frameArtifact,
         detail: status === "PASS" ? "effect-bearing frame delta observed" : "operator surface refused",
       });
-      const control = join(stateDir, "ember-finetune-control.jsonl");
+      const control = controlPath;
       const persisted =
         ["pause", "resume", "terminate"].includes(action) && existsSync(control)
           ? readFileSync(control)
@@ -467,6 +472,8 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       });
     }
     terminal.dispose();
+    rmSync(controlPath, { force: true });
+    rmSync(telemetryPath, { force: true });
     rmSync(home, { recursive: true, force: true });
   }
 }
