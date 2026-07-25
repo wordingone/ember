@@ -1566,7 +1566,7 @@ export function ReplScreen({
       { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
       React.createElement(
         Box,
-        { key: "banner", flexShrink: 0, overflow: "hidden" },
+        { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
         React.createElement(Homescreen, {
           state: {
             model:   config.model,

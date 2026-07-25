@@ -10,10 +10,10 @@ import { ReplScreen } from "./repl.ts";
 import { operatorSurfaceWidth } from "./repl.ts";
 
 describe("repl operator surface layout", () => {
-  test("real REPL workspace keeps the bounded pane visible at 60x20 and 80x24", () => {
+  test("real REPL workspace keeps the bounded pane visible at 60x20 and live 80x24 to 40x24 to 80x24", () => {
     let handle: ReturnType<typeof mountInk> | undefined;
     let raw = "";
-    for (const [columns, rows] of [[60, 20], [80, 24]] as const) {
+    for (const [columns, rows] of [[60, 20], [80, 24], [40, 24], [80, 24]] as const) {
       const config = { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" };
       const element = React.createElement(
         TerminalSizeContext.Provider,
@@ -41,7 +41,9 @@ describe("repl operator surface layout", () => {
       expect(lines.length).toBe(rows);
       // At these bounded heights the activity feed intentionally occupies the lower pane;
       // assert the graph families that are actually paintable without changing that layout.
-      for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
+      for (const heading of columns <= 40
+        ? ["TRAINING/LOSS", "RESOURCE EFFICIENC"]
+        : ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
         expect(lines.some((line) => line.includes(heading))).toBe(true);
       }
       expect(lines.some((line) => line.includes("IDLE"))).toBe(true);
@@ -52,7 +54,7 @@ describe("repl operator surface layout", () => {
       const promptRightBorder = promptRow?.indexOf("│", 1) ?? -1;
       expect(promptRightBorder).toBeGreaterThan(0);
 
-      const statusRows = lines.filter((line) => line.includes("bypass permis"));
+      const statusRows = lines.filter((line) => line.includes("○ observe"));
       expect(statusRows).toHaveLength(1);
       expect(statusRows[0]?.[0]).toBe("│");
       expect(statusRows[0]?.indexOf("│", 1)).toBe(promptRightBorder);
