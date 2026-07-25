@@ -1,5 +1,7 @@
 # Start here
 
+On Windows, launch the operator body from the repository root by running `Ember.cmd`.
+
 This page exists so a first-time reader — someone with no prior context on this repo — can
 verify one claim end-to-end without reverse-engineering the vocabulary first. It does not repeat
 `README.md` or `GOAL.md`; it maps the terms and structure those pages assume you already have.
