@@ -1,0 +1,194 @@
+{
+  "schema_version": "ember-cli-issue-243-live-resize/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "issue": 243,
+  "evidence_class": "LIVE_COMPILED_BINARY_CONPTY",
+  "source_commit": "96b9c105c6227a2da4e707ce9345d07745e880d7",
+  "binary": {
+    "artifact": "tools/ember-cli/src/ember.exe",
+    "sha256": "990176cd4b7e570ee4460558e559abcd4a71fbea40e823f9c29e2e3f13e6a6b5",
+    "reproducible_rebuild": {
+      "source_commit": "96b9c105c6227a2da4e707ce9345d07745e880d7",
+      "sha256": "990176cd4b7e570ee4460558e559abcd4a71fbea40e823f9c29e2e3f13e6a6b5",
+      "equals_captured_binary": true
+    }
+  },
+  "builder": {
+    "executable_basename": "bun.exe",
+    "sha256": "e496d135ede0d3d774d9db18ddc2da8d5b0fa4b1cb452638f5b91332df548b8a",
+    "version": "1.3.12",
+    "invocation": [
+      "bun.exe",
+      "build",
+      "./entrypoints/main.ts",
+      "--compile",
+      "--outfile",
+      "<owned-temp>/ember.exe",
+      "--banner",
+      "<derived-from-source-commit>"
+    ]
+  },
+  "transport": "windows-conpty/node-pty",
+  "argv": [
+    "ember.exe"
+  ],
+  "dimensions": [
+    {
+      "columns": 80,
+      "rows": 24
+    },
+    {
+      "columns": 40,
+      "rows": 24
+    },
+    {
+      "columns": 80,
+      "rows": 24
+    }
+  ],
+  "stages": [
+    {
+      "stage": 1,
+      "columns": 80,
+      "rows": 24,
+      "raw_public_redacted": {
+        "path": "tests/fixtures/ember-cli/issue-243/live-resize-v1/stage-1-80.raw",
+        "bytes": 4034,
+        "sha256": "c3d6941a2001d80b896569a936900a04f685f11e8dfc39787fc60694236a39ff"
+      },
+      "raw_private_exact": {
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/96b9c105c6227a2da4e707ce9345d07745e880d7/stage-1-80.raw",
+        "bytes": 4034,
+        "sha256": "d03ebe37c2a4a4ff337cedff9f799bebfe20d89902c219e855cc6b714daf79fe"
+      },
+      "path_redaction": {
+        "byte_length_preserved": true,
+        "mappings": [
+          {
+            "source_sha256": "21931efbec56a966b265bfbed0337222a00810dd8ef05b0269cd7371facdb94b",
+            "replacement": "{local-21931efbec56}~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "occurrences": 1
+          },
+          {
+            "source_sha256": "83e684ece03db245a93ceb302441a5e5f31f8b01ee7fda9b07ac40bcd8bd3154",
+            "replacement": "{local-83e684ece03d}~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "occurrences": 1
+          },
+          {
+            "source_sha256": "25229b5034a83cc850f8c4fb950f89a86c981c5ed797e69069eb725834205f3b",
+            "replacement": "<p>~~~~~~~~",
+            "occurrences": 1
+          },
+          {
+            "source_sha256": "b2ca98267a5f2b567cf701c47e83b9d006a2788ab16a5f829b1a68a192f9f01d",
+            "replacement": "<p>~~~~~~~",
+            "occurrences": 1
+          }
+        ]
+      },
+      "frame": {
+        "path": "tests/fixtures/ember-cli/issue-243/live-resize-v1/stage-1-80.frame.txt",
+        "bytes": 2467,
+        "sha256": "345723b24f83cc23f5d3ff44c9bfbd261f7536fe5d4c01d8288a3b672629405b"
+      },
+      "closed_prompt_region": {
+        "top": 20,
+        "bottom": 23,
+        "contentColumns": 45
+      }
+    },
+    {
+      "stage": 2,
+      "columns": 40,
+      "rows": 24,
+      "raw_public_redacted": {
+        "path": "tests/fixtures/ember-cli/issue-243/live-resize-v1/stage-2-40.raw",
+        "bytes": 4022,
+        "sha256": "5d8503e59f42254db92bcf6ed1eb782b18180c7f82993b3c2aec9bf02c89d094"
+      },
+      "raw_private_exact": {
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/96b9c105c6227a2da4e707ce9345d07745e880d7/stage-2-40.raw",
+        "bytes": 4022,
+        "sha256": "ca8f1ef0ce6f698ea7f6fd709597832bcbb0597f631eb1a302d6ab878f4ba8c8"
+      },
+      "path_redaction": {
+        "byte_length_preserved": true,
+        "mappings": [
+          {
+            "source_sha256": "b2ca98267a5f2b567cf701c47e83b9d006a2788ab16a5f829b1a68a192f9f01d",
+            "replacement": "<p>~~~~~~~",
+            "occurrences": 1
+          },
+          {
+            "source_sha256": "9e83cb7d56e993999233dc761416d397f43712ccc6d5813738302e373db64161",
+            "replacement": "<p>~~~~",
+            "occurrences": 1
+          }
+        ]
+      },
+      "frame": {
+        "path": "tests/fixtures/ember-cli/issue-243/live-resize-v1/stage-2-40.frame.txt",
+        "bytes": 1293,
+        "sha256": "a3e06516b1e08da83f42ea145d482e6fbe5cd05f400dfdba0c493ca6c6e31ead"
+      },
+      "closed_prompt_region": {
+        "top": 20,
+        "bottom": 23,
+        "contentColumns": 18
+      }
+    },
+    {
+      "stage": 3,
+      "columns": 80,
+      "rows": 24,
+      "raw_public_redacted": {
+        "path": "tests/fixtures/ember-cli/issue-243/live-resize-v1/stage-3-80.raw",
+        "bytes": 6176,
+        "sha256": "042e8735afd48d219615ea8a56e481e126ee75b8e6c8158fecca86198e4f7354"
+      },
+      "raw_private_exact": {
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/96b9c105c6227a2da4e707ce9345d07745e880d7/stage-3-80.raw",
+        "bytes": 6176,
+        "sha256": "e7344a07d1a62b7560d2797c39da2da08e5192836c8e7566e676acfd64a25ca7"
+      },
+      "path_redaction": {
+        "byte_length_preserved": true,
+        "mappings": [
+          {
+            "source_sha256": "b2ca98267a5f2b567cf701c47e83b9d006a2788ab16a5f829b1a68a192f9f01d",
+            "replacement": "<p>~~~~~~~",
+            "occurrences": 2
+          },
+          {
+            "source_sha256": "9e83cb7d56e993999233dc761416d397f43712ccc6d5813738302e373db64161",
+            "replacement": "<p>~~~~",
+            "occurrences": 1
+          }
+        ]
+      },
+      "frame": {
+        "path": "tests/fixtures/ember-cli/issue-243/live-resize-v1/stage-3-80.frame.txt",
+        "bytes": 2473,
+        "sha256": "3d4521027409e9bc4795df5bd4f899c98371a81f6780da2a897265a860ee99d5"
+      },
+      "closed_prompt_region": {
+        "top": 20,
+        "bottom": 23,
+        "contentColumns": 45
+      }
+    }
+  ],
+  "claim_boundary": {
+    "derived": [
+      "captured binary equals an independent rebuild from source_commit",
+      "independent rebuild used the recorded external builder executable"
+    ],
+    "not_proven": [
+      "source_commit review acceptance",
+      "model, training, benchmark, or capability completion"
+    ]
+  },
+  "result": "PASS"
+}

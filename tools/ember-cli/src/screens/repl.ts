@@ -36,7 +36,7 @@ import {
   type PromptInputState,
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
-import { Homescreen, type BoardSummary } from "../components/logo-homescreen.ts";
+import { Homescreen, type BoardSummary, type HomescreenProps } from "../components/logo-homescreen.ts";
 import { SlashDropdown }                from "../components/slash-dropdown.ts";
 import {
   shouldShowSlashDropdown,
@@ -45,6 +45,8 @@ import {
   moveDropdownSelection,
   completeSlashSelection,
   computeSlashDropdownDisplay,
+  slashDropdownMaxVisible,
+  slashDropdownCanRender,
 } from "../services/slash-dropdown.ts";
 import { getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
@@ -626,6 +628,10 @@ export function ReplScreen({
   onExit:         _onExit,
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
+  // Hoisted because the homescreen, prompt, and palette below all consume the same conversation
+  // column width through one render path; no component maintains a mirrored width oracle.
+  const paneWidth = operatorSurfaceWidth(terminalCols);
+  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
 
   const useVirtualScroll = shouldUseVirtualScroll(env);
   const writeTitle       = shouldWriteTerminalTitle(env);
@@ -1074,7 +1080,28 @@ export function ReplScreen({
   const dropdownMatches = dropdownOpen
     ? filterSlashCommands(slashCommands, slashQueryFrom(inputState.text))
     : [];
-  const dropdownDisplay = computeSlashDropdownDisplay(dropdownMatches, dropdownSelectedIndex);
+  // Single source of truth for what <Homescreen> is actually given -- used below both to render
+  // it AND to size the palette against its real (not guessed) row count. Declared here (hoisted
+  // above the JSX return) so both use sites reference the exact same object; the JSX render call
+  // below reuses `homescreenProps` rather than re-literal-ing it, so they cannot drift apart.
+  const homescreenProps: HomescreenProps = {
+    state: {
+      model:   config.model,
+      cwd,
+      version: process.env["EMBER_VERSION"] ?? "0.0.0",
+      dataRoot: dataRoot ?? "",
+    },
+    viewportWidth: mainColumnWidth,
+    boardSummary,
+  };
+  // While slash composition is active, the render below collapses every variable chrome row:
+  // banner, spinner, stash/shimmer/queue/notification rows and status details. The surviving
+  // prompt/status region is structurally four rows, so palette sizing has no mirrored layout math.
+  const dropdownDisplay = computeSlashDropdownDisplay(
+    dropdownMatches,
+    dropdownSelectedIndex,
+    slashDropdownMaxVisible(terminalRows, dropdownMatches.length),
+  );
 
   // Back to the top row whenever the composed query text changes (narrows/widens the match
   // list) -- never fires on a pure Up/Down navigation, since those only touch
@@ -1482,12 +1509,16 @@ export function ReplScreen({
     // (b22 item 1) -- Enter completes the highlighted command into the input instead of falling
     // through to message-submit below.
     if (dropdownOpen && dropdownDisplay.visible.length > 0) {
+      // 2026-07-25 palette-overflow-render finding: wrap over the FULL match list
+      // (dropdownMatches), not the visible-cap slice -- computeSlashDropdownDisplay now scrolls
+      // its window to follow the selection, so an entry beyond the visible cap is reachable by
+      // continuing to press Down instead of being permanently hidden.
       if (key.downArrow) {
-        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, 1));
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownMatches.length, 1));
         return;
       }
       if (key.upArrow) {
-        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, -1));
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownMatches.length, -1));
         return;
       }
       if (key.return) {
@@ -1555,29 +1586,21 @@ export function ReplScreen({
   // Render
   // ---------------------------------------------------------------------------
 
-  const paneWidth = operatorSurfaceWidth(terminalCols);
-  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
-
   return React.createElement(
     Box,
     { flexDirection: "row", width: terminalCols, height: terminalRows, overflow: "hidden" },
     React.createElement(
       Box,
       { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
-      React.createElement(
-        Box,
-        { key: "banner", flexShrink: 0, overflow: "hidden" },
-        React.createElement(Homescreen, {
-          state: {
-            model:   config.model,
-            cwd,
-            version: process.env["EMBER_VERSION"] ?? "0.0.0",
-            dataRoot: dataRoot ?? "",
-          },
-          viewportWidth: mainColumnWidth,
-          boardSummary,
-        }),
-      ),
+      // The palette owns the banner rows while slash composition is active. Outside the
+      // palette, retain #243's shrinkable banner so prompt/status chrome remains visible.
+      dropdownOpen
+        ? null
+        : React.createElement(
+            Box,
+            { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
+            React.createElement(Homescreen, homescreenProps),
+          ),
       React.createElement(
         Box,
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
@@ -1588,14 +1611,14 @@ export function ReplScreen({
         ),
       ),
       dialogOverlay,
-      busy
+      busy && !dropdownOpen
         ? React.createElement(SpinnerAnimationRow, {
             key:         "spinner",
             elapsedMs:   spinnerElapsed,
             startedAtMs: spinnerStartRef.current,
           })
         : null,
-      dropdownOpen && dropdownDisplay.visible.length > 0
+      dropdownOpen && slashDropdownCanRender(terminalRows, dropdownMatches.length)
         ? React.createElement(SlashDropdown, {
             key:           "slash-dropdown",
             commands:      dropdownDisplay.visible,
@@ -1608,21 +1631,22 @@ export function ReplScreen({
         key:            "input",
         state:          inputState,
         isProcessing:   busy,
+        compact:        dropdownOpen,
         showStatusLine: false,
         suggestion:     currentSuggestion ?? undefined,
         width:          mainColumnWidth,
-      }),
-      React.createElement(StatusLine, {
-        key:            "status",
-        permissionMode: permModeState,
-        interrupt:      interruptHandler,
-        taskPanel:      taskPanelState,
-        telemetry,
-        modelMetrics:   modelMetrics ?? undefined,
-        effort:         retryStatus,
-        degraded:       degradedBanner,
-        outage:         outageBanner,
-        roundtripAge,
+        statusLine: React.createElement(StatusLine, {
+          permissionMode: permModeState,
+          interrupt:      interruptHandler,
+          taskPanel:      taskPanelState,
+          telemetry,
+          modelMetrics:   modelMetrics ?? undefined,
+          effort:         retryStatus,
+          degraded:       degradedBanner,
+          outage:         outageBanner,
+          roundtripAge,
+          compact:         dropdownOpen,
+        }),
       }),
     ),
     React.createElement(OperatorSurfacePane, {

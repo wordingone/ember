@@ -436,6 +436,8 @@ export interface StatusLineProps {
    *  Absent → indicator hidden (no guarded client wired yet); present → always rendered,
    *  healthy or degraded alike, so a wedge is visible even without a tripped circuit. */
   roundtripAge?: RoundtripAgeState;
+  /** Render only the single bounded base bar; all transient detail rows remain in state. */
+  compact?: boolean;
 }
 
 export function StatusLine({
@@ -450,6 +452,7 @@ export function StatusLine({
   degraded,
   outage,
   roundtripAge,
+  compact = false,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
     if (key.shift && key.tab)    { permissionMode.cycle(); return; }
@@ -457,9 +460,9 @@ export function StatusLine({
     if (key.ctrl && _input === "t") { taskPanel.toggle(); return; }
   });
 
-  const text = statusBarText(permissionMode.mode, taskPanel.visible);
+  const text = statusBarText(permissionMode.mode, compact ? false : taskPanel.visible);
   const modeIndicator = renderModeIndicator(cognitiveMode ?? "observe", false);
-  const telemetryLabel = telemetryMemoKey(telemetry);
+  const telemetryLabel = compact ? null : telemetryMemoKey(telemetry);
 
   return React.createElement(
     // #561 P0-A: StatusLine is fixed bottom chrome, never a flex-shrink target — see the same
@@ -467,19 +470,19 @@ export function StatusLine({
     // shrinks this box toward 0 rows and it vanishes from the frame.
     Box,
     { flexDirection: "column", flexShrink: 0 },
-    outage != null
+    !compact && outage != null
       ? React.createElement(OutageBanner, { key: "outage", outage })
       : null,
-    degraded != null
+    !compact && degraded != null
       ? React.createElement(DegradedBanner, { key: "degraded", degraded })
       : null,
-    effort != null
+    !compact && effort != null
       ? React.createElement(EffortCallout, { key: "effort", effort })
       : null,
-    coordinator != null
+    !compact && coordinator != null
       ? React.createElement(CoordinatorAgentStatus, { key: "coord", coordinator })
       : null,
-    taskPanel.visible
+    !compact && taskPanel.visible
       ? React.createElement(TaskListV2, { key: "tasks", tasks: taskPanel.tasks })
       : null,
     telemetryLabel != null
@@ -487,13 +490,13 @@ export function StatusLine({
       : null,
     React.createElement(
       Box,
-      { key: "bar", flexDirection: "row" },
+      { key: "bar", flexDirection: "row", height: compact ? 1 : undefined, overflow: compact ? "hidden" : undefined },
       React.createElement(Text, { key: "mode", dimColor: true }, modeIndicator),
       React.createElement(Text, { key: "sep", dimColor: true }, SEGMENT_SEPARATOR),
       React.createElement(Text, { key: "text" }, text),
       // Live model metrics meter — absent when no server is connected.
       // Neither competitor can show local VRAM/throughput; this scores 0 for them.
-      modelMetrics != null
+      !compact && modelMetrics != null
         ? React.createElement(React.Fragment, { key: "metrics" },
             React.createElement(Text, { key: "msep", dimColor: true }, SEGMENT_SEPARATOR),
             React.createElement(ModelMetricsBar, { key: "mbar", metrics: modelMetrics }),
@@ -501,7 +504,7 @@ export function StatusLine({
         : null,
       // issue #239: always-visible last-successful-roundtrip age — never hidden the
       // way DegradedBanner is, since it must read as "wedged" even before any circuit trips.
-      roundtripAge != null
+      !compact && roundtripAge != null
         ? React.createElement(React.Fragment, { key: "roundtrip" },
             React.createElement(Text, { key: "rsep", dimColor: true }, SEGMENT_SEPARATOR),
             React.createElement(RoundtripAgeIndicator, { key: "rbar", roundtripAge }),

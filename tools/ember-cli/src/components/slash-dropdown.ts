@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // components/slash-dropdown.ts — the slash-command completion dropdown's rendering (issue b22
 // item 1, ledgered since b14 as ember-cli-slash-dropdown). Exemplar: the field's own "/" menu
 // convention (Claude Code, Crush) per field-ux-map §8b/§9 — thin box-drawing border + negative
@@ -45,6 +49,22 @@ export function SlashDropdown({ commands, selectedIndex, overflowCount, width }:
       borderStyle: PANEL_BORDER_STYLE,
       borderColor: color("muted", "fg"),
       paddingX: 1,
+      // 2026-07-25 operability finding (state/operability-finding-palette-renders-broken):
+      // this Box had no flexShrink (defaults to 1, layout-engine.ts) and no overflow, so when
+      // total sibling content (banner + transcript + prompt + status) exceeded the terminal's
+      // row budget, the real CSS flex-shrink pass (layout-engine.ts's weighted-deficit
+      // algorithm, B6 W4') proportionally compressed THIS box's own computed height right
+      // alongside the transcript -- and with no overflow:"hidden" declared, its entry rows
+      // painted straight past its own (now too-short) bounds into the next sibling's territory
+      // (the real prompt row), instead of clipping cleanly the way overflow-clip.test.ts's W4
+      // fix already proved for a tall transcript child. flexShrink:0 removes this box from the
+      // deficit pool entirely (matching the same protection banner/prompt/status already carry,
+      // per #561), so the caller's own `commands`/`overflowCount` slice -- already computed
+      // upstream from the ACTUAL available rows -- is what determines how much is shown, never
+      // an unpredictable layout squeeze; overflow:"hidden" stays as the defensive backstop
+      // (matching the W4 precedent) in case some other future contention still shrinks it.
+      flexShrink: 0,
+      overflow: "hidden",
     },
     ...commands.map((cmd, i) => {
       const selected = i === selectedIndex;

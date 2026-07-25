@@ -1,0 +1,24 @@
+╭─ ember ──────────────────────────────────────┌LIVE RUN / ACTIVITY/EVENT FEED─┐
+│    ▀       ember  v0.0.0                     │ IDLE                          │
+│   ▀▀▀      inference + training, on this mach│ [START] [PAUSE] [RESUME] [RESTA
+│  ▀▀▀▀▀     OFFLINE - no model · Local        │ SOURCE UNVERIFIED/UNBOUND     │
+│   ▀▀▀      <p>~~~~~~~                        │ TRAINING/LOSS                 │
+│    ▀                                         │ loss                SOURCE UNBO
+│Tips for getting started                      │ RESOURCE EFFICIENCY           │
+│────────────────────────                      │ GPU utilization %   SOURCE UNBO
+                                               │ VRAM GiB            SOURCE UNBO
+                                               │ tokens/s            SOURCE UNBO
+                                               │ learning rate       SOURCE UNBO
+                                               │ GPU watts           SOURCE UNBO
+                                               │ energy joules       SOURCE UNBO
+                                               │ step/time INSUFFICIENT REAL … │
+                                               │ checkpoint INSUFFICIENT REAL… │
+                                               │ ACTIVITY/EVENT FEED           │
+                                               │ activity: none observed yet   │
+                                               │                               │
+                                               │                               │
+                                               │                               │
+╭─────────────────────────────────────────────╮│                               │
+│ ❯                                           ││                               │
+│ ○ observe · ⏵⏵ bypass permissions on · no r ││                               │
+╰─────────────────────────────────────────────╯└───────────────────────────────┘
