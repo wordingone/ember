@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,18 @@ lp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(lp)
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
+
+# The architecture's own expert declaration, read from the model module rather than
+# copied here, so a change to the roster moves the expectation with it.
+_MODEL_PATH = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b" / "model.py"
+_model_spec = importlib.util.spec_from_file_location("ember_restart_model_decl", _MODEL_PATH)
+_model_mod = importlib.util.module_from_spec(_model_spec)
+# Register before exec: model.py defines dataclasses, and dataclasses resolves a
+# field's type by looking its module up in sys.modules -- an unregistered module
+# makes that lookup return None and collection dies in dataclasses._is_type.
+sys.modules[_model_spec.name] = _model_mod
+_model_spec.loader.exec_module(_model_mod)
+_EXPERT_NAMES = _model_mod.EXPERT_NAMES
 
 
 @pytest.fixture
@@ -119,7 +132,15 @@ def test_storage_fail_closed_uncomputable_floor(cfg, root):
 def test_recovery_pass_real_roundtrip(cfg, root):
     r = lp.preflight_recovery(cfg, root)
     assert r["status"] == "pass", r
-    assert r["checkpoint_shards"] == 6
+    # A checkpoint carries three fixed-role shards -- shared_model, optimizer_state
+    # and replay_state -- plus exactly one shard per declared expert
+    # (checkpoint_artifacts.py builds the list in that order). The literal this
+    # replaces said 6, which was a three-expert count; the decoder has declared
+    # four experts since the sparse routed rewrite, so the receipt has produced 7
+    # for longer than this assertion has been in the tree. Deriving from the
+    # architecture declaration also makes the assertion fail if a fixed role is
+    # dropped or an expert shard is skipped, which a literal cannot see.
+    assert r["checkpoint_shards"] == 3 + len(_EXPERT_NAMES)
     assert r["data_cursor"]["global_step"] == 4
 
 
