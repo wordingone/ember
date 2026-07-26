@@ -3,6 +3,15 @@
 # RTX 4090 (Ada, sm_89), Windows 11, Python on Windows (no WSL)
 # Prepared 2026-06-10
 
+> Historical research snapshot, not installation authority.
+>
+> Python dependency authority: manifests/python-environment-v1.json
+>
+> Version rows and commands below preserve alternatives researched on
+> 2026-06-10. Do not execute them as the current Ember environment. Use the
+> root README command, which validates and installs the measured manifest
+> instead of these historical candidate pins.
+
 ---
 
 ## Pins Table
@@ -38,7 +47,7 @@
 
 ---
 
-## Recommended pip install (venv recipe)
+## Historical candidate recipe (do not use as current installation authority)
 
 ```powershell
 # 1. Create and activate a clean venv (Python 3.12 recommended)
