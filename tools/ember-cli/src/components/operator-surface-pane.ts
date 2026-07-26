@@ -14,7 +14,7 @@ import {
   visibleActivityFeedLines,
   type ActivityFeedLine,
 } from "./activity-feed-pane.ts";
-import { sparklineRow } from "../ink/chart.ts";
+import { renderChart, sparklineRow } from "../ink/chart.ts";
 import { HOST_METRIC_IDS, type HostMetricId, type HostMetricSeries, type HostTelemetrySnapshot } from "../services/host-telemetry-poller.ts";
 
 export interface OperatorSourceIdentity {
@@ -564,29 +564,68 @@ function boundedSurfaceLine(line: string, width: number): string {
   return line.length <= width ? line : `${line.slice(0, Math.max(0, width - 1))}\u2026`;
 }
 
-function compactMetricLine(
+/** A metric is growable (eligible to receive surplus interior height, R1d) once it has at least
+ *  two real samples to plot -- the same threshold this function already used to choose the
+ *  single-row spark path over SOURCE UNBOUND / INSUFFICIENT REAL HISTORY. Fewer than two real
+ *  samples means there is nothing a taller plot would show, so those rows take no share. */
+function metricIsGrowable(points: Array<{ step: number; value?: number }>): boolean {
+  return points.filter((point) => finiteNumber(point.value)).length >= 2;
+}
+
+/** Renders one metric family at `rows` tall. `rows <= 1` is BYTE-IDENTICAL to the pre-R1d
+ *  single-row sparkline (same per-point glyph mapping, not a resample) -- this is the exact-fit
+ *  acceptance row (#4): a mount with no surplus must produce today's frame unchanged. `rows > 1`
+ *  spends the Braille canvas's 4x vertical resolution via the SAME renderChart primitive
+ *  host-telemetry curves already use, min/max-resampled so a spike still survives compression. */
+function compactMetricLines(
   label: string,
   points: Array<{ step: number; value?: number }>,
   columns: number,
   statusTag: string | undefined,
   isLive: boolean,
-): string {
+  rows: number = 1,
+): string[] {
   const finite = points.filter((point) => finiteNumber(point.value));
   const prefix = `${label.padEnd(20, " ")}${statusTag ? `${statusTag} ` : ""}`;
-  if (finite.length === 0) return `${prefix}${isLive ? "AWAITING FIRST SAMPLE" : "SOURCE UNBOUND"}`;
-  if (finite.length < 2) return `${prefix}INSUFFICIENT REAL HISTORY`;
-  const min = Math.min(...finite.map((point) => point.value!));
-  const max = Math.max(...finite.map((point) => point.value!));
-  const span = max - min;
-  const glyphs = points.map((point) => {
-    if (!finiteNumber(point.value)) return "\u00b7";
-    const level = span === 0 ? 7 : Math.floor(((point.value - min) / span) * 7);
-    return PLOT_GLYPHS[Math.max(0, Math.min(7, level))];
-  }).join("");
-  return `${prefix}${glyphs.slice(0, columns)}`;
+  if (finite.length === 0) return [`${prefix}${isLive ? "AWAITING FIRST SAMPLE" : "SOURCE UNBOUND"}`];
+  if (finite.length < 2) return [`${prefix}INSUFFICIENT REAL HISTORY`];
+  if (rows <= 1) {
+    const min = Math.min(...finite.map((point) => point.value!));
+    const max = Math.max(...finite.map((point) => point.value!));
+    const span = max - min;
+    const glyphs = points.map((point) => {
+      if (!finiteNumber(point.value)) return "\u00b7";
+      const level = span === 0 ? 7 : Math.floor(((point.value - min) / span) * 7);
+      return PLOT_GLYPHS[Math.max(0, Math.min(7, level))];
+    }).join("");
+    return [`${prefix}${glyphs.slice(0, columns)}`];
+  }
+  const samples: Array<number | null> = points.map((point) => (finiteNumber(point.value) ? point.value! : null));
+  const chart = renderChart(samples, { width: columns, height: Math.floor(rows) });
+  const blankPrefix = " ".repeat(prefix.length);
+  return chart.rows.map((row, index) => `${index === 0 ? prefix : blankPrefix}${row}`);
 }
 
-function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns: number, hostBound: boolean = false): string[] {
+/**
+ * One row-producing unit of the graph stream (R1d). `growable` blocks (metric families with at
+ * least two real samples) are the ones surplus interior height distributes across; `render(1)`
+ * on every block, fixed or chart, is EXACTLY today's flat line list -- the byte-identical
+ * exact-fit case (acceptance #4) is nothing more than every block asked for its floor.
+ */
+interface GraphBlock {
+  readonly growable: boolean;
+  render(rows: number): string[];
+}
+
+function fixedBlock(line: string): GraphBlock {
+  return { growable: false, render: () => [line] };
+}
+
+function chartBlock(growable: boolean, render: (rows: number) => string[]): GraphBlock {
+  return { growable, render };
+}
+
+function compactSharedGraphBlocks(snapshot: OperatorSurfaceSnapshot, plotColumns: number, hostBound: boolean = false): GraphBlock[] {
   const checkpointSteps = new Set(snapshot.graphs.checkpoints.map((checkpoint) => checkpoint.step));
   const axisByStep = new Map<number, { step: number }>();
   for (const point of snapshot.graphs.points) axisByStep.set(point.step, { step: point.step });
@@ -605,28 +644,30 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
   const marker = axisSamples.length > 0
     ? `checkpoint ${axisSamples.map((point) => checkpointSteps.has(point.step) ? "▲" : "·").join("")}`
     : "checkpoint INSUFFICIENT REAL HISTORY";
+  const metricBlock = (label: string, points: Array<{ step: number; value?: number }>): GraphBlock =>
+    chartBlock(metricIsGrowable(points), (rows) => compactMetricLines(label, points, plotColumns, stateTag, isLive, rows));
   // When the host-telemetry source is bound, its always-present VRAM/GPU curves make the
   // run-event GPU-utilization / VRAM / GPU-watts rows redundant — omitting them here is what
   // lets ten curves (four training + six host) fit the height budget without the layout engine
   // collapsing arbitrary rows. Without a bound host source the legacy full section stands.
-  const gpuRows = hostBound ? [] : [
-    compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag, isLive),
-    compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag, isLive),
+  const gpuBlocks: GraphBlock[] = hostBound ? [] : [
+    metricBlock("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct)),
+    metricBlock("VRAM GiB", pointMetric((point) => point.vramUsedGib)),
   ];
-  const gpuWattsRows = hostBound ? [] : [
-    compactMetricLine("GPU watts", pointMetric((point) => point.gpuWatts), plotColumns, stateTag, isLive),
+  const gpuWattsBlocks: GraphBlock[] = hostBound ? [] : [
+    metricBlock("GPU watts", pointMetric((point) => point.gpuWatts)),
   ];
   return [
-    `TRAINING/LOSS${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("loss", pointMetric((point) => point.loss), plotColumns, stateTag, isLive),
-    `RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`,
-    ...gpuRows,
-    compactMetricLine("tokens/s", pointMetric((point) => point.tokensPerSecond), plotColumns, stateTag, isLive),
-    compactMetricLine("learning rate", pointMetric((point) => point.learningRate), plotColumns, stateTag, isLive),
-    ...gpuWattsRows,
-    compactMetricLine("energy joules", pointMetric((point) => point.boardEnergyJoulesTotal), plotColumns, stateTag, isLive),
-    boundedSurfaceLine(axis, plotColumns + 20),
-    boundedSurfaceLine(marker, plotColumns + 20),
+    fixedBlock(`TRAINING/LOSS${stateTag ? ` [${stateTag}]` : ""}`),
+    metricBlock("loss", pointMetric((point) => point.loss)),
+    fixedBlock(`RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`),
+    ...gpuBlocks,
+    metricBlock("tokens/s", pointMetric((point) => point.tokensPerSecond)),
+    metricBlock("learning rate", pointMetric((point) => point.learningRate)),
+    ...gpuWattsBlocks,
+    metricBlock("energy joules", pointMetric((point) => point.boardEnergyJoulesTotal)),
+    fixedBlock(boundedSurfaceLine(axis, plotColumns + 20)),
+    fixedBlock(boundedSurfaceLine(marker, plotColumns + 20)),
   ];
 }
 /** Leading columns reserved for the keyboard-focus marker (R2b) — reserved UNCONDITIONALLY so
@@ -679,27 +720,67 @@ export const HOST_METRIC_LABELS: Record<HostMetricId, string> = {
   disk: "host disk %",
 };
 
+/** A host series is growable (R1d) once it holds at least two REAL (non-null, finite) samples --
+ *  the floor a taller plot needs to show anything a one-row sparkline doesn't already. A series
+ *  that is unbound, empty, or entirely null stays at its single text/axis row and takes no
+ *  share, same threshold `metricIsGrowable` uses for the training families. */
+function hostSeriesIsGrowable(series: HostMetricSeries | undefined): boolean {
+  if (!series) return false;
+  let count = 0;
+  for (const value of series.values) {
+    if (value !== null && Number.isFinite(value)) count += 1;
+    if (count >= 2) return true;
+  }
+  return false;
+}
+
 /**
- * One host-metric line. ORDER INVARIANT (frozen spec): "is this source bound" is decided FIRST,
- * "does it have samples" only after. A bound-but-empty series renders an empty axis (all-gap
- * sparkline), and can NEVER fall through to the SOURCE UNBOUND path — unbound-before-bound is
- * the named defect.
+ * One host-metric's lines, `rows` tall. ORDER INVARIANT (frozen spec): "is this source bound" is
+ * decided FIRST, "does it have samples" only after. A bound-but-empty series renders an empty
+ * axis (all-gap sparkline), and can NEVER fall through to the SOURCE UNBOUND path —
+ * unbound-before-bound is the named defect. `rows <= 1` is BYTE-IDENTICAL to the pre-R1d single
+ * line (same `sparklineRow` call); `rows > 1` spends the surplus via the same Braille
+ * `renderChart` primitive the multi-row training families use.
  */
-export function hostMetricLine(id: HostMetricId, series: HostMetricSeries | undefined, columns: number): string {
+export function hostMetricLines(id: HostMetricId, series: HostMetricSeries | undefined, columns: number, rows: number = 1): string[] {
   const prefix = HOST_METRIC_LABELS[id].padEnd(20, " ");
-  if (!series) return `${prefix}SOURCE UNBOUND`; // genuinely no producer wired
+  if (!series) return [`${prefix}SOURCE UNBOUND`]; // genuinely no producer wired
   // Bound from here down. Empty -> empty axis; null latest -> gap glyphs + the stated reason.
-  const spark = sparklineRow(series.values, columns);
   const latest = series.values.length > 0 ? series.values[series.values.length - 1] : undefined;
   const reason = latest === null && series.unavailableReason ? ` [${series.unavailableReason}]` : "";
-  return `${prefix}${spark}${reason}`;
+  if (rows <= 1) {
+    const spark = sparklineRow(series.values, columns);
+    return [`${prefix}${spark}${reason}`];
+  }
+  const chart = renderChart(series.values, { width: columns, height: Math.floor(rows) });
+  const blankPrefix = " ".repeat(prefix.length);
+  return chart.rows.map((row, index) => {
+    const label = index === 0 ? prefix : blankPrefix;
+    const trailer = index === chart.rows.length - 1 ? reason : "";
+    return `${label}${row}${trailer}`;
+  });
+}
+
+/** Legacy single-line accessor, preserved for existing direct callers/tests: today's one-row
+ *  rendering, byte-identical to before R1d. */
+export function hostMetricLine(id: HostMetricId, series: HostMetricSeries | undefined, columns: number): string {
+  return hostMetricLines(id, series, columns, 1)[0]!;
+}
+
+function hostTelemetryBlocks(host: HostTelemetrySnapshot | undefined, columns: number): GraphBlock[] {
+  return [
+    fixedBlock("HOST TELEMETRY"),
+    ...HOST_METRIC_IDS.map((id) =>
+      chartBlock(hostSeriesIsGrowable(host?.[id]), (rows) => hostMetricLines(id, host?.[id], columns, rows)),
+    ),
+  ];
 }
 
 /** The six always-present host curves. Present with or without a live run — that is the whole
  *  point: the resting panel is bound, and a live run ADDS training curves without dropping any
- *  of these. */
+ *  of these. Legacy flat accessor: today's floor-only rendering, byte-identical to before R1d. */
 export function hostTelemetryLines(host: HostTelemetrySnapshot | undefined, columns: number): string[] {
-  return ["HOST TELEMETRY", ...HOST_METRIC_IDS.map((id) => hostMetricLine(id, host?.[id], columns))];
+  return hostTelemetryBlocks(host, columns).flatMap((block) => block.render(1));
 }
 
 export function OperatorSurfacePane({
@@ -745,17 +826,21 @@ export function OperatorSurfacePane({
   // legacy families already render that state. A WIRED host with a missing/empty series is the
   // per-series bound/unbound decision inside hostMetricLine — that is where the order invariant
   // lives, and it is never skipped when the producer exists.
-  const hostSection = input.host === undefined ? [] : hostTelemetryLines(input.host, plotColumns);
-  const trainingSection = compactSharedGraphLines(snapshot, plotColumns, input.host !== undefined);
-  // Both passes land here: the section ORDER is the height-contention policy above, and
-  // every resulting line is then bounded against the pane's real inner width so any
-  // shortening carries a visible marker instead of being silently hard-clipped by the
-  // outer renderer (legibility bar, 2026-07-26). Order first, bound second — bounding
-  // before assembly would measure the wrong strings.
-  const graphLines = (snapshot.graphs.points.length === 0
-    ? [...hostSection, ...trainingSection]
-    : [...trainingSection, ...hostSection]
-  ).map((line) => boundedSurfaceLine(line, innerWidth));
+  const hostBlocks = input.host === undefined ? [] : hostTelemetryBlocks(input.host, plotColumns);
+  const trainingBlocks = compactSharedGraphBlocks(snapshot, plotColumns, input.host !== undefined);
+  // Section order is the height-contention policy (above); block order is what both the
+  // end-trim and the R1d surplus-distribution below walk in, so "first ones in section order"
+  // (the frozen remainder-placement rule) means exactly this array's order.
+  const orderedGraphBlocks: GraphBlock[] = snapshot.graphs.points.length === 0
+    ? [...hostBlocks, ...trainingBlocks]
+    : [...trainingBlocks, ...hostBlocks];
+  const growableBlockIndices = orderedGraphBlocks
+    .map((block, index) => (block.growable ? index : -1))
+    .filter((index) => index >= 0);
+  // Every block at its floor (rows=1) is EXACTLY today's flat line list, one line per block —
+  // the count the fixed-chrome budget below compares against, and the byte-identical output
+  // acceptance row #4 requires when there is no surplus to distribute.
+  const baselineBlockCount = orderedGraphBlocks.length;
   const compactMetrics = snapshot.metrics.length > 0
     ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, innerWidth)]
     : [];
@@ -823,14 +908,39 @@ export function OperatorSurfacePane({
     : [];
   const fixedChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length + compactMetrics.length + 1 + 1 + compactAgentLines.length;
   const graphRowBudget = effectiveHeight - fixedChromeRows;
-  const visibleGraphLines = graphLines.length <= graphRowBudget
-    ? graphLines
-    : graphRowBudget >= 1
-      ? [
-          ...graphLines.slice(0, graphRowBudget - 1),
-          boundedSurfaceLine(`… ${graphLines.length - (graphRowBudget - 1)} more rows`, innerWidth),
-        ]
-      : [];
+  // R1d: the pane used to stop here once end-trim didn't bind — a fitting or roomy mount passed
+  // the flat one-row-per-chart stream through UNTOUCHED, which is exactly the under-subscribed
+  // half this spec fills. The over-subscribed branch (graphRowBudget < baseline) is UNCHANGED:
+  // trim from the end, state the drop, same as before. Only when there is genuine surplus
+  // (graphRowBudget > baseline) does distribution run, and only across growable blocks; zero
+  // growable blocks or zero/negative surplus falls through to the same untouched pass-through
+  // the exact-fit case always had (skip-path S1/S6).
+  const rawGraphLines: string[] = baselineBlockCount > graphRowBudget
+    ? (() => {
+        const baseline = orderedGraphBlocks.flatMap((block) => block.render(1));
+        return graphRowBudget >= 1
+          ? [
+              ...baseline.slice(0, graphRowBudget - 1),
+              `… ${baseline.length - (graphRowBudget - 1)} more rows`,
+            ]
+          : [];
+      })()
+    : (() => {
+        const surplus = graphRowBudget - baselineBlockCount;
+        if (surplus <= 0 || growableBlockIndices.length === 0) {
+          return orderedGraphBlocks.flatMap((block) => block.render(1));
+        }
+        // Even growth across bound charts; the remainder goes to the FIRST ones in section
+        // order (conjunction C2: deterministic across two renders of the same size).
+        const perChart = Math.floor(surplus / growableBlockIndices.length);
+        const remainder = surplus % growableBlockIndices.length;
+        const rowsForBlock = new Map<number, number>();
+        growableBlockIndices.forEach((blockIndex, orderIndex) => {
+          rowsForBlock.set(blockIndex, 1 + perChart + (orderIndex < remainder ? 1 : 0));
+        });
+        return orderedGraphBlocks.flatMap((block, index) => block.render(rowsForBlock.get(index) ?? 1));
+      })();
+  const visibleGraphLines = rawGraphLines.map((line) => boundedSurfaceLine(line, innerWidth));
 
   const body = React.createElement(
     Box,
