@@ -26,9 +26,20 @@ describe("/admit producer-receipt schema authority", () => {
   it("rejects content-addressed receipts whose output identities disagree", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ember-admit-schema-"));
     const outputRoot = path.join(root, "candidates");
-    const identities = { checkpoint: "c".repeat(64) };
+    const identities = {
+      checkpoint: {
+        relative_path: "checkpoint.bin",
+        sha256: "c".repeat(64),
+        bytes: 10,
+      },
+    };
+    const descriptorIdentity = {
+      relative_path: "admission.json",
+      sha256: "a".repeat(64),
+      bytes: 123,
+    };
     const digestJoin = createHash("sha256").update(
-      `${canonical({ role_sha256: identities })}\n`,
+      `${canonical({ output_identities: identities })}\n`,
     ).digest("hex");
     const receipt = {
       benchmark_claim: false,
@@ -60,7 +71,10 @@ describe("/admit producer-receipt schema authority", () => {
       output_identities: { checkpoint: "d".repeat(64) },
       schema_version: "ember-owned-admission-producer-receipt-v1",
       selected: false,
-      source_identities: identities,
+      source_identities: {
+        descriptor: descriptorIdentity,
+        roles: identities,
+      },
       training_claim: false,
       training_started: false,
     };
@@ -72,7 +86,8 @@ describe("/admit producer-receipt schema authority", () => {
     const candidateSha256 = createHash("sha256").update(
       canonical({
         producer_receipt_sha256: receiptSha256,
-        role_sha256: identities,
+        descriptor_identity: descriptorIdentity,
+        output_identities: receipt.output_identities,
       }),
     ).digest("hex");
     const command = createAdmitCommand({

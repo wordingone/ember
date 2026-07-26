@@ -27,9 +27,21 @@ describe("/admit on-disk receipt verification", () => {
   it("rehashes the exact receipt and candidate digest before success", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ember-admit-receipt-"));
     const outputRoot = path.join(root, "candidates");
-    const identities = { checkpoint: "c".repeat(64) };
+    const checkpointBytes = Buffer.from("checkpoint");
+    const identities = {
+      checkpoint: {
+        relative_path: "checkpoint.bin",
+        sha256: createHash("sha256").update(checkpointBytes).digest("hex"),
+        bytes: checkpointBytes.byteLength,
+      },
+    };
+    const descriptorIdentity = {
+      relative_path: "admission.json",
+      sha256: "d".repeat(64),
+      bytes: 123,
+    };
     const digestJoin = createHash("sha256").update(
-      `${canonical({ role_sha256: identities })}\n`,
+      `${canonical({ output_identities: identities })}\n`,
     ).digest("hex");
     const receipt = {
       candidate_id: "candidate-one",
@@ -57,7 +69,10 @@ describe("/admit on-disk receipt verification", () => {
       output_identities: identities,
       schema_version: "ember-owned-admission-producer-receipt-v1",
       selected: false,
-      source_identities: identities,
+      source_identities: {
+        descriptor: descriptorIdentity,
+        roles: identities,
+      },
       training_claim: false,
       training_started: false,
     };
@@ -69,11 +84,13 @@ describe("/admit on-disk receipt verification", () => {
       "producer-receipts",
     );
     fs.mkdirSync(receiptRoot, { recursive: true });
+    fs.writeFileSync(path.join(outputRoot, "candidate-one", "checkpoint.bin"), checkpointBytes);
     fs.writeFileSync(path.join(receiptRoot, `${receiptSha256}.json`), receiptBytes);
     const candidateSha256 = createHash("sha256").update(
       canonical({
         producer_receipt_sha256: receiptSha256,
-        role_sha256: identities,
+        descriptor_identity: descriptorIdentity,
+        output_identities: identities,
       }),
     ).digest("hex");
     const command = createAdmitCommand({

@@ -30,9 +30,21 @@ describe("/admit receipt path authority", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ember-admit-link-"));
     const target = path.join(root, "target");
     const outputRoot = path.join(root, "linked-output");
-    const identities = { checkpoint: "c".repeat(64) };
+    const checkpointBytes = Buffer.from("checkpoint");
+    const identities = {
+      checkpoint: {
+        relative_path: "checkpoint.bin",
+        sha256: createHash("sha256").update(checkpointBytes).digest("hex"),
+        bytes: checkpointBytes.byteLength,
+      },
+    };
+    const descriptorIdentity = {
+      relative_path: "admission.json",
+      sha256: "d".repeat(64),
+      bytes: 123,
+    };
     const digestJoin = createHash("sha256").update(
-      `${canonical({ role_sha256: identities })}\n`,
+      `${canonical({ output_identities: identities })}\n`,
     ).digest("hex");
     const receipt = {
       benchmark_claim: false,
@@ -60,7 +72,10 @@ describe("/admit receipt path authority", () => {
       output_identities: identities,
       schema_version: "ember-owned-admission-producer-receipt-v1",
       selected: false,
-      source_identities: identities,
+      source_identities: {
+        descriptor: descriptorIdentity,
+        roles: identities,
+      },
       training_claim: false,
       training_started: false,
     };
@@ -68,11 +83,13 @@ describe("/admit receipt path authority", () => {
     const receiptSha256 = createHash("sha256").update(bytes).digest("hex");
     const receiptRoot = path.join(target, "candidate-one", "producer-receipts");
     fs.mkdirSync(receiptRoot, { recursive: true });
+    fs.writeFileSync(path.join(target, "candidate-one", "checkpoint.bin"), checkpointBytes);
     fs.writeFileSync(path.join(receiptRoot, `${receiptSha256}.json`), bytes);
     fs.symlinkSync(target, outputRoot, "junction");
     const candidateSha256 = createHash("sha256").update(canonical({
       producer_receipt_sha256: receiptSha256,
-      role_sha256: identities,
+      descriptor_identity: descriptorIdentity,
+      output_identities: identities,
     })).digest("hex");
 
     expect(verifyAdmissionProducerReceipt(outputRoot, {

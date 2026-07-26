@@ -5,7 +5,7 @@
 
 import { spawnSync } from "child_process";
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { isAbsolute, join, parse, relative, resolve, sep } from "path";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
@@ -96,6 +96,72 @@ function canonicalJson(value: unknown): string {
   return encoded;
 }
 const SHA256_RE = /^[0-9a-f]{64}$/;
+
+interface FileIdentity {
+  relative_path: string;
+  sha256: string;
+  bytes: number;
+}
+
+function parseFileIdentity(value: unknown): FileIdentity | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const identity = value as Record<string, unknown>;
+  const relativePath = identity.relative_path;
+  const parts = typeof relativePath === "string" ? relativePath.split("/") : [];
+  if (
+    Object.keys(identity).sort().join(",") !== "bytes,relative_path,sha256" ||
+    typeof relativePath !== "string" ||
+    relativePath.length === 0 ||
+    relativePath.includes("\\") ||
+    /[\u0000-\u0020]/u.test(relativePath) ||
+    isAbsolute(relativePath) ||
+    parts.some((part) => part === "" || part === "." || part === "..") ||
+    parts[0]?.includes(":") ||
+    parts[0] === "producer-receipts" ||
+    typeof identity.sha256 !== "string" ||
+    !SHA256_RE.test(identity.sha256) ||
+    typeof identity.bytes !== "number" ||
+    !Number.isSafeInteger(identity.bytes) ||
+    identity.bytes < 0
+  ) {
+    return null;
+  }
+  return identity as unknown as FileIdentity;
+}
+
+function collectCandidateTree(candidateRoot: string): {
+  files: Set<string>;
+  directories: Set<string>;
+} | null {
+  const files = new Set<string>();
+  const directories = new Set<string>();
+  const walk = (directory: string): boolean => {
+    let entries;
+    try {
+      if (!lstatSync(directory).isDirectory()) return false;
+      entries = readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    for (const entry of entries) {
+      const absolute = join(directory, entry.name);
+      const relativePath = relative(candidateRoot, absolute).split(sep).join("/");
+      if (entry.isSymbolicLink()) return false;
+      if (entry.isDirectory()) {
+        directories.add(relativePath);
+        if (!walk(absolute)) return false;
+      } else if (entry.isFile()) {
+        files.add(relativePath);
+      } else {
+        return false;
+      }
+    }
+    return true;
+  };
+  return walk(candidateRoot) ? { files, directories } : null;
+}
 
 const CANDIDATE_ID_RE = /^[a-z][a-z0-9_.-]*$/;
 function parseOptions(args: string): AdmitOptions | null {
@@ -258,19 +324,72 @@ export function verifyAdmissionProducerReceipt(
     return null;
   }
   const consumerRows = consumers as Record<string, unknown>;
-  const roleIdentities = identities as Record<string, unknown>;
+  const sourceIdentities = identities as Record<string, unknown>;
+  const descriptorIdentity = parseFileIdentity(sourceIdentities.descriptor);
+  const sourceRoles = sourceIdentities.roles;
+  if (
+    Object.keys(sourceIdentities).sort().join(",") !== "descriptor,roles" ||
+    descriptorIdentity === null ||
+    typeof sourceRoles !== "object" ||
+    sourceRoles === null ||
+    Array.isArray(sourceRoles) ||
+    canonicalJson(outputIdentities) !== canonicalJson(sourceRoles)
+  ) {
+    return null;
+  }
+  const roleIdentities = outputIdentities as Record<string, unknown>;
+  const parsedRoles = new Map<string, FileIdentity>();
   if (
     Object.keys(roleIdentities).length === 0 ||
-    Object.entries(roleIdentities).some(
-      ([role, digest]) =>
+    Object.entries(roleIdentities).some(([role, identity]) => {
+      const parsed = parseFileIdentity(identity);
+      if (parsed !== null) parsedRoles.set(role, parsed);
+      return (
         role.length === 0 ||
-        typeof digest !== "string" ||
-        !SHA256_RE.test(digest),
-    ) ||
-    canonicalJson(outputIdentities) !== canonicalJson(roleIdentities) ||
+        parsed === null
+      );
+    }) ||
+    new Set([...parsedRoles.values()].map((identity) => identity.relative_path)).size
+      !== parsedRoles.size ||
     createHash("sha256")
-      .update(`${canonicalJson({ role_sha256: roleIdentities })}\n`)
+      .update(`${canonicalJson({ output_identities: roleIdentities })}\n`)
       .digest("hex") !== digestJoin
+  ) {
+    return null;
+  }
+  const candidateRoot = resolve(outputRoot, candidateId);
+  const expectedFiles = new Set<string>([
+    `producer-receipts/${receiptSha256}.json`,
+  ]);
+  const expectedDirectories = new Set<string>(["producer-receipts"]);
+  for (const identity of parsedRoles.values()) {
+    const file = resolve(candidateRoot, ...identity.relative_path.split("/"));
+    if (!isRegularFileUnderUnlinkedRoot(candidateRoot, file)) return null;
+    let bytes: Uint8Array;
+    try {
+      bytes = readFileSync(file);
+    } catch {
+      return null;
+    }
+    if (
+      bytes.byteLength !== identity.bytes ||
+      createHash("sha256").update(bytes).digest("hex") !== identity.sha256
+    ) {
+      return null;
+    }
+    expectedFiles.add(identity.relative_path);
+    let parent = identity.relative_path.split("/").slice(0, -1);
+    while (parent.length > 0) {
+      expectedDirectories.add(parent.join("/"));
+      parent = parent.slice(0, -1);
+    }
+  }
+  const tree = collectCandidateTree(candidateRoot);
+  if (
+    tree === null ||
+    canonicalJson([...tree.files].sort()) !== canonicalJson([...expectedFiles].sort()) ||
+    canonicalJson([...tree.directories].sort()) !==
+      canonicalJson([...expectedDirectories].sort())
   ) {
     return null;
   }
@@ -300,7 +419,8 @@ export function verifyAdmissionProducerReceipt(
   const candidateSha256 = createHash("sha256").update(
     canonicalJson({
       producer_receipt_sha256: receiptSha256,
-      role_sha256: identities,
+      descriptor_identity: descriptorIdentity,
+      output_identities: roleIdentities,
     }),
   ).digest("hex");
   return candidateSha256 === claimedCandidateSha256 ? candidateSha256 : null;
