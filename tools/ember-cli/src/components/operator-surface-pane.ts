@@ -562,6 +562,8 @@ export function layoutControlRows(actions: readonly string[], availableWidth: nu
     }
   }
   return rows;
+}
+
 export const HOST_METRIC_LABELS: Record<HostMetricId, string> = {
   memory: "host memory GiB",
   ram: "host RAM GiB",
