@@ -91,6 +91,9 @@ describe("cond3 Artifact B: /model identity resolution on the fully-resolved OWN
 
     const result = await cmd.execute("status", ctx);
 
+    if (!result || result.type !== "message") {
+      throw new Error("expected /model status to return a message result");
+    }
     expect(result.type).toBe("message");
     const bytes = readFileSync(FIXTURE_CHECKPOINT);
     const actualSha256 = createHash("sha256").update(bytes).digest("hex");
