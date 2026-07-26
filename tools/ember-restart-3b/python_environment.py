@@ -55,11 +55,15 @@ _SOURCE_KEYS = {"kind", "locator", "commit", "artifact_sha256"}
 _OPTIONAL_KEYS = {"imports", "feature", "reason"}
 _PROSE_KEYS = {"path", "required_marker"}
 _LINKED_KEYS = {"rust", "typescript"}
+_PRIMARY_INDEX_LOCATOR = "https://pypi.org/simple"
+_EXPECTED_INDEX_LOCATOR = "https://download.pytorch.org/whl/cu126"
 _EXPECTED_PIP_OPTIONS = [
+    "--isolated",
+    "--index-url",
+    _PRIMARY_INDEX_LOCATOR,
     "--extra-index-url",
-    "https://download.pytorch.org/whl/cu126",
+    _EXPECTED_INDEX_LOCATOR,
 ]
-_EXPECTED_INDEX_LOCATOR = _EXPECTED_PIP_OPTIONS[1]
 _VERSION_RE = re.compile(r"^[0-9][A-Za-z0-9.+_-]*$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")

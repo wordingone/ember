@@ -183,6 +183,19 @@ def test_install_command_is_exact_and_non_mutating_when_not_executed() -> None:
     assert "arc-agi==0.9.4" not in argv
 
 
+def test_install_command_isolated_from_shell_local_pip_state() -> None:
+    manifest = load_manifest()
+    argv = python_environment.build_install_argv(
+        manifest,
+        python_executable="python",
+    )
+    assert argv[:9] == [
+        "python", "-m", "pip", "install", "--isolated",
+        "--index-url", "https://pypi.org/simple",
+        "--extra-index-url", "https://download.pytorch.org/whl/cu126",
+    ]
+
+
 def test_install_refuses_environment_drift_before_pip(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
