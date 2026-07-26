@@ -476,7 +476,10 @@ def current_installed_sources(
             sources[distribution] = None
             continue
         try:
-            parsed = json.loads(raw)
+            parsed = json.loads(
+                raw,
+                object_pairs_hook=_reject_duplicate_object_keys,
+            )
         except json.JSONDecodeError as exc:
             raise EnvironmentContractError(
                 f"installed direct_url.json is malformed for {distribution}: {exc}"

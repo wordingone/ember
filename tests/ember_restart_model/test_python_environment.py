@@ -282,3 +282,31 @@ def test_manifest_loader_rejects_duplicate_json_object_keys(tmp_path: Path) -> N
         match="duplicate JSON object key",
     ):
         python_environment.load_manifest(path)
+
+
+def test_installed_direct_url_rejects_duplicate_json_object_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeDistribution:
+        def read_text(self, name: str) -> str:
+            assert name == "direct_url.json"
+            return (
+                '{"url":"https://example.invalid/first",'
+                '"url":"https://example.invalid/shadow"}'
+            )
+
+    monkeypatch.setattr(
+        python_environment.importlib.metadata,
+        "distribution",
+        lambda _name: FakeDistribution(),
+    )
+    manifest = {
+        "packages": [
+            {"distribution": "example", "install_by_default": True}
+        ]
+    }
+    with pytest.raises(
+        python_environment.EnvironmentContractError,
+        match="duplicate JSON object key",
+    ):
+        python_environment.current_installed_sources(manifest)
