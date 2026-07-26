@@ -283,6 +283,20 @@ COMMAND_REGISTRY = "tools/ember-cli/src/command-registry.ts"
 REPL_TS = "tools/ember-cli/src/screens/repl.ts"
 SLASH_DROPDOWN_TS = "tools/ember-cli/src/services/slash-dropdown.ts"
 
+# Rendered-frame capture: the executable closure of the palette chain's last
+# link (SlashDropdown JSX -> actual terminal cells). The capture tool drives
+# the REAL compiled cockpit through ConPTY, types "/" + a 3-char prefix per
+# spine command, reconstructs the frame with a headless terminal, and
+# requires the full command name AND an untyped description fragment on ONE
+# rendered row. The harness consumes the tool's per-target verdict lines,
+# never its exit code alone (byte provenance: every asserted substring can
+# only have been written by the product's renderer through the PTY).
+CAPTURE_TOOL = "tools/ember-cli/src/build-tools/palette-frame-capture.ts"
+CAPTURE_CWD = "tools/ember-cli/src"
+COCKPIT_BINARY = "tools/ember-cli/src/ember.exe"
+CAPTURE_TARGETS = ("custody", "model", "benchmark", "train")
+CAPTURE_TIMEOUT_S = 240
+
 # A command factory declaring `availability: [...]` with any entry is dropped
 # by getCommands()'s meetsAvailabilityRequirement filter under default deps
 # (isCloudSubscriber/isConsoleUser both () => false), so it never enumerates
@@ -409,6 +423,52 @@ _ABS_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]|^/")
 
 def check(state: str, evidence: str) -> dict:
     return {"state": state, "evidence": evidence}
+
+
+def run_rendered_frame_capture(root: Path) -> dict:
+    """Execute the ConPTY rendered-frame capture against the compiled cockpit
+    and return {"executed": bool, ...}. When executed, "lines" maps each
+    capture target to the tool's own per-target verdict line ("PASS <name>:
+    ..." on stdout / "FAIL <name>: ..." on stderr) -- the exit code alone is
+    never treated as evidence. Every non-executable path names its reason so
+    the caller can report an explicit could-not-execute state."""
+    tool = root / CAPTURE_TOOL
+    if not tool.is_file():
+        return {"executed": False, "reason": f"capture tool missing: {CAPTURE_TOOL}"}
+    binary = os.environ.get("EMBER_COCKPIT_BINARY", str(root / COCKPIT_BINARY))
+    if not Path(binary).is_file():
+        return {
+            "executed": False,
+            "reason": f"no compiled cockpit binary at {binary} (build with "
+            "`bun run ./build-tools/build-cockpit.ts` or set EMBER_COCKPIT_BINARY)",
+        }
+    bun = shutil.which("bun")
+    if bun is None:
+        return {"executed": False, "reason": "bun runtime not on PATH"}
+    outdir = tempfile.mkdtemp(prefix="ember-rendered-frame-")
+    try:
+        proc = subprocess.run(
+            [bun, "run", str(tool), str(Path(binary).resolve()), outdir],
+            cwd=str(root / CAPTURE_CWD),
+            capture_output=True,
+            encoding="utf8",
+            errors="replace",
+            timeout=CAPTURE_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "executed": False,
+            "reason": f"capture timed out after {CAPTURE_TIMEOUT_S}s",
+        }
+    except OSError as exc:
+        return {"executed": False, "reason": f"capture could not be spawned: {exc}"}
+    lines: dict[str, str] = {}
+    for line in (proc.stdout or "").splitlines() + (proc.stderr or "").splitlines():
+        m = re.match(r"^(PASS|FAIL) ([a-z]+):", line)
+        if m and m.group(2) in CAPTURE_TARGETS:
+            lines[m.group(2)] = line.strip()
+    tail = " | ".join((proc.stderr or proc.stdout or "").strip().splitlines()[-3:])
+    return {"executed": True, "exit": proc.returncode, "lines": lines, "tail": tail}
 
 
 def assert_ember_root(root: Path) -> None:
@@ -1741,13 +1801,36 @@ def run(root: Path) -> dict:
             f"{chain['evidence']}; no availability restriction declared",
         )
 
+    # L5 rendered frame -- the former first undecidable row, now backed by an
+    # EXECUTED ConPTY capture of the real compiled cockpit when the
+    # environment can run it. Fail-closed: a verdict row comes ONLY from the
+    # capture tool's own per-target PASS/FAIL line over a reconstructed
+    # frame; any inability to execute (no binary, no bun, no ConPTY, crash,
+    # timeout) degrades to an explicit could-not-execute state, never to a
+    # pass.
+    capture = run_rendered_frame_capture(root)
+    report["rendered_frame"] = {}
+    for target in CAPTURE_TARGETS:
+        if not capture["executed"]:
+            report["rendered_frame"][target] = check(
+                "undecidable",
+                f"could not execute rendered-frame capture: {capture['reason']}",
+            )
+            continue
+        line = capture["lines"].get(target)
+        if line is None:
+            report["rendered_frame"][target] = check(
+                "undecidable",
+                "capture ran but emitted no verdict line for this target "
+                f"(exit={capture['exit']}; tail: {capture['tail']})",
+            )
+        elif line.startswith("PASS"):
+            report["rendered_frame"][target] = check("resolved-true", line)
+        else:
+            report["rendered_frame"][target] = check("resolved-false", line)
+
     # Permanently undecidable half ----------------------------------------
     report["undecidable"] = [
-        "Rendered frame: palette MEMBERSHIP is machine-checked (palette "
-        "section: registry -> availability filter -> repl state -> "
-        "filterSlashCommands -> display window -> SlashDropdown commands "
-        "prop); the final link -- SlashDropdown's JSX becoming actual "
-        "terminal pixels -- still requires human capture",
         "Interaction cost: is each control one click / one keystroke, with "
         "no typed flags? (human capture required)",
         "Launch experience: does the launcher reach a usable first pixel "
@@ -1758,6 +1841,11 @@ def run(root: Path) -> dict:
         list(checks.values())
         + list(report["spine"].values())
         + list(report["palette"].values())
+        # Rendered-frame rows gate ONLY when the capture actually executed: an
+        # executed FAIL is a real operability failure, while an environment
+        # that cannot run ConPTY has produced no verdict about the frame and
+        # its rows stay undecidable (reported, never silently passing).
+        + [c for c in report["rendered_frame"].values() if c["state"] != "undecidable"]
     )
     report["verdict"] = (
         "PASS (measurable half only; undecidable items remain human-judged)"
@@ -1795,6 +1883,9 @@ def main() -> int:
             print(f"  [{c['state']:>14}] {k}: {c['evidence']}")
         print("  palette reachability (rendered-list membership, static):")
         for k, c in report["palette"].items():
+            print(f"  [{c['state']:>14}] {k}: {c['evidence']}")
+        print("  rendered frame (executed ConPTY capture of the compiled cockpit):")
+        for k, c in report["rendered_frame"].items():
             print(f"  [{c['state']:>14}] {k}: {c['evidence']}")
         print("  undecidable (human capture required):")
         for u in report["undecidable"]:
