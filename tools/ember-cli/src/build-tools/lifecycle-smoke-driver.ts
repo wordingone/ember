@@ -158,6 +158,23 @@ export function actionLocalDelta(delta: string, input: string): string {
   return marker === -1 ? delta : delta.slice(marker + input.length);
 }
 
+export function actionVisibleDelta(before: string, after: string): string {
+  const remaining = new Map<string, number>();
+  for (const line of before.split(/\r?\n/).map((row) => row.trimEnd())) {
+    remaining.set(line, (remaining.get(line) ?? 0) + 1);
+  }
+  const added: string[] = [];
+  for (const line of after.split(/\r?\n/).map((row) => row.trimEnd())) {
+    const count = remaining.get(line) ?? 0;
+    if (count > 0) {
+      remaining.set(line, count - 1);
+    } else if (line.trim() !== "") {
+      added.push(line);
+    }
+  }
+  return added.join("\n").trim();
+}
+
 
 export function classifyActionFrame(
   action: Exclude<LifecycleAction, "launch">,
@@ -617,7 +634,12 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       [repoRoot, home, binary],
     );
     const launchArtifact = artifactPath(repoRoot, join(outDir, "action-1-launch.frame.txt"));
+    const launchDeltaArtifact = artifactPath(
+      repoRoot,
+      join(outDir, "action-1-launch.delta.txt"),
+    );
     writeFileSync(join(repoRoot, launchArtifact), readyFrame, "utf8");
+    writeFileSync(join(repoRoot, launchDeltaArtifact), readyFrame, "utf8");
     evidence.push({
       action: "launch",
       ordinal: 1,
@@ -630,6 +652,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       output_excerpt: "READY_OSC observed from compiled product render",
       state_evidence: null,
       frame_artifact: launchArtifact,
+      delta_artifact: launchDeltaArtifact,
       repair_item: null,
     });
     attempts.push({
@@ -690,6 +713,15 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
           join(outDir, `action-${index + 1}-${action}.frame.txt`),
         );
         writeFileSync(join(repoRoot, failedArtifact), failedFrame, "utf8");
+        const failedDeltaArtifact = artifactPath(
+          repoRoot,
+          join(outDir, `action-${index + 1}-${action}.delta.txt`),
+        );
+        writeFileSync(
+          join(repoRoot, failedDeltaArtifact),
+          `no effect-bearing frame delta: ${String(error)}\n`,
+          "utf8",
+        );
         evidence.push({
           action,
           ordinal: index + 1,
@@ -704,6 +736,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
           }`,
           state_evidence: null,
           frame_artifact: failedArtifact,
+          delta_artifact: failedDeltaArtifact,
           repair_item: `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
         });
         continue;
@@ -713,6 +746,12 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         [repoRoot, home, binary],
       ).publicBytes;
       const publicFrame = Buffer.from(redacted).toString("utf8");
+      const publicBefore = Buffer.from(
+        redactHostPaths(
+          Buffer.from(driven.before, "utf8"),
+          [repoRoot, home, binary],
+        ).publicBytes,
+      ).toString("utf8");
       const frameArtifact = artifactPath(
         repoRoot,
         join(outDir, `action-${index + 1}-${action}.frame.txt`),
@@ -726,8 +765,17 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
         .replaceAll(input.replaceAll(home, "<EMBER_SMOKE_HOME>").replaceAll(repoRoot, "<EMBER_REPO>"), "")
         .trim();
-      const status = classifyActionFrame(action, redactedDelta);
-      const publicDelta = actionOutputExcerpt(action, publicFrame, redactedDelta);
+      const visibleDelta = actionVisibleDelta(publicBefore, publicFrame);
+      const semanticDelta = [redactedDelta, visibleDelta]
+        .filter((part) => part.trim() !== "")
+        .join("\n");
+      const deltaArtifact = artifactPath(
+        repoRoot,
+        join(outDir, `action-${index + 1}-${action}.delta.txt`),
+      );
+      writeFileSync(join(repoRoot, deltaArtifact), semanticDelta, "utf8");
+      const status = classifyActionFrame(action, semanticDelta);
+      const publicDelta = actionOutputExcerpt(action, publicFrame, semanticDelta);
       attempts.push({
         action,
         input: redactPublicText(input, [repoRoot, home, binary]),
@@ -736,7 +784,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         detail: status === "PASS" ? "effect-bearing frame delta observed" : "operator surface refused",
       });
       let stateEvidence: LifecycleStateEvidence | null = null;
-      let effectEvidence = Buffer.from(redactedDelta, "utf8");
+      let effectEvidence = Buffer.from(semanticDelta, "utf8");
       let effectKind: LifecycleActionEvidence["effect_kind"] =
         status === "PREFLIGHT_ONLY"
           ? "preflight-only"
@@ -787,6 +835,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         output_excerpt: publicDelta || `${status}: no printable output`,
         state_evidence: stateEvidence,
         frame_artifact: frameArtifact,
+        delta_artifact: deltaArtifact,
         repair_item: status === "PASS"
           ? null
           : action === "train" && status === "PREFLIGHT_ONLY"

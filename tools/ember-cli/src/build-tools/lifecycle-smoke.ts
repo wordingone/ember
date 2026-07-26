@@ -116,6 +116,7 @@ export interface LifecycleActionEvidence {
   output_excerpt: string;
   state_evidence: LifecycleStateEvidence | null;
   frame_artifact: string;
+  delta_artifact: string;
   repair_item: string | null;
 }
 
@@ -279,13 +280,14 @@ export function validateLifecycleReceipt(
       "action", "ordinal", "input_sha256", "before_frame_sha256",
       "after_frame_sha256", "effect_evidence_sha256", "effect_kind",
       "outcome", "output_excerpt", "state_evidence", "frame_artifact",
-      "repair_item",
+      "delta_artifact", "repair_item",
     ], `action ${index + 1}`);
     requireSha(row.input_sha256, `${row.action} input`);
     requireSha(row.before_frame_sha256, `${row.action} before frame`);
     requireSha(row.after_frame_sha256, `${row.action} after frame`);
     requireSha(row.effect_evidence_sha256, `${row.action} effect evidence`);
     requireArtifact(row.frame_artifact, `${row.action} frame artifact`);
+    requireArtifact(row.delta_artifact, `${row.action} delta artifact`);
     if (row.ordinal !== index + 1) throw new Error("ordered actions have a wrong ordinal");
     if (row.output_excerpt.trim() === "") {
       throw new Error(`${row.action} output excerpt is absent`);
