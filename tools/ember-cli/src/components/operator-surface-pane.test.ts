@@ -498,8 +498,22 @@ describe("OperatorSurfacePane", () => {
       expect(tokensRow).not.toContain("AWAITING FIRST SAMPLE");
       // A metric this run hasn't produced yet, while running: AWAITING, never UNBOUND.
       const gpuWattsRow = rows.find((row) => row.startsWith("GPU watts"));
-      expect(gpuWattsRow).toContain("AWAITING FIRST SAMPLE");
+      // D2 rebase interaction (legibility scope addition, 2026-07-26): "GPU watts" padded to 20
+      // cols + "AWAITING FIRST SAMPLE" (21 chars) is 41 characters -- it never fit inside the
+      // pane's true content budget (innerWidth = effectiveWidth - 4, border + padding both
+      // accounted for) at 40 columns (innerWidth 36); it only appeared to fit before because
+      // this test predates the legibility pass's border+padding accounting fix and read the
+      // pre-fix, over-generous bound. At 40 columns the correct behavior is a visible "…"
+      // marker, never a silent full-text assumption; 60/80 columns have room for the phrase
+      // whole and keep the original assertion.
       expect(gpuWattsRow).not.toContain("SOURCE UNBOUND");
+      if (width === 40) {
+        expect(gpuWattsRow).toContain("AWAITING FIRST");
+        expect(gpuWattsRow).toContain("…");
+        expect(gpuWattsRow).not.toContain("AWAITING FIRST SAMPLE");
+      } else {
+        expect(gpuWattsRow).toContain("AWAITING FIRST SAMPLE");
+      }
     }
   });
 

@@ -90,14 +90,26 @@ describe("D3: OperatorSurfacePane border integrity across the width sweep", () =
   for (const width of [20, 24, 60, 80, 100, 140, 200]) {
     test(`width=${width}: single border closes on all four sides, aligned, no content escapes it`, () => {
       const height = 12;
+      // Combined-result check (team-lead, 2026-07-26): the merged operator-controls PR (#1102)
+      // introduced "AWAITING FIRST SAMPLE" as a distinct rendering from "SOURCE UNBOUND" for a
+      // LIVE run with a metric that has zero samples yet -- longer text than the pre-existing
+      // "SOURCE UNBOUND"/"SOURCE UNVERIFIED/UNBOUND" strings this sweep already exercised, and
+      // never rendered together with the D1/D2/D3 border fixes before this rebase. A recent
+      // train_step event with NO gpu_watts field drives getOperatorRunStatus to RUNNING (so
+      // familyLines/compactMetricLine choose "AWAITING FIRST SAMPLE") while leaving the metric
+      // itself sample-less -- the exact shape that produces the new, longer string.
+      const nowMs = Date.parse("2026-07-26T12:00:00.000Z");
       const el = React.createElement(OperatorSurfacePane, {
         telemetry: telemetry({
-          activeRun: { runId: "run-a", step: 2, loss: 1, stepMs: 500, lastTs: "2026-07-17T17:30:02.000Z" },
+          activeRun: { runId: "run-a", step: 2, loss: 1, stepMs: 500, lastTs: "2026-07-26T11:59:59.000Z" },
+          recentEvents: [
+            { ts: "2026-07-26T11:59:59.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-a", step: 2, loss: 1 } },
+          ],
         }),
         activityLines: [
           { ts: "4m ago", text: "[watchdog] a deliberately long event line meant to overrun the pane's inner width by a wide margin" } as never,
         ],
-        width, height, terminalColumns: Math.max(width + 20, 220), terminalRows: 60,
+        width, height, terminalColumns: Math.max(width + 20, 220), terminalRows: 60, nowMs,
       });
       // effectiveWidth/effectiveHeight mirror OperatorSurfacePane's own clamp (width>=20,
       // height>=8) -- computed from the DECLARED frame geometry, not from reading the component.
