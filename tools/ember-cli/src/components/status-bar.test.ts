@@ -6,6 +6,8 @@
 // Spec: specs/surface6-fireball-observatory.md; m10-battery-harness.md (A2/A7)
 
 import { describe, it, expect } from "bun:test";
+import React from "react";
+import { mountInk } from "../ink/reconciler.ts";
 import {
   renderModeIndicator,
   formatTokenCount,
@@ -20,10 +22,14 @@ import {
   RoundtripAgeIndicator,
   statusBarText,
   BYPASS_STATUS_TEXT,
+  fitStatusBarLine,
+  StatusLine,
+  SEGMENT_SEPARATOR,
   type ModelMetrics,
   type DegradedBannerState,
   type OutageBannerState,
   type RoundtripAgeState,
+  type StatusBarOptionalSegment,
 } from "./status-bar.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 
@@ -407,5 +413,94 @@ describe("issue #1044: statusBarText carries no keybinding-hint chrome", () => {
     expect(BYPASS_STATUS_TEXT).not.toContain("shift+tab");
     expect(BYPASS_STATUS_TEXT).not.toContain("esc to interrupt");
     expect(BYPASS_STATUS_TEXT).not.toContain("ctrl+t");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legibility bar (2026-07-26): the bar row used to render the mode indicator, "bypass
+// permissions on", the model-metrics meter, and the roundtrip indicator with no width
+// accounting -- a narrow terminal silently hard-clipped the row mid-word
+// ("bypass permissions on ·" with nothing after it, no marker). RED on pre-fix master:
+// fitStatusBarLine/StatusBarOptionalSegment/StatusLine's width prop did not exist at all.
+// ---------------------------------------------------------------------------
+describe("fitStatusBarLine — core identity text never drops; decorations reflow first", () => {
+  const metrics: StatusBarOptionalSegment = { key: "metrics", text: "12k/120k · 28t/s · 12.4/24.0GB" };
+  const roundtrip: StatusBarOptionalSegment = { key: "roundtrip", text: "last roundtrip 5s ago" };
+  const core = `⏵⏵${SEGMENT_SEPARATOR}bypass permissions on`;
+
+  it("keeps every optional segment when the width comfortably fits everything", () => {
+    const fitted = fitStatusBarLine(core, [metrics, roundtrip], 200);
+    expect(fitted.core).toBe(core);
+    expect(fitted.kept.map((s) => s.key)).toEqual(["metrics", "roundtrip"]);
+  });
+
+  it("drops the lowest-priority (last) optional segment first once width runs out", () => {
+    const width = core.length + SEGMENT_SEPARATOR.length + metrics.text.length + 2;
+    const fitted = fitStatusBarLine(core, [metrics, roundtrip], width);
+    expect(fitted.core).toBe(core);
+    expect(fitted.kept.map((s) => s.key)).toEqual(["metrics"]);
+  });
+
+  it("drops ALL optional segments before ever touching the core text", () => {
+    const width = core.length; // exactly the core, no room for any separator
+    const fitted = fitStatusBarLine(core, [metrics, roundtrip], width);
+    expect(fitted.core).toBe(core);
+    expect(fitted.kept).toEqual([]);
+  });
+
+  it("only truncates the core itself, with a visible marker, when even the bare core doesn't fit", () => {
+    const fitted = fitStatusBarLine(core, [metrics, roundtrip], 10);
+    expect(fitted.kept).toEqual([]);
+    expect(fitted.core.length).toBeLessThanOrEqual(10);
+    expect(fitted.core.endsWith("…")).toBe(true);
+    // Never the old silent-clip shape: whatever survives always carries the marker.
+    expect(fitted.core).not.toBe(core.slice(0, 10));
+  });
+
+  it("an unconstrained (undefined) width keeps every segment — no behavior change for existing callers", () => {
+    const fitted = fitStatusBarLine(core, [metrics, roundtrip], undefined);
+    expect(fitted.core).toBe(core);
+    expect(fitted.kept).toEqual([metrics, roundtrip]);
+  });
+});
+
+describe("StatusLine — width prop protects the core identity text at narrow widths", () => {
+  // StatusLine calls useInput (a real hook), so it must be mounted through Ink's own reconciler
+  // rather than invoked as a plain function (unlike the hook-free DegradedBanner/OutageBanner
+  // components elsewhere in this file).
+  function mount(width: number | undefined, cols = 200) {
+    const chunks: string[] = [];
+    const el = React.createElement(StatusLine, {
+      permissionMode: { mode: "bypass" as const, cycle: () => {} },
+      interrupt: { interrupt: () => {} },
+      taskPanel: { visible: false, toggle: () => {}, tasks: [] },
+      telemetry: {} as any,
+      modelMetrics: { contextTokens: 12000, maxContextTokens: 120000, vramUsedGb: 12.4, vramTotalGb: 24, tokensPerSec: 28.3 },
+      roundtripAge: { lastSuccessAt: Date.now() - 5000 },
+      width,
+    } as any);
+    const handle = mountInk(el, { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns: cols, rows: 6 } });
+    handle.unmount();
+    return chunks.join("");
+  }
+
+  it("at a very narrow width, the model-metrics and roundtrip segments are dropped first", () => {
+    const out = mount(12);
+    expect(out).not.toContain("12k/120k");
+    expect(out).not.toContain("last roundtrip");
+  });
+
+  it("at a generous width, the core text and both optional segments all render", () => {
+    const out = mount(200);
+    expect(out).toContain("bypass permissions on");
+    expect(out).toContain("12k/120k");
+    expect(out).toContain("last roundtrip");
+  });
+
+  it("with no width prop at all (legacy callers), behavior is unchanged -- everything renders", () => {
+    const out = mount(undefined);
+    expect(out).toContain("bypass permissions on");
+    expect(out).toContain("12k/120k");
+    expect(out).toContain("last roundtrip");
   });
 });

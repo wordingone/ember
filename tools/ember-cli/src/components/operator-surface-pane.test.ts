@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
-import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane, PLOT_PREFIX_WIDTH } from "./operator-surface-pane.ts";
+import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane, PLOT_PREFIX_WIDTH, layoutControlRows } from "./operator-surface-pane.ts";
 import type { TelemetryState } from "../services/telemetry-watch.ts";
 import type { ActivityFeedLine } from "./activity-feed-pane.ts";
 
@@ -527,5 +527,89 @@ describe("OperatorSurfacePane", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], width: 48 });
     expect((element as any).props["data-operator-surface"]).toBe("right-pane");
     expect((element as any).props.children.props.borderTitle).toBe("LIVE RUN / ACTIVITY/EVENT FEED");
+  });
+
+  // -------------------------------------------------------------------------
+  // Legibility bar (2026-07-26): "no control label is truncated — controls are the last thing
+  // to lose characters, never the first" + "the layout reflows... two columns cut in half is
+  // never the answer." RED on pre-fix master: the controls Box was a flat flexDirection:"row"
+  // with no wrap (flexWrap is a dead prop in layout-engine.ts) — at a narrow pane the outer
+  // overflow:"hidden" box raw-clipped the row mid-label: "[START] [PAUSE] [RESUME] [RES".
+  // -------------------------------------------------------------------------
+  describe("layoutControlRows — controls never truncate, they wrap instead", () => {
+    test("packs all four controls on one row when the width comfortably fits them", () => {
+      expect(layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 80)).toEqual([
+        ["START", "PAUSE", "RESUME", "RESTART"],
+      ]);
+    });
+
+    test("wraps to multiple rows, never splitting a label, at a narrow width", () => {
+      const rows = layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 20);
+      const flatLabels = rows.flat();
+      expect(flatLabels).toEqual(["START", "PAUSE", "RESUME", "RESTART"]);
+      for (const row of rows) {
+        const rowWidth = row.reduce((sum, action) => sum + `[${action}]`.length + 1, 0);
+        expect(rowWidth).toBeLessThanOrEqual(20 + `[${row[row.length - 1]}]`.length + 1); // never demands the row shrink a label
+      }
+    });
+
+    test("even a pathologically narrow width gives every label its own row rather than cutting it", () => {
+      const rows = layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 1);
+      expect(rows.flat()).toEqual(["START", "PAUSE", "RESUME", "RESTART"]);
+      expect(rows.every((row) => row.length === 1)).toBe(true);
+    });
+  });
+
+  test("at a narrow pane width, every control label renders IN FULL across wrapped rows instead of being clipped", () => {
+    const element = OperatorSurfacePane({
+      telemetry: telemetry({ recentEvents: [train("run-narrow", 1, "2026-07-17T17:30:01.000Z", 2)] }),
+      activityLines: [], width: 24, height: 20, terminalColumns: 24, terminalRows: 20,
+      nowMs: Date.parse("2026-07-17T17:30:02.000Z"),
+    });
+    const body = (element as any).props.children;
+    const controlsElement = (body.props.children as any[]).find((child) => child?.key === "controls");
+    // Recursively collect every rendered control label string ("[START]" etc.) regardless of
+    // whether they sit flat or nested under wrapped row Boxes.
+    const collectLabels = (node: any): string[] => {
+      if (!node || typeof node !== "object") return [];
+      const kids = node.props?.children;
+      if (typeof kids === "string") return [kids];
+      if (Array.isArray(kids)) return kids.flatMap(collectLabels);
+      if (kids && typeof kids === "object") return collectLabels(kids);
+      return [];
+    };
+    const labels = collectLabels(controlsElement);
+    expect(labels).toEqual(["[START]", "[PAUSE]", "[RESUME]", "[RESTART]"]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Legibility bar: "no metric value is truncated... shortens by an explicit, defined rule with
+  // a visible marker — never silent character-level clipping." RED on pre-fix master: graph/
+  // metric/source/agent lines were handed to the outer overflow:"hidden" box unbounded, which
+  // hard-clipped anything too long with NO marker ("SOURCE UN" instead of "SOURCE UNBOUND").
+  // -------------------------------------------------------------------------
+  test("no rendered content line exceeds the pane's inner width, and any shortened line carries a visible marker", () => {
+    const element = OperatorSurfacePane({
+      telemetry: telemetry({
+        channelStatus: "OFFLINE",
+        recentEvents: [train("run-x", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000 })],
+      }),
+      activityLines: [{ ts: "2026-07-17T17:30:00.000Z", source: "watchdog", text: "871 watchdog events collapsed into one summary line for the report", path: "Z:\\repo\\ember\\tools\\ember-cli\\state\\process-watch.json" }],
+      width: 36, height: 20, terminalColumns: 36, terminalRows: 20,
+      nowMs: Date.parse("2026-07-17T17:30:05.000Z"),
+    });
+    const body = (element as any).props.children;
+    const innerWidth = 36 - 2;
+    const rows = (body.props.children as any[])
+      .map((child) => child?.props?.children)
+      .filter((value) => typeof value === "string");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.length).toBeLessThanOrEqual(innerWidth);
+    }
+    // The exact silent-clip fragment this bug produced in production ("SOURCE UN" cut mid-word,
+    // e.g. a metric-family row) must never appear again: any row containing "SOURCE UN" either
+    // completes it to "SOURCE UNBOUND"/"SOURCE UNVERIFIED/UNBOUND" or carries the ellipsis marker.
+    expect(rows.some((row: string) => row.includes("SOURCE UN") && !row.includes("SOURCE UNBOUND") && !row.includes("SOURCE UNVERIFIED") && !row.includes(ellipsis))).toBe(false);
   });
 });

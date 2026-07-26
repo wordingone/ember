@@ -29,6 +29,11 @@ export interface OperatorSurfaceInput {
   nowMs?: number;
   maxAgentLines?: number;
   plotWidth?: number;
+  /** Path-truncation budget for the activity-feed line's path suffix, shrunk by the caller to
+   *  the ACTUAL pane width (legibility bar, 2026-07-26) rather than the fixed 48-char default —
+   *  a narrow pane used to hand a 48-char-budgeted line to the outer renderer, which then
+   *  silently hard-clipped it further with no marker at all. */
+  pathMaxLen?: number;
 }
 
 export type OperatorRunStatus = "RUNNING" | "STALE" | "IDLE" | "OFFLINE";
@@ -373,6 +378,7 @@ export function buildOperatorSurfaceSnapshot({
   nowMs = Date.now(),
   maxAgentLines = 6,
   plotWidth = 80,
+  pathMaxLen,
 }: OperatorSurfaceInput): OperatorSurfaceSnapshot {
   const rawGraphs = buildOperatorSurfaceGraphs(telemetry, plotWidth, nowMs);
   const status = getOperatorRunStatus(telemetry, nowMs, rawGraphs.runId);
@@ -426,7 +432,7 @@ export function buildOperatorSurfaceSnapshot({
 
   const visible = visibleActivityFeedLines(activityLines, maxAgentLines);
   const agentLines = visible.length > 0
-    ? visible.map((line) => formatActivityFeedLine(line, nowMs))
+    ? visible.map((line) => finiteNumber(pathMaxLen) ? formatActivityFeedLine(line, nowMs, pathMaxLen) : formatActivityFeedLine(line, nowMs))
     : [EMPTY_STATE_TEXT];
 
   return {
@@ -509,6 +515,39 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
     boundedSurfaceLine(marker, plotColumns + 20),
   ];
 }
+/** Per-action label width including its own trailing gap (paddingRight:1 on the control's own
+ *  Box) — used to pack controls into rows that never split a label mid-word (legibility bar,
+ *  2026-07-26: "no control label is truncated — controls are the last thing to lose
+ *  characters, never the first"). */
+function controlLabelWidth(action: string): number {
+  return `[${action}]`.length + 1;
+}
+
+/** Packs the four control labels into as few rows as fit `availableWidth`, greedily, never
+ *  splitting a label — every row always gets at least one full label even if that label alone
+ *  exceeds `availableWidth` (a too-narrow pane gets its own row per control, not a clipped one).
+ *  This REPLACES relying on flexWrap for the controls row: the layout engine declares a
+ *  `flexWrap` property but never actually implements wrapping (dead prop, verified by reading
+ *  layout-engine.ts), so a too-narrow controls row used to run past the pane and get raw-clipped
+ *  by the outer overflow:"hidden" box with no marker at all ("[START] [PAUSE] [RESUME] [RES").
+ *  Reflowing into rows here needs no layout-engine change and never truncates anything. */
+export function layoutControlRows(actions: readonly string[], availableWidth: number): string[][] {
+  const rows: string[][] = [[]];
+  let used = 0;
+  for (const action of actions) {
+    const w = controlLabelWidth(action);
+    const current = rows[rows.length - 1]!;
+    if (current.length > 0 && used + w > availableWidth) {
+      rows.push([action]);
+      used = w;
+    } else {
+      current.push(action);
+      used += w;
+    }
+  }
+  return rows;
+}
+
 export function OperatorSurfacePane({
   width,
   height,
@@ -521,17 +560,68 @@ export function OperatorSurfacePane({
   const terminalHeight = finiteNumber(terminalRows) ? terminalRows : 1447;
   const effectiveWidth = Math.max(20, Math.min(finiteNumber(width) ? width : 36, terminalWidth));
   const effectiveHeight = Math.max(8, Math.min(finiteNumber(height) ? height : 24, terminalHeight));
+  // Inner content width once the pane's own paddingX:1 (both sides) is accounted for — the
+  // single source of truth every line below is bounded against, so no line can ever reach the
+  // outer overflow:"hidden" box wider than it, and any shortening carries a visible "…" marker
+  // (boundedSurfaceLine) instead of the outer box silently hard-clipping it raw.
+  const innerWidth = Math.max(1, effectiveWidth - 2);
+  const adaptivePathMaxLen = Math.max(8, innerWidth - 20);
   const snapshot = buildOperatorSurfaceSnapshot({
     ...input,
     plotWidth: Math.max(8, effectiveWidth - 4),
+    pathMaxLen: adaptivePathMaxLen,
   });
   const statusColor = snapshot.status === "RUNNING" ? "green" : snapshot.status === "OFFLINE" ? "red" : "yellow";
   const plotColumns = Math.max(8, effectiveWidth - 24);
-  const graphLines = compactSharedGraphLines(snapshot, plotColumns);
+  const graphLines = compactSharedGraphLines(snapshot, plotColumns)
+    .map((line) => boundedSurfaceLine(line, innerWidth));
   const compactMetrics = snapshot.metrics.length > 0
-    ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, effectiveWidth - 4)]
+    ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, innerWidth)]
     : [];
-  const compactAgentLines = snapshot.agentLines.slice(-1);
+  const compactAgentLines = snapshot.agentLines.slice(-1).map((line) => boundedSurfaceLine(line, innerWidth));
+  const sourceLineText = boundedSurfaceLine(snapshot.source, innerWidth);
+
+  const CONTROL_ACTIONS = ["START", "PAUSE", "RESUME", "RESTART"] as const;
+  const controlEnabled = (action: (typeof CONTROL_ACTIONS)[number]): boolean =>
+    action === "START" ? snapshot.status === "IDLE"
+      : action === "PAUSE" ? snapshot.status === "RUNNING"
+      : action === "RESUME" ? input.telemetry.runStatus?.phase === "PAUSED"
+      : snapshot.status === "STALE" || snapshot.status === "OFFLINE";
+  const renderControl = (action: (typeof CONTROL_ACTIONS)[number]): React.ReactElement => {
+    const enabled = controlEnabled(action);
+    return React.createElement(
+      Box,
+      {
+        key: `control-${action}`,
+        flexShrink: 0,
+        paddingRight: 1,
+        onClick: enabled ? () => onControl?.(action, snapshot.graphs.runId) : undefined,
+      },
+      React.createElement(Text, { color: enabled ? "green" : "gray" }, `[${action}]`),
+    );
+  };
+  const controlRows = layoutControlRows(CONTROL_ACTIONS, innerWidth);
+  // Single row -> render flat, exactly as before (preserves the existing flat "controls" shape
+  // at every width wide enough to hold all four labels). Multiple rows only when the pane is too
+  // narrow for one row -> each row is its own full-width labels, never a clipped one.
+  const controlsElement = controlRows.length <= 1
+    ? React.createElement(
+        Box,
+        { key: "controls", flexDirection: "row", flexShrink: 0 },
+        ...CONTROL_ACTIONS.map(renderControl),
+      )
+    : React.createElement(
+        Box,
+        { key: "controls", flexDirection: "column", flexShrink: 0 },
+        ...controlRows.map((row, rowIndex) =>
+          React.createElement(
+            Box,
+            { key: `controls-row-${rowIndex}`, flexDirection: "row", flexShrink: 0 },
+            ...row.map((action) => renderControl(action as (typeof CONTROL_ACTIONS)[number])),
+          ),
+        ),
+      );
+
   const body = React.createElement(
     Box,
     {
@@ -547,28 +637,9 @@ export function OperatorSurfacePane({
       paddingX: 1,
     },
     React.createElement(Text, { key: "status", color: statusColor, bold: true }, snapshot.status),
-    React.createElement(
-      Box,
-      { key: "controls", flexDirection: "row", flexShrink: 0 },
-      ...(["START", "PAUSE", "RESUME", "RESTART"] as const).map((action) => {
-        const enabled = action === "START" ? snapshot.status === "IDLE"
-          : action === "PAUSE" ? snapshot.status === "RUNNING"
-          : action === "RESUME" ? input.telemetry.runStatus?.phase === "PAUSED"
-          : snapshot.status === "STALE" || snapshot.status === "OFFLINE";
-        return React.createElement(
-          Box,
-          {
-            key: `control-${action}`,
-            flexShrink: 0,
-            paddingRight: 1,
-            onClick: enabled ? () => onControl?.(action, snapshot.graphs.runId) : undefined,
-          },
-          React.createElement(Text, { color: enabled ? "green" : "gray" }, `[${action}]`),
-        );
-      }),
-    ),
+    controlsElement,
     ...compactMetrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
-    React.createElement(Text, { key: "source", dimColor: true }, snapshot.source),
+    React.createElement(Text, { key: "source", dimColor: true }, sourceLineText),
     ...graphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
     React.createElement(Text, { key: "stream-title", color: "magenta", bold: true }, "ACTIVITY/EVENT FEED"),
     ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),

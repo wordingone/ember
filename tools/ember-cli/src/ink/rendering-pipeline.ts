@@ -394,6 +394,15 @@ function resolveBorderColorStyle(colorName: string | undefined): Style {
  * observed bold+dim+inverse ("\x1b[1;2;7m") stack over what should be a plain dim "─" rule. */
 export interface PrevStyleTracker { current: Style; }
 
+/** Truncates a border title to `width` cells with a trailing "…" marker — never a bare
+ *  codepoint slice with nothing to show a viewer that content was lost. `width <= 0` returns
+ *  "" (paintBorder's fill loop handles the empty case); `width === 1` returns just the marker. */
+function truncateBorderTitle(title: string, width: number): string {
+  if (width <= 0) return "";
+  if (width === 1) return "…";
+  return `${title.slice(0, width - 1)}…`;
+}
+
 /** Paints a box's perimeter (all 4 edges) at its own layout rect, clipped to
  * clipRect exactly like text painting. Embeds borderTitle in the top edge when
  * given (falls back to a truncated title, never throwing, when it overflows the
@@ -420,8 +429,11 @@ function paintBorder(
   };
 
   // Top edge — plain horizontal run, or with the title embedded just after the
-  // corner glyph (a much-too-long title truncates to `inner` rather than throwing
-  // or being silently dropped).
+  // corner glyph. A too-long title never silently loses characters (legibility bar,
+  // 2026-07-26): it either drops its padding spaces to fit, or truncates with a
+  // visible "…" marker — the same discipline as clipToWidth/truncateAnsiLineToWidth
+  // elsewhere in this app. A raw `.slice(0, inner)` here was indistinguishable from
+  // an intentionally short title (no marker at all).
   let topMid: string;
   if (node.borderTitle && node.borderTitle.length > 0) {
     const padded = ` ${node.borderTitle} `;
@@ -429,8 +441,14 @@ function paintBorder(
       const leftFill  = 1;
       const rightFill = Math.max(0, inner - leftFill - padded.length);
       topMid = glyphs.horizontal.repeat(leftFill) + padded + glyphs.horizontal.repeat(rightFill);
+    } else if (node.borderTitle.length <= inner) {
+      // Fits without its wrapping spaces — not a content loss, just less breathing room.
+      const leftFill = Math.min(1, inner - node.borderTitle.length);
+      topMid = glyphs.horizontal.repeat(leftFill)
+        + node.borderTitle
+        + glyphs.horizontal.repeat(Math.max(0, inner - leftFill - node.borderTitle.length));
     } else {
-      const truncated = node.borderTitle.slice(0, inner);
+      const truncated = truncateBorderTitle(node.borderTitle, inner);
       topMid = truncated + glyphs.horizontal.repeat(Math.max(0, inner - truncated.length));
     }
   } else {

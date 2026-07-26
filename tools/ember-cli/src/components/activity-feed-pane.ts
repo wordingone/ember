@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/activity-feed-pane.ts — issue #485 rung 1 / #518: the operator-visible half of the
 // activity feed. Renders REAL observed events (receipt landings, outage windows, watchdog
 // transitions, board runs) that the services/activity-feed.ts engine has actually rendered —
@@ -54,6 +57,20 @@ export function truncateMiddle(value: string, maxLen: number = DEFAULT_PATH_MAX_
   return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
 }
 
+/** Left-truncates a path with a leading ellipsis marker: "…/tail/of/path" — drops the front and
+ *  keeps the tail (the most identifying part of a path: the filename and its nearest parent
+ *  directories), consistently everywhere a path renders (legibility bar, 2026-07-26: "paths
+ *  truncate from the left with a marker, consistently everywhere" — before this, one path
+ *  rendered middle-truncated via truncateMiddle above and another rendered raw and got hard-
+ *  clipped by the outer terminal renderer with no marker at all, in the SAME frame). Never grows
+ *  the string; a budget of 1 renders just the marker; a budget <= 0 renders "". */
+export function truncatePathLeft(value: string, maxLen: number = DEFAULT_PATH_MAX_LEN): string {
+  if (maxLen <= 0) return "";
+  if (value.length <= maxLen) return value;
+  if (maxLen === 1) return "…";
+  return `…${value.slice(value.length - (maxLen - 1))}`;
+}
+
 /** Returns the last `maxVisible` lines, oldest-first — so rendering them in order puts the
  *  newest line at the bottom, matching a normal scrolling log. */
 export function visibleActivityFeedLines(
@@ -71,7 +88,7 @@ export function formatActivityFeedLine(
   pathMaxLen: number = DEFAULT_PATH_MAX_LEN,
 ): string {
   const age = formatReceiptAge(line.ts, nowMs);
-  const pathSuffix = line.path ? ` [${truncateMiddle(line.path, pathMaxLen)}]` : "";
+  const pathSuffix = line.path ? ` [${truncatePathLeft(line.path, pathMaxLen)}]` : "";
   return `${age} · [${line.source}] ${line.text}${pathSuffix}`;
 }
 
@@ -222,7 +239,7 @@ export function ActivityTranscriptBlock({
         React.createElement(
           Text,
           { key: "value", dimColor: true, italic: true },
-          truncateMiddle(line.path, pathMaxLen),
+          truncatePathLeft(line.path, pathMaxLen),
         ),
       )
     : null;

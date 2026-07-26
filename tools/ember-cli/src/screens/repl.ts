@@ -1659,6 +1659,9 @@ export function ReplScreen({
           outage:         outageBanner,
           roundtripAge,
           compact:         dropdownOpen,
+          // Legibility bar (2026-07-26): without this the bar row had no way to know it was
+          // about to overflow mainColumnWidth — see status-bar.ts's fitStatusBarLine.
+          width:           mainColumnWidth,
         }),
       }),
     ),

@@ -96,10 +96,20 @@ describe("repl operator surface layout", () => {
       }
       const lines = renderedLines(raw, columns, rows);
       expect(lines.length).toBe(rows);
+      // Legibility bar (2026-07-26): "RESOURCE EFFICIENC" (a silent hard-cut, no marker) was the
+      // exact pre-fix defect shape at this narrow width -- a heading truncated mid-word with
+      // nothing to tell an operator it wasn't a genuinely different, shorter label. The pane now
+      // bounds every line against its real inner width (boundedSurfaceLine) and always appends a
+      // visible "…" marker when it must shorten a line, so at 40 columns the heading now reads
+      // "RESOURCE EFFICIEN…" instead.
       for (const heading of columns <= 40
-        ? ["TRAINING/LOSS", "RESOURCE EFFICIENC"]
+        ? ["TRAINING/LOSS", "RESOURCE EFFICIEN…"]
         : ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
         expect(lines.some((line) => line.includes(heading))).toBe(true);
+      }
+      if (columns <= 40) {
+        // The old silent-clip fragment must never reappear un-marked.
+        expect(lines.some((line) => line.includes("RESOURCE EFFICIENC") && !line.includes("RESOURCE EFFICIEN…"))).toBe(false);
       }
       expect(lines.some((line) => line.includes("IDLE"))).toBe(true);
 
