@@ -442,13 +442,27 @@ def run_rendered_frame_capture(root: Path) -> dict:
             "reason": f"no compiled cockpit binary at {binary} (build with "
             "`bun run ./build-tools/build-cockpit.ts` or set EMBER_COCKPIT_BINARY)",
         }
-    bun = shutil.which("bun")
-    if bun is None:
-        return {"executed": False, "reason": "bun runtime not on PATH"}
+    # The capture runs under NODE, not bun, and that is load-bearing rather than a preference.
+    # node-pty is a native addon; under Bun on Windows `pty.spawn` throws ERR_SOCKET_CLOSED
+    # before the pseudo-console is usable, so every capture died with no verdict line and this
+    # row degraded to undecidable on a machine where the product renders perfectly well.
+    # Measured 2026-07-26 with a five-line node-pty probe inside the package directory: node
+    # echoed through the pty (SAW_OK=true), bun threw at spawn. The compiled cockpit itself is
+    # untouched by this -- it is the harness's own driver that needs a working pty binding.
+    # `--experimental-strip-types` lets node execute the .ts tool directly (node >= 22.6).
+    node = shutil.which("node")
+    if node is None:
+        return {"executed": False, "reason": "node runtime not on PATH (required for node-pty)"}
     outdir = tempfile.mkdtemp(prefix="ember-rendered-frame-")
     try:
         proc = subprocess.run(
-            [bun, "run", str(tool), str(Path(binary).resolve()), outdir],
+            [
+                node,
+                "--experimental-strip-types",
+                str(tool),
+                str(Path(binary).resolve()),
+                outdir,
+            ],
             cwd=str(root / CAPTURE_CWD),
             capture_output=True,
             encoding="utf8",
