@@ -99,6 +99,19 @@ def test_pip_options_are_closed_and_cannot_inject_installer_flags() -> None:
         python_environment.validate_manifest_shape(manifest)
 
 
+def test_index_source_must_match_the_executed_pip_index() -> None:
+    manifest = load_manifest()
+    torch = next(
+        row for row in manifest["packages"] if row["distribution"] == "torch"
+    )
+    torch["source"]["locator"] = "https://example.invalid/whl/cu126"
+    with pytest.raises(
+        python_environment.EnvironmentContractError,
+        match="index source must equal the executed pip index",
+    ):
+        python_environment.validate_manifest_shape(manifest)
+
+
 def test_vcs_source_mismatch_fails_closed() -> None:
     manifest = load_manifest()
     sources = {row["distribution"]: None for row in manifest["packages"]}

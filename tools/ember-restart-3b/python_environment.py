@@ -59,6 +59,7 @@ _EXPECTED_PIP_OPTIONS = [
     "--extra-index-url",
     "https://download.pytorch.org/whl/cu126",
 ]
+_EXPECTED_INDEX_LOCATOR = _EXPECTED_PIP_OPTIONS[1]
 _VERSION_RE = re.compile(r"^[0-9][A-Za-z0-9.+_-]*$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -242,6 +243,11 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
             ):
                 raise EnvironmentContractError(
                     f"{label} index source/requirement is malformed"
+                )
+            if locator != _EXPECTED_INDEX_LOCATOR:
+                raise EnvironmentContractError(
+                    f"{label} index source must equal the executed pip index "
+                    f"{_EXPECTED_INDEX_LOCATOR!r}"
                 )
         else:
             if (
