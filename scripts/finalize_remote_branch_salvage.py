@@ -106,6 +106,11 @@ def build_certification_receipt(
     ):
         raise PacketError("publication workflow identity is invalid")
 
+    # These context fields are defense-in-depth declarations, not the primary
+    # publication authority. The workflow's read-only permissions prevent ref
+    # mutation, while collect_remote_branch_salvage.py requires element-wise
+    # equality of every live ref and head before/after capture. Keep both those
+    # independently tested gates if these declarations ever change.
     excluded_refs = _refs(context["excluded_refs"], field="publication_context.excluded_refs")
     mutated_refs = _refs(
         context["ref_mutations_performed"],
@@ -134,7 +139,7 @@ def build_certification_receipt(
     receipt = {
         "schema_version": "ember-remote-branch-salvage-certification-v1",
         "repository": "wordingone/ember",
-        "status": "CERTIFIED_NON_AUTHORIZING_CAPTURE",
+        "status": "CANDIDATE_NON_AUTHORIZING_CAPTURE",
         "master_sha": packet["master_sha"],
         "captured_at": packet["captured_at"],
         "branch_count": packet["branch_count"],
