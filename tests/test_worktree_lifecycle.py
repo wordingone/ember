@@ -671,6 +671,42 @@ def test_reconcile_clears_a_row_whose_directory_was_deleted_raw(tmp_path: Path) 
     assert lifecycle(repo, "audit", check=False).returncode == 0
 
 
+def test_reconcile_touches_only_the_requested_row_and_its_metadata(tmp_path: Path) -> None:
+    """The exact-path contract, against the collateral shape that broke it.
+
+    `git worktree prune` is repository-wide. Reconciling A with it cleared the metadata of
+    every other prunable worktree too, while removing only A's row -- so B went from
+    "listed, quietly stuck" to "not listed, and now MISSING_MANAGED_WORKTREE", which blocks
+    pushes repo-wide. That is this verb's own deadlock, moved onto someone else's row.
+
+    Two raw-deleted worktrees are the smallest case that can show it: with one, a global
+    prune and a targeted one are indistinguishable.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    first = _managed(repo, tmp_path, "first-gone")
+    second = _managed(repo, tmp_path, "second-gone")
+
+    shutil.rmtree(first)
+    shutil.rmtree(second)
+
+    result = lifecycle(repo, "reconcile", "--path", str(first))
+    assert '"status": "RECONCILED"' in result.stdout
+
+    listed = git(repo, "worktree", "list", "--porcelain").stdout.replace("\\", "/")
+    assert str(first).replace("\\", "/") not in listed, "the requested record must be gone"
+    assert str(second).replace("\\", "/") in listed, "B's git metadata is not this call's to touch"
+
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    assert path_key_of(first) not in state["managed"]
+    assert path_key_of(second) in state["managed"], "B's row must survive"
+
+    # And B is not stranded: audit is no worse than before, and B still has its own exit.
+    assert lifecycle(repo, "audit", check=False).returncode == 0
+    assert '"status": "RECONCILED"' in lifecycle(repo, "reconcile", "--path", str(second)).stdout
+    assert lifecycle(repo, "audit", check=False).returncode == 0
+
+
 def test_reconcile_refuses_a_live_worktree(tmp_path: Path) -> None:
     """A live worktree is retire's business -- retire carries the clean-tree and
     archive-ref checks this verb deliberately lacks. Reconcile must never become a

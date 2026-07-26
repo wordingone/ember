@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from contextlib import AbstractContextManager
@@ -37,6 +38,11 @@ class Worktree:
     head: str
     branch: str | None
     detached: bool
+    # Git marks a record `prunable` when its directory is gone but the administrative
+    # metadata survives -- the exact shape produced by deleting a worktree by hand.
+    # Defaults False so a git old enough not to emit the attribute reads as live, which
+    # is the conservative direction: refusals stay refusals, nothing new is stepped over.
+    prunable: bool = False
 
 
 def canonical_path(value: str | Path) -> str:
@@ -78,6 +84,7 @@ def parse_worktrees(text: str) -> list[Worktree]:
                 head=str(fields["HEAD"]),
                 branch=fields.get("branch"),
                 detached=bool(fields.get("detached", False)),
+                prunable=bool(fields.get("prunable", False)),
             )
         )
 
@@ -393,6 +400,40 @@ def retire_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[s
     }
 
 
+def prune_one_worktree_metadata(repo: Path, target_path: str) -> bool:
+    """Remove the administrative directory of ONE worktree, identified by its path.
+
+    Git keeps a directory per linked worktree under ``$GIT_COMMON_DIR/worktrees/<name>``,
+    and the ``gitdir`` file inside it records that worktree's ``.git`` location. Matching
+    on that recorded path is how this stays exact: the caller names a path, and only the
+    record pointing at that path is touched. ``git worktree prune`` would do the same
+    thing for every stale record at once, which is the collateral this exists to avoid.
+
+    Returns whether a record was found and removed. Absent is not an error -- git may have
+    pruned it already, and reconcile's job is that the row and the metadata both end up
+    gone, not that this call was the one to do it.
+    """
+    admin_root = common_dir(repo) / "worktrees"
+    if not admin_root.is_dir():
+        return False
+    wanted = path_key(target_path)
+    for entry in sorted(admin_root.iterdir()):
+        pointer = entry / "gitdir"
+        if not pointer.is_file():
+            continue
+        try:
+            recorded = pointer.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if not recorded:
+            continue
+        # `gitdir` points at the worktree's `.git` FILE; its parent is the worktree.
+        if path_key(Path(recorded).parent) == wanted:
+            shutil.rmtree(entry, ignore_errors=False)
+            return True
+    return False
+
+
 def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[str, Any]:
     """Clear ONE managed row whose worktree is genuinely gone.
 
@@ -431,8 +472,7 @@ def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dic
             raise LifecycleError("LEGACY_PATH", canonical_path(requested_path))
         raise LifecycleError("NOT_MANAGED", canonical_path(requested_path))
 
-    # ORDER IS THE WHOLE FIX. Prune runs BEFORE the live-set is computed, not after the
-    # refusal that used it.
+    # PRUNABLE IS NOT LIVE, and the metadata transition is TARGET-SCOPED.
     #
     # The incident this verb exists for is an owner deleting the directory without
     # retiring. That leaves git's administrative metadata behind, and a worktree with
@@ -443,20 +483,23 @@ def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dic
     # written around it could not see this: the test constructed the one input shape the
     # bug did not have.
     #
-    # Pruning first removes the variance instead of tracking it: prune only ever clears
-    # metadata whose directory is already gone, so after it runs, anything still listed
-    # is genuinely live and the refusal below means what it says. That is also why this
-    # is safe ahead of the check -- prune cannot touch a live worktree, and it is a no-op
-    # when there is no stale metadata. We already hold the repository lock here.
+    # `git worktree prune` is the obvious answer and the wrong one. It is REPOSITORY-WIDE:
+    # reconciling A would clear the metadata of every other prunable worktree too, while
+    # this verb removes only A's row. Every other raw-deleted managed row would go from
+    # "listed, quietly stuck" to "not listed, and now MISSING_MANAGED_WORKTREE" -- which
+    # blocks pushes repo-wide. That is the same deadlock this verb exists to end, moved
+    # onto someone else's row, and it is exactly what an exact-path contract forbids.
     #
-    # It also runs ahead of the emptiness check, and that ordering is load-bearing in the
-    # other direction: a LIVE worktree's directory is never empty, so checking emptiness
-    # first would refuse every live path with PATH_NOT_EMPTY and the WORKTREE_LIVE refusal
-    # -- the one that tells the caller to use `retire` -- would become unreachable. Live is
-    # the more specific condition, so it is answered first.
-    run_git(repo, ["worktree", "prune"], check=False)
-
-    live = {row.key: row for row in list_worktrees(repo)}
+    # So: read the state instead of mutating it. Git already tells us which records are
+    # prunable, and a prunable record is not a live worktree. The refusal below now means
+    # what it says without anything having been changed to make it true.
+    #
+    # The live check runs ahead of the emptiness check, and that ordering is load-bearing:
+    # a LIVE worktree's directory is never empty, so checking emptiness first would refuse
+    # every live path with PATH_NOT_EMPTY and the WORKTREE_LIVE refusal -- the one that
+    # tells the caller to use `retire` -- would become unreachable. Live is the more
+    # specific condition, so it is answered first.
+    live = {row.key: row for row in list_worktrees(repo) if not row.prunable}
     if key in live:
         raise LifecycleError("WORKTREE_LIVE", live[key].path)
 
@@ -468,6 +511,13 @@ def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dic
             raise LifecycleError("PATH_UNREADABLE", f"{destination}: {exc}") from exc
         if leftovers:
             raise LifecycleError("PATH_NOT_EMPTY", str(destination))
+
+    # The metadata for THIS path, and nothing else. Leaving it would make the path an
+    # UNMANAGED_WORKTREE the moment its row is gone -- git still listing a worktree the
+    # registry no longer knows -- so the row and its metadata have to leave together.
+    # Removing the one administrative directory whose `gitdir` points at this path is
+    # precisely what prune would have done for this record, scoped to it.
+    prune_one_worktree_metadata(repo, record["path"])
 
     state["managed"].pop(key)
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
