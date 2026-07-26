@@ -41,6 +41,7 @@ jobs:
         id: capture
         env:
           GH_TOKEN: ${{ github.token }}
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -49,7 +50,7 @@ jobs:
           mkdir -p "${raw}" "${out}"
           captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-          baseline_run_id='${{ inputs.baseline_run_id }}'
+          baseline_run_id="${BASELINE_RUN_ID}"
           api_master=$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)
           test "${api_master}" = "${GITHUB_SHA}"
 
