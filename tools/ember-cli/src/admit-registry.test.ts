@@ -1,0 +1,19 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+import { describe, expect, it } from "bun:test";
+import fs from "node:fs";
+import path from "node:path";
+
+
+describe("/admit registry surface", () => {
+  it("registers exactly one load-bearing candidate producer", () => {
+    const registry = fs.readFileSync(
+      path.join(import.meta.dir, "command-registry.ts"),
+      "utf8",
+    );
+    expect(registry.match(/import \{ createAdmitCommand \}/g)).toHaveLength(1);
+    expect(registry.match(/createAdmitCommand\(\)/g)).toHaveLength(1);
+  });
+});
