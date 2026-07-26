@@ -237,19 +237,19 @@ def test_clean_genesis_fail_closed_borrowed_loading_in_source(cfg, root, tmp_pat
 # and cross-check its architecture/tokenizer/corpus hashes against the actual
 # on-disk launch inputs -- fail-closed on absent/mismatched identity.
 
-def test_identity_manifest_fail_closed_real_config_corpus_artifact_drift(cfg, root):
-    # #1091 B5/C6: as of this writing, the real manifest's data.corpus_id
-    # ("owned-pretrain-v1") and the real config's expected_input_artifact_id
-    # ("owned-four-domain-production-rung-v1") genuinely disagree -- two
-    # separately-named identifiers for what should be the same declared
-    # training input. This is a REAL finding, not a test defect: the preflight
-    # must fail closed on it, and the cure is the check that catches the
-    # disagreement, never editing one value to match the other.
+def test_identity_manifest_pass_real_config_corpus_artifact_joined(cfg, root):
+    # cond3 corpus-join cure: the real manifest's data.corpus_id and the real
+    # config's expected_input_artifact_id both now name the same admitted
+    # executable input, "owned-four-domain-production-rung-v1" -- the
+    # production_rung.py ARTIFACT_ID and input-identity.json artifact_id --
+    # never the legacy "owned-pretrain-v1" family label, which carried no
+    # top-level artifact_id/data_class/receipt authority of its own. The
+    # preflight must PASS on the unmodified real config/manifest, with no
+    # copy or field substitution required to reach agreement.
+    assert cfg["training"]["expected_input_artifact_id"] == "owned-four-domain-production-rung-v1"
     r = lp.preflight_identity_manifest(cfg, root)
-    assert r["status"] == "fail", r
-    assert "does not match" in r["reason"]
-    assert "owned-pretrain-v1" in r["reason"]
-    assert "owned-four-domain-production-rung-v1" in r["reason"]
+    assert r["status"] == "pass", r
+    assert r["corpus_sha256"] == "c651062976dd9b73e1d114c14e9d468348049e65311a7eb188708987f1a6949f"
 
 
 def test_identity_manifest_pass_when_corpus_and_artifact_ids_aligned(cfg, root):
@@ -258,7 +258,7 @@ def test_identity_manifest_pass_when_corpus_and_artifact_ids_aligned(cfg, root):
     # architecture/tokenizer/corpus/stream-receipt bytes -- everything
     # named_launch_command needs to emit a resolved (non-placeholder) command.
     aligned = copy.deepcopy(cfg)
-    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned["training"]["expected_input_artifact_id"] = "owned-four-domain-production-rung-v1"
     r = lp.preflight_identity_manifest(aligned, root)
     assert r["status"] == "pass", r
     assert r["disposition"] == "OWNED_CANDIDATE"
@@ -267,6 +267,19 @@ def test_identity_manifest_pass_when_corpus_and_artifact_ids_aligned(cfg, root):
     assert len(r["corpus_sha256"]) == 64
     assert len(r["stream_receipt_sha256"]) == 64
     assert r["stream_receipt_path"] == aligned["training"]["stream_receipt"]
+
+
+def test_identity_manifest_fail_closed_corpus_artifact_id_drift(cfg, root):
+    # The negative case the cure's check exists for: if the two identifiers
+    # DID disagree, the preflight must fail closed and name both values --
+    # never silently pass, and never silently prefer one over the other.
+    drifted = copy.deepcopy(cfg)
+    drifted["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    r = lp.preflight_identity_manifest(drifted, root)
+    assert r["status"] == "fail", r
+    assert "does not match" in r["reason"]
+    assert "owned-pretrain-v1" in r["reason"]
+    assert "owned-four-domain-production-rung-v1" in r["reason"]
 
 
 def test_identity_manifest_fail_closed_missing_config_field(cfg, root):
@@ -389,7 +402,7 @@ def test_identity_manifest_fail_closed_owned_admitted_at_pretrain_launch(cfg, ro
 
 def test_stream_receipt_fail_closed_missing_config_field(cfg, root):
     broken = copy.deepcopy(cfg)
-    broken["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"  # align, isolate this field
+    broken["training"]["expected_input_artifact_id"] = "owned-four-domain-production-rung-v1"  # align, isolate this field
     del broken["training"]["stream_receipt"]
     r = lp.preflight_identity_manifest(broken, root)
     assert r["status"] == "fail"
@@ -398,7 +411,7 @@ def test_stream_receipt_fail_closed_missing_config_field(cfg, root):
 
 def test_stream_receipt_fail_closed_absent_file(cfg, root):
     aligned = copy.deepcopy(cfg)
-    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned["training"]["expected_input_artifact_id"] = "owned-four-domain-production-rung-v1"
     aligned["training"]["stream_receipt"] = "receipts/does-not-exist.json"
     r = lp.preflight_identity_manifest(aligned, root)
     assert r["status"] == "fail"
@@ -407,7 +420,7 @@ def test_stream_receipt_fail_closed_absent_file(cfg, root):
 
 def test_stream_receipt_fail_closed_wrong_ticket(cfg, root):
     aligned = copy.deepcopy(cfg)
-    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned["training"]["expected_input_artifact_id"] = "owned-four-domain-production-rung-v1"
     # stream_receipt must resolve under the real repo root (preflight_storage-
     # style paths are always root-relative), so write the bad fixture there
     # rather than under pytest's tmp_path, and always clean it up after.
@@ -426,7 +439,7 @@ def test_stream_receipt_fail_closed_wrong_ticket(cfg, root):
 
 def test_stream_receipt_fail_closed_unreadable_json(cfg, root, tmp_path):
     aligned = copy.deepcopy(cfg)
-    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned["training"]["expected_input_artifact_id"] = "owned-four-domain-production-rung-v1"
     bad_rel = "receipts/ember-01-launch-packet/_test-unreadable-receipt.json"
     bad_path = root / bad_rel
     bad_path.parent.mkdir(parents=True, exist_ok=True)
@@ -442,7 +455,7 @@ def test_stream_receipt_fail_closed_unreadable_json(cfg, root, tmp_path):
 
 def test_stream_receipt_sha256_matches_real_bytes(cfg, root):
     aligned = copy.deepcopy(cfg)
-    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned["training"]["expected_input_artifact_id"] = "owned-four-domain-production-rung-v1"
     r = lp.preflight_identity_manifest(aligned, root)
     assert r["status"] == "pass", r
     import hashlib
@@ -457,36 +470,35 @@ def test_all_six_implemented_no_deferred(cfg, root):
     assert len(lp.IMPLEMENTED) == 6
 
 
-def test_run_exits_nonzero_today_due_to_corpus_artifact_id_drift(root):
-    # #1091 C6: today's real config genuinely fails the identity-manifest
-    # preflight (corpus_id vs expected_input_artifact_id disagreement) -- the
-    # packet must refuse and name exactly that preflight, never silently pass.
+def test_run_exits_zero_real_config_corpus_artifact_id_joined(root):
+    # cond3 corpus-join cure: the real manifest and the real config now name
+    # the same admitted executable input artifact, so the unmodified real
+    # config reaches rc == 0 through the real run()/CLI entry point -- the
+    # #1091 C6 disagreement this test used to pin as expected is resolved.
     rc = lp.run(_CONFIG_PATH)
-    assert rc == 1
+    assert rc == 0
 
 
-def test_run_exits_zero_when_corpus_and_artifact_ids_aligned(root, tmp_path, monkeypatch):
-    # The intended path (C1), exercised through the real run()/CLI entry
-    # point rather than just the unit-level preflight: point run() at a
-    # config file that is a byte-for-byte copy of the real one except for the
-    # one aligned field, in the REAL root (so every other declared path still
-    # resolves), and confirm the packet reaches rc == 0 with a fully resolved
-    # (no placeholder) command.
+def test_run_exits_nonzero_when_corpus_and_artifact_ids_drift(root, tmp_path, monkeypatch):
+    # The negative case: point run() at a config that is a byte-for-byte copy
+    # of the real one except the one field forced back to the legacy,
+    # non-admitted artifact id -- the packet must refuse and name exactly the
+    # identity-manifest preflight, never silently pass.
     real_bytes = _CONFIG_PATH.read_text(encoding="utf-8")
     real_cfg = json.loads(real_bytes)
     real_cfg["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
-    aligned_config_path = _CONFIG_PATH.parent / "_test-aligned-ember-restart-3b.json"
-    aligned_config_path.write_text(json.dumps(real_cfg), encoding="utf-8")
+    drifted_config_path = _CONFIG_PATH.parent / "_test-drifted-ember-restart-3b.json"
+    drifted_config_path.write_text(json.dumps(real_cfg), encoding="utf-8")
     try:
-        rc = lp.run(aligned_config_path)
+        rc = lp.run(drifted_config_path)
     finally:
-        aligned_config_path.unlink()
-    assert rc == 0
+        drifted_config_path.unlink()
+    assert rc == 1
 
 
 def test_named_command_is_truthful_no_placeholder(cfg, root):
     aligned = copy.deepcopy(cfg)
-    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned["training"]["expected_input_artifact_id"] = "owned-four-domain-production-rung-v1"
     identity = lp.preflight_identity_manifest(aligned, root)
     assert identity["status"] == "pass", identity
     cmd = lp.named_launch_command(aligned, identity)
