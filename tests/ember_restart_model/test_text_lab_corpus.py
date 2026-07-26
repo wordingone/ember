@@ -213,14 +213,14 @@ class TextLabCorpusTests(unittest.TestCase):
         import run_vertical_slice
         with patch.object(run_vertical_slice, "run_text_lab_preflight", side_effect=ValueError("authority drift")), patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA reached")):
             with self.assertRaisesRegex(ValueError, "authority drift"):
-                run_vertical_slice.run_semantic(seed=1, artifact_root=ROOT / "unused", receipt_path=ROOT / "unused", shards_root=ROOT / "unused", tokenizer_path=ROOT / "unused", steps=1, sequence_length=1, checkpoint_interval=1, write_budget_bytes=1)
+                run_vertical_slice.run_semantic(seed=1, artifact_root=ROOT / "unused", receipt_path=ROOT / "unused", shards_root=ROOT / "unused", tokenizer_path=ROOT / "unused", expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64, expected_architecture_sha256="a" * 64, steps=1, sequence_length=1, checkpoint_interval=1, write_budget_bytes=1)
 
     def test_canonical_runner_refuses_terminal_unresolved_receipt_before_cuda_probe(self):
         import run_vertical_slice
         unresolved = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
         with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value=unresolved), patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA reached")):
             with self.assertRaisesRegex(ValueError, "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"):
-                run_vertical_slice.run_semantic(seed=1, artifact_root=ROOT / "unused", receipt_path=ROOT / "unused", shards_root=ROOT / "unused", tokenizer_path=ROOT / "unused", steps=1, sequence_length=1, checkpoint_interval=1, write_budget_bytes=1)
+                run_vertical_slice.run_semantic(seed=1, artifact_root=ROOT / "unused", receipt_path=ROOT / "unused", shards_root=ROOT / "unused", tokenizer_path=ROOT / "unused", expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64, expected_architecture_sha256="a" * 64, steps=1, sequence_length=1, checkpoint_interval=1, write_budget_bytes=1)
 
     def test_manifest_requires_two_sources_all_domains_and_deterministic_splits(self):
         from text_lab_corpus import build_manifest, validate_manifest

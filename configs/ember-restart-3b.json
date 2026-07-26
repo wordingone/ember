@@ -139,7 +139,9 @@
                                           "required_for_write_heavy_commands":  true
                                       },
                      "input_identity_manifest":  "data/ember-restart-3b/input-identity.json",
-                     "expected_input_artifact_id":  "owned-four-domain-production-rung-v1"
+                     "expected_input_artifact_id":  "owned-four-domain-production-rung-v1",
+                     "identity_manifest":  "data/ember-restart-3b/cond3-identity-manifest.json",
+                     "stream_receipt":  "receipts/token-shards-v0-20260611T170047Z.json"
                  },
     "checkpoints":  {
                         "retention":  {

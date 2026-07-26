@@ -1,0 +1,223 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02B",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema": "ember-model-experiment-identity-v1",
+  "identity": {
+    "model_id": "ember-restart-3b-clean-genesis",
+    "experiment_id": "ember-restart-3b-launch-candidate",
+    "run_id": "not-yet-launched",
+    "checkpoint_id": "not-yet-launched",
+    "disposition": "OWNED_CANDIDATE",
+    "selected_as_owned_ember": false
+  },
+  "architecture": {
+    "source": "configs/ember-restart-3b.json",
+    "sha256": "c267b0de1f7fa6f6b039a28bcb9af1fe87964dc13786abe5bec13aa44ee2cd6b"
+  },
+  "checkpoint": {
+    "format": "ember-checkpoint-envelope-v1",
+    "byte_sha256": {
+      "status": "unresolved",
+      "reason": "clean-genesis pre-birth manifest: no checkpoint bytes exist yet, so no byte digest can be taken without fabricating one"
+    },
+    "tensors": [
+      {
+        "name": "declared-genesis-placeholder",
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "float32",
+        "sha256": {
+          "status": "unresolved",
+          "reason": "clean-genesis pre-birth manifest: this tensor has not been materialized, so it has no bytes to digest"
+        }
+      }
+    ],
+    "ancestry": [],
+    "recovery_state": "CLEAN"
+  },
+  "tokenizer": {
+    "id": "owned-tokenizer-v1",
+    "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
+  },
+  "data": {
+    "corpus_id": "owned-four-domain-production-rung-v1",
+    "sha256": "c651062976dd9b73e1d114c14e9d468348049e65311a7eb188708987f1a6949f",
+    "ordering_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "curriculum_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "verifier_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "clean_genesis": true,
+    "accepted_input": {
+      "input_id": "github-issue-812",
+      "authority_id": "ember-02-issue-812",
+      "authority_record_sha256": "cb77071a43d117d78edb5a7687bd9fcdb0ad8213326bc168dc7e00a3dcf42554",
+      "authority": "UNRESOLVED",
+      "shard_manifest_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "caller_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "gate_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "validator_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "forwarding_receipt_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  },
+  "parameters": {
+    "allocated": 3839161856,
+    "unique": 3839161856,
+    "active": 3839161856,
+    "trainable": 3839161856,
+    "served": 3839161856,
+    "actually_trained": 0,
+    "evidence_receipts": {
+      "allocated": [],
+      "unique": [],
+      "active": [],
+      "trainable": [],
+      "served": [],
+      "actually_trained": []
+    }
+  },
+  "training": {
+    "steps": 0,
+    "effective_tokens": 0,
+    "modality_mixture": {
+      "text": 0.5,
+      "image": 0.25,
+      "audio": 0.25
+    },
+    "optimizer_state_sha256": {
+      "status": "unresolved",
+      "reason": "clean-genesis launch: no optimizer state has been realized yet"
+    },
+    "numerics": {
+      "profile": "bf16-activations-fp32-master",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "stopping_rule": {
+      "criterion_id": "ember-sufficient-pretraining-v1",
+      "result": "NOT_REACHED",
+      "receipt_sha256": {
+        "status": "unresolved",
+        "reason": "no sufficient-pretraining criterion has been evaluated yet"
+      }
+    }
+  },
+  "capabilities": {
+    "native_modalities": {
+      "text": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "image": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "audio": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      }
+    },
+    "reasoning": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    },
+    "structured_tool_use": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    }
+  },
+  "mechanisms": {
+    "experts": [],
+    "router": [],
+    "temporary_adapters": [],
+    "permanent_merges": [],
+    "memory_substrates": [],
+    "world_models": [],
+    "dreaming_updates": [],
+    "deletion_objects": []
+  },
+  "backend": {
+    "executable_sha256": {
+      "status": "unresolved",
+      "reason": "clean-genesis launch: no backend process has started yet"
+    },
+    "process_identity": {
+      "status": "unresolved",
+      "reason": "clean-genesis launch: no backend process has started yet"
+    },
+    "process_receipt_sha256": {
+      "status": "unresolved",
+      "reason": "clean-genesis launch: no backend process has started yet"
+    },
+    "protocol": "cuda-training-v1",
+    "device": "cuda",
+    "runtime_dependencies": [],
+    "resource_lease_id": {
+      "status": "unresolved",
+      "reason": "clean-genesis launch: no GPU lease has been acquired yet"
+    }
+  },
+  "evaluation": {
+    "benchmark_id": "not-yet-evaluated",
+    "version": "not-yet-evaluated",
+    "split": "not-yet-evaluated",
+    "harness_sha256": {
+      "status": "unresolved",
+      "reason": "no benchmark has been executed yet"
+    },
+    "subject_checkpoint_sha256": {
+      "status": "unresolved",
+      "reason": "clean-genesis pre-birth manifest: no subject checkpoint exists to evaluate, so no digest can be taken"
+    },
+    "comparator_identity": {
+      "status": "unresolved",
+      "reason": "no benchmark has been executed yet"
+    },
+    "comparator_sha256": {
+      "status": "unresolved",
+      "reason": "no benchmark has been executed yet"
+    },
+    "score": {
+      "status": "unresolved",
+      "reason": "no benchmark has been executed yet"
+    },
+    "uncertainty": {
+      "status": "unresolved",
+      "reason": "no benchmark has been executed yet"
+    },
+    "receipt_sha256": {
+      "status": "unresolved",
+      "reason": "no benchmark has been executed yet"
+    },
+    "counts_toward_owned_completion": false
+  },
+  "provenance": {
+    "ownership": "OWNED_CLEAN_GENESIS",
+    "exclusion_reasons": [],
+    "learned_signal_sources": [
+      "owned_training_data"
+    ],
+    "neural_capability_credit_sources": [
+      "owned_checkpoint"
+    ]
+  },
+  "unresolved": [
+    "backend.executable_sha256",
+    "backend.process_identity",
+    "backend.process_receipt_sha256",
+    "backend.resource_lease_id",
+    "checkpoint.byte_sha256",
+    "checkpoint.tensors[0].sha256",
+    "evaluation.comparator_identity",
+    "evaluation.comparator_sha256",
+    "evaluation.harness_sha256",
+    "evaluation.receipt_sha256",
+    "evaluation.score",
+    "evaluation.subject_checkpoint_sha256",
+    "evaluation.uncertainty",
+    "training.optimizer_state_sha256",
+    "training.stopping_rule.receipt_sha256"
+  ]
+}

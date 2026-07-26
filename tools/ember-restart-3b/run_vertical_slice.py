@@ -2490,6 +2490,7 @@ def run_specialist(
     )
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
+    expected_receipt_sha256: str, expected_tokenizer_sha256: str, expected_architecture_sha256: str,
     steps: int, sequence_length: int, checkpoint_interval: int, write_budget_bytes: int, resume_checkpoint: Path | None = None,
     resume_counter_receipt: Path | None = None, resume_realization_registry: Path | None = None,
     resume_optimizer_transition_registry: Path | None = None,
@@ -2519,6 +2520,31 @@ def run_semantic(
     )
     if stream.vocab_size != config.vocab_size:
         raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
+    # Closed identity join (#1091): a green launch-packet preflight binds to a
+    # manifest-declared receipt/tokenizer/architecture digest, but nothing
+    # previously carried that digest into the bytes this runner actually
+    # consumes -- an operator could substitute a different, individually
+    # valid, receipt/shard/tokenizer set after the green preflight and train
+    # on bytes the preflight never represented. Recompute and compare BEFORE
+    # any model construction or training step; refuse on any mismatch,
+    # including an absent/blank expectation (never "no expectation supplied,
+    # therefore proceed").
+    architecture_sha256 = _sha256(config_path)
+    if (
+        not expected_receipt_sha256
+        or not expected_tokenizer_sha256
+        or not expected_architecture_sha256
+        or stream.receipt_sha256 != expected_receipt_sha256
+        or stream.tokenizer_sha256 != expected_tokenizer_sha256
+        or architecture_sha256 != expected_architecture_sha256
+    ):
+        raise RuntimeError(
+            "semantic launch identity mismatch: the receipt/tokenizer/architecture bytes "
+            "this run would consume do not match the launch-packet-bound expected digests "
+            f"(receipt_match={stream.receipt_sha256 == expected_receipt_sha256}, "
+            f"tokenizer_match={stream.tokenizer_sha256 == expected_tokenizer_sha256}, "
+            f"architecture_match={architecture_sha256 == expected_architecture_sha256})"
+        )
     total_parameters = config.structural_parameter_count()
     shared_active_parameters = 1_020_589_568
     device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
@@ -2710,6 +2736,9 @@ def main() -> None:
     semantic.add_argument("--receipt", type=Path, required=True)
     semantic.add_argument("--shards-root", type=Path, required=True)
     semantic.add_argument("--tokenizer", type=Path, required=True)
+    semantic.add_argument("--expected-receipt-sha256", required=True)
+    semantic.add_argument("--expected-tokenizer-sha256", required=True)
+    semantic.add_argument("--expected-architecture-sha256", required=True)
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
@@ -2734,6 +2763,9 @@ def main() -> None:
             receipt_path=args.receipt,
             shards_root=args.shards_root,
             tokenizer_path=args.tokenizer,
+            expected_receipt_sha256=args.expected_receipt_sha256,
+            expected_tokenizer_sha256=args.expected_tokenizer_sha256,
+            expected_architecture_sha256=args.expected_architecture_sha256,
             steps=args.steps,
             sequence_length=args.sequence_length,
             checkpoint_interval=args.checkpoint_interval,

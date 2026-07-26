@@ -501,12 +501,199 @@ def preflight_recovery(cfg: dict, root: Path) -> dict:
     }
 
 
+def _identity_manifests_dir(root: Path) -> Path:
+    return root / "scripts" / "ember_01_identity"
+
+
+def _ensure_identity_validator_on_path(root: Path) -> None:
+    identity_dir = str(_identity_manifests_dir(root))
+    if identity_dir not in sys.path:
+        sys.path.insert(0, identity_dir)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = __import__("hashlib").sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return __import__("hashlib").sha256(data).hexdigest()
+
+
+def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
+    """cond3 GAP-3: the 3B launch path must round-trip the declared model/
+    experiment identity manifest (training.identity_manifest) through the
+    REAL cond3 validator (scripts/ember_01_identity/validate_identity.py's
+    validate_manifest -- imported, never reimplemented) before naming a
+    launch command, and cross-check the manifest's architecture/tokenizer/
+    corpus identity against the ACTUAL bytes this packet is about to launch.
+    Fails closed on: an absent config field/manifest file, a manifest that
+    fails validate_identity's own schema/structural checks, or any
+    architecture/tokenizer/corpus hash drift between the declared identity
+    and the real on-disk launch inputs.
+
+    checkpoint.byte_sha256 is NOT cross-checked against real bytes: this is
+    the clean-genesis PRE-training launch preflight and no checkpoint exists
+    yet (disposition OWNED_CANDIDATE, not OWNED_ADMITTED -- validate_identity
+    itself only binds checkpoint bytes for OWNED_ADMITTED manifests, which
+    this one correctly is not).
+    """
+    try:
+        manifest_rel = _dig(cfg, "training", "identity_manifest")
+    except MissingField as e:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"config missing field required for identity preflight: {e}"}
+
+    manifest_path = root / manifest_rel
+    if not manifest_path.is_file():
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"declared identity manifest is absent: {manifest_rel}"}
+
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity manifest {manifest_rel!r} unreadable: {type(e).__name__}: {e}"}
+
+    try:
+        _ensure_identity_validator_on_path(root)
+        from validate_identity import IdentityValidationError, validate_manifest  # noqa: PLC0415
+    except Exception as e:  # noqa: BLE001 - fail closed on any import defect
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity validator unavailable: {type(e).__name__}: {e}"}
+
+    try:
+        validate_manifest(payload, require_resolved=False)
+    except IdentityValidationError as e:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity manifest failed validation: {e}"}
+    except Exception as e:  # noqa: BLE001 - fail closed on any other validator defect
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": f"identity validator error: {type(e).__name__}: {e}"}
+
+    # Cross-check the cert manifest's architecture/tokenizer/corpus identity
+    # against the REAL bytes this packet is about to launch. validate_manifest
+    # only checks hash SHAPE (looks like sha256); it has no notion of "the
+    # real config file" -- that binding is this preflight's job.
+    problems: list[str] = []
+
+    architecture_source = _dig(payload, "architecture", "source")
+    architecture_path = root / architecture_source
+    if not architecture_path.is_file():
+        problems.append(f"declared architecture source is absent: {architecture_source}")
+    else:
+        actual = _sha256_file(architecture_path)
+        declared = _dig(payload, "architecture", "sha256")
+        if actual != declared:
+            problems.append(
+                f"architecture.sha256 drift: manifest={declared} actual={actual}")
+
+    tokenizer_path = root / "tokenizer" / "tokenizer.json"
+    if not tokenizer_path.is_file():
+        problems.append(f"declared tokenizer artifact is absent: {tokenizer_path}")
+    else:
+        actual = _sha256_file(tokenizer_path)
+        declared = _dig(payload, "tokenizer", "sha256")
+        if actual != declared:
+            problems.append(
+                f"tokenizer.sha256 drift: manifest={declared} actual={actual}")
+
+    corpus_id = _dig(payload, "data", "corpus_id")
+    corpus_path = root / "data" / "ember-restart-3b" / f"{corpus_id}.json"
+    if not corpus_path.is_file():
+        problems.append(f"declared corpus artifact is absent: {corpus_path}")
+    else:
+        actual = _sha256_file(corpus_path)
+        declared = _dig(payload, "data", "sha256")
+        if actual != declared:
+            problems.append(
+                f"data.sha256 drift: manifest={declared} actual={actual}")
+
+    disposition = _dig(payload, "identity", "disposition")
+    if disposition == "OWNED_ADMITTED":
+        problems.append(
+            "identity manifest declares OWNED_ADMITTED at a clean-genesis "
+            "pre-training launch -- no checkpoint exists to admit")
+
+    # #1091 fix, B5/C6: corpus_id (this manifest's declared training input) and
+    # config.training.expected_input_artifact_id (the artifact the packet is
+    # told to require) are two separately-named identifiers for what should be
+    # the SAME declared input. Nothing previously joined them, and they had
+    # already drifted apart. This is a real disagreement to surface, never one
+    # to silence by editing either side to match the other.
+    try:
+        expected_input_artifact_id = _dig(cfg, "training", "expected_input_artifact_id")
+    except MissingField as e:
+        problems.append(f"config missing field required for the corpus-identity join: {e}")
+        expected_input_artifact_id = None
+    if expected_input_artifact_id is not None and corpus_id != expected_input_artifact_id:
+        problems.append(
+            f"data.corpus_id ({corpus_id!r}) does not match "
+            f"config.training.expected_input_artifact_id ({expected_input_artifact_id!r}) "
+            "-- the declared training input and the required input artifact have drifted apart")
+
+    # #1091 fix, B1-B4: bind the identity manifest to the ACTUAL bytes the
+    # production semantic runner (run_vertical_slice.run_semantic) consumes --
+    # the TOKEN-SHARDS-V0 stream receipt -- not merely to a sibling artifact
+    # that describes the corpus. The receipt's own bytes already commit
+    # (transitively) to its declared shard set and tokenizer premise
+    # (ManifestBoundTokenStream.from_receipt verifies every shard byte-for-byte
+    # against the receipt's declared hashes, and the tokenizer bytes against
+    # the receipt's declared tokenizer premise, at actual launch time); binding
+    # to the receipt's own sha256 is therefore a closed digest over the whole
+    # stream identity, computed here without touching multi-gigabyte shard
+    # data that this CPU-only preflight never needs to read.
+    stream_receipt_sha256 = None
+    stream_receipt_rel = None
+    try:
+        stream_receipt_rel = _dig(cfg, "training", "stream_receipt")
+    except MissingField as e:
+        problems.append(f"config missing field required for the stream-receipt binding: {e}")
+    if stream_receipt_rel is not None:
+        receipt_path = root / stream_receipt_rel
+        if not receipt_path.is_file():
+            problems.append(f"declared stream receipt is absent: {stream_receipt_rel}")
+        else:
+            try:
+                receipt_bytes = receipt_path.read_bytes()
+                receipt_payload = json.loads(receipt_bytes)
+            except (OSError, json.JSONDecodeError) as e:
+                problems.append(
+                    f"stream receipt {stream_receipt_rel!r} unreadable: {type(e).__name__}: {e}")
+            else:
+                if receipt_payload.get("ticket") != "TOKEN-SHARDS-V0":
+                    problems.append(
+                        f"stream receipt {stream_receipt_rel!r} does not declare TOKEN-SHARDS-V0")
+                else:
+                    stream_receipt_sha256 = _sha256_bytes(receipt_bytes)
+
+    if problems:
+        return {"name": "identity-manifest", "status": "fail",
+                "reason": "; ".join(problems)}
+
+    return {
+        "name": "identity-manifest",
+        "status": "pass",
+        "manifest": manifest_rel,
+        "disposition": disposition,
+        "architecture_sha256": _dig(payload, "architecture", "sha256"),
+        "tokenizer_sha256": _dig(payload, "tokenizer", "sha256"),
+        "corpus_sha256": _dig(payload, "data", "sha256"),
+        "stream_receipt_path": stream_receipt_rel,
+        "stream_receipt_sha256": stream_receipt_sha256,
+    }
+
+
 IMPLEMENTED = [preflight_storage, preflight_resource, preflight_no_sub_3b,
-               preflight_recovery, preflight_clean_genesis]
+               preflight_recovery, preflight_clean_genesis,
+               preflight_identity_manifest]
 DEFERRED: list = []
 
 
-def named_launch_command(cfg: dict) -> dict:
+def named_launch_command(cfg: dict, identity: dict) -> dict:
     """Truthful EMBER-02 launch command.
 
     scripts/timeshare_pretrain.py is EXECUTION-DENIED: it carries
@@ -525,8 +712,20 @@ def named_launch_command(cfg: dict) -> dict:
     to end (run_vertical_slice.run_semantic), and itself requires CUDA
     (torch.cuda.is_available() / torch.cuda.mem_get_info()) -- named from its
     real argparse arg surface (run_vertical_slice.py:2478-2493).
+
+    #1091 fix: the --receipt/--shards-root/--tokenizer arguments used to be
+    literal <angle-bracket> placeholders -- a green identity-manifest preflight
+    carried no binding at all into this emitted command, so an operator could
+    launch a different, individually valid, receipt/shard/tokenizer set than
+    the one the preflight validated. `identity` is this packet's own
+    preflight_identity_manifest() PASS result: --receipt and the three
+    --expected-*-sha256 arguments are now resolved, real values from that
+    result, and run_semantic recomputes and compares them before any model or
+    training work begins (run_vertical_slice.py's semantic-launch identity
+    guard).
     """
     ckpt_root = _dig(cfg, "namespaces", "checkpoints", "root")
+    stream_receipt_rel = identity["stream_receipt_path"]
     return {
         "note": (
             "scripts/timeshare_pretrain.py is EXECUTION-DENIED "
@@ -539,9 +738,12 @@ def named_launch_command(cfg: dict) -> dict:
             "python tools/ember-restart-3b/run_vertical_slice.py semantic "
             "--seed <launch-seed> "
             f"--artifact-root {ckpt_root}/<run-id> "
-            "--receipt <manifest-bound-stream-receipt.json> "
-            "--shards-root <token-shard-dir> "
-            "--tokenizer <tokenizer-path> "
+            f"--receipt {stream_receipt_rel} "
+            "--shards-root <token-shard-dir declared by the receipt's own shard_dir field> "
+            "--tokenizer tokenizer/tokenizer.json "
+            f"--expected-receipt-sha256 {identity['stream_receipt_sha256']} "
+            f"--expected-tokenizer-sha256 {identity['tokenizer_sha256']} "
+            f"--expected-architecture-sha256 {identity['architecture_sha256']} "
             "--steps <N> --sequence-length <seq-len> "
             "--checkpoint-interval 50 --write-budget-gib <write-budget-gib>"
         ),
@@ -563,13 +765,14 @@ def run(config_path: Path) -> int:
     for fn in DEFERRED:
         rows.append(fn(cfg, root))
 
-    # All 5 preflights are now IMPLEMENTED (DEFERRED is empty); any "fail" or
+    # All 6 preflights are now IMPLEMENTED (DEFERRED is empty); any "fail" or
     # "deferred" row blocks the packet -- no name-list special-casing needed.
     implemented_fail = any(r["status"] == "fail" for r in rows)
     any_deferred = any(r["status"] == "deferred" for r in rows)
     all_pass = not implemented_fail and not any_deferred
 
-    cmd = named_launch_command(cfg) if all_pass else None
+    identity_row = next(r for r in rows if r["name"] == "identity-manifest")
+    cmd = named_launch_command(cfg, identity_row) if all_pass else None
     summary = {
         "record": "launch-packet-summary",
         "config": str(config_path.name),
