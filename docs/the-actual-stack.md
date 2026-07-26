@@ -40,9 +40,24 @@ comparison and measurement surfaces. **None of them is the birth decoder**, and 
 imports repo-wide will conclude otherwise. This document said exactly that in its first version and
 was wrong.
 
-Versions come from a measured receipt rather than a requirements file, because there is no
-`requirements.txt` or `pyproject.toml` at master: **torch 2.6.0+cu124, CUDA 12.4,
-bitsandbytes 0.49.2.** Single RTX 4090, 23.99 GiB, under WSL2.
+There is no `requirements.txt` and no `pyproject.toml` at master, so there is no declared
+environment to quote. What exists is one measured receipt,
+`receipts/fp33-e2-full-tune-ceiling-20260612T034610Z.json` (2026-06-12), whose `versions` block
+reads **torch 2.6.0+cu124, CUDA 12.4, bitsandbytes 0.49.2**.
+
+**That receipt cannot establish Ember's birth runtime, and this document originally implied it
+could.** Its `model.id` is `Qwen/Qwen2.5-Coder-3B-Instruct` — a borrowed model — and its `config`
+is `paged_adamw_8bit`, the paged placement the contract does not use. It is a historical
+borrowed-probe environment: correct for what it measured, and evidence of nothing about the owned
+path. Treat those three version pins as the last environment anyone actually recorded, not as a
+pinned birth environment.
+
+Two further details that circulate with those pins have **no receipt behind them at all**. The card
+model and WSL2 are not in that receipt or in any other committed artifact; I supplied them from
+outside the repo, which is exactly what this document's opening line says it does not do. The only
+committed hardware figure is `23.99 GiB` of GPU capacity, and it appears inside an out-of-memory
+error string in the batch-8 probe result rather than as a recorded device field. A capacity read out
+of a crash message is real but incidental, and the machine's identity is currently undocumented.
 
 ## What the sparse kernel backend is
 
@@ -127,25 +142,31 @@ Worth flagging for anyone reading older receipts: the measured-throughput anchor
 borrowed 3B, not with the contract's non-paged configuration. The two are different placements with
 different transfer behaviour, and throughput numbers should not be moved between them silently.
 
-## Corpus — the planned assembly and the governed input are different objects
+## Corpus — the planned assembly and the selected input are different objects
 
 These are two separate artifacts and conflating them overstates what has actually been ingested.
 The first version of this section did exactly that.
 
-**The governed executed input, today.** `data/ember-restart-3b/input-identity.json` names artifact
-`owned-four-domain-production-rung-v1`: **48,428 bytes, four records**, a deterministically replayed
-owned image/audio/reasoning/tool rung. Its own provenance field ends with the words that matter —
-"measured rung and **not sufficient-pretraining evidence**". That is the identity a run would bind
-to right now, and it is a capability rung rather than a pretraining corpus. Nothing at master claims
-otherwise.
+**The governed selected and admitted input, today.**
+`data/ember-restart-3b/input-identity.json` names artifact `owned-four-domain-production-rung-v1`:
+**48,428 bytes, four records**, a deterministically replayed owned image/audio/reasoning/tool rung.
+Its own provenance field ends with the words that matter — "measured rung and **not
+sufficient-pretraining evidence**". That is the identity a governed run would bind to, and it is a
+capability rung rather than a pretraining corpus.
+
+**Selected and admitted, not executed — and the distinction is the whole point of the section.** An
+identity file plus an admission receipt proves what a run would bind to; it does not prove a run
+happened. A search of `receipts/` at master for this artifact id returns nothing, so **no training
+execution against this input is claimed or inferable here.** The earlier wording said "executed
+input", which credited the artifact with a run it does not evidence.
 
 **The 17.9 GB assembly is historical/planned, and says so in its own bytes.**
 `configs/v1-pretrain-config.json` carries `authority.artifact_class = "historical_only"` and
 `authority.execution_authority = "denied"`, under `goal_id: EMBER-00`. It describes four sources
 with committed manifests and sha256s — permissively-licensed GitHub code (13.0 GB), English
 Wikipedia (3.0 GB), Gutenberg (1.9 GB), and Ember's own MIT-clean ARC-DSL slice (0.5 MB), deduped by
-exact document-level sha256 per source. It is corpus **evidence and design**, not the current
-executed input, and quoting it as "the corpus" credits an ingestion that has not happened.
+exact document-level sha256 per source. It is corpus **evidence and design**, not the currently
+selected input, and quoting it as "the corpus" credits an ingestion that has not happened.
 
 The part of it worth carrying forward is a **removal**: `fineweb_edu`, 7.4 GB and 1.55M documents,
 dropped as TAINTED because documents were selected by a classifier trained on Llama-3-70B-Instruct
@@ -154,8 +175,9 @@ stated reason. Corpus filtering must be deterministic and free of model-mediated
 classifier trained on another model's outputs is model-mediated selection even though no weights are
 copied. The rule survives the config's historical status; the tonnage does not transfer with it.
 
-So the honest one-line answer to "what is it training on" is: **nothing at pretraining scale yet.**
-There is a governed 48 KB rung with a valid identity, and a denied-authority design for 17.9 GB.
+So the honest one-line answer to "what is it training on" is: **nothing yet.** There is a governed
+48 KB rung admitted and ready to bind, a denied-authority design for 17.9 GB, and no committed
+receipt of a training run against either.
 
 ## The coined terms, decoded
 
@@ -173,24 +195,37 @@ There is a governed 48 KB rung with a valid identity, and a denied-authority des
 Stated plainly, because a doc that only describes what is built reads as a claim that the rest is
 done:
 
-- **No dependency manifest.** No `requirements.txt`, no `pyproject.toml`, no lockfile at master. The
-  version pins above come from a measured receipt, which means the environment is reproducible by
-  archaeology rather than by declaration.
+- **No dependency manifest, and no recorded owned-path environment.** No `requirements.txt`, no
+  `pyproject.toml`, no lockfile at master. The only version pins anywhere come from a June probe on
+  a borrowed model with a different optimizer placement, so the environment is reproducible by
+  archaeology rather than by declaration — and the archaeology is of the wrong dig site.
+- **No recorded host identity.** The machine's GPU model and OS layer are not committed anywhere.
+  The single hardware figure in the receipts is a capacity number quoted inside an OOM error.
 - **No 3B-shape phase profile.** The only phase breakdown in the repo is at 368M. Everything anyone
   says about where 3B step time goes is extrapolation from a model an order of magnitude smaller.
 - **No device-memory-bandwidth receipt.** Statements about DRAM bandwidth headroom currently rest on
   the vendor datasheet number, not on a measurement taken on this card.
 - **No custom kernels of any kind** in the training path.
-- **No ingested pretraining corpus.** The governed input identity is a 48 KB four-record rung whose
-  own provenance says it is not sufficient-pretraining evidence, and the 17.9 GB assembly is a
-  denied-authority historical config. Distance from "designed" to "ingested" is not zero here.
+- **No ingested pretraining corpus, and no training-execution receipt.** The selected input identity
+  is a 48 KB four-record rung whose own provenance says it is not sufficient-pretraining evidence,
+  and the 17.9 GB assembly is a denied-authority historical config. Nothing in `receipts/` records a
+  run against either. Distance from "designed" to "admitted" to "executed" is not zero here, and the
+  three are separate distances.
 
 ## How to check this document
 
 Every number above comes from `configs/ember-restart-3b.json`, `configs/v1-pretrain-config.json`,
-`data/ember-restart-3b/input-identity.json`, or the import census, all at master. Read an artifact's
-own `authority` block before quoting its contents as current state — that is the check this document
-failed on its first pass. The parameter total and the memory budget are arithmetic you can
+`data/ember-restart-3b/input-identity.json`, or the import census, all at master.
+
+Two checks this document failed on earlier passes, worth running on anything that cites a repo
+artifact. **Read an artifact's `authority` block before quoting its contents as current state** — a
+denied-authority config describes a plan, not a fact. And **ask what an artifact's subject actually
+was** before borrowing its surrounding fields: a throughput receipt measured on a borrowed model
+establishes its own environment and nothing about the owned path, however honestly the numbers
+inside it were taken. Both failures here were the same move — an artifact measured for one purpose
+lending its credibility to a neighbouring claim nobody measured.
+
+The parameter total and the memory budget are arithmetic you can
 re-run from the formulas in the contract's `parameter_formula` block — the contract states the
 formulas and the total separately, and they agree, which is the check worth repeating whenever the
 architecture changes.
