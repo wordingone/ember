@@ -5,8 +5,14 @@ name: remote-branch-salvage-capture
 
 on:
   workflow_dispatch:
+    inputs:
+      baseline_run_id:
+        description: "Prior successful candidate run at this exact master; blank emits candidate only"
+        required: false
+        type: string
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
   deployments: read
@@ -43,6 +49,7 @@ jobs:
           mkdir -p "${raw}" "${out}"
           captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
+          baseline_run_id='${{ inputs.baseline_run_id }}'
           api_master=$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)
           test "${api_master}" = "${GITHUB_SHA}"
 
@@ -110,9 +117,31 @@ jobs:
             --packet "${out}/packet.json" \
             --summary "${out}/public-summary.json" \
             --publication-context "${out}/publication-context.json" \
-            --output "${out}/certification-receipt.json"
+            --output "${out}/candidate-receipt.json"
 
           cp "${raw}"/*.json "${out}/"
+          if [ -n "${baseline_run_id}" ]; then
+            case "${baseline_run_id}" in
+              *[!0-9]*)
+                echo "baseline_run_id must contain decimal digits only" >&2
+                exit 1
+                ;;
+            esac
+            test "${baseline_run_id}" != "${GITHUB_RUN_ID}"
+            baseline="${RUNNER_TEMP}/remote-branch-salvage-baseline"
+            artifact_name="remote-branch-salvage-${baseline_run_id}-${GITHUB_SHA}"
+            mkdir -p "${baseline}"
+            gh run download "${baseline_run_id}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --name "${artifact_name}" \
+              --dir "${baseline}"
+            python -B scripts/compare_remote_branch_salvage_captures.py \
+              --first-artifact "${baseline}" \
+              --second-artifact "${out}" \
+              --expected-first-run-id "${baseline_run_id}" \
+              --expected-second-run-id "${GITHUB_RUN_ID}" \
+              --output "${out}/two-run-certification-receipt.json"
+          fi
           (
             cd "${out}"
             sha256sum ./*.json | sort -k2 > SHA256SUMS

@@ -79,7 +79,7 @@ def test_finalizer_accepts_master_workflow_artifact_without_ref_mutation(
 
     assert result.returncode == 0, result.stdout + result.stderr
     receipt = json.loads((tmp_path / "receipt.json").read_text(encoding="utf-8"))
-    assert receipt["status"] == "CERTIFIED_NON_AUTHORIZING_CAPTURE"
+    assert receipt["status"] == "CANDIDATE_NON_AUTHORIZING_CAPTURE"
     assert receipt["master_sha"] == "a" * 40
     assert receipt["branch_count"] == 2
     assert receipt["excluded_refs"] == []
@@ -160,3 +160,8 @@ def test_post_merge_capture_workflow_is_manual_read_only_and_artifact_only() -> 
     assert "git push" not in text
     assert "gh pr comment" not in text
     assert "finalize_remote_branch_salvage.py" in text
+    assert "baseline_run_id:" in text
+    assert "gh run download" in text
+    assert "compare_remote_branch_salvage_captures.py" in text
+    assert '--expected-first-run-id "${baseline_run_id}"' in text
+    assert '--expected-second-run-id "${GITHUB_RUN_ID}"' in text
