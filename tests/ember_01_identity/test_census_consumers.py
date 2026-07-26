@@ -146,6 +146,81 @@ def test_root_locator_spec_resolves_repo_env_and_missing_without_serializing_pat
     assert all("locator" not in row for row in resolved)
 
 
+def test_checked_root_locator_spec_exercises_optional_absence_and_terminal_redaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = json.loads(ROOT_LOCATOR_SPEC_PATH.read_text(encoding="utf-8"))
+    locator_envs = {
+        row["locator"]["env"]
+        for row in payload["roots"]
+        if set(row["locator"]) == {"kind", "env"}
+    }
+    for name in locator_envs:
+        monkeypatch.delenv(name, raising=False)
+
+    private_backup = tmp_path / "isolated-private-backup"
+    private_backup.mkdir()
+    monkeypatch.setenv("EMBER_CENSUS_PRIVATE_BACKUP_DEFAULT", str(private_backup))
+    redactions = ["operator-secret", "second-private-term"]
+    monkeypatch.setenv(
+        "EMBER_CENSUS_PATH_REDACTIONS",
+        f"  {redactions[0]} , {redactions[1]}  ",
+    )
+
+    original_relative = "docs/ember-01-identity/operator-secret-consumer.py"
+    fixture_path = tmp_path / original_relative
+    fixture_path.parent.mkdir(parents=True)
+    fixture_path.write_text(
+        "EMBER_MODEL_URL = 'fixture-only'\n",
+        encoding="utf-8",
+    )
+    missing_sentinel = tmp_path / "__configured_missing_root__"
+    assert not missing_sentinel.exists()
+
+    resolved = resolve_root_locator_spec(payload, repo_root=tmp_path)
+    assert len(resolved) == len(payload["roots"])
+    assert all("locator" not in row for row in resolved)
+    assert all("path_redactions_env" not in row for row in resolved)
+    assert all(row["path_redactions"] == redactions for row in resolved)
+
+    optional_rows = [
+        row for row in resolved
+        if row.get("disposition") == "optional_local_absent"
+    ]
+    assert optional_rows
+    assert all(Path(row["root"]) == missing_sentinel for row in optional_rows)
+    assert all(
+        row["disposition"] == "optional_local_absent" for row in optional_rows
+    )
+    assert Path(next(
+        row["root"] for row in resolved
+        if row["root_id"] == "private-backup-default"
+    )) == private_backup
+
+    identity_row = next(
+        row for row in resolved
+        if row["root_id"] == "identity-contract-candidate"
+    )
+    census = build_census_set([identity_row])
+    evidence = next(
+        row for row in census["evidence"]
+        if row["path_sha256"]
+        == hashlib.sha256(original_relative.encode("utf-8")).hexdigest()
+    )
+    token = (
+        "{redacted-"
+        + hashlib.sha256(redactions[0].casefold().encode("utf-8")).hexdigest()[:12]
+        + "}"
+    )
+    assert evidence["path"] == (
+        f"docs/ember-01-identity/{token}-consumer.py"
+    )
+    assert redactions[0] not in evidence["path"]
+    assert evidence["path_sha256"] == hashlib.sha256(
+        original_relative.encode("utf-8")
+    ).hexdigest()
+
+
 def test_portable_root_profile_requires_no_host_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     payload = json.loads(ROOT_LOCATOR_SPEC_PATH.read_text(encoding="utf-8"))
     for key in list(os.environ):
