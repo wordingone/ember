@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
@@ -117,6 +119,7 @@ export interface LifecycleActionEvidence {
   state_evidence: LifecycleStateEvidence | null;
   frame_artifact: string;
   delta_artifact: string;
+  delta_sha256: string;
   repair_item: string | null;
 }
 
@@ -193,6 +196,31 @@ function requireClosedKeys(
   if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
     throw new Error(`${label} has missing or unknown fields`);
   }
+}
+
+function bytesSha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+export function validateLifecycleActionArtifacts(
+  row: LifecycleActionEvidence,
+  readArtifact: (artifact: string) => Uint8Array,
+): { ok: true } {
+  const frame = readArtifact(row.frame_artifact);
+  if (bytesSha256(frame) !== row.after_frame_sha256) {
+    throw new Error(`${row.action} frame artifact hash mismatch`);
+  }
+  const delta = readArtifact(row.delta_artifact);
+  if (bytesSha256(delta) !== row.delta_sha256) {
+    throw new Error(`${row.action} delta artifact hash mismatch`);
+  }
+  if (row.state_evidence !== null) {
+    const state = readArtifact(row.state_evidence.artifact);
+    if (bytesSha256(state) !== row.state_evidence.delta_sha256) {
+      throw new Error(`${row.action} state artifact hash mismatch`);
+    }
+  }
+  return { ok: true };
 }
 
 export function validateLifecycleReceipt(
@@ -280,7 +308,7 @@ export function validateLifecycleReceipt(
       "action", "ordinal", "input_sha256", "before_frame_sha256",
       "after_frame_sha256", "effect_evidence_sha256", "effect_kind",
       "outcome", "output_excerpt", "state_evidence", "frame_artifact",
-      "delta_artifact", "repair_item",
+      "delta_artifact", "delta_sha256", "repair_item",
     ], `action ${index + 1}`);
     requireSha(row.input_sha256, `${row.action} input`);
     requireSha(row.before_frame_sha256, `${row.action} before frame`);
@@ -288,6 +316,7 @@ export function validateLifecycleReceipt(
     requireSha(row.effect_evidence_sha256, `${row.action} effect evidence`);
     requireArtifact(row.frame_artifact, `${row.action} frame artifact`);
     requireArtifact(row.delta_artifact, `${row.action} delta artifact`);
+    requireSha(row.delta_sha256, `${row.action} delta`);
     if (row.ordinal !== index + 1) throw new Error("ordered actions have a wrong ordinal");
     if (row.output_excerpt.trim() === "") {
       throw new Error(`${row.action} output excerpt is absent`);
