@@ -28,6 +28,7 @@ import {
   type LifecycleAction,
   type LifecycleActionEvidence,
   type LifecycleReceipt,
+  type LifecycleStateEvidence,
 } from "./lifecycle-smoke.ts";
 
 const { Terminal } = xtermHeadless;
@@ -40,13 +41,97 @@ const TIMEOUT_MS = 15_000;
 interface AttemptRow {
   action: LifecycleAction;
   input: string;
-  status: "PASS" | "MISSING" | "REFUSED" | "NO_EFFECT";
+  status: "PASS" | "PREFLIGHT_ONLY" | "MISSING" | "REFUSED" | "NO_EFFECT";
   frame_artifact: string;
   detail: string;
 }
 
 function sha256(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function stateSha(bytes: Uint8Array): string {
+  return sha256(bytes);
+}
+
+export function deriveControlAppendState(
+  before: Uint8Array | null,
+  after: Uint8Array,
+  expectedCommand: "pause" | "resume" | "stop",
+  artifact: string,
+): LifecycleStateEvidence {
+  const prior = before ?? new Uint8Array();
+  if (
+    after.byteLength <= prior.byteLength ||
+    !Buffer.from(after.subarray(0, prior.byteLength)).equals(Buffer.from(prior))
+  ) {
+    throw new Error("control channel is not an append-only extension");
+  }
+  const delta = after.subarray(prior.byteLength);
+  const lines = Buffer.from(delta)
+    .toString("utf8")
+    .split(/\r?\n/)
+    .filter((line) => line.length > 0);
+  if (lines.length !== 1) {
+    throw new Error("control append must contain exactly one JSON row");
+  }
+  let row: unknown;
+  try {
+    row = JSON.parse(lines[0]!);
+  } catch {
+    throw new Error("control append row is not JSON");
+  }
+  if (
+    typeof row !== "object" ||
+    row === null ||
+    Array.isArray(row) ||
+    JSON.stringify(Object.keys(row).sort()) !==
+      JSON.stringify(["runId", "ts", "verb"])
+  ) {
+    throw new Error("control append row has missing or unknown fields");
+  }
+  const record = row as Record<string, unknown>;
+  if (
+    record.verb !== expectedCommand ||
+    record.runId !== "smoke-run" ||
+    typeof record.ts !== "string" ||
+    !Number.isFinite(Date.parse(record.ts))
+  ) {
+    throw new Error("control command is not the expected run-bound row");
+  }
+  return {
+    artifact,
+    before_exists: before !== null,
+    before_sha256: before === null ? null : stateSha(before),
+    after_exists: true,
+    after_sha256: stateSha(after),
+    delta_sha256: stateSha(delta),
+    command: expectedCommand,
+    run_id: "smoke-run",
+  };
+}
+
+export function derivePublicationState(
+  before: Uint8Array | null,
+  after: Uint8Array,
+  artifact: string,
+): LifecycleStateEvidence {
+  if (before !== null) {
+    throw new Error("publication target existed before the lifecycle action");
+  }
+  if (after.byteLength === 0) {
+    throw new Error("publication produced no artifact bytes");
+  }
+  return {
+    artifact,
+    before_exists: false,
+    before_sha256: null,
+    after_exists: true,
+    after_sha256: stateSha(after),
+    delta_sha256: stateSha(after),
+    command: null,
+    run_id: null,
+  };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -74,11 +159,33 @@ export function actionLocalDelta(delta: string, input: string): string {
 }
 
 
-export function classifyActionFrame(frame: string): AttemptRow["status"] {
-  const lower = frame.toLowerCase();
-  if (lower.includes("unknown command")) return "MISSING";
+export function classifyActionFrame(
+  action: Exclude<LifecycleAction, "launch">,
+  delta: string,
+): AttemptRow["status"] {
+  const lower = delta.toLowerCase();
+  if (lower.includes("unknown command") || lower.includes("not registered")) {
+    return "MISSING";
+  }
   if (lower.includes("error:") || lower.includes("failed to")) return "REFUSED";
-  return "PASS";
+  if (
+    action === "train" &&
+    lower.includes("launch-packet") &&
+    lower.includes("does not launch training")
+  ) {
+    return "PREFLIGHT_ONLY";
+  }
+  const positive: Record<Exclude<LifecycleAction, "launch" | "train">, RegExp> = {
+    observe: /watching state[\\/]ember-telemetry/i,
+    pause: /pause run=smoke-run/i,
+    resume: /resume run=smoke-run/i,
+    save: /legacy checkpoint snapshot saved \(not \/model checkpoint load compatible\)/i,
+    terminate: /stop run=smoke-run/i,
+    reload: /checkpoint loaded/i,
+    continue: /continu(?:e|ed|ing)/i,
+  };
+  if (action !== "train" && positive[action].test(delta)) return "PASS";
+  return "NO_EFFECT";
 }
 
 export function saveActionCompletionObserved(frame: string, delta: string): boolean {
@@ -91,12 +198,12 @@ export function saveActionCompletionObserved(frame: string, delta: string): bool
 
 export function actionOutputExcerpt(
   action: Exclude<LifecycleAction, "launch">,
-  frame: string,
+  _frame: string,
   delta: string,
 ): string {
   const saveQuote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
-  if (action === "save" && (frame.includes(saveQuote) || delta.includes(saveQuote))) return saveQuote;
-  const lines = frame.split("\n");
+  if (action === "save" && delta.includes(saveQuote)) return saveQuote;
+  const lines = delta.split("\n");
   const patterns: Record<Exclude<LifecycleAction, "launch">, RegExp> = {
     train: /launch-packet/i,
     observe: /watching state\/ember-telemetry/i,
@@ -111,7 +218,7 @@ export function actionOutputExcerpt(
   if (observed !== undefined) return observed.trim();
   const trimmedDelta = delta.trim();
   if (trimmedDelta !== "") return trimmedDelta.slice(-2000);
-  return frame.trim().slice(-2000);
+  return "";
 }
 
 function commandText(args: string[], cwd: string): string {
@@ -199,6 +306,22 @@ export function slashCommandNeedsSecondEnter(
   input: string,
 ): boolean {
   return input.startsWith("/") && !completedPromptFrame(frame, width, input);
+}
+
+export function submitSecondEnterIfNeeded(
+  writer: { write(value: string): void },
+  input: string,
+  frame: string[],
+  width: number,
+  needsSecondEnter: (
+    frame: string[],
+    width: number,
+    input: string,
+  ) => boolean = slashCommandNeedsSecondEnter,
+): boolean {
+  if (!needsSecondEnter(frame, width, input)) return false;
+  writer.write("\r");
+  return true;
 }
 
 function redactHostPaths(
@@ -363,9 +486,12 @@ async function driveInput(
   child.write("\r");
   await sleep(600);
   await flush();
-  if (input.startsWith("/")) {
-    child.write("\r");
-  }
+  submitSecondEnterIfNeeded(
+    child,
+    input,
+    visibleFrameLines(terminal),
+    COLS,
+  );
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const currentRawLength = raw.join("").length;
@@ -499,11 +625,10 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       before_frame_sha256: sha256(""),
       after_frame_sha256: sha256(readyFrame),
       effect_evidence_sha256: sha256(READY_OSC),
-      effect_kind: "durable-state-transition",
+      effect_kind: "observable-readiness",
       outcome: "PASS",
       output_excerpt: "READY_OSC observed from compiled product render",
-      state_before: 0,
-      state_after: 1,
+      state_evidence: null,
       frame_artifact: launchArtifact,
       repair_item: null,
     });
@@ -520,6 +645,20 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       const action = LIFECYCLE_ACTIONS[index]! as Exclude<
         LifecycleAction, "launch">;
       const input = inputs[action as Exclude<LifecycleAction, "launch">];
+      const controlCommand =
+        action === "pause" ? "pause"
+          : action === "resume" ? "resume"
+            : action === "terminate" ? "stop"
+              : null;
+      const saveManifestPath = join(home, "saved-checkpoint", "manifest.json");
+      const stateSourcePath =
+        controlCommand === null
+          ? action === "save" ? saveManifestPath : null
+          : controlPath;
+      const stateBefore =
+        stateSourcePath !== null && existsSync(stateSourcePath)
+          ? readFileSync(stateSourcePath)
+          : null;
       const actionTimeoutMs =
         action === "train"
           ? 600_000
@@ -563,8 +702,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
           output_excerpt: `no effect-bearing frame delta: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          state_before: null,
-          state_after: null,
+          state_evidence: null,
           frame_artifact: failedArtifact,
           repair_item: `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
         });
@@ -581,7 +719,6 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       );
       writeFileSync(join(repoRoot, frameArtifact), publicFrame, "utf8");
       const localDelta = actionLocalDelta(driven.delta, input);
-      const status = classifyActionFrame(publicFrame);
       const redactedDelta = Buffer.from(
         redactHostPaths(Buffer.from(localDelta, "utf8"), [repoRoot, home, binary]).publicBytes,
       )
@@ -589,6 +726,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
         .replaceAll(input.replaceAll(home, "<EMBER_SMOKE_HOME>").replaceAll(repoRoot, "<EMBER_REPO>"), "")
         .trim();
+      const status = classifyActionFrame(action, redactedDelta);
       const publicDelta = actionOutputExcerpt(action, publicFrame, redactedDelta);
       attempts.push({
         action,
@@ -597,29 +735,63 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         frame_artifact: frameArtifact,
         detail: status === "PASS" ? "effect-bearing frame delta observed" : "operator surface refused",
       });
-      const control = controlPath;
-      const persisted =
-        ["pause", "resume", "terminate"].includes(action) && existsSync(control)
-          ? readFileSync(control)
-          : action === "save" && existsSync(join(home, "saved-checkpoint", "manifest.json"))
-            ? readFileSync(join(home, "saved-checkpoint", "manifest.json"))
-            : Buffer.from(driven.delta, "utf8");
+      let stateEvidence: LifecycleStateEvidence | null = null;
+      let effectEvidence = Buffer.from(redactedDelta, "utf8");
+      let effectKind: LifecycleActionEvidence["effect_kind"] =
+        status === "PREFLIGHT_ONLY"
+          ? "preflight-only"
+          : status === "PASS"
+            ? "observable-product-effect"
+            : "observable-refusal";
+      if (status === "PASS" && controlCommand !== null) {
+        if (!existsSync(controlPath)) {
+          throw new Error(`${action} reported PASS without a control artifact`);
+        }
+        const after = readFileSync(controlPath);
+        const stateArtifact = artifactPath(
+          repoRoot,
+          join(outDir, `action-${index + 1}-${action}.state.jsonl`),
+        );
+        stateEvidence = deriveControlAppendState(
+          stateBefore,
+          after,
+          controlCommand,
+          stateArtifact,
+        );
+        effectEvidence = after.subarray(stateBefore?.byteLength ?? 0);
+        writeFileSync(join(repoRoot, stateArtifact), effectEvidence);
+        effectKind = "durable-control-append";
+      } else if (status === "PASS" && action === "save") {
+        if (!existsSync(saveManifestPath)) {
+          throw new Error("save reported PASS without a published manifest");
+        }
+        const after = readFileSync(saveManifestPath);
+        const stateArtifact = artifactPath(
+          repoRoot,
+          join(outDir, `action-${index + 1}-save.state.json`),
+        );
+        stateEvidence = derivePublicationState(stateBefore, after, stateArtifact);
+        effectEvidence = after;
+        writeFileSync(join(repoRoot, stateArtifact), after);
+        effectKind = "durable-artifact-publication";
+      }
       evidence.push({
         action,
         ordinal: index + 1,
         input_sha256: sha256(input),
         before_frame_sha256: sha256(driven.before),
         after_frame_sha256: sha256(driven.after),
-        effect_evidence_sha256: sha256(persisted),
-        effect_kind: status === "PASS" ? "durable-state-transition" : "observable-refusal",
+        effect_evidence_sha256: sha256(effectEvidence),
+        effect_kind: effectKind,
         outcome: status,
         output_excerpt: publicDelta || `${status}: no printable output`,
-        state_before: status === "PASS" ? index : null,
-        state_after: status === "PASS" ? index + 1 : null,
+        state_evidence: stateEvidence,
         frame_artifact: frameArtifact,
         repair_item: status === "PASS"
           ? null
-          : action === "reload"
+          : action === "train" && status === "PREFLIGHT_ONLY"
+            ? "EMBER-CLI-TRAIN-EXECUTION-WIRING"
+            : action === "reload"
             ? "EMBER-CLI-SAVE-RELOAD-COMPATIBILITY"
             : action === "continue"
               ? "EMBER-CLI-CONTINUE-PRODUCTION-WIRING"
@@ -654,7 +826,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     );
 
     const receipt: LifecycleReceipt = {
-      schema_version: "ember-cli-lifecycle-smoke/v1",
+      schema_version: "ember-cli-lifecycle-smoke/v2",
       evidence_class: "LIVE_COMPILED_BINARY_CONPTY",
       source_commit: sourceCommit,
       binary: {

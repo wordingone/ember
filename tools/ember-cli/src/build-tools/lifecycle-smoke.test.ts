@@ -21,7 +21,7 @@ const SHA_D = "d".repeat(64);
 
 function validReceipt(): LifecycleReceipt {
   return {
-    schema_version: "ember-cli-lifecycle-smoke/v1",
+    schema_version: "ember-cli-lifecycle-smoke/v2",
     evidence_class: "LIVE_COMPILED_BINARY_CONPTY",
     source_commit: GIT_COMMIT,
     binary: {
@@ -42,21 +42,62 @@ function validReceipt(): LifecycleReceipt {
       elapsed_ms: 17,
       frame_sha256: SHA_D,
     },
-    actions: LIFECYCLE_ACTIONS.map((action, index) => ({
-      action,
-      ordinal: index + 1,
-      input_sha256: String(index + 1).padStart(64, "0"),
-      before_frame_sha256: String(index + 11).padStart(64, "0"),
-      after_frame_sha256: String(index + 21).padStart(64, "0"),
-      effect_evidence_sha256: String(index + 31).padStart(64, "0"),
-      effect_kind: "durable-state-transition",
-      outcome: "PASS",
-      output_excerpt: `${action} effect observed`,
-      state_before: index,
-      state_after: index + 1,
-      frame_artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.frame.txt`,
-      repair_item: null,
-    })),
+    actions: LIFECYCLE_ACTIONS.map((action, index) => {
+      const durable = ["pause", "resume", "save", "terminate"].includes(action);
+      const command = action === "terminate" ? "stop" : action;
+      const outcome =
+        action === "train" ? "PREFLIGHT_ONLY"
+          : action === "reload" ? "REFUSED"
+            : action === "continue" ? "MISSING"
+              : "PASS";
+      const effectKind =
+        action === "launch" ? "observable-readiness"
+          : action === "train" ? "preflight-only"
+            : action === "observe" ? "observable-product-effect"
+              : action === "save" ? "durable-artifact-publication"
+                : durable ? "durable-control-append"
+                  : "observable-refusal";
+      const deltaSha = String(index + 31).padStart(64, "0");
+      return {
+        action,
+        ordinal: index + 1,
+        input_sha256: String(index + 1).padStart(64, "0"),
+        before_frame_sha256: String(index + 11).padStart(64, "0"),
+        after_frame_sha256: String(index + 21).padStart(64, "0"),
+        effect_evidence_sha256: deltaSha,
+        effect_kind: effectKind,
+        outcome,
+        output_excerpt:
+          action === "save"
+            ? "legacy checkpoint snapshot saved (not /model checkpoint load compatible)"
+            : action === "reload"
+              ? "error: failed to load checkpoint"
+              : action === "continue"
+                ? "Unknown command: /continue"
+                : action === "train"
+                  ? "This command does NOT launch training."
+                  : `${action} effect observed`,
+        state_evidence: durable
+          ? {
+            artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.state`,
+            before_exists: action !== "pause" && action !== "save",
+            before_sha256:
+              action === "pause" || action === "save"
+                ? null
+                : String(index + 41).padStart(64, "0"),
+            after_exists: true,
+            after_sha256: String(index + 51).padStart(64, "0"),
+            delta_sha256: deltaSha,
+            command: action === "save" ? null : command,
+            run_id: action === "save" ? null : "smoke-run",
+          }
+          : null,
+        frame_artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.frame.txt`,
+        repair_item: outcome === "PASS"
+          ? null
+          : `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
+      };
+    }),
     termination: {
       explicit_requested: true,
       child_exit_observed: true,
@@ -102,21 +143,43 @@ describe("validateLifecycleReceipt", () => {
     reload.outcome = "REFUSED";
     reload.effect_kind = "observable-refusal";
     reload.output_excerpt = "error: failed to load checkpoint";
-    reload.state_before = null;
-    reload.state_after = null;
     reload.repair_item = "EMBER-CLI-SAVE-RELOAD-COMPATIBILITY";
     const continued = receipt.actions.find((row) => row.action === "continue")!;
     continued.outcome = "MISSING";
     continued.effect_kind = "observable-refusal";
     continued.output_excerpt = "Unknown command: /continue";
-    continued.state_before = null;
-    continued.state_after = null;
     continued.repair_item = "EMBER-CLI-CONTINUE-PRODUCTION-WIRING";
 
     expect(validateLifecycleReceipt(receipt, expected)).toEqual({
       ok: true,
       action_count: 9,
     });
+  });
+
+  test("refuses NO_EFFECT because it is an instrument failure", () => {
+    const receipt = validReceipt();
+    const continued = receipt.actions.find((row) => row.action === "continue")!;
+    continued.outcome = "NO_EFFECT";
+    expect(() => validateLifecycleReceipt(receipt, expected)).toThrow(
+      "instrument",
+    );
+  });
+
+  test("refuses synthetic or wrong durable state evidence", () => {
+    const sameBytes = validReceipt();
+    const pause = sameBytes.actions.find((row) => row.action === "pause")!;
+    pause.state_evidence!.before_exists = true;
+    pause.state_evidence!.before_sha256 = pause.state_evidence!.after_sha256;
+    expect(() => validateLifecycleReceipt(sameBytes, expected)).toThrow(
+      "durable state",
+    );
+
+    const wrongCommand = validReceipt();
+    const resumed = wrongCommand.actions.find((row) => row.action === "resume")!;
+    resumed.state_evidence!.command = "pause";
+    expect(() => validateLifecycleReceipt(wrongCommand, expected)).toThrow(
+      "control command",
+    );
   });
 
   test("refuses lexical-only credit", () => {
@@ -297,21 +360,38 @@ describe("compiled lifecycle action completion", () => {
     expect(driver.classifyActionFrame).toBeFunction();
     expect(driver.actionOutputExcerpt).toBeFunction();
 
-    const continuedFrame = [
-      "error: failed to load checkpoint: historical row",
+    expect(driver.classifyActionFrame!(
+      "continue",
       "Unknown command: /continue",
-    ].join("\n");
-    expect(driver.classifyActionFrame!(continuedFrame)).toBe("MISSING");
+    )).toBe("MISSING");
+    expect(driver.classifyActionFrame!(
+      "continue",
+      "cursor repaint without command result",
+    )).toBe("NO_EFFECT");
+    expect(driver.classifyActionFrame!(
+      "train",
+      [
+        "launch-packet: all preflights GREEN -- EMBER-02 is launch-ready.",
+        "This command does NOT launch training.",
+      ].join("\n"),
+    )).toBe("PREFLIGHT_ONLY");
+    expect(driver.classifyActionFrame!(
+      "terminate",
+      "stop run=smoke-run",
+    )).toBe("PASS");
 
     const quote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
     expect(driver.actionOutputExcerpt!("save", "legacy checkpoint snapshot saved", `${quote}${"x".repeat(3000)}`))
       .toBe(quote);
-    expect(driver.actionOutputExcerpt!("continue", continuedFrame, "cursor repaint without contiguous output"))
-      .toContain("Unknown command: /continue");
+    expect(driver.actionOutputExcerpt!(
+      "continue",
+      "error: failed to load checkpoint: stale prior viewport row",
+      "Unknown command: /continue",
+    )).toBe("Unknown command: /continue");
     expect(driver.actionOutputExcerpt!(
       "terminate",
-      `${quote}\nstop run=smoke-run`,
       quote,
+      "stop run=smoke-run",
     )).toBe("stop run=smoke-run");
 
     expect(driver.saveActionCompletionObserved).toBeFunction();
@@ -334,6 +414,102 @@ describe("compiled lifecycle action completion", () => {
     const redacted = driver.redactPublicText!(`${backslashProbe} ${slashProbe}`, []);
     expect(redacted).not.toContain(backslashProbe);
     expect(redacted).not.toContain(slashProbe);
+  });
+
+  test("submits a second Enter only while the slash command remains pending", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.submitSecondEnterIfNeeded).toBeFunction();
+
+    const pendingWrites: string[] = [];
+    driver.submitSecondEnterIfNeeded!(
+      { write: (value: string) => pendingWrites.push(value) },
+      "/train",
+      [],
+      20,
+      () => true,
+    );
+    expect(pendingWrites).toEqual(["\r"]);
+
+    const clearedWrites: string[] = [];
+    driver.submitSecondEnterIfNeeded!(
+      { write: (value: string) => clearedWrites.push(value) },
+      "/train",
+      [],
+      20,
+      () => false,
+    );
+    expect(clearedWrites).toEqual([]);
+  });
+});
+
+describe("compiled lifecycle durable state evidence", () => {
+  test("binds one exact append-only control row to before, after, and delta bytes", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.deriveControlAppendState).toBeFunction();
+    const appended =
+      '{"verb":"pause","runId":"smoke-run","ts":"2026-07-25T00:00:00.000Z"}\n';
+    expect(driver.deriveControlAppendState!(
+      null,
+      Buffer.from(appended, "utf8"),
+      "pause",
+      "receipts/ember-cli-lifecycle-smoke/action-4-pause.state.jsonl",
+    )).toEqual({
+      artifact: "receipts/ember-cli-lifecycle-smoke/action-4-pause.state.jsonl",
+      before_exists: false,
+      before_sha256: null,
+      after_exists: true,
+      after_sha256: "e631817fae79a8dc1775d1cf9e51ec7efe32bfe36f8bd9aba0dd996dfa2cba87",
+      delta_sha256: "e631817fae79a8dc1775d1cf9e51ec7efe32bfe36f8bd9aba0dd996dfa2cba87",
+      command: "pause",
+      run_id: "smoke-run",
+    });
+  });
+
+  test("refuses changed prefixes, extra rows, or the wrong control command", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    const pause =
+      '{"verb":"pause","runId":"smoke-run","ts":"2026-07-25T00:00:00.000Z"}\n';
+    const resume =
+      '{"verb":"resume","runId":"smoke-run","ts":"2026-07-25T00:00:01.000Z"}\n';
+    const artifact =
+      "receipts/ember-cli-lifecycle-smoke/action-4-pause.state.jsonl";
+    expect(() => driver.deriveControlAppendState!(
+      Buffer.from(pause),
+      Buffer.from(resume),
+      "pause",
+      artifact,
+    )).toThrow("append-only");
+    expect(() => driver.deriveControlAppendState!(
+      null,
+      Buffer.from(`${pause}${resume}`),
+      "pause",
+      artifact,
+    )).toThrow("exactly one");
+    expect(() => driver.deriveControlAppendState!(
+      null,
+      Buffer.from(resume),
+      "pause",
+      artifact,
+    )).toThrow("control command");
+  });
+
+  test("binds publication bytes without inventing a prior state", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.derivePublicationState).toBeFunction();
+    expect(driver.derivePublicationState!(
+      null,
+      Buffer.from("{}\n", "utf8"),
+      "receipts/ember-cli-lifecycle-smoke/action-6-save.state.json",
+    )).toEqual({
+      artifact: "receipts/ember-cli-lifecycle-smoke/action-6-save.state.json",
+      before_exists: false,
+      before_sha256: null,
+      after_exists: true,
+      after_sha256: "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      delta_sha256: "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      command: null,
+      run_id: null,
+    });
   });
 });
 
