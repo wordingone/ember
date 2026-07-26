@@ -92,6 +92,30 @@ describe("model command", () => {
       expect(cmd.isEnabled()).toBe(true);
       expect(cmd.description).toContain("model");
     });
+
+    // Owned-serving-path disclosure binding (PR #1065): the description is
+    // the only place an operator who has read no source can learn the
+    // serving contract, and the no-source operability harness resolves its
+    // owned_serving_path row from these exact bytes (word-boundary stems
+    // "owned" + "serv", both required). Bind the three contract legs and the
+    // two stems so a description rewrite cannot silently drop the
+    // disclosure. Assert stems, not the full sentence: wording may improve,
+    // the contract content may not disappear.
+    it("description discloses the owned serving path contract", () => {
+      const desc = createModelCommand().description;
+      // harness stems, word-boundary anchored (mirrors the harness's
+      // word-stem rule: "serv" covers serve/serves/serving)
+      expect(desc).toMatch(/\bowned\b/i);
+      expect(desc).toMatch(/\bserv/i);
+      // leg 1: a validated owned identity takes the default owned seat
+      expect(desc.toLowerCase()).toContain("default owned seat");
+      // leg 2: borrowed models are explicit reference seats only
+      expect(desc.toLowerCase()).toContain("reference seat");
+      // leg 3: with no owned identity, launch refuses unless model-free
+      // offline observation is explicitly requested
+      expect(desc.toLowerCase()).toContain("offline");
+      expect(desc.toLowerCase()).toContain("refuses");
+    });
   });
 
   // =========================================================================
