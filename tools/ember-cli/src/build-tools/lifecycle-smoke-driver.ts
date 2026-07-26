@@ -272,8 +272,15 @@ export function actionOutputExcerpt(
     reload: /error: failed to load checkpoint/i,
     continue: /unknown command|not registered/i,
   };
-  const observed = [...lines].reverse().find((line) => patterns[action].test(line));
-  if (observed !== undefined) return observed.trim();
+  const observedIndex = lines.findLastIndex((line) => patterns[action].test(line));
+  if (observedIndex !== -1) {
+    const observed = lines[observedIndex]!.trim();
+    const continuation = lines[observedIndex + 1]?.trim() ?? "";
+    if (action === "train" && /does not launch training/i.test(continuation)) {
+      return `${observed}\n${continuation}`;
+    }
+    return observed;
+  }
   const trimmedDelta = delta.trim();
   if (trimmedDelta !== "") return trimmedDelta.slice(-2000);
   return "";
@@ -284,14 +291,7 @@ export function classifyActionEvidence(
   frame: string,
   delta: string,
 ): { status: AttemptRow["status"]; excerpt: string } {
-  let excerpt = actionOutputExcerpt(action, frame, delta);
-  if (
-    action === "train" &&
-    /does not launch training/i.test(delta) &&
-    !/does not launch training/i.test(excerpt)
-  ) {
-    excerpt = `${excerpt}\nThis command does NOT launch training.`.trim();
-  }
+  const excerpt = actionOutputExcerpt(action, frame, delta);
   return {
     status: classifyActionFrame(action, excerpt),
     excerpt,

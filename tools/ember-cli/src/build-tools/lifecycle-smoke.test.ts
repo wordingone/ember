@@ -270,7 +270,9 @@ describe("validateLifecycleReceipt", () => {
     forced.termination.clean_exit_observed = false;
     forced.termination.forced_cleanup_required = true;
     forced.termination.forced_cleanup_attempted = true;
-    expect(() => validateLifecycleReceipt(forced, expected)).not.toThrow();
+    expect(() => validateLifecycleReceipt(forced, expected)).toThrow(
+      "clean operator exit",
+    );
   });
 
   test("measures clean exit before deciding whether forced cleanup is required", async () => {
@@ -499,6 +501,17 @@ describe("compiled lifecycle action completion", () => {
       quote,
       "stop run=smoke-run",
     )).toBe("stop run=smoke-run");
+    expect(driver.actionOutputExcerpt!(
+      "train",
+      "",
+      [
+        "launch-packet: all preflights GREEN -- EMBER-02 is launch-ready.",
+        "This command does NOT launch training.",
+      ].join("\n"),
+    )).toBe([
+      "launch-packet: all preflights GREEN -- EMBER-02 is launch-ready.",
+      "This command does NOT launch training.",
+    ].join("\n"));
 
     expect(driver.classifyActionEvidence).toBeFunction();
     expect(driver.classifyActionEvidence!(
