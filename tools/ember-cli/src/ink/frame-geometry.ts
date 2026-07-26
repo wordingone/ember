@@ -58,6 +58,36 @@ function buildCornerIndex(): Map<string, CornerMatch[]> {
 
 const CORNER_INDEX = buildCornerIndex();
 
+// A style whose four corner glyphs are not all distinct cannot be read positionally: `classic`
+// uses "+" for all four, so every "+" in a frame indexes as a candidate top-left and each of a
+// box's other three corners is re-read as the top-left of a box that does not exist. On a clean
+// 3-line classic box that produced FOUR boxes -- one real, three spurious and `clipped` -- with
+// violations empty, which made any count-or-all-unclipped authority unusable in EMBER_ASCII and
+// contradicted this file's stated mode-independence (found by review at 2c7b8fa, not by a test:
+// the suite had no classic case at all).
+const AMBIGUOUS_CORNERS = new Set(
+  STYLES.filter((s) => new Set([s.topLeft, s.topRight, s.bottomLeft, s.bottomRight]).size < 4).map((s) => s.name),
+);
+
+/**
+ * For an ambiguous-corner style only, a candidate top-left must additionally carry the style's
+ * horizontal glyph immediately to its right and its vertical glyph immediately below. That is
+ * false for the other three roles by construction (a top-right has the horizontal on its LEFT, a
+ * bottom-left the vertical ABOVE, a bottom-right both behind it), so the role confusion dies.
+ *
+ * Deliberately NOT applied to distinct-corner styles, and the reason is the tempting wrong fix:
+ * applied universally it would turn a genuinely clipped Unicode box at a frame edge from
+ * "reported clipped" into "never seen", destroying the exact signal `clipped` exists to carry.
+ * It reads only the two immediate neighbours for the same reason -- a real classic box whose
+ * top-right runs off-frame still enters discovery and is still reported clipped.
+ */
+function isStructuralTopLeft(grid: string[][], row: number, col: number, style: StyleGlyphs): boolean {
+  if (!AMBIGUOUS_CORNERS.has(style.name)) return true;
+  if ((grid[row]?.[col + 1] ?? "") !== style.horizontal) return false;
+  if ((grid[row + 1]?.[col] ?? "") !== style.vertical) return false;
+  return true;
+}
+
 export interface FrameBox {
   topRow: number;
   bottomRow: number;
@@ -105,6 +135,7 @@ function discoverBoxes(grid: string[][]): FrameBox[] {
       if (!matches) continue;
       for (const { style, role } of matches) {
         if (role !== "topLeft") continue;
+        if (!isStructuralTopLeft(grid, row, col, style)) continue;
         let rightCol = -1;
         for (let c = col + 1; c < line.length; c += 1) {
           if (line[c] === style.topRight) {

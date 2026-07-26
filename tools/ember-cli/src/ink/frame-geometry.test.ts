@@ -89,4 +89,97 @@ describe("frame geometry — R4b acceptance (pure-unit rows)", () => {
     // A clipped box contributes no violations of its own (it was only half seen).
     expect(result.violations).toEqual([]);
   });
+
+  // The classic/EMBER_ASCII rows below exist because the suite had NO classic case at all, so a
+  // checker that returned four boxes for a clean three-line classic frame -- one real and three
+  // spurious, violations empty -- passed every test here while its mode-independence contract was
+  // false. Found by review at 2c7b8fa. Every row asserts a COUNT, because the defect was invisible
+  // to any assertion that only asked whether the real box was present.
+  test("classic (EMBER_ASCII glyphs): a clean box yields EXACTLY one unclipped box, not one plus three phantom corners", () => {
+    const frame = [
+      "+----+",
+      "| ab |",
+      "+----+",
+    ];
+    const result = checkFrameGeometry(frame);
+    expect(result.boxes.length).toBe(1);
+    expect(result.boxes[0]!.styleName).toBe("classic");
+    expect(result.boxes[0]!.clipped).toBe(false);
+    expect(result.boxes[0]!.topRow).toBe(0);
+    expect(result.boxes[0]!.bottomRow).toBe(2);
+    expect(result.boxes[0]!.leftCol).toBe(0);
+    expect(result.boxes[0]!.rightCol).toBe(5);
+    expect(result.violations).toEqual([]);
+  });
+
+  test("classic: a corrupted border cell FAILS closed, exactly as the unicode row does", () => {
+    const corrupted = [
+      "+----+",
+      "| ab |",
+      "+-X--+",
+    ];
+    const result = checkFrameGeometry(corrupted);
+    expect(result.boxes.length).toBe(1);
+    expect(result.boxes[0]!.clipped).toBe(false);
+    expect(result.violations.length).toBeGreaterThan(0);
+  });
+
+  test("classic: a box whose bottom edge runs off-frame is still reported clipped -- disambiguation does not eat the skip-path signal", () => {
+    const frame = [
+      "+----+",
+      "| ab |",
+      "| cd |",
+      // no bottom edge -- the box runs off the bottom
+    ];
+    const result = checkFrameGeometry(frame);
+    expect(result.boxes.length).toBe(1);
+    expect(result.boxes[0]!.styleName).toBe("classic");
+    expect(result.boxes[0]!.clipped).toBe(true);
+    expect(result.violations).toEqual([]);
+  });
+
+  test("classic: nested boxes are both found, and neither box contributes a phantom", () => {
+    const frame = [
+      "+--------+",
+      "| +----+ |",
+      "| | ab | |",
+      "| +----+ |",
+      "+--------+",
+    ];
+    const result = checkFrameGeometry(frame);
+    expect(result.boxes.length).toBe(2);
+    expect(result.boxes.every((b) => b.clipped === false)).toBe(true);
+    expect(result.boxes.every((b) => b.styleName === "classic")).toBe(true);
+  });
+
+  test("mode-independence is a real property: the same classic frame is judged identically with EMBER_ASCII set and unset", () => {
+    const frame = [
+      "+----+",
+      "| ab |",
+      "+----+",
+    ];
+    const prior = process.env.EMBER_ASCII;
+    try {
+      process.env.EMBER_ASCII = "1";
+      const withAscii = checkFrameGeometry(frame);
+      delete process.env.EMBER_ASCII;
+      const withoutAscii = checkFrameGeometry(frame);
+      expect(withAscii).toEqual(withoutAscii);
+      expect(withAscii.boxes.length).toBe(1);
+    } finally {
+      if (prior === undefined) delete process.env.EMBER_ASCII;
+      else process.env.EMBER_ASCII = prior;
+    }
+  });
+
+  test("distinct-corner styles are untouched by the disambiguation: a unicode box at the frame's right edge still reports clipped", () => {
+    // The tempting universal fix would have dropped this box entirely instead of reporting it.
+    const frame = [
+      "ab╭",
+      "cd│",
+    ];
+    const result = checkFrameGeometry(frame);
+    expect(result.boxes.length).toBe(1);
+    expect(result.boxes[0]!.clipped).toBe(true);
+  });
 });
