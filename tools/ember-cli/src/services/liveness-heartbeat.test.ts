@@ -10,6 +10,8 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import {
   createLivenessHeartbeatWriter,
+  shouldSuppressForHeadlessCapture,
+  HEADLESS_CAPTURE_ENV,
   heartbeatAge,
   readHeartbeatRow,
 } from "./liveness-heartbeat.ts";
@@ -558,6 +560,99 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
       if (savedEnv === undefined) delete process.env["EMBER_REPO_ROOT"];
       else process.env["EMBER_REPO_ROOT"] = savedEnv;
       fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("headless-capture suppression", () => {
+  // The defect these cover: the heartbeat is the input to scripts/liveness-watchdog.ps1, which
+  // relaunches the cockpit once the heartbeat ages out. A capture harness driving the COMPILED
+  // binary therefore suppresses that relaunch -- it makes a dead cockpit look alive. Observed
+  // 2026-07-26: a palette-capture run inside an isolated worktree left a fresh heartbeat in the
+  // MAIN repo's state dir, because this module resolves to the main root by design.
+
+  test("SUPPRESSED ON THE SUCCESS PATH: a resolvable repoRoot still yields an inert writer", () => {
+    // This is the load-bearing case. Resolution SUCCEEDS here, which is every normal run and the
+    // only path whose file the watchdog ever polls -- so a guard placed after resolution would
+    // leave this exact case writing. The would-be path is computed independently of the writer.
+    const wouldBePath = path.join(scratchDir, "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+
+    const writer = createLivenessHeartbeatWriter({
+      repoRoot: scratchDir,
+      env: { [HEADLESS_CAPTURE_ENV]: "1" },
+    });
+
+    expect(writer.filePath).toBeNull();
+    writer.write(Date.UTC(2026, 6, 26, 0, 0, 0));
+    expect(fs.existsSync(wouldBePath)).toBe(false);
+    // Nothing is created on the way there either -- not even the directory.
+    expect(fs.existsSync(path.dirname(wouldBePath))).toBe(false);
+  });
+
+  test("write() stays a no-op across repeated calls on a suppressed writer", () => {
+    const wouldBePath = path.join(scratchDir, "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+    const writer = createLivenessHeartbeatWriter({
+      repoRoot: scratchDir,
+      env: { [HEADLESS_CAPTURE_ENV]: "1" },
+    });
+
+    for (let i = 0; i < 5; i += 1) writer.write(Date.UTC(2026, 6, 26, 0, 0, i));
+
+    expect(fs.existsSync(wouldBePath)).toBe(false);
+  });
+
+  test("an absent or empty value leaves the writer LIVE", () => {
+    for (const env of [{}, { [HEADLESS_CAPTURE_ENV]: "" }]) {
+      const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 7, version: "v", env });
+      writer.write(Date.UTC(2026, 6, 26, 1, 0, 0));
+
+      const row = JSON.parse(fs.readFileSync(requireFilePath(writer.filePath), "utf8"));
+      expect(row.pid).toBe(7);
+      fs.rmSync(requireFilePath(writer.filePath));
+    }
+  });
+
+  test("a value that is not exactly \"1\" is a typo, not an intent -- the writer stays LIVE", () => {
+    // Fail-safe direction. Going inert on a garbled value would take a real cockpit's heartbeat
+    // away and provoke the very relaunch this guard exists to prevent, so only "1" suppresses.
+    for (const raw of ["true", "TRUE", "yes", "0", "false", " 1", "1 "]) {
+      const writer = createLivenessHeartbeatWriter({
+        repoRoot: scratchDir,
+        pid: 9,
+        version: "v",
+        env: { [HEADLESS_CAPTURE_ENV]: raw },
+      });
+
+      expect(writer.filePath).not.toBeNull();
+      writer.write(Date.UTC(2026, 6, 26, 2, 0, 0));
+      const row = JSON.parse(fs.readFileSync(requireFilePath(writer.filePath), "utf8"));
+      expect(row.pid).toBe(9);
+      fs.rmSync(requireFilePath(writer.filePath));
+    }
+  });
+
+  test("shouldSuppressForHeadlessCapture maps every input class", () => {
+    expect(shouldSuppressForHeadlessCapture({})).toBe(false);
+    expect(shouldSuppressForHeadlessCapture({ [HEADLESS_CAPTURE_ENV]: undefined })).toBe(false);
+    expect(shouldSuppressForHeadlessCapture({ [HEADLESS_CAPTURE_ENV]: "" })).toBe(false);
+    expect(shouldSuppressForHeadlessCapture({ [HEADLESS_CAPTURE_ENV]: "1" })).toBe(true);
+    expect(shouldSuppressForHeadlessCapture({ [HEADLESS_CAPTURE_ENV]: "true" })).toBe(false);
+    expect(shouldSuppressForHeadlessCapture({ [HEADLESS_CAPTURE_ENV]: "0" })).toBe(false);
+  });
+
+  test("defaults to the real process env when none is injected", () => {
+    // The production call site passes no env, so the default parameter is the shipped behaviour.
+    const saved = process.env[HEADLESS_CAPTURE_ENV];
+    try {
+      delete process.env[HEADLESS_CAPTURE_ENV];
+      expect(shouldSuppressForHeadlessCapture()).toBe(false);
+
+      process.env[HEADLESS_CAPTURE_ENV] = "1";
+      expect(shouldSuppressForHeadlessCapture()).toBe(true);
+      expect(createLivenessHeartbeatWriter({ repoRoot: scratchDir }).filePath).toBeNull();
+    } finally {
+      if (saved === undefined) delete process.env[HEADLESS_CAPTURE_ENV];
+      else process.env[HEADLESS_CAPTURE_ENV] = saved;
     }
   });
 });
