@@ -6,28 +6,43 @@ accretion, birth floor — describes real things, but a reader has to already kn
 the concrete stack was not written down anywhere in one place.
 
 Every number here is derived from committed bytes and the arithmetic is reproduced rather than
-quoted. Sources: `configs/ember-restart-3b.json` (contract v3), `configs/v1-pretrain-config.json`,
-the tracked Python import census, and a measured throughput receipt. Where something does not exist,
-this says so.
+quoted. Sources: `configs/ember-restart-3b.json` (contract v3), `configs/v1-pretrain-config.json`
+(historical-only, see the corpus section), `data/ember-restart-3b/input-identity.json`, the tracked
+Python import census, and a measured throughput receipt. Where something does not exist, this says
+so.
 
 ## Framework
 
-**PyTorch, with HuggingFace `transformers` for the model class.** Not JAX, not DeepSpeed, not
-Megatron. The import census over every tracked `.py` at master:
+**Plain PyTorch. The birth decoder is hand-written, not a HuggingFace model.**
 
-| import | occurrences | role |
-|---|---|---|
-| `torch` | 527 | everything |
-| `transformers` — `LlamaConfig`, `LlamaModel`, `LlamaForCausalLM` | 35 | the decoder |
-| `tokenizers` (HF, standalone) | 23 | tokenizer, trained in-repo |
-| `datasets` | 13 | corpus loading |
-| `bitsandbytes` | 8 | 8-bit optimizer |
-| `peft` (LoRA) | 2 | reference/finetune paths only, not the birth run |
-| `triton` | 1 | one probe; nothing in the training path |
+This distinction is the one a repo-wide grep gets wrong, so scope it to the birth path first. Every
+third-party import under `tools/ember-restart-3b/`, the exclusive training namespace named by the
+contract:
 
-Versions, from a measured receipt rather than a requirements file (there is no
-`requirements.txt`/`pyproject.toml` at master — worth fixing separately):
-**torch 2.6.0+cu124, CUDA 12.4, bitsandbytes 0.49.2.** Single RTX 4090, 23.99 GiB, under WSL2.
+| import | role |
+|---|---|
+| `torch`, `torch.nn`, `torch.nn.functional`, `torch.utils.checkpoint` | the model and the loop |
+| `tokenizers` (HuggingFace's standalone Rust library) | tokenizer, trained in-repo |
+| `bitsandbytes` | 8-bit optimizer |
+
+That is the whole list. **No `transformers`, no `datasets`, no `peft`, no `triton`, no JAX, no
+DeepSpeed, no Megatron.**
+
+The model is `tools/ember-restart-3b/model.py::UnifiedDecoder`, a `torch.nn.Module` written here,
+along with everything under it: `RMSNorm`, `RawPatchProjector`, `RawAudioProjector`,
+`RotaryCoordinates`, `SharedAttention`, `SwiGLUExpert`, `_DecoderLayer`. `launch_packet.py` pins the
+`class UnifiedDecoder` marker as part of the launch preflight, so the identity of the decoder is
+checked rather than assumed.
+
+`LlamaConfig` / `LlamaModel` / `LlamaForCausalLM` do appear across the repo — every occurrence is
+under `scripts/`, in reference-model, benchmarking, serving and throughput-probe paths. Those are
+comparison and measurement surfaces. **None of them is the birth decoder**, and a census that counts
+imports repo-wide will conclude otherwise. This document said exactly that in its first version and
+was wrong.
+
+Versions come from a measured receipt rather than a requirements file, because there is no
+`requirements.txt` or `pyproject.toml` at master: **torch 2.6.0+cu124, CUDA 12.4,
+bitsandbytes 0.49.2.** Single RTX 4090, 23.99 GiB, under WSL2.
 
 ## What the sparse kernel backend is
 
@@ -78,23 +93,28 @@ one where the other belongs is the easiest mistake to make here.
 ## Memory budget, checked against the cap
 
 bf16 weights at 2 bytes; gradients and 8-bit AdamW state at 2 bytes per **active** parameter, per the
-contract's own `training.memory` block:
+contract's own `training.memory` block. The reserves are declared in GiB and the cap is in GiB, so
+everything below is in bytes and reported in GiB — mixing decimal GB for tensor bytes with binary
+reserves is how the first version of this table got the answer wrong by about a gigabyte.
 
 ```
-weights   3.839B × 2B = 7.68 GB   (all of them resident)
-grads     1.725B × 2B = 3.45 GB   (active only)
-opt state 1.725B × 2B = 3.45 GB   (active only)
-                        -------
-                        14.58 GB
-+ activation reserve     4 GB
-+ runtime reserve        2 GB
-                        -------
-                        20.58 GB   against training.gpu.memory_cap_gib = 22 (23.62 GB)
+weights   3,839,161,856 × 2 =  7,678,323,712 B   (all of them resident)
+grads     1,725,232,640 × 2 =  3,450,465,280 B   (active only)
+opt state 1,725,232,640 × 2 =  3,450,465,280 B   (active only)
+                              --------------
+                              14,579,254,272 B  = 13.578 GiB
++ activation reserve  4 GiB =  4,294,967,296 B
++ runtime reserve     2 GiB =  2,147,483,648 B
+                              --------------
+                              21,021,705,216 B  = 19.578 GiB
+cap  training.gpu.memory_cap_gib = 22 GiB      = 23,622,320,128 B
+headroom                         2,600,614,912 B =  2.422 GiB
 ```
 
-It fits, with roughly 3 GB of headroom. That headroom is why the expert freezing is load-bearing
-rather than decorative: without it, gradients and optimizer state on all 3.84B parameters add about
-8.5 GB and the run does not fit on this card at all.
+It fits with about 2.4 GiB spare. That margin is why expert freezing is load-bearing rather than
+decorative: taking gradients and 8-bit optimizer state on all 3.84B parameters instead of the active
+1.73B adds `2 × 2 × 2,113,929,216` = 8,455,716,864 B (7.875 GiB), which puts the run at 27.45 GiB —
+past the cap and past the card.
 
 ## Optimizer
 
@@ -107,19 +127,35 @@ Worth flagging for anyone reading older receipts: the measured-throughput anchor
 borrowed 3B, not with the contract's non-paged configuration. The two are different placements with
 different transfer behaviour, and throughput numbers should not be moved between them silently.
 
-## Corpus
+## Corpus — the planned assembly and the governed input are different objects
 
-From `configs/v1-pretrain-config.json`, four sources, all with committed manifests and sha256s:
-permissively-licensed GitHub code (13.0 GB), English Wikipedia (3.0 GB), Gutenberg (1.9 GB), and
-Ember's own MIT-clean ARC-DSL slice (0.5 MB). Deduplication is exact sha256 at document level, per
-source.
+These are two separate artifacts and conflating them overstates what has actually been ingested.
+The first version of this section did exactly that.
 
-The interesting part is a **removal**: `fineweb_edu`, 7.4 GB and 1.55M documents, dropped as TAINTED
-because documents were selected by a classifier trained on Llama-3-70B-Instruct annotations. That is
-what "clean-genesis" actually means in practice — not a slogan, a 7.4 GB deletion with a stated
-reason. Corpus filtering must be deterministic and free of model-mediated selection, and a
+**The governed executed input, today.** `data/ember-restart-3b/input-identity.json` names artifact
+`owned-four-domain-production-rung-v1`: **48,428 bytes, four records**, a deterministically replayed
+owned image/audio/reasoning/tool rung. Its own provenance field ends with the words that matter —
+"measured rung and **not sufficient-pretraining evidence**". That is the identity a run would bind
+to right now, and it is a capability rung rather than a pretraining corpus. Nothing at master claims
+otherwise.
+
+**The 17.9 GB assembly is historical/planned, and says so in its own bytes.**
+`configs/v1-pretrain-config.json` carries `authority.artifact_class = "historical_only"` and
+`authority.execution_authority = "denied"`, under `goal_id: EMBER-00`. It describes four sources
+with committed manifests and sha256s — permissively-licensed GitHub code (13.0 GB), English
+Wikipedia (3.0 GB), Gutenberg (1.9 GB), and Ember's own MIT-clean ARC-DSL slice (0.5 MB), deduped by
+exact document-level sha256 per source. It is corpus **evidence and design**, not the current
+executed input, and quoting it as "the corpus" credits an ingestion that has not happened.
+
+The part of it worth carrying forward is a **removal**: `fineweb_edu`, 7.4 GB and 1.55M documents,
+dropped as TAINTED because documents were selected by a classifier trained on Llama-3-70B-Instruct
+annotations. That is what "clean-genesis" concretely means — not a slogan, a 7.4 GB deletion with a
+stated reason. Corpus filtering must be deterministic and free of model-mediated selection, and a
 classifier trained on another model's outputs is model-mediated selection even though no weights are
-copied.
+copied. The rule survives the config's historical status; the tonnage does not transfer with it.
+
+So the honest one-line answer to "what is it training on" is: **nothing at pretraining scale yet.**
+There is a governed 48 KB rung with a valid identity, and a denied-authority design for 17.9 GB.
 
 ## The coined terms, decoded
 
@@ -145,11 +181,16 @@ done:
 - **No device-memory-bandwidth receipt.** Statements about DRAM bandwidth headroom currently rest on
   the vendor datasheet number, not on a measurement taken on this card.
 - **No custom kernels of any kind** in the training path.
+- **No ingested pretraining corpus.** The governed input identity is a 48 KB four-record rung whose
+  own provenance says it is not sufficient-pretraining evidence, and the 17.9 GB assembly is a
+  denied-authority historical config. Distance from "designed" to "ingested" is not zero here.
 
 ## How to check this document
 
-Every number above comes from `configs/ember-restart-3b.json`, `configs/v1-pretrain-config.json`, or
-the import census, all at master. The parameter total and the memory budget are arithmetic you can
+Every number above comes from `configs/ember-restart-3b.json`, `configs/v1-pretrain-config.json`,
+`data/ember-restart-3b/input-identity.json`, or the import census, all at master. Read an artifact's
+own `authority` block before quoting its contents as current state — that is the check this document
+failed on its first pass. The parameter total and the memory budget are arithmetic you can
 re-run from the formulas in the contract's `parameter_formula` block — the contract states the
 formulas and the total separately, and they agree, which is the check worth repeating whenever the
 architecture changes.
