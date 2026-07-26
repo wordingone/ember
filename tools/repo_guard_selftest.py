@@ -493,6 +493,66 @@ def test_split_kernel_hashed_scan_covers_every_subject_guard_surface():
             cleanup(tmp)
 
 
+def test_split_kernel_accepts_byte_identical_inherited_guard_surfaces():
+    tmp = make_fixture("fix/selftest-split-identical-guard")
+    try:
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc == 0, (
+            "trusted split kernel rejected byte-identical inherited guard surfaces\n"
+            + out
+        )
+        assert "repo-guard: PASS" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_split_kernel_rejects_absolute_path_in_non_guard_file():
+    tmp = make_fixture("fix/selftest-split-non-guard-path")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        bad_path = "C" + ":" + "/Users/example/private"
+        (tmp / "docs" / "note.md").write_text(
+            "candidate-smuggled path: " + bad_path + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc != 0, f"trusted split kernel accepted a non-guard path\n{out}"
+        assert "FAIL [paths]" in out, out
+        assert "docs/note.md:1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_split_kernel_rejects_deleted_subject_guard():
+    tmp = make_fixture("fix/selftest-split-deleted-guard")
+    try:
+        (tmp / "tools" / "repo-guard.sh").unlink()
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc != 0, f"trusted split kernel accepted a deleted subject guard\n{out}"
+        assert "FAIL [guard-kernel] subject guard surface is missing" in out, out
+    finally:
+        cleanup(tmp)
+
+
 def test_split_kernel_scans_subject_guard_for_absolute_paths():
     tmp = make_fixture("fix/selftest-split-subject-path")
     try:
@@ -522,6 +582,7 @@ def test_required_workflow_uses_base_pinned_kernel():
         encoding="utf-8"
     )
     required = (
+        "pull_request:",
         "pull_request_target:",
         "path: guard-kernel",
         "path: guard-subject",
@@ -536,23 +597,32 @@ def test_required_workflow_uses_base_pinned_kernel():
     )
     for marker in required:
         assert marker in text, f"trusted workflow marker missing: {marker}"
-    assert "\n  pull_request:\n" not in text, (
-        "candidate-authored pull_request workflow cannot be the required trust gate"
+    assert (
+        "on:\n"
+        "  push:\n"
+        "  pull_request:\n"
+        "    branches: [master]\n"
+        "  pull_request_target:\n"
+    ) in text, (
+        "bootstrap must retain pull_request while restoring unfiltered push coverage"
     )
-    assert text.count("persist-credentials: false") == 3
+    assert text.count("persist-credentials: false") == 4
     kernel_checkout = text.split(
         "- name: Checkout trusted guard kernel", 1
-    )[1].split("- name: Checkout pull-request merge subject", 1)[0]
+    )[1].split("- name: Checkout bootstrap trusted guard kernel", 1)[0]
     assert "ref:" not in kernel_checkout, (
         "trusted kernel must resolve the current protected-base tip, not an event-stale base SHA"
     )
     assert (
-        "github.event_name == 'pull_request_target' && "
+        "(github.event_name == 'pull_request_target' || "
+        "github.event_name == 'pull_request') && "
         "github.event.pull_request.base.sha || github.event.before"
     ) in text, "push and pull-request events must both bind an explicit changed-range base"
     assert "explicit range base is unavailable; refusing weaker tree-only fallback" in text
     assert "pull_request_target resolves the current" in text
-    assert "push resolves the triggering protected commit" in text
+    assert "pull_request is a temporary bootstrap trigger" in text
+    assert "push is a same-tree self-check" in text
+    assert "pull_request_target is the separated trusted-kernel gate" in text
     assert 'bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"' in text
 
 
@@ -569,7 +639,10 @@ ALL_TESTS = [
     test_trusted_kernel_ignores_subject_guard_and_helpers,
     test_split_kernel_scans_subject_guard_for_runtime_names,
     test_split_kernel_hashed_scan_covers_every_subject_guard_surface,
+    test_split_kernel_accepts_byte_identical_inherited_guard_surfaces,
+    test_split_kernel_rejects_absolute_path_in_non_guard_file,
     test_split_kernel_scans_subject_guard_for_absolute_paths,
+    test_split_kernel_rejects_deleted_subject_guard,
     test_required_workflow_uses_base_pinned_kernel,
 ]
 
