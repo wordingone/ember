@@ -6,11 +6,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +20,33 @@ IDENTITY_VALIDATOR = (
     REPO_ROOT / "scripts" / "ember_01_identity" / "validate_identity.py"
 )
 RESTART_SEAT_CONSUMER = REPO_ROOT / "scripts" / "ember_restart" / "cli_seat.py"
+
+_IDENTITY_STATIC_EVIDENCE = (
+    "manifests/ember-01-identity/schema-v1.json",
+    "manifests/ember-01-identity/trusted-verifiers-v1.json",
+    "manifests/ember-01-identity/accepted-training-input-authorities-v1.json",
+    "manifests/ember-01-custody/benchmark-registry.json",
+)
+CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
+    "identity": (
+        "scripts/ember_01_identity/validate_identity.py",
+        *_IDENTITY_STATIC_EVIDENCE,
+    ),
+    "restart": (
+        "scripts/ember_restart/cli_seat.py",
+        "scripts/ember_restart/contract.py",
+        "scripts/ember_restart/prediction_contract.py",
+        "scripts/ember_restart/seat_identity_bridge.py",
+        "scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
+        "scripts/ember_01_identity/validate_identity.py",
+        "tools/ember-restart-3b/parameter_counter.py",
+        *_IDENTITY_STATIC_EVIDENCE,
+    ),
+}
+CONSUMER_ENTRYPOINTS = {
+    "identity": "scripts/ember_01_identity/validate_identity.py",
+    "restart": "scripts/ember_restart/cli_seat.py",
+}
 
 CONSUMER_COMMAND_CONTRACTS = {
     "identity": (
@@ -49,7 +78,7 @@ CONSUMER_COMMAND_CONTRACTS = {
 
 
 @dataclass(frozen=True)
-class ConsumerValidatorSnapshot:
+class ConsumerClosureFileSnapshot:
     sha256: str
     content: bytes
     device: int
@@ -59,7 +88,41 @@ class ConsumerValidatorSnapshot:
     ctime_ns: int
 
 
-def _snapshot_validator(path: Path) -> ConsumerValidatorSnapshot:
+@dataclass(frozen=True)
+class ConsumerValidatorSnapshot:
+    entrypoint: str
+    files: Mapping[str, ConsumerClosureFileSnapshot]
+
+    @property
+    def sha256(self) -> str:
+        return self.files[self.entrypoint].sha256
+
+    @property
+    def content(self) -> bytes:
+        return self.files[self.entrypoint].content
+
+    @property
+    def device(self) -> int:
+        return self.files[self.entrypoint].device
+
+    @property
+    def inode(self) -> int:
+        return self.files[self.entrypoint].inode
+
+    @property
+    def size(self) -> int:
+        return self.files[self.entrypoint].size
+
+    @property
+    def mtime_ns(self) -> int:
+        return self.files[self.entrypoint].mtime_ns
+
+    @property
+    def ctime_ns(self) -> int:
+        return self.files[self.entrypoint].ctime_ns
+
+
+def _snapshot_file(path: Path) -> ConsumerClosureFileSnapshot:
     try:
         before = path.stat(follow_symlinks=False)
         content = path.read_bytes()
@@ -76,7 +139,7 @@ def _snapshot_validator(path: Path) -> ConsumerValidatorSnapshot:
         or before.st_size != len(content)
     ):
         raise ValueError("consumer.validator_drift")
-    return ConsumerValidatorSnapshot(
+    return ConsumerClosureFileSnapshot(
         sha256=hashlib.sha256(content).hexdigest(),
         content=content,
         device=before.st_dev,
@@ -87,76 +150,121 @@ def _snapshot_validator(path: Path) -> ConsumerValidatorSnapshot:
     )
 
 
+def _valid_closure_relative_path(relative: str) -> bool:
+    path = Path(relative)
+    return (
+        isinstance(relative, str)
+        and relative
+        and "\\" not in relative
+        and not path.is_absolute()
+        and relative == path.as_posix()
+        and all(part not in {"", ".", ".."} for part in path.parts)
+    )
+
+
+def _snapshot_consumer_closure(
+    name: str,
+    relative_paths: Sequence[str],
+) -> ConsumerValidatorSnapshot:
+    entrypoint_path = {
+        "identity": IDENTITY_VALIDATOR,
+        "restart": RESTART_SEAT_CONSUMER,
+    }[name]
+    try:
+        entrypoint = entrypoint_path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except (OSError, ValueError) as exc:
+        raise ValueError("consumer.validator_location") from exc
+    if (
+        name not in CONSUMER_ENTRYPOINTS
+        or entrypoint != CONSUMER_ENTRYPOINTS[name]
+        or len(relative_paths) != len(set(relative_paths))
+        or entrypoint not in relative_paths
+        or not all(_valid_closure_relative_path(relative) for relative in relative_paths)
+    ):
+        raise ValueError("consumer.validator_closure")
+    files = {
+        relative: _snapshot_file(REPO_ROOT / Path(relative))
+        for relative in relative_paths
+    }
+    return ConsumerValidatorSnapshot(entrypoint=entrypoint, files=files)
+
+
 def snapshot_consumer_validators() -> dict[str, ConsumerValidatorSnapshot]:
     return {
-        "identity": _snapshot_validator(IDENTITY_VALIDATOR),
-        "restart": _snapshot_validator(RESTART_SEAT_CONSUMER),
+        name: _snapshot_consumer_closure(name, relative_paths)
+        for name, relative_paths in CONSUMER_CLOSURE_RELATIVE_PATHS.items()
     }
 
 
-def _validator_matches(path: Path, snapshot: ConsumerValidatorSnapshot) -> bool:
+def _file_matches(relative: str, snapshot: ConsumerClosureFileSnapshot) -> bool:
     try:
-        current = _snapshot_validator(path)
+        current = _snapshot_file(REPO_ROOT / Path(relative))
     except ValueError:
         return False
-    return (
-        current.sha256 == snapshot.sha256
-        and current.content == snapshot.content
-        and current.device == snapshot.device
-        and current.inode == snapshot.inode
-        and current.size == snapshot.size
-        and current.mtime_ns == snapshot.mtime_ns
-        and current.ctime_ns == snapshot.ctime_ns
-    )
+    return current == snapshot
 
 
 def verify_consumer_validators(
     snapshots: Mapping[str, ConsumerValidatorSnapshot],
 ) -> bool:
-    return set(snapshots) == {"identity", "restart"} and (
-        _validator_matches(IDENTITY_VALIDATOR, snapshots["identity"])
-        and _validator_matches(RESTART_SEAT_CONSUMER, snapshots["restart"])
+    return (
+        set(snapshots) == {"identity", "restart"}
+        and all(
+            snapshot.entrypoint == CONSUMER_ENTRYPOINTS[name]
+            and tuple(snapshot.files) == CONSUMER_CLOSURE_RELATIVE_PATHS[name]
+            and all(_file_matches(relative, file_snapshot)
+                    for relative, file_snapshot in snapshot.files.items())
+            for name, snapshot in snapshots.items()
+        )
     )
 
-_SNAPSHOT_EXEC_SHIM = """
-import pathlib
-import sys
 
-source = sys.stdin.buffer.read()
-script = sys.argv[1]
-sys.argv = sys.argv[1:]
-sys.path.insert(0, str(pathlib.Path(script).parent))
-namespace = {
-    "__name__": "__main__",
-    "__file__": script,
-    "__package__": None,
-    "__cached__": None,
-}
-exec(compile(source, script, "exec"), namespace, namespace)
-""".strip()
+def consumer_validator_closure_identity(
+    snapshot: ConsumerValidatorSnapshot,
+) -> dict[str, dict[str, object]]:
+    return {
+        relative: {
+            "relative_path": relative,
+            "sha256": file_snapshot.sha256,
+            "bytes": len(file_snapshot.content),
+        }
+        for relative, file_snapshot in snapshot.files.items()
+    }
 
 
 def _run_snapshotted_validator(
-    validator_path: Path,
     snapshot: ConsumerValidatorSnapshot,
     arguments: list[str],
 ) -> subprocess.CompletedProcess[str]:
-    if hashlib.sha256(snapshot.content).hexdigest() != snapshot.sha256:
+    if (
+        not _valid_closure_relative_path(snapshot.entrypoint)
+        or snapshot.entrypoint not in snapshot.files
+        or any(
+            not _valid_closure_relative_path(relative)
+            or hashlib.sha256(file_snapshot.content).hexdigest()
+            != file_snapshot.sha256
+            or len(file_snapshot.content) != file_snapshot.size
+            for relative, file_snapshot in snapshot.files.items()
+        )
+    ):
         raise ValueError("consumer.validator_snapshot")
-    command = [
-        sys.executable,
-        "-c",
-        _SNAPSHOT_EXEC_SHIM,
-        str(validator_path),
-        *arguments,
-    ]
-    completed = subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        input=snapshot.content,
-        capture_output=True,
-        check=False,
-    )
+    with tempfile.TemporaryDirectory(prefix="ember-admission-consumer-") as scratch:
+        snapshot_root = Path(scratch)
+        for relative, file_snapshot in snapshot.files.items():
+            destination = snapshot_root / Path(relative)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("xb") as handle:
+                handle.write(file_snapshot.content)
+                handle.flush()
+                os.fsync(handle.fileno())
+        entrypoint = snapshot_root / Path(snapshot.entrypoint)
+        command = [sys.executable, str(entrypoint), *arguments]
+        completed = subprocess.run(
+            command,
+            cwd=snapshot_root,
+            capture_output=True,
+            check=False,
+        )
     return subprocess.CompletedProcess(
         args=command,
         returncode=completed.returncode,
@@ -172,7 +280,7 @@ def run_identity_consumer(
     paths: Mapping[str, Path],
     snapshot: ConsumerValidatorSnapshot | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    frozen = snapshot if snapshot is not None else _snapshot_validator(IDENTITY_VALIDATOR)
+    frozen = snapshot if snapshot is not None else snapshot_consumer_validators()["identity"]
     arguments = [
         str(paths["identity_manifest"]),
         "--checkpoint",
@@ -189,17 +297,17 @@ def run_identity_consumer(
         str(paths["identity_trusted_verifier_registry"]),
         "--require-resolved",
     ]
-    return _run_snapshotted_validator(IDENTITY_VALIDATOR, frozen, arguments)
+    return _run_snapshotted_validator(frozen, arguments)
 
 
 def run_restart_consumer(
     paths: Mapping[str, Path],
     snapshot: ConsumerValidatorSnapshot | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    frozen = snapshot if snapshot is not None else _snapshot_validator(RESTART_SEAT_CONSUMER)
+    frozen = snapshot if snapshot is not None else snapshot_consumer_validators()["restart"]
     arguments = [
         str(paths["restart_run_manifest"]),
         "--trusted-verifier-registry",
         str(paths["restart_trusted_verifier_registry"]),
     ]
-    return _run_snapshotted_validator(RESTART_SEAT_CONSUMER, frozen, arguments)
+    return _run_snapshotted_validator(frozen, arguments)

@@ -16,8 +16,15 @@ PRODUCER_ROOT = REPO_ROOT / "scripts" / "ember_admission"
 sys.path.insert(0, str(PRODUCER_ROOT))
 
 from receipt import verify_producer_receipt, write_producer_receipt  # noqa: E402
-from consumers import CONSUMER_COMMAND_CONTRACTS  # noqa: E402
+from consumers import CONSUMER_COMMAND_CONTRACTS, CONSUMER_ENTRYPOINTS  # noqa: E402
 from source_snapshot import SourceSnapshot  # noqa: E402
+
+def _validator_closure(name: str, digest: str) -> dict[str, dict[str, object]]:
+    relative = CONSUMER_ENTRYPOINTS[name]
+    return {
+        relative: {"relative_path": relative, "sha256": digest, "bytes": 1}
+    }
+
 
 
 def _descriptor_snapshot() -> SourceSnapshot:
@@ -74,6 +81,7 @@ def test_receipt_is_content_addressed_and_discloses_no_host_path(
                 "returncode": 0,
                 "stdout_sha256": "3" * 64,
                 "validator_sha256": "1" * 64,
+                "validator_closure": _validator_closure("identity", "1" * 64),
             },
             "restart": {
                 "accepted": True,
@@ -81,6 +89,7 @@ def test_receipt_is_content_addressed_and_discloses_no_host_path(
                 "returncode": 0,
                 "stdout_sha256": "4" * 64,
                 "validator_sha256": "2" * 64,
+                "validator_closure": _validator_closure("restart", "2" * 64),
             },
         },
     )
@@ -147,11 +156,13 @@ def test_receipt_refuses_nonzero_or_malformed_consumer_authority(
                     "command": list(CONSUMER_COMMAND_CONTRACTS["identity"]),
                     "stdout_sha256": "3" * 64,
                     "validator_sha256": "1" * 64,
+                    "validator_closure": _validator_closure("identity", "1" * 64),
                 },
                 "restart": {
                     "accepted": True,
                     "returncode": 1,
                     "validator_sha256": "2" * 64,
+                    "validator_closure": _validator_closure("restart", "2" * 64),
                     "command": list(CONSUMER_COMMAND_CONTRACTS["restart"]),
                     "stdout_sha256": "4" * 64,
                 },
@@ -185,6 +196,7 @@ def test_written_receipt_drift_is_detected(tmp_path: Path) -> None:
                 "accepted": True,
                 "returncode": 0,
                 "validator_sha256": "1" * 64,
+                "validator_closure": _validator_closure("identity", "1" * 64),
                 "command": list(CONSUMER_COMMAND_CONTRACTS["identity"]),
                 "stdout_sha256": "3" * 64,
             },
@@ -192,6 +204,7 @@ def test_written_receipt_drift_is_detected(tmp_path: Path) -> None:
                 "accepted": True,
                 "returncode": 0,
                 "validator_sha256": "2" * 64,
+                "validator_closure": _validator_closure("restart", "2" * 64),
                 "command": list(CONSUMER_COMMAND_CONTRACTS["restart"]),
                 "stdout_sha256": "4" * 64,
             },

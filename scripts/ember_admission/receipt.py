@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from consumers import CONSUMER_COMMAND_CONTRACTS
+from consumers import CONSUMER_COMMAND_CONTRACTS, CONSUMER_ENTRYPOINTS
 from source_snapshot import SourceSnapshot
 
 
@@ -70,6 +70,42 @@ def _valid_identity(value: Any) -> bool:
         and value["bytes"] >= 0
     )
 
+def _valid_consumer_result(name: str, result: Any) -> bool:
+    if not isinstance(result, dict) or set(result) != {
+        "accepted",
+        "command",
+        "returncode",
+        "stdout_sha256",
+        "validator_sha256",
+        "validator_closure",
+    }:
+        return False
+    closure = result.get("validator_closure")
+    if (
+        name not in CONSUMER_COMMAND_CONTRACTS
+        or result.get("command") != list(CONSUMER_COMMAND_CONTRACTS[name])
+        or result.get("accepted") is not True
+        or result.get("returncode") != 0
+        or not isinstance(result.get("stdout_sha256"), str)
+        or SHA256_RE.fullmatch(result["stdout_sha256"]) is None
+        or not isinstance(result.get("validator_sha256"), str)
+        or SHA256_RE.fullmatch(result["validator_sha256"]) is None
+        or not isinstance(closure, dict)
+        or not closure
+        or not all(
+            isinstance(relative, str)
+            and _valid_identity(identity)
+            and identity["relative_path"] == relative
+            for relative, identity in closure.items()
+        )
+        or CONSUMER_ENTRYPOINTS[name] not in closure
+        or closure[CONSUMER_ENTRYPOINTS[name]]["sha256"]
+        != result["validator_sha256"]
+    ):
+        return False
+    return True
+
+
 
 def write_producer_receipt(
     candidate: Path,
@@ -80,23 +116,8 @@ def write_producer_receipt(
 ) -> ProducerReceiptResult:
     if (
         set(consumer_results) != {"identity", "restart"}
-        or any(
-            set(result) != {
-                "accepted",
-                "command",
-                "returncode",
-                "stdout_sha256",
-                "validator_sha256",
-            }
-            or result.get("command") != list(CONSUMER_COMMAND_CONTRACTS[name])
-            or result.get("accepted") is not True
-            or result.get("returncode") != 0
-            or not isinstance(result.get("stdout_sha256"), str)
-            or SHA256_RE.fullmatch(result["stdout_sha256"]) is None
-            or not isinstance(result.get("validator_sha256"), str)
-            or SHA256_RE.fullmatch(result["validator_sha256"]) is None
-            for name, result in consumer_results.items()
-        )
+        or any(not _valid_consumer_result(name, result)
+               for name, result in consumer_results.items())
     ):
         raise ValueError("receipt.consumers")
     descriptor_identity = _identity(descriptor_snapshot)
@@ -274,6 +295,8 @@ def verify_producer_receipt(
         != len(outputs)
         or not isinstance(consumers, dict)
         or set(consumers) != {"identity", "restart"}
+        or any(not _valid_consumer_result(name, result)
+               for name, result in consumers.items())
     ):
         return False
     digest_join = hashlib.sha256(

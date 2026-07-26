@@ -85,6 +85,10 @@ export const ADMISSION_CONSUMER_COMMANDS = {
     "role:restart_trusted_verifier_registry",
   ],
 } as const;
+const ADMISSION_CONSUMER_ENTRYPOINTS = {
+  identity: "scripts/ember_01_identity/validate_identity.py",
+  restart: "scripts/ember_restart/cli_seat.py",
+} as const;
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
@@ -401,16 +405,34 @@ export function verifyAdmissionProducerReceipt(
         return true;
       }
       const record = row as Record<string, unknown>;
+      const closure = record.validator_closure;
+      if (typeof closure !== "object" || closure === null || Array.isArray(closure)) {
+        return true;
+      }
+      const parsedClosure = new Map<string, FileIdentity>();
+      if (
+        Object.entries(closure).length === 0 ||
+        Object.entries(closure).some(([relativePath, identity]) => {
+          const parsed = parseFileIdentity(identity);
+          if (parsed !== null) parsedClosure.set(relativePath, parsed);
+          return parsed === null || parsed.relative_path !== relativePath;
+        })
+      ) {
+        return true;
+      }
+      const entrypoint = parsedClosure.get(ADMISSION_CONSUMER_ENTRYPOINTS[name]);
       return (
         canonicalJson(record.command) !== canonicalJson(ADMISSION_CONSUMER_COMMANDS[name]) ||
         Object.keys(record).sort().join(",") !==
-          "accepted,command,returncode,stdout_sha256,validator_sha256" ||
+          "accepted,command,returncode,stdout_sha256,validator_closure,validator_sha256" ||
         record.accepted !== true ||
         typeof record.stdout_sha256 !== "string" ||
         !SHA256_RE.test(record.stdout_sha256) ||
         record.returncode !== 0 ||
         typeof record.validator_sha256 !== "string" ||
-        !SHA256_RE.test(record.validator_sha256)
+        !SHA256_RE.test(record.validator_sha256) ||
+        entrypoint === undefined ||
+        entrypoint.sha256 !== record.validator_sha256
       );
     })
   ) {

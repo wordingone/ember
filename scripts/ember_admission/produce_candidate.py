@@ -20,6 +20,7 @@ from candidate import (
 )
 from consumers import (
     CONSUMER_COMMAND_CONTRACTS,
+    consumer_validator_closure_identity,
     run_identity_consumer,
     run_restart_consumer,
     snapshot_consumer_validators,
@@ -113,7 +114,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         validate_descriptor(descriptor)
         snapshots = snapshot_sources(args.workspace, descriptor)
         consumer_validators = snapshot_consumer_validators()
-        candidate, published_paths, destination = stage_candidate(
+        candidate, _staged_paths, destination = stage_candidate(
             args.output_root,
             descriptor["candidate_id"],
             snapshots,
@@ -121,6 +122,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (AdmissionProducerError, ValueError) as exc:
         code = exc.code if isinstance(exc, AdmissionProducerError) else str(exc)
         print(json.dumps({"code": code, "ok": False}, sort_keys=True))
+        return 2
+
+    try:
+        candidate, published_paths = publish_staged_candidate(
+            candidate,
+            destination,
+            snapshots,
+        )
+    except ValueError as exc:
+        quarantine_candidate(candidate)
+        print(json.dumps({"code": str(exc), "ok": False}, sort_keys=True))
         return 2
 
     identity_result = run_identity_consumer(published_paths, consumer_validators["identity"])
@@ -160,6 +172,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     identity_result.stdout.encode("utf-8")
                 ).hexdigest(),
                 "validator_sha256": consumer_validators["identity"].sha256,
+                "validator_closure": consumer_validator_closure_identity(
+                    consumer_validators["identity"]
+                ),
             },
             "restart": {
                 "accepted": True,
@@ -169,31 +184,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ).hexdigest(),
                 "returncode": restart_result.returncode,
                 "validator_sha256": consumer_validators["restart"].sha256,
+                "validator_closure": consumer_validator_closure_identity(
+                    consumer_validators["restart"]
+                ),
             },
         },
     )
-    if not verify_source_snapshots(
-        args.workspace, snapshots
-    ) or not verify_descriptor_snapshot(
-        args.workspace, descriptor_snapshot
-    ) or not verify_consumer_validators(consumer_validators
-    ) or not verify_published_snapshots(
-        published_paths, snapshots
-    ) or not verify_producer_receipt(candidate, receipt):
-        quarantine_candidate(candidate)
-        print(json.dumps({"code": "candidate.drift", "ok": False}, sort_keys=True))
-        return 2
-
-    try:
-        candidate, published_paths = publish_staged_candidate(
-            candidate,
-            destination,
-            snapshots,
-        )
-    except ValueError as exc:
-        quarantine_candidate(candidate)
-        print(json.dumps({"code": str(exc), "ok": False}, sort_keys=True))
-        return 2
     if not verify_source_snapshots(
         args.workspace, snapshots
     ) or not verify_descriptor_snapshot(

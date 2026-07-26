@@ -60,11 +60,23 @@ describe("/admit receipt path authority", () => {
           accepted: true, command: ADMISSION_CONSUMER_COMMANDS.identity,
           returncode: 0, stdout_sha256: "3".repeat(64),
           validator_sha256: "1".repeat(64),
+          validator_closure: {
+            "scripts/ember_01_identity/validate_identity.py": {
+              relative_path: "scripts/ember_01_identity/validate_identity.py",
+              sha256: "1".repeat(64), bytes: 1,
+            },
+          },
         },
         restart: {
           accepted: true, command: ADMISSION_CONSUMER_COMMANDS.restart,
           returncode: 0, stdout_sha256: "4".repeat(64),
           validator_sha256: "2".repeat(64),
+          validator_closure: {
+            "scripts/ember_restart/cli_seat.py": {
+              relative_path: "scripts/ember_restart/cli_seat.py",
+              sha256: "2".repeat(64), bytes: 1,
+            },
+          },
         },
       },
       cross_consumer_digest_join_sha256: digestJoin,
