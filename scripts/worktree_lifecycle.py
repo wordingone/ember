@@ -431,6 +431,31 @@ def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dic
             raise LifecycleError("LEGACY_PATH", canonical_path(requested_path))
         raise LifecycleError("NOT_MANAGED", canonical_path(requested_path))
 
+    # ORDER IS THE WHOLE FIX. Prune runs BEFORE the live-set is computed, not after the
+    # refusal that used it.
+    #
+    # The incident this verb exists for is an owner deleting the directory without
+    # retiring. That leaves git's administrative metadata behind, and a worktree with
+    # stale metadata is still listed by `git worktree list --porcelain` -- as PRUNABLE,
+    # but listed. Computing the live set first therefore classified exactly the failure
+    # shape as WORKTREE_LIVE and refused, so the verb deadlocked on its own reason for
+    # existing. `git worktree remove` clears the metadata cleanly, which is why a test
+    # written around it could not see this: the test constructed the one input shape the
+    # bug did not have.
+    #
+    # Pruning first removes the variance instead of tracking it: prune only ever clears
+    # metadata whose directory is already gone, so after it runs, anything still listed
+    # is genuinely live and the refusal below means what it says. That is also why this
+    # is safe ahead of the check -- prune cannot touch a live worktree, and it is a no-op
+    # when there is no stale metadata. We already hold the repository lock here.
+    #
+    # It also runs ahead of the emptiness check, and that ordering is load-bearing in the
+    # other direction: a LIVE worktree's directory is never empty, so checking emptiness
+    # first would refuse every live path with PATH_NOT_EMPTY and the WORKTREE_LIVE refusal
+    # -- the one that tells the caller to use `retire` -- would become unreachable. Live is
+    # the more specific condition, so it is answered first.
+    run_git(repo, ["worktree", "prune"], check=False)
+
     live = {row.key: row for row in list_worktrees(repo)}
     if key in live:
         raise LifecycleError("WORKTREE_LIVE", live[key].path)
@@ -443,10 +468,6 @@ def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dic
             raise LifecycleError("PATH_UNREADABLE", f"{destination}: {exc}") from exc
         if leftovers:
             raise LifecycleError("PATH_NOT_EMPTY", str(destination))
-
-    # Stale git administrative metadata for a removed worktree is git's own to
-    # clear; prune is a no-op when there is none.
-    run_git(repo, ["worktree", "prune"], check=False)
 
     state["managed"].pop(key)
     state["updated_at"] = datetime.now(timezone.utc).isoformat()

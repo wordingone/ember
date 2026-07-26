@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -620,6 +621,53 @@ def test_reconcile_clears_a_row_whose_worktree_was_deleted_outside_the_tool(
     state = json.loads(state_path(repo).read_text(encoding="utf-8"))
     assert path_key_of(gone) not in state["managed"]
     # And the deadlock is cleared: audit passes again.
+    assert lifecycle(repo, "audit", check=False).returncode == 0
+
+
+def test_reconcile_clears_a_row_whose_directory_was_deleted_raw(tmp_path: Path) -> None:
+    """The ACTUAL incident shape, which the test above does not reproduce.
+
+    `git worktree remove` clears git's administrative metadata as it goes. The incident
+    was an owner deleting the directory -- nothing tells git, so `.git/worktrees/<name>`
+    survives and `git worktree list --porcelain` still lists the path, marked prunable.
+    Reconcile computed its live set from that listing before pruning, so it classified
+    exactly this shape as WORKTREE_LIVE and refused: the verb deadlocked on the one case
+    it was written for, while a test built on `worktree remove` stayed green.
+
+    RED before the ordering fix: this asserted WORKTREE_LIVE on the reconcile call.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    gone = _managed(repo, tmp_path, "raw-deleted")
+
+    # Delete the directory the way the incident did. Git is never told.
+    shutil.rmtree(gone)
+    assert not gone.exists()
+
+    # The metadata git keeps is what distinguishes this from the `worktree remove` path,
+    # so assert it is actually still there -- otherwise this test silently degrades into
+    # a duplicate of the one above.
+    listed = git(repo, "worktree", "list", "--porcelain").stdout
+    assert str(gone) in listed or str(gone).replace("\\", "/") in listed.replace("\\", "/"), (
+        "precondition: git must still list the deleted worktree, or this is not the shape"
+    )
+
+    # Measured, not assumed: in THIS shape audit still passes, because its live set comes
+    # from the same listing and a prunable row counts as present. So the trap is not a
+    # loud one -- it is that the row has no exit. Retire cannot run (git cannot chdir into
+    # a directory that is gone), and reconcile refused it as WORKTREE_LIVE. Both verbs
+    # out, and audit goes loud later anyway, the moment git's own gc prunes the metadata.
+    stuck = lifecycle(repo, "retire", "--path", str(gone), check=False)
+    assert stuck.returncode == 2
+    assert "GIT_ERROR" in stuck.stderr, "retire is not the exit for a vanished directory"
+
+    result = lifecycle(repo, "reconcile", "--path", str(gone))
+    assert '"status": "RECONCILED"' in result.stdout
+    # The retained branch survives, exactly as on the clean path.
+    assert "raw-deleted" in git(repo, "branch", "--list", "raw-deleted").stdout
+
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    assert path_key_of(gone) not in state["managed"]
     assert lifecycle(repo, "audit", check=False).returncode == 0
 
 
