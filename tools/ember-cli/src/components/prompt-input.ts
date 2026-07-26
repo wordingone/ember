@@ -93,6 +93,21 @@ export interface PromptInputActions {
 export interface PromptInputDeps {
   onEditorOpen?:      (text: string) => void;
   onModelPickerOpen?: () => void;
+  /**
+   * Whether this hook's key handler is live. Defaults to true.
+   *
+   * Ink's `_deliverKeyEvent` (ink/hooks.ts) dispatches every keypress to EVERY registered handler
+   * whose `isActive` is true, and a handler returning does not stop propagation. So a second
+   * surface that also claims the keyboard — the operator-control pane — does not take keys away
+   * from this hook by owning its own branch; both handlers run on the same keystroke. Shift+Tab
+   * would traverse the pane AND cycle permission mode; Ctrl+S would stash the prompt AND dispatch
+   * a control; Escape would exit the pane AND restore a stash.
+   *
+   * The only place that fact can be honoured is here, at registration, because `isActive` is the
+   * one mechanism the dispatcher consults. Callers that hand keyboard authority to another surface
+   * pass false for the duration.
+   */
+  keyboardActive?:    boolean;
 }
 
 export interface QueueDisplay {
@@ -384,7 +399,7 @@ export function usePromptInput(
       cyclePermissionMode,
       restoreStash,
     }, isStashed);
-  });
+  }, { isActive: deps.keyboardActive ?? true });
 
   const state: PromptInputState = {
     text:           tc.text,

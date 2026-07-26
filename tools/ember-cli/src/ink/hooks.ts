@@ -150,24 +150,31 @@ export function useInput(
   const isActive = options?.isActive ?? true;
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
+  // This hook call's OWN registry entry. The sync effect below used to reach for
+  // `_inputHandlers[_inputHandlers.length - 1]`, which is this entry only while no later
+  // `useInput` has registered. In the REPL a second, always-active handler registers after the
+  // prompt's, so from that point the prompt's isActive toggle mutated the wrong entry and its own
+  // handler stayed permanently active regardless of pane focus.
+  const entryRef = useRef<InputHandlerEntry | null>(null);
 
   useEffect(() => {
     const entry: InputHandlerEntry = {
       handler: (input, key) => handlerRef.current(input, key),
       isActive,
     };
+    entryRef.current = entry;
     _inputHandlers.push(entry);
     return () => {
       const idx = _inputHandlers.indexOf(entry);
       if (idx >= 0) _inputHandlers.splice(idx, 1);
+      if (entryRef.current === entry) entryRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync isActive without re-registering
+  // Sync isActive without re-registering — on THIS call's entry, whatever its index.
   useEffect(() => {
-    const entry = _inputHandlers[_inputHandlers.length - 1];
-    if (entry) entry.isActive = isActive;
+    if (entryRef.current) entryRef.current.isActive = isActive;
   });
 }
 
