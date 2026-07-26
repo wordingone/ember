@@ -83,7 +83,14 @@ jobs:
           # excluding them wholesale drops eligible PRs from 24 to 5 on the
           # current backlog -- which would trade the bottleneck this workflow
           # exists to remove for a slightly different one.
-          PROTECTED_RE='^(INVARIANT\.md|GOAL\.md|\.github/workflows/|\.githooks/|tools/[^/]+$|scripts/[^/]+$|build-tools/|docs/authority/|goals/|constitution)'
+          # The smoke check's path is tools/ember-cli/src/build-tools/, NOT a
+          # repo-root build-tools/ -- the workflow runs it with
+          # `working-directory: tools/ember-cli/src`, so the `bun test
+          # build-tools/...` line is relative and reads like a root path when
+          # it is not. A bare `build-tools/` pattern matches nothing in this
+          # repository, which would have left the smoke test's own bytes
+          # editable by the PR it grades.
+          PROTECTED_RE='^(INVARIANT\.md|GOAL\.md|\.github/workflows/|\.githooks/|tools/[^/]+$|scripts/[^/]+$|tools/ember-cli/src/build-tools/|docs/authority/|goals/|constitution)'
 
           if [ -n "${EVENT_PR:-}" ]; then
             PRS="$EVENT_PR"
@@ -94,12 +101,29 @@ jobs:
 
           for pr in $PRS; do
             meta=$(gh pr view "$pr" --repo "$REPO" \
-                     --json number,isDraft,mergeStateStatus,autoMergeRequest,baseRefName,files,changedFiles \
+                     --json number,isDraft,mergeStateStatus,autoMergeRequest,baseRefName,files,changedFiles,labels \
                      2>/dev/null) || { echo "pr #$pr: unreadable, skipping"; continue; }
 
             is_draft=$(jq -r '.isDraft' <<<"$meta")
             base=$(jq -r '.baseRefName' <<<"$meta")
             already=$(jq -r 'if .autoMergeRequest == null then "no" else "yes" end' <<<"$meta")
+
+            # The judgment gate. GitHub's own review primitive cannot be used
+            # here: the repository has a single identity, every PR is authored
+            # by it, and GitHub forbids approving your own PR. A required
+            # approving review is therefore unsatisfiable -- it would not gate
+            # anything, it would deadlock everything, and auto-merge would
+            # never fire at all. Measured before this was written: the last
+            # eight merged PRs carried zero reviews each.
+            #
+            # So the label carries the judgment instead. Applying
+            # `auto-merge-ok` is the reviewer's deliberate act, and it is the
+            # ONLY thing that enrolls a PR. Nothing lands merely by being green.
+            # The mechanical gate stays with branch protection, which now
+            # requires both checks and binds admins too.
+            if ! jq -e '.labels[] | select(.name == "auto-merge-ok")' <<<"$meta" >/dev/null 2>&1; then
+              echo "pr #$pr: not labelled auto-merge-ok, skipping (awaiting review)"; continue
+            fi
 
             if [ "$is_draft" = "true" ]; then
               echo "pr #$pr: draft, skipping"; continue
