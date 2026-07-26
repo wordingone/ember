@@ -26,7 +26,10 @@ import {
   loadOwnedModelIdentity,
 } from "../entrypoints/owned-seat-loader.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import {
+  resolveEmberRepoRootOrCwd,
+  resolveEmberSourceRootOrCwd,
+} from "../utils/repo-root.ts";
 import {
   MalformedBindingArgError,
   parseBindingArg,
@@ -96,7 +99,7 @@ export function _defaultGetModelSeatDecision(): ModelSeatDecision {
   if (decision.allowed) return decision;
 
   try {
-    const repoRoot = resolveEmberRepoRootOrCwd({}, "[ember] /custody");
+    const repoRoot = resolveEmberSourceRootOrCwd({}, "[ember] /custody identity");
     const configHome = getEmberConfigHomeDir();
     const admittedIdentity = loadOwnedModelIdentity({
       repoRoot,

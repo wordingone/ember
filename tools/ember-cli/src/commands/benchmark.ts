@@ -8,11 +8,11 @@
 // execution -- 'run' truthfully reports "not_executed: harness is <harness_status>"
 // for every row (no real harness is wired yet) rather than faking a result.
 //
-// Repo-root resolution mirrors commands/custody.ts (resolveEmberRepoRootOrCwd), so the
-// registry path resolves the same way regardless of the ember-cli's launch cwd.
+// Benchmark registry bytes belong to the selected checkout, so linked-worktree launches use
+// resolveEmberSourceRootOrCwd and never substitute a canonical main checkout.
 
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -67,7 +67,7 @@ interface BenchmarkCommandDeps {
    *  registry path. Returning/throwing lets tests exercise missing/unreadable files
    *  without touching the real filesystem. */
   readRegistryFile?: (path: string) => string;
-  /** Injectable for tests; defaults to `resolveEmberRepoRootOrCwd({}, "[ember] /benchmark")`. */
+  /** Injectable for tests; defaults to the exact-checkout source-root resolver. */
   resolveRepoRoot?: () => string;
   /** Injectable for tests; overrides the registry path entirely (bypasses repo-root
    *  resolution + the manifests/ember-01-custody/ convention). */
@@ -206,7 +206,7 @@ export function renderBenchmarkTable(registry: BenchmarkRegistry): string {
  *  <benchmark_id>` command. */
 export function createBenchmarkCommand(deps: BenchmarkCommandDeps = {}): RegistryCommand {
   const doResolveRepoRoot =
-    deps.resolveRepoRoot ?? (() => resolveEmberRepoRootOrCwd({}, "[ember] /benchmark"));
+    deps.resolveRepoRoot ?? (() => resolveEmberSourceRootOrCwd({}, "[ember] /benchmark"));
   const doReadRegistryFile = deps.readRegistryFile ?? _defaultReadRegistryFile;
 
   function resolvedRegistryPath(): string {

@@ -7,7 +7,11 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resolveEmberRepoRoot, CanonicalRootError } from "./repo-root.ts";
+import {
+  resolveEmberRepoRoot,
+  resolveEmberSourceRoot,
+  CanonicalRootError,
+} from "./repo-root.ts";
 
 let scratchDir: string;
 
@@ -177,6 +181,106 @@ describe("issue #666 — worktree-vs-main-checkout convergence", () => {
   });
 });
 
+describe("source-byte authority in a linked worktree", () => {
+  test("source resolution preserves the selected worktree while state resolution converges on main", async () => {
+    const { mainRoot, worktreeRoot } = makeMainAndWorktree();
+    const options = {
+      envRepoRoot: worktreeRoot,
+      envSourceRoot: worktreeRoot,
+      startDir: scratchDir,
+      execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+    };
+    expect(resolveEmberSourceRoot(options)).toBe(path.resolve(worktreeRoot));
+    expect(resolveEmberRepoRoot(options)).toBe(path.resolve(mainRoot));
+  });
+
+  test("canonical EMBER_REPO_ROOT cannot redirect source-byte authority away from the selected worktree", () => {
+    const { mainRoot, worktreeRoot } = makeMainAndWorktree();
+    const savedRepoRoot = process.env["EMBER_REPO_ROOT"];
+    const savedSourceRoot = process.env["EMBER_SOURCE_ROOT"];
+    try {
+      process.env["EMBER_REPO_ROOT"] = mainRoot;
+      delete process.env["EMBER_SOURCE_ROOT"];
+      expect(
+        resolveEmberSourceRoot({
+          startDir: path.join(worktreeRoot, "tools", "ember-cli"),
+          execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+        }),
+      ).toBe(path.resolve(worktreeRoot));
+    } finally {
+      if (savedRepoRoot === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedRepoRoot;
+      if (savedSourceRoot === undefined) delete process.env["EMBER_SOURCE_ROOT"];
+      else process.env["EMBER_SOURCE_ROOT"] = savedSourceRoot;
+    }
+  });
+
+  test("EMBER_SOURCE_ROOT selects source bytes while EMBER_REPO_ROOT independently selects canonical state", () => {
+    const { mainRoot, worktreeRoot } = makeMainAndWorktree();
+    const savedRepoRoot = process.env["EMBER_REPO_ROOT"];
+    const savedSourceRoot = process.env["EMBER_SOURCE_ROOT"];
+    try {
+      process.env["EMBER_REPO_ROOT"] = mainRoot;
+      process.env["EMBER_SOURCE_ROOT"] = worktreeRoot;
+      const options = {
+        startDir: scratchDir,
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      };
+      expect(resolveEmberSourceRoot(options)).toBe(path.resolve(worktreeRoot));
+      expect(resolveEmberRepoRoot(options)).toBe(path.resolve(mainRoot));
+    } finally {
+      if (savedRepoRoot === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedRepoRoot;
+      if (savedSourceRoot === undefined) delete process.env["EMBER_SOURCE_ROOT"];
+      else process.env["EMBER_SOURCE_ROOT"] = savedSourceRoot;
+    }
+  });
+});
+
+describe("root-authority consumer wiring", () => {
+  test("every production consumer keeps its explicit source-or-state disposition", () => {
+    const srcRoot = path.resolve(import.meta.dir, "..");
+    const read = (relativePath: string): string =>
+      fs.readFileSync(path.join(srcRoot, relativePath), "utf8");
+
+    const exactCheckoutConsumers = [
+      "commands/train.ts",
+      "commands/benchmark.ts",
+      "commands/model.ts",
+      "components/spine-panel.ts",
+      "entrypoints/process-entry.ts",
+    ];
+    for (const relativePath of exactCheckoutConsumers) {
+      const source = read(relativePath);
+      expect(source).toContain("import { resolveEmberSourceRootOrCwd }");
+      expect(source).not.toContain("import { resolveEmberRepoRootOrCwd }");
+      expect(source).not.toContain("EMBER_REPO_ROOT");
+    }
+
+    const canonicalStateConsumers = [
+      "hardening/hardening-receipts.ts",
+      "services/activity-feed.ts",
+      "services/brain-server-supervisor.ts",
+      "services/github-receipts.ts",
+      "services/goal-persistence.ts",
+      "services/goal-receipts.ts",
+      "services/operator-receipts.ts",
+      "services/outage-banner-poller.ts",
+    ];
+    for (const relativePath of canonicalStateConsumers) {
+      const source = read(relativePath);
+      expect(source).toContain("import { resolveEmberRepoRootOrCwd }");
+      expect(source).not.toContain("import { resolveEmberSourceRootOrCwd }");
+      expect(source).not.toContain("EMBER_SOURCE_ROOT");
+    }
+
+    const custody = read("commands/custody.ts");
+    expect(custody).toContain("resolveEmberSourceRootOrCwd");
+    expect(custody).toContain("resolveEmberRepoRootOrCwd");
+    expect(custody).toContain("/custody identity");
+    expect(custody).toContain("/custody");
+  });
+});
 // ---------------------------------------------------------------------------------------
 // PR954 round 2 — strict resolver: a marker-valid standalone root with NO .git at all is
 // accepted as-is (git-less deployment / plain copy). Every OTHER `.git`-FILE shape that

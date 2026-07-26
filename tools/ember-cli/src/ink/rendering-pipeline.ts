@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // rendering-pipeline — terminal renderer core: object pools, screen buffer,
 // double-buffered diff, optimizer, and render entry point.
 // Cross-layer deps (event-system) are injected as optional interfaces.
@@ -674,6 +678,8 @@ export interface RendererOptions {
   stream: { write(s: string): void };
   stdout: { columns: number; rows: number };
   debug?: boolean;
+  /** Called exactly once, after this renderer writes its first non-empty frame. */
+  onFirstFrameFlushed?: () => void;
 }
 
 export interface Renderer {
@@ -690,6 +696,7 @@ export function createRenderer(options: RendererOptions): Renderer {
 
   let prevFrame: Frame | null = null;
   let currentFrame: Frame | null = null;
+  let firstFrameFlushed = false;
   // issue #286: the diff in diffFrames() only ever iterates curr's own width/height, so on a
   // resize to SMALLER dimensions, cells the previous (larger) frame held outside the new bounds
   // are never targeted by any patch -- they're simply never mentioned again. That's fine on a
@@ -760,7 +767,13 @@ export function createRenderer(options: RendererOptions): Renderer {
       // non-empty, so plain content needing no SGR is written without SGR and inherits the
       // stale inverse. The reset makes each patch self-terminating, breaking the cross-patch leak.
       if (runs.length > 0) buf += "\x1b[m";
-      if (buf) stream.write(buf);
+      if (buf) {
+        stream.write(buf);
+        if (!firstFrameFlushed) {
+          firstFrameFlushed = true;
+          options.onFirstFrameFlushed?.();
+        }
+      }
 
       // M9-DIAG-LIVE: capture per-paint diagnostic for live root-cause
       try {

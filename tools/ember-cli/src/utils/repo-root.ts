@@ -22,7 +22,8 @@
 // Fails CLOSED (throws) if no candidate validates, naming EMBER_REPO_ROOT — this module
 // never silently returns a wrong root (e.g. the drive root). Callers that must never crash
 // (operator-receipts' fail-open contract, the interactive TUI boot) catch this explicitly
-// and degrade per their own policy; this is the one shared resolver, not two.
+// and degrade per their own policy. Source-byte consumers use the separate exact-checkout
+// resolver below; mutable singleton state consumers use this canonical resolver.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -172,6 +173,8 @@ export interface ResolveEmberRepoRootOptions {
   /** Overrides the EMBER_REPO_ROOT env var lookup — tests inject a value directly instead
    *  of mutating process.env. */
   envRepoRoot?: string;
+  /** Exact-checkout override. Source authority never reads EMBER_REPO_ROOT. */
+  envSourceRoot?: string;
 }
 
 /**
@@ -199,6 +202,55 @@ export function resolveEmberRepoRoot(options: ResolveEmberRepoRootOptions = {}):
       "Set EMBER_REPO_ROOT to the repo path.",
   );
 }
+/**
+ * Resolves the exact selected Ember checkout that owns executable/source bytes.
+ *
+ * Unlike resolveEmberRepoRoot(), this deliberately does NOT follow a linked
+ * worktree's `.git` file to the main checkout. The canonical resolver exists
+ * for shared mutable state (#666); applying it to config, scripts, manifests,
+ * or other claim-bearing source bytes silently substitutes a different tree.
+ * EMBER_SOURCE_ROOT is this resolver's only environment override.
+ * EMBER_REPO_ROOT belongs exclusively to the canonical mutable-state resolver
+ * and is deliberately ignored here.
+ */
+export function resolveEmberSourceRoot(
+  options: ResolveEmberRepoRootOptions = {},
+): string {
+  const envValue = options.envSourceRoot ?? process.env["EMBER_SOURCE_ROOT"];
+  if (envValue) {
+    const resolvedEnv = path.resolve(envValue);
+    if (isRepoRoot(resolvedEnv)) return resolvedEnv;
+  }
+
+  const fromCwd = walkUpForMarker(options.startDir ?? process.cwd());
+  if (fromCwd) return fromCwd;
+
+  const fromExe = walkUpForMarker(path.dirname(options.execPath ?? process.execPath));
+  if (fromExe) return fromExe;
+
+  throw new Error(
+    "Could not resolve the selected Ember source root (no directory containing GOAL.md + " +
+      "tools/ember-cli found via cwd or the running binary's location). " +
+      "Set EMBER_SOURCE_ROOT to the selected checkout path.",
+  );
+}
+
+/** Fail-open wrapper for interactive source consumers. The fallback remains the
+ * selected cwd; it never canonicalizes through a worktree pointer. */
+export function resolveEmberSourceRootOrCwd(
+  options: ResolveEmberRepoRootOptions = {},
+  warnPrefix = "[source-root]",
+): string {
+  try {
+    return resolveEmberSourceRoot(options);
+  } catch (err) {
+    console.warn(
+      `${warnPrefix} source root resolution failed, falling back to cwd: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return options.startDir ?? process.cwd();
+  }
+}
+
 
 /**
  * Same resolution as resolveEmberRepoRoot(), but never throws — callers that must not
