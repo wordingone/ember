@@ -9,7 +9,7 @@
 // substring (the full command name, and a description fragment the instrument never typed) can
 // only have been written by the product's own renderer through the PTY.
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -21,6 +21,12 @@ const { Terminal } = xtermHeadless;
 const COLS = 160;
 const ROWS = 40;
 const TIMEOUT_MS = 20_000;
+/** Append-only kill ledger. An operator with a shared ledger points EMBER_KILL_RECEIPTS at it;
+ *  otherwise the receipt lands beside the captured frames, so the record exists either way and
+ *  no machine-specific path is baked into the repo. */
+function killReceiptsPath(outDir: string): string {
+  return process.env["EMBER_KILL_RECEIPTS"] ?? join(outDir, "kill-receipts.jsonl");
+}
 
 interface SpineTarget {
   /** what the instrument actually types after "/" — deliberately a strict prefix */
@@ -78,6 +84,12 @@ async function main(): Promise<void> {
         EMBER_SOURCE_ROOT: repoRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
+        // This process is an instrument, not the operator's cockpit. Without this the compiled
+        // binary publishes a liveness heartbeat that the watchdog reads as "the cockpit is
+        // alive" -- and it lands in the MAIN repo's state dir even from an isolated worktree,
+        // because the heartbeat resolves through the strict root resolver by design. A harness
+        // that drives the real product inherits every side effect the product has.
+        EMBER_CLI_HEADLESS_CAPTURE: "1",
       },
     });
     child.onData((data) => {
@@ -103,13 +115,24 @@ async function main(): Promise<void> {
       await writes;
       const frame = frameText(terminal);
       writeFileSync(join(outDir, `palette-${target.name}.frame.txt`), `${frame}\n`, "utf8");
-      const nameShown = frame.includes(target.name);
-      const descShown = frame.includes(target.descriptionFragment);
-      if (nameShown && descShown) {
-        console.log(`PASS ${target.name}: rendered name + untyped description fragment present in frame`);
+      // Both substrings must land on ONE line, which is what a rendered dropdown ROW is.
+      // Searching the whole frame independently would pass when the name is on one row and the
+      // description on an unrelated one -- and it has a concrete false-pass: "model" appears
+      // inside custody's own description ("the current model seat classification"), so a
+      // frame-wide name search for `model` is satisfied by the custody row alone.
+      const row = frame
+        .split("\n")
+        .find((line) => line.includes(target.name) && line.includes(target.descriptionFragment));
+      if (row !== undefined) {
+        console.log(`PASS ${target.name}: name + untyped description fragment on ONE rendered row`);
       } else {
+        const nameLines = frame.split("\n").filter((line) => line.includes(target.name)).length;
+        const descLines = frame
+          .split("\n")
+          .filter((line) => line.includes(target.descriptionFragment)).length;
         failures.push(
-          `FAIL ${target.name}: nameShown=${nameShown} descShown=${descShown} (typed only "/${target.typed}")`,
+          `FAIL ${target.name}: no single row carries both (typed only "/${target.typed}"; ` +
+            `rows with name=${nameLines}, rows with description=${descLines})`,
         );
         console.error(failures[failures.length - 1]);
       }
@@ -127,6 +150,27 @@ async function main(): Promise<void> {
     console.log("VERDICT PASS: all four spine commands rendered as terminal cells (frames in out-dir)");
   } finally {
     if (child != null) {
+      // Receipt BEFORE the kill, and the selector is the PID this process spawned -- never a
+      // name pattern, which could reach an operator's own cockpit or an unrelated founder's
+      // pane. Written to the shared append-only ledger by a JSON serializer rather than by
+      // string assembly. A failure to write the receipt does not block the kill: leaving the
+      // driven binary running would be the worse outcome, so the fallback is a loud warning.
+      const receipt = {
+        ts: new Date().toISOString(),
+        script: "tools/ember-cli/src/build-tools/palette-frame-capture.ts",
+        pids: [child.pid],
+        match_rule: "pid returned by this process's own node-pty spawn of the binary under test",
+        survivors_expected: "none",
+      };
+      try {
+        appendFileSync(killReceiptsPath(outDir), `${JSON.stringify(receipt)}\n`, "utf8");
+      } catch (err) {
+        console.error(
+          `[palette-frame-capture] kill receipt could not be written (${
+            err instanceof Error ? err.message : String(err)
+          }) -- proceeding with the kill so no driven binary is left running`,
+        );
+      }
       spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
         windowsHide: true,
         stdio: "ignore",
