@@ -280,6 +280,15 @@ DOC_FILES = ("README.md", "docs/START-HERE.md")
 COMMANDS_DIR = "tools/ember-cli/src/commands"
 PACKAGE_JSON = "tools/ember-cli/src/package.json"
 COMMAND_REGISTRY = "tools/ember-cli/src/command-registry.ts"
+REPL_TS = "tools/ember-cli/src/screens/repl.ts"
+SLASH_DROPDOWN_TS = "tools/ember-cli/src/services/slash-dropdown.ts"
+
+# A command factory declaring `availability: [...]` with any entry is dropped
+# by getCommands()'s meetsAvailabilityRequirement filter under default deps
+# (isCloudSubscriber/isConsoleUser both () => false), so it never enumerates
+# into the palette however thoroughly it is registered. Matched on the
+# lowercased module body (the same haystack load_commands already stores).
+AVAILABILITY_RE = re.compile(r"\bavailability\s*:\s*\[([^\]]*)\]")
 
 # What "lands inside the repo's CLI entry" means for L1: a resolved
 # invocation target (or any string literal encountered along the chain,
@@ -1296,6 +1305,160 @@ def load_commands(root: Path) -> tuple[dict[str, dict], list[str]]:
     return modules, errors
 
 
+def verify_palette_chain(root: Path) -> dict:
+    """Statically walk the palette's OWN data path, outermost link inward,
+    and report the first broken link (or none).
+
+    The operator observes a rendered dropdown row. Working backward, the
+    chain as shipped is:
+
+        SlashDropdown commands prop  <-  computeSlashDropdownDisplay(...).visible
+                                     <-  filterSlashCommands(slashCommands, query)
+                                     <-  slashCommands state  <-  getCommands(cwd)
+                                     <-  merged.filter(meetsAvailabilityRequirement)
+                                     <-  getBuiltinCommands() registry array
+
+    Links verified HERE (as bytes, no TS execution): the repl wiring from
+    getCommands() into the exact state variable filterSlashCommands consumes;
+    that filter's result flowing into computeSlashDropdownDisplay; that
+    display's .visible flowing into the SlashDropdown component's commands
+    prop; the bare-"/" branch of filterSlashCommands returning the FULL list
+    (membership == visibility for an empty query); and the availability
+    filter's existence + default-deps disposition in the registry. The one
+    link this function cannot reach is SlashDropdown's JSX becoming actual
+    terminal pixels -- that remains in the undecidable list.
+
+    Fail-closed: any unparseable link names itself in "broken"; callers must
+    treat a broken chain as undecidable-weak, never as pass."""
+    out = {"broken": None, "evidence": "", "filter_active": False}
+
+    def _read(rel: str) -> str | None:
+        try:
+            return (root / rel).read_text(encoding="utf-8", errors="strict")
+        except (OSError, UnicodeError):
+            return None
+
+    repl = _read(REPL_TS)
+    if repl is None:
+        out["broken"] = f"{REPL_TS} unreadable/missing"
+        return out
+    dd = _read(SLASH_DROPDOWN_TS)
+    if dd is None:
+        out["broken"] = f"{SLASH_DROPDOWN_TS} unreadable/missing"
+        return out
+    reg = _read(COMMAND_REGISTRY)
+    if reg is None:
+        out["broken"] = f"{COMMAND_REGISTRY} unreadable/missing"
+        return out
+
+    # Link A: getCommands() result passed THROUGH (same identifier) into a
+    # state setter -- `getCommands(cwd).then((cmds) => ... setX(cmds))`.
+    m = re.search(
+        r"getCommands\(\s*\w+\s*\)\s*\.then\(\s*\(\s*(\w+)\s*\)\s*=>"
+        r"[^;]*?\b(set\w+)\(\s*\1\s*\)",
+        repl,
+        re.DOTALL,
+    )
+    if not m:
+        out["broken"] = (
+            f"{REPL_TS}: no getCommands(..).then((x) => setX(x)) pass-through "
+            "-- palette state is not fed from the command registry"
+        )
+        return out
+    setter = m.group(2)
+
+    # Link B: that setter belongs to a useState pair; recover the list ident.
+    m = re.search(r"const\s*\[\s*(\w+)\s*,\s*" + re.escape(setter) + r"\s*\]", repl)
+    if not m:
+        out["broken"] = f"{REPL_TS}: setter {setter} has no useState pair"
+        return out
+    list_ident = m.group(1)
+
+    # Link C: filterSlashCommands consumes exactly that state variable, and
+    # its result is bound to a name.
+    m = re.search(
+        r"const\s+(\w+)\s*=[^;]*?filterSlashCommands\(\s*"
+        + re.escape(list_ident) + r"\b",
+        repl,
+        re.DOTALL,
+    )
+    if not m:
+        out["broken"] = (
+            f"{REPL_TS}: filterSlashCommands does not consume {list_ident} "
+            "-- the dropdown filters some other list than the registry state"
+        )
+        return out
+    matches_ident = m.group(1)
+
+    # Link D: the filtered matches flow into computeSlashDropdownDisplay.
+    m = re.search(
+        r"const\s+(\w+)\s*=\s*computeSlashDropdownDisplay\(\s*"
+        + re.escape(matches_ident) + r"\b",
+        repl,
+        re.DOTALL,
+    )
+    if not m:
+        out["broken"] = (
+            f"{REPL_TS}: computeSlashDropdownDisplay does not consume "
+            f"{matches_ident}"
+        )
+        return out
+    display_ident = m.group(1)
+
+    # Link E: the display window's .visible is what the SlashDropdown
+    # component is actually handed as its commands prop.
+    if not re.search(
+        r"commands:\s*" + re.escape(display_ident) + r"\.visible", repl
+    ):
+        out["broken"] = (
+            f"{REPL_TS}: SlashDropdown commands prop is not "
+            f"{display_ident}.visible -- render consumes a different list"
+        )
+        return out
+
+    # Link F: bare "/" returns the FULL command list, so registry membership
+    # (post availability filter) IS empty-query visibility.
+    if not re.search(
+        r'if\s*\(\s*query\s*===\s*""\s*\)\s*return\s+commands\s*;', dd
+    ):
+        out["broken"] = (
+            f"{SLASH_DROPDOWN_TS}: filterSlashCommands has no "
+            '`if (query === "") return commands` branch -- an empty query '
+            "no longer shows the full list, so membership is not visibility"
+        )
+        return out
+
+    # Link G: the availability filter + its default-deps disposition. If the
+    # registry filters on meetsAvailabilityRequirement, the per-module
+    # availability check below is grounded in the palette's real predicate;
+    # its default deps must be statically FALSE for the exclusion disposition
+    # to be decidable without running the app.
+    if re.search(r"\.filter\(\s*meetsAvailabilityRequirement\s*\)", reg):
+        if re.search(r"isCloudSubscriber:\s*\(\)\s*=>\s*false", reg) and re.search(
+            r"isConsoleUser:\s*\(\)\s*=>\s*false", reg
+        ):
+            out["filter_active"] = True
+        else:
+            out["broken"] = (
+                f"{COMMAND_REGISTRY}: meetsAvailabilityRequirement filter is "
+                "applied but its default deps are not statically false -- "
+                "the exclusion disposition is undecidable from bytes"
+            )
+            return out
+
+    out["evidence"] = (
+        f"getCommands -> {list_ident} state -> filterSlashCommands (bare-'/' "
+        f"returns full list) -> computeSlashDropdownDisplay -> SlashDropdown "
+        f"commands={display_ident}.visible"
+        + (
+            "; availability filter active, default deps cloud=false/console=false"
+            if out["filter_active"]
+            else "; no availability filter applied in getCommands"
+        )
+    )
+    return out
+
+
 def run(root: Path) -> dict:
     report: dict = {"root": str(root), "checks": {}, "spine": {}, "undecidable": []}
     checks = report["checks"]
@@ -1423,12 +1586,14 @@ def run(root: Path) -> dict:
     }
     unregistered_stems = sorted(set(modules) - registered_stems)
 
+    resolved_stem: dict[str, str] = {}
     for func, keywords in SPINE_FUNCTIONS.items():
         require_all = func in CONJUNCTION_FUNCTIONS
         hit = None
         weak = False
         ambiguous = False
         orphan_note = ""
+        chosen_stem: str | None = None
         # Pass 1 (STRONG): keyword(s) in the command NAME or its declared
         # DESCRIPTION -- the two things a reader with no source can actually
         # see -- of a module command-registry.ts actually registers.
@@ -1468,6 +1633,7 @@ def run(root: Path) -> dict:
             stem = strong_matches[0]
             m = registered_modules[stem]
             hit = f"command {m['names']} in {stem}.ts (named + described, registered)"
+            chosen_stem = stem
         if hit is None:
             # WEAK pass. Report EVERY registered module whose body mentions a
             # keyword, ranked by hit count -- never an arbitrary first match.
@@ -1533,18 +1699,66 @@ def run(root: Path) -> dict:
             )
         else:
             report["spine"][func] = check("resolved-true", hit)
+            if chosen_stem is not None:
+                resolved_stem[func] = chosen_stem
+
+    # L4 palette reachability -- the former "UI affordance visibility"
+    # undecidable row, machine-checked as far as static bytes reach. A spine
+    # command that is registered but never enumerates into the dropdown the
+    # operator actually sees (filtered by availability, or the palette reads
+    # a different list) is NOT operable, whatever L3 says. The chain walk is
+    # in verify_palette_chain; the residual (JSX -> pixels) stays in the
+    # undecidable list below.
+    chain = verify_palette_chain(root)
+    report["palette"] = {}
+    for func in SPINE_FUNCTIONS:
+        if report["spine"][func]["state"] != "resolved-true":
+            report["palette"][func] = check(
+                "resolved-false",
+                "no resolved spine command to check (see the spine row)",
+            )
+            continue
+        if chain["broken"]:
+            report["palette"][func] = check(
+                "weak", f"palette data chain unverifiable: {chain['broken']}"
+            )
+            continue
+        stem = resolved_stem[func]
+        body_lower = modules[stem]["body_lower"]
+        av = AVAILABILITY_RE.search(body_lower)
+        if av and re.search(r"['\"]", av.group(1)) and chain["filter_active"]:
+            report["palette"][func] = check(
+                "resolved-false",
+                f"registered but EXCLUDED by the palette's availability "
+                f"filter: {stem}.ts declares availability:[{av.group(1).strip()}] "
+                "and default deps resolve cloud=false/console=false, so "
+                "getCommands() drops it before the dropdown ever enumerates it",
+            )
+            continue
+        report["palette"][func] = check(
+            "resolved-true",
+            f"{stem}.ts enumerates into the rendered palette: "
+            f"{chain['evidence']}; no availability restriction declared",
+        )
 
     # Permanently undecidable half ----------------------------------------
     report["undecidable"] = [
-        "UI affordance visibility: does each command render as a visible "
-        "menu/palette item in the running cockpit? (human capture required)",
+        "Rendered frame: palette MEMBERSHIP is machine-checked (palette "
+        "section: registry -> availability filter -> repl state -> "
+        "filterSlashCommands -> display window -> SlashDropdown commands "
+        "prop); the final link -- SlashDropdown's JSX becoming actual "
+        "terminal pixels -- still requires human capture",
         "Interaction cost: is each control one click / one keystroke, with "
         "no typed flags? (human capture required)",
         "Launch experience: does the launcher reach a usable first pixel "
         "without prompts for paths/flags? (human capture required)",
     ]
 
-    gating = list(checks.values()) + list(report["spine"].values())
+    gating = (
+        list(checks.values())
+        + list(report["spine"].values())
+        + list(report["palette"].values())
+    )
     report["verdict"] = (
         "PASS (measurable half only; undecidable items remain human-judged)"
         if all(c["state"] == "resolved-true" for c in gating)
@@ -1578,6 +1792,9 @@ def main() -> int:
             print(f"  [{c['state']:>14}] {k}: {c['evidence']}")
         print("  spine functions:")
         for k, c in report["spine"].items():
+            print(f"  [{c['state']:>14}] {k}: {c['evidence']}")
+        print("  palette reachability (rendered-list membership, static):")
+        for k, c in report["palette"].items():
             print(f"  [{c['state']:>14}] {k}: {c['evidence']}")
         print("  undecidable (human capture required):")
         for u in report["undecidable"]:

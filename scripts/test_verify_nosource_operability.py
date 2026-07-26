@@ -1119,5 +1119,135 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             )
 
 
+def _palette_chain_fixture(root: Path, wired: bool = True) -> None:
+    """Write the minimal repl.ts + slash-dropdown.ts pair carrying the exact
+    palette data chain the harness walks. wired=False severs one link (the
+    dropdown filters a hardcoded list instead of the registry state) --
+    the negative-case shape where every command is registered yet the
+    palette reads none of them."""
+    consumed = "slashCommands" if wired else "hardcodedList"
+    _write(
+        root / "tools/ember-cli/src/screens/repl.ts",
+        "const [slashCommands, setSlashCommands] = useState([]);\n"
+        "useEffect(() => {\n"
+        "  let cancelled = false;\n"
+        "  getCommands(cwd).then((cmds) => { if (!cancelled) setSlashCommands(cmds); });\n"
+        "}, [cwd]);\n"
+        "const dropdownMatches = dropdownOpen\n"
+        f"  ? filterSlashCommands({consumed}, slashQueryFrom(inputState.text))\n"
+        "  : [];\n"
+        "const dropdownDisplay = computeSlashDropdownDisplay(\n"
+        "  dropdownMatches,\n"
+        "  dropdownSelectedIndex,\n"
+        ");\n"
+        "React.createElement(SlashDropdown, {\n"
+        "  commands: dropdownDisplay.visible,\n"
+        "});\n",
+    )
+    _write(
+        root / "tools/ember-cli/src/services/slash-dropdown.ts",
+        "export function filterSlashCommands(commands, query) {\n"
+        '  if (query === "") return commands;\n'
+        "  return commands.filter((c) => c.name.startsWith(query));\n"
+        "}\n",
+    )
+
+
+def _registry_with_availability_filter(root: Path, stems: list[str]) -> None:
+    """Like _registry_importing, but the registry also applies the real
+    palette filter shape: merged.filter(meetsAvailabilityRequirement) with
+    default deps statically false -- the predicate that makes a declared
+    availability:[..] an exclusion."""
+    imports = "\n".join(
+        f"import {{ create{_camel(s)}Command }} from './commands/{s}.ts';" for s in stems
+    )
+    calls = "\n".join(f"    create{_camel(s)}Command()," for s in stems)
+    _write(
+        root / "tools/ember-cli/src/command-registry.ts",
+        f"{imports}\n"
+        "const defaultDeps = {\n"
+        "  getBuiltinCommands: () => [\n"
+        f"{calls}\n"
+        "  ],\n"
+        "  isCloudSubscriber: () => false,\n"
+        "  isConsoleUser: () => false,\n"
+        "};\n"
+        "export async function getCommands(cwd) {\n"
+        "  const merged = deps.getBuiltinCommands();\n"
+        "  const filtered = merged.filter(meetsAvailabilityRequirement);\n"
+        "  return filtered;\n"
+        "}\n",
+    )
+
+
+class PaletteReachabilityTests(unittest.TestCase):
+    """The former 'UI affordance visibility' undecidable row, machine-checked:
+    a spine command must be reachable through the palette's OWN data path
+    (registry -> availability filter -> repl state -> filterSlashCommands ->
+    display window -> SlashDropdown commands prop), not merely registered."""
+
+    def test_wired_chain_and_unrestricted_command_resolves_true(self):
+        """Positive control: registered+described command, full chain wired,
+        no availability restriction -- palette row must be resolved-true."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(root, "benchmod", "benchmark", "benchmark the model")
+            _registry_with_availability_filter(root, ["benchmod"])
+            _palette_chain_fixture(root, wired=True)
+            report = harness.run(root)
+            self.assertEqual(report["spine"]["benchmarking"]["state"], "resolved-true")
+            self.assertEqual(
+                report["palette"]["benchmarking"]["state"], "resolved-true", report
+            )
+
+    def test_availability_declared_command_is_excluded_not_true(self):
+        """The injection twin (registered but excluded by the render filter):
+        the module declares availability:["cloud"], default deps are false,
+        so getCommands() drops it before the dropdown enumerates it. Spine
+        row stays resolved-true (it IS registered+described); the palette
+        row must go resolved-false and the verdict must FAIL."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _write(
+                root / "tools/ember-cli/src/commands/benchmod.ts",
+                "export function createBenchmodCommand() {\n"
+                "  return {\n"
+                '    name: "benchmark",\n'
+                '    availability: ["cloud"],\n'
+                '    description: "benchmark the model",\n'
+                "  };\n"
+                "}\n",
+            )
+            _registry_with_availability_filter(root, ["benchmod"])
+            _palette_chain_fixture(root, wired=True)
+            report = harness.run(root)
+            self.assertEqual(report["spine"]["benchmarking"]["state"], "resolved-true")
+            self.assertEqual(
+                report["palette"]["benchmarking"]["state"], "resolved-false", report
+            )
+            self.assertEqual(report["verdict"], "FAIL")
+
+    def test_broken_chain_is_weak_never_true(self):
+        """Registered command but the dropdown filters a DIFFERENT list than
+        the registry state -- the chain walk must refuse (weak, naming the
+        broken link), never resolve true, and the verdict must FAIL."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _minimal_ember_root(root)
+            _write_real_launcher_chain(root)
+            _command_module(root, "benchmod", "benchmark", "benchmark the model")
+            _registry_with_availability_filter(root, ["benchmod"])
+            _palette_chain_fixture(root, wired=False)
+            report = harness.run(root)
+            row = report["palette"]["benchmarking"]
+            self.assertEqual(row["state"], "weak", report)
+            self.assertIn("does not consume slashCommands", row["evidence"])
+            self.assertEqual(report["verdict"], "FAIL")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
