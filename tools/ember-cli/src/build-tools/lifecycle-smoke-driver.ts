@@ -239,6 +239,18 @@ export function actionOutputExcerpt(
   return "";
 }
 
+export function classifyActionEvidence(
+  action: Exclude<LifecycleAction, "launch">,
+  frame: string,
+  delta: string,
+): { status: AttemptRow["status"]; excerpt: string } {
+  const excerpt = actionOutputExcerpt(action, frame, delta);
+  return {
+    status: classifyActionFrame(action, excerpt),
+    excerpt,
+  };
+}
+
 function commandText(args: string[], cwd: string): string {
   const result = spawnSync(args[0]!, args.slice(1), {
     cwd,
@@ -804,8 +816,10 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         join(outDir, `action-${index + 1}-${action}.delta.txt`),
       );
       writeFileSync(join(repoRoot, deltaArtifact), semanticDelta, "utf8");
-      const status = classifyActionFrame(action, semanticDelta);
-      const publicDelta = actionOutputExcerpt(action, publicFrame, semanticDelta);
+      const {
+        status,
+        excerpt: publicDelta,
+      } = classifyActionEvidence(action, publicFrame, semanticDelta);
       attempts.push({
         action,
         input: redactPublicText(input, [repoRoot, home, binary]),

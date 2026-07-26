@@ -444,6 +444,19 @@ describe("compiled lifecycle action completion", () => {
       "stop run=smoke-run",
     )).toBe("stop run=smoke-run");
 
+    expect(driver.classifyActionEvidence).toBeFunction();
+    expect(driver.classifyActionEvidence!(
+      "observe",
+      "",
+      [
+        "error: launch-packet preflight FAILED -- stale prior action",
+        "watching state/ember-telemetry.jsonl",
+      ].join("\n"),
+    )).toEqual({
+      status: "PASS",
+      excerpt: "watching state/ember-telemetry.jsonl",
+    });
+
     expect(driver.saveActionCompletionObserved).toBeFunction();
     expect(driver.saveActionCompletionObserved!(
       "prompt cleared after save submission",
