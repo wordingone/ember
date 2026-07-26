@@ -47,6 +47,13 @@ describe("frame geometry — R4b acceptance row 3 (OperatorSurfacePane, existing
       const lines = mountAndFrame(el, effectiveWidth + 10, effectiveHeight + 4);
       const result = checkFrameGeometry(lines);
       expect(result.violations).toEqual([]);
+      // Zero violations alone is a fail-open verdict: checkFrameGeometry skips any box it marks
+      // `clipped`, so a pane whose right edge vanished entirely -- R4b defect B, the exact symptom
+      // this sweep exists to catch -- would report zero violations and pass silently. The pane
+      // yields exactly one `single`-style box at every swept width (observed), so binding that
+      // makes the assertion non-vacuous.
+      expect(result.boxes.length).toBe(1);
+      expect(result.boxes[0]!.clipped).toBe(false);
     });
   }
 });
