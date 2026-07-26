@@ -76,6 +76,19 @@ class EnvironmentContractError(ValueError):
     """Raised when the environment authority fails closed."""
 
 
+def _reject_duplicate_object_keys(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise EnvironmentContractError(
+                f"duplicate JSON object key: {key!r}"
+            )
+        result[key] = value
+    return result
+
+
 def _require_exact_keys(
     value: Mapping[str, Any],
     expected: set[str],
@@ -120,7 +133,10 @@ def load_manifest(path: Path) -> dict[str, Any]:
     except OSError as exc:
         raise EnvironmentContractError(f"cannot read manifest: {exc}") from exc
     try:
-        payload = json.loads(text)
+        payload = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_object_keys,
+        )
     except json.JSONDecodeError as exc:
         raise EnvironmentContractError(f"manifest is malformed JSON: {exc}") from exc
     if not isinstance(payload, dict):

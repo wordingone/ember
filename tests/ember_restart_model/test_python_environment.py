@@ -248,3 +248,17 @@ def test_strict_utf8_manifest_loader_rejects_invalid_bytes(tmp_path: Path) -> No
         match="strict UTF-8",
     ):
         python_environment.load_manifest(path)
+
+
+def test_manifest_loader_rejects_duplicate_json_object_keys(tmp_path: Path) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_text(
+        '{"schema_version":"ember-python-environment-v1",'
+        '"schema_version":"shadow-authority"}',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        python_environment.EnvironmentContractError,
+        match="duplicate JSON object key",
+    ):
+        python_environment.load_manifest(path)
