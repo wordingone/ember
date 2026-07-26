@@ -129,6 +129,16 @@ jobs:
                 ;;
             esac
             test "${baseline_run_id}" != "${GITHUB_RUN_ID}"
+            baseline_run_metadata="${RUNNER_TEMP}/remote-branch-salvage-baseline-run.json"
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${baseline_run_id}" \
+              > "${baseline_run_metadata}"
+            jq -e \
+              --arg sha "${GITHUB_SHA}" \
+              --arg workflow_path ".github/workflows/remote-branch-salvage-capture.yml" \
+              '.conclusion == "success" and .event == "workflow_dispatch"
+               and .head_sha == $sha and .path == $workflow_path' \
+              "${baseline_run_metadata}" > /dev/null
             baseline="${RUNNER_TEMP}/remote-branch-salvage-baseline"
             artifact_name="remote-branch-salvage-${baseline_run_id}-${GITHUB_SHA}"
             mkdir -p "${baseline}"
