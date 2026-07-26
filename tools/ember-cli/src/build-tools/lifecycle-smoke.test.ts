@@ -102,8 +102,11 @@ function validReceipt(): LifecycleReceipt {
     }),
     termination: {
       explicit_requested: true,
-      child_exit_observed: true,
-      cleanup_attempted: true,
+      clean_exit_observed: true,
+      clean_exit_wait_ms: 125,
+      forced_cleanup_required: false,
+      forced_cleanup_attempted: false,
+      final_exit_observed: true,
       survivors: 0,
     },
     artifacts: {
@@ -256,6 +259,59 @@ describe("validateLifecycleReceipt", () => {
     const receipt = validReceipt();
     receipt.termination.survivors = 1;
     expect(() => validateLifecycleReceipt(receipt, expected)).toThrow("termination");
+
+    const incoherent = validReceipt();
+    incoherent.termination.clean_exit_observed = false;
+    expect(() => validateLifecycleReceipt(incoherent, expected)).toThrow(
+      "termination",
+    );
+
+    const forced = validReceipt();
+    forced.termination.clean_exit_observed = false;
+    forced.termination.forced_cleanup_required = true;
+    forced.termination.forced_cleanup_attempted = true;
+    expect(() => validateLifecycleReceipt(forced, expected)).not.toThrow();
+  });
+
+  test("measures clean exit before deciding whether forced cleanup is required", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.terminateLifecycleChild).toBeFunction();
+    let forced = 0;
+    let observed = false;
+    const result = await driver.terminateLifecycleChild!(
+      () => undefined,
+      () => observed,
+      () => { forced += 1; },
+      async () => { observed = true; },
+      (() => { let now = 0; return () => (now += 25); })(),
+      100,
+    );
+    expect(result.clean_exit_observed).toBe(true);
+    expect(result.forced_cleanup_required).toBe(false);
+    expect(result.forced_cleanup_attempted).toBe(false);
+    expect(result.final_exit_observed).toBe(true);
+    expect(result.survivors).toBe(0);
+    expect(forced).toBe(0);
+
+    let forcedAfterTimeout = 0;
+    let observedAfterTimeout = false;
+    const forcedResult = await driver.terminateLifecycleChild!(
+      () => undefined,
+      () => observedAfterTimeout,
+      () => {
+        forcedAfterTimeout += 1;
+        observedAfterTimeout = true;
+      },
+      async () => undefined,
+      (() => { let now = 0; return () => (now += 25); })(),
+      100,
+    );
+    expect(forcedResult.clean_exit_observed).toBe(false);
+    expect(forcedResult.forced_cleanup_required).toBe(true);
+    expect(forcedResult.forced_cleanup_attempted).toBe(true);
+    expect(forcedResult.final_exit_observed).toBe(true);
+    expect(forcedResult.survivors).toBe(0);
+    expect(forcedAfterTimeout).toBe(1);
   });
 
   test("refuses forged source, binary, rebuild, or builder bindings", () => {

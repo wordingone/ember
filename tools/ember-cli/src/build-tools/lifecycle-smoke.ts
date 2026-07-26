@@ -148,8 +148,11 @@ export interface LifecycleReceipt {
   actions: LifecycleActionEvidence[];
   termination: {
     explicit_requested: boolean;
-    child_exit_observed: boolean;
-    cleanup_attempted: boolean;
+    clean_exit_observed: boolean;
+    clean_exit_wait_ms: number;
+    forced_cleanup_required: boolean;
+    forced_cleanup_attempted: boolean;
+    final_exit_observed: boolean;
     survivors: number;
   };
   artifacts: {
@@ -431,15 +434,26 @@ export function validateLifecycleReceipt(
   }
 
   requireClosedKeys(receipt.termination, [
-    "explicit_requested", "child_exit_observed", "cleanup_attempted", "survivors",
+    "explicit_requested", "clean_exit_observed", "clean_exit_wait_ms",
+    "forced_cleanup_required", "forced_cleanup_attempted",
+    "final_exit_observed", "survivors",
   ], "termination");
+  const clean = receipt.termination.clean_exit_observed;
+  const forced = receipt.termination.forced_cleanup_required;
   if (
     receipt.termination.explicit_requested !== true ||
-    receipt.termination.child_exit_observed !== true ||
-    receipt.termination.cleanup_attempted !== true ||
+    typeof clean !== "boolean" ||
+    !Number.isInteger(receipt.termination.clean_exit_wait_ms) ||
+    receipt.termination.clean_exit_wait_ms < 0 ||
+    typeof forced !== "boolean" ||
+    receipt.termination.forced_cleanup_attempted !== forced ||
+    forced !== !clean ||
+    receipt.termination.final_exit_observed !== true ||
     receipt.termination.survivors !== 0
   ) {
-    throw new Error("termination did not prove an exited, cleaned, leak-free child");
+    throw new Error(
+      "termination did not distinguish clean exit from forced leak-free cleanup",
+    );
   }
 
   requireClosedKeys(receipt.artifacts, ["receipt", "diagnostics"], "artifacts");
