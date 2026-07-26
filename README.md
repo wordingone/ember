@@ -16,6 +16,31 @@ structured tool use, created and operated on one 24 GiB GPU.
 
 For a fresh context, start with [docs/START-HERE.md](docs/START-HERE.md).
 
+## Install the measured Python environment
+
+Python dependency authority: manifests/python-environment-v1.json
+
+From the repository root, install the exact direct Python environment measured
+for Ember:
+
+    python tools/ember-restart-3b/python_environment.py install
+
+The manifest records CPython, CUDA-wheel index, exact direct-package versions,
+the pinned Transformers source commit, import-to-distribution mappings, and
+guarded optional integrations. The default install excludes the exact ARC-AGI
+feature pins because their upstream wheel declares Python 3.12 or newer while
+the measured Ember interpreter is Python 3.10. Validate the repository contract
+and the current interpreter without installing anything:
+
+    python tools/ember-restart-3b/python_environment.py verify --check-installed
+
+Rust remains authoritative in
+[`runtime/ember-lab/Cargo.toml`](runtime/ember-lab/Cargo.toml), and the
+ember-cli TypeScript package remains authoritative in
+[`tools/ember-cli/src/package.json`](tools/ember-cli/src/package.json). This
+measured contract is not yet a claim that a fresh clean environment was
+independently installed.
+
 ## Current truth
 
 <!-- BOARD-STATUS-BEGIN -->
