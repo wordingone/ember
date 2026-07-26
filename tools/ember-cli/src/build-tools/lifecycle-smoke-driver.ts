@@ -244,7 +244,14 @@ export function classifyActionEvidence(
   frame: string,
   delta: string,
 ): { status: AttemptRow["status"]; excerpt: string } {
-  const excerpt = actionOutputExcerpt(action, frame, delta);
+  let excerpt = actionOutputExcerpt(action, frame, delta);
+  if (
+    action === "train" &&
+    /does not launch training/i.test(delta) &&
+    !/does not launch training/i.test(excerpt)
+  ) {
+    excerpt = `${excerpt}\nThis command does NOT launch training.`.trim();
+  }
   return {
     status: classifyActionFrame(action, excerpt),
     excerpt,
