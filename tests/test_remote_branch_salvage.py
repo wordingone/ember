@@ -6,8 +6,13 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import subprocess
+import sys
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from scripts.collect_remote_branch_salvage import _citations
 from scripts.remote_branch_salvage import (
     PacketError,
     build_packet,
@@ -202,6 +207,33 @@ class RemoteBranchSalvageTests(unittest.TestCase):
         summary["deletion_authority"] = "GRANTED"
         with self.assertRaises(PacketError):
             validate_public_summary(summary)
+
+    def test_public_tree_scan_never_self_attests_external_custody_complete(self) -> None:
+        master = sha("a")
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=f"{master}:receipts/example.json:7:matched\n{master}:docs/example.md:9:matched\n",
+            stderr="",
+        )
+        with patch("scripts.collect_remote_branch_salvage._run_git", return_value=completed):
+            public, custody = _citations(Path("."), master, "feat/example", sha("b"))
+        self.assertTrue(public["complete"])
+        self.assertEqual(public["citations"], ["docs/example.md:9", "receipts/example.json:7"])
+        self.assertEqual(custody, {"complete": False, "citations": []})
+
+    def test_collector_cli_imports_from_repository_root(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, "-B", "scripts/collect_remote_branch_salvage.py", "--help"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--raw-root", result.stdout)
 
 
 if __name__ == "__main__":
