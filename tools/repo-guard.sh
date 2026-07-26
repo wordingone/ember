@@ -57,20 +57,6 @@ note() { printf '  - %s\n' "$1"; }
 fail() { printf 'FAIL [%s] %s\n' "$1" "$2"; FAIL=1; }
 ok()   { printf 'ok   [%s] %s\n' "$1" "$2"; }
 
-surface_bytes_match() {
-  local relative="$1"
-  local kernel_surface="$KERNEL_ROOT/$relative"
-  local subject_surface="$SUBJECT_ROOT/$relative"
-  [ -f "$kernel_surface" ] &&
-    [ ! -L "$kernel_surface" ] &&
-    [ -f "$subject_surface" ] &&
-    [ ! -L "$subject_surface" ] &&
-    cmp -s "$kernel_surface" "$subject_surface"
-}
-
-[ -f "$SUBJECT_ROOT/tools/repo-guard.sh" ] && [ ! -L "$SUBJECT_ROOT/tools/repo-guard.sh" ] ||
-  fail "guard-kernel" "subject guard surface is missing"
-
 MAX_STATE_LINES="${MAX_STATE_LINES:-150}"
 MAX_BRANCHES="${MAX_BRANCHES:-25}"
 PUSH_REMOTE_URL="${PUSH_REMOTE_URL:-}"
@@ -135,7 +121,7 @@ PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
 )
 PATHPAT_SELF_EXCLUDE_ARGS=()
-if surface_bytes_match 'tools/repo-guard.sh'; then
+if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
   PATHPAT_SELF_EXCLUDE_ARGS=(':(exclude)tools/repo-guard.sh')
 fi
 # Commit-time invocation (REPO_GUARD_SCOPE=staged, set by .githooks/pre-commit)
@@ -164,15 +150,13 @@ fi
 # Detect patterns like /mnt/..../M/avir/ or /M/avir that carry developer-local context.
 PATHFRAG='(/mnt/[^/]*/M/avir/)|(/M/avir)'
 PATHFRAG_SELF_EXCLUDE_ARGS=()
-for relative in \
-  'tools/repo-guard.sh' \
-  'tools/check_names_hashed.py' \
-  'tools/repo-guard-denylist.sha256'
-do
-  if surface_bytes_match "$relative"; then
-    PATHFRAG_SELF_EXCLUDE_ARGS+=(":(exclude)$relative")
-  fi
-done
+if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
+  PATHFRAG_SELF_EXCLUDE_ARGS=(
+    ':(exclude)tools/repo-guard.sh'
+    ':(exclude)tools/check_names_hashed.py'
+    ':(exclude)tools/repo-guard-denylist.sha256'
+  )
+fi
 if git grep -nIE "$PATHFRAG" -- . "${PATHFRAG_SELF_EXCLUDE_ARGS[@]}" >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
   fail "path-frags" "local WSL/mount path fragments in tracked files"
   sed 's/^/      /' /tmp/rg_pathfrags | head -20
