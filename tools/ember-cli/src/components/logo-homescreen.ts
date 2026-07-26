@@ -482,8 +482,30 @@ export function Homescreen({
   boardSummary,
   nowMs         = Date.now(),
 }: HomescreenProps): React.ReactElement {
+  // D4: one outer titled panel wraps the whole hero -- replaces WelcomeV2's own border entirely
+  // (the B2 root cause: a child border wider than its parent leftCol clipped in row-flex mode).
+  const panelIsRow  = viewportWidth >= LEFT_PANEL_MAX_WIDTH * 2;
+  // R4b (frame geometry, state/operator-pass-2026-07-26.md W2 -- corrected root cause): the
+  // homescreen panel's RIGHT border edge (both corners and every vertical side cell) was missing
+  // entirely whenever this screen renders beside a right-hand panel (repl.ts's operator-surface
+  // pane, mainColumnWidth around 50-60) -- not a content/border row collision at all. leftCol was
+  // ALWAYS given the fixed LEFT_COL_WIDTH (58, sized for the wide row-flex case), even in "stacked"
+  // (column) mode where leftCol and rightCol stack vertically and each should claim the FULL
+  // available content width, exactly like rightColWidth already does dynamically via its own
+  // `stacked` branch. So panelWidth's `Math.max(LEFT_COL_WIDTH, rcWidth) + 2` floor came out to
+  // 60 at a real 53-wide viewport -- 7 columns wider than the panel's parent ever had to give it --
+  // and every downstream write past column 52 (including the closing round corner glyphs and every
+  // right-edge vertical bar) silently fell outside the render pipeline's clipRect. Stacked mode's
+  // leftCol now claims the SAME dynamic content width as rightCol (viewportWidth - 2, i.e. what
+  // rightColWidth already returns for its own `stacked` branch); row mode is unchanged (leftCol
+  // keeps the fixed LEFT_COL_WIDTH share it was designed for). identityTextWidth() already clips
+  // leftCol's own text well below either width (viewportWidth - 4, floor 8), so narrowing leftCol's
+  // BOX width in stacked mode loses no content that wasn't already text-clipped.
+  const rcWidth      = rightColWidth(viewportWidth);
+  const leftColWidth = panelIsRow ? LEFT_COL_WIDTH : Math.max(1, viewportWidth - 2);
+
   const leftCol = React.createElement(
-    Box, { key: "left", flexDirection: "column", width: LEFT_COL_WIDTH },
+    Box, { key: "left", flexDirection: "column", width: leftColWidth },
     state.updateAvailable
       ? React.createElement(
           Text, { key: "update", dimColor: true },
@@ -506,19 +528,25 @@ export function Homescreen({
     footer:  "/resume for more",
   };
 
-  const rcWidth = rightColWidth(viewportWidth);
   const rightCol = React.createElement(
     Box, { key: "right", flexDirection: "column", width: rcWidth },
     React.createElement(FeedComponent, { key: "onboarding", feed: onboardingFeed, width: rcWidth }),
     React.createElement(FeedComponent, { key: "recent",     feed: recentFeed,     width: rcWidth }),
   );
 
-  // D4: one outer titled panel wraps the whole hero -- replaces WelcomeV2's own border entirely
-  // (the B2 root cause: a child border wider than its parent leftCol clipped in row-flex mode).
-  const panelIsRow  = viewportWidth >= LEFT_PANEL_MAX_WIDTH * 2;
   const panelWidth  = panelIsRow
     ? LEFT_COL_WIDTH + rcWidth + 2
-    : Math.max(LEFT_COL_WIDTH, rcWidth) + 2;
+    : Math.max(leftColWidth, rcWidth) + 2;
+  // R4b (frame geometry, state/operator-pass-2026-07-26.md W2): this panel had no `overflow`
+  // declared, so when its own flexShrink allocation from the caller's column layout (repl.ts's
+  // "banner" wrapper) came in SHORTER than the panel's natural content height, the panel sized
+  // its OWN border to the shrunk height while its children (leftCol/rightCol Text lines) kept
+  // laying out every natural row uncapped -- the last content row and the panel's own bottom
+  // border then landed on the SAME frame row, the closing corner overwriting into content
+  // instead of getting its own row. `overflow:"hidden"` is the same fix already applied to every
+  // OTHER box in this codebase that must render a clean border under a shrunk allocation
+  // (operator-surface-pane.ts's own body Box, repl.ts's row/column wrappers): content beyond the
+  // panel's own interior is clipped, never painted onto the border.
   const panel = React.createElement(
     Box,
     {
@@ -528,6 +556,7 @@ export function Homescreen({
       borderStyle:   "round",
       borderColor:   color("identity", "fg", "dark"),
       borderTitle:   "ember",
+      overflow:      "hidden",
     },
     leftCol,
     rightCol,
