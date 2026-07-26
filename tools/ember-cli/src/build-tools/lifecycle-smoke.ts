@@ -441,6 +441,7 @@ export function validateLifecycleReceipt(
   const clean = receipt.termination.clean_exit_observed;
   const forced = receipt.termination.forced_cleanup_required;
   if (
+    clean !== true ||
     receipt.termination.explicit_requested !== true ||
     typeof clean !== "boolean" ||
     !Number.isInteger(receipt.termination.clean_exit_wait_ms) ||
@@ -452,7 +453,7 @@ export function validateLifecycleReceipt(
     receipt.termination.survivors !== 0
   ) {
     throw new Error(
-      "termination did not distinguish clean exit from forced leak-free cleanup",
+      "termination did not prove a clean operator exit without forced cleanup",
     );
   }
 
