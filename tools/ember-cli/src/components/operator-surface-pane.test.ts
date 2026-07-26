@@ -426,6 +426,103 @@ describe("OperatorSurfacePane", () => {
     pause.props.onClick();
     expect(calls).toEqual([{ action: "PAUSE", runId: "run-control" }]);
   });
+  test("RED->GREEN: a metric with zero samples on an actively RUNNING run reads AWAITING FIRST SAMPLE, not SOURCE UNBOUND", () => {
+    // The run IS live (a train_step arrived just now, well inside ACTIVE_RUN_TTL_MS) and IS
+    // emitting some fields (loss, tokens_per_second) -- gpu_watts simply hasn't shown up in any
+    // event yet. That is a temporal "no samples so far, may still arrive" state, structurally
+    // different from a dead/idle channel where the metric can never arrive. Before this test the
+    // two states rendered identically as "SOURCE UNBOUND".
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const graphs = buildOperatorSurfaceGraphs(telemetry({
+      recentEvents: [
+        train("run-live", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-live", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ],
+    }), 80, now);
+    expect(graphs.resource).toContain("GPU WATTS: AWAITING FIRST SAMPLE");
+    expect(graphs.resource).not.toContain("GPU WATTS: SOURCE UNBOUND");
+  });
+
+  test("RED->GREEN: a metric with zero samples on a dead/idle channel still reads SOURCE UNBOUND", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const graphs = buildOperatorSurfaceGraphs(telemetry(), 80, now);
+    expect(graphs.modelGrowth).toEqual(["MODEL GROWTH: SOURCE UNBOUND"]);
+    const staleRun = buildOperatorSurfaceGraphs(telemetry({
+      recentEvents: [train("run-cold", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 50 })],
+    }), 80, now);
+    expect(staleRun.resource).toContain("GPU WATTS: SOURCE UNBOUND");
+    expect(staleRun.resource).not.toContain("GPU WATTS: AWAITING FIRST SAMPLE");
+  });
+
+  test("RED->GREEN: the rendered compact pane distinguishes AWAITING FIRST SAMPLE from SOURCE UNBOUND at the same call site the operator sees", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const runningElement = OperatorSurfacePane({
+      telemetry: telemetry({ recentEvents: [
+        train("run-compact", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-compact", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ] }),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: now,
+    });
+    const runningBody = (runningElement as any).props.children;
+    const runningRows = (runningBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
+    expect(runningRows.some((row: string) => row.startsWith("GPU watts") && row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
+
+    const idleElement = OperatorSurfacePane({
+      telemetry: telemetry(),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: now,
+    });
+    const idleBody = (idleElement as any).props.children;
+    const idleRows = (idleBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
+    expect(idleRows.some((row: string) => row.startsWith("GPU watts") && row.includes("SOURCE UNBOUND"))).toBe(true);
+  });
+
+  test("legibility width sweep: AWAITING FIRST SAMPLE / SOURCE UNBOUND / a plotted curve are all distinguishable at 40, 60, and 80 columns", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    for (const width of [40, 60, 80]) {
+      const element = OperatorSurfacePane({
+        telemetry: telemetry({ recentEvents: [
+          train("run-sweep", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+          train("run-sweep", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+        ] }),
+        activityLines: [], width, height: 24, terminalColumns: width, terminalRows: 24,
+        nowMs: now,
+      });
+      const body = (element as any).props.children;
+      const rows = (body.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string") as string[];
+      // A live curve (tokens/s has 2 real samples): must render plotted glyphs, not a fixed word.
+      const tokensRow = rows.find((row) => row.startsWith("tokens/s"));
+      expect(tokensRow).toBeDefined();
+      expect(tokensRow).not.toContain("SOURCE UNBOUND");
+      expect(tokensRow).not.toContain("AWAITING FIRST SAMPLE");
+      // A metric this run hasn't produced yet, while running: AWAITING, never UNBOUND.
+      const gpuWattsRow = rows.find((row) => row.startsWith("GPU watts"));
+      expect(gpuWattsRow).toContain("AWAITING FIRST SAMPLE");
+      expect(gpuWattsRow).not.toContain("SOURCE UNBOUND");
+    }
+  });
+
+  test("legibility width sweep: the real Ink viewport renders both labels without a truncated/blank row at 40 columns", () => {
+    const chunks: string[] = [];
+    const element = React.createElement(OperatorSurfacePane, {
+      telemetry: telemetry({ recentEvents: [
+        train("run-sweep-ink", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-sweep-ink", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ] }),
+      activityLines: [], width: 40, height: 24, terminalColumns: 40, terminalRows: 24,
+      nowMs: Date.parse("2026-07-26T00:00:05.000Z"),
+    });
+    const handle = mountInk(element, { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns: 40, rows: 24 } });
+    handle.unmount();
+    const frame = buildFrame(40, 24);
+    parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
+    const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
+    expect(rows.every((row) => row.length === 40)).toBe(true);
+    expect(rows.some((row) => row.includes("AWAITING"))).toBe(true);
+    expect(rows.some((row) => row.includes(String.fromCodePoint(0x2588)) || row.includes(String.fromCodePoint(0x2581)))).toBe(true);
+  });
+
   test("renders a truthful activity pane title", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], width: 48 });
     expect((element as any).props["data-operator-surface"]).toBe("right-pane");
