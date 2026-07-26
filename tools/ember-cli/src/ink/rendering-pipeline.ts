@@ -419,6 +419,23 @@ function paintBorder(
   const style  = resolveBorderColorStyle(node.borderColor);
   const inner  = Math.max(0, lw - 2);
 
+  // D1 (legibility scope addition, 2026-07): "the left orange banner has lost its bottom
+  // border -- the box does not close." Root cause: an ancestor's overflow:"hidden" (a Box
+  // flexShrink'ing under height pressure, e.g. repl.ts's `banner` wrapper around <Homescreen>)
+  // can hand this node a clipRect whose bottom edge sits ABOVE this box's own bottomRow
+  // (ly + lh - 1) while its topRow (ly) is still fully visible -- so the top edge painted fine
+  // and the bottom edge's writeAt() calls below all silently dropped, leaving an open-ended box.
+  // A bordered box should never render with one edge visible and the other silently missing:
+  // when the natural bottom edge falls outside the visible extent but the top edge and at least
+  // one more row below it are still visible, PIN the bottom edge to the last visible row instead
+  // of its own computedHeight-1 -- sacrificing interior content rows (already independently
+  // clipped by the normal per-row/per-child clip, so no double-paint) rather than the box's own
+  // closing edge. This is the render-time enforcement of "a container always closes" for every
+  // bordered Box, not just this one call site.
+  const naturalBottomRow = ly + lh - 1;
+  const visibleBottomRow = Math.min(naturalBottomRow, clipRect.y + clipRect.height - 1);
+  const bottomRow_ = (ly >= clipRect.y && visibleBottomRow > ly) ? visibleBottomRow : naturalBottomRow;
+
   const writeAt = (row: number, col: number, ch: string): void => {
     if (col < clipRect.x || col >= clipRect.x + clipRect.width) return;
     if (row < clipRect.y || row >= clipRect.y + clipRect.height) return;
@@ -457,16 +474,18 @@ function paintBorder(
   const topRow = glyphs.topLeft + topMid + glyphs.topRight;
   for (let i = 0; i < topRow.length && i < lw; i++) writeAt(ly, lx + i, topRow[i]!);
 
-  // Side edges — vertical glyph at the leftmost/rightmost column of every row
-  // strictly between the top and bottom edges.
-  for (let r = 1; r < lh - 1; r++) {
-    writeAt(ly + r, lx, glyphs.vertical);
-    writeAt(ly + r, lx + lw - 1, glyphs.vertical);
+  // Side edges — vertical glyph at the leftmost/rightmost column of every row strictly between
+  // the top edge and the (possibly pinned) bottom edge.
+  for (let r = ly + 1; r < bottomRow_; r++) {
+    writeAt(r, lx, glyphs.vertical);
+    writeAt(r, lx + lw - 1, glyphs.vertical);
   }
 
-  // Bottom edge — plain horizontal run, no title.
+  // Bottom edge — plain horizontal run, no title. Painted at bottomRow_ (pinned to the last
+  // visible row when the box's true bottom edge is clipped away — see above), not unconditionally
+  // at ly + lh - 1.
   const bottomRow = glyphs.bottomLeft + glyphs.horizontal.repeat(inner) + glyphs.bottomRight;
-  for (let i = 0; i < bottomRow.length && i < lw; i++) writeAt(ly + lh - 1, lx + i, bottomRow[i]!);
+  for (let i = 0; i < bottomRow.length && i < lw; i++) writeAt(bottomRow_, lx + i, bottomRow[i]!);
 
   // Self-terminating (style-bleed.test.ts): a colored border leaves the real terminal state
   // non-default with nothing downstream aware it must reset. Explicitly closing out the color
@@ -560,8 +579,24 @@ export function renderNodeToOutput(
   // painted rect -- only when it declares overflow:"hidden", and only for what gets passed to
   // its OWN children -- makes overflow:"hidden" actually clip, without touching the default
   // ("visible") behavior any other node relies on.
+  // D2 (legibility scope addition, 2026-07): the intersect rect below used to be the box's FULL
+  // OUTER rect (lx, ly, lw, lh) -- the exact same rect paintBorder uses for the border glyphs
+  // themselves. layout-engine.ts already insets CHILD POSITIONING by border width (reconciler.ts's
+  // applyBorderProps sets layout.border=1 whenever borderStyle is present), but an unwrapped/
+  // overlong Text child is not constrained by its own declared width at paint time -- only by
+  // whatever clipRect it inherits. So a bordered overflow:"hidden" Box's clip rect must ALSO be
+  // inset by its own border width, or overrunning content paints straight onto (and past) the
+  // border glyphs paintBorder already drew -- the operator's report: a watchdog line breaking
+  // through the blue container's right border, drawn OVER the border character and out past it.
+  // Mirrors layout-engine.ts lines ~272-275's own bt/br/bb/bl fallback-to-`border` computation so
+  // the two insets can never disagree. Zero-width/height when a border would consume the whole
+  // box is clamped by intersectClipRect's own Math.max(0, ...), same as any other empty rect.
+  const bt = node.layout.borderTop    || node.layout.border;
+  const br = node.layout.borderRight  || node.layout.border;
+  const bb = node.layout.borderBottom || node.layout.border;
+  const bl = node.layout.borderLeft   || node.layout.border;
   const childClipRect: ClipRect = node.layout.overflow === "hidden"
-    ? intersectClipRect(clipRect, { x: lx, y: ly, width: lw, height: lh })
+    ? intersectClipRect(clipRect, { x: lx + bl, y: ly + bt, width: lw - bl - br, height: lh - bt - bb })
     : clipRect;
 
   // Recurse into children
