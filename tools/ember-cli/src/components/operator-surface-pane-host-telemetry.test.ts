@@ -130,6 +130,51 @@ describe("operator surface pane host telemetry", () => {
     }
   });
 
+  // Height contention (cure 2026-07-26): live run AND bound host at the small viewport the
+  // resize screen test uses (terminal 40x24 -> pane 20x24). Nothing pinned this case before —
+  // the burst that built the section named it as its own uncovered gap. Loss under height
+  // pressure must be DETERMINISTIC and stated: the leading training headings survive, the host
+  // TAIL yields (same precedence the section ordering encodes), and the last graph row says how
+  // many rows were dropped — never an arbitrary middle-row collapse, never a silent one.
+  test("height contention: live run + host at pane 20x24 trims the tail deterministically and says so", () => {
+    const telemetryState = telemetry({
+      recentEvents: [
+        train("run-a", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 100 }),
+        train("run-a", 2, "2026-07-17T17:30:02.000Z", 1, { tokens_per_second: 120 }),
+      ],
+    });
+    const nowMs = Date.parse("2026-07-17T17:30:03.000Z");
+    const rows = renderPaneRows(
+      { telemetry: telemetryState, host: host(), nowMs, width: 20, height: 24, terminalColumns: 40, terminalRows: 24 },
+      40,
+      24,
+    );
+    // Leading training headings and their curves survive (live order: training leads).
+    expect(rows.some((row) => row.includes("TRAINING/LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("RESOURCE EFFICI"))).toBe(true);
+    expect(rows.some((row) => row.includes("loss"))).toBe(true);
+    // The host section is present and yields from its TAIL only: its heading and leading curves
+    // render, the trailing curves are the ones dropped.
+    expect(rows.some((row) => row.includes("HOST TELEMETRY"))).toBe(true);
+    expect(rows.some((row) => row.includes("host memory"))).toBe(true);
+    expect(rows.some((row) => row.includes("host disk"))).toBe(false);
+    // The drop is STATED on the pane's last graph row, not left for the operator to guess.
+    const marker = rows.find((row) => /… \d+ more rows/.test(row));
+    expect(marker).toBeDefined();
+    // And the trim is end-only: every rendered graph row is a leading prefix of the emitted
+    // stream — the arbitrary-middle-collapse shape (a row above AND below a missing one) is the
+    // named defect. "host memory" present with "host disk" absent plus the marker pins that.
+
+    // Zero behaviour change when the budget does not bind: the same live+host mount at the
+    // default roomy height renders every row with NO marker (this is what the first row-budget
+    // attempt got wrong — it truncated mounts that had room).
+    const roomy = renderPaneRows({ telemetry: telemetryState, host: host(), nowMs });
+    for (const stem of ["TRAINING/LOSS", "RESOURCE EFFICIENCY", "host memory", "host disk"]) {
+      expect(roomy.some((row) => row.includes(stem))).toBe(true);
+    }
+    expect(roomy.some((row) => /… \d+ more rows/.test(row))).toBe(false);
+  });
+
   // Conjunction C2: nvidia-smi absent AND live run — training curves unaffected.
   test("C2: host GPU-source failure leaves the training sections intact", () => {
     const telemetryState = telemetry({

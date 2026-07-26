@@ -695,6 +695,30 @@ export function OperatorSurfacePane({
         ),
       );
 
+  // Height budget (cure 2026-07-26): the pane used to emit every graph row and let the layout
+  // engine clip against the pane height — under height pressure that engine collapses ARBITRARY
+  // MIDDLE rows (the RESOURCE EFFICIENCY heading and the host VRAM curve were both observed
+  // vanishing from the middle while rows above and below rendered). Arbitrary loss is the
+  // defect; deterministic loss is not. So: count the fixed chrome rows EXACTLY as the body below
+  // constructs them — 2 border rows + status + control rows + metrics + source + stream title +
+  // agent lines (each a single non-wrapping Text row, every string already bounded to
+  // innerWidth) — and trim the graph stream from the END to the remaining budget, stating the
+  // drop on the last row. Trimming from the end keeps the precedence the section ordering
+  // already encodes: leading training headings and curves survive, the host tail yields. When
+  // the budget does not bind (graphLines fits), the stream passes through UNTOUCHED — zero
+  // behaviour change for any mount with room, which is exactly what a chrome-row miscount would
+  // break (the first attempt at this budget overcounted and truncated roomy mounts).
+  const fixedChromeRows = 2 + 1 + controlRows.length + compactMetrics.length + 1 + 1 + compactAgentLines.length;
+  const graphRowBudget = effectiveHeight - fixedChromeRows;
+  const visibleGraphLines = graphLines.length <= graphRowBudget
+    ? graphLines
+    : graphRowBudget >= 1
+      ? [
+          ...graphLines.slice(0, graphRowBudget - 1),
+          boundedSurfaceLine(`… ${graphLines.length - (graphRowBudget - 1)} more rows`, innerWidth),
+        ]
+      : [];
+
   const body = React.createElement(
     Box,
     {
@@ -713,7 +737,7 @@ export function OperatorSurfacePane({
     controlsElement,
     ...compactMetrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
     React.createElement(Text, { key: "source", dimColor: true }, sourceLineText),
-    ...graphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
+    ...visibleGraphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
     React.createElement(Text, { key: "stream-title", color: "magenta", bold: true }, "ACTIVITY/EVENT FEED"),
     ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
   );
