@@ -44,8 +44,22 @@ const FIREBALL_GUTTER = "   ";
 /** B4 W1: mock1's real truecolor accent for "Local" -- never the dim ANSI-16 "green" literal. */
 const LOCAL_ACCENT_COLOR = "#4EC9A3";
 /** Safe text budget for the identity block's variable-length lines (tagline/cwd; model gets a
- * further-reduced budget below to leave room for its fixed " · Local" suffix on the same row). */
+ * further-reduced budget below to leave room for its fixed " · Local" suffix on the same row).
+ * This is a CEILING, not a fixed allowance — see identityTextWidth below (legibility bar,
+ * 2026-07-26): at narrow terminal widths the identity column claims less than this, and every
+ * caller used to clip against the ceiling regardless, so clipToWidth reported "fits" for a cwd
+ * path shorter than 40 chars while the actual on-screen column was narrower still — the outer
+ * renderer then silently hard-clipped it with no marker at all. */
 const LEFT_TEXT_WIDTH = 40;
+
+/** The identity block's actual usable text width at a given terminal width — never wider than
+ * LEFT_TEXT_WIDTH, and never wider than what the terminal can actually show once the fireball
+ * raster + gutter share the same row (identityLines sit beside FIREBALL_GUTTER, not the full
+ * viewport). Floors at 8 so a pathological tiny terminal still gets *something* legible rather
+ * than a zero-width budget. */
+function identityTextWidth(viewportWidth: number): number {
+  return Math.max(8, Math.min(LEFT_TEXT_WIDTH, viewportWidth - 4));
+}
 
 /** The identity block's actual column claim in row-flex layout -- matches rightColWidth's own
  * leftCol-share assumption exactly (Math.max(LEFT_PANEL_MAX_WIDTH, WELCOME_THRESHOLD)), so leftCol
@@ -165,6 +179,22 @@ export function clipToWidth(text: string, width: number): string {
   }
   if (lastSpace > 0) return budget.slice(0, lastSpace).join("") + "…";
   return budget.join("") + "…";
+}
+
+/** Shortens a filesystem path to its last two segments with a leading ellipsis marker once the
+ *  full path doesn't fit `budget` — the tail of a path (its deepest directories) is what actually
+ *  identifies which tree/worktree is active, so this drops the FRONT and keeps the back, same
+ *  direction shortenDataRootForDisplay below already uses for the "Data:" line. Legibility bar
+ *  (2026-07-26): "paths truncate from the left with a marker, consistently everywhere" — before
+ *  this, the cwd line had no path-aware shortening at all and relied on clipToWidth's generic
+ *  word-boundary clip (which drops the TAIL, the wrong end for a path). Short paths that already
+ *  fit are returned untouched. */
+export function shortenPathForDisplay(fullPath: string, budget: number): string {
+  if ([...fullPath].length <= budget) return fullPath;
+  const sep = fullPath.includes("\\") ? "\\" : "/";
+  const segments = fullPath.split(/[\\/]/).filter((s) => s.length > 0);
+  if (segments.length <= 2) return fullPath;
+  return `…${sep}${segments.slice(-2).join(sep)}`;
 }
 
 /** #303 narrow-viewport fix: `Data: <path>` collapsed to a bare "Data:…" at LEFT_TEXT_WIDTH --
@@ -389,10 +419,11 @@ export interface HomescreenProps {
  * fireball's), so degraded (EMBER_ASCII / non-color) single-line fireball output never silently
  * drops the tagline/model/cwd rows -- only the color-art rendering shrinks, identity content never
  * does. */
-function renderIdentityBlock(state: LogoState, fireballTick: number): React.ReactElement {
+function renderIdentityBlock(state: LogoState, fireballTick: number, viewportWidth: number = 80): React.ReactElement {
   const ascii = process.env["EMBER_ASCII"] === "1";
   const fireballLines = renderFireballLines("panel", "idle", fireballTick, { ascii, color: !ascii });
   const version2 = state.version ?? "0.0.0";
+  const textWidth = identityTextWidth(viewportWidth);
 
   const identityLines: Array<React.ReactElement | null> = [
     React.createElement(
@@ -403,26 +434,29 @@ function renderIdentityBlock(state: LogoState, fireballTick: number): React.Reac
       React.createElement(Text, { dimColor: true }, `  v${version2}`),
     ),
     React.createElement(
-      Text, { key: "l1", dimColor: true }, clipToWidth(IDENTITY_TAGLINE, LEFT_TEXT_WIDTH),
+      Text, { key: "l1", dimColor: true }, clipToWidth(IDENTITY_TAGLINE, textWidth),
     ),
     state.model
       ? React.createElement(
           Box, { key: "l2", flexDirection: "row" },
           React.createElement(
-            Text, null, clipToWidth(state.model, Math.max(1, LEFT_TEXT_WIDTH - 8)),
+            Text, null, clipToWidth(state.model, Math.max(1, textWidth - 8)),
           ),
           // B4 W1: mock1's real truecolor accent, never the dim ANSI-16 "green" literal.
           React.createElement(Text, { color: LOCAL_ACCENT_COLOR }, " \xB7 Local"),
         )
       : null,
     state.cwd
-      ? React.createElement(Text, { key: "l3", dimColor: true }, clipToWidth(state.cwd, LEFT_TEXT_WIDTH))
+      ? React.createElement(
+          Text, { key: "l3", dimColor: true },
+          clipToWidth(shortenPathForDisplay(state.cwd, textWidth), textWidth),
+        )
       : null,
     // #303: visible data-root indicator — a disconnected cockpit is immediately self-evident.
     state.dataRoot
       ? React.createElement(
           Text, { key: "l4", dimColor: true },
-          clipToWidth(`Data: ${shortenDataRootForDisplay(state.dataRoot, LEFT_TEXT_WIDTH)}`, LEFT_TEXT_WIDTH),
+          clipToWidth(`Data: ${shortenDataRootForDisplay(state.dataRoot, textWidth)}`, textWidth),
         )
       : null,
   ];
@@ -456,7 +490,7 @@ export function Homescreen({
           `Update available: v${state.updateAvailable} (run /update)`,
         )
       : null,
-    renderIdentityBlock(state, fireballTick),
+    renderIdentityBlock(state, fireballTick, viewportWidth),
   );
 
   const onboardingFeed: Feed = {
