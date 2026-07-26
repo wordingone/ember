@@ -519,6 +519,10 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _sha256_bytes(data: bytes) -> str:
+    return __import__("hashlib").sha256(data).hexdigest()
+
+
 def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
     """cond3 GAP-3: the 3B launch path must round-trip the declared model/
     experiment identity manifest (training.identity_manifest) through the
@@ -614,6 +618,58 @@ def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
             "identity manifest declares OWNED_ADMITTED at a clean-genesis "
             "pre-training launch -- no checkpoint exists to admit")
 
+    # #1091 fix, B5/C6: corpus_id (this manifest's declared training input) and
+    # config.training.expected_input_artifact_id (the artifact the packet is
+    # told to require) are two separately-named identifiers for what should be
+    # the SAME declared input. Nothing previously joined them, and they had
+    # already drifted apart. This is a real disagreement to surface, never one
+    # to silence by editing either side to match the other.
+    try:
+        expected_input_artifact_id = _dig(cfg, "training", "expected_input_artifact_id")
+    except MissingField as e:
+        problems.append(f"config missing field required for the corpus-identity join: {e}")
+        expected_input_artifact_id = None
+    if expected_input_artifact_id is not None and corpus_id != expected_input_artifact_id:
+        problems.append(
+            f"data.corpus_id ({corpus_id!r}) does not match "
+            f"config.training.expected_input_artifact_id ({expected_input_artifact_id!r}) "
+            "-- the declared training input and the required input artifact have drifted apart")
+
+    # #1091 fix, B1-B4: bind the identity manifest to the ACTUAL bytes the
+    # production semantic runner (run_vertical_slice.run_semantic) consumes --
+    # the TOKEN-SHARDS-V0 stream receipt -- not merely to a sibling artifact
+    # that describes the corpus. The receipt's own bytes already commit
+    # (transitively) to its declared shard set and tokenizer premise
+    # (ManifestBoundTokenStream.from_receipt verifies every shard byte-for-byte
+    # against the receipt's declared hashes, and the tokenizer bytes against
+    # the receipt's declared tokenizer premise, at actual launch time); binding
+    # to the receipt's own sha256 is therefore a closed digest over the whole
+    # stream identity, computed here without touching multi-gigabyte shard
+    # data that this CPU-only preflight never needs to read.
+    stream_receipt_sha256 = None
+    stream_receipt_rel = None
+    try:
+        stream_receipt_rel = _dig(cfg, "training", "stream_receipt")
+    except MissingField as e:
+        problems.append(f"config missing field required for the stream-receipt binding: {e}")
+    if stream_receipt_rel is not None:
+        receipt_path = root / stream_receipt_rel
+        if not receipt_path.is_file():
+            problems.append(f"declared stream receipt is absent: {stream_receipt_rel}")
+        else:
+            try:
+                receipt_bytes = receipt_path.read_bytes()
+                receipt_payload = json.loads(receipt_bytes)
+            except (OSError, json.JSONDecodeError) as e:
+                problems.append(
+                    f"stream receipt {stream_receipt_rel!r} unreadable: {type(e).__name__}: {e}")
+            else:
+                if receipt_payload.get("ticket") != "TOKEN-SHARDS-V0":
+                    problems.append(
+                        f"stream receipt {stream_receipt_rel!r} does not declare TOKEN-SHARDS-V0")
+                else:
+                    stream_receipt_sha256 = _sha256_bytes(receipt_bytes)
+
     if problems:
         return {"name": "identity-manifest", "status": "fail",
                 "reason": "; ".join(problems)}
@@ -626,6 +682,8 @@ def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
         "architecture_sha256": _dig(payload, "architecture", "sha256"),
         "tokenizer_sha256": _dig(payload, "tokenizer", "sha256"),
         "corpus_sha256": _dig(payload, "data", "sha256"),
+        "stream_receipt_path": stream_receipt_rel,
+        "stream_receipt_sha256": stream_receipt_sha256,
     }
 
 
@@ -635,7 +693,7 @@ IMPLEMENTED = [preflight_storage, preflight_resource, preflight_no_sub_3b,
 DEFERRED: list = []
 
 
-def named_launch_command(cfg: dict) -> dict:
+def named_launch_command(cfg: dict, identity: dict) -> dict:
     """Truthful EMBER-02 launch command.
 
     scripts/timeshare_pretrain.py is EXECUTION-DENIED: it carries
@@ -654,8 +712,20 @@ def named_launch_command(cfg: dict) -> dict:
     to end (run_vertical_slice.run_semantic), and itself requires CUDA
     (torch.cuda.is_available() / torch.cuda.mem_get_info()) -- named from its
     real argparse arg surface (run_vertical_slice.py:2478-2493).
+
+    #1091 fix: the --receipt/--shards-root/--tokenizer arguments used to be
+    literal <angle-bracket> placeholders -- a green identity-manifest preflight
+    carried no binding at all into this emitted command, so an operator could
+    launch a different, individually valid, receipt/shard/tokenizer set than
+    the one the preflight validated. `identity` is this packet's own
+    preflight_identity_manifest() PASS result: --receipt and the three
+    --expected-*-sha256 arguments are now resolved, real values from that
+    result, and run_semantic recomputes and compares them before any model or
+    training work begins (run_vertical_slice.py's semantic-launch identity
+    guard).
     """
     ckpt_root = _dig(cfg, "namespaces", "checkpoints", "root")
+    stream_receipt_rel = identity["stream_receipt_path"]
     return {
         "note": (
             "scripts/timeshare_pretrain.py is EXECUTION-DENIED "
@@ -668,9 +738,12 @@ def named_launch_command(cfg: dict) -> dict:
             "python tools/ember-restart-3b/run_vertical_slice.py semantic "
             "--seed <launch-seed> "
             f"--artifact-root {ckpt_root}/<run-id> "
-            "--receipt <manifest-bound-stream-receipt.json> "
-            "--shards-root <token-shard-dir> "
-            "--tokenizer <tokenizer-path> "
+            f"--receipt {stream_receipt_rel} "
+            "--shards-root <token-shard-dir declared by the receipt's own shard_dir field> "
+            "--tokenizer tokenizer/tokenizer.json "
+            f"--expected-receipt-sha256 {identity['stream_receipt_sha256']} "
+            f"--expected-tokenizer-sha256 {identity['tokenizer_sha256']} "
+            f"--expected-architecture-sha256 {identity['architecture_sha256']} "
             "--steps <N> --sequence-length <seq-len> "
             "--checkpoint-interval 50 --write-budget-gib <write-budget-gib>"
         ),
@@ -698,7 +771,8 @@ def run(config_path: Path) -> int:
     any_deferred = any(r["status"] == "deferred" for r in rows)
     all_pass = not implemented_fail and not any_deferred
 
-    cmd = named_launch_command(cfg) if all_pass else None
+    identity_row = next(r for r in rows if r["name"] == "identity-manifest")
+    cmd = named_launch_command(cfg, identity_row) if all_pass else None
     summary = {
         "record": "launch-packet-summary",
         "config": str(config_path.name),

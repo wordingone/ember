@@ -15,7 +15,7 @@
   },
   "architecture": {
     "source": "configs/ember-restart-3b.json",
-    "sha256": "5dc6dcfb236c37c435bb34332cef585cf8a4d235f7effa555b62c192ef3002de"
+    "sha256": "c267b0de1f7fa6f6b039a28bcb9af1fe87964dc13786abe5bec13aa44ee2cd6b"
   },
   "checkpoint": {
     "format": "ember-checkpoint-envelope-v1",

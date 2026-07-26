@@ -237,13 +237,36 @@ def test_clean_genesis_fail_closed_borrowed_loading_in_source(cfg, root, tmp_pat
 # and cross-check its architecture/tokenizer/corpus hashes against the actual
 # on-disk launch inputs -- fail-closed on absent/mismatched identity.
 
-def test_identity_manifest_pass_real_config(cfg, root):
+def test_identity_manifest_fail_closed_real_config_corpus_artifact_drift(cfg, root):
+    # #1091 B5/C6: as of this writing, the real manifest's data.corpus_id
+    # ("owned-pretrain-v1") and the real config's expected_input_artifact_id
+    # ("owned-four-domain-production-rung-v1") genuinely disagree -- two
+    # separately-named identifiers for what should be the same declared
+    # training input. This is a REAL finding, not a test defect: the preflight
+    # must fail closed on it, and the cure is the check that catches the
+    # disagreement, never editing one value to match the other.
     r = lp.preflight_identity_manifest(cfg, root)
+    assert r["status"] == "fail", r
+    assert "does not match" in r["reason"]
+    assert "owned-pretrain-v1" in r["reason"]
+    assert "owned-four-domain-production-rung-v1" in r["reason"]
+
+
+def test_identity_manifest_pass_when_corpus_and_artifact_ids_aligned(cfg, root):
+    # The intended path (C1): when the two identifiers agree, the preflight
+    # passes and carries forward the closed digests over the real
+    # architecture/tokenizer/corpus/stream-receipt bytes -- everything
+    # named_launch_command needs to emit a resolved (non-placeholder) command.
+    aligned = copy.deepcopy(cfg)
+    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    r = lp.preflight_identity_manifest(aligned, root)
     assert r["status"] == "pass", r
     assert r["disposition"] == "OWNED_CANDIDATE"
     assert len(r["architecture_sha256"]) == 64
     assert len(r["tokenizer_sha256"]) == 64
     assert len(r["corpus_sha256"]) == 64
+    assert len(r["stream_receipt_sha256"]) == 64
+    assert r["stream_receipt_path"] == aligned["training"]["stream_receipt"]
 
 
 def test_identity_manifest_fail_closed_missing_config_field(cfg, root):
@@ -359,6 +382,74 @@ def test_identity_manifest_fail_closed_owned_admitted_at_pretrain_launch(cfg, ro
     assert r["status"] == "fail"
 
 
+# ---- stream-receipt binding (#1091 B1-B5) -----------------------------------
+# The identity preflight must bind to the ACTUAL stream receipt this launch
+# will consume (config.training.stream_receipt), not merely to a sibling
+# corpus-description artifact -- fail-closed on every skip path.
+
+def test_stream_receipt_fail_closed_missing_config_field(cfg, root):
+    broken = copy.deepcopy(cfg)
+    broken["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"  # align, isolate this field
+    del broken["training"]["stream_receipt"]
+    r = lp.preflight_identity_manifest(broken, root)
+    assert r["status"] == "fail"
+    assert "stream-receipt binding" in r["reason"]
+
+
+def test_stream_receipt_fail_closed_absent_file(cfg, root):
+    aligned = copy.deepcopy(cfg)
+    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned["training"]["stream_receipt"] = "receipts/does-not-exist.json"
+    r = lp.preflight_identity_manifest(aligned, root)
+    assert r["status"] == "fail"
+    assert "declared stream receipt is absent" in r["reason"]
+
+
+def test_stream_receipt_fail_closed_wrong_ticket(cfg, root):
+    aligned = copy.deepcopy(cfg)
+    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    # stream_receipt must resolve under the real repo root (preflight_storage-
+    # style paths are always root-relative), so write the bad fixture there
+    # rather than under pytest's tmp_path, and always clean it up after.
+    bad_rel = "receipts/ember-01-launch-packet/_test-bad-ticket-receipt.json"
+    bad_path = root / bad_rel
+    bad_path.parent.mkdir(parents=True, exist_ok=True)
+    bad_path.write_text(json.dumps({"ticket": "SOMETHING-ELSE"}), encoding="utf-8")
+    try:
+        aligned["training"]["stream_receipt"] = bad_rel
+        r = lp.preflight_identity_manifest(aligned, root)
+        assert r["status"] == "fail"
+        assert "does not declare TOKEN-SHARDS-V0" in r["reason"]
+    finally:
+        bad_path.unlink()
+
+
+def test_stream_receipt_fail_closed_unreadable_json(cfg, root, tmp_path):
+    aligned = copy.deepcopy(cfg)
+    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    bad_rel = "receipts/ember-01-launch-packet/_test-unreadable-receipt.json"
+    bad_path = root / bad_rel
+    bad_path.parent.mkdir(parents=True, exist_ok=True)
+    bad_path.write_text("{not valid json", encoding="utf-8")
+    try:
+        aligned["training"]["stream_receipt"] = bad_rel
+        r = lp.preflight_identity_manifest(aligned, root)
+        assert r["status"] == "fail"
+        assert "unreadable" in r["reason"]
+    finally:
+        bad_path.unlink()
+
+
+def test_stream_receipt_sha256_matches_real_bytes(cfg, root):
+    aligned = copy.deepcopy(cfg)
+    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    r = lp.preflight_identity_manifest(aligned, root)
+    assert r["status"] == "pass", r
+    import hashlib
+    real_bytes = (root / aligned["training"]["stream_receipt"]).read_bytes()
+    assert r["stream_receipt_sha256"] == hashlib.sha256(real_bytes).hexdigest()
+
+
 # ---- overall exit ------------------------------------------------------------
 
 def test_all_six_implemented_no_deferred(cfg, root):
@@ -366,16 +457,39 @@ def test_all_six_implemented_no_deferred(cfg, root):
     assert len(lp.IMPLEMENTED) == 6
 
 
-def test_run_exits_zero_when_all_six_pass(root):
-    # Real config: all 6 preflights (storage, resource, no-sub-3B, recovery,
-    # clean-genesis, identity-manifest) are implemented and pass -> packet
-    # exits 0 and prints the real EMBER-02 command.
+def test_run_exits_nonzero_today_due_to_corpus_artifact_id_drift(root):
+    # #1091 C6: today's real config genuinely fails the identity-manifest
+    # preflight (corpus_id vs expected_input_artifact_id disagreement) -- the
+    # packet must refuse and name exactly that preflight, never silently pass.
     rc = lp.run(_CONFIG_PATH)
+    assert rc == 1
+
+
+def test_run_exits_zero_when_corpus_and_artifact_ids_aligned(root, tmp_path, monkeypatch):
+    # The intended path (C1), exercised through the real run()/CLI entry
+    # point rather than just the unit-level preflight: point run() at a
+    # config file that is a byte-for-byte copy of the real one except for the
+    # one aligned field, in the REAL root (so every other declared path still
+    # resolves), and confirm the packet reaches rc == 0 with a fully resolved
+    # (no placeholder) command.
+    real_bytes = _CONFIG_PATH.read_text(encoding="utf-8")
+    real_cfg = json.loads(real_bytes)
+    real_cfg["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    aligned_config_path = _CONFIG_PATH.parent / "_test-aligned-ember-restart-3b.json"
+    aligned_config_path.write_text(json.dumps(real_cfg), encoding="utf-8")
+    try:
+        rc = lp.run(aligned_config_path)
+    finally:
+        aligned_config_path.unlink()
     assert rc == 0
 
 
-def test_named_command_is_truthful_no_placeholder(cfg):
-    cmd = lp.named_launch_command(cfg)
+def test_named_command_is_truthful_no_placeholder(cfg, root):
+    aligned = copy.deepcopy(cfg)
+    aligned["training"]["expected_input_artifact_id"] = "owned-pretrain-v1"
+    identity = lp.preflight_identity_manifest(aligned, root)
+    assert identity["status"] == "pass", identity
+    cmd = lp.named_launch_command(aligned, identity)
     assert "run_vertical_slice.py" in cmd["command"]
     assert "semantic" in cmd["command"]
     assert "run_semantic" in cmd["library_entrypoint"]
@@ -383,6 +497,13 @@ def test_named_command_is_truthful_no_placeholder(cfg):
     # the named command must never point at it, and the note must say why.
     assert "timeshare_pretrain.py" not in cmd["command"]
     assert "historical_only" in cmd["note"]
+    # #1091 B2: --receipt and the three --expected-*-sha256 arguments are
+    # RESOLVED real values, never the old literal <angle-bracket> placeholders.
+    assert "<manifest-bound-stream-receipt.json>" not in cmd["command"]
+    assert f"--receipt {identity['stream_receipt_path']}" in cmd["command"]
+    assert f"--expected-receipt-sha256 {identity['stream_receipt_sha256']}" in cmd["command"]
+    assert f"--expected-tokenizer-sha256 {identity['tokenizer_sha256']}" in cmd["command"]
+    assert f"--expected-architecture-sha256 {identity['architecture_sha256']}" in cmd["command"]
 
 
 # ---- cond3 unresolved identity (GAP-3) --------------------------------------
