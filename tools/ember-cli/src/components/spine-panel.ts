@@ -42,7 +42,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import {
   _loadBenchmarkRegistry,
   createBenchmarkCommand,
@@ -609,7 +609,7 @@ export async function assembleSpinePanelState(
   deps: SpinePanelDeps = {},
 ): Promise<SpinePanelState> {
   const resolveRepoRoot =
-    deps.resolveRepoRoot ?? (() => resolveEmberRepoRootOrCwd({ startDir: cwd }, "[ember] /spine"));
+    deps.resolveRepoRoot ?? (() => resolveEmberSourceRootOrCwd({ startDir: cwd }, "[ember] /spine"));
   const repoRoot = resolveRepoRoot();
 
   const elements: SpineElementState[] = [

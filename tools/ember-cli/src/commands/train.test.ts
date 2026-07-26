@@ -16,6 +16,9 @@ import {
   type LaunchPacketRunResult,
 } from "./train.ts";
 import type { CommandContext } from "../types/command-types.ts";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const mockCtx: CommandContext = {
   sessionId: "test-session",
@@ -435,5 +438,53 @@ describe("train command", () => {
         expect(certifiedSpawns).toHaveLength(0);
       }
     });
+  });
+});
+
+describe("/train source-byte authority", () => {
+  it("runs launch_packet.py and its config from the selected linked worktree, not its main checkout", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-source-root-"));
+    try {
+      const mainRoot = path.join(scratch, "main");
+      const worktreeRoot = path.join(scratch, "worktree");
+      fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), {
+        recursive: true,
+      });
+      fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
+      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# main\n");
+      fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), {
+        recursive: true,
+      });
+      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# worktree\n");
+      fs.writeFileSync(
+        path.join(worktreeRoot, ".git"),
+        `gitdir: ${path.join(mainRoot, ".git", "worktrees", "lane")}\n`,
+      );
+
+      const spawns: RecordedSpawn[] = [];
+      const cmd = createTrainCommand({
+        pythonBin: "python",
+        runLaunchPacket: (executable, args) => {
+          spawns.push({ executable, args });
+          return { status: 0, stdout: allGreenStdout() };
+        },
+      });
+      const result = await cmd.execute("", { ...mockCtx, cwd: worktreeRoot });
+
+      expect(result?.exitCode).toBeUndefined();
+      expect(spawns).toHaveLength(1);
+      expect(spawns[0]!.args).toEqual([
+        path.join(
+          worktreeRoot,
+          "tools",
+          "ember-restart-3b",
+          "launch_packet.py",
+        ),
+        "--config",
+        path.join(worktreeRoot, "configs", "ember-restart-3b.json"),
+      ]);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });
