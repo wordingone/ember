@@ -457,6 +457,15 @@ describe("compiled lifecycle action completion", () => {
       excerpt: "watching state/ember-telemetry.jsonl",
     });
 
+    expect(driver.classifyActionEvidence!(
+      "train",
+      "",
+      [
+        "launch-packet: all preflights GREEN -- EMBER-02 is launch-ready.",
+        "This command does NOT launch training.",
+      ].join("\n"),
+    ).status).toBe("PREFLIGHT_ONLY");
+
     expect(driver.saveActionCompletionObserved).toBeFunction();
     expect(driver.saveActionCompletionObserved!(
       "prompt cleared after save submission",
