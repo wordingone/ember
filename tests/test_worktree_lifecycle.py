@@ -566,3 +566,120 @@ def test_hooks_and_agents_require_lifecycle_guard() -> None:
     assert "scripts/worktree_lifecycle.py create" in agents
     assert "scripts/worktree_lifecycle.py retire" in agents
     assert "Raw `git worktree add` and recursive worktree deletion are forbidden" in agents
+
+
+# ---------------------------------------------------------------------------
+# reconcile: the exit for a managed row whose worktree is genuinely gone
+# ---------------------------------------------------------------------------
+
+
+def path_key_of(value: Path) -> str:
+    """Mirror of the tool's own registry key derivation (canonical + casefold)."""
+    return str(Path(value).expanduser().resolve(strict=False)).casefold()
+
+
+def _managed(repo: Path, tmp_path: Path, name: str) -> Path:
+    """Create one managed worktree and return its path."""
+    path = tmp_path / name
+    lifecycle(
+        repo, "create",
+        "--path", str(path),
+        "--branch", name,
+        "--owner", "founder-one",
+        "--purpose", f"managed-{name}",
+        "--expires", "2099-01-01",
+    )
+    return path
+
+
+def test_reconcile_clears_a_row_whose_worktree_was_deleted_outside_the_tool(
+    tmp_path: Path,
+) -> None:
+    """The incident this verb exists for: an owner removes the directory without
+    retiring, so audit -- and therefore create, retire and the push guard -- raise
+    MISSING_MANAGED_WORKTREE with no way to clear the row. RED before reconcile
+    existed: the only recovery was to physically reconstruct the worktree first.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    gone = _managed(repo, tmp_path, "gone")
+
+    # Remove it the way the incident did: git forgets it, the row survives.
+    git(repo, "worktree", "remove", str(gone))
+    assert not gone.exists()
+
+    blocked = lifecycle(repo, "audit", check=False)
+    assert blocked.returncode == 2
+    assert "MISSING_MANAGED_WORKTREE" in blocked.stderr
+
+    result = lifecycle(repo, "reconcile", "--path", str(gone))
+    assert '"status": "RECONCILED"' in result.stdout
+    # The branch is NOT deleted -- the row goes, the ref stays.
+    assert "gone" in git(repo, "branch", "--list", "gone").stdout
+
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    assert path_key_of(gone) not in state["managed"]
+    # And the deadlock is cleared: audit passes again.
+    assert lifecycle(repo, "audit", check=False).returncode == 0
+
+
+def test_reconcile_refuses_a_live_worktree(tmp_path: Path) -> None:
+    """A live worktree is retire's business -- retire carries the clean-tree and
+    archive-ref checks this verb deliberately lacks. Reconcile must never become a
+    way around them.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    live = _managed(repo, tmp_path, "live")
+
+    result = lifecycle(repo, "reconcile", "--path", str(live), check=False)
+    assert result.returncode == 2
+    assert "WORKTREE_LIVE" in result.stderr
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    assert path_key_of(live) in state["managed"], "the row must survive a refusal"
+
+
+def test_reconcile_refuses_when_the_path_still_has_content(tmp_path: Path) -> None:
+    """The load-bearing safety property: reconcile steps over an EMPTY directory and
+    nothing else. If bytes are there, someone may still be holding them, and clearing
+    the row would strand them outside every check.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    stranded = _managed(repo, tmp_path, "stranded")
+
+    # git no longer tracks it, but the directory has content.
+    git(repo, "worktree", "remove", str(stranded))
+    stranded.mkdir(parents=True, exist_ok=True)
+    (stranded / "unsaved.txt").write_text("work nobody has copied out\n", encoding="utf-8")
+
+    result = lifecycle(repo, "reconcile", "--path", str(stranded), check=False)
+    assert result.returncode == 2
+    assert "PATH_NOT_EMPTY" in result.stderr
+    assert (stranded / "unsaved.txt").exists(), "reconcile must not touch bytes"
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    assert path_key_of(stranded) in state["managed"]
+
+
+def test_reconcile_refuses_an_unregistered_path(tmp_path: Path) -> None:
+    """Exact-path only, managed rows only: this can never become a blanket sweep."""
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+
+    result = lifecycle(repo, "reconcile", "--path", str(tmp_path / "never-registered"), check=False)
+    assert result.returncode == 2
+    assert "NOT_MANAGED" in result.stderr
+
+
+def test_reconcile_refuses_a_legacy_snapshot_path(tmp_path: Path) -> None:
+    """legacy_paths are the install-time snapshot and are not this verb's to edit."""
+    repo = make_repo(tmp_path)
+    legacy = tmp_path / "legacy"
+    git(repo, "worktree", "add", "-b", "legacy", str(legacy))
+    lifecycle(repo, "install", "--target", "6")
+
+    result = lifecycle(repo, "reconcile", "--path", str(legacy), check=False)
+    assert result.returncode == 2
+    # Live, so the live check fires first -- either refusal is correct, but it must
+    # never succeed.
+    assert "WORKTREE_LIVE" in result.stderr or "LEGACY_PATH" in result.stderr

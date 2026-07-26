@@ -393,6 +393,74 @@ def retire_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[s
     }
 
 
+def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[str, Any]:
+    """Clear ONE managed row whose worktree is genuinely gone.
+
+    MISSING_MANAGED_WORKTREE is raised by audit_state before it does anything, and
+    audit runs first inside create, retire and the pre-push guard. So a row whose
+    worktree no longer exists has no exit: every verb that could remove it refuses
+    to run until the thing it would remove is put back. The only way out today is
+    to physically reconstruct a worktree at the registered path -- absurd when the
+    ROW is what is wrong -- and until someone does, the check blocks pushes
+    repo-wide, so one owner's stale bookkeeping halts every other owner's
+    unrelated work. That happened twice on 2026-07-26 within ten minutes.
+
+    This verb is that exit, and it is deliberately the narrowest one that works:
+
+    * an EXACT path is required, so it can never become a sweep;
+    * only ``managed`` rows are eligible -- ``legacy_paths`` are the install-time
+      snapshot and are not this verb's to edit;
+    * it REFUSES when the worktree is live (that case is ``retire``, which has the
+      clean-tree and archive-ref checks this one deliberately lacks);
+    * it REFUSES when the path exists with any content, so it can never discard
+      bytes someone is still holding -- an empty directory is the only on-disk
+      state it will step over;
+    * it never deletes the branch. The row goes; the ref stays; nothing that was
+      committed can be lost by running this.
+
+    Fail-closed stays fail-closed. What changes is that a stale row has an exit
+    that is not "rebuild the directory you already deleted".
+    """
+    state = load_or_initialize(repo, state_file)
+    # Deliberately NOT audit_state(): audit raises on exactly the condition this
+    # verb exists to clear, so calling it here would reproduce the deadlock.
+    key = path_key(requested_path)
+    record = state["managed"].get(key)
+    if record is None:
+        if key in state["legacy_paths"]:
+            raise LifecycleError("LEGACY_PATH", canonical_path(requested_path))
+        raise LifecycleError("NOT_MANAGED", canonical_path(requested_path))
+
+    live = {row.key: row for row in list_worktrees(repo)}
+    if key in live:
+        raise LifecycleError("WORKTREE_LIVE", live[key].path)
+
+    destination = Path(record["path"])
+    if destination.exists():
+        try:
+            leftovers = any(destination.iterdir())
+        except OSError as exc:
+            raise LifecycleError("PATH_UNREADABLE", f"{destination}: {exc}") from exc
+        if leftovers:
+            raise LifecycleError("PATH_NOT_EMPTY", str(destination))
+
+    # Stale git administrative metadata for a removed worktree is git's own to
+    # clear; prune is a no-op when there is none.
+    run_git(repo, ["worktree", "prune"], check=False)
+
+    state["managed"].pop(key)
+    state["updated_at"] = datetime.now(timezone.utc).isoformat()
+    write_state(state_file, state)
+    return {
+        "status": "RECONCILED",
+        "path": record["path"],
+        "owner": record.get("owner"),
+        "retained_branch": record.get("branch"),
+        "recorded_head": record.get("head"),
+        "ceiling": state["ceiling"],
+    }
+
+
 def emit(payload: dict[str, Any], quiet: bool) -> None:
     if not quiet:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -420,6 +488,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     retire_parser = subparsers.add_parser("retire")
     retire_parser.add_argument("--path", required=True)
+
+    reconcile_parser = subparsers.add_parser("reconcile")
+    reconcile_parser.add_argument(
+        "--path",
+        required=True,
+        help=(
+            "exact registered path of a managed row whose worktree is gone; "
+            "refuses when the worktree is live or the path has any content"
+        ),
+    )
     return parser
 
 
@@ -443,6 +521,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 emit(create_worktree(repo, state_file, args), False)
             elif args.command == "retire":
                 emit(retire_worktree(repo, state_file, args.path), False)
+            elif args.command == "reconcile":
+                emit(reconcile_worktree(repo, state_file, args.path), False)
             else:
                 raise AssertionError(args.command)
         return 0
