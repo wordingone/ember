@@ -50,7 +50,6 @@ import {
 } from "../services/slash-dropdown.ts";
 import { getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
-import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildMessageLookups,
   UserTextMessage,
@@ -1060,6 +1059,26 @@ export function ReplScreen({
   const outageBanner = useOutageBanner();
 
   // Render dispatch (memoised per lookups + viewport width)
+  // KNOWN DEFECT, left uncured on purpose and measured rather than described.
+  //
+  // This callback closes over the mount-time `slashCommands` — the empty array, before the async
+  // registry load lands — so a welcome message rendered through dispatch shows six BLOCKED spine
+  // rows forever while the always-mounted banner beside it shows six BOUND ones. An independent
+  // review of this PR found it, and the comment on renderMsgDispatch below still claims "both call
+  // sites pass it", which is true of the value and false of its currency.
+  //
+  // Both obvious cures — adding `slashCommands` to the dependency array, or reading it through a
+  // ref so the identity stays stable — make the welcome path render against the live registry, and
+  // BOTH turn five palette and dropdown suites red: palette-overflow-render (4), palette-resize-
+  // cycle (1), repl-slash-dropdown (3), repl-operator-surface (1), repl-source-binding (1). Each
+  // loses the palette's "+N more" overflow row. Measured by bisection: repl.ts at head passes,
+  // either cure alone fails, and the rest of this PR's changes are not involved.
+  //
+  // So the currency defect and the palette's overflow contract interact through something neither
+  // this comment nor the review has yet named, and shipping a cure that reds five suites to fix a
+  // second-screen staleness would be trading a visible contract for a hidden one. Filed rather than
+  // half-fixed; the transcript welcome copy is also arguably redundant with the always-mounted
+  // banner, which may be the real answer.
   const renderMessage = useCallback(
     (msg: SessionMessage) =>
       renderMsgDispatch(msg, lookups as MessageLookups, terminalCols, slashCommands),
@@ -1139,6 +1158,11 @@ export function ReplScreen({
       dataRoot: dataRoot ?? "",
     },
     viewportWidth: mainColumnWidth,
+    // The real terminal height, so the panel budgets its own variable content instead of trusting
+    // that a number someone measured once still holds. Passing it is what makes the budget reach
+    // production at all — the component defaults to no truncation when it is absent, which is the
+    // safe default and also the shape in which a "wired but never fed" boundary hides.
+    viewportHeight: terminalRows,
     boardSummary,
     // The spine block resolves against the SAME registry that drives the slash palette, so a
     // command shown on the first screen is by construction a command the operator can type.

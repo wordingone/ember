@@ -358,3 +358,31 @@ describe("A6: the canonical-root disclosure appears exactly when it should", () 
     expect(rootDisclosure("R:/repo", "R:/repo-elsewhere")).not.toBeNull();
   });
 });
+
+// A7 — a BOUND row's command is fully typeable at every supported width (added 2026-07-25 from an
+// independent review). Putting the command before the label stopped the LABEL from eating it; it
+// did not stop the WIDTH from eating it. At width 20 the longest row rendered `BOUND   /model mani…`
+// — a name that resolves to nothing, which is the exact harm the whole block exists to remove.
+// The cure drops the sub-verb before it clips the command name, so what is shown is always a
+// command the operator can actually type.
+describe("A7: a shown command is always a typeable command", () => {
+  const rows = buildSpineRows(fullRegistry());
+  for (const width of [20, 24, 28, 31, 32, 38, 60, 80]) {
+    it(`every BOUND row shows a complete command at width ${width}`, () => {
+      for (const row of rows.filter((r) => r.status === "BOUND")) {
+        const line = renderSpineRow(row, width);
+        const shown = line.slice(8).split("  ")[0]!.replace(/…$/, "");
+        // Whatever survived truncation must be a real prefix-complete command: either the full
+        // command text or its base. A partial word is the defect.
+        expect([row.command, row.commandBase]).toContain(shown.trim());
+      }
+    });
+  }
+
+  it("drops the verb rather than the command name when the full text will not fit", () => {
+    const row = rows.find((r) => r.command === "/model manifest inspect")!;
+    expect(renderSpineRow(row, 20)).toContain("/model");
+    expect(renderSpineRow(row, 20)).not.toContain("/model mani…");
+    expect(renderSpineRow(row, 80)).toContain("/model manifest inspect");
+  });
+});

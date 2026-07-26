@@ -26,7 +26,7 @@ import { Box, Text, RawAnsi } from "../ink/components.ts";
 import { color, type FeatureFlags } from "./design-system.ts";
 import { renderFireballLines, FIREBALL_IDLE_POSE_FRAME } from "./fireball.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
-import { buildSpineRows, renderSpineBlock } from "./spine-first-screen.ts";
+import { SPINE_FUNCTIONS, buildSpineRows, renderSpineBlock } from "./spine-first-screen.ts";
 import { formatReceiptAge, isReceiptStale } from "../core/receipt-age.ts";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +67,17 @@ function identityTextWidth(viewportWidth: number): number {
  * leftCol-share assumption exactly (Math.max(LEFT_PANEL_MAX_WIDTH, WELCOME_THRESHOLD)), so leftCol
  * + rightCol always sum to the panel's content width with no gap and no overlap. */
 const LEFT_COL_WIDTH = Math.max(LEFT_PANEL_MAX_WIDTH, WELCOME_THRESHOLD);
+
+/** The panel's own top and bottom border rows, which every height budget must pay before content.
+ *  The budget itself is NOT a constant: it comes from the caller's real terminal height, because a
+ *  budget hardcoded to the 80x20 case truncates content on a 60-row terminal that has room for all
+ *  of it. Measured: the first version of this fix did exactly that and cost nine existing tests
+ *  their live-telemetry rows at no benefit to anyone. */
+const PANEL_BORDER_ROWS = 2;
+/** The identity block is a fixed-length list — null slots still occupy their row. */
+const IDENTITY_BLOCK_ROWS  = 5;
+/** Every feed prints a title and an underline before its first entry. */
+const FEED_CHROME_ROWS     = 2;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -432,6 +443,11 @@ export interface HomescreenProps {
   state:          LogoState;
   flags?:         FeatureFlags;
   viewportWidth?: number;
+  /** The terminal's real row count. Supplied, the recent-activity feed is budgeted so the panel
+   *  cannot outgrow the screen and clip its own border; omitted, nothing is truncated at all.
+   *  Omission is the honest default: a component that guesses a height would silently drop content
+   *  on terminals with room to spare. */
+  viewportHeight?: number;
   /** Live animation clock for the identity block's Fireball (b14 item 2 reframe): the welcome
    * screen no longer freezes at a static pose -- the caller's own tick (the same clock driving the
    * bottom-chrome fireball) threads straight through. Defaults to 0 for callers that don't yet
@@ -522,6 +538,7 @@ export function Homescreen({
   flags         = {},
   viewportWidth = 80,
   fireballTick  = FIREBALL_IDLE_POSE_FRAME,
+  viewportHeight,
   boardSummary,
   nowMs         = Date.now(),
   spineCommands,
@@ -548,10 +565,12 @@ export function Homescreen({
   // BOX width in stacked mode loses no content that wasn't already text-clipped.
   const rcWidth      = rightColWidth(viewportWidth);
   const leftColWidth = panelIsRow ? LEFT_COL_WIDTH : Math.max(1, viewportWidth - 2);
+  const disclosureRow = rootDisclosure(state.dataRoot, launchDir);
+  const updateRow      = state.updateAvailable ? 1 : 0;
 
   const leftCol = React.createElement(
     Box, { key: "left", flexDirection: "column", width: leftColWidth },
-    rootDisclosure(state.dataRoot, launchDir),
+    disclosureRow,
     state.updateAvailable
       ? React.createElement(
           Text, { key: "update", dimColor: true },
@@ -592,22 +611,61 @@ export function Homescreen({
     // demonstrates — and it cost the one row that put the panel at 21 in an 80x20 terminal, which
     // pushed the bottom border off-screen. Measured, not guessed: bottom-border row 21, budget 20.
     //
-    // MARGIN WARNING for whoever adds the next line here. The panel now lands at exactly 20 rows
-    // at 80x20. There is no slack. One more entry in this feed OR in the recent-activity feed
-    // clips the border again, and the failure surfaces as a corner-painting test rather than as
-    // anything that mentions height. If you need another line, take one back from somewhere in the
-    // same column — do not assume there is room.
+    // This feed's height is fixed by construction: SPINE_FUNCTIONS.length rows, at every input.
+    // The variable rows on this screen are the left column's two optional lines and the recent
+    // feed's board-driven entries, and those are budgeted below.
   };
-  const recentFeed: Feed = {
-    title:   "Recent activity",
-    entries: recentFeedEntries(boardSummary, nowMs),
-    footer:  "/resume for more",
-  };
+
+  // PANEL HEIGHT, made structural rather than measured (independent review of this PR, 2026-07-25).
+  //
+  // The first version of this change left a comment here saying the panel "lands at exactly 20 rows
+  // at 80x20, there is no slack". That was true of ONE state — the state the border-clip test
+  // mounts, with no board summary, no update line, and no launch-root disclosure. Three things
+  // reachable in ordinary operation pushed it past 20: the disclosure row this very PR added (it
+  // fires exactly when you launch from a worktree, which is the case it exists for), the update
+  // line, and the recent feed's entries, which grow with live telemetry, condition transitions and
+  // the attention list — an UNBOUNDED list against a zero-slack budget.
+  //
+  // Widening the assertion would only have tracked the variance. Removing it is stronger: the
+  // right column's last feed absorbs whatever the left column spends, so the total is a consequence
+  // of the arithmetic below rather than something a test happens to observe. Anything that does not
+  // fit is reported as "+n more" — one row, always, so the count cannot leak through the summary of
+  // itself — and /resume still shows all of it.
+  const leftRows       = IDENTITY_BLOCK_ROWS + (disclosureRow ? 1 : 0) + updateRow;
+  const onboardingRows = FEED_CHROME_ROWS + SPINE_FUNCTIONS.length;
+  const recentAll      = recentFeedEntries(boardSummary, nowMs);
+  // Rows left for the recent feed once the fixed content has been charged. A full feed costs its
+  // chrome (title + underline), its footer, and at least one entry.
+  const contentBudget  = viewportHeight === undefined
+    ? Number.POSITIVE_INFINITY
+    : Math.max(0, viewportHeight - PANEL_BORDER_ROWS);
+  const recentRows     = contentBudget - leftRows - onboardingRows;
+  const RECENT_MIN     = FEED_CHROME_ROWS + 1 + 1;
+
+  // When the left column is at its fullest — disclosure AND update line both showing — there is no
+  // longer room for a titled feed at all. Clamping the entry count to a floor of 1 does not save
+  // it: the chrome and footer alone still overrun, which is what the worst-case border test caught
+  // on the first attempt at this fix. So below the minimum the feed collapses to a single line that
+  // still says how much is there and how to see it, and one line is a size the budget can always
+  // pay.
+  const recentEntryBudget = recentRows >= RECENT_MIN ? recentRows - FEED_CHROME_ROWS - 1 : 0;
+  const overflow          = Math.max(0, recentAll.length - Math.max(0, recentEntryBudget - 1));
+  const recentShown       = recentAll.length > recentEntryBudget
+    ? [...recentAll.slice(0, Math.max(0, recentEntryBudget - 1)), { text: `+${overflow} more` }]
+    : recentAll;
+  const recentFeed: Feed | null = recentEntryBudget > 0
+    ? { title: "Recent activity", entries: recentShown, footer: "/resume for more" }
+    : null;
+  const recentCollapsed = recentFeed
+    ? null
+    : `Recent activity: ${recentAll.length} (/resume)`;
 
   const rightCol = React.createElement(
     Box, { key: "right", flexDirection: "column", width: rcWidth },
     React.createElement(FeedComponent, { key: "onboarding", feed: onboardingFeed, width: rcWidth }),
-    React.createElement(FeedComponent, { key: "recent",     feed: recentFeed,     width: rcWidth }),
+    recentFeed
+      ? React.createElement(FeedComponent, { key: "recent", feed: recentFeed, width: rcWidth })
+      : React.createElement(Text, { key: "recent-collapsed", dimColor: true }, recentCollapsed),
   );
 
   const panelWidth  = panelIsRow

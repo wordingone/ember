@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // homescreen-border-clip.test.ts — B2 regression found via PTY capture (not the isolated
 // WelcomeV2-alone unit test, which passed because it never exercised the real parent layout):
 // Homescreen's leftCol Box declares width:LEFT_PANEL_MAX_WIDTH (50), but its child WelcomeV2
@@ -81,4 +84,66 @@ describe("right-border column uniformity (production frame parser, not raw strin
       expect([...distinct][0]).toBe(cols - 1); // and that column is the true right edge
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Panel height under POPULATED live state (added 2026-07-25, from an independent review of the
+// spine-on-first-screen PR).
+//
+// Every case above mounts `state: {}` with no board summary, no update line and no launch-root
+// disclosure. That binds the 20-row budget to one reconstructed frame, which is not the same as
+// binding it to the quantity: the disclosure row fires exactly when the operator launches from a
+// worktree, the update line fires on any available update, and the recent feed's entries grow with
+// live telemetry, condition transitions and the attention list — a list with no upper bound at all.
+// Each of those was reachable in ordinary operation against a budget the code itself described as
+// having "no slack".
+//
+// So these cases mount the states the fixture omitted. They pass because the recent feed is now
+// budgeted against what the left column actually spends, rather than because the numbers happened
+// to line up on the day someone measured them.
+describe("panel height is structural, not observed, at 80x20", () => {
+  const boardSummary = {
+    green: 4, total: 9, pctComplete: 44,
+    topAttention: ["C2 attention line", "C4 attention line", "C6 attention line",
+                   "C7 attention line", "C8 attention line"],
+    boardTs: "2026-07-25T00:00:00Z",
+    liveTelemetry: { gpu: { text: "gpu: idle" }, activeRun: { text: "run: none" },
+                     lastReceipt: { text: "receipt: 2h" } },
+    recentTransitions: [{ text: "board: C(-1) GREEN->RED" }, { text: "board: C(-2) RED->GREEN" }],
+  } as never;
+
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ["populated board",                 { boardSummary }],
+    ["launch-root disclosure",          { state: { dataRoot: "R:/canonical" }, launchDir: "R:/elsewhere" }],
+    ["update line",                     { state: { updateAvailable: "9.9.9" } }],
+    ["all three at once (worst case)",  { state: { dataRoot: "R:/canonical", updateAvailable: "9.9.9" },
+                                          launchDir: "R:/elsewhere", boardSummary }],
+  ];
+
+  for (const [name, props] of cases) {
+    test(`all four corners paint with ${name}`, () => {
+      const out = mountAndCapture(
+        React.createElement(Homescreen, {
+          state: {}, viewportWidth: 80, viewportHeight: 20, nowMs: 0, ...props,
+        }),
+        80,
+      );
+      expect(out).toContain("╭");
+      expect(out).toContain("╮");
+      expect(out).toContain("╰");
+      expect(out).toContain("╯"); // FAILS before the budget fix: panel runs past row 20
+    });
+  }
+
+  test("content dropped by the budget is reported, never silently absent", () => {
+    const out = mountAndCapture(
+      React.createElement(Homescreen, {
+        state: {}, viewportWidth: 80, viewportHeight: 20, nowMs: 0, boardSummary,
+      }),
+      80,
+    );
+    // The overflow line is one row by construction, so the summary of the truncation cannot itself
+    // be what overflows the budget.
+    expect(out).toMatch(/\+\d+ more/);
+  });
 });

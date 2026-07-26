@@ -42,6 +42,11 @@ export interface SpineRow {
   /** The command text to show. Empty when the command did not resolve — a row NEVER prints a
    *  command name that does not exist, because the first screen's whole job is to be typeable. */
   command: string;
+  /** The command WITHOUT its sub-verb — `/model` for `/model manifest inspect`. Same emptiness rule
+   *  as `command`. Kept so a narrow width can drop the verb instead of clipping the command name
+   *  itself: `/model` is shorter, still true, and still typeable, whereas `/model mani…` is a name
+   *  that resolves to nothing. */
+  commandBase: string;
   status: SpineRowStatus;
   /** Why, when the status is not BOUND. Empty when BOUND. */
   reason: string;
@@ -92,6 +97,7 @@ function resolveOne(
     return {
       label: def.label,
       command: '',
+      commandBase: '',
       status: 'BLOCKED',
       reason: 'no command registered for this function',
     };
@@ -99,7 +105,8 @@ function resolveOne(
 
   // The registry's own name wins over our literal. A renamed command must surface as its new name
   // or as BLOCKED — never as the stale string in SPINE_FUNCTIONS above.
-  const text = def.verb ? `/${found.name} ${def.verb}` : `/${found.name}`;
+  const base = `/${found.name}`;
+  const text = def.verb ? `${base} ${def.verb}` : base;
 
   let enabled = false;
   try {
@@ -109,16 +116,20 @@ function resolveOne(
     return {
       label: def.label,
       command: text,
+      commandBase: base,
       status: 'OFFLINE',
       reason: 'availability check failed',
     };
   }
 
   if (!enabled) {
-    return { label: def.label, command: text, status: 'OFFLINE', reason: 'not available here' };
+    return {
+      label: def.label, command: text, commandBase: base,
+      status: 'OFFLINE', reason: 'not available here',
+    };
   }
 
-  return { label: def.label, command: text, status: 'BOUND', reason: '' };
+  return { label: def.label, command: text, commandBase: base, status: 'BOUND', reason: '' };
 }
 
 /**
@@ -153,11 +164,30 @@ export function renderSpineRow(row: SpineRow, width: number): string {
   // to type. Measured, not assumed: a live launch rendered "BOUND custody and the identity
   // manifest  /…", which names a function and then hides how to reach it, i.e. exactly the gap this
   // whole block exists to close, reproduced inside the fix.
-  const head = row.command !== '' ? row.command : '';
+  const max = Math.max(1, Math.floor(width));
+  // Putting the command first stops the LABEL from eating it, but it does not stop the WIDTH from
+  // eating it: at any width below the status column plus the command, the command itself clipped
+  // mid-word — `BOUND   /model mani…` at width 20, a width this module's own tests declare
+  // supported. A clipped command teaches a name that resolves to nothing, which is the precise harm
+  // the reordering was meant to remove; the reordering fixed one cause of it and left the other.
+  // Caught by an independent review rather than by me.
+  //
+  // So when the full command does not fit, drop the VERB and keep the command name. `/model` is
+  // true, typeable, and gets the operator to a surface that lists its own verbs. Only if even the
+  // bare name cannot fit do we fall back to clipping — at that width nothing legible fits anyway.
+  // The `+ 1` reserves the ellipsis column. Without it, a command that measures exactly `max` is
+  // judged to fit, the LINE then overflows because of the label after it, and truncation takes the
+  // command's own last character — `/model manifest inspec…` at width 31. Measured: the first
+  // version of this fix passed at widths 20 and 32 and failed at 31, because "the command fits"
+  // and "the command survives the clip" are different claims.
+  const fits = (head: string) => STATUS_WIDTH + 1 + head.length + 1 <= max;
+  const head = row.command === '' ? ''
+    : fits(row.command) ? row.command
+    : fits(row.commandBase) ? row.commandBase
+    : row.command;
   const line = head
     ? `${status} ${head}  ${row.label}`
     : `${status} ${row.label}  ${row.reason}`;
-  const max = Math.max(1, Math.floor(width));
   if (line.length <= max) return line;
   if (max <= 1) return line.slice(0, max);
   return `${line.slice(0, max - 1)}…`;
