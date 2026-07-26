@@ -139,6 +139,46 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
+export async function terminateLifecycleChild(
+  requestExit: () => void,
+  isExitObserved: () => boolean,
+  forceCleanup: () => void,
+  wait: (ms: number) => Promise<void> = sleep,
+  now: () => number = Date.now,
+  cleanExitWaitMs = 2_000,
+): Promise<LifecycleReceipt["termination"]> {
+  if (!Number.isInteger(cleanExitWaitMs) || cleanExitWaitMs < 1) {
+    throw new Error("clean exit wait must be a positive integer");
+  }
+  requestExit();
+  const startedAt = now();
+  const cleanDeadline = startedAt + cleanExitWaitMs;
+  while (!isExitObserved() && now() < cleanDeadline) {
+    await wait(25);
+  }
+  const cleanExitObserved = isExitObserved();
+  const cleanExitWaitElapsed = Math.max(0, now() - startedAt);
+  let forcedCleanupAttempted = false;
+  if (!cleanExitObserved) {
+    forcedCleanupAttempted = true;
+    forceCleanup();
+    const forcedDeadline = now() + 2_000;
+    while (!isExitObserved() && now() < forcedDeadline) {
+      await wait(25);
+    }
+  }
+  const finalExitObserved = isExitObserved();
+  return {
+    explicit_requested: true,
+    clean_exit_observed: cleanExitObserved,
+    clean_exit_wait_ms: Math.min(cleanExitWaitElapsed, cleanExitWaitMs),
+    forced_cleanup_required: !cleanExitObserved,
+    forced_cleanup_attempted: forcedCleanupAttempted,
+    final_exit_observed: finalExitObserved,
+    survivors: finalExitObserved ? 0 : 1,
+  };
+}
+
 export async function writePromptInput(
   writer: { write(value: string): void },
   input: string,
@@ -648,7 +688,6 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
   let writes = Promise.resolve();
   let child: IPty | undefined;
   let exitObserved = false;
-  let cleanupAttempted = false;
   const attempts: AttemptRow[] = [];
   const evidence: LifecycleActionEvidence[] = [];
   try {
@@ -900,17 +939,16 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       });
     }
 
-    child.write("\u0003");
-    await sleep(200);
-    cleanupAttempted = true;
-    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
-      windowsHide: true,
-      stdio: "ignore",
-    });
-    const exitDeadline = Date.now() + 2_000;
-    while (!exitObserved && Date.now() < exitDeadline) {
-      await sleep(25);
-    }
+    const termination = await terminateLifecycleChild(
+      () => child!.write("\u0003"),
+      () => exitObserved,
+      () => {
+        spawnSync("taskkill", ["/PID", String(child!.pid), "/T", "/F"], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+      },
+    );
 
     const attemptArtifact = join(outDir, "attempt.json");
     writeFileSync(
@@ -949,12 +987,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         frame_sha256: sha256(readyFrame),
       },
       actions: evidence,
-      termination: {
-        explicit_requested: true,
-        child_exit_observed: exitObserved,
-        cleanup_attempted: cleanupAttempted,
-        survivors: exitObserved ? 0 : 1,
-      },
+      termination,
       artifacts: {
         receipt: artifactPath(repoRoot, receiptPath),
         diagnostics: artifactPath(repoRoot, outDir),
@@ -983,8 +1016,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     }
     writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
   } finally {
-    if (child != null) {
-      cleanupAttempted = true;
+    if (child != null && !exitObserved) {
       spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
         windowsHide: true,
         stdio: "ignore",
