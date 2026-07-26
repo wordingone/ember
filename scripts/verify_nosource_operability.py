@@ -1488,7 +1488,7 @@ def verify_palette_chain(root: Path) -> dict:
 # ("usage.../`usage...) is a usage error; any other message expression
 # (a render call, a status template) is substantive. Every shape outside the
 # recognised grammar -- an unrecognised binder (an argument PARSER whose
-# empty-input behaviour would need evaluation, e.g. train.ts), a condition
+# empty-input behaviour the idiom-4 walk below cannot prove structurally), a condition
 # mixing the token with other state, a body this walker cannot segment --
 # is `undecidable-static`, reported in the undecidable list and NEVER gated,
 # exactly the disposition the docstring gives undecidable items. Only
@@ -1663,6 +1663,326 @@ def _judge_message_region(region: str, ident: str | None = None) -> tuple[str | 
     return "resolved-true", f"first reached message is substantive (not a usage literal): {first[:80]}"
 
 
+# --- Idiom 4: guarded-tokenizer parser binder (2026-07-26) ------------------
+# Shape: execute() feeds `args` into an in-module parser function inside a
+# try/catch. The shape is decidable WITHOUT a general expression evaluator
+# exactly when the parser proves, structurally, what it does on empty input:
+#   (a) its token binding is the empty-guarded tokenizer
+#       `raw.trim() === "" ? [] : raw.trim().split(...)` -- empty input
+#       yields an empty token list;
+#   (b) its result is initialised as a flat literal object, and every
+#       assignment to that result sits inside the loop over the token list --
+#       a loop the empty list never enters, so on empty input the result
+#       equals its literal initialiser;
+#   (c) every post-loop `if (...) throw` condition is a boolean combination
+#       of the result's fields, each constant under that literal state
+#       (absent fields are `undefined`).
+# Any structural requirement failing keeps the row undecidable-static.
+# When the parser provably RETURNS, the bare invocation proceeds past the
+# parse try/catch with the result's fields KNOWN; branches conditioned on
+# those fields are entered/skipped accordingly. Because runtime state (not
+# the bare token) selects among the remaining branches, no single "first
+# message" is statically defensible -- so the verdict here is UNIVERSAL:
+# every bare-reachable `message:` must agree (all usage -> resolved-false,
+# all substantive -> resolved-true, mixed or none -> undecidable-static).
+# When the parser provably THROWS a usage literal, that IS the bare result:
+# resolved-false. A provable throw of anything else stays undecidable (the
+# catch may transform it).
+
+_BOOL_EXPR_TOKENS_RE = re.compile(r"^(?:True|False|and|or|not|\(|\)|\s)+$")
+
+
+def _eval_parsed_cond(cond: str, var: str, fields: dict) -> bool | None:
+    """Evaluate a JS condition over `var`'s statically-known literal fields
+    (absent key == undefined). True/False, or None when any atom is outside
+    the recognised grammar (fail-closed)."""
+    expr = cond
+    expr = re.sub(
+        re.escape(var) + r"\.(\w+)\s*!==\s*undefined",
+        lambda m: "True" if m.group(1) in fields else "False",
+        expr,
+    )
+    expr = re.sub(
+        re.escape(var) + r"\.(\w+)\s*===\s*undefined",
+        lambda m: "False" if m.group(1) in fields else "True",
+        expr,
+    )
+    expr = re.sub(
+        re.escape(var) + r"\.(\w+)",
+        lambda m: "True" if bool(fields.get(m.group(1), False)) else "False",
+        expr,
+    )
+    expr = expr.replace("&&", " and ").replace("||", " or ").replace("!", " not ")
+    if not _BOOL_EXPR_TOKENS_RE.match(expr):
+        return None
+    # A multi-line condition keeps its newlines; outside brackets a newline is
+    # a syntax error in eval-mode, so normalise all whitespace to single spaces
+    # (token-validated above -- whitespace carries no meaning here).
+    expr = " ".join(expr.split())
+    try:
+        return bool(eval(expr, {"__builtins__": {}}, {}))  # noqa: S307 -- token-validated booleans only
+    except Exception:
+        return None
+
+
+def _parse_object_literal_fields(src: str) -> dict | None:
+    """Fields of a FLAT object literal whose values are all literals.
+    None on anything else (fail-closed)."""
+    fields: dict = {}
+    body = src.strip()
+    if body == "":
+        return fields
+    for part in body.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.fullmatch(
+            r"(\w+)\s*:\s*(true|false|\"[^\"]*\"|'[^']*'|-?\d+(?:\.\d+)?)", part
+        )
+        if m is None:
+            return None
+        val = m.group(2)
+        if val == "true":
+            fields[m.group(1)] = True
+        elif val == "false":
+            fields[m.group(1)] = False
+        elif val[0] in "\"'":
+            fields[m.group(1)] = val[1:-1]
+        else:
+            fields[m.group(1)] = float(val)
+    return fields
+
+
+def _parser_empty_input_disposition(
+    fn_name: str, module_body: str
+) -> tuple[str | None, object, str]:
+    """What `fn_name("")` provably does: ('returns', fields, evidence) /
+    ('throws', thrown_literal_or_None, evidence) / (None, None, reason)."""
+    m = re.search(r"function\s+" + re.escape(fn_name) + r"\s*\(", module_body)
+    if m is None:
+        return None, None, f"parser `{fn_name}` is not an in-module function declaration"
+    paren_open = module_body.index("(", m.start())
+    paren_close = _match_delim(module_body, paren_open, "(", ")")
+    if paren_close is None:
+        return None, None, f"parser `{fn_name}` parameter list unparseable"
+    pm = re.match(r"\s*(\w+)", module_body[paren_open + 1 : paren_close])
+    if pm is None:
+        return None, None, f"parser `{fn_name}` first parameter unrecognisable"
+    param = pm.group(1)
+    brace_open = module_body.find("{", paren_close)
+    brace_close = _match_delim(module_body, brace_open, "{", "}") if brace_open != -1 else None
+    if brace_close is None:
+        return None, None, f"parser `{fn_name}` body unparseable"
+    body = module_body[brace_open + 1 : brace_close]
+
+    tok = re.search(
+        r"(?:const|let)\s+(\w+)\s*=\s*" + re.escape(param)
+        + r"\s*\.trim\(\)\s*===\s*(?:\"\"|'')\s*\?\s*\[\]\s*:\s*"
+        + re.escape(param) + r"\s*\.trim\(\)\s*\.split\(",
+        body,
+    )
+    if tok is None:
+        return None, None, (
+            f"parser `{fn_name}` lacks the empty-guarded tokenizer binding "
+            "(`param.trim() === \"\" ? [] : param.trim().split(...)`); its empty-input "
+            "token list is unproven"
+        )
+    tokens_var = tok.group(1)
+
+    init = re.search(r"(?:const|let)\s+(\w+)\s*(?::\s*[\w<>\[\], .|]+)?\s*=\s*\{", body[tok.end():])
+    if init is None:
+        return None, None, f"parser `{fn_name}`: no literal-initialised result object after the tokenizer"
+    parsed_var = init.group(1)
+    init_abs_start = tok.end() + init.start()
+    lit_open = tok.end() + init.end() - 1
+    lit_close = _match_delim(body, lit_open, "{", "}")
+    if lit_close is None:
+        return None, None, f"parser `{fn_name}`: result initialiser braces unparseable"
+    fields = _parse_object_literal_fields(body[lit_open + 1 : lit_close])
+    if fields is None:
+        return None, None, f"parser `{fn_name}`: result initialiser is not a flat all-literal object"
+
+    loop = re.search(r"for\s*\(", body)
+    if loop is None:
+        return None, None, f"parser `{fn_name}`: no token loop found"
+    lp_open = body.index("(", loop.start())
+    lp_close = _match_delim(body, lp_open, "(", ")")
+    if lp_close is None:
+        return None, None, f"parser `{fn_name}`: token-loop header unparseable"
+    if not re.search(r"\b" + re.escape(tokens_var) + r"\b", body[lp_open + 1 : lp_close]):
+        return None, None, f"parser `{fn_name}`: first loop does not iterate the token list"
+    lb_open = body.find("{", lp_close)
+    lb_close = _match_delim(body, lb_open, "{", "}") if lb_open != -1 else None
+    if lb_close is None:
+        return None, None, f"parser `{fn_name}`: token-loop block unparseable"
+
+    if re.search(r"\bthrow\b", body[tok.end() : loop.start()]):
+        return None, None, f"parser `{fn_name}`: a throw sits between the tokenizer and the token loop"
+    for am in re.finditer(
+        re.escape(parsed_var) + r"(?:\.\w+|\[[^\]]*\])?\s*=(?![=>])", body
+    ):
+        if init_abs_start <= am.start() <= lit_open:
+            continue  # the initialiser itself
+        if lb_open <= am.start() <= lb_close:
+            continue  # inside the never-entered token loop
+        return None, None, (
+            f"parser `{fn_name}`: result mutated outside the token loop; "
+            "empty-input state unproven"
+        )
+
+    post = body[lb_close + 1 :]
+    pos = 0
+    while True:
+        ii = post.find("if (", pos)
+        if ii == -1:
+            break
+        cc = _match_delim(post, ii + 3, "(", ")")
+        if cc is None:
+            return None, None, f"parser `{fn_name}`: unparseable post-loop if-condition"
+        cond = post[ii + 4 : cc]
+        bo = post.find("{", cc)
+        bc = _match_delim(post, bo, "{", "}") if bo != -1 else None
+        if bc is None:
+            return None, None, f"parser `{fn_name}`: post-loop if without a braced block"
+        val = _eval_parsed_cond(cond, parsed_var, fields)
+        if val is None:
+            return None, None, (
+                f"parser `{fn_name}`: post-loop condition `{cond.strip()[:70]}` is not "
+                "constant under the empty-input state"
+            )
+        if val:
+            tm = re.search(r"throw\s+new\s+\w+\(\s*(\"[^\"]*\"|'[^']*'|`[^`]*`)", post[bo + 1 : bc])
+            lit = tm.group(1)[1:-1] if tm else None
+            return "throws", lit, (
+                f"empty input: post-loop `if ({cond.strip()[:70]})` is TRUE and its block throws"
+            )
+        post = post[:bo] + " " * (bc - bo + 1) + post[bc + 1 :]
+        pos = bc + 1
+    if re.search(r"\bthrow\b", post):
+        return None, None, f"parser `{fn_name}`: unconditional/unrecognised throw after the token loop"
+    if not re.search(r"\breturn\s+" + re.escape(parsed_var) + r"\b", post):
+        return None, None, f"parser `{fn_name}`: no `return {parsed_var}` after the token loop"
+    return "returns", fields, (
+        "empty input: token list is [], the token loop never runs, the result equals its "
+        "literal initialiser, and every post-loop throw-condition evaluates FALSE"
+    )
+
+
+def _strip_known_field_blocks(region: str, var: str, fields: dict) -> tuple[str | None, str]:
+    """Blank `if (...)` blocks whose conditions over `var`'s known fields
+    evaluate FALSE under the bare invocation. TRUE conditions keep their
+    block; a trailing `else` on a TRUE condition fails closed (the bare path
+    skips it and this walker does not segment else-chains). Unknown shapes
+    mentioning `var` fail closed."""
+    out = list(region)
+    pos = 0
+    while True:
+        if_idx = region.find("if (", pos)
+        if if_idx == -1:
+            return "".join(out), ""
+        cond_close = _match_delim(region, if_idx + 3, "(", ")")
+        if cond_close is None:
+            return None, f"unparseable if-condition at offset {if_idx}"
+        cond = region[if_idx + 4 : cond_close]
+        if re.search(r"\b" + re.escape(var) + r"\b", cond):
+            val = _eval_parsed_cond(cond, var, fields)
+            if val is None:
+                return None, (
+                    f"condition `{cond.strip()[:70]}` mentions the parsed result in a "
+                    "shape not constant under the empty-input state"
+                )
+            blk_open = region.find("{", cond_close)
+            blk_close = _match_delim(region, blk_open, "{", "}") if blk_open != -1 else None
+            if blk_close is None:
+                return None, f"parsed-result if at offset {if_idx} has no braced block"
+            if val is False:
+                for i in range(blk_open, blk_close + 1):
+                    if out[i] != "\n":
+                        out[i] = " "
+                pos = blk_close + 1
+                continue
+            if re.match(r"\s*else\b", region[blk_close + 1 :]):
+                return None, (
+                    f"TRUE condition `{cond.strip()[:70]}` carries an else-branch this "
+                    "walker does not segment"
+                )
+        pos = cond_close + 1
+
+
+def _assess_via_parser_binder(stem: str, exec_body: str, module_body: str) -> dict | None:
+    """Idiom 4. None == not this idiom (caller keeps its existing reason)."""
+    m = re.search(
+        r"(?:let|const)\s+(\w+)(?:\s*:\s*[\w<>\[\], .|]+)?\s*;\s*try\s*\{\s*"
+        r"\1\s*=\s*(\w+)\(\s*args\s*\)\s*;\s*\}\s*catch",
+        exec_body,
+    )
+    if m is None:
+        return None
+    res_var, fn_name = m.group(1), m.group(2)
+    disp, payload, ev = _parser_empty_input_disposition(fn_name, module_body)
+    if disp is None:
+        return check(
+            "undecidable-static",
+            f"{stem}.ts: parser binder `{fn_name}(args)` recognised but {ev}",
+        )
+    cb_open = exec_body.find("{", m.end())
+    cb_close = _match_delim(exec_body, cb_open, "{", "}") if cb_open != -1 else None
+    if cb_close is None:
+        return check("undecidable-static", f"{stem}.ts: parse catch block unparseable")
+    if disp == "throws":
+        if payload is None:
+            return check(
+                "undecidable-static",
+                f"{stem}.ts: parser `{fn_name}` throws on empty input but the thrown "
+                "literal is unextractable",
+            )
+        if payload.lower().startswith("usage"):
+            return check(
+                "resolved-false",
+                f"{stem}.ts: parser binder [{fn_name}(args)]; {ev}; the thrown literal is a "
+                f"usage string surfaced by the parse catch: {payload[:80]}",
+            )
+        return check(
+            "undecidable-static",
+            f"{stem}.ts: parser `{fn_name}` provably throws a non-usage literal on empty "
+            "input; the catch's transformation of it is not judged statically",
+        )
+    fields = payload  # type: ignore[assignment]
+    blanked = list(exec_body)
+    for i in range(cb_open, cb_close + 1):  # the parse catch is provably skipped
+        if blanked[i] != "\n":
+            blanked[i] = " "
+    stripped, why = _strip_known_field_blocks("".join(blanked), res_var, fields)
+    if stripped is None:
+        return check("undecidable-static", f"{stem}.ts: {why}")
+    msgs = [s.strip() for s in _MSG_EXPR_RE.findall(stripped)]
+    if not msgs:
+        return check(
+            "undecidable-static",
+            f"{stem}.ts: parser binder resolved but no message: expression is bare-reachable",
+        )
+    usage = [x for x in msgs if _USAGE_MSG_VALUE_RE.match(x)]
+    if not usage:
+        return check(
+            "resolved-true",
+            f"{stem}.ts: parser binder [{fn_name}(args): {ev}]; bare invocation proceeds "
+            f"past the parse with {res_var} = its literal state; all {len(msgs)} "
+            "bare-reachable message expressions are substantive (none is a usage literal); "
+            "runtime selects among substantive reports only",
+        )
+    if len(usage) == len(msgs):
+        return check(
+            "resolved-false",
+            f"{stem}.ts: parser binder [{fn_name}(args): {ev}]; every bare-reachable "
+            f"message expression is a usage literal ({len(msgs)} total)",
+        )
+    return check(
+        "undecidable-static",
+        f"{stem}.ts: bare-reachable messages mix usage and substantive "
+        f"({len(usage)}/{len(msgs)} usage); the static walk cannot pick which fires",
+    )
+
+
 def assess_bare_default_invocation(stem: str, body: str) -> dict:
     """Does `<stem>`'s bare default invocation (empty args) reach a
     substantive result? States: resolved-true / resolved-false /
@@ -1687,6 +2007,9 @@ def assess_bare_default_invocation(stem: str, body: str) -> dict:
 
     ident, binder_evidence = _find_bare_token_ident(exec_body)
     if ident is None:
+        parser_row = _assess_via_parser_binder(stem, exec_body, body)
+        if parser_row is not None:
+            return parser_row
         return check("undecidable-static", f"{stem}.ts: {binder_evidence}")
 
     pos = 0
