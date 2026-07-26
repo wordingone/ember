@@ -193,3 +193,57 @@ def resolve_workspace_descriptor(
     ):
         raise ValueError("descriptor.location")
     return _open_regular_source(workspace, relative.as_posix())
+
+
+def snapshot_descriptor(
+    workspace_path: Path,
+    descriptor_path: Path,
+) -> SourceSnapshot:
+    try:
+        workspace = workspace_path.resolve(strict=True)
+        descriptor = descriptor_path.resolve(strict=True)
+        relative = descriptor.relative_to(workspace).as_posix()
+        before_read = descriptor.stat(follow_symlinks=False)
+        content = descriptor.read_bytes()
+        after_read = descriptor.stat(follow_symlinks=False)
+    except (OSError, ValueError) as exc:
+        raise ValueError("descriptor.location") from exc
+    if (
+        not descriptor.is_file()
+        or before_read.st_dev != after_read.st_dev
+        or before_read.st_ino != after_read.st_ino
+        or before_read.st_size != after_read.st_size
+        or before_read.st_mtime_ns != after_read.st_mtime_ns
+        or before_read.st_ctime_ns != after_read.st_ctime_ns
+        or before_read.st_size != len(content)
+    ):
+        raise ValueError("descriptor.drift")
+    return SourceSnapshot(
+        role="input_descriptor",
+        relative_path=relative,
+        sha256=hashlib.sha256(content).hexdigest(),
+        content=content,
+        source_device=before_read.st_dev,
+        source_inode=before_read.st_ino,
+        source_size=before_read.st_size,
+        source_mtime_ns=before_read.st_mtime_ns,
+        source_ctime_ns=before_read.st_ctime_ns,
+    )
+
+
+def verify_descriptor_snapshot(
+    workspace_path: Path,
+    snapshot: SourceSnapshot,
+) -> bool:
+    if snapshot.role != "input_descriptor":
+        return False
+    try:
+        workspace = workspace_path.resolve(strict=True)
+        descriptor = _open_regular_source(workspace, snapshot.relative_path)
+    except (OSError, ValueError):
+        return False
+    return _matches_snapshot(
+        descriptor,
+        snapshot,
+        require_source_identity=True,
+    )

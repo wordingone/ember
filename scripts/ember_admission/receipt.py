@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import os
+import re
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -37,9 +38,43 @@ def _canonical_bytes(payload: Mapping[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
+def _identity(snapshot: SourceSnapshot) -> dict[str, Any]:
+    return {
+        "relative_path": snapshot.relative_path,
+        "sha256": snapshot.sha256,
+        "bytes": len(snapshot.content),
+    }
+
+
+def _valid_relative_path(value: Any) -> bool:
+    if not isinstance(value, str) or not value or "\\" in value:
+        return False
+    path = Path(value)
+    return (
+        not path.is_absolute()
+        and value == path.as_posix()
+        and all(part not in {"", ".", ".."} for part in path.parts)
+        and path.parts[0] != "producer-receipts"
+    )
+
+
+def _valid_identity(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"relative_path", "sha256", "bytes"}
+        and _valid_relative_path(value.get("relative_path"))
+        and isinstance(value.get("sha256"), str)
+        and SHA256_RE.fullmatch(value["sha256"]) is not None
+        and isinstance(value.get("bytes"), int)
+        and not isinstance(value.get("bytes"), bool)
+        and value["bytes"] >= 0
+    )
+
+
 def write_producer_receipt(
     candidate: Path,
     candidate_id: str,
+    descriptor_snapshot: SourceSnapshot,
     snapshots: Mapping[str, SourceSnapshot],
     consumer_results: Mapping[str, Mapping[str, Any]],
 ) -> ProducerReceiptResult:
@@ -64,18 +99,30 @@ def write_producer_receipt(
         )
     ):
         raise ValueError("receipt.consumers")
-    role_sha256 = {
-        role: snapshot.sha256
+    descriptor_identity = _identity(descriptor_snapshot)
+    role_identities = {
+        role: _identity(snapshot)
         for role, snapshot in sorted(snapshots.items())
     }
+    if (
+        descriptor_snapshot.role != "input_descriptor"
+        or not _valid_identity(descriptor_identity)
+        or not all(_valid_identity(value) for value in role_identities.values())
+        or len({value["relative_path"] for value in role_identities.values()})
+        != len(role_identities)
+    ):
+        raise ValueError("receipt.identities")
     digest_join = hashlib.sha256(
-        _canonical_bytes({"role_sha256": role_sha256})
+        _canonical_bytes({"output_identities": role_identities})
     ).hexdigest()
     payload = {
         "schema_version": "ember-owned-admission-producer-receipt-v1",
         "candidate_id": candidate_id,
-        "source_identities": role_sha256,
-        "output_identities": role_sha256,
+        "source_identities": {
+            "descriptor": descriptor_identity,
+            "roles": role_identities,
+        },
+        "output_identities": role_identities,
         "cross_consumer_digest_join_sha256": digest_join,
         "consumers": {
             name: dict(result)
@@ -106,7 +153,8 @@ def write_producer_receipt(
         json.dumps(
             {
                 "producer_receipt_sha256": receipt_sha256,
-                "role_sha256": role_sha256,
+                "descriptor_identity": descriptor_identity,
+                "output_identities": role_identities,
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -116,6 +164,40 @@ def write_producer_receipt(
         receipt_sha256=receipt_sha256,
         candidate_sha256=candidate_sha256,
     )
+
+
+def _candidate_tree_matches(
+    candidate: Path,
+    output_identities: Mapping[str, Mapping[str, Any]],
+    receipt_relative_path: str,
+) -> bool:
+    expected_files = {
+        value["relative_path"] for value in output_identities.values()
+    } | {receipt_relative_path}
+    expected_directories = {"producer-receipts"}
+    for relative in expected_files:
+        parent = Path(relative).parent
+        while parent != Path("."):
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+    actual_files: set[str] = set()
+    actual_directories: set[str] = set()
+    try:
+        for path in candidate.rglob("*"):
+            relative = path.relative_to(candidate).as_posix()
+            info = path.stat(follow_symlinks=False)
+            attributes = getattr(info, "st_file_attributes", 0)
+            if stat.S_ISLNK(info.st_mode) or attributes & 0x400:
+                return False
+            if stat.S_ISREG(info.st_mode):
+                actual_files.add(relative)
+            elif stat.S_ISDIR(info.st_mode):
+                actual_directories.add(relative)
+            else:
+                return False
+    except OSError:
+        return False
+    return actual_files == expected_files and actual_directories == expected_directories
 
 
 def verify_producer_receipt(
@@ -129,6 +211,99 @@ def verify_producer_receipt(
     )
     try:
         receipt_bytes = receipt_path.read_bytes()
-    except OSError:
+        payload = json.loads(receipt_bytes)
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return False
-    return hashlib.sha256(receipt_bytes).hexdigest() == result.receipt_sha256
+    if (
+        hashlib.sha256(receipt_bytes).hexdigest() != result.receipt_sha256
+        or not isinstance(payload, dict)
+        or receipt_bytes != _canonical_bytes(payload)
+        or set(payload)
+        != {
+            "schema_version",
+            "candidate_id",
+            "source_identities",
+            "output_identities",
+            "cross_consumer_digest_join_sha256",
+            "consumers",
+            "claim_boundary",
+            "selected",
+            "loaded",
+            "training_started",
+            "training_claim",
+            "benchmark_claim",
+            "capability_claim",
+        }
+        or payload.get("schema_version")
+        != "ember-owned-admission-producer-receipt-v1"
+        or payload.get("claim_boundary")
+        != [
+            "candidate_produced",
+            "identity_consumer_accepted",
+            "restart_consumer_accepted",
+        ]
+        or any(
+            payload.get(key) is not False
+            for key in (
+                "selected",
+                "loaded",
+                "training_started",
+                "training_claim",
+                "benchmark_claim",
+                "capability_claim",
+            )
+        )
+    ):
+        return False
+    sources = payload.get("source_identities")
+    outputs = payload.get("output_identities")
+    consumers = payload.get("consumers")
+    if (
+        not isinstance(sources, dict)
+        or set(sources) != {"descriptor", "roles"}
+        or not _valid_identity(sources.get("descriptor"))
+        or not isinstance(sources.get("roles"), dict)
+        or sources["roles"] != outputs
+        or not isinstance(outputs, dict)
+        or not outputs
+        or not all(
+            isinstance(role, str) and role and _valid_identity(identity)
+            for role, identity in outputs.items()
+        )
+        or len({identity["relative_path"] for identity in outputs.values()})
+        != len(outputs)
+        or not isinstance(consumers, dict)
+        or set(consumers) != {"identity", "restart"}
+    ):
+        return False
+    digest_join = hashlib.sha256(
+        _canonical_bytes({"output_identities": outputs})
+    ).hexdigest()
+    if payload.get("cross_consumer_digest_join_sha256") != digest_join:
+        return False
+    for identity in outputs.values():
+        path = candidate / Path(identity["relative_path"])
+        try:
+            content = path.read_bytes()
+        except OSError:
+            return False
+        if (
+            len(content) != identity["bytes"]
+            or hashlib.sha256(content).hexdigest() != identity["sha256"]
+        ):
+            return False
+    receipt_relative_path = f"producer-receipts/{result.receipt_sha256}.json"
+    if not _candidate_tree_matches(candidate, outputs, receipt_relative_path):
+        return False
+    candidate_sha256 = hashlib.sha256(
+        json.dumps(
+            {
+                "producer_receipt_sha256": result.receipt_sha256,
+                "descriptor_identity": sources["descriptor"],
+                "output_identities": outputs,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return candidate_sha256 == result.candidate_sha256

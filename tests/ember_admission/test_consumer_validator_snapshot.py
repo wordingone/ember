@@ -41,3 +41,67 @@ def test_consumer_validator_snapshot_binds_bytes_and_metadata(
     identity.write_bytes(b"identity-v1")
 
     assert not consumers.verify_consumer_validators(snapshots)
+
+
+def test_identity_consumer_executes_snapshotted_validator_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = tmp_path / "identity.py"
+    restart = tmp_path / "restart.py"
+    identity.write_text("print('snapshot-identity')\n", encoding="utf-8")
+    restart.write_text("print('snapshot-restart')\n", encoding="utf-8")
+    monkeypatch.setattr(consumers, "IDENTITY_VALIDATOR", identity)
+    monkeypatch.setattr(consumers, "RESTART_SEAT_CONSUMER", restart)
+    snapshots = consumers.snapshot_consumer_validators()
+
+    identity.write_text("print('swapped-live-identity')\n", encoding="utf-8")
+    paths = {
+        role: tmp_path / f"{role}.json"
+        for role in (
+            "artifact_bundle",
+            "checkpoint",
+            "identity_manifest",
+            "identity_trusted_verifier_registry",
+            "receipt_bundle",
+            "tensor_hashes",
+            "tensor_manifest",
+        )
+    }
+    for path in paths.values():
+        path.write_text("{}\n", encoding="utf-8")
+
+    result = consumers.run_identity_consumer(paths, snapshots["identity"])
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "snapshot-identity"
+    assert "swapped-live-identity" not in result.stdout
+
+
+def test_restart_consumer_executes_snapshotted_validator_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = tmp_path / "identity.py"
+    restart = tmp_path / "restart.py"
+    identity.write_text("print('snapshot-identity')\n", encoding="utf-8")
+    restart.write_text("print('snapshot-restart')\n", encoding="utf-8")
+    monkeypatch.setattr(consumers, "IDENTITY_VALIDATOR", identity)
+    monkeypatch.setattr(consumers, "RESTART_SEAT_CONSUMER", restart)
+    snapshots = consumers.snapshot_consumer_validators()
+
+    restart.write_text("print('swapped-live-restart')\n", encoding="utf-8")
+    manifest = tmp_path / "restart_run_manifest.json"
+    registry = tmp_path / "restart_trusted_verifier_registry.json"
+    manifest.write_text("{}\n", encoding="utf-8")
+    registry.write_text("{}\n", encoding="utf-8")
+
+    result = consumers.run_restart_consumer(
+        {
+            "restart_run_manifest": manifest,
+            "restart_trusted_verifier_registry": registry,
+        },
+        snapshots["restart"],
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "snapshot-restart"
+    assert "swapped-live-restart" not in result.stdout

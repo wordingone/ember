@@ -118,14 +118,62 @@ def verify_consumer_validators(
         and _validator_matches(RESTART_SEAT_CONSUMER, snapshots["restart"])
     )
 
+_SNAPSHOT_EXEC_SHIM = """
+import pathlib
+import sys
+
+source = sys.stdin.buffer.read()
+script = sys.argv[1]
+sys.argv = sys.argv[1:]
+sys.path.insert(0, str(pathlib.Path(script).parent))
+namespace = {
+    "__name__": "__main__",
+    "__file__": script,
+    "__package__": None,
+    "__cached__": None,
+}
+exec(compile(source, script, "exec"), namespace, namespace)
+""".strip()
 
 
-
-
-def run_identity_consumer(paths: Mapping[str, Path]) -> subprocess.CompletedProcess[str]:
+def _run_snapshotted_validator(
+    validator_path: Path,
+    snapshot: ConsumerValidatorSnapshot,
+    arguments: list[str],
+) -> subprocess.CompletedProcess[str]:
+    if hashlib.sha256(snapshot.content).hexdigest() != snapshot.sha256:
+        raise ValueError("consumer.validator_snapshot")
     command = [
         sys.executable,
-        str(IDENTITY_VALIDATOR),
+        "-c",
+        _SNAPSHOT_EXEC_SHIM,
+        str(validator_path),
+        *arguments,
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        input=snapshot.content,
+        capture_output=True,
+        check=False,
+    )
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=completed.returncode,
+        stdout=completed.stdout.decode("utf-8", errors="strict"),
+        stderr=completed.stderr.decode("utf-8", errors="strict"),
+    )
+
+
+
+
+
+def run_identity_consumer(
+    paths: Mapping[str, Path],
+    snapshot: ConsumerValidatorSnapshot | None = None,
+) -> subprocess.CompletedProcess[str]:
+    frozen = snapshot if snapshot is not None else _snapshot_validator(IDENTITY_VALIDATOR)
+    arguments = [
         str(paths["identity_manifest"]),
         "--checkpoint",
         str(paths["checkpoint"]),
@@ -141,27 +189,17 @@ def run_identity_consumer(paths: Mapping[str, Path]) -> subprocess.CompletedProc
         str(paths["identity_trusted_verifier_registry"]),
         "--require-resolved",
     ]
-    return subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    return _run_snapshotted_validator(IDENTITY_VALIDATOR, frozen, arguments)
 
 
-def run_restart_consumer(paths: Mapping[str, Path]) -> subprocess.CompletedProcess[str]:
-    command = [
-        sys.executable,
-        str(RESTART_SEAT_CONSUMER),
+def run_restart_consumer(
+    paths: Mapping[str, Path],
+    snapshot: ConsumerValidatorSnapshot | None = None,
+) -> subprocess.CompletedProcess[str]:
+    frozen = snapshot if snapshot is not None else _snapshot_validator(RESTART_SEAT_CONSUMER)
+    arguments = [
         str(paths["restart_run_manifest"]),
         "--trusted-verifier-registry",
         str(paths["restart_trusted_verifier_registry"]),
     ]
-    return subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    return _run_snapshotted_validator(RESTART_SEAT_CONSUMER, frozen, arguments)

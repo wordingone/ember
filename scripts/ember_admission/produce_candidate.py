@@ -29,7 +29,9 @@ from descriptor import validate_descriptor
 from receipt import verify_producer_receipt, write_producer_receipt
 from source_snapshot import (
     resolve_workspace_descriptor,
+    snapshot_descriptor,
     snapshot_sources,
+    verify_descriptor_snapshot,
     verify_published_snapshots,
     verify_source_snapshots,
 )
@@ -67,10 +69,10 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return dict(pairs)
 
 
-def _load_descriptor(path: Path) -> Mapping[str, Any]:
+def _load_descriptor(content: bytes) -> Mapping[str, Any]:
     try:
         payload = json.loads(
-            path.read_text(encoding="utf-8", errors="strict"),
+            content.decode("utf-8", errors="strict"),
             object_pairs_hook=_strict_object,
         )
     except (OSError, UnicodeError, json.JSONDecodeError, _DuplicateKey) as exc:
@@ -106,7 +108,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         descriptor_path = resolve_workspace_descriptor(args.workspace, args.descriptor)
-        descriptor = _load_descriptor(descriptor_path)
+        descriptor_snapshot = snapshot_descriptor(args.workspace, descriptor_path)
+        descriptor = _load_descriptor(descriptor_snapshot.content)
         validate_descriptor(descriptor)
         snapshots = snapshot_sources(args.workspace, descriptor)
         consumer_validators = snapshot_consumer_validators()
@@ -120,12 +123,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"code": code, "ok": False}, sort_keys=True))
         return 2
 
-    identity_result = run_identity_consumer(published_paths)
+    identity_result = run_identity_consumer(published_paths, consumer_validators["identity"])
     if identity_result.returncode != 0:
         quarantine_candidate(candidate)
         print(json.dumps({"code": "identity.refused", "ok": False}, sort_keys=True))
         return 2
-    restart_result = run_restart_consumer(published_paths)
+    restart_result = run_restart_consumer(published_paths, consumer_validators["restart"])
     if restart_result.returncode != 0:
         quarantine_candidate(candidate)
         print(json.dumps({"code": "restart.refused", "ok": False}, sort_keys=True))
@@ -136,6 +139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if not verify_source_snapshots(
         args.workspace, snapshots
+    ) or not verify_descriptor_snapshot(
+        args.workspace, descriptor_snapshot
     ) or not verify_published_snapshots(published_paths, snapshots):
         quarantine_candidate(candidate)
         print(json.dumps({"code": "candidate.drift", "ok": False}, sort_keys=True))
@@ -144,6 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     receipt = write_producer_receipt(
         candidate,
         descriptor["candidate_id"],
+        descriptor_snapshot,
         snapshots,
         {
             "identity": {
@@ -168,6 +174,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if not verify_source_snapshots(
         args.workspace, snapshots
+    ) or not verify_descriptor_snapshot(
+        args.workspace, descriptor_snapshot
     ) or not verify_consumer_validators(consumer_validators
     ) or not verify_published_snapshots(
         published_paths, snapshots
@@ -188,6 +196,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if not verify_source_snapshots(
         args.workspace, snapshots
+    ) or not verify_descriptor_snapshot(
+        args.workspace, descriptor_snapshot
     ) or not verify_consumer_validators(consumer_validators
     ) or not verify_published_snapshots(
         published_paths, snapshots

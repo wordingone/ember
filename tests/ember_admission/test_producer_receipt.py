@@ -20,6 +20,26 @@ from consumers import CONSUMER_COMMAND_CONTRACTS  # noqa: E402
 from source_snapshot import SourceSnapshot  # noqa: E402
 
 
+def _descriptor_snapshot() -> SourceSnapshot:
+    content = b'{"schema_version":"ember-owned-admission-input-v1"}\n'
+    return SourceSnapshot(
+        role="input_descriptor",
+        relative_path="admission.json",
+        sha256=hashlib.sha256(content).hexdigest(),
+        content=content,
+    )
+
+
+def _materialize_outputs(
+    candidate: Path,
+    snapshots: dict[str, SourceSnapshot],
+) -> None:
+    for snapshot in snapshots.values():
+        path = candidate / snapshot.relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(snapshot.content)
+
+
 def test_receipt_is_content_addressed_and_discloses_no_host_path(
     tmp_path: Path,
 ) -> None:
@@ -39,10 +59,13 @@ def test_receipt_is_content_addressed_and_discloses_no_host_path(
             content=b"{}",
         ),
     }
+    descriptor_snapshot = _descriptor_snapshot()
+    _materialize_outputs(candidate, snapshots)
 
     result = write_producer_receipt(
         candidate,
         "candidate-one",
+        descriptor_snapshot,
         snapshots,
         {
             "identity": {
@@ -78,14 +101,18 @@ def test_receipt_is_content_addressed_and_discloses_no_host_path(
         CONSUMER_COMMAND_CONTRACTS["identity"]
     )
     assert str(tmp_path) not in receipt_bytes.decode("utf-8")
+    assert payload["source_identities"]["descriptor"] == {
+        "relative_path": "admission.json",
+        "sha256": descriptor_snapshot.sha256,
+        "bytes": len(descriptor_snapshot.content),
+    }
+    assert payload["output_identities"]["checkpoint"]["relative_path"] == "checkpoint.bin"
     assert result.candidate_sha256 == hashlib.sha256(
         json.dumps(
             {
                 "producer_receipt_sha256": result.receipt_sha256,
-                "role_sha256": {
-                    role: snapshot.sha256
-                    for role, snapshot in sorted(snapshots.items())
-                },
+                "descriptor_identity": payload["source_identities"]["descriptor"],
+                "output_identities": payload["output_identities"],
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -106,10 +133,12 @@ def test_receipt_refuses_nonzero_or_malformed_consumer_authority(
             content=b"checkpoint",
         )
     }
+    _materialize_outputs(candidate, snapshots)
     try:
         write_producer_receipt(
             candidate,
             "candidate-one",
+            _descriptor_snapshot(),
             snapshots,
             {
                 "identity": {
@@ -145,9 +174,11 @@ def test_written_receipt_drift_is_detected(tmp_path: Path) -> None:
             content=b"checkpoint",
         )
     }
+    _materialize_outputs(candidate, snapshots)
     result = write_producer_receipt(
         candidate,
         "candidate-one",
+        _descriptor_snapshot(),
         snapshots,
         {
             "identity": {
@@ -169,4 +200,8 @@ def test_written_receipt_drift_is_detected(tmp_path: Path) -> None:
     assert verify_producer_receipt(candidate, result)
     receipt = candidate / "producer-receipts" / f"{result.receipt_sha256}.json"
     receipt.write_bytes(receipt.read_bytes() + b" ")
+    assert not verify_producer_receipt(candidate, result)
+
+    receipt.write_bytes(receipt.read_bytes()[:-1])
+    (candidate / "unbound-extra.json").write_text("{}\n", encoding="utf-8")
     assert not verify_producer_receipt(candidate, result)
