@@ -1589,10 +1589,71 @@ def _classify_condition_for_bare(cond: str, ident: str) -> str:
     return "unknown" if re.search(r"\b" + re.escape(ident) + r"\b", c) else "irrelevant"
 
 
-def _judge_message_region(region: str) -> tuple[str | None, str]:
-    """Verdict from the FIRST `message:` expression in a region of code the
-    bare invocation reaches: usage literal -> resolved-false, anything else
-    -> resolved-true, none -> undecidable."""
+def _strip_bare_skipped_blocks(region: str, ident: str) -> tuple[str | None, str]:
+    """Blank out nested `if (...) { ... }` blocks the BARE invocation does not
+    enter, so the first-message scan cannot credit a message the operator will
+    never see.
+
+    Why this exists (2026-07-26, demonstrated rather than reasoned): the
+    first version handed the whole entered block to the message scan, which took
+    the first `message:` in SOURCE order. Injecting
+
+        if (subcommand === "status") { message: "...summary for the operator" }
+        if (subcommand === "")       { message: "usage: /benchmark ..." }
+
+    inside the entered block produced verdict PASS, exit 0 -- the check credited
+    a message sitting in a sub-branch bare explicitly skips, while the real bare
+    output was the usage string. That is the exact first-match crediting failure
+    this file's own history warns about, reappearing one level down inside the
+    mechanism added to prevent it. A gate whose green can be produced by
+    unreachable code is worse than no gate.
+
+    Blanking preserves offsets so evidence strings stay meaningful. An unknown
+    nested condition mentioning the token fails CLOSED -- the caller turns that
+    into undecidable-static rather than guessing.
+    """
+    out = list(region)
+    pos = 0
+    while True:
+        if_idx = region.find("if (", pos)
+        if if_idx == -1:
+            return "".join(out), ""
+        cond_close = _match_delim(region, if_idx + 3, "(", ")")
+        if cond_close is None:
+            return None, f"unparseable nested if-condition at offset {if_idx}"
+        cond = region[if_idx + 4 : cond_close]
+        kind = _classify_condition_for_bare(cond, ident)
+        blk_open = region.find("{", cond_close)
+        blk_close = _match_delim(region, blk_open, "{", "}") if blk_open != -1 else None
+        if kind == "unknown":
+            return None, (
+                f"nested condition `{cond.strip()[:70]}` mixes the bare token with "
+                "unrecognised terms; refusing to guess whether bare reaches its block"
+            )
+        if kind in ("skips", "skips-guard"):
+            if blk_close is None:
+                return None, (
+                    f"nested bare-skipped if at offset {if_idx} has no braced block "
+                    "this walker can segment"
+                )
+            for i in range(blk_open, blk_close + 1):
+                if out[i] != "\n":
+                    out[i] = " "
+            pos = blk_close + 1
+            continue
+        pos = cond_close + 1
+
+
+def _judge_message_region(region: str, ident: str | None = None) -> tuple[str | None, str]:
+    """Verdict from the FIRST `message:` expression the bare invocation actually
+    reaches in a region: usage literal -> resolved-false, anything else ->
+    resolved-true, none -> undecidable. Nested branches bare does not enter are
+    removed first (see _strip_bare_skipped_blocks)."""
+    if ident is not None:
+        reachable, why = _strip_bare_skipped_blocks(region, ident)
+        if reachable is None:
+            return None, why
+        region = reachable
     msgs = _MSG_EXPR_RE.findall(region)
     if not msgs:
         return None, "no message: expression found in the reached region"
@@ -1653,7 +1714,7 @@ def assess_bare_default_invocation(stem: str, body: str) -> dict:
                 "block this walker can segment",
             )
         if verdict_kind == "enters":
-            state, msg_ev = _judge_message_region(exec_body[blk_open + 1 : blk_close])
+            state, msg_ev = _judge_message_region(exec_body[blk_open + 1 : blk_close], ident)
             if state is None:
                 return check(
                     "undecidable-static",
@@ -1680,7 +1741,7 @@ def assess_bare_default_invocation(stem: str, body: str) -> dict:
     # No bare-entered branch: the bare invocation falls through every
     # recognised dispatch to the code after the last skipped block.
     tail = exec_body[pos:] if pos else exec_body
-    state, msg_ev = _judge_message_region(tail)
+    state, msg_ev = _judge_message_region(tail, ident)
     guard_note = (
         f"; bare skips the reject-unknown guard `if ({guard_seen[:70]})`"
         if guard_seen
