@@ -209,7 +209,7 @@ describe("train command", () => {
         // text to paste -- the raw command string is no longer surfaced by default.
         expect(result?.message).not.toContain(REAL_LAUNCH_COMMAND);
         expect(result?.message).toContain("launch-ready");
-        expect(result?.message).toMatch(/OFFER train-\d+ action=train-launch/);
+        expect(result?.message).toMatch(/OFFER \S+ action=train-launch/);
         expect(result?.message).toContain('type "confirm');
         // Only the preflight ever ran; the training launch was never spawned.
         assertOnlyPreflightSpawned(spawns);
@@ -506,7 +506,7 @@ describe("acceptance map: train-launch-operability v1", () => {
 
         const result = await cmd.execute("", mockCtx);
 
-        expect(result?.message).toMatch(/OFFER train-\d+/);
+        expect(result?.message).toMatch(/OFFER \S+/);
         expect(result?.exitCode).toBeUndefined();
       } finally {
         fs.rmSync(scratch, { recursive: true, force: true });
@@ -558,6 +558,77 @@ describe("acceptance map: train-launch-operability v1", () => {
         fs.rmSync(scratch, { recursive: true, force: true });
       }
     });
+
+    it("O5: an offer minted through one command instance is confirmable through another (spine-panel.ts:695 builds a fresh instance per drive call with no injected dep)", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-o5-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const certifiedSpawns: RecordedSpawn[] = [];
+
+        // Two SEPARATE createTrainCommand() calls over the same repoRoot -- exactly what
+        // components/spine-panel.ts:695/698 does on every drive() call for the "train"
+        // key, since no trainCommand dep is normally injected there.
+        const mintingInstance = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+        const confirmingInstance = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+          runCertifiedLaunch: (executable, args) => {
+            certifiedSpawns.push({ executable, args });
+            return {
+              status: 0,
+              stdout: JSON.stringify({ execution_receipt: "r.json", artifact_root: "a/" }),
+            };
+          },
+        });
+
+        const offerResult = await mintingInstance.execute("", mockCtx);
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        expect(offerId).toBeDefined();
+
+        const confirmResult = await confirmingInstance.execute(`confirm ${offerId}`, mockCtx);
+
+        expect(confirmResult?.exitCode).toBeUndefined();
+        expect(confirmResult?.message.toLowerCase()).not.toContain("no outstanding");
+        expect(certifiedSpawns).toHaveLength(1);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("O6: two instances minting concurrently produce distinct offer ids", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-o6-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const instanceA = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+        const instanceB = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+
+        const [resultA, resultB] = await Promise.all([
+          instanceA.execute("", mockCtx),
+          instanceB.execute("", mockCtx),
+        ]);
+        const idA = resultA?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        const idB = resultB?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+
+        expect(idA).toBeDefined();
+        expect(idB).toBeDefined();
+        expect(idA).not.toBe(idB);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("conjunction rows", () => {
@@ -569,7 +640,7 @@ describe("acceptance map: train-launch-operability v1", () => {
 
         const result = await cmd.execute("", mockCtx);
 
-        expect(result?.message).toMatch(/OFFER train-\d+ action=train-launch/);
+        expect(result?.message).toMatch(/OFFER \S+ action=train-launch/);
         expect(result?.exitCode).toBeUndefined();
         assertOnlyPreflightSpawned(spawns);
       } finally {
@@ -676,7 +747,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         });
 
         const offerResult = await cmd.execute("", mockCtx);
-        const offerId = offerResult?.message.match(/OFFER (train-\d+)/)?.[1];
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
         expect(offerId).toBeDefined();
 
         const confirmResult = await cmd.execute(`confirm ${offerId}`, mockCtx);
@@ -755,7 +826,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         });
 
         const offerResult = await cmd.execute("", mockCtx);
-        const offerId = offerResult?.message.match(/OFFER (train-\d+)/)?.[1];
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
         expect(offerId).toBeDefined();
 
         const first = await cmd.execute(`confirm ${offerId}`, mockCtx);
@@ -898,7 +969,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
         const result = await cmd.execute("", mockCtx);
 
-        expect(result?.message).toMatch(/OFFER train-\d+ action=train-launch/);
+        expect(result?.message).toMatch(/OFFER \S+ action=train-launch/);
         expect(result?.exitCode).toBeUndefined();
       } finally {
         fs.rmSync(scratch, { recursive: true, force: true });
@@ -927,7 +998,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         });
 
         const offerResult = await cmd.execute("", mockCtx);
-        const offerId = offerResult?.message.match(/OFFER (train-\d+)/)?.[1];
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
         expect(offerId).toBeDefined();
 
         const confirmResult = await cmd.execute(`confirm ${offerId}`, mockCtx);

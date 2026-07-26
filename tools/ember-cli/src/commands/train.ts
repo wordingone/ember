@@ -287,8 +287,19 @@ function _artifactFailureLine(label: string, artifact: ResolvedArtifact): string
 // ---------------------------------------------------------------------------
 // Offer/confirm state (offer/confirm, panel's own idiom -- core/encounter-membrane.ts's
 // shape, reused rather than reinvented per SPEC-train-launch-operability-v1.md's kill
-// criterion). Offers are single-use and scoped to one createTrainCommand() instance,
-// which is created once at registry wiring time and lives for the process/session.
+// criterion).
+//
+// MODULE-scoped, deliberately, not per-instance (found fadv-review 2026-07-26, O5/O6):
+// command-registry.ts's getCommands(cwd) memoizes createTrainCommand() per cwd, but
+// components/spine-panel.ts:695/698 builds `deps.trainCommand ?? createTrainCommand()`
+// fresh inside the thunk it calls on every drive(), with no injected dep on that path --
+// so an offer minted through one instance was unfindable by a confirm routed through the
+// next instance, on the operator panel itself. Hoisting the store here makes "offers are
+// single-use and expire with the session" true BY CONSTRUCTION (there is only ever one
+// store, independent of how many RegistryCommand objects a caller happens to construct),
+// rather than true only under an unstated assumption about wiring. Offer ids likewise
+// carry a module-level counter PLUS a time+random component (not just an instance-local
+// counter) so two instances minting in the same tick can never collide.
 // ---------------------------------------------------------------------------
 
 interface TrainOffer {
@@ -297,6 +308,15 @@ interface TrainOffer {
   certificate: string;
   declarationLedger: string;
   runSpec: string;
+}
+
+const trainOffers = new Map<string, TrainOffer>();
+let trainOfferCounter = 0;
+
+function _mintOfferId(): string {
+  trainOfferCounter += 1;
+  const entropy = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  return `train-${trainOfferCounter}-${entropy}`;
 }
 
 interface TrainArgs {
@@ -445,11 +465,10 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
   const runCertifiedLaunch =
     deps.runCertifiedLaunch ?? _defaultCertifiedLaunchRunner;
 
-  // Single-use offers, scoped to this command instance (created once at registry wiring
-  // time, so this lives for the running session -- matching "offer ids are single-use
-  // and expire with the session" in the spec).
-  const trainOffers = new Map<string, TrainOffer>();
-  let offerCounter = 0;
+  // Offer state is module-scoped (trainOffers, above) -- deliberately NOT redeclared
+  // here -- so it is single and session-scoped regardless of how many
+  // createTrainCommand() instances a caller constructs (registry vs spine-panel; see the
+  // comment on trainOffers above).
 
   return {
     name: "train",
@@ -663,8 +682,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         };
       }
 
-      offerCounter += 1;
-      const offerId = `train-${offerCounter}`;
+      const offerId = _mintOfferId();
       trainOffers.set(offerId, {
         offerId,
         ts: new Date().toISOString(),
