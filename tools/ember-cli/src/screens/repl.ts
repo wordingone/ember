@@ -118,6 +118,7 @@ import { buildEmberWorldState } from "../core/ember-world-state.ts";
 import { useBoardTsPoller } from "../services/board-ts-poller.ts";
 import { formatCockpitRestartEvent } from "../core/monitor-render.ts";
 import { useGpuStatePoller, formatGpuStateLine } from "../services/gpu-state-poller.ts";
+import { useHostTelemetryPoller } from "../services/host-telemetry-poller.ts";
 import {
   useActiveRunPoller,
   isActiveRunFresh,
@@ -965,6 +966,9 @@ export function ReplScreen({
   // boardTs/events merges above).
   const receiptsRoot = path.join(process.env.EMBER_GOALFORGE_ROOT || cwd, "receipts");
   const gpuState   = useGpuStatePoller();
+  // Host telemetry needs no run in flight — it binds the right panel's six resting curves.
+  // VRAM/GPU route from the gpuState poller above; a second nvidia-smi reader is a defect.
+  const hostTelemetry = useHostTelemetryPoller(gpuState);
   const activeRun  = useActiveRunPoller(receiptsRoot);
   const receiptLanding = useReceiptLandingPoller(receiptsRoot);
   useEffect(() => {
@@ -1668,6 +1672,7 @@ export function ReplScreen({
     React.createElement(OperatorSurfacePane, {
       key: "operator-surface",
       telemetry,
+      host: hostTelemetry,
       activityLines: getActivityFeedState().recentLines,
       sourceIdentity,
       width: paneWidth,

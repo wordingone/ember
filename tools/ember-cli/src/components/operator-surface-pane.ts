@@ -14,6 +14,8 @@ import {
   visibleActivityFeedLines,
   type ActivityFeedLine,
 } from "./activity-feed-pane.ts";
+import { sparklineRow } from "../ink/chart.ts";
+import { HOST_METRIC_IDS, type HostMetricId, type HostMetricSeries, type HostTelemetrySnapshot } from "../services/host-telemetry-poller.ts";
 
 export interface OperatorSourceIdentity {
   publicCommit?: string;
@@ -34,6 +36,10 @@ export interface OperatorSurfaceInput {
    *  a narrow pane used to hand a 48-char-budgeted line to the outer renderer, which then
    *  silently hard-clipped it further with no marker at all. */
   pathMaxLen?: number;
+  /** Host telemetry snapshot from useHostTelemetryPoller — needs no run in flight. When
+   *  present, the six host curves are BOUND; SOURCE UNBOUND survives only for a source that
+   *  genuinely has no producer wired. */
+  host?: HostTelemetrySnapshot;
 }
 
 export type OperatorRunStatus = "RUNNING" | "STALE" | "IDLE" | "OFFLINE";
@@ -482,7 +488,7 @@ function compactMetricLine(
   return `${prefix}${glyphs.slice(0, columns)}`;
 }
 
-function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns: number): string[] {
+function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns: number, hostBound: boolean = false): string[] {
   const checkpointSteps = new Set(snapshot.graphs.checkpoints.map((checkpoint) => checkpoint.step));
   const axisByStep = new Map<number, { step: number }>();
   for (const point of snapshot.graphs.points) axisByStep.set(point.step, { step: point.step });
@@ -501,15 +507,25 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
   const marker = axisSamples.length > 0
     ? `checkpoint ${axisSamples.map((point) => checkpointSteps.has(point.step) ? "▲" : "·").join("")}`
     : "checkpoint INSUFFICIENT REAL HISTORY";
+  // When the host-telemetry source is bound, its always-present VRAM/GPU curves make the
+  // run-event GPU-utilization / VRAM / GPU-watts rows redundant — omitting them here is what
+  // lets ten curves (four training + six host) fit the height budget without the layout engine
+  // collapsing arbitrary rows. Without a bound host source the legacy full section stands.
+  const gpuRows = hostBound ? [] : [
+    compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag, isLive),
+    compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag, isLive),
+  ];
+  const gpuWattsRows = hostBound ? [] : [
+    compactMetricLine("GPU watts", pointMetric((point) => point.gpuWatts), plotColumns, stateTag, isLive),
+  ];
   return [
     `TRAINING/LOSS${stateTag ? ` [${stateTag}]` : ""}`,
     compactMetricLine("loss", pointMetric((point) => point.loss), plotColumns, stateTag, isLive),
     `RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag, isLive),
-    compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag, isLive),
+    ...gpuRows,
     compactMetricLine("tokens/s", pointMetric((point) => point.tokensPerSecond), plotColumns, stateTag, isLive),
     compactMetricLine("learning rate", pointMetric((point) => point.learningRate), plotColumns, stateTag, isLive),
-    compactMetricLine("GPU watts", pointMetric((point) => point.gpuWatts), plotColumns, stateTag, isLive),
+    ...gpuWattsRows,
     compactMetricLine("energy joules", pointMetric((point) => point.boardEnergyJoulesTotal), plotColumns, stateTag, isLive),
     boundedSurfaceLine(axis, plotColumns + 20),
     boundedSurfaceLine(marker, plotColumns + 20),
@@ -546,6 +562,36 @@ export function layoutControlRows(actions: readonly string[], availableWidth: nu
     }
   }
   return rows;
+export const HOST_METRIC_LABELS: Record<HostMetricId, string> = {
+  memory: "host memory GiB",
+  ram: "host RAM GiB",
+  vram: "host VRAM GiB",
+  cpu: "host CPU %",
+  gpu: "host GPU %",
+  disk: "host disk %",
+};
+
+/**
+ * One host-metric line. ORDER INVARIANT (frozen spec): "is this source bound" is decided FIRST,
+ * "does it have samples" only after. A bound-but-empty series renders an empty axis (all-gap
+ * sparkline), and can NEVER fall through to the SOURCE UNBOUND path — unbound-before-bound is
+ * the named defect.
+ */
+export function hostMetricLine(id: HostMetricId, series: HostMetricSeries | undefined, columns: number): string {
+  const prefix = HOST_METRIC_LABELS[id].padEnd(20, " ");
+  if (!series) return `${prefix}SOURCE UNBOUND`; // genuinely no producer wired
+  // Bound from here down. Empty -> empty axis; null latest -> gap glyphs + the stated reason.
+  const spark = sparklineRow(series.values, columns);
+  const latest = series.values.length > 0 ? series.values[series.values.length - 1] : undefined;
+  const reason = latest === null && series.unavailableReason ? ` [${series.unavailableReason}]` : "";
+  return `${prefix}${spark}${reason}`;
+}
+
+/** The six always-present host curves. Present with or without a live run — that is the whole
+ *  point: the resting panel is bound, and a live run ADDS training curves without dropping any
+ *  of these. */
+export function hostTelemetryLines(host: HostTelemetrySnapshot | undefined, columns: number): string[] {
+  return ["HOST TELEMETRY", ...HOST_METRIC_IDS.map((id) => hostMetricLine(id, host?.[id], columns))];
 }
 
 export function OperatorSurfacePane({
@@ -581,8 +627,25 @@ export function OperatorSurfacePane({
   });
   const statusColor = snapshot.status === "RUNNING" ? "green" : snapshot.status === "OFFLINE" ? "red" : "yellow";
   const plotColumns = Math.max(8, effectiveWidth - 24);
-  const graphLines = compactSharedGraphLines(snapshot, plotColumns)
-    .map((line) => boundedSurfaceLine(line, innerWidth));
+  // Section order is height-contention policy: RESTING (no run points), the host curves ARE the
+  // panel's content and lead; LIVE, the training sections lead and host follows, so a
+  // height-constrained live viewport keeps its training headings (the pre-existing contract)
+  // while the host curves remain present in the row stream for any viewport tall enough.
+  // No host prop at all = the producer is not wired into this mount (legacy/test mounts); the
+  // legacy families already render that state. A WIRED host with a missing/empty series is the
+  // per-series bound/unbound decision inside hostMetricLine — that is where the order invariant
+  // lives, and it is never skipped when the producer exists.
+  const hostSection = input.host === undefined ? [] : hostTelemetryLines(input.host, plotColumns);
+  const trainingSection = compactSharedGraphLines(snapshot, plotColumns, input.host !== undefined);
+  // Both passes land here: the section ORDER is the height-contention policy above, and
+  // every resulting line is then bounded against the pane's real inner width so any
+  // shortening carries a visible marker instead of being silently hard-clipped by the
+  // outer renderer (legibility bar, 2026-07-26). Order first, bound second — bounding
+  // before assembly would measure the wrong strings.
+  const graphLines = (snapshot.graphs.points.length === 0
+    ? [...hostSection, ...trainingSection]
+    : [...trainingSection, ...hostSection]
+  ).map((line) => boundedSurfaceLine(line, innerWidth));
   const compactMetrics = snapshot.metrics.length > 0
     ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, innerWidth)]
     : [];
