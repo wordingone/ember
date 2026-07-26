@@ -36,7 +36,7 @@ import type { Tool } from "../core/tool-interface.ts";
 import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -788,7 +788,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   let seatDecision = resolveModelSeat(seatInput);
   if (!seatDecision.allowed) {
     try {
-      const repoRoot = resolveEmberRepoRootOrCwd({}, "[ember-cli]");
+      const repoRoot = resolveEmberSourceRootOrCwd({}, "[ember-cli]");
       const configHome = getEmberConfigHomeDir();
       const admittedIdentity = (opts.loadOwnedIdentityFn ?? loadOwnedModelIdentity)({
         repoRoot,
@@ -1171,7 +1171,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     import("../ink/components.ts"),
     import("../core/frontend-shell.ts"),
   ]);
-  const root          = frontendShell.createRoot();
+  const { emitReadySentinel } = await import("../cli/ready-sentinel.ts");
+  const root = frontendShell.createRoot({
+    onFirstFrameFlushed: () => emitReadySentinel(process.stdout),
+  });
 
   let resolveExit!: () => void;
   const exitPromise = new Promise<void>((r) => { resolveExit = r; });
@@ -1196,7 +1199,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       permissionMode:   "bypass" as const,
       baseSystemPrompt: "",
     },
-    cwd:    resolveEmberRepoRootOrCwd({}, "[ember-cli]"),
+    cwd:    resolveEmberSourceRootOrCwd({}, "[ember-cli]"),
     onExit: (): void => { resolveExit(); },
   };
 
@@ -1219,6 +1222,9 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       // the live context: its resize listener + 250ms/_refreshSize() poller (ink/components.ts)
       // now actually reach the REPL, so a live terminal resize reflows instead of leaving stale-
       // width content for the terminal to hard-wrap.
+      //
+      // Readiness is emitted by the renderer-owned first-frame callback passed
+      // to createRoot above. Unrelated stdout writes cannot satisfy that gate.
       r.render(
         React.createElement(
           InkApp,

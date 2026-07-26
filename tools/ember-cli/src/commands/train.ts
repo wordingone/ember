@@ -12,7 +12,7 @@
 // preflight, certificate-consumer, or response failure, execution fails closed.
 
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { spawnSync } from "child_process";
 import { join } from "path";
 
@@ -169,7 +169,7 @@ function _extractLaunchCommand(
 
 /** Default ember repo root, re-derived read-only the same way sibling commands do. */
 function _defaultRepoRoot(cwd: string): string {
-  return resolveEmberRepoRootOrCwd({ startDir: cwd }, "[ember] /train");
+  return resolveEmberSourceRootOrCwd({ startDir: cwd }, "[ember] /train");
 }
 
 // ---------------------------------------------------------------------------
