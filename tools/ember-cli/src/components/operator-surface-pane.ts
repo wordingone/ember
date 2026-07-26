@@ -243,8 +243,15 @@ function eventMetricSamples(
     .sort((left, right) => left.step - right.step || Date.parse(left.ts) - Date.parse(right.ts));
 }
 
-function familyLines(title: string, samples: OperatorMetricPoint[], unbound: string, maxPoints: number, checkpointSteps: Set<number>): string[] {
-  if (samples.length === 0) return [`${unbound}: SOURCE UNBOUND`];
+/**
+ * "SOURCE UNBOUND" and "AWAITING FIRST SAMPLE" are different facts and must not share a
+ * rendering: UNBOUND says this metric can never arrive right now (no live run to bind to);
+ * AWAITING says the run IS live and could still produce it -- the run is simply not there yet
+ * for this particular field. `isLive` is the selected run's RUNNING status, computed once by the
+ * caller from the same evidence the rest of the pane already trusts (getOperatorRunStatus).
+ */
+function familyLines(title: string, samples: OperatorMetricPoint[], unbound: string, maxPoints: number, checkpointSteps: Set<number>, isLive: boolean): string[] {
+  if (samples.length === 0) return [`${unbound}: ${isLive ? "AWAITING FIRST SAMPLE" : "SOURCE UNBOUND"}`];
   return plotLines(title, samples, checkpointSteps, maxPoints);
 }
 
@@ -290,20 +297,23 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   const modelGrowth = eventMetricSamples(telemetry, runId, "model_growth", "value", nowMs);
   const capability = eventMetricSamples(telemetry, runId, "capability_score", "score", nowMs);
   const latestTrainTs = selection?.latestTs;
+  // Whether the selected run is live RIGHT NOW, by the same evidence the rest of the pane
+  // already trusts -- gates the SOURCE UNBOUND / AWAITING FIRST SAMPLE choice below.
+  const isLive = getOperatorRunStatus(telemetry, nowMs, runId) === "RUNNING";
   const decorate = (lines: string[]): string[] =>
     channelIsOffline(telemetry, runId, latestTrainTs) ? decorateHistory(lines, "OFFLINE/HISTORICAL") : lines;
   const lossLines = decorate(loss);
   const resourceLines = decorate([
     "RESOURCE EFFICIENCY",
-    ...familyLines("GPU utilization %", gpu, "GPU UTILIZATION", maxPoints, checkpointSteps),
-    ...familyLines("VRAM GiB", vram, "VRAM", maxPoints, checkpointSteps),
-    ...familyLines("tokens/s", tokensPerSecond, "TOKENS/S", maxPoints, checkpointSteps),
-    ...familyLines("learning rate", learningRate, "LEARNING RATE", maxPoints, checkpointSteps),
-    ...familyLines("GPU watts", gpuWatts, "GPU WATTS", maxPoints, checkpointSteps),
-    ...familyLines("board energy joules", boardEnergy, "ENERGY", maxPoints, checkpointSteps),
+    ...familyLines("GPU utilization %", gpu, "GPU UTILIZATION", maxPoints, checkpointSteps, isLive),
+    ...familyLines("VRAM GiB", vram, "VRAM", maxPoints, checkpointSteps, isLive),
+    ...familyLines("tokens/s", tokensPerSecond, "TOKENS/S", maxPoints, checkpointSteps, isLive),
+    ...familyLines("learning rate", learningRate, "LEARNING RATE", maxPoints, checkpointSteps, isLive),
+    ...familyLines("GPU watts", gpuWatts, "GPU WATTS", maxPoints, checkpointSteps, isLive),
+    ...familyLines("board energy joules", boardEnergy, "ENERGY", maxPoints, checkpointSteps, isLive),
   ]);
-  const modelGrowthLines = decorate(familyLines("model growth", modelGrowth, "MODEL GROWTH", maxPoints, checkpointSteps));
-  const capabilityLines = decorate(familyLines("capability score", capability, "CAPABILITY SCORES", maxPoints, checkpointSteps));
+  const modelGrowthLines = decorate(familyLines("model growth", modelGrowth, "MODEL GROWTH", maxPoints, checkpointSteps, isLive));
+  const capabilityLines = decorate(familyLines("capability score", capability, "CAPABILITY SCORES", maxPoints, checkpointSteps, isLive));
   return {
     runId,
     points,
@@ -449,10 +459,11 @@ function compactMetricLine(
   points: Array<{ step: number; value?: number }>,
   columns: number,
   statusTag: string | undefined,
+  isLive: boolean,
 ): string {
   const finite = points.filter((point) => finiteNumber(point.value));
   const prefix = `${label.padEnd(20, " ")}${statusTag ? `${statusTag} ` : ""}`;
-  if (finite.length === 0) return `${prefix}SOURCE UNBOUND`;
+  if (finite.length === 0) return `${prefix}${isLive ? "AWAITING FIRST SAMPLE" : "SOURCE UNBOUND"}`;
   if (finite.length < 2) return `${prefix}INSUFFICIENT REAL HISTORY`;
   const min = Math.min(...finite.map((point) => point.value!));
   const max = Math.max(...finite.map((point) => point.value!));
@@ -472,6 +483,7 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
   for (const step of checkpointSteps) axisByStep.set(step, { step });
   const axisSamples = sharedWindow([...axisByStep.values()].sort((left, right) => left.step - right.step), plotColumns, checkpointSteps);
   const stateTag = snapshot.status === "STALE" ? "STALE/HISTORICAL" : snapshot.status === "OFFLINE" ? "OFFLINE/HISTORICAL" : undefined;
+  const isLive = snapshot.status === "RUNNING";
   const pointMetric = (value: (point: OperatorSeriesPoint) => number | undefined) =>
     axisSamples.map((axisPoint) => {
       const point = snapshot.graphs.points.find((candidate) => candidate.step === axisPoint.step);
@@ -485,14 +497,14 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
     : "checkpoint INSUFFICIENT REAL HISTORY";
   return [
     `TRAINING/LOSS${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("loss", pointMetric((point) => point.loss), plotColumns, stateTag),
+    compactMetricLine("loss", pointMetric((point) => point.loss), plotColumns, stateTag, isLive),
     `RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag),
-    compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag),
-    compactMetricLine("tokens/s", pointMetric((point) => point.tokensPerSecond), plotColumns, stateTag),
-    compactMetricLine("learning rate", pointMetric((point) => point.learningRate), plotColumns, stateTag),
-    compactMetricLine("GPU watts", pointMetric((point) => point.gpuWatts), plotColumns, stateTag),
-    compactMetricLine("energy joules", pointMetric((point) => point.boardEnergyJoulesTotal), plotColumns, stateTag),
+    compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag, isLive),
+    compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag, isLive),
+    compactMetricLine("tokens/s", pointMetric((point) => point.tokensPerSecond), plotColumns, stateTag, isLive),
+    compactMetricLine("learning rate", pointMetric((point) => point.learningRate), plotColumns, stateTag, isLive),
+    compactMetricLine("GPU watts", pointMetric((point) => point.gpuWatts), plotColumns, stateTag, isLive),
+    compactMetricLine("energy joules", pointMetric((point) => point.boardEnergyJoulesTotal), plotColumns, stateTag, isLive),
     boundedSurfaceLine(axis, plotColumns + 20),
     boundedSurfaceLine(marker, plotColumns + 20),
   ];

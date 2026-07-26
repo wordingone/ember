@@ -78,6 +78,7 @@ import {
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
 import { telemetryMemoKey }              from "../services/telemetry-label.ts";
+import { driveOperatorControl, type OperatorControlAction } from "../services/operator-controls.ts";
 import {
   getActivityFeedState,
   startActivityFeed,
@@ -657,6 +658,18 @@ export function ReplScreen({
       sourceBindingVerified: binding.verified,
     };
   }, [env, cwd]);
+
+  // The operator-surface pane only renders click/keyboard INTENT ([START][PAUSE][RESUME]
+  // [RESTART]) -- driveOperatorControl is the one production path that turns that intent into a
+  // real effect: an append to the governed finetune control channel a training-side poller
+  // obeys. Before this wiring the pane's onControl prop was never passed here, so every click
+  // fired its handler and changed nothing (the exact defect: a control that appears to work).
+  // EMBER_FINETUNE_CONTROL_PATH lets tests point the channel at a temp file without touching the
+  // real state/ember-finetune-control.jsonl; production takes the default channel path.
+  const operatorControlChannelPath = env["EMBER_FINETUNE_CONTROL_PATH"];
+  const handleOperatorControl = useCallback((action: OperatorControlAction, runId?: string) => {
+    void driveOperatorControl(action, runId, { channelPath: operatorControlChannelPath });
+  }, [operatorControlChannelPath]);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
   const [taskPanelVisible, setTaskPanelVisible] = useState(false);
@@ -1658,6 +1671,7 @@ export function ReplScreen({
       height: terminalRows,
       terminalColumns: terminalCols,
       terminalRows,
+      onControl: handleOperatorControl,
     }),
   );
 }
