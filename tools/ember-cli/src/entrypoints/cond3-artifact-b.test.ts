@@ -21,7 +21,8 @@ import { describe, it, expect } from "bun:test";
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { _resolveModelIdentity } from "../commands/model.ts";
+import { _resolveModelIdentity, createModelCommand } from "../commands/model.ts";
+import type { CommandContext } from "../types/command-types.ts";
 
 const FIXTURE_DIR = join(
   import.meta.dir,
@@ -68,5 +69,35 @@ describe("cond3 Artifact B: /model identity resolution on the fully-resolved OWN
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  // The two tests above enter at _resolveModelIdentity, which is the layer the
+  // defect was DIAGNOSED at, not the layer an operator observes. A production
+  // entry point is the head of a chain rather than a point, so a test that
+  // starts mid-chain leaves the wiring between the command and the resolver
+  // unverified -- and the comment "the same convention model.ts uses in
+  // production" is a claim about equivalence, not evidence of it. This test
+  // drives the operator-visible entry with the DEFAULT resolver: the only
+  // injected dep is the manifest PATH (data), never resolveModelIdentity
+  // (behaviour), so createModelCommand's own `deps.resolveModelIdentity ??
+  // _resolveModelIdentity` default is what actually runs.
+  it("PRODUCTION ENTRY: /model status renders the fixture identity through the default resolver", async () => {
+    const ctx: CommandContext = {
+      sessionId: "cond3-artifact-b",
+      mode: "test",
+      cwd: FIXTURE_DIR,
+    };
+    const cmd = createModelCommand({ manifestPath: FIXTURE_MANIFEST });
+
+    const result = await cmd.execute("status", ctx);
+
+    expect(result.type).toBe("message");
+    const bytes = readFileSync(FIXTURE_CHECKPOINT);
+    const actualSha256 = createHash("sha256").update(bytes).digest("hex");
+    // The rendered line carries the REAL checkpoint hash and the REAL
+    // disposition -- not UNVERIFIED, which is what a broken chain produces.
+    expect(result.message).toContain(actualSha256);
+    expect(result.message).toContain("OWNED_CANDIDATE");
+    expect(result.message).not.toContain("UNVERIFIED");
   });
 });
