@@ -149,6 +149,18 @@ def test_unknown_manifest_field_fails_closed() -> None:
         python_environment.validate_manifest_shape(manifest)
 
 
+def test_cli_rejects_an_alternate_manifest_authority(tmp_path: Path) -> None:
+    alternative = tmp_path / "parallel-authority.json"
+    alternative.write_text(
+        json.dumps(load_manifest()),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit):
+        python_environment.main([
+            "--root", str(ROOT), "--manifest", str(alternative), "verify",
+        ])
+
+
 def test_contradictory_prose_marker_fails_closed(tmp_path: Path) -> None:
     manifest = load_manifest()
     doc = tmp_path / "README.md"

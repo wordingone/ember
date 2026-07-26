@@ -610,11 +610,6 @@ def _parser() -> argparse.ArgumentParser:
         default=_default_root(),
         help="Ember repository root (default: script parent repository)",
     )
-    parser.add_argument(
-        "--manifest",
-        type=Path,
-        default=Path("manifests/python-environment-v1.json"),
-    )
     sub = parser.add_subparsers(dest="command", required=True)
     verify = sub.add_parser("verify", help="validate repository/import authority")
     verify.add_argument("--check-installed", action="store_true")
@@ -626,10 +621,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     root = args.root.resolve()
-    manifest_path = args.manifest
-    if not manifest_path.is_absolute():
-        manifest_path = root / manifest_path
-    manifest = load_manifest(manifest_path.resolve())
+    manifest = load_manifest(root / "manifests" / "python-environment-v1.json")
     if args.command == "verify":
         versions = (
             current_installed_versions(manifest)
