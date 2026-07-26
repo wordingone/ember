@@ -10,8 +10,12 @@ import argparse
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.remote_branch_salvage import PacketError, _canonical
 
@@ -122,17 +126,18 @@ def _citations(repo: Path, master: str, name: str, head: str) -> tuple[dict[str,
     if result.returncode not in {0, 1}:
         return {"complete": False, "citations": []}, {"complete": False, "citations": []}
     public: set[str] = set()
-    custody: set[str] = set()
     for line in result.stdout.splitlines():
         parts = line.split(":", 3)
         if len(parts) < 3:
             continue
         path = parts[1] if parts[0] == master else parts[0]
         line_number = parts[2] if parts[0] == master else parts[1]
-        citation = f"{path}:{line_number}"
-        target = custody if path.startswith(("receipts/", "manifests/", "docs/hygiene/")) else public
-        target.add(citation)
-    return {"complete": True, "citations": sorted(public)}, {"complete": True, "citations": sorted(custody)}
+        public.add(f"{path}:{line_number}")
+    # A scan of the public Git tree is complete only for public consumers. Receipts and
+    # manifests tracked there remain public citations; their path prefix cannot prove that
+    # private/durable custody roots were searched. Until a separately content-addressed
+    # external custody census is supplied, every row must fail closed on custody completeness.
+    return {"complete": True, "citations": sorted(public)}, {"complete": False, "citations": []}
 
 
 def _compact_pr(pr: Mapping[str, Any]) -> dict[str, Any]:
@@ -201,8 +206,10 @@ def build_capture(*, repo: Path, branches_pre_path: Path, branches_post_path: Pa
         open_head = [{"number": pr["number"], "head_sha": head} for pr in prs if pr["state"] == "open" and pr["head_sha"] == head]
         eq = _equivalence(repo, master, head, reach, prs)
         public, custody = _citations(repo, master, name, head)
-        if not public["complete"] or not custody["complete"]:
+        if not public["complete"]:
             errors.append("public_master_consumer_scan_failed")
+        if not custody["complete"]:
+            errors.append("external_custody_census_unavailable")
         branch_releases = sorted(str(row.get("tag_name") or row.get("name")) for row in releases if row.get("target_commitish") in {name, head} and (row.get("tag_name") or row.get("name")))
         branch_deployments = sorted(str(row.get("id")) for row in deployments if row.get("ref") in {name, head})
         rows.append({
