@@ -456,6 +456,104 @@ export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
   height?: number;
   terminalColumns?: number;
   terminalRows?: number;
+  /** Index into OPERATOR_CONTROL_ACTIONS currently holding keyboard traversal focus, or
+   *  undefined when the pane itself does not have keyboard focus (R2b). Drives the visible
+   *  focus marker — a control that is focused with no way to see which one is focused is the
+   *  same failure class as a control that renders and does nothing. */
+  focusedControlIndex?: number;
+  /** Reason surfaced when a disabled control's accelerator or activation was attempted (R2b
+   *  acceptance row 7) — silently doing nothing is the exact failure R2 was filed for. */
+  disabledActionReason?: string;
+}
+
+// ---------------------------------------------------------------------------
+// R2b — keyboard-reachable operator controls
+// ---------------------------------------------------------------------------
+
+/** Canonical traversal/visual order for the four operator controls. Exported so repl.ts's
+ *  keyboard handler shares the exact same order and index space as this pane's rendering —
+ *  divergence here would make "focus visits all four controls in visual order" a lie. */
+export const OPERATOR_CONTROL_ACTIONS = ["START", "PAUSE", "RESUME", "RESTART"] as const;
+
+/** Single-key accelerator per control (lowercase). Shown decorated in the control's own label
+ *  via operatorControlLabel so the mnemonic is always visible, never a hidden binding. */
+export const OPERATOR_CONTROL_ACCELERATORS: Record<OperatorControlAction, string> = {
+  START: "s",
+  PAUSE: "p",
+  RESUME: "u",
+  RESTART: "t",
+};
+
+/** Decorates the accelerator letter inside the action name itself, e.g. "[(S)TART]",
+ *  "[RES(U)ME]" — derived generically from OPERATOR_CONTROL_ACCELERATORS rather than a
+ *  hand-maintained label table, so the two can never drift apart. */
+export function operatorControlLabel(action: OperatorControlAction): string {
+  const accel = OPERATOR_CONTROL_ACCELERATORS[action].toUpperCase();
+  const index = action.indexOf(accel);
+  const decorated = index < 0
+    ? `${action}(${accel})`
+    : `${action.slice(0, index)}(${accel})${action.slice(index + 1)}`;
+  return `[${decorated}]`;
+}
+
+const OPERATOR_CONTROL_DISABLED_REASONS: Record<OperatorControlAction, string> = {
+  START: "a run is already active",
+  PAUSE: "no running run",
+  RESUME: "no paused run",
+  RESTART: "no stale or offline run to restart",
+};
+
+/** Reason surfaced (R2b acceptance row 7) when a disabled control's accelerator or focused
+ *  activation is attempted — a fixed, generic reason per action is sufficient; the point is
+ *  that SOMETHING is surfaced rather than nothing. */
+export function operatorControlDisabledReason(action: OperatorControlAction): string {
+  return OPERATOR_CONTROL_DISABLED_REASONS[action];
+}
+
+/** Same enablement rule the pane's own render uses, exported so repl.ts's keyboard traversal
+ *  and accelerator dispatch can skip/reject a disabled control using the IDENTICAL predicate —
+ *  a second, hand-copied version of this rule is exactly how "looks reachable, isn't" bugs are
+ *  born. */
+export function isOperatorControlEnabled(
+  action: OperatorControlAction,
+  status: OperatorRunStatus,
+  telemetry: TelemetryState,
+): boolean {
+  return action === "START" ? status === "IDLE"
+    : action === "PAUSE" ? status === "RUNNING"
+    : action === "RESUME" ? telemetry.runStatus?.phase === "PAUSED"
+    : status === "STALE" || status === "OFFLINE";
+}
+
+/**
+ * Pure traversal-step function: from `current` (use -1 to mean "not yet entered the set"), moves
+ * `direction` (+1/-1) steps, skipping any index whose `enabledMask` entry is false, and returns
+ * the landed index or null when the step runs off either end of the set (acceptance row 1's
+ * "leaves the set", row 6's "the disabled control is skipped"). This is the SAME function
+ * repl.ts's keyboard handler calls on every Tab/Arrow press and on pane-entry (entry is just
+ * `nextOperatorFocusIndex(-1, 1, enabledMask)`) — there is no second, hand-copied traversal rule
+ * that could drift from what actually ships.
+ */
+export function nextOperatorFocusIndex(
+  current: number,
+  direction: 1 | -1,
+  enabledMask: readonly boolean[],
+): number | null {
+  let next = current + direction;
+  while (next >= 0 && next < enabledMask.length && !enabledMask[next]) next += direction;
+  return next >= 0 && next < enabledMask.length ? next : null;
+}
+
+/** The same {status, runId} pair the pane derives internally via buildOperatorSurfaceGraphs +
+ *  getOperatorRunStatus, exposed so repl.ts's keyboard path can evaluate isOperatorControlEnabled
+ *  and resolve the runId a dispatched control command targets, without re-deriving run selection
+ *  by a second, divergent path. */
+export function operatorControlStatus(
+  telemetry: TelemetryState,
+  nowMs: number = Date.now(),
+): { status: OperatorRunStatus; runId?: string } {
+  const graphs = buildOperatorSurfaceGraphs(telemetry, 80, nowMs);
+  return { status: getOperatorRunStatus(telemetry, nowMs, graphs.runId), runId: graphs.runId };
 }
 
 function sharedWindow<T extends { step: number }>(samples: T[], maxPoints: number, checkpointSteps: Set<number> = new Set()): T[] {
@@ -531,12 +629,20 @@ function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns:
     boundedSurfaceLine(marker, plotColumns + 20),
   ];
 }
+/** Leading columns reserved for the keyboard-focus marker (R2b) — reserved UNCONDITIONALLY so
+ *  gaining/losing keyboard focus never reflows the controls row; only the marker glyph itself
+ *  changes. */
+const FOCUS_MARKER_WIDTH = 2;
+const FOCUS_MARKER_ON = "▸ ";
+const FOCUS_MARKER_OFF = "  ";
+
 /** Per-action label width including its own trailing gap (paddingRight:1 on the control's own
  *  Box) — used to pack controls into rows that never split a label mid-word (legibility bar,
  *  2026-07-26: "no control label is truncated — controls are the last thing to lose
- *  characters, never the first"). */
-function controlLabelWidth(action: string): number {
-  return `[${action}]`.length + 1;
+ *  characters, never the first"). Measures the DECORATED label (accelerator-annotated, R2b),
+ *  since that is what actually renders — measuring the bare action name would under-count. */
+function controlLabelWidth(action: OperatorControlAction): number {
+  return FOCUS_MARKER_WIDTH + operatorControlLabel(action).length + 1;
 }
 
 /** Packs the four control labels into as few rows as fit `availableWidth`, greedily, never
@@ -551,7 +657,7 @@ export function layoutControlRows(actions: readonly string[], availableWidth: nu
   const rows: string[][] = [[]];
   let used = 0;
   for (const action of actions) {
-    const w = controlLabelWidth(action);
+    const w = controlLabelWidth(action as OperatorControlAction);
     const current = rows[rows.length - 1]!;
     if (current.length > 0 && used + w > availableWidth) {
       rows.push([action]);
@@ -602,6 +708,8 @@ export function OperatorSurfacePane({
   terminalColumns,
   terminalRows,
   onControl,
+  focusedControlIndex,
+  disabledActionReason,
   ...input
 }: OperatorSurfacePaneProps): React.ReactElement {
   const terminalWidth = finiteNumber(terminalColumns) ? terminalColumns : 1727;
@@ -654,14 +762,12 @@ export function OperatorSurfacePane({
   const compactAgentLines = snapshot.agentLines.slice(-1).map((line) => boundedSurfaceLine(line, innerWidth));
   const sourceLineText = boundedSurfaceLine(snapshot.source, innerWidth);
 
-  const CONTROL_ACTIONS = ["START", "PAUSE", "RESUME", "RESTART"] as const;
+  const CONTROL_ACTIONS = OPERATOR_CONTROL_ACTIONS;
   const controlEnabled = (action: (typeof CONTROL_ACTIONS)[number]): boolean =>
-    action === "START" ? snapshot.status === "IDLE"
-      : action === "PAUSE" ? snapshot.status === "RUNNING"
-      : action === "RESUME" ? input.telemetry.runStatus?.phase === "PAUSED"
-      : snapshot.status === "STALE" || snapshot.status === "OFFLINE";
+    isOperatorControlEnabled(action, snapshot.status, input.telemetry);
   const renderControl = (action: (typeof CONTROL_ACTIONS)[number]): React.ReactElement => {
     const enabled = controlEnabled(action);
+    const focused = focusedControlIndex === CONTROL_ACTIONS.indexOf(action);
     return React.createElement(
       Box,
       {
@@ -670,7 +776,11 @@ export function OperatorSurfacePane({
         paddingRight: 1,
         onClick: enabled ? () => onControl?.(action, snapshot.graphs.runId) : undefined,
       },
-      React.createElement(Text, { color: enabled ? "green" : "gray" }, `[${action}]`),
+      React.createElement(
+        Text,
+        { color: focused ? "cyan" : enabled ? "green" : "gray", bold: focused },
+        `${focused ? FOCUS_MARKER_ON : FOCUS_MARKER_OFF}${operatorControlLabel(action)}`,
+      ),
     );
   };
   const controlRows = layoutControlRows(CONTROL_ACTIONS, innerWidth);
@@ -708,7 +818,10 @@ export function OperatorSurfacePane({
   // the budget does not bind (graphLines fits), the stream passes through UNTOUCHED — zero
   // behaviour change for any mount with room, which is exactly what a chrome-row miscount would
   // break (the first attempt at this budget overcounted and truncated roomy mounts).
-  const fixedChromeRows = 2 + 1 + controlRows.length + compactMetrics.length + 1 + 1 + compactAgentLines.length;
+  const disabledReasonLines = disabledActionReason
+    ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
+    : [];
+  const fixedChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length + compactMetrics.length + 1 + 1 + compactAgentLines.length;
   const graphRowBudget = effectiveHeight - fixedChromeRows;
   const visibleGraphLines = graphLines.length <= graphRowBudget
     ? graphLines
@@ -735,6 +848,7 @@ export function OperatorSurfacePane({
     },
     React.createElement(Text, { key: "status", color: statusColor, bold: true }, snapshot.status),
     controlsElement,
+    ...disabledReasonLines.map((line) => React.createElement(Text, { key: `disabled-reason-${line}`, color: "yellow" }, line)),
     ...compactMetrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
     React.createElement(Text, { key: "source", dimColor: true }, sourceLineText),
     ...visibleGraphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),

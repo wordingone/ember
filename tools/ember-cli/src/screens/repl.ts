@@ -80,6 +80,14 @@ import {
 import { telemetryMemoKey }              from "../services/telemetry-label.ts";
 import { driveOperatorControl, type OperatorControlAction } from "../services/operator-controls.ts";
 import {
+  OPERATOR_CONTROL_ACTIONS,
+  OPERATOR_CONTROL_ACCELERATORS,
+  isOperatorControlEnabled,
+  operatorControlDisabledReason,
+  operatorControlStatus,
+  nextOperatorFocusIndex,
+} from "../components/operator-surface-pane.ts";
+import {
   getActivityFeedState,
   startActivityFeed,
 }                                        from "../services/activity-feed.ts";
@@ -671,6 +679,16 @@ export function ReplScreen({
   const handleOperatorControl = useCallback((action: OperatorControlAction, runId?: string) => {
     void driveOperatorControl(action, runId, { channelPath: operatorControlChannelPath });
   }, [operatorControlChannelPath]);
+
+  // R2b: keyboard-reachable operator controls. `paneFocused` is the single discriminator for
+  // both halves of the invariant -- "operator surface focused" and "no text input active" are
+  // the same fact in this app (there is exactly one thing with keyboard focus at a time), so one
+  // boolean suffices rather than two that could drift apart. `focusedControlIndex` is the
+  // traversal position within OPERATOR_CONTROL_ACTIONS while paneFocused is true; it is ignored
+  // (and the pane renders no marker) whenever paneFocused is false.
+  const [paneFocused,          setPaneFocused]          = useState(false);
+  const [focusedControlIndex,  setFocusedControlIndex]  = useState(0);
+  const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
   const [taskPanelVisible, setTaskPanelVisible] = useState(false);
@@ -1522,6 +1540,81 @@ export function ReplScreen({
 
   // Main keyboard handler
   useInput((input, key) => {
+    // R2b -- ORDER INVARIANT (frozen spec): whether a text input has focus is decided FIRST,
+    // before any accelerator/traversal dispatch is even considered. `paneFocused` IS that
+    // decision (there is exactly one focus target in this app, so "operator surface focused"
+    // and "no text input active" are the same boolean) -- when true this branch owns the
+    // keystroke completely and NEVER falls through to the prompt-typing code below. An
+    // accelerator that also inserted itself into the prompt, or vice versa, would be exactly the
+    // "lenient outcome reachable before the strict check" defect this ordering exists to forbid.
+    if (paneFocused) {
+      const { status, runId } = operatorControlStatus(telemetry);
+      const enabledMask = OPERATOR_CONTROL_ACTIONS.map((action) =>
+        isOperatorControlEnabled(action, status, telemetry),
+      );
+
+      // Escape always returns focus to the prompt, from anywhere in the set.
+      if (key.escape) {
+        setPaneFocused(false);
+        setControlDisabledReason(undefined);
+        return;
+      }
+
+      // Traversal: Tab / RightArrow forward, Shift+Tab / LeftArrow backward. Disabled controls
+      // are skipped (acceptance row 6); running off either end LEAVES the set back to the prompt
+      // (acceptance row 1: "visits all four ... then leaves the set") -- traversal order is
+      // always OPERATOR_CONTROL_ACTIONS' own canonical order, never the wrapped-row visual
+      // grouping, so a narrow pane reflowing controls into multiple rows can never break it
+      // (conjunction row C1).
+      const forward = (key.tab && !key.shift) || key.rightArrow;
+      const backward = (key.tab && key.shift) || key.leftArrow;
+      if (forward || backward) {
+        setControlDisabledReason(undefined);
+        const next = nextOperatorFocusIndex(focusedControlIndex, forward ? 1 : -1, enabledMask);
+        if (next === null) {
+          setPaneFocused(false);
+          return;
+        }
+        setFocusedControlIndex(next);
+        return;
+      }
+
+      // Activation: Enter or Space fires the focused control (rows 2/3 -- identical outcome).
+      if (key.return || input === " ") {
+        const action = OPERATOR_CONTROL_ACTIONS[focusedControlIndex];
+        if (action && enabledMask[focusedControlIndex]) {
+          setControlDisabledReason(undefined);
+          handleOperatorControl(action, runId);
+        } else if (action) {
+          setControlDisabledReason(operatorControlDisabledReason(action));
+        }
+        return;
+      }
+
+      // Accelerators: single-key direct activation while the pane -- not a text input -- has
+      // focus (row 4). Disabled target: no verb, no error, reason surfaced (row 7); focus stays
+      // put either way (row 4's "focus unchanged").
+      const accelAction = input
+        ? OPERATOR_CONTROL_ACTIONS.find(
+            (action) => OPERATOR_CONTROL_ACCELERATORS[action] === input.toLowerCase(),
+          )
+        : undefined;
+      if (accelAction) {
+        const idx = OPERATOR_CONTROL_ACTIONS.indexOf(accelAction);
+        if (enabledMask[idx]) {
+          setControlDisabledReason(undefined);
+          handleOperatorControl(accelAction, runId);
+        } else {
+          setControlDisabledReason(operatorControlDisabledReason(accelAction));
+        }
+        return;
+      }
+
+      // Any other key while the pane is focused is swallowed here -- it must never reach the
+      // prompt-typing code below.
+      return;
+    }
+
     // Slash-command dropdown navigation takes priority over every other binding while it's open
     // (b22 item 1) -- Enter completes the highlighted command into the input instead of falling
     // through to message-submit below.
@@ -1551,6 +1644,20 @@ export function ReplScreen({
       if (currentSuggestion && !busyRef.current) {
         inputActions.setText(currentSuggestion);
         setCurrentSuggestion(null);
+        return;
+      }
+      // R2b: with no suggestion to accept, Tab moves keyboard focus onto the operator
+      // controls -- entering at the first ENABLED control (never a disabled one, when at least
+      // one control is enabled) so the visible focus indicator never opens on a dead control.
+      // Guarded on !dropdownOpen so composing a slash command is never interrupted mid-type.
+      if (!dropdownOpen) {
+        const { status } = operatorControlStatus(telemetry);
+        const enabledMask = OPERATOR_CONTROL_ACTIONS.map((action) =>
+          isOperatorControlEnabled(action, status, telemetry),
+        );
+        const entryIndex = nextOperatorFocusIndex(-1, 1, enabledMask);
+        setFocusedControlIndex(entryIndex ?? 0);
+        setPaneFocused(true);
       }
       return;
     }
@@ -1680,6 +1787,8 @@ export function ReplScreen({
       terminalColumns: terminalCols,
       terminalRows,
       onControl: handleOperatorControl,
+      focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
+      disabledActionReason: controlDisabledReason,
     }),
   );
 }
