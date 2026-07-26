@@ -89,6 +89,39 @@ export function inspectLifecycleSurface(
   }));
 }
 
+export interface OwnedAdmissionProducerSurface {
+  action: "admit";
+  authority_boundary:
+    "candidate-production-only; selected=false loaded=false training_started=false";
+  command: "admit";
+  input:
+    "/admit --workspace <path> --descriptor <path> --output-root <path>";
+  status: "AVAILABLE" | "MISSING";
+}
+
+/**
+ * Map the explicit owned-admission producer without granting effect credit.
+ * A reachable command proves only the no-source product surface exists; the
+ * Task020 disk receipt and both production consumers remain the authority.
+ */
+export function inspectOwnedAdmissionProducerSurface(
+  commands: readonly LifecycleSurfaceCommand[],
+): OwnedAdmissionProducerSurface {
+  const reachable = new Set<string>();
+  for (const command of commands) {
+    reachable.add(command.name);
+    for (const alias of command.aliases ?? []) reachable.add(alias);
+  }
+  return {
+    action: "admit",
+    authority_boundary:
+      "candidate-production-only; selected=false loaded=false training_started=false",
+    command: "admit",
+    input: "/admit --workspace <path> --descriptor <path> --output-root <path>",
+    status: reachable.has("admit") ? "AVAILABLE" : "MISSING",
+  };
+}
+
 export interface LifecycleStateEvidence {
   artifact: string;
   before_exists: boolean;
