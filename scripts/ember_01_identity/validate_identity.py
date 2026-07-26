@@ -1022,7 +1022,21 @@ def validate_manifest(
                 )
 
     subject_present, subject_hash = _get(payload, "evaluation.subject_checkpoint_sha256")
-    if checkpoint_present and subject_present and subject_hash != checkpoint_hash:
+    # Both sides widened to sha256OrUnresolved, so this raw inequality now compares two unresolved
+    # OBJECTS whenever a clean-genesis pre-birth manifest is validated -- and two unresolved objects
+    # differ exactly when their `reason` prose differs. That made the verdict a function of an
+    # English sentence: identical reasons passed, honest per-field reasons failed. Equality of
+    # identity is only meaningful between two RESOLVED digests, so an unresolved side makes the
+    # comparison inapplicable rather than failed. Unresolvedness itself is not let through here --
+    # `require_resolved` below reports each unresolved path on its own, which is the check that
+    # actually owns that question.
+    if (
+        checkpoint_present
+        and subject_present
+        and not _is_unresolved(subject_hash)
+        and not _is_unresolved(checkpoint_hash)
+        and subject_hash != checkpoint_hash
+    ):
         findings.append(_finding("evaluation.subject_checkpoint_mismatch", "evaluation subject is not checkpoint bytes"))
 
     disposition = _get(payload, "identity.disposition")[1]

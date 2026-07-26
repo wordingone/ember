@@ -1577,3 +1577,78 @@ def test_cli_requires_and_resolves_admission_receipt_bundle(tmp_path: Path) -> N
     assert "admission.verifier_untrusted" in resolved.stdout
     assert "admission.receipt_signature_invalid" in resolved.stdout
     assert json.loads(resolved.stdout)["ok"] is False
+
+
+# --- identity equality is inapplicable when either side is unresolved -------------------------
+#
+# Both `checkpoint.byte_sha256` and `evaluation.subject_checkpoint_sha256` widened to
+# sha256OrUnresolved. The equality check kept comparing them raw, so on a clean-genesis pre-birth
+# manifest it compared two unresolved OBJECTS -- and by the schema those differ exactly when their
+# `reason` prose differs. The verdict became a function of an English sentence: identical reasons
+# passed, honest per-field reasons failed. Identity equality is only meaningful between two
+# RESOLVED digests.
+
+UNRESOLVED_A = {"status": "unresolved", "reason": "checkpoint bytes do not exist before birth"}
+UNRESOLVED_B = {"status": "unresolved", "reason": "evaluation has not run before birth"}
+MISMATCH = "evaluation.subject_checkpoint_mismatch"
+
+
+def finding_codes(payload: dict, **kwargs) -> set[str]:
+    """Codes raised by validate_manifest, or an empty set when it accepts the payload.
+
+    error_codes() above requires a raise; these cases assert a code's ABSENCE, which on an
+    otherwise-valid manifest means no exception at all.
+    """
+    try:
+        validate_manifest(payload, **kwargs)
+    except IdentityValidationError as caught:
+        return {finding["code"] for finding in caught.findings}
+    return set()
+
+
+def _identity_pair(checkpoint: object, subject: object) -> dict:
+    payload = valid_manifest()
+    payload["checkpoint"]["byte_sha256"] = checkpoint
+    payload["evaluation"]["subject_checkpoint_sha256"] = subject
+    return payload
+
+
+def test_two_unresolved_sides_with_different_reasons_are_not_a_mismatch() -> None:
+    # The regression itself. Two honest, per-field reasons -- the shape a real pre-birth manifest
+    # has -- must not read as "evaluation subject is not checkpoint bytes".
+    assert MISMATCH not in finding_codes(_identity_pair(UNRESOLVED_A, UNRESOLVED_B))
+
+
+def test_two_unresolved_sides_with_identical_reasons_are_not_a_mismatch() -> None:
+    # This case passed BEFORE the fix, by accident of equal prose. It stays passing for a reason
+    # now, and is kept so the pair documents that the old verdict tracked the sentence.
+    assert MISMATCH not in finding_codes(_identity_pair(UNRESOLVED_A, dict(UNRESOLVED_A)))
+
+
+@pytest.mark.parametrize("unresolved_side", ["checkpoint", "subject"])
+def test_one_resolved_and_one_unresolved_side_is_inapplicable(unresolved_side: str) -> None:
+    # Asymmetric, so both directions are covered rather than one standing in for the other.
+    digest = "a" * 64
+    payload = (
+        _identity_pair(UNRESOLVED_A, digest)
+        if unresolved_side == "checkpoint"
+        else _identity_pair(digest, UNRESOLVED_A)
+    )
+    assert MISMATCH not in finding_codes(payload)
+
+
+def test_unresolvedness_is_still_reported_by_the_check_that_owns_it() -> None:
+    # The guard makes equality inapplicable; it does not let unresolvedness through. Without this
+    # row the fix could be read as weakening the manifest's resolution requirement.
+    codes = finding_codes(_identity_pair(UNRESOLVED_A, UNRESOLVED_B), require_resolved=True)
+    assert any(code.startswith("field.unresolved") or "unresolved" in code for code in codes), codes
+
+
+def test_two_resolved_digests_that_differ_are_still_a_mismatch() -> None:
+    # Over-closure guard: the check that matters must still bite on the case it exists for.
+    assert MISMATCH in finding_codes(_identity_pair("a" * 64, "b" * 64))
+
+
+def test_two_resolved_digests_that_agree_are_not_a_mismatch() -> None:
+    digest = "c" * 64
+    assert MISMATCH not in finding_codes(_identity_pair(digest, digest))
