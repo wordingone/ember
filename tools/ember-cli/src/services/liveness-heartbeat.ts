@@ -23,16 +23,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
+import { isHeadlessCapture, HEADLESS_CAPTURE_ENV } from "./headless-capture.ts";
+
+// Re-exported so this module's existing importers and tests keep one import site. The
+// predicate itself lives in headless-capture.ts because the heartbeat is only ONE of the
+// side effects a capture harness inherits -- see that module's header.
+export { isHeadlessCapture, HEADLESS_CAPTURE_ENV };
+/** @deprecated name kept for the tests that named it first; prefer isHeadlessCapture. */
+export const shouldSuppressForHeadlessCapture = isHeadlessCapture;
 
 export interface LivenessHeartbeatRow {
   ts:      string; // ISO8601Z -- when this heartbeat was written
   pid:     number;
   version: string; // build SHA or package version, whatever the caller has at hand
 }
-
-/** Env var a harness sets when it drives the COMPILED binary as a test instrument rather than as
- *  the operator's cockpit. Exact value "1"; see shouldSuppressForHeadlessCapture. */
-export const HEADLESS_CAPTURE_ENV = "EMBER_CLI_HEADLESS_CAPTURE";
 
 export interface LivenessHeartbeatWriterOptions {
   /** Overrides the resolved repo root -- tests point this at a scratch directory. */
@@ -58,40 +62,6 @@ export interface LivenessHeartbeatWriter {
   write: (nowMs?: number) => void;
 }
 
-/** Returns true when this process is a headless capture harness rather than the operator's
- *  cockpit, and must therefore publish nothing about cockpit liveness.
- *
- *  Why this exists: the heartbeat is not merely a status file, it is the input to
- *  scripts/liveness-watchdog.ps1, which RELAUNCHES the cockpit once the heartbeat ages past its
- *  threshold. So any process that writes a fresh heartbeat suppresses that relaunch -- it makes a
- *  dead cockpit look alive. The comment on the resolution-failure path below already names this
- *  hazard ("manufactures a false 'the cockpit is alive' signal") and guards the PATH half of it: a
- *  heartbeat at a root the watchdog never polls. This guards the WRITER half: a heartbeat at the
- *  root the watchdog polls constantly, written by something that is not the cockpit. That half is
- *  strictly worse, because it is the case the watchdog actually reads.
- *
- *  It became reachable when the palette-frame-capture harness began driving the compiled binary
- *  under a PTY to read its rendered cells. A harness that runs the real product inherits every
- *  side effect the product has, including the ones nobody wrote down as outputs -- and the run's
- *  isolated worktree does not contain this one, because the heartbeat resolves to the MAIN root
- *  by design (see the worktree assertions in this module's tests).
- *
- *  Exactly "1" enables it. A non-empty value that is not "1" is a typo, not an intent, so it warns
- *  loudly and changes nothing -- silently going inert on a garbled value would take a live
- *  cockpit's heartbeat away and provoke the very relaunch this guard exists to prevent. */
-export function shouldSuppressForHeadlessCapture(
-  env: Record<string, string | undefined> = process.env,
-): boolean {
-  const raw = env[HEADLESS_CAPTURE_ENV];
-  if (raw === undefined || raw === "") return false;
-  if (raw === "1") return true;
-  console.warn(
-    `[liveness-heartbeat] ${HEADLESS_CAPTURE_ENV}=${JSON.stringify(raw)} is not the exact value ` +
-      `"1" -- ignoring it and writing heartbeats normally. Set it to "1" to suppress.`,
-  );
-  return false;
-}
-
 /** #413: tools/ember-cli/state/ is gitignored repo-wide -- the root .gitignore's bare `state/`
  *  pattern matches at any depth (verified via `git check-ignore -v
  *  tools/ember-cli/state/cockpit-heartbeat.json`), so this path needs no new .gitignore line and
@@ -106,7 +76,7 @@ export function createLivenessHeartbeatWriter(
   // nothing even on the path where resolution SUCCEEDS -- which is every normal run, and the only
   // path that reaches the watchdog. Placing it after resolution would leave the defect intact and
   // only cover the failure case, which was already inert.
-  if (shouldSuppressForHeadlessCapture(options.env)) {
+  if (isHeadlessCapture(options.env)) {
     console.warn(
       `[liveness-heartbeat] ${HEADLESS_CAPTURE_ENV}=1 -- this process is a capture harness, not ` +
         `the cockpit; heartbeat writer is INERT (no file will ever be created or written).`,

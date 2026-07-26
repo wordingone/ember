@@ -1071,6 +1071,62 @@ describe("startActivityFeed — P0-B watermark/exclusion/coalescing (real fs)", 
   );
 
   it(
+    "HEADLESS CAPTURE: a harness run renders normally but publishes NO watermark, so the operator's next cockpit still sees the receipts",
+    async () => {
+      // A capture harness drives the real compiled binary, and screens/repl.ts mounts this engine
+      // unconditionally with DEFAULT deps -- so before this guard the harness stamped the
+      // watermark at the main repo root, and the operator's next cockpit read that map and
+      // suppressed replay. The receipts were "rendered" to a PTY nobody was reading.
+      const deps = baseDeps();
+      handle = startActivityFeed({ ...deps, env: { EMBER_CLI_HEADLESS_CAPTURE: "1" } });
+      await sleep(300);
+
+      const dir = path.join(deps.receiptsDir, "acceptance");
+      fs.mkdirSync(dir, { recursive: true });
+      const filePath = path.join(dir, "harness-seen.json");
+      fs.writeFileSync(filePath, JSON.stringify({ verdict: "GREEN" }));
+
+      await sleep(1200);
+      // It still RENDERS -- suppression is about publishing, not about crippling the instrument,
+      // and a harness that stopped rendering could not measure what it was built to measure.
+      expect(getActivityFeedState().recentLines.some((l) => l.text.includes("harness-seen.json"))).toBe(true);
+      // ...but nothing was published for anyone else to act on.
+      expect(fs.existsSync(deps.watermarkPath)).toBe(false);
+
+      // The load-bearing consequence, asserted through the real consumer rather than inferred
+      // from the absent file: a fresh cockpit-mode engine on the same watermark path renders the
+      // receipt, because no prior run claimed to have shown it.
+      handle?.stop();
+      handle = startActivityFeed(deps);
+      await sleep(300);
+      fs.writeFileSync(filePath, JSON.stringify({ verdict: "GREEN", touched: true }));
+      await sleep(1200);
+      expect(getActivityFeedState().recentLines.some((l) => l.text.includes("harness-seen.json"))).toBe(true);
+    },
+    12000,
+  );
+
+  it(
+    "a value that is not exactly \"1\" leaves the engine publishing normally",
+    async () => {
+      // Fail-safe direction, same as the heartbeat guard: silently suppressing on a garbled value
+      // would take a real cockpit's watermark away and reintroduce the replay flood the watermark
+      // exists to stop.
+      const deps = baseDeps();
+      handle = startActivityFeed({ ...deps, env: { EMBER_CLI_HEADLESS_CAPTURE: "true" } });
+      await sleep(300);
+
+      const dir = path.join(deps.receiptsDir, "acceptance");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, "cockpit-seen.json"), JSON.stringify({ verdict: "GREEN" }));
+
+      await sleep(1200);
+      expect(fs.existsSync(deps.watermarkPath)).toBe(true);
+    },
+    8000,
+  );
+
+  it(
     "coalesces a burst of simultaneously-materialized files into one summarized line, not N individual lines",
     async () => {
       const deps = baseDeps();
