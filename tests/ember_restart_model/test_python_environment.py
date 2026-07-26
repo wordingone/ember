@@ -149,6 +149,26 @@ def test_unknown_manifest_field_fails_closed() -> None:
         python_environment.validate_manifest_shape(manifest)
 
 
+def test_prose_authority_rejects_windows_rooted_path() -> None:
+    manifest = load_manifest()
+    manifest["prose_authority"][0]["path"] = r"\Windows\outside.md"
+    with pytest.raises(
+        python_environment.EnvironmentContractError,
+        match="unsafe or duplicate",
+    ):
+        python_environment.validate_manifest_shape(manifest)
+
+
+def test_linked_manifest_rejects_windows_rooted_path() -> None:
+    manifest = load_manifest()
+    manifest["linked_manifests"]["rust"] = r"\Windows\Cargo.toml"
+    with pytest.raises(
+        python_environment.EnvironmentContractError,
+        match="must be repo-relative",
+    ):
+        python_environment.validate_manifest_shape(manifest)
+
+
 def test_cli_rejects_an_alternate_manifest_authority(tmp_path: Path) -> None:
     alternative = tmp_path / "parallel-authority.json"
     alternative.write_text(

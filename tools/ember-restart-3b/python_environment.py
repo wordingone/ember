@@ -322,7 +322,12 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
             raise EnvironmentContractError(
                 f"{label}.required_marker must equal the authority marker"
             )
-        if path in seen_paths or Path(path).is_absolute() or ".." in Path(path).parts:
+        relative_path = Path(path)
+        if (
+            path in seen_paths
+            or relative_path.anchor
+            or ".." in relative_path.parts
+        ):
             raise EnvironmentContractError(f"{label}.path is unsafe or duplicate")
         seen_paths.add(path)
 
@@ -332,7 +337,8 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
     _require_exact_keys(linked, _LINKED_KEYS, "linked_manifests")
     for key in sorted(_LINKED_KEYS):
         path = _require_text(linked.get(key), f"linked_manifests.{key}")
-        if Path(path).is_absolute() or ".." in Path(path).parts:
+        relative_path = Path(path)
+        if relative_path.anchor or ".." in relative_path.parts:
             raise EnvironmentContractError(
                 f"linked_manifests.{key} must be repo-relative"
             )
