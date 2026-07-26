@@ -369,6 +369,28 @@ export function redactPublicText(text: string, hostPaths: string[]): string {
     .toString("utf8");
 }
 
+export function publicFailureFrame(
+  frame: string,
+  hostPaths: string[],
+): string {
+  let publicFrame = frame;
+  for (const hostPath of [...new Set(hostPaths)].sort(
+    (left, right) => right.length - left.length,
+  )) {
+    publicFrame = publicFrame.replaceAll(hostPath, "<HOST_PATH>");
+  }
+  return redactPublicText(publicFrame, []);
+}
+
+export function attemptDetail(status: AttemptRow["status"]): string {
+  if (status === "PASS") return "effect-bearing frame delta observed";
+  if (status === "PREFLIGHT_ONLY") {
+    return "preflight-only product outcome observed";
+  }
+  if (status === "NO_EFFECT") return "instrument observed no attributable effect";
+  return "operator surface refused";
+}
+
 
 interface ReproducibleBuildEvidence {
   rebuildBinarySha256: string;
@@ -709,7 +731,10 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
           frame_artifact: "",
           detail: error instanceof Error ? error.message : String(error),
         });
-        const failedFrame = `${visibleFrameLines(terminal).join("\n")}\n`;
+        const failedFrame = publicFailureFrame(
+          `${visibleFrameLines(terminal).join("\n")}\n`,
+          [repoRoot, home, binary],
+        );
         const failedArtifact = artifactPath(
           repoRoot,
           join(outDir, `action-${index + 1}-${action}.frame.txt`),
@@ -786,7 +811,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         input: redactPublicText(input, [repoRoot, home, binary]),
         status,
         frame_artifact: frameArtifact,
-        detail: status === "PASS" ? "effect-bearing frame delta observed" : "operator surface refused",
+        detail: attemptDetail(status),
       });
       let stateEvidence: LifecycleStateEvidence | null = null;
       let effectEvidence = Buffer.from(semanticDelta, "utf8");
