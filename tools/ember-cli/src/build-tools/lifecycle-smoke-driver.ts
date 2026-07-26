@@ -24,6 +24,7 @@ import { READY_OSC } from "../cli/ready-sentinel.ts";
 import { buildCommitBanner } from "./build-cockpit.ts";
 import {
   LIFECYCLE_ACTIONS,
+  validateLifecycleActionArtifacts,
   validateLifecycleReceipt,
   type LifecycleAction,
   type LifecycleActionEvidence,
@@ -653,6 +654,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       state_evidence: null,
       frame_artifact: launchArtifact,
       delta_artifact: launchDeltaArtifact,
+      delta_sha256: sha256(readyFrame),
       repair_item: null,
     });
     attempts.push({
@@ -717,9 +719,11 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
           repoRoot,
           join(outDir, `action-${index + 1}-${action}.delta.txt`),
         );
+        const failedDelta =
+          `no effect-bearing frame delta: ${String(error)}\n`;
         writeFileSync(
           join(repoRoot, failedDeltaArtifact),
-          `no effect-bearing frame delta: ${String(error)}\n`,
+          failedDelta,
           "utf8",
         );
         evidence.push({
@@ -737,6 +741,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
           state_evidence: null,
           frame_artifact: failedArtifact,
           delta_artifact: failedDeltaArtifact,
+          delta_sha256: sha256(failedDelta),
           repair_item: `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
         });
         continue;
@@ -827,8 +832,8 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         action,
         ordinal: index + 1,
         input_sha256: sha256(input),
-        before_frame_sha256: sha256(driven.before),
-        after_frame_sha256: sha256(driven.after),
+        before_frame_sha256: sha256(publicBefore),
+        after_frame_sha256: sha256(publicFrame),
         effect_evidence_sha256: sha256(effectEvidence),
         effect_kind: effectKind,
         outcome: status,
@@ -836,6 +841,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         state_evidence: stateEvidence,
         frame_artifact: frameArtifact,
         delta_artifact: deltaArtifact,
+        delta_sha256: sha256(semanticDelta),
         repair_item: status === "PASS"
           ? null
           : action === "train" && status === "PREFLIGHT_ONLY"
@@ -923,6 +929,12 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       binarySha256: binarySha,
       builderSha256: build.builderExecutableSha256Before,
     });
+    for (const row of receipt.actions) {
+      validateLifecycleActionArtifacts(
+        row,
+        (artifact) => readFileSync(join(repoRoot, artifact)),
+      );
+    }
     writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
   } finally {
     if (child != null) {

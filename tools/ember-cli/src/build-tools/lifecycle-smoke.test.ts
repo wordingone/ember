@@ -94,6 +94,7 @@ function validReceipt(): LifecycleReceipt {
           : null,
         frame_artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.frame.txt`,
         delta_artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.delta.txt`,
+        delta_sha256: String(index + 61).padStart(64, "0"),
         repair_item: outcome === "PASS"
           ? null
           : `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
@@ -155,6 +156,41 @@ describe("validateLifecycleReceipt", () => {
       ok: true,
       action_count: 9,
     });
+  });
+
+  test("rehashes public frame, delta, and durable state artifacts", async () => {
+    const contract = await import("./lifecycle-smoke.ts");
+    expect(contract.validateLifecycleActionArtifacts).toBeFunction();
+    const validateLifecycleActionArtifacts =
+      contract.validateLifecycleActionArtifacts!;
+    const receipt = validReceipt();
+    const launch = receipt.actions.find((row) => row.action === "launch")!;
+    launch.after_frame_sha256 =
+      "3c04009b8f1d7bee2e496be23c08761744b26c499ca15f3c125643be85c86e0c";
+    launch.delta_sha256 =
+      "673953e0ad7fc53247f4feadc2c2d4506396840d1f8796526f48d47333ac7652";
+    expect(validateLifecycleActionArtifacts(launch, (artifact) => {
+      if (artifact === launch.frame_artifact) return Buffer.from("frame\n");
+      if (artifact === launch.delta_artifact) return Buffer.from("delta\n");
+      throw new Error("unexpected artifact");
+    })).toEqual({ ok: true });
+    expect(() => validateLifecycleActionArtifacts(launch, (artifact) => {
+      if (artifact === launch.frame_artifact) return Buffer.from("forged\n");
+      return Buffer.from("delta\n");
+    })).toThrow("frame artifact");
+
+    const pause = receipt.actions.find((row) => row.action === "pause")!;
+    pause.after_frame_sha256 = launch.after_frame_sha256;
+    pause.delta_sha256 = launch.delta_sha256;
+    pause.effect_evidence_sha256 =
+      "927489cb2fcdb32e302713f6a720397868b71dd2128c734181983f367d622c24";
+    pause.state_evidence!.delta_sha256 = pause.effect_evidence_sha256;
+    expect(validateLifecycleActionArtifacts(pause, (artifact) => {
+      if (artifact === pause.frame_artifact) return Buffer.from("frame\n");
+      if (artifact === pause.delta_artifact) return Buffer.from("delta\n");
+      if (artifact === pause.state_evidence!.artifact) return Buffer.from("state\n");
+      throw new Error("unexpected artifact");
+    })).toEqual({ ok: true });
   });
 
   test("refuses NO_EFFECT because it is an instrument failure", () => {
