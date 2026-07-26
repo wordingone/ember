@@ -748,11 +748,19 @@ export function hostMetricLines(id: HostMetricId, series: HostMetricSeries | und
   // Bound from here down. Empty -> empty axis; null latest -> gap glyphs + the stated reason.
   const latest = series.values.length > 0 ? series.values[series.values.length - 1] : undefined;
   const reason = latest === null && series.unavailableReason ? ` [${series.unavailableReason}]` : "";
+  // R1e (state/operator-pass-2026-07-26.md W3-diagnosed -- corrected root cause): the caller's
+  // total line budget (`20 + plotColumns`, this component's own innerWidth) has ZERO slack beyond
+  // `prefix.length + columns` -- the outer `boundedSurfaceLine` pass silently truncated any
+  // trailing `reason` bracket the moment one was present, e.g. "loss SOURCE UNBOU…" losing the
+  // reason text entirely rather than the axis losing a cell. Reserving `reason`'s own width out of
+  // the plot budget up front keeps the line's TOTAL length identical to before (so nothing else
+  // downstream changes) while the reason text itself survives instead of getting clipped.
+  const spendWidth = Math.max(1, columns - reason.length);
   if (rows <= 1) {
-    const spark = sparklineRow(series.values, columns);
+    const spark = sparklineRow(series.values, spendWidth);
     return [`${prefix}${spark}${reason}`];
   }
-  const chart = renderChart(series.values, { width: columns, height: Math.floor(rows) });
+  const chart = renderChart(series.values, { width: spendWidth, height: Math.floor(rows) });
   const blankPrefix = " ".repeat(prefix.length);
   return chart.rows.map((row, index) => {
     const label = index === 0 ? prefix : blankPrefix;
