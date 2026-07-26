@@ -58,7 +58,32 @@ jobs:
           # identity, or the automation itself; each needs a deliberate human
           # merge even when green and approved. A PR touching ANY of them is
           # skipped in full — the exclusion is per-PR, not per-file.
-          PROTECTED_RE='^(INVARIANT\.md|GOAL\.md|\.github/workflows/|docs/authority/|goals/|constitution)'
+          #
+          # tools/, scripts/, build-tools/ and .githooks/ are here for a
+          # specific reason that is easy to miss: branch protection matches
+          # check NAMES, not implementations, and both required checks run the
+          # PR's OWN copy of their scripts. repo-guard.yml uses
+          # actions/checkout@v4 on the merge ref and then executes
+          # `tools/repo-guard.sh` and `scripts/check_pr_authority_binding.py`;
+          # ember-cli-lifecycle-smoke.yml executes
+          # `build-tools/lifecycle-smoke.test.ts`. So a PR that edits any of
+          # those bytes is graded by its own edited grader — it could reduce a
+          # required check to a no-op, pass it, and auto-land. That is the
+          # subject writing the bytes its own verdict depends on. The exclusion
+          # is by the DEPTH-1 files of tools/ and scripts/ rather than by an
+          # exact filename list, because repo-guard.sh reads its neighbours at
+          # that same level -- check_line_endings.py, check_names_hashed.py,
+          # check_no_temp.py, repo-guard-denylist.sha256, and especially
+          # repo-guard-names-exclude.txt, which lists the path prefixes the
+          # name check skips. An exact filename list would go stale the first
+          # time one of them grew a helper.
+          #
+          # It is NOT the whole of tools/: tools/ember-cli/ and its siblings
+          # are ordinary product source that the guard merely inspects, and
+          # excluding them wholesale drops eligible PRs from 24 to 5 on the
+          # current backlog -- which would trade the bottleneck this workflow
+          # exists to remove for a slightly different one.
+          PROTECTED_RE='^(INVARIANT\.md|GOAL\.md|\.github/workflows/|\.githooks/|tools/[^/]+$|scripts/[^/]+$|build-tools/|docs/authority/|goals/|constitution)'
 
           if [ -n "${EVENT_PR:-}" ]; then
             PRS="$EVENT_PR"
