@@ -464,6 +464,24 @@ describe("compiled lifecycle action completion", () => {
     const redacted = driver.redactPublicText!(`${backslashProbe} ${slashProbe}`, []);
     expect(redacted).not.toContain(backslashProbe);
     expect(redacted).not.toContain(slashProbe);
+
+    expect(driver.attemptDetail).toBeFunction();
+    expect(driver.attemptDetail!("PASS")).toBe(
+      "effect-bearing frame delta observed",
+    );
+    expect(driver.attemptDetail!("PREFLIGHT_ONLY")).toBe(
+      "preflight-only product outcome observed",
+    );
+    expect(driver.attemptDetail!("REFUSED")).toBe("operator surface refused");
+
+    expect(driver.publicFailureFrame).toBeFunction();
+    const failedFrame = driver.publicFailureFrame!(
+      `failure under ${backslashProbe} and ${slashProbe}`,
+      [backslashProbe, slashProbe],
+    );
+    expect(failedFrame).not.toContain(backslashProbe);
+    expect(failedFrame).not.toContain(slashProbe);
+    expect(failedFrame).toContain("<HOST_PATH>");
   });
 
   test("submits a second Enter only while the slash command remains pending", async () => {
