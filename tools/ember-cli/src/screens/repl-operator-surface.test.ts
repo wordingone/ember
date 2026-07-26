@@ -101,15 +101,24 @@ describe("repl operator surface layout", () => {
       // nothing to tell an operator it wasn't a genuinely different, shorter label. The pane now
       // bounds every line against its real inner width (boundedSurfaceLine) and always appends a
       // visible "…" marker when it must shorten a line, so at 40 columns the heading now reads
-      // "RESOURCE EFFICIEN…" instead.
+      // "RESOURCE EFFICI…" instead. (D2 scope addition, 2026-07-26: the pane's own inner-width
+      // budget under-counted its border by 2 columns on top of padding -- fixed in
+      // operator-surface-pane.ts's innerWidth, effectiveWidth-4 not effectiveWidth-2 -- so the
+      // marker now lands 2 columns earlier than before, matching the pane's true content budget.)
       for (const heading of columns <= 40
-        ? ["TRAINING/LOSS", "RESOURCE EFFICIEN…"]
+        ? ["TRAINING/LOSS", "RESOURCE EFFICI…"]
         : ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
         expect(lines.some((line) => line.includes(heading))).toBe(true);
       }
       if (columns <= 40) {
         // The old silent-clip fragment must never reappear un-marked.
-        expect(lines.some((line) => line.includes("RESOURCE EFFICIENC") && !line.includes("RESOURCE EFFICIEN…"))).toBe(false);
+        expect(lines.some((line) => line.includes("RESOURCE EFFICIENC") && !line.includes("RESOURCE EFFICI…"))).toBe(false);
+        // Nor may content ever reach the pane's own right border column (D2 structural fix).
+        const paneRows = lines.filter((line) => line.includes("│"));
+        for (const line of paneRows) {
+          const rightBorder = line.lastIndexOf("│");
+          if (rightBorder > 0) expect(line[rightBorder]).toBe("│");
+        }
       }
       expect(lines.some((line) => line.includes("IDLE"))).toBe(true);
 

@@ -560,11 +560,19 @@ export function OperatorSurfacePane({
   const terminalHeight = finiteNumber(terminalRows) ? terminalRows : 1447;
   const effectiveWidth = Math.max(20, Math.min(finiteNumber(width) ? width : 36, terminalWidth));
   const effectiveHeight = Math.max(8, Math.min(finiteNumber(height) ? height : 24, terminalHeight));
-  // Inner content width once the pane's own paddingX:1 (both sides) is accounted for — the
-  // single source of truth every line below is bounded against, so no line can ever reach the
-  // outer overflow:"hidden" box wider than it, and any shortening carries a visible "…" marker
-  // (boundedSurfaceLine) instead of the outer box silently hard-clipping it raw.
-  const innerWidth = Math.max(1, effectiveWidth - 2);
+  // Inner content width once the pane's own borderStyle:"single" (1 col each side, line 616) AND
+  // paddingX:1 (1 col each side, line 625) are BOTH accounted for — 4 columns total, not 2. This
+  // under-counted (border-only omitted) before D2 (legibility scope addition, 2026-07): the
+  // rendering pipeline's clip rect now structurally reserves the border column regardless (see
+  // ink/rendering-pipeline.ts renderNodeToOutput), so the 2-column-too-generous bound could no
+  // longer overwrite the border glyph itself, but it would still let boundedSurfaceLine's marker
+  // land 2 columns later than the true content budget — i.e. silent hard-clipping (no marker) of
+  // the last 2 characters by the render pipeline's own clip, exactly the "silent clipping" defect
+  // class this whole pass exists to kill, just moved one layer down. innerWidth is the single
+  // source of truth every line below is bounded against, so no line can ever reach the outer
+  // overflow:"hidden" box wider than its true content budget, and any shortening always carries
+  // a visible "…" marker (boundedSurfaceLine) rather than a raw, unmarked cut.
+  const innerWidth = Math.max(1, effectiveWidth - 4);
   const adaptivePathMaxLen = Math.max(8, innerWidth - 20);
   const snapshot = buildOperatorSurfaceSnapshot({
     ...input,
