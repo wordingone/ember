@@ -163,5 +163,8 @@ def test_post_merge_capture_workflow_is_manual_read_only_and_artifact_only() -> 
     assert "baseline_run_id:" in text
     assert "gh run download" in text
     assert "compare_remote_branch_salvage_captures.py" in text
+    assert "BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}" in text
+    assert 'baseline_run_id="${BASELINE_RUN_ID}"' in text
+    assert "baseline_run_id='${{ inputs.baseline_run_id }}'" not in text
     assert '--expected-first-run-id "${baseline_run_id}"' in text
     assert '--expected-second-run-id "${GITHUB_RUN_ID}"' in text
