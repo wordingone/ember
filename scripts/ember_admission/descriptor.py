@@ -13,6 +13,7 @@ from typing import Any, Mapping
 ROLE_KEYS = {"role", "path", "sha256"}
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 ROLE_RE = re.compile(r"[a-z][a-z0-9_.-]*")
+CANDIDATE_ID_RE = re.compile(r"[a-z][a-z0-9_-]*")
 REQUIRED_ROLES = {
     "artifact_bundle",
     "checkpoint",
@@ -45,7 +46,7 @@ def validate_descriptor(payload: Mapping[str, Any]) -> None:
     candidate_id = payload.get("candidate_id")
     if (
         not isinstance(candidate_id, str)
-        or ROLE_RE.fullmatch(candidate_id) is None
+        or CANDIDATE_ID_RE.fullmatch(candidate_id) is None
     ):
         raise ValueError("descriptor.candidate_id")
     rows = payload.get("roles")

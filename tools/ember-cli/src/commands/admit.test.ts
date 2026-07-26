@@ -71,4 +71,68 @@ describe("/admit command", () => {
     expect(result?.message).toContain("usage:");
     expect(calls).toBe(0);
   });
+
+  it("refuses any output namespace overlapping the live owned selection before spawning", async () => {
+    const overlappingRoots = [
+      "C:/config/owned",
+      "C:/config/owned/current.json",
+      "C:/config/owned/current.json/candidates",
+      ...(process.platform === "win32" ? ["c:/CONFIG/OWNED"] : []),
+    ];
+    for (const outputRoot of overlappingRoots) {
+      let calls = 0;
+      const command = createAdmitCommand({
+        getConfigHome: () => "C:/config",
+        runProducer() {
+          calls += 1;
+          return { status: 0, stdout: "{}" };
+        },
+      });
+
+      const result = await command.execute(
+        `--workspace C:/operator --descriptor C:/operator/admission.json --output-root ${outputRoot}`,
+        { sessionId: "s", mode: "local", cwd: "C:/ember" },
+      );
+
+      expect(result).toEqual({
+        type: "message",
+        message: "admission output overlaps live owned selection",
+        exitCode: 2,
+      });
+      expect(calls).toBe(0);
+    }
+  });
+
+  it("rejects reserved candidate ids returned by the producer", async () => {
+    let verificationCalls = 0;
+    const command = createAdmitCommand({
+      runProducer() {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            candidate_id: "current.json",
+            candidate_sha256: "a".repeat(64),
+            producer_receipt_sha256: "b".repeat(64),
+            ok: true,
+            selected: false,
+            loaded: false,
+            training_started: false,
+          }),
+        };
+      },
+      verifyReceipt() {
+        verificationCalls += 1;
+        return null;
+      },
+    });
+
+    const result = await command.execute(
+      "--workspace C:/operator --descriptor C:/operator/admission.json --output-root C:/candidates",
+      { sessionId: "s", mode: "local", cwd: "C:/ember" },
+    );
+
+    expect(result?.exitCode).toBe(2);
+    expect(result?.message).toContain("invalid authority evidence");
+    expect(verificationCalls).toBe(0);
+  });
 });

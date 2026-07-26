@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { isAbsolute, join, parse, relative, resolve, sep } from "path";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
+import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 
 
@@ -17,6 +18,7 @@ export interface AdmissionRunResult {
 }
 
 export interface AdmitCommandDeps {
+  getConfigHome?: () => string;
   producerPath?: string;
   pythonExecutable?: string;
   runProducer?: (
@@ -167,7 +169,19 @@ function collectCandidateTree(candidateRoot: string): {
   return walk(candidateRoot) ? { files, directories } : null;
 }
 
-const CANDIDATE_ID_RE = /^[a-z][a-z0-9_.-]*$/;
+const CANDIDATE_ID_RE = /^[a-z][a-z0-9_-]*$/;
+function pathsOverlap(left: string, right: string): boolean {
+  const fold = (value: string): string => {
+    const absolute = resolve(value).replace(/[\\/]+$/u, "");
+    return process.platform === "win32" ? absolute.toLocaleLowerCase("en-US") : absolute;
+  };
+  const leftPath = fold(left);
+  const rightPath = fold(right);
+  const boundary = sep;
+  return leftPath === rightPath ||
+    leftPath.startsWith(`${rightPath}${boundary}`) ||
+    rightPath.startsWith(`${leftPath}${boundary}`);
+}
 function parseOptions(args: string): AdmitOptions | null {
   const parts = args.trim().split(/\s+/).filter(Boolean);
   const values = new Map<string, string>();
@@ -449,6 +463,7 @@ export function verifyAdmissionProducerReceipt(
 }
 
 export function createAdmitCommand(deps: AdmitCommandDeps = {}): RegistryCommand {
+  const getConfigHome = deps.getConfigHome ?? getEmberConfigHomeDir;
   const runProducer = deps.runProducer ?? defaultRunProducer;
   const pythonExecutable = deps.pythonExecutable ?? "python";
   const verifyReceipt = deps.verifyReceipt ?? verifyAdmissionProducerReceipt;
@@ -461,6 +476,18 @@ export function createAdmitCommand(deps: AdmitCommandDeps = {}): RegistryCommand
       const options = parseOptions(args);
       if (options === null) {
         return { type: "message" as const, message: USAGE, exitCode: 2 };
+      }
+      const currentSelection = join(
+        getConfigHome(),
+        "owned",
+        "current.json",
+      );
+      if (pathsOverlap(options.outputRoot, currentSelection)) {
+        return {
+          type: "message" as const,
+          message: "admission output overlaps live owned selection",
+          exitCode: 2,
+        };
       }
       const sourceRoot = resolveEmberSourceRootOrCwd(
         { startDir: context.cwd },
