@@ -519,6 +519,22 @@ def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dic
     # precisely what prune would have done for this record, scoped to it.
     prune_one_worktree_metadata(repo, record["path"])
 
+    # VERIFY THE OUTCOME, not the call. The remover reports False both for "already gone"
+    # and for "could not find or read the record", and those are opposite facts -- so its
+    # return value cannot decide anything. Ask git instead, under the same lock: if the
+    # path is still listed, the metadata survived, and popping the row here would turn a
+    # managed-but-stale worktree into an UNMANAGED one, which blocks the repo again. Same
+    # stranded state as the collateral bug, relocated onto the requested row.
+    #
+    # The re-list is authoritative in both directions, which is why it is the check rather
+    # than the boolean: it passes for the legitimate already-pruned case and fails for
+    # every way the removal can silently not happen.
+    if any(row.key == key for row in list_worktrees(repo)):
+        raise LifecycleError(
+            "METADATA_REMOVAL_FAILED",
+            f"{record['path']} is still registered with Git after target-scoped removal; row preserved",
+        )
+
     state["managed"].pop(key)
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
     write_state(state_file, state)

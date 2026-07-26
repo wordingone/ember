@@ -707,6 +707,59 @@ def test_reconcile_touches_only_the_requested_row_and_its_metadata(tmp_path: Pat
     assert lifecycle(repo, "audit", check=False).returncode == 0
 
 
+def load_lifecycle_module():
+    """Import the tool in-process, for the one negative that needs to fail its own removal."""
+    import importlib.util
+
+    name = "worktree_lifecycle_under_test"
+    spec = importlib.util.spec_from_file_location(name, SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: @dataclass resolves its annotations through sys.modules, and
+    # an unregistered module makes that lookup return None mid-import.
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_reconcile_preserves_the_row_when_the_metadata_survives(tmp_path: Path) -> None:
+    """The row and its Git metadata leave together, or neither leaves.
+
+    The target-scoped remover returns False for two opposite facts -- "already gone" and
+    "could not find or read the record" -- so its return value cannot decide anything. If
+    the metadata survives and the row is popped anyway, the exact path becomes an
+    UNMANAGED_WORKTREE and blocks the repo: the same stranded state as the global-prune
+    collateral, relocated onto the requested row.
+
+    So the check is a re-list under the same lock, which is authoritative in both
+    directions. Here the removal is made to do nothing, which is the production failure
+    outcome, and reconcile must refuse rather than write.
+    """
+    module = load_lifecycle_module()
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    gone = _managed(repo, tmp_path, "removal-fails")
+    shutil.rmtree(gone)
+
+    module.prune_one_worktree_metadata = lambda *_args, **_kwargs: False
+
+    state_file = state_path(repo)
+    try:
+        module.reconcile_worktree(Path(repo), Path(state_file), str(gone))
+    except module.LifecycleError as caught:
+        assert caught.code == "METADATA_REMOVAL_FAILED"
+    else:  # pragma: no cover - the assertion below reports it either way
+        raise AssertionError("reconcile must refuse when the metadata survives")
+
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    assert path_key_of(gone) in state["managed"], "the row must survive a failed removal"
+
+    # The registry is no worse than before: still managed, still listed, still recoverable
+    # by a reconcile that CAN remove the metadata.
+    assert lifecycle(repo, "audit", check=False).returncode == 0
+    assert '"status": "RECONCILED"' in lifecycle(repo, "reconcile", "--path", str(gone)).stdout
+
+
 def test_reconcile_refuses_a_live_worktree(tmp_path: Path) -> None:
     """A live worktree is retire's business -- retire carries the clean-tree and
     archive-ref checks this verb deliberately lacks. Reconcile must never become a
