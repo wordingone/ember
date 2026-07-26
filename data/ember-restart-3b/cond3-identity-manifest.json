@@ -19,13 +19,22 @@
   },
   "checkpoint": {
     "format": "ember-checkpoint-envelope-v1",
-    "byte_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "byte_sha256": {
+      "status": "unresolved",
+      "reason": "clean-genesis pre-birth manifest: no checkpoint bytes exist yet, so no byte digest can be taken without fabricating one"
+    },
     "tensors": [
       {
         "name": "declared-genesis-placeholder",
-        "shape": [1, 1],
+        "shape": [
+          1,
+          1
+        ],
         "dtype": "float32",
-        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "sha256": {
+          "status": "unresolved",
+          "reason": "clean-genesis pre-birth manifest: this tensor has not been materialized, so it has no bytes to digest"
+        }
       }
     ],
     "ancestry": [],
@@ -97,12 +106,27 @@
   },
   "capabilities": {
     "native_modalities": {
-      "text": { "state": "UNVERIFIED", "evidence_receipts": [] },
-      "image": { "state": "UNVERIFIED", "evidence_receipts": [] },
-      "audio": { "state": "UNVERIFIED", "evidence_receipts": [] }
+      "text": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "image": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "audio": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      }
     },
-    "reasoning": { "state": "UNVERIFIED", "evidence_receipts": [] },
-    "structured_tool_use": { "state": "UNVERIFIED", "evidence_receipts": [] }
+    "reasoning": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    },
+    "structured_tool_use": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    }
   },
   "mechanisms": {
     "experts": [],
@@ -143,7 +167,10 @@
       "status": "unresolved",
       "reason": "no benchmark has been executed yet"
     },
-    "subject_checkpoint_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "subject_checkpoint_sha256": {
+      "status": "unresolved",
+      "reason": "clean-genesis pre-birth manifest: no subject checkpoint exists to evaluate, so no digest can be taken"
+    },
     "comparator_identity": {
       "status": "unresolved",
       "reason": "no benchmark has been executed yet"
@@ -169,21 +196,28 @@
   "provenance": {
     "ownership": "OWNED_CLEAN_GENESIS",
     "exclusion_reasons": [],
-    "learned_signal_sources": ["owned_training_data"],
-    "neural_capability_credit_sources": ["owned_checkpoint"]
+    "learned_signal_sources": [
+      "owned_training_data"
+    ],
+    "neural_capability_credit_sources": [
+      "owned_checkpoint"
+    ]
   },
   "unresolved": [
-    "training.optimizer_state_sha256",
-    "training.stopping_rule.receipt_sha256",
     "backend.executable_sha256",
     "backend.process_identity",
     "backend.process_receipt_sha256",
     "backend.resource_lease_id",
-    "evaluation.harness_sha256",
+    "checkpoint.byte_sha256",
+    "checkpoint.tensors[0].sha256",
     "evaluation.comparator_identity",
     "evaluation.comparator_sha256",
+    "evaluation.harness_sha256",
+    "evaluation.receipt_sha256",
     "evaluation.score",
+    "evaluation.subject_checkpoint_sha256",
     "evaluation.uncertainty",
-    "evaluation.receipt_sha256"
+    "training.optimizer_state_sha256",
+    "training.stopping_rule.receipt_sha256"
   ]
 }

@@ -383,3 +383,69 @@ def test_named_command_is_truthful_no_placeholder(cfg):
     # the named command must never point at it, and the note must say why.
     assert "timeshare_pretrain.py" not in cmd["command"]
     assert "historical_only" in cmd["note"]
+
+
+# ---- cond3 unresolved identity (GAP-3) --------------------------------------
+# checkpoint.byte_sha256 and evaluation.subject_checkpoint_sha256 both widened to
+# sha256OrUnresolved. The mismatch check between them was a raw `!=`, so on a
+# clean-genesis pre-birth manifest it compared two unresolved OBJECTS -- which
+# differ exactly when their `reason` prose differs. The verdict was a function of
+# an English sentence: identical reasons passed, honest per-field reasons failed.
+
+def _identity_manifest():
+    import json as _json
+    from pathlib import Path as _Path
+    root = _Path(__file__).resolve().parents[2]
+    return _json.loads(
+        (root / "data/ember-restart-3b/cond3-identity-manifest.json").read_text(encoding="utf-8")
+    )
+
+
+def test_unresolved_pair_is_not_a_subject_checkpoint_mismatch():
+    import copy as _copy, sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / "scripts"))
+    from ember_01_identity.validate_identity import validate_manifest
+
+    payload = _identity_manifest()
+    # The two reasons are deliberately DIFFERENT -- an honest manifest states why
+    # each field is unresolved, and equality of prose must not decide identity.
+    assert payload["checkpoint"]["byte_sha256"]["reason"] != \
+        payload["evaluation"]["subject_checkpoint_sha256"]["reason"]
+    validate_manifest(_copy.deepcopy(payload))  # raises on any finding
+
+
+def test_resolved_mismatch_is_still_caught():
+    import copy as _copy, pytest as _pytest, sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / "scripts"))
+    from ember_01_identity.validate_identity import validate_manifest, IdentityValidationError
+
+    payload = _copy.deepcopy(_identity_manifest())
+    payload["checkpoint"]["byte_sha256"] = "11" * 32
+    payload["evaluation"]["subject_checkpoint_sha256"] = "22" * 32
+    payload["unresolved"] = [
+        p for p in payload["unresolved"]
+        if p not in ("checkpoint.byte_sha256", "evaluation.subject_checkpoint_sha256")
+    ]
+    with _pytest.raises(IdentityValidationError) as excinfo:
+        validate_manifest(payload)
+    codes = {f.get("code") for f in excinfo.value.findings}
+    assert "evaluation.subject_checkpoint_mismatch" in codes
+
+
+def test_require_resolved_rejects_every_unresolved_identity_path():
+    import copy as _copy, pytest as _pytest, sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / "scripts"))
+    from ember_01_identity.validate_identity import validate_manifest, IdentityValidationError
+
+    with _pytest.raises(IdentityValidationError) as excinfo:
+        validate_manifest(_copy.deepcopy(_identity_manifest()), require_resolved=True)
+    paths = {f.get("detail") for f in excinfo.value.findings if f.get("code") == "field.unresolved"}
+    for required in (
+        "checkpoint.byte_sha256",
+        "checkpoint.tensors[0].sha256",
+        "evaluation.subject_checkpoint_sha256",
+    ):
+        assert required in paths, required
