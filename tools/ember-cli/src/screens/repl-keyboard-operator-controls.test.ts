@@ -21,19 +21,41 @@
 // the full key-byte boundary, on the one row whose own premise is unreachable at that boundary.
 // Every other row (2 through S3) drives real key bytes into a real mounted ReplScreen exactly as
 // the click test does.
+//
+// DD1-DD4 below (added for the #P1 dual-dispatch repair, R2b keyboard-authority fix) are the same
+// shape, entering at the same real key-byte boundary, but each proves a NEGATIVE as well as a
+// positive: that repl.ts's own operator-pane handler acts on a key AND that usePromptInput's own
+// handler -- registered on the exact same shared dispatcher (ink/hooks.ts's `_inputHandlers`) --
+// never also acts on it while the pane holds focus. Two of the four (DD1 Shift+Tab's
+// cyclePermissionMode, DD2 Alt+P's openModelPicker) have NO production render or callback surface
+// at all: `permissionModeStatusLine` is dead in production (prompt-input.ts's own comment: "repl.ts
+// :showStatusLine is always false"), and `onModelPickerOpen`/`onEditorOpen` have zero call sites
+// anywhere in repl.ts (grep-verified) -- both effects are invoked ONLY from usePromptInput's own
+// internal useInput handler, so nothing downstream can ever show they didn't fire. Row 1 above hit
+// the identical wall (no telemetry state makes its premise reachable at the full boundary) and
+// dropped one level to the pure step function; DD1/DD2 drop to the same next level down --
+// `usePromptInput` itself, still the real hook, the real shared dispatcher, and the real stdin
+// bridge, just with `keyboardActive` set explicitly to the value ReplScreen computes (`!paneFocused`)
+// instead of being driven by a live pane, and with the otherwise-unrendered state made visible (or
+// spied) by the test's own wrapper -- exactly as `mountForKeyboard`'s own wrapper already renders
+// context/props no production entry point renders unassisted. Each of DD1/DD2 also includes a
+// sensitivity check (the identical bytes DO fire the effect when `keyboardActive` is true) so the
+// negative assertion is a real one, not a harness that could never observe the effect either way.
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
-import React from "react";
+import React, { useState } from "react";
 import { tmpdir } from "os";
 import { join } from "path";
 import { writeFile, readFile, unlink } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
-import { TerminalSizeContext } from "../ink/components.ts";
+import { TerminalSizeContext, Text } from "../ink/components.ts";
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
 import { resetCommandRegistryForTests } from "../command-registry.ts";
 import { startTelemetryWatch } from "../services/telemetry-watch.ts";
 import { ReplScreen } from "./repl.ts";
+import { usePromptInput, type PromptInputDeps } from "../components/prompt-input.ts";
+import { useInput as useRawInput, _deliverKeyEvent } from "../ink/hooks.ts";
 import {
   OperatorSurfacePane,
   nextOperatorFocusIndex,
@@ -69,6 +91,12 @@ const KEY = {
   ENTER: "\r",
   SPACE: " ",
   ESCAPE: "\x1b",
+  // DD1-DD4: byte sequences confirmed against node's own readline keypress decoder (the same
+  // decoder stdin-bridge.ts wires up via `emitKeypressEvents`) -- SHIFT_TAB decodes to
+  // {name:"tab", shift:true}, CTRL_S to {name:"s", ctrl:true}, ALT_P to {name:"p", meta:true}.
+  SHIFT_TAB: "\x1b[Z",
+  CTRL_S: "\x13",
+  ALT_P: "\x1bp",
 };
 
 async function readControlLines(controlPath: string): Promise<Array<Record<string, unknown>>> {
@@ -164,6 +192,56 @@ async function waitFor(predicate: () => boolean, attempts: number = 30): Promise
     await flushRepl();
   }
   return predicate();
+}
+
+/** DD1/DD2 support -- mounts `usePromptInput` with `keyboardActive` pinned to the exact value the
+ *  test wants to probe, and renders `state.permissionMode` as text so an otherwise fully-internal,
+ *  never-rendered-in-production piece of state becomes observable. Real hook, real
+ *  `useInput`/dispatcher, real stdin bridge -- see the module doc comment above for why this is
+ *  the correct level to enter at for these two keys specifically.
+ *
+ *  Registers a SECOND, always-active, no-op `useInput` AFTER usePromptInput's own -- mirroring
+ *  screens/repl.ts's real registration order (usePromptInput at line ~1099, the main handler at
+ *  line ~1547, always-active, registered later) -- because ink/hooks.ts's `useInput` has its OWN
+ *  defect: the per-render "sync isActive" effect writes to `_inputHandlers[_inputHandlers.length -
+ *  1]` (the array's LAST entry) instead of the specific entry its own mount effect created, so
+ *  whichever `useInput` call is NOT currently last never has its `isActive` toggle actually take
+ *  effect after the first render. With only usePromptInput's own handler registered, this harness
+ *  would never trigger that defect (its entry IS always "last"); the companion handler recreates
+ *  the exact two-handler contention screens/repl.ts has in production, so `active:false` here is a
+ *  real test of whether keyboardActive suppression survives that contention -- not a vacuous one.
+ *
+ *  Also reproduces the exact TRANSITION shape, not just the end value: the resync-index defect
+ *  above only breaks an UPDATE to `isActive` -- the one-time mount effect always captures whatever
+ *  value is current at first render correctly, so a harness that mounts directly with a fixed
+ *  `keyboardActive` would never exercise the bug (it would look "already correct" from render one).
+ *  screens/repl.ts starts with `paneFocused=false` (`keyboardActive` true) and flips to false only
+ *  once Tab is pressed -- a genuine post-mount update -- so this harness mounts at `true` and then
+ *  transitions to the requested `active` value the same way, before any key bytes are sent. */
+async function mountPromptHookOnly(
+  active: boolean,
+  deps: PromptInputDeps = {},
+): Promise<{ stdin: FakeStdin; stopBridge: () => void; getRaw: () => string; unmount: () => void }> {
+  let raw = "";
+  let setLiveExternal: ((v: boolean) => void) | null = null;
+  function Probe(): React.ReactElement {
+    const [live, setLive] = useState(true); // mirrors the initial `!paneFocused === true`
+    setLiveExternal = setLive;
+    const [state] = usePromptInput({ ...deps, keyboardActive: live });
+    // Always-active companion handler, registered AFTER usePromptInput's own -- see doc comment.
+    useRawInput(() => {});
+    return React.createElement(Text, null, `PERM:${state.permissionMode}`);
+  }
+  const handle = mountInk(React.createElement(Probe, null), {
+    stream: { write(chunk: string) { raw += chunk; } },
+    stdout: { columns: 40, rows: 5 },
+  });
+  const stdin = new FakeStdin();
+  const stopBridge = startStdinBridge({ stdin: stdin as never });
+  await flushRepl();
+  setLiveExternal!(active); // the Tab-press-equivalent transition
+  await flushRepl();
+  return { stdin, stopBridge, getRaw: () => raw, unmount: () => handle.unmount() };
 }
 
 const RUN_ID = "run-kbd";
@@ -571,6 +649,211 @@ describe("repl keyboard operator controls (R2b)", () => {
       expect(controlLines).toEqual([]); // driveOperatorControl's validateControlCmd rejects a
       // runId-less resume BEFORE any emit -- the fail-closed floor holds even when the pane's own
       // enablement check let the accelerator through.
+    } finally {
+      await teardown(m, previous);
+    }
+  }, 15000);
+
+  // -----------------------------------------------------------------------
+  // DD1 -- Shift+Tab: real production dual-registration. Reviewer-found defect (independent
+  // review at 0f9a5b17): repl.ts's operator pane and prompt-input.ts's usePromptInput both
+  // registered `useInput` handlers on the shared ink/hooks.ts dispatcher, and Shift+Tab reached
+  // BOTH -- the pane traversed backward AND the prompt cycled its permission mode. The fix pins
+  // usePromptInput's own handler `isActive` to `!paneFocused`.
+  // -----------------------------------------------------------------------
+  test("DD1: Shift+Tab moves the pane's focus backward and never reaches the prompt's permission-mode cycle", async () => {
+    // PANE HALF -- full ReplScreen, real \x1b[Z bytes: entry lands on PAUSE, forward once onto
+    // RESUME (both enabled simultaneously here, exactly as row4 sets up), then Shift+Tab must
+    // move focus back to PAUSE -- proving repl.ts's own handler receives and acts on the real
+    // byte sequence as backward traversal, and that traversal never dispatches a verb.
+    const t1 = new Date(Date.now() - 2000).toISOString();
+    const t2 = new Date(Date.now() - 1000).toISOString();
+    const m = await mountForKeyboard([trainEvent(RUN_ID, t1), runStatusEvent(RUN_ID, t2, "PAUSED")]);
+    const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
+    try {
+      const running = await waitFor(() => renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("RUNNING")));
+      expect(running).toBe(true);
+
+      send(m.stdin, KEY.TAB); // entry -- lands on PAUSE
+      await flushRepl();
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(P)AUSE]"))).toBe(true);
+
+      send(m.stdin, KEY.RIGHT); // forward -- lands on RESUME
+      await flushRepl();
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [RES(U)ME]"))).toBe(true);
+
+      send(m.stdin, KEY.SHIFT_TAB); // backward -- must return to PAUSE
+      await flushRepl();
+      const lines = renderedLines(m.getRaw(), m.columns, m.rows);
+      expect(lines.some((l) => l.includes("▸ [(P)AUSE]"))).toBe(true);
+      expect(lines.some((l) => l.includes("▸ [RES(U)ME]"))).toBe(false);
+
+      const controlLines = await readControlLines(m.controlPath);
+      expect(controlLines).toEqual([]); // traversal alone never emits a verb
+    } finally {
+      await teardown(m, previous);
+    }
+
+    // PROMPT HALF -- see mountPromptHookOnly's doc comment for why this drops one level: with
+    // keyboardActive pinned false (the value ReplScreen computes while paneFocused), the SAME
+    // Shift+Tab byte sequence, through the real hook and the real dispatcher, must leave
+    // state.permissionMode at its initial "bypass".
+    const inactive = await mountPromptHookOnly(false);
+    try {
+      send(inactive.stdin, KEY.SHIFT_TAB);
+      await flushRepl();
+      expect(renderedLines(inactive.getRaw(), 40, 5).some((l) => l.includes("PERM:bypass"))).toBe(true);
+    } finally {
+      inactive.stopBridge();
+      inactive.unmount();
+    }
+
+    // Sensitivity check -- the identical bytes through the identical hook DO cycle the mode when
+    // active, so the negative assertion above is real: the harness can observe the effect, it
+    // simply didn't fire while inactive.
+    const active = await mountPromptHookOnly(true);
+    try {
+      send(active.stdin, KEY.SHIFT_TAB);
+      await flushRepl();
+      expect(renderedLines(active.getRaw(), 40, 5).some((l) => l.includes("PERM:regular"))).toBe(true);
+    } finally {
+      active.stopBridge();
+      active.unmount();
+    }
+  }, 15000);
+
+  // -----------------------------------------------------------------------
+  // DD2 -- Alt+P: accelerator matching ignores modifiers (`input.toLowerCase() === "p"`), so the
+  // pane's PAUSE accelerator fires on Alt+P exactly as it does on plain "p", while the prompt's
+  // `key.alt && input === "p"` branch also matches the same keystroke and would (pre-fix) open
+  // the model picker.
+  // -----------------------------------------------------------------------
+  test("DD2: Alt+P fires the pane's PAUSE accelerator and never reaches the prompt's model picker", async () => {
+    // PANE HALF -- full ReplScreen, real \x1bp bytes (node readline: meta:true, name:"p").
+    const now = new Date().toISOString();
+    const m = await mountForKeyboard([trainEvent(RUN_ID, now)]); // status RUNNING -- only PAUSE enabled
+    const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
+    try {
+      const running = await waitFor(() => renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("RUNNING")));
+      expect(running).toBe(true);
+
+      send(m.stdin, KEY.TAB); // entry -- lands on PAUSE, the only enabled control while RUNNING
+      await flushRepl();
+      send(m.stdin, KEY.ALT_P);
+      await flushRepl();
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+      const controlLines = await readControlLines(m.controlPath);
+      expect(controlLines).toEqual([{ verb: "pause", runId: RUN_ID, ts: expect.any(String) }]);
+    } finally {
+      await teardown(m, previous);
+    }
+
+    // PROMPT HALF -- onModelPickerOpen has zero call sites in repl.ts (grep-verified: it is never
+    // wired to ReplScreen's usePromptInput call at all), so its non-invocation can only be shown
+    // via a spy passed straight through PromptInputDeps -- exactly the supported test seam.
+    const inactiveCalls: string[] = [];
+    const inactive = await mountPromptHookOnly(false, { onModelPickerOpen: () => inactiveCalls.push("open") });
+    try {
+      send(inactive.stdin, KEY.ALT_P);
+      await flushRepl();
+      expect(inactiveCalls).toEqual([]);
+    } finally {
+      inactive.stopBridge();
+      inactive.unmount();
+    }
+
+    // Sensitivity check -- the identical bytes through the identical hook DO open the picker
+    // when active.
+    const activeCalls: string[] = [];
+    const active = await mountPromptHookOnly(true, { onModelPickerOpen: () => activeCalls.push("open") });
+    try {
+      send(active.stdin, KEY.ALT_P);
+      await flushRepl();
+      expect(activeCalls).toEqual(["open"]);
+    } finally {
+      active.stopBridge();
+      active.unmount();
+    }
+  }, 15000);
+
+  // -----------------------------------------------------------------------
+  // DD3 -- Ctrl+S: accelerator matching ignores modifiers, so Ctrl+S reaches the pane's START
+  // accelerator exactly as plain "s" does, while the prompt's `key.ctrl && input === "s"` branch
+  // also matches and would (pre-fix) stash the prompt's text.
+  // -----------------------------------------------------------------------
+  test("DD3: Ctrl+S fires the pane's START accelerator and never stashes the prompt", async () => {
+    const m = await mountForKeyboard([]); // no run at all -- only START is enabled (IDLE)
+    const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
+    try {
+      await flushRepl();
+      send(m.stdin, KEY.TAB); // entry -- lands on START, the only enabled control
+      await flushRepl();
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(S)TART]"))).toBe(true);
+
+      send(m.stdin, KEY.CTRL_S); // real \x13 bytes (node readline: ctrl:true, name:"s")
+      await flushRepl();
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+      const controlLines = await readControlLines(m.controlPath);
+      expect(controlLines).toEqual([{ verb: "start", ts: expect.any(String) }]);
+
+      const lines = renderedLines(m.getRaw(), m.columns, m.rows);
+      expect(lines.some((l) => l.includes("Input stashed"))).toBe(false); // prompt never stashed
+    } finally {
+      await teardown(m, previous);
+    }
+  }, 15000);
+
+  // -----------------------------------------------------------------------
+  // DD4 -- Escape: the pane's own `key.escape` branch always exits the pane; the prompt's
+  // `key.escape && isStashed` branch would (pre-fix) ALSO restore a stash on the same keystroke,
+  // discarding it, whenever one existed at the moment the pane held focus.
+  // -----------------------------------------------------------------------
+  test("DD4: Escape exits the pane and never restores an existing stash", async () => {
+    const m = await mountForKeyboard([]); // no run at all -- only START is enabled (IDLE)
+    const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
+    try {
+      await flushRepl();
+
+      // Stash real text while the PROMPT (not the pane) has focus, so a stash genuinely exists
+      // before the pane ever takes the keyboard.
+      send(m.stdin, "h");
+      send(m.stdin, "i");
+      await flushRepl();
+      send(m.stdin, KEY.CTRL_S); // stash() -- prompt has focus, pane doesn't exist yet
+      await flushRepl();
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("Input stashed"))).toBe(true);
+
+      send(m.stdin, KEY.TAB); // entry -- lands on START; the stash notice must survive this
+      await flushRepl();
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(S)TART]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("Input stashed"))).toBe(true);
+
+      // A bare Escape byte cannot be driven through the real stdin-bridge pipeline here: the SGR
+      // mouse decoder in front of it (ink/termio.ts's createSgrMouseDecoder) retains any byte
+      // sequence that is itself a strict prefix of its mouse-report marker "\x1b[<" -- and a lone
+      // "\x1b" IS such a prefix -- so `pending` holds it forever waiting for more input that this
+      // test never sends (byte-traced: `retainedPrefixLength("\x1b")` returns 1, so `passthrough`
+      // stays empty and the byte never reaches readline at all; even a follow-up byte in the SAME
+      // send() would merge into ONE readline keypress, meta+char, never a standalone `escape`).
+      // Row 1 hit an identical wall (no telemetry state makes its premise reachable at the full
+      // byte boundary) and dropped to the pure step function underneath; this drops to the same
+      // next level down -- `_deliverKeyEvent`, ink/hooks.ts's own dispatcher entry point, called
+      // directly with the exact keyName/modifiers a real standalone Escape keypress carries. This
+      // still exercises the real, currently-mounted `_inputHandlers` (repl.ts's pane handler AND
+      // usePromptInput's, both live from the mount above) -- only the byte-to-keypress decoding
+      // step is skipped, because that step is the one genuinely unreachable here.
+      _deliverKeyEvent("escape", {});
+      await flushRepl();
+      const exited = await waitFor(() => !renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸")));
+      expect(exited).toBe(true); // pane's own escape branch fired -- focus left the set
+
+      const lines = renderedLines(m.getRaw(), m.columns, m.rows);
+      expect(lines.some((l) => l.includes("Input stashed"))).toBe(true); // stash was NEVER restored
+
+      const controlLines = await readControlLines(m.controlPath);
+      expect(controlLines).toEqual([]); // escape never dispatches a verb either
     } finally {
       await teardown(m, previous);
     }

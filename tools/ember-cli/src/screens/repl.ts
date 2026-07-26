@@ -1090,8 +1090,13 @@ export function ReplScreen({
     });
   }
 
-  // Prompt input hook
-  const [inputState, inputActions] = usePromptInput();
+  // Prompt input hook.
+  //
+  // R2b P1 repair: keyboard authority is EXCLUSIVE, and the only mechanism that makes it exclusive
+  // is `isActive` at registration. The pane owning its own branch is not enough — Ink delivers each
+  // keypress to every active handler and a handler returning does not stop propagation, so while
+  // the pane holds focus this hook must be switched OFF rather than merely out-competed.
+  const [inputState, inputActions] = usePromptInput({ keyboardActive: !paneFocused });
 
   // Latest input-buffer snapshot, readable from the injector's closures below
   // without re-constructing them on every keystroke.
