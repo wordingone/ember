@@ -186,11 +186,54 @@ describe("source-byte authority in a linked worktree", () => {
     const { mainRoot, worktreeRoot } = makeMainAndWorktree();
     const options = {
       envRepoRoot: worktreeRoot,
+      envSourceRoot: worktreeRoot,
       startDir: scratchDir,
       execPath: path.join(scratchDir, "nowhere", "bin.exe"),
     };
     expect(resolveEmberSourceRoot(options)).toBe(path.resolve(worktreeRoot));
     expect(resolveEmberRepoRoot(options)).toBe(path.resolve(mainRoot));
+  });
+
+  test("canonical EMBER_REPO_ROOT cannot redirect source-byte authority away from the selected worktree", () => {
+    const { mainRoot, worktreeRoot } = makeMainAndWorktree();
+    const savedRepoRoot = process.env["EMBER_REPO_ROOT"];
+    const savedSourceRoot = process.env["EMBER_SOURCE_ROOT"];
+    try {
+      process.env["EMBER_REPO_ROOT"] = mainRoot;
+      delete process.env["EMBER_SOURCE_ROOT"];
+      expect(
+        resolveEmberSourceRoot({
+          startDir: path.join(worktreeRoot, "tools", "ember-cli"),
+          execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+        }),
+      ).toBe(path.resolve(worktreeRoot));
+    } finally {
+      if (savedRepoRoot === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedRepoRoot;
+      if (savedSourceRoot === undefined) delete process.env["EMBER_SOURCE_ROOT"];
+      else process.env["EMBER_SOURCE_ROOT"] = savedSourceRoot;
+    }
+  });
+
+  test("EMBER_SOURCE_ROOT selects source bytes while EMBER_REPO_ROOT independently selects canonical state", () => {
+    const { mainRoot, worktreeRoot } = makeMainAndWorktree();
+    const savedRepoRoot = process.env["EMBER_REPO_ROOT"];
+    const savedSourceRoot = process.env["EMBER_SOURCE_ROOT"];
+    try {
+      process.env["EMBER_REPO_ROOT"] = mainRoot;
+      process.env["EMBER_SOURCE_ROOT"] = worktreeRoot;
+      const options = {
+        startDir: scratchDir,
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      };
+      expect(resolveEmberSourceRoot(options)).toBe(path.resolve(worktreeRoot));
+      expect(resolveEmberRepoRoot(options)).toBe(path.resolve(mainRoot));
+    } finally {
+      if (savedRepoRoot === undefined) delete process.env["EMBER_REPO_ROOT"];
+      else process.env["EMBER_REPO_ROOT"] = savedRepoRoot;
+      if (savedSourceRoot === undefined) delete process.env["EMBER_SOURCE_ROOT"];
+      else process.env["EMBER_SOURCE_ROOT"] = savedSourceRoot;
+    }
   });
 });
 
@@ -211,6 +254,7 @@ describe("root-authority consumer wiring", () => {
       const source = read(relativePath);
       expect(source).toContain("import { resolveEmberSourceRootOrCwd }");
       expect(source).not.toContain("import { resolveEmberRepoRootOrCwd }");
+      expect(source).not.toContain("EMBER_REPO_ROOT");
     }
 
     const canonicalStateConsumers = [
@@ -227,6 +271,7 @@ describe("root-authority consumer wiring", () => {
       const source = read(relativePath);
       expect(source).toContain("import { resolveEmberRepoRootOrCwd }");
       expect(source).not.toContain("import { resolveEmberSourceRootOrCwd }");
+      expect(source).not.toContain("EMBER_SOURCE_ROOT");
     }
 
     const custody = read("commands/custody.ts");

@@ -700,6 +700,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         ...process.env,
         EMBER_HOME: home,
         EMBER_REPO_ROOT: repoRoot,
+        EMBER_SOURCE_ROOT: repoRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
       },

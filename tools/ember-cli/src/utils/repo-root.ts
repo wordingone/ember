@@ -173,6 +173,8 @@ export interface ResolveEmberRepoRootOptions {
   /** Overrides the EMBER_REPO_ROOT env var lookup — tests inject a value directly instead
    *  of mutating process.env. */
   envRepoRoot?: string;
+  /** Exact-checkout override. Source authority never reads EMBER_REPO_ROOT. */
+  envSourceRoot?: string;
 }
 
 /**
@@ -207,11 +209,14 @@ export function resolveEmberRepoRoot(options: ResolveEmberRepoRootOptions = {}):
  * worktree's `.git` file to the main checkout. The canonical resolver exists
  * for shared mutable state (#666); applying it to config, scripts, manifests,
  * or other claim-bearing source bytes silently substitutes a different tree.
+ * EMBER_SOURCE_ROOT is this resolver's only environment override.
+ * EMBER_REPO_ROOT belongs exclusively to the canonical mutable-state resolver
+ * and is deliberately ignored here.
  */
 export function resolveEmberSourceRoot(
   options: ResolveEmberRepoRootOptions = {},
 ): string {
-  const envValue = options.envRepoRoot ?? process.env["EMBER_REPO_ROOT"];
+  const envValue = options.envSourceRoot ?? process.env["EMBER_SOURCE_ROOT"];
   if (envValue) {
     const resolvedEnv = path.resolve(envValue);
     if (isRepoRoot(resolvedEnv)) return resolvedEnv;
@@ -226,7 +231,7 @@ export function resolveEmberSourceRoot(
   throw new Error(
     "Could not resolve the selected Ember source root (no directory containing GOAL.md + " +
       "tools/ember-cli found via cwd or the running binary's location). " +
-      "Set EMBER_REPO_ROOT to the selected checkout path.",
+      "Set EMBER_SOURCE_ROOT to the selected checkout path.",
   );
 }
 
