@@ -1,0 +1,782 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "master_sha": "e8a89a39cee293d793543e025a0d03fee0181e6d",
+  "rows": [
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 3,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the current resident-training gate and publish one current-master receipt with empty invalid_codes plus the named C14/C4/C5 reruns.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3",
+          "source_kind": "issue_body",
+          "source_sha256": "54f35903e94a6b1f2631a925de24c0a363723f11a40a1338a480422b26767c88",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-4870625972",
+          "source_kind": "issue_comment",
+          "source_sha256": "44c9235309d2ac22d9ba43ebd5e24fe3371dc3ab6d373c3797cda741eb508eb6",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-4871258304",
+          "source_kind": "issue_comment",
+          "source_sha256": "9af83809c5c4031e473878ed40607249515edf1aaa703cbd96453e9ea71e6f0f",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-4871398675",
+          "source_kind": "issue_comment",
+          "source_sha256": "827f01cdd426a940927fe264d3d213c1677f02b3dd1e36236590891378dda314",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-4871622233",
+          "source_kind": "issue_comment",
+          "source_sha256": "e74aeea6e1c61846778101a69d0e7821ed9a7ed05b16759bfadc34e0a0505cec",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-4872377848",
+          "source_kind": "issue_comment",
+          "source_sha256": "12c77e8dd89a2dbd8c1698db8171538cecebf21de6806f92322aef2c60783829",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-4872543653",
+          "source_kind": "issue_comment",
+          "source_sha256": "f1471e2306af445239cd134d92051aecc07a71837b3700dade7c4b0d3e6acd29",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-4872936486",
+          "source_kind": "issue_comment",
+          "source_sha256": "9aaacb3e9461a87b5e3185e8449660bc846f9d10c0a13e1373b662b9be2f7020",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/3#issuecomment-5015936642",
+          "source_kind": "issue_comment",
+          "source_sha256": "35d23747c3cb1b9529e7b5a7b3f1585f2ca60b359d102312dff009203390df4d",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/3",
+        "description": "No current public PASS receipt binds the resident-training runner and required board probes.",
+        "source_sha256": "54f35903e94a6b1f2631a925de24c0a363723f11a40a1338a480422b26767c88"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 7,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run the measured P1 energy-envelope points and the first real BOOTSTRAP_PASS under one governed receipt pair.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/7",
+          "source_kind": "issue_body",
+          "source_sha256": "94d2a71e572956eb7e8b4d7f911c535e5dc99c7c7b1584058aad26ef0bb94762",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/7#issuecomment-5011794087",
+          "source_kind": "issue_comment",
+          "source_sha256": "8c7d7c146108b548e081242e8dd186c6c2aed16298a9ec7f711d6a5cf266d4f5",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/7",
+        "description": "Measured P1 energy-envelope points and a real BOOTSTRAP_PASS receipt remain absent.",
+        "source_sha256": "94d2a71e572956eb7e8b4d7f911c535e5dc99c7c7b1584058aad26ef0bb94762"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 8,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the preregistered iso-FLOP grow-versus-scratch comparison with net2net identity and deletion-control receipts.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/8",
+          "source_kind": "issue_body",
+          "source_sha256": "8952fe8ca6e73a9947af06303f285c9ba5ef6d94d9127fb6a944754c55d2a791",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/8#issuecomment-5014100423",
+          "source_kind": "issue_comment",
+          "source_sha256": "bb263d49c23e094a3cdced28c8ae99ecc52282530bff04d928ec0404b7212150",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/8",
+        "description": "The complete iso-FLOP growth comparison and its preregistered conjunctive verdict are not publicly bound.",
+        "source_sha256": "8952fe8ca6e73a9947af06303f285c9ba5ef6d94d9127fb6a944754c55d2a791"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 12,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute all eight frozen axes and publish the single PASS, FAIL, or UNEVALUABLE conjunctive verdict consumed by the board probe.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/12",
+          "source_kind": "issue_body",
+          "source_sha256": "82cf63b27213da109166af603c69a5385920aae32132a4074dd9e93699866227",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/12#issuecomment-5011793874",
+          "source_kind": "issue_comment",
+          "source_sha256": "915054ac0073e04883ac590b534450e459dabb481bca3d22ecdb7f257d0b710a",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/12",
+        "description": "No preregistration-bound eight-axis conjunctive verdict and consuming board receipt exists.",
+        "source_sha256": "82cf63b27213da109166af603c69a5385920aae32132a4074dd9e93699866227"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 14,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run one registry-wired governance probe covering every named predicate and publish its operator-acceptance objects.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/14",
+          "source_kind": "issue_body",
+          "source_sha256": "bc9ab53b94f5a79dff5b3ddb4d16fa340dbff9382f8ebbc8464dc6496420f374",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/14#issuecomment-5014506131",
+          "source_kind": "issue_comment",
+          "source_sha256": "ed8a3ac35425441e600cb542b70eb5e9962e7908dba4a760d00316950993dd88",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/14",
+        "description": "The five governance-clock predicates are not jointly bound by a current machine receipt.",
+        "source_sha256": "bc9ab53b94f5a79dff5b3ddb4d16fa340dbff9382f8ebbc8464dc6496420f374"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 20,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Re-earn the one-hour and three-hour windows and publish executed evidence pointers plus the hardened C11 GREEN receipt.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/20",
+          "source_kind": "issue_body",
+          "source_sha256": "c94193d05fe07e773548d29168d2100d72575b89ca3159ccd7547716045b7b44",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/20#issuecomment-4878487593",
+          "source_kind": "issue_comment",
+          "source_sha256": "e7bd68c6e04c74f4bd25b92da2823d175801fb821ffaeff6ce6c68c9b089f0aa",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/20#issuecomment-4879625953",
+          "source_kind": "issue_comment",
+          "source_sha256": "74ac1662cc810cef02853625b0ae577450e88824a797adcb96cb2fd402068d1a",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/20#issuecomment-5015948948",
+          "source_kind": "issue_comment",
+          "source_sha256": "3f9d5cfb721c6512e1b66703d2c2ae7e57e465c98cccc6632f55bc5148e82405",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/20",
+        "description": "Fresh earned one-hour and three-hour duration receipts with deletion sensitivity remain absent.",
+        "source_sha256": "c94193d05fe07e773548d29168d2100d72575b89ca3159ccd7547716045b7b44"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 29,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and freeze the staged S1-S5 apex receipt with owned growth lineage, token bill, W2 finetune, deletion linkage, and working-set governance.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/29",
+          "source_kind": "issue_body",
+          "source_sha256": "1d60a039f73bf4ca44f5555622f8618e326e0ac2386c4642398d601fa46107ab",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/29#issuecomment-4877874193",
+          "source_kind": "issue_comment",
+          "source_sha256": "a75cd8a85d581c3ca1f8ae1d799a1da9a3d99afbcf0b52547b458db30cd87b50",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/29#issuecomment-4879088540",
+          "source_kind": "issue_comment",
+          "source_sha256": "6adbaafaefb580dd124f5df2de4e150116bb38a555bfed9990586672f8f4ba94",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/29#issuecomment-4883055736",
+          "source_kind": "issue_comment",
+          "source_sha256": "e13587590f26eca78ff93f4229a91d8e59210b7c180edce8f2e77ea0078cf131",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/29",
+        "description": "The staged owned-scale apex receipt has not been produced.",
+        "source_sha256": "1d60a039f73bf4ca44f5555622f8618e326e0ac2386c4642398d601fa46107ab"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 35,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Resolve every listed contract-text divergence and publish an operator-ratified machine findings receipt.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/35",
+          "source_kind": "issue_body",
+          "source_sha256": "143116fd7a0c9cd5676547956d517c18bf0f9083e8f8e780689005c38d7dcaf0",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/35#issuecomment-4877624610",
+          "source_kind": "issue_comment",
+          "source_sha256": "3e0a4063093a76a85ada6bc094a1149e77afc381611a115c6cbd674a09d651c5",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/35#issuecomment-4877737030",
+          "source_kind": "issue_comment",
+          "source_sha256": "bde1aefafb1566f81b1fed006ba86d058a923ffe7a9243fa116edad6ede50a6f",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/35#issuecomment-4882604662",
+          "source_kind": "issue_comment",
+          "source_sha256": "5efa5914fb734fde4917193f9ec7c07c5ece217f48dccdd12a3853a13b4bc76d",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/35#issuecomment-4882644156",
+          "source_kind": "issue_comment",
+          "source_sha256": "907dcda8d73a7d80052001bb9b1ae6febf69b6e6107169ad585c2a761d44abc1",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/35#issuecomment-4882923162",
+          "source_kind": "issue_comment",
+          "source_sha256": "219534042b2049f2604ecf89c121ba6bc26e91f232d96e52857d61322b3d321b",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/35#issuecomment-5011682084",
+          "source_kind": "issue_comment",
+          "source_sha256": "bcd6b6e022f0e16b0c29d30cca7cfbaf4674c16a7aedcd8a2bd6ef95321b0d9d",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/35",
+        "description": "The contract-integrity defect classes are not all resolved by a current audit and acceptance object.",
+        "source_sha256": "143116fd7a0c9cd5676547956d517c18bf0f9083e8f8e780689005c38d7dcaf0"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 37,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Produce the exact A20 rung-1 and rung-2 ruling, then execute the frozen mechanism-redesign arm if its trigger fires.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/37",
+          "source_kind": "issue_body",
+          "source_sha256": "6ae9bc1bf995f72f746e36bca0242b659077d3cbcafdbb455b04a3dc90593e0a",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/37#issuecomment-4879530901",
+          "source_kind": "issue_comment",
+          "source_sha256": "82e41c2c252c0dfb19d8b7894b356394a735d77da812674d9f9ddc5298efebcd",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/37#issuecomment-4879606156",
+          "source_kind": "issue_comment",
+          "source_sha256": "75f7233b23a3c9961b9a3df3301a186b01b13ddd61ed77e2f29d0e7f0b217fed",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/37#issuecomment-5014104742",
+          "source_kind": "issue_comment",
+          "source_sha256": "a5288b3ece47f54fec1241258ede456a7d8ccf7362c5173a5fcf2892c4ca1286",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/37",
+        "description": "The A20 rung-2 trigger verdict and required follow-on mechanism receipt are absent.",
+        "source_sha256": "6ae9bc1bf995f72f746e36bca0242b659077d3cbcafdbb455b04a3dc90593e0a"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 46,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the complete ember-cli versus avir-cli parity matrix, including predecessor coverage and idle-flame behavior, and publish the fresh-reader receipt.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/46",
+          "source_kind": "issue_body",
+          "source_sha256": "19d9cd4145ebc8b5a12eab34ea899fb8591645e0a07a13b1f910e15d69979ae6",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/46#issuecomment-5014190268",
+          "source_kind": "issue_comment",
+          "source_sha256": "622e949b7b33538c0de289f4d16863e8e9ab1341a7fcaf9dbce110d97a314099",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/46",
+        "description": "No current receipt proves the complete behavioral parity matrix.",
+        "source_sha256": "19d9cd4145ebc8b5a12eab34ea899fb8591645e0a07a13b1f910e15d69979ae6"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 47,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run one native 4090 single-process 27B-class co-resident train-step and inference-pass experiment and publish all five measured assertions.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/47",
+          "source_kind": "issue_body",
+          "source_sha256": "6472a3339021a7e81a1a6256a99c8296e9510a768861ff68f5c3738df8d0c0cc",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/47#issuecomment-4880214660",
+          "source_kind": "issue_comment",
+          "source_sha256": "8e87f48cddbb36d20b23bf0220429d1c2f5f55616b4a064f1d3e2aeb4fd724dd",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/47#issuecomment-4880428606",
+          "source_kind": "issue_comment",
+          "source_sha256": "3c73f7212d98756556cc0adb3830aa179d1d8e8d001ea2f190126bbad1ffac00",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/47",
+        "description": "A real non-dry-run 27B-class co-residency receipt is not publicly bound.",
+        "source_sha256": "6472a3339021a7e81a1a6256a99c8296e9510a768861ff68f5c3738df8d0c0cc"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 53,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the frozen S0-S5 GPU window in order and publish the resolved commands, predicates, and numbered window receipts.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53",
+          "source_kind": "issue_body",
+          "source_sha256": "4e3537ff75f19b2f464d5ff075ee44c6657a0667ef6efdd999f566ad335bf7ef",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4880445621",
+          "source_kind": "issue_comment",
+          "source_sha256": "d91e5fb55a6fb861d97265a554076077c2c07eaa01e2868134fa02e45d0cedf8",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4880585732",
+          "source_kind": "issue_comment",
+          "source_sha256": "abec11251895e13d5180e5894b1e2dd7036bb1f05fc3f645781b16814c615fed",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4880636280",
+          "source_kind": "issue_comment",
+          "source_sha256": "f2ff0f35c7d1bf046a1304fa7a8089440df4779e75f186ae003def5197c0f94d",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4880836521",
+          "source_kind": "issue_comment",
+          "source_sha256": "0797527e1ad809b1f2c6e2f13289d2946901ea465ce0bd40415f4ce0e86a32f9",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4881062944",
+          "source_kind": "issue_comment",
+          "source_sha256": "ee96dea169ff281af642bdbc31945ad5c5f287fa3956572298f6d3279a52eaf9",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4881148424",
+          "source_kind": "issue_comment",
+          "source_sha256": "7f7b68921e83f6b5b60a33d81719727f99e050052d51b893575af401d6033de0",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4881296908",
+          "source_kind": "issue_comment",
+          "source_sha256": "042d6697e2e5352b6b5189606e1927d14f656a5eb3931a57247211a1fce49f55",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4881389768",
+          "source_kind": "issue_comment",
+          "source_sha256": "495c76a2f85597855197403859c3bec5616ff821136f50239c2ef7fd1f0fc80e",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4881554436",
+          "source_kind": "issue_comment",
+          "source_sha256": "2ad4e4676ada2d2310bee20129248905ab182c10e580b0052ba35449de2fc2f8",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4881943677",
+          "source_kind": "issue_comment",
+          "source_sha256": "69fb7dbb38b628fa98414ff473f5527fde599150eb1639bab1328952dedb989c",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4884630087",
+          "source_kind": "issue_comment",
+          "source_sha256": "b8310f08f725649558709367887452e285f7ead1e677646166dd95599c08edb5",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4885293880",
+          "source_kind": "issue_comment",
+          "source_sha256": "301732dd2d443b3c444ece669bc7676375196d9a1fcb626fdef4c69313bf0cae",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4888268596",
+          "source_kind": "issue_comment",
+          "source_sha256": "b7de3c733024be8543d10b93bb174f441082fd1966e3a69c74bd8b09492ef65c",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-4931920411",
+          "source_kind": "issue_comment",
+          "source_sha256": "ba73c271c5f27866d604e3baa55c6822e1a68ff1216cdbebadf0c97c3e5e15b3",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/53#issuecomment-5014527502",
+          "source_kind": "issue_comment",
+          "source_sha256": "4c190b94c381aff27ee579375926b9ef03793e7bfff4cca20c08f3870ab9d59d",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/53",
+        "description": "The live S0-S5 GPU-window preflight and execution receipt set is incomplete.",
+        "source_sha256": "4e3537ff75f19b2f464d5ff075ee44c6657a0667ef6efdd999f566ad335bf7ef"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 54,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Publish pre/post per-frame dimension evidence from the current installed CLI and rerun the named jitter regression.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/54",
+          "source_kind": "issue_body",
+          "source_sha256": "56eaddbca5c1054c220ad70dcc1c44b4feac81c72b7772a2422b7e0b0659b4fc",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/54#issuecomment-4880437174",
+          "source_kind": "issue_comment",
+          "source_sha256": "9178126b41fc38eeff7c9e87e94b59103f785276e20d8e2e05a4b1d2f957906c",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/54#issuecomment-5016104362",
+          "source_kind": "issue_comment",
+          "source_sha256": "e64f0c4cb5661edd7db88afaccebd854916ef2911cbd4141710320bc7d27a508",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/54",
+        "description": "The current installed binary lacks a two-sided per-frame geometry receipt proving the jitter cure.",
+        "source_sha256": "56eaddbca5c1054c220ad70dcc1c44b4feac81c72b7772a2422b7e0b0659b4fc"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 55,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Land the complete inference-to-training translation gap table with citations and an in-tree citation gate.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/55",
+          "source_kind": "issue_body",
+          "source_sha256": "84241e3b1dfc6f3123691f4fba395ac2468ebad2ebbc4ff176b36cac9ff2bf18",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/55",
+        "description": "The complete cited training-translation map and enforcing gate are absent.",
+        "source_sha256": "84241e3b1dfc6f3123691f4fba395ac2468ebad2ebbc4ff176b36cac9ff2bf18"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 92,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the R0-R5 autonomy ladder with five clean receipted windows per rung and publish the invariant-gated transfer evidence.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/92",
+          "source_kind": "issue_body",
+          "source_sha256": "d9b1c22ce2cc06a5a805a2873962ed044d0932cc843c1befee9fc0753a15aa07",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/92#issuecomment-4883266745",
+          "source_kind": "issue_comment",
+          "source_sha256": "49b076e44ebad14abf340434520c8d0de0e11dc24da0deedf5e57c844e636dee",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/92#issuecomment-4883351369",
+          "source_kind": "issue_comment",
+          "source_sha256": "70d61aa5c24318ead6b324b6cbc8177fba0407a729aee6192c1a5f3e858d4896",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/92",
+        "description": "No executed R0-R5 autonomy-ladder evidence exists.",
+        "source_sha256": "d9b1c22ce2cc06a5a805a2873962ed044d0932cc843c1befee9fc0753a15aa07"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 98,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run fresh independent one-hour and three-hour chains and publish active-runs visibility plus hardened C11 GREEN and old-chain RED evidence.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/98",
+          "source_kind": "issue_body",
+          "source_sha256": "f44c4eeea3aef332ecc0117fd3db226cb894e4a21935221fc583f14d80bc4fe3",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/98#issuecomment-4883386082",
+          "source_kind": "issue_comment",
+          "source_sha256": "a1b3646446ad5a53b22c4f56ed84558a92e8ac57335dcc1e1ddd0a2edc9b4484",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/98",
+        "description": "The rebuilt one-hour and three-hour developmental-duration chains remain unearned.",
+        "source_sha256": "f44c4eeea3aef332ecc0117fd3db226cb894e4a21935221fc583f14d80bc4fe3"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 99,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Stage, name, upload, and verify the current reachable checkpoint on Hugging Face with an immutable revision receipt.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/99",
+          "source_kind": "issue_body",
+          "source_sha256": "a7b631b819e05fa348a0871a6778dab56a01288ac2eb641a5af43dd8deee0beb",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/99#issuecomment-4883406312",
+          "source_kind": "issue_comment",
+          "source_sha256": "1c1d19d2b7802179ee94526b1112db40dee7a0e4bd93ff3702fc98af036b5254",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/99#issuecomment-5015595316",
+          "source_kind": "issue_comment",
+          "source_sha256": "d536216ec0fd029799c8881f3de5e6e130f717c75293155d639f5a6ac000c25a",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/99",
+        "description": "No reachable current checkpoint staging and upload receipt is public.",
+        "source_sha256": "a7b631b819e05fa348a0871a6778dab56a01288ac2eb641a5af43dd8deee0beb"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 105,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Backfill model-authored same-task wrong attempts for all 48 tasks and publish append-only pool, dedup PASS, and C-LADM GREEN receipts.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/105",
+          "source_kind": "issue_body",
+          "source_sha256": "f535ae847b5b66506e135ab61ba7d85e3204ae19285999bb4ce1427475c9ecaa",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/105#issuecomment-5014242946",
+          "source_kind": "issue_comment",
+          "source_sha256": "b12f5f8813b5b2ce516e0de5bd58fa805e4ee7386a7de0b27c43ac888fc46759",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/105",
+        "description": "The 48-task model-authored wrong-attempt control class is incomplete.",
+        "source_sha256": "f535ae847b5b66506e135ab61ba7d85e3204ae19285999bb4ce1427475c9ecaa"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 107,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Complete a fresh 24-hour continuation after the rebuilt one-hour and three-hour chain and publish inherited-versus-fresh timing plus hardened C11 evidence.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/107",
+          "source_kind": "issue_body",
+          "source_sha256": "110d78081b5940a30fc649dfa4303d629bd506504ade3cf711e825781d84ad02",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/107",
+        "description": "The 24-hour tier has not been re-earned on the corrected duration chain.",
+        "source_sha256": "110d78081b5940a30fc649dfa4303d629bd506504ade3cf711e825781d84ad02"
+      }
+    },
+    {
+      "authority_review": null,
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 111,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Make /train execute the governed training run under the existing preflight and certified-launch gates, then publish CLI-frame and execution-receipt evidence.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/111",
+          "source_kind": "issue_body",
+          "source_sha256": "8b1be0e3c929bfed2bb67c99868819c54ef069de118061dd3daab251e1239e4e",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/111#issuecomment-4883862019",
+          "source_kind": "issue_comment",
+          "source_sha256": "ee1c0fb465c5434256df07cb1eb325847c06667ce118dae9026597ea33cae1f0",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/111#issuecomment-4887074866",
+          "source_kind": "issue_comment",
+          "source_sha256": "951a81331dff61ef4ed78384c1cc1f51acbf2913539781b8e69e1a739c4daac6",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/111",
+        "description": "The rendered /train command is discoverable but explicitly does not launch training, so canonical Ember CLI operability remains unproved.",
+        "source_sha256": "8b1be0e3c929bfed2bb67c99868819c54ef069de118061dd3daab251e1239e4e"
+      }
+    }
+  ],
+  "schema_version": "ember-oldest-issue-decisions-v1",
+  "selection_sha256": "b9146e72cd5ab87afbe68714731b7170204cf4a701588db2d80ef03727cc7e9e"
+}
