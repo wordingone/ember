@@ -10,6 +10,8 @@ mutable singleton state converges there (issue #666).
 
 | Production consumer | Authority | Reason |
 |---|---|---|
+| `EMBER_SOURCE_ROOT` | exact checkout | Read only by the source resolver; selects executable and claim-bearing bytes. |
+| `EMBER_REPO_ROOT` | canonical root | Read only by the mutable-state resolver; converges linked worktrees on singleton state. |
 | `commands/train.ts` | exact checkout | Executes and hashes config and training scripts. |
 | `commands/benchmark.ts` | exact checkout | Reads the selected benchmark registry. |
 | `commands/model.ts` | exact checkout | Loads and validates selected model manifests. |
