@@ -93,6 +93,7 @@ function validReceipt(): LifecycleReceipt {
           }
           : null,
         frame_artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.frame.txt`,
+        delta_artifact: `receipts/ember-cli-lifecycle-smoke/action-${index + 1}.delta.txt`,
         repair_item: outcome === "PASS"
           ? null
           : `EMBER-CLI-${action.toUpperCase()}-OPERABILITY`,
@@ -353,6 +354,19 @@ describe("compiled lifecycle action completion", () => {
       "/model checkpoint save C:\\tmp\\saved",
     );
     expect(saved).toContain("not /model checkpoint load compatible");
+  });
+
+  test("derives an action-local visible delta without unchanged viewport history", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.actionVisibleDelta).toBeFunction();
+    expect(driver.actionVisibleDelta!(
+      "stale prior error\nunchanged dashboard\n",
+      "unchanged dashboard\nnew action result\n",
+    )).toBe("new action result");
+    expect(driver.actionVisibleDelta!(
+      "same row\nsame row\n",
+      "same row\nsame row\nnew row\n",
+    )).toBe("new row");
   });
 
   test("classifies the rendered action and retains the exact save incompatibility", async () => {
