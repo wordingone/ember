@@ -108,8 +108,11 @@ describe("operator-surface pane control click drives a real effect on the run", 
       // Real telemetry poll runs every 500ms (services/telemetry-watch.ts POLL_INTERVAL_MS);
       // wait for the pane to actually observe the RUNNING event before clicking, rather than a
       // fixed sleep guessed to be "long enough".
-      // [PAUSE] renders in EVERY status (disabled-but-visible when not RUNNING), so the loop
-      // must wait for RUNNING itself, not merely for the glyph to appear.
+      // The PAUSE control renders in EVERY status (disabled-but-visible when not RUNNING), so
+      // the loop must wait for RUNNING itself, not merely for the glyph to appear. R2b decorates
+      // the label with its accelerator ("[(P)AUSE]", see operatorControlLabel) plus a two-column
+      // focus-marker slot in front of it -- the click still targets the same Box, just at the
+      // new label text.
       let lines: string[] = [];
       let running = false;
       for (let attempt = 0; attempt < 30 && !running; attempt++) {
@@ -119,7 +122,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
         running = lines.some((line) => line.includes("RUNNING"));
       }
       expect(running).toBe(true);
-      const pauseAt = findGlyph(lines, "[PAUSE]");
+      const pauseAt = findGlyph(lines, "[(P)AUSE]");
       expect(pauseAt).toBeDefined();
 
       stdin.emit("data", Buffer.from(sgrLeftClick(pauseAt!.col + 1, pauseAt!.row)));

@@ -420,8 +420,12 @@ describe("OperatorSurfacePane", () => {
     const body = (element as any).props.children;
     const controlRow = (body.props.children as any[]).find((child) => child?.key === "controls");
     const controls = controlRow.props.children as any[];
-    expect(controls.map((control) => control.props.children.props.children)).toEqual(["[START]", "[PAUSE]", "[RESUME]", "[RESTART]"]);
-    const pause = controls.find((control) => control.props.children.props.children === "[PAUSE]");
+    // R2b: labels now carry the focus marker slot (unfocused = two leading spaces) and the
+    // accelerator-decorated action name -- see operatorControlLabel.
+    expect(controls.map((control) => control.props.children.props.children)).toEqual([
+      "  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]",
+    ]);
+    const pause = controls.find((control) => control.props.children.props.children === "  [(P)AUSE]");
     expect(typeof pause.props.onClick).toBe("function");
     pause.props.onClick();
     expect(calls).toEqual([{ action: "PAUSE", runId: "run-control" }]);
@@ -593,7 +597,7 @@ describe("OperatorSurfacePane", () => {
       return [];
     };
     const labels = collectLabels(controlsElement);
-    expect(labels).toEqual(["[START]", "[PAUSE]", "[RESUME]", "[RESTART]"]);
+    expect(labels).toEqual(["  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]"]);
   });
 
   // -------------------------------------------------------------------------
