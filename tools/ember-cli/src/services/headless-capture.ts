@@ -21,6 +21,21 @@
 export const HEADLESS_CAPTURE_ENV = "EMBER_CLI_HEADLESS_CAPTURE";
 
 /**
+ * The env fragment every instrument launcher spreads into the child it spawns.
+ *
+ * A fragment rather than a literal at each call site, for the reason the predicate is shared: the
+ * defect is not that one writer was missed, it is that the set of writers is not enumerable by
+ * inspection. The same is true of launchers. One exported name gives the enumeration test something
+ * to require at every `spawnPty` site, so a launcher added later fails loudly instead of quietly
+ * running as the cockpit.
+ *
+ * Spread it AFTER `...process.env` — an instrument forces the value rather than inheriting it.
+ */
+export function headlessCaptureEnv(): Record<string, string> {
+  return { [HEADLESS_CAPTURE_ENV]: "1" };
+}
+
+/**
  * True when this process is a headless capture harness rather than the operator's cockpit.
  *
  * Exactly `"1"` enables it. A non-empty value that is not `"1"` is a typo, not an intent, so it
