@@ -1,0 +1,659 @@
+{
+  "schema_version": "ember-python-environment-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "observed_environment": {
+    "implementation": "CPython",
+    "python_version": "3.10.11",
+    "python_executable_basename": "python.exe",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "pip_version": "25.2"
+  },
+  "pip_options": [
+    "--isolated",
+    "--index-url",
+    "https://pypi.org/simple",
+    "--extra-index-url",
+    "https://download.pytorch.org/whl/cu126"
+  ],
+  "packages": [
+    {
+      "distribution": "pillow",
+      "version": "12.1.1",
+      "requirement": "pillow==12.1.1",
+      "imports": [
+        "PIL"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "accelerate",
+      "version": "1.10.1",
+      "requirement": "accelerate==1.10.1",
+      "imports": [
+        "accelerate"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "arc-agi",
+      "version": "0.9.4",
+      "requirement": "arc-agi==0.9.4",
+      "imports": [
+        "arc_agi"
+      ],
+      "group": "optional",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": "8b16f2aacf5d7253b9f444aa2fb32ccec3ec355d7e3f33126fde3fa69942a88e"
+      },
+      "install_by_default": false,
+      "compatibility": "Exact live optional ARC-AGI integration; excluded from the default CPython 3.10 install because arc-agi 0.9.4 declares Requires-Python >=3.12."
+    },
+    {
+      "distribution": "arcengine",
+      "version": "0.9.3",
+      "requirement": "arcengine==0.9.3",
+      "imports": [
+        "arcengine"
+      ],
+      "group": "optional",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": false,
+      "compatibility": "Exact live optional ARC-AGI integration; excluded from the default CPython 3.10 install because arc-agi 0.9.4 declares Requires-Python >=3.12."
+    },
+    {
+      "distribution": "bitsandbytes",
+      "version": "0.49.1",
+      "requirement": "bitsandbytes==0.49.1",
+      "imports": [
+        "bitsandbytes"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "openai-clip",
+      "version": "1.0.1",
+      "requirement": "openai-clip==1.0.1",
+      "imports": [
+        "clip"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "cryptography",
+      "version": "45.0.7",
+      "requirement": "cryptography==45.0.7",
+      "imports": [
+        "cryptography"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "datasets",
+      "version": "4.1.1",
+      "requirement": "datasets==4.1.1",
+      "imports": [
+        "datasets"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "fastapi",
+      "version": "0.129.0",
+      "requirement": "fastapi==0.129.0",
+      "imports": [
+        "fastapi"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "huggingface_hub",
+      "version": "1.22.0",
+      "requirement": "huggingface_hub==1.22.0",
+      "imports": [
+        "huggingface_hub"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "jsonschema",
+      "version": "4.26.0",
+      "requirement": "jsonschema==4.26.0",
+      "imports": [
+        "jsonschema"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "kaggle",
+      "version": "1.7.4.5",
+      "requirement": "kaggle==1.7.4.5",
+      "imports": [
+        "kagglesdk"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "lm_eval",
+      "version": "0.4.12",
+      "requirement": "lm_eval==0.4.12",
+      "imports": [
+        "lm_eval"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "numpy",
+      "version": "2.2.6",
+      "requirement": "numpy==2.2.6",
+      "imports": [
+        "numpy"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "peft",
+      "version": "0.18.1",
+      "requirement": "peft==0.18.1",
+      "imports": [
+        "peft"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "psutil",
+      "version": "7.1.0",
+      "requirement": "psutil==7.1.0",
+      "imports": [
+        "psutil"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "pydantic",
+      "version": "2.12.5",
+      "requirement": "pydantic==2.12.5",
+      "imports": [
+        "pydantic"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "requests",
+      "version": "2.32.5",
+      "requirement": "requests==2.32.5",
+      "imports": [
+        "requests"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "safetensors",
+      "version": "0.6.2",
+      "requirement": "safetensors==0.6.2",
+      "imports": [
+        "safetensors"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "scipy",
+      "version": "1.15.3",
+      "requirement": "scipy==1.15.3",
+      "imports": [
+        "scipy"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "sentencepiece",
+      "version": "0.2.1",
+      "requirement": "sentencepiece==0.2.1",
+      "imports": [
+        "sentencepiece"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "scikit-learn",
+      "version": "1.7.1",
+      "requirement": "scikit-learn==1.7.1",
+      "imports": [
+        "sklearn"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "tokenizers",
+      "version": "0.22.2",
+      "requirement": "tokenizers==0.22.2",
+      "imports": [
+        "tokenizers"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "tomli",
+      "version": "2.2.1",
+      "requirement": "tomli==2.2.1",
+      "imports": [
+        "tomli"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "torch",
+      "version": "2.10.0+cu126",
+      "requirement": "torch==2.10.0+cu126",
+      "imports": [
+        "torch"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "index",
+        "locator": "https://download.pytorch.org/whl/cu126",
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "torchao",
+      "version": "0.16.0",
+      "requirement": "torchao==0.16.0",
+      "imports": [
+        "torchao"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "transformers",
+      "version": "5.8.0.dev0",
+      "requirement": "transformers @ git+https://github.com/huggingface/transformers.git@5d9bce2548fc6fa70d0e38e7999a29bedaa4feeb",
+      "imports": [
+        "transformers"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "vcs",
+        "locator": "https://github.com/huggingface/transformers.git",
+        "commit": "5d9bce2548fc6fa70d0e38e7999a29bedaa4feeb",
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "triton-windows",
+      "version": "3.5.0.post21",
+      "requirement": "triton-windows==3.5.0.post21",
+      "imports": [
+        "triton"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "trl",
+      "version": "0.24.0",
+      "requirement": "trl==0.24.0",
+      "imports": [
+        "trl"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "typing_extensions",
+      "version": "4.15.0",
+      "requirement": "typing_extensions==4.15.0",
+      "imports": [
+        "typing_extensions"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "unsloth",
+      "version": "2026.2.1",
+      "requirement": "unsloth==2026.2.1",
+      "imports": [
+        "unsloth"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "uvicorn",
+      "version": "0.41.0",
+      "requirement": "uvicorn==0.41.0",
+      "imports": [
+        "uvicorn"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "PyYAML",
+      "version": "6.0.2",
+      "requirement": "PyYAML==6.0.2",
+      "imports": [
+        "yaml"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
+      "distribution": "zstandard",
+      "version": "0.25.0",
+      "requirement": "zstandard==0.25.0",
+      "imports": [
+        "zstandard"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    }
+  ],
+  "optional_unavailable": [
+    {
+      "imports": [
+        "dsl",
+        "generators",
+        "verifiers"
+      ],
+      "feature": "ARC vendor-tree diagnostics",
+      "reason": "Loaded only after explicit sys.path binding to operator-supplied ARC vendor trees; not a pip authority."
+    },
+    {
+      "imports": [
+        "kaggle_benchmarks"
+      ],
+      "feature": "Kaggle benchmark generated runners",
+      "reason": "Feature-gated integration is absent from the measured environment and has no approved reproducible distribution identity."
+    },
+    {
+      "imports": [
+        "liger_kernel"
+      ],
+      "feature": "Liger fused kernels",
+      "reason": "Guarded accelerator import falls back to the owned non-Liger path when unavailable."
+    },
+    {
+      "imports": [
+        "muon"
+      ],
+      "feature": "Muon optimizer experiment",
+      "reason": "Guarded experimental optimizer import falls back to AdamW when unavailable."
+    },
+    {
+      "imports": [
+        "pynvml"
+      ],
+      "feature": "Sub-second NVML power sampling",
+      "reason": "Guarded sampler falls back to the native nvidia-smi path when unavailable."
+    },
+    {
+      "imports": [
+        "uiautomation"
+      ],
+      "feature": "Cockpit Windows UI inventory",
+      "reason": "Guarded operator-surface integration returns an empty inventory when unavailable."
+    }
+  ],
+  "prose_authority": [
+    {
+      "path": "README.md",
+      "required_marker": "Python dependency authority: manifests/python-environment-v1.json"
+    },
+    {
+      "path": "docs/research/triton-windows-research-2026-06-10.md",
+      "required_marker": "Python dependency authority: manifests/python-environment-v1.json"
+    }
+  ],
+  "linked_manifests": {
+    "rust": "runtime/ember-lab/Cargo.toml",
+    "typescript": "tools/ember-cli/src/package.json"
+  }
+}
