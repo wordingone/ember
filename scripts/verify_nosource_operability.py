@@ -210,7 +210,13 @@ resolved-false, never a silent pass.
 WHAT IS NOT MEASURED (permanently undecidable here, human capture required):
   - whether the command actually appears as a visible affordance in the
     running UI (menu/palette rendering);
-  - whether operating it takes one click/keystroke rather than typed flags;
+  - whether operating it takes one click/keystroke rather than typed flags
+    (PARTIALLY narrowed 2026-07-26: the interaction section decides, from
+    each resolved spine module's own dispatch bytes, whether the BARE
+    default invocation reaches a substantive result rather than a usage
+    error -- the one thing a no-source reader can type. The rendered
+    click/keystroke count, non-bare argument discoverability, and every
+    undecidable-static row remain human-judged);
   - whether the launched process reaches a usable first pixel.
   - round 3 (2026-07-25) closed the comment/print/dead-code-after-exit
     forms of "a string that never executes still counts". Round 3.1
@@ -1299,6 +1305,9 @@ def load_commands(root: Path) -> tuple[dict[str, dict], list[str]]:
             "has_description": bool(DESC_RE.search(body)),
             "desc_lower": " ".join(DESC_TEXT_RE.findall(body)).lower(),
             "body_lower": body.lower(),
+            # Raw bytes, case preserved: the I4 bare-invocation analysis reads
+            # identifiers and string literals, which are case-sensitive.
+            "body": body,
         }
     if not modules:
         errors.append(f"command registry empty: {COMMANDS_DIR}")
@@ -1457,6 +1466,236 @@ def verify_palette_chain(root: Path) -> dict:
         )
     )
     return out
+
+
+# --- I4 interaction cost: bare default invocation, statically decided ------
+#
+# The undecidable list has carried "Interaction cost: is each control one
+# click / one keystroke, with no typed flags?" as wholly human-judged. Half of
+# that question IS machine-decidable from the command module's own bytes: a
+# reader with no source can type exactly one thing -- the bare command name,
+# no arguments -- so the decidable half is whether each spine command's
+# DEFAULT invocation (empty args string into execute()) reaches a substantive
+# operator-facing result, or only a usage/required-argument error that demands
+# argument grammar the no-source bar says the operator does not have.
+#
+# What decides, and what can never silently pass on prose: the analysis walks
+# the execute() body's dispatch conditions IN SOURCE ORDER (control flow
+# before dispositions -- which branch runs FIRST owns the behaviour), tracking
+# only what a recognised empty-token binder proves about the bare token
+# (== ""). The verdict for a bare-entered branch comes from the branch's own
+# `message:` expressions: a message bound to a usage literal
+# ("usage.../`usage...) is a usage error; any other message expression
+# (a render call, a status template) is substantive. Every shape outside the
+# recognised grammar -- an unrecognised binder (an argument PARSER whose
+# empty-input behaviour would need evaluation, e.g. train.ts), a condition
+# mixing the token with other state, a body this walker cannot segment --
+# is `undecidable-static`, reported in the undecidable list and NEVER gated,
+# exactly the disposition the docstring gives undecidable items. Only
+# resolved-true / resolved-false rows join the gating set.
+#
+# DELIBERATELY NOT COVERED (stays human-judged, named in the undecidable
+# list): whether the palette click / keystroke count in the RENDERED UI is
+# one; whether arguments a command accepts beyond its bare form are
+# discoverable; and every `undecidable-static` row.
+
+_EXECUTE_HEAD_RE = re.compile(r"async\s+execute\s*\(\s*args\b")
+_USAGE_MSG_VALUE_RE = re.compile(r"""^\s*(?:"usage|'usage|`usage)""", re.IGNORECASE)
+# The lookbehind rejects `err.message : String(err)` -- a property ACCESS
+# followed by a ternary colon is not a `message:` object key, and on the
+# first run it was captured as one (verdict coincidentally unchanged; the
+# mechanism was wrong). An object key is never preceded by `.` or a word
+# character.
+_MSG_EXPR_RE = re.compile(r"(?<![.\w])message\s*:\s*([^\n,]{1,120})")
+
+
+def _match_delim(text: str, open_idx: int, open_ch: str, close_ch: str) -> int | None:
+    """Index of the delimiter closing text[open_idx] (which must be open_ch),
+    by plain depth counting. A string literal containing an unbalanced
+    delimiter desyncs this -- callers fail closed on None or on a nonsense
+    span, they never guess."""
+    if open_idx >= len(text) or text[open_idx] != open_ch:
+        return None
+    depth = 0
+    for i in range(open_idx, len(text)):
+        if text[i] == open_ch:
+            depth += 1
+        elif text[i] == close_ch:
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
+def _find_bare_token_ident(body: str) -> tuple[str | None, str]:
+    """The identifier holding the FIRST TOKEN of the args string, in a form
+    proven to be "" when args is empty. Three recognised idioms, each an
+    exact shape this repo's command modules use; anything else is None
+    (fail-closed to undecidable-static)."""
+    m = re.search(
+        r"(?:const|let)\s+(\w+)\s*=\s*args\s*\.trim\(\)\s*\.split\([^)]*\)\s*\[0\]\s*\?\?\s*(?:\"\"|'')",
+        body,
+    )
+    if m:
+        return m.group(1), f"{m.group(1)} = args.trim().split(...)[0] ?? \"\""
+    m = re.search(r"(?:const|let)\s+(\w+)\s*=\s*args\s*\.trim\(\)\s*\.split\(", body)
+    if m:
+        parts = m.group(1)
+        m2 = re.search(
+            r"(?:const|let)\s+(\w+)\s*=\s*" + re.escape(parts) + r"\s*\[0\]\s*\?\?\s*(?:\"\"|'')",
+            body,
+        )
+        if m2:
+            return m2.group(1), f"{m2.group(1)} = {parts}[0] ?? \"\" (parts = args.trim().split(...))"
+    m = re.search(r"(?:const|let)\s+(\w+)\s*=\s*args\s*\.trim\(\)\s*;", body)
+    if m:
+        trimvar = m.group(1)
+        m2 = re.search(
+            r"(?:const|let)\s+(\w+)\s*=\s*\w+\s*===\s*-1\s*\?\s*"
+            + re.escape(trimvar) + r"\s*:\s*" + re.escape(trimvar) + r"\.slice\(",
+            body,
+        )
+        if m2:
+            return (
+                m2.group(1),
+                f"{m2.group(1)} = firstSpace === -1 ? {trimvar} : {trimvar}.slice(...) "
+                f"({trimvar} = args.trim(); \"\" under empty args either way)",
+            )
+    return None, "no recognised empty-token binder (args flows into an argument parser " \
+                 "whose empty-input behaviour cannot be evaluated statically)"
+
+
+def _classify_condition_for_bare(cond: str, ident: str) -> str:
+    """What a condition does when `ident` is "" (the bare invocation):
+    'enters' / 'skips' / 'skips-guard' (a conjunction of !== tests including
+    !== \"\": bare skips a block that exists to reject unknown subcommands) /
+    'unknown' (mentions ident in an unrecognised shape) / 'irrelevant'."""
+    c = cond.strip()
+    if re.fullmatch(r"!\s*" + re.escape(ident), c):
+        return "enters"
+    eq = re.compile(r"^" + re.escape(ident) + r"\s*===\s*(\"[^\"]*\"|'[^']*')$")
+    disjuncts = [p.strip() for p in c.split("||")]
+    if all(eq.match(p) for p in disjuncts):
+        lits = [eq.match(p).group(1)[1:-1] for p in disjuncts]
+        return "enters" if "" in lits else "skips"
+    ne = re.compile(r"^" + re.escape(ident) + r"\s*!==\s*(\"[^\"]*\"|'[^']*')$")
+    conjuncts = [p.strip() for p in c.split("&&")]
+    if all(ne.match(p) for p in conjuncts):
+        lits = [ne.match(p).group(1)[1:-1] for p in conjuncts]
+        # "" among the != literals: bare makes the condition FALSE, skipping
+        # the reject-unknown-subcommand block -- the custody.ts guard shape.
+        # No "": every term is true for "", so bare ENTERS the reject block.
+        return "skips-guard" if "" in lits else "enters"
+    return "unknown" if re.search(r"\b" + re.escape(ident) + r"\b", c) else "irrelevant"
+
+
+def _judge_message_region(region: str) -> tuple[str | None, str]:
+    """Verdict from the FIRST `message:` expression in a region of code the
+    bare invocation reaches: usage literal -> resolved-false, anything else
+    -> resolved-true, none -> undecidable."""
+    msgs = _MSG_EXPR_RE.findall(region)
+    if not msgs:
+        return None, "no message: expression found in the reached region"
+    first = msgs[0].strip()
+    if _USAGE_MSG_VALUE_RE.match(first):
+        return "resolved-false", f"first reached message is a usage literal: {first[:80]}"
+    return "resolved-true", f"first reached message is substantive (not a usage literal): {first[:80]}"
+
+
+def assess_bare_default_invocation(stem: str, body: str) -> dict:
+    """Does `<stem>`'s bare default invocation (empty args) reach a
+    substantive result? States: resolved-true / resolved-false /
+    undecidable-static (fail-closed; never gates, lands in the undecidable
+    list)."""
+    heads = list(_EXECUTE_HEAD_RE.finditer(body))
+    if len(heads) != 1:
+        return check(
+            "undecidable-static",
+            f"{stem}.ts: found {len(heads)} `async execute(args...` heads; "
+            "need exactly one to segment the body",
+        )
+    paren_open = body.index("(", heads[0].start())
+    paren_close = _match_delim(body, paren_open, "(", ")")
+    if paren_close is None:
+        return check("undecidable-static", f"{stem}.ts: execute() parameter list unparseable")
+    brace_open = body.find("{", paren_close)
+    brace_close = _match_delim(body, brace_open, "{", "}") if brace_open != -1 else None
+    if brace_close is None:
+        return check("undecidable-static", f"{stem}.ts: execute() body unparseable")
+    exec_body = body[brace_open + 1 : brace_close]
+
+    ident, binder_evidence = _find_bare_token_ident(exec_body)
+    if ident is None:
+        return check("undecidable-static", f"{stem}.ts: {binder_evidence}")
+
+    pos = 0
+    guard_seen: str | None = None
+    while True:
+        if_idx = exec_body.find("if (", pos)
+        if if_idx == -1:
+            break
+        cond_close = _match_delim(exec_body, if_idx + 3, "(", ")")
+        if cond_close is None:
+            return check(
+                "undecidable-static",
+                f"{stem}.ts: unparseable if-condition at offset {if_idx}",
+            )
+        cond = exec_body[if_idx + 4 : cond_close]
+        verdict_kind = _classify_condition_for_bare(cond, ident)
+        blk_open = exec_body.find("{", cond_close)
+        blk_close = (
+            _match_delim(exec_body, blk_open, "{", "}") if blk_open != -1 else None
+        )
+        if verdict_kind in ("enters", "skips", "skips-guard") and blk_close is None:
+            return check(
+                "undecidable-static",
+                f"{stem}.ts: bare-relevant if at offset {if_idx} has no braced "
+                "block this walker can segment",
+            )
+        if verdict_kind == "enters":
+            state, msg_ev = _judge_message_region(exec_body[blk_open + 1 : blk_close])
+            if state is None:
+                return check(
+                    "undecidable-static",
+                    f"{stem}.ts: bare invocation enters `if ({cond.strip()[:70]})` but {msg_ev}",
+                )
+            return check(
+                state,
+                f"{stem}.ts: bare token binder [{binder_evidence}]; bare invocation "
+                f"enters `if ({cond.strip()[:70]})`; {msg_ev}",
+            )
+        if verdict_kind in ("skips", "skips-guard"):
+            if verdict_kind == "skips-guard":
+                guard_seen = cond.strip()
+            pos = blk_close + 1
+            continue
+        if verdict_kind == "unknown":
+            return check(
+                "undecidable-static",
+                f"{stem}.ts: condition `{cond.strip()[:70]}` mixes the bare token "
+                "with unrecognised terms; refusing to guess its bare disposition",
+            )
+        pos = cond_close + 1  # irrelevant condition: step past it only
+
+    # No bare-entered branch: the bare invocation falls through every
+    # recognised dispatch to the code after the last skipped block.
+    tail = exec_body[pos:] if pos else exec_body
+    state, msg_ev = _judge_message_region(tail)
+    guard_note = (
+        f"; bare skips the reject-unknown guard `if ({guard_seen[:70]})`"
+        if guard_seen
+        else ""
+    )
+    if state is None:
+        return check(
+            "undecidable-static",
+            f"{stem}.ts: bare invocation falls through all dispatch{guard_note} but {msg_ev}",
+        )
+    return check(
+        state,
+        f"{stem}.ts: bare token binder [{binder_evidence}]; bare invocation falls "
+        f"through recognised dispatch{guard_note}; {msg_ev}",
+    )
 
 
 def run(root: Path) -> dict:
@@ -1741,6 +1980,38 @@ def run(root: Path) -> dict:
             f"{chain['evidence']}; no availability restriction declared",
         )
 
+    # I4 interaction cost -- bare default invocation, statically decided --
+    # A spine command a no-source operator can only drive by typing its bare
+    # name must reach a substantive result from that bare form; a command
+    # whose bare form is a usage error demands argument grammar the no-source
+    # bar says the operator does not have. undecidable-static rows land in
+    # the undecidable list and are EXCLUDED from gating (the docstring's
+    # standing disposition for undecidable items); only resolved-true /
+    # resolved-false rows gate.
+    report["interaction"] = {}
+    interaction_gating: list[dict] = []
+    interaction_undecidable: list[str] = []
+    for func in SPINE_FUNCTIONS:
+        if report["spine"][func]["state"] != "resolved-true":
+            row = check(
+                "resolved-false",
+                "no resolved spine command to check (see the spine row)",
+            )
+            report["interaction"][func] = row
+            interaction_gating.append(row)
+            continue
+        stem = resolved_stem[func]
+        row = assess_bare_default_invocation(stem, modules[stem]["body"])
+        report["interaction"][func] = row
+        if row["state"] == "undecidable-static":
+            interaction_undecidable.append(
+                f"Interaction cost, {func} ({stem}.ts): bare-invocation "
+                f"disposition not statically decidable -- {row['evidence']} "
+                "(human capture required)"
+            )
+        else:
+            interaction_gating.append(row)
+
     # Permanently undecidable half ----------------------------------------
     report["undecidable"] = [
         "Rendered frame: palette MEMBERSHIP is machine-checked (palette "
@@ -1748,16 +2019,21 @@ def run(root: Path) -> dict:
         "filterSlashCommands -> display window -> SlashDropdown commands "
         "prop); the final link -- SlashDropdown's JSX becoming actual "
         "terminal pixels -- still requires human capture",
-        "Interaction cost: is each control one click / one keystroke, with "
-        "no typed flags? (human capture required)",
+        "Interaction cost: the BARE-INVOCATION half is machine-checked "
+        "(interaction section: each resolved spine command's default, "
+        "no-argument form must reach a substantive result, not a usage "
+        "error); still human-judged: whether the rendered UI drives each "
+        "control in one click / one keystroke, whether non-bare arguments "
+        "are discoverable, and every undecidable-static row below",
         "Launch experience: does the launcher reach a usable first pixel "
         "without prompts for paths/flags? (human capture required)",
-    ]
+    ] + interaction_undecidable
 
     gating = (
         list(checks.values())
         + list(report["spine"].values())
         + list(report["palette"].values())
+        + interaction_gating
     )
     report["verdict"] = (
         "PASS (measurable half only; undecidable items remain human-judged)"
@@ -1796,6 +2072,9 @@ def main() -> int:
         print("  palette reachability (rendered-list membership, static):")
         for k, c in report["palette"].items():
             print(f"  [{c['state']:>14}] {k}: {c['evidence']}")
+        print("  interaction cost (bare default invocation, static):")
+        for k, c in report["interaction"].items():
+            print(f"  [{c['state']:>18}] {k}: {c['evidence']}")
         print("  undecidable (human capture required):")
         for u in report["undecidable"]:
             print(f"    - {u}")
