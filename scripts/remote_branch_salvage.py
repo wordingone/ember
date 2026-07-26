@@ -163,6 +163,23 @@ def _validate_branch(raw: Any, *, index: int) -> dict[str, Any]:
     if reach["merge_base"] is not None:
         _sha1(reach["merge_base"], field=f"branches[{index}].reachability.merge_base")
 
+    status = reach["status"]
+    ahead = reach["ahead_by"]
+    behind = reach["behind_by"]
+    merge_base = reach["merge_base"]
+    consistent = {
+        "IDENTICAL": ahead == 0 and behind == 0 and merge_base == head,
+        "BEHIND": ahead == 0 and behind > 0 and merge_base == head,
+        "AHEAD": ahead > 0 and behind == 0 and merge_base is not None,
+        "DIVERGED": ahead > 0 and behind > 0 and merge_base is not None,
+        "NO_COMMON_ANCESTOR": ahead == 0 and behind == 0 and merge_base is None,
+        "ERROR": ahead == 0 and behind == 0 and merge_base is None,
+    }
+    if not consistent[status]:
+        raise PacketError(
+            f"branches[{index}].reachability is internally inconsistent for {status}"
+        )
+
     eq = _object(branch["patch_blob_equivalence"], field=f"branches[{index}].patch_blob_equivalence")
     _strict_keys(eq, {"status", "canonical_survivor", "path_count", "path_digest_sha256", "patch_digest_sha256"}, field=f"branches[{index}].patch_blob_equivalence")
     if eq["status"] not in {"PROVEN", "NOT_PROVEN", "NOT_APPLICABLE", "ERROR"}:
@@ -224,6 +241,7 @@ def _disposition(branch: Mapping[str, Any]) -> tuple[str, bool, str]:
         (reach["status"] in {"AHEAD", "DIVERGED", "NO_COMMON_ANCESTOR", "ERROR"} and eq["status"] != "PROVEN", "unique content or patch/blob equivalence remains unproven"),
         (eq["status"] not in {"PROVEN", "NOT_APPLICABLE"}, "canonical-survivor equivalence remains unproven"),
         (eq["canonical_survivor"] is None, "canonical survivor is missing"),
+        (True, "independent raw-source and patch/blob replay evidence is not attached to this non-authorizing packet"),
     ]
     for failed, reason in gates:
         if failed:

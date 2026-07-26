@@ -83,11 +83,13 @@ class RemoteBranchSalvageTests(unittest.TestCase):
         self.assertEqual(packet["deletion_authority"], "NOT_GRANTED")
         self.assertFalse(packet["public_mutation_performed"])
         self.assertEqual(packet["rows"][0]["ref"], "refs/heads/feat/contained")
-        self.assertEqual(packet["rows"][0]["disposition"], "DISCARD_EVIDENCED")
-        self.assertTrue(packet["rows"][0]["deletion_proposed"])
+        self.assertEqual(packet["rows"][0]["disposition"], "NEGATIVE_KEEP")
+        self.assertFalse(packet["rows"][0]["deletion_proposed"])
+        self.assertIn("independent raw-source", packet["rows"][0]["falsifier"])
         self.assertEqual(packet["rows"][1]["ref"], "refs/heads/master")
         self.assertEqual(packet["rows"][1]["disposition"], "NEGATIVE_KEEP")
         self.assertFalse(packet["rows"][1]["deletion_proposed"])
+        self.assertEqual(packet["safe_to_delete_refs"], [])
         validate_packet(packet)
 
     def test_exact_authority_binding_survives_packet_build(self) -> None:
@@ -129,6 +131,22 @@ class RemoteBranchSalvageTests(unittest.TestCase):
         value["branches"][1]["patch_blob_equivalence"]["status"] = "NOT_PROVEN"
         packet = build_packet(value)
         self.assertEqual(packet["rows"][0]["disposition"], "NEGATIVE_KEEP")
+
+    def test_inconsistent_reachability_is_rejected(self) -> None:
+        invalid = (
+            {"status": "IDENTICAL", "ahead_by": 1, "behind_by": 0, "merge_base": sha("b")},
+            {"status": "BEHIND", "ahead_by": 5, "behind_by": 4, "merge_base": sha("b")},
+            {"status": "AHEAD", "ahead_by": 1, "behind_by": 2, "merge_base": sha("b")},
+            {"status": "DIVERGED", "ahead_by": 0, "behind_by": 2, "merge_base": sha("b")},
+            {"status": "NO_COMMON_ANCESTOR", "ahead_by": 0, "behind_by": 0, "merge_base": sha("b")},
+            {"status": "ERROR", "ahead_by": 1, "behind_by": 0, "merge_base": None},
+        )
+        for reachability in invalid:
+            with self.subTest(reachability=reachability):
+                value = capture()
+                value["branches"][1]["reachability"] = reachability
+                with self.assertRaises(PacketError):
+                    build_packet(value)
 
     def test_ref_drift_fails_closed(self) -> None:
         value = capture()
@@ -194,7 +212,7 @@ class RemoteBranchSalvageTests(unittest.TestCase):
         self.assertNotIn("refs/heads/feat/contained", rendered)
         encoded = summary["rows"][0]["ref_utf8_hex"]
         self.assertEqual(bytes.fromhex(encoded).decode("utf-8"), "refs/heads/feat/contained")
-        self.assertEqual(summary["proposal_refs_utf8_hex"], [encoded])
+        self.assertEqual(summary["proposal_refs_utf8_hex"], [])
 
     def test_public_summary_tamper_is_rejected(self) -> None:
         summary = build_public_summary(build_packet(capture()))
