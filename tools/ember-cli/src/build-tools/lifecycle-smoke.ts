@@ -87,6 +87,17 @@ export function inspectLifecycleSurface(
   }));
 }
 
+export interface LifecycleStateEvidence {
+  artifact: string;
+  before_exists: boolean;
+  before_sha256: string | null;
+  after_exists: boolean;
+  after_sha256: string | null;
+  delta_sha256: string;
+  command: string | null;
+  run_id: string | null;
+}
+
 export interface LifecycleActionEvidence {
   action: LifecycleAction;
   ordinal: number;
@@ -94,17 +105,22 @@ export interface LifecycleActionEvidence {
   before_frame_sha256: string;
   after_frame_sha256: string;
   effect_evidence_sha256: string;
-  effect_kind: "durable-state-transition" | "observable-refusal";
-  outcome: "PASS" | "MISSING" | "REFUSED" | "NO_EFFECT";
+  effect_kind:
+    | "observable-readiness"
+    | "observable-product-effect"
+    | "preflight-only"
+    | "durable-control-append"
+    | "durable-artifact-publication"
+    | "observable-refusal";
+  outcome: "PASS" | "PREFLIGHT_ONLY" | "MISSING" | "REFUSED" | "NO_EFFECT";
   output_excerpt: string;
-  state_before: number | null;
-  state_after: number | null;
+  state_evidence: LifecycleStateEvidence | null;
   frame_artifact: string;
   repair_item: string | null;
 }
 
 export interface LifecycleReceipt {
-  schema_version: "ember-cli-lifecycle-smoke/v1";
+  schema_version: "ember-cli-lifecycle-smoke/v2";
   evidence_class: "LIVE_COMPILED_BINARY_CONPTY";
   source_commit: string;
   binary: {
@@ -188,7 +204,7 @@ export function validateLifecycleReceipt(
     "artifacts", "operator_contract_mapping", "accepted_instrument_run",
     "claim_boundary",
   ], "receipt");
-  if (receipt.schema_version !== "ember-cli-lifecycle-smoke/v1") {
+  if (receipt.schema_version !== "ember-cli-lifecycle-smoke/v2") {
     throw new Error("unsupported lifecycle receipt schema");
   }
   if (receipt.evidence_class !== "LIVE_COMPILED_BINARY_CONPTY") {
@@ -262,8 +278,8 @@ export function validateLifecycleReceipt(
     requireClosedKeys(row, [
       "action", "ordinal", "input_sha256", "before_frame_sha256",
       "after_frame_sha256", "effect_evidence_sha256", "effect_kind",
-      "outcome", "output_excerpt", "state_before", "state_after",
-      "frame_artifact", "repair_item",
+      "outcome", "output_excerpt", "state_evidence", "frame_artifact",
+      "repair_item",
     ], `action ${index + 1}`);
     requireSha(row.input_sha256, `${row.action} input`);
     requireSha(row.before_frame_sha256, `${row.action} before frame`);
@@ -274,23 +290,92 @@ export function validateLifecycleReceipt(
     if (row.output_excerpt.trim() === "") {
       throw new Error(`${row.action} output excerpt is absent`);
     }
+    if (row.outcome === "NO_EFFECT") {
+      throw new Error(`${row.action} NO_EFFECT is an instrument failure`);
+    }
+
+    const isDurable =
+      row.effect_kind === "durable-control-append" ||
+      row.effect_kind === "durable-artifact-publication";
+    if (isDurable) {
+      if (row.outcome !== "PASS" || row.state_evidence === null) {
+        throw new Error(`${row.action} durable state evidence is absent`);
+      }
+      const state = row.state_evidence;
+      requireClosedKeys(state, [
+        "artifact", "before_exists", "before_sha256", "after_exists",
+        "after_sha256", "delta_sha256", "command", "run_id",
+      ], `${row.action} state evidence`);
+      requireArtifact(state.artifact, `${row.action} state artifact`);
+      requireSha(state.delta_sha256, `${row.action} state delta`);
+      if (state.before_exists) {
+        if (state.before_sha256 === null) {
+          throw new Error(`${row.action} durable state before hash is absent`);
+        }
+        requireSha(state.before_sha256, `${row.action} state before`);
+      } else if (state.before_sha256 !== null) {
+        throw new Error(`${row.action} nonexistent prior state has a hash`);
+      }
+      if (!state.after_exists || state.after_sha256 === null) {
+        throw new Error(`${row.action} durable state after bytes are absent`);
+      }
+      requireSha(state.after_sha256, `${row.action} state after`);
+      if (
+        (state.before_exists && state.before_sha256 === state.after_sha256) ||
+        state.delta_sha256 !== row.effect_evidence_sha256
+      ) {
+        throw new Error(`${row.action} durable state is unchanged or unbound`);
+      }
+      const expectedControl: Partial<Record<LifecycleAction, string>> = {
+        pause: "pause",
+        resume: "resume",
+        terminate: "stop",
+      };
+      if (row.effect_kind === "durable-control-append") {
+        if (
+          state.command !== expectedControl[row.action] ||
+          state.run_id !== "smoke-run"
+        ) {
+          throw new Error(`${row.action} control command is not state-bound`);
+        }
+      } else if (
+        row.action !== "save" ||
+        state.command !== null ||
+        state.run_id !== null
+      ) {
+        throw new Error(`${row.action} publication state is malformed`);
+      }
+    } else if (row.state_evidence !== null) {
+      throw new Error(`${row.action} nondurable outcome carries fake state`);
+    }
+
     if (row.outcome === "PASS") {
       if (row.before_frame_sha256 === row.after_frame_sha256) {
         throw new Error(`${row.action} is missing an effect-bearing frame delta`);
       }
+      const expectedEffect: Partial<Record<LifecycleAction, string>> = {
+        launch: "observable-readiness",
+        observe: "observable-product-effect",
+        pause: "durable-control-append",
+        resume: "durable-control-append",
+        save: "durable-artifact-publication",
+        terminate: "durable-control-append",
+      };
+      if (row.effect_kind !== expectedEffect[row.action] || row.repair_item !== null) {
+        throw new Error(`${row.action} PASS effect is lexical-only or mismapped`);
+      }
+    } else if (row.outcome === "PREFLIGHT_ONLY") {
       if (
-        row.effect_kind !== "durable-state-transition" ||
-        row.state_before !== index ||
-        row.state_after !== index + 1 ||
-        row.repair_item !== null
+        row.action !== "train" ||
+        row.effect_kind !== "preflight-only" ||
+        typeof row.repair_item !== "string" ||
+        row.repair_item.trim() === ""
       ) {
-        throw new Error(`${row.action} effect is lexical-only or not state-bound`);
+        throw new Error("train preflight-only outcome is not truthfully bound");
       }
     } else if (
-      !["MISSING", "REFUSED", "NO_EFFECT"].includes(row.outcome) ||
+      !["MISSING", "REFUSED"].includes(row.outcome) ||
       row.effect_kind !== "observable-refusal" ||
-      row.state_before !== null ||
-      row.state_after !== null ||
       typeof row.repair_item !== "string" ||
       row.repair_item.trim() === ""
     ) {
