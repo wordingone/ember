@@ -23,6 +23,8 @@
 
 import { describe, expect, it } from "bun:test";
 
+import { resolve } from "node:path";
+
 import {
   resolveModelSeat,
   selectedModelContract,
@@ -130,22 +132,29 @@ describe("cond3 owned seat — ember-cli runtime consumer round-trip", () => {
     expect(identity!.modelConfigCapabilities!.modelConfigSha256).toBe(MODEL_CONFIG_SHA256);
     expect(identity!.modelConfigCapabilities!.structuredOutputs).toBe(true);
 
-    // Launch descriptor: every field, ADMISSION authority, paths preserved
-    // (resolve() may normalize separators/drive; compare case-insensitively on
-    // the path tail exactly as the loader's own fallback compare does).
+    // Launch descriptor: every field, ADMISSION authority, paths preserved.
+    // resolve() drive-prefixes these POSIX-style paths on win32, so the raw
+    // strings differ. The cure is to remove the variance rather than loosen the
+    // comparison: apply the SAME known normalization to the expected value and
+    // compare EXACTLY. A suffix match cannot see a prepend-style
+    // reinterpretation -- "/repo/DECOY/repo/checkpoints/step-final" ends with
+    // the honest tail and would have passed. Verified: with toEndWith that
+    // decoy passes; with the exact compare below it fails, expected
+    // "c:/repo/decoy/repo/checkpoints/step-final" vs received
+    // "c:/repo/checkpoints/step-final".
     const launch = identity!.launch!;
     expect(launch.authorityKind).toBe("ADMISSION");
     expect(launch.mode).toBe("INTERACTIVE");
     expect(launch.pythonExecutable).toBe("python");
     const tail = (p: string) => p.replace(/\\/g, "/").toLowerCase();
-    expect(tail(launch.checkpointDir)).toEndWith(tail(LAUNCH.checkpoint_dir));
+    expect(tail(launch.checkpointDir)).toBe(tail(resolve(LAUNCH.checkpoint_dir)));
     if (launch.authorityKind === "ADMISSION") {
-      expect(tail(launch.modelConfigPath)).toEndWith(tail(LAUNCH.model_config_path));
-      expect(tail(launch.runManifestPath)).toEndWith(tail(MANIFEST_PATH));
-      expect(tail(launch.trustedVerifierRegistryPath)).toEndWith(tail(REGISTRY_PATH));
+      expect(tail(launch.modelConfigPath)).toBe(tail(resolve(LAUNCH.model_config_path)));
+      expect(tail(launch.runManifestPath)).toBe(tail(resolve(MANIFEST_PATH)));
+      expect(tail(launch.trustedVerifierRegistryPath)).toBe(tail(resolve(REGISTRY_PATH)));
     }
-    expect(tail(launch.serverPath)).toEndWith(tail(LAUNCH.server_path));
-    expect(tail(launch.tokenizerPath)).toEndWith(tail(LAUNCH.tokenizer_path));
+    expect(tail(launch.serverPath)).toBe(tail(resolve(LAUNCH.server_path)));
+    expect(tail(launch.tokenizerPath)).toBe(tail(resolve(LAUNCH.tokenizer_path)));
   });
 
   it("POSITIVE: the loaded identity round-trips resolveModelSeat's DEFAULT invocation as the OWNED seat, byte-identical", () => {
