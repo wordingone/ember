@@ -166,5 +166,10 @@ def test_post_merge_capture_workflow_is_manual_read_only_and_artifact_only() -> 
     assert "BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}" in text
     assert 'baseline_run_id="${BASELINE_RUN_ID}"' in text
     assert "baseline_run_id='${{ inputs.baseline_run_id }}'" not in text
+    assert 'actions/runs/${baseline_run_id}' in text
+    assert '.conclusion == "success"' in text
+    assert '.event == "workflow_dispatch"' in text
+    assert '.head_sha == $sha' in text
+    assert '.path == $workflow_path' in text
     assert '--expected-first-run-id "${baseline_run_id}"' in text
     assert '--expected-second-run-id "${GITHUB_RUN_ID}"' in text
