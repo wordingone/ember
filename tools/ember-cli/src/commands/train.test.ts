@@ -16,6 +16,7 @@ import {
   type LaunchPacketRunResult,
 } from "./train.ts";
 import type { CommandContext } from "../types/command-types.ts";
+import { tryDispatchSlashCommand } from "../services/slash-dispatch.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -173,6 +174,60 @@ function assertOnlyPreflightSpawned(spawns: RecordedSpawn[]): void {
 }
 
 describe("train command", () => {
+  it("routes the displayed /train confirm instruction through the production slash dispatcher", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-dispatch-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      const certifiedSpawns: RecordedSpawn[] = [];
+      const cmd = createTrainCommand({
+        pythonBin: "python",
+        repoRoot: scratch,
+        certifiedLaunchScriptPath: path.join(
+          scratch,
+          "tools",
+          "ember-restart-3b",
+          "certified_train_launch.py",
+        ),
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: (executable, args) => {
+          certifiedSpawns.push({ executable, args });
+          return {
+            status: 0,
+            stdout: JSON.stringify({
+              execution_receipt: "receipt.json",
+              artifact_root: "artifacts/run",
+            }),
+          };
+        },
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+
+      const offerResult = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      expect(offerResult?.message).toContain(`type "/train confirm ${offerId}"`);
+
+      // Bare text is a model turn, never a slash-command confirmation.
+      expect(
+        await tryDispatchSlashCommand(`confirm ${offerId}`, mockCtx, dispatchDeps),
+      ).toBeNull();
+
+      const confirmResult = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        mockCtx,
+        dispatchDeps,
+      );
+      expect(confirmResult?.exitCode).toBeUndefined();
+      expect(confirmResult?.message).toContain("receipt.json");
+      expect(certifiedSpawns).toHaveLength(1);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   // =========================================================================
   // Registration
   // =========================================================================
