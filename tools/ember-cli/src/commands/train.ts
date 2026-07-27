@@ -452,7 +452,7 @@ function _interpretCertifiedResult(
  *     present and valid, mint a single-use OFFER through the panel's own confirm-only
  *     idiom (core/encounter-membrane.ts's shape, reused rather than reinvented). No
  *     command string is handed to the operator to paste.
- *  3. `confirm <id>` invokes exactly the same fixed certified_train_launch.py consumer
+ *  3. `/train confirm <id>` invokes exactly the same fixed certified_train_launch.py consumer
  *     `--execute` invokes, with the paths resolved at offer time -- only for an id
  *     minted by a green preflight earlier in this session.
  *  4. With `--execute` and all three certificate paths, invoke exactly one fixed
@@ -479,7 +479,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
     async execute(args: string, ctx: CommandContext) {
       const trimmed = args.trim();
 
-      // "confirm <id>" is a bare-token subcommand of the confirm-only membrane, not a
+      // "/train confirm <id>" routes here as the train command's bare-token subcommand, not a
       // --flag invocation -- handled entirely separately, before the flag parser and
       // before any preflight (O3: confirm invokes the consumer only for an id minted by
       // a green preflight already recorded in this session; it never re-runs the
@@ -492,7 +492,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           return {
             type: "message" as const,
             message:
-              'error: "confirm" requires exactly one offer id -- usage: confirm <id>. No action taken.',
+              'error: "/train confirm" requires exactly one offer id -- usage: /train confirm <id>. No action taken.',
             exitCode: 1,
           };
         }
@@ -699,7 +699,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           `  declaration ledger: ${canonical.declarationLedger}`,
           `  run spec: ${canonical.runSpec}`,
           "",
-          `OFFER ${offerId} action=train-launch -- type "confirm ${offerId}" to proceed. Declining, a typo, or anything else takes no action; the confirm-only membrane never silently steers.`,
+          `OFFER ${offerId} action=train-launch -- type "/train confirm ${offerId}" to proceed. Declining, a typo, or anything else takes no action; the confirm-only membrane never silently steers.`,
         ].join("\n"),
       };
     },

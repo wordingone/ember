@@ -265,7 +265,7 @@ describe("train command", () => {
         expect(result?.message).not.toContain(REAL_LAUNCH_COMMAND);
         expect(result?.message).toContain("launch-ready");
         expect(result?.message).toMatch(/OFFER \S+ action=train-launch/);
-        expect(result?.message).toContain('type "confirm');
+        expect(result?.message).toContain('type "/train confirm');
         // Only the preflight ever ran; the training launch was never spawned.
         assertOnlyPreflightSpawned(spawns);
       } finally {

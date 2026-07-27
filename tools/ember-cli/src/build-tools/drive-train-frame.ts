@@ -142,6 +142,31 @@ async function main(): Promise<void> {
     console.log("=== FRAME 4: after second Enter ===");
     console.log(ran2);
 
+    // 3. Exercise the production confirmation route with an id that cannot possibly have
+    // been minted. This proves the compiled slash dispatcher reaches /train's confirm-only
+    // refusal while making a training launch impossible.
+    const refusalCommand = "/train confirm probe-never-minted";
+    for (const ch of refusalCommand) {
+      child.write(ch);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    await settle(() => writes, 1500);
+    const confirmTyped = capture("05-confirm-typed");
+    console.log("=== FRAME 5: safe confirmation refusal typed ===");
+    console.log(confirmTyped);
+
+    child.write("\r");
+    await settle(() => writes, 3000);
+    child.write("\r");
+    await settle(() => writes, 3000);
+    const confirmRefused = capture("06-confirm-refused");
+    console.log("=== FRAME 6: safe confirmation refused ===");
+    console.log(confirmRefused);
+
+    if (!raw.join("").includes("no outstanding train-launch offer")) {
+      throw new Error("compiled /train confirm route did not reach the fail-closed unknown-offer response");
+    }
+
     writeFileSync(join(outDir, "raw.txt"), raw.join(""), "utf8");
     console.log(`frames written to ${outDir}`);
   } finally {

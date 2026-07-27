@@ -45,7 +45,7 @@ Resolved relative to `repoRoot` exactly as `configPath` and `scriptPath` already
 Do not invent a new affordance. `commands/world-state.ts:126` already establishes the cockpit's
 confirm-only membrane:
 
-> `OFFER <id> action=<action> -- type "confirm <id>" to proceed.`
+> `OFFER <id> action=<action> -- type "/train confirm <id>" to proceed.`
 
 `/train` adopts the same shape. With no arguments:
 
@@ -57,10 +57,10 @@ confirm-only membrane:
    is the correct one: it tells them what is missing rather than handing them a command to paste;
 5. all three present → emit `OFFER <id> action=train-launch` with the resolved paths listed for
    inspection, and no subprocess beyond the preflight;
-6. `confirm <id>` invokes exactly the same fixed `certified_train_launch.py` consumer the
+6. `/train confirm <id>` invokes exactly the same fixed `certified_train_launch.py` consumer the
    `--execute` path invokes today, with the resolved paths.
 
-Offer ids are single-use and expire with the session. A `confirm` for an unknown, spent or expired
+Offer ids are single-use and expire with the session. A `/train confirm` for an unknown, spent or expired
 id takes no action and says so — matching the membrane's stated contract that a typo never steers.
 
 ### 3. `--execute` stays
@@ -85,7 +85,7 @@ Passing a *different* argument set to that consumer is a defect, not an improvem
 |---|---|
 | O1 | the preflight runs before any artifact resolution — resolution never precedes it |
 | O2 | an OFFER is emitted only after preflight green AND all three artifacts resolved |
-| O3 | `confirm` invokes the consumer only for an id minted by a green preflight in this session |
+| O3 | `/train confirm` invokes the consumer only for an id minted by a green preflight in this session |
 | O4 | preflight red short-circuits: no resolution, no offer, no consumer invocation |
 
 ### Conjunction rows (each lenient outcome against each strict check)
@@ -105,9 +105,9 @@ Passing a *different* argument set to that consumer is a defect, not an improvem
 
 | # | skip path | required outcome |
 |---|---|---|
-| S1 | `confirm <id>` typed with no prior `/train` this session | no consumer invocation; unknown-offer message |
-| S2 | `confirm <id>` for a spent id | no second invocation |
-| S3 | `confirm` with a malformed or absent id | no action |
+| S1 | `/train confirm <id>` typed with no prior `/train` this session | no consumer invocation; unknown-offer message |
+| S2 | `/train confirm <id>` for a spent id | no second invocation |
+| S3 | `/train confirm` with a malformed or absent id | no action |
 | S4 | an artifact path exists but is an empty file or unparseable | fail closed — existence is not validity, and the check must not be skipped just because the path resolved |
 | S5 | `--execute` with only *some* of the three flags | the existing usage error, unchanged |
 
@@ -128,5 +128,7 @@ RED first: the C-rows and S-rows are written as failing tests before the impleme
 failure is observed and recorded. An assertion that has never failed proves nothing.
 
 Then, as the last leg and not a substitute for it: drive the compiled binary as the operator through
-the headless capture, type `/train`, and read the rendered frame. The frame is the receipt — the
-test suite establishes that nothing else broke.
+the headless capture, type `/train`, read the rendered offer, then submit
+`/train confirm probe-never-minted`. The deliberately unknown id proves the production dispatcher
+reaches the confirm-only refusal without authorizing training. The frames are the receipt — the test
+suite separately proves that a real offered id reaches only the injected certified consumer.
