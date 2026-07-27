@@ -1058,31 +1058,15 @@ export function ReplScreen({
   // never confused with an actual crash.
   const outageBanner = useOutageBanner();
 
+  // Command registry state must be declared before renderMessage reads it. Keeping the state below
+  // the callback made the obvious dependency fix read a lexical binding before initialization.
+  const [slashCommands, setSlashCommands] = useState<RegistryCommand[]>([]);
+
   // Render dispatch (memoised per lookups + viewport width)
-  // KNOWN DEFECT, left uncured on purpose and measured rather than described.
-  //
-  // This callback closes over the mount-time `slashCommands` — the empty array, before the async
-  // registry load lands — so a welcome message rendered through dispatch shows six BLOCKED spine
-  // rows forever while the always-mounted banner beside it shows six BOUND ones. An independent
-  // review of this PR found it, and the comment on renderMsgDispatch below still claims "both call
-  // sites pass it", which is true of the value and false of its currency.
-  //
-  // Both obvious cures — adding `slashCommands` to the dependency array, or reading it through a
-  // ref so the identity stays stable — make the welcome path render against the live registry, and
-  // BOTH turn five palette and dropdown suites red: palette-overflow-render (4), palette-resize-
-  // cycle (1), repl-slash-dropdown (3), repl-operator-surface (1), repl-source-binding (1). Each
-  // loses the palette's "+N more" overflow row. Measured by bisection: repl.ts at head passes,
-  // either cure alone fails, and the rest of this PR's changes are not involved.
-  //
-  // So the currency defect and the palette's overflow contract interact through something neither
-  // this comment nor the review has yet named, and shipping a cure that reds five suites to fix a
-  // second-screen staleness would be trading a visible contract for a hidden one. Filed rather than
-  // half-fixed; the transcript welcome copy is also arguably redundant with the always-mounted
-  // banner, which may be the real answer.
   const renderMessage = useCallback(
     (msg: SessionMessage) =>
       renderMsgDispatch(msg, lookups as MessageLookups, terminalCols, slashCommands),
-    [lookups, terminalCols],
+    [lookups, terminalCols, slashCommands],
   );
 
   // Transcript region
@@ -1133,7 +1117,6 @@ export function ReplScreen({
   // at mount; the dropdown itself is a pure function of the live input text + terminal width, so
   // it stays in sync with both typing (narrows the match list) and resize (b23's description
   // truncation re-derives its budget from `terminalCols` on every render).
-  const [slashCommands, setSlashCommands]           = useState<RegistryCommand[]>([]);
   const [dropdownSelectedIndex, setDropdownSelIndex] = useState(0);
 
   useEffect(() => {
