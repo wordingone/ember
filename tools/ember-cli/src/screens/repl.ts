@@ -1689,8 +1689,13 @@ export function ReplScreen({
     }
 
     if (key.return) {
-      if (!inputState.text.trim()) return;
-      const text = inputState.text;
+      // issue #251: read the synchronous live snapshot, not `inputState.text` -- the latter is
+      // React-state-derived and reflects only the last completed render, which a same-tick
+      // Enter (delivered in the same terminal write() burst as the characters before it) reads
+      // as stale/empty, silently dropping the whole submission. getSnapshot() is always current.
+      const live = inputActions.getSnapshot();
+      if (!live.text.trim()) return;
+      const text = live.text;
       inputActions.setText("");
       clearInputRefForSubmit(inputStateRef);
       // Clear any pending suggestion when the user submits.

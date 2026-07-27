@@ -88,6 +88,15 @@ export interface PromptInputActions {
   toggleFastMode:      () => void;
   openEditor:          () => void;
   openModelPicker:     () => void;
+  /**
+   * issue #251: returns the LIVE text+cursor synchronously, bypassing React's render cycle.
+   * A caller that needs the up-to-the-instant buffer content -- most importantly a same-tick
+   * Enter handler reading the text just inserted by preceding keystrokes in the SAME synchronous
+   * keyboard burst -- must call this instead of reading the `PromptInputState` object returned
+   * from render, which only reflects state as of the last completed render and is proven stale
+   * mid-burst (see the module doc comment on `usePromptInput` below).
+   */
+  getSnapshot:         () => TextCursor;
 }
 
 export interface PromptInputDeps {
@@ -319,60 +328,89 @@ export function usePromptInput(
   const stashRef = useRef(new StashManager());
   const fastRef  = useRef(new FastModeHint());
 
+  // issue #251 ("full line + Enter in one synchronous write burst is silently dropped"): a
+  // real terminal write() burst decodes into several `_deliverKeyEvent` calls (one per
+  // character, then one for Enter) that all run synchronously, in order, in the SAME JS turn --
+  // React never gets a chance to render between them. Every caller that reads state via the
+  // `tc` useState value (including a consumer's own `inputState.text` closure, e.g. repl.ts's
+  // Enter handler) sees whatever `tc` was as of the LAST completed render, so an Enter delivered
+  // in the same burst as the preceding characters reads the buffer as it was BEFORE any of them
+  // landed -- empty, on a fresh line -- and the "nothing typed" guard silently no-ops the whole
+  // submission. Splitting the write (character(s), then Enter as its own write()) gives React a
+  // chance to render in between, which is why that path always worked and made this look
+  // input-length- or word-count-related rather than a batching race.
+  //
+  // tcRef is the fix: a plain ref that every mutation below updates FIRST, synchronously and
+  // unconditionally, before also calling `setTc` to schedule the matching re-render. Because
+  // tcRef.current is written immediately (not deferred to React's next render), a same-tick
+  // `getSnapshot()` call always returns the fully caught-up value, burst or no burst.
+  const tcRef = useRef<TextCursor>(tc);
+
+  const updateTc = useCallback((fn: (prev: TextCursor) => TextCursor) => {
+    const next = fn(tcRef.current);
+    tcRef.current = next;
+    setTc(next);
+    return next;
+  }, []);
+
   const parsed = parseInputMode(tc.text);
 
   const setText = useCallback((t: string) => {
-    const truncated = t.slice(0, MAX_INPUT_CHARS);
-    setTc({ text: truncated, cursor: truncated.length });
-  }, []);
+    updateTc(() => {
+      const truncated = t.slice(0, MAX_INPUT_CHARS);
+      return { text: truncated, cursor: truncated.length };
+    });
+  }, [updateTc]);
 
   const insertText = useCallback((ch: string) => {
-    setTc(prev => insertAtCursor(prev.text, prev.cursor, ch));
-  }, []);
+    updateTc(prev => insertAtCursor(prev.text, prev.cursor, ch));
+  }, [updateTc]);
 
   const deleteBackwardAction = useCallback(() => {
-    setTc(prev => deleteBackward(prev.text, prev.cursor));
-  }, []);
+    updateTc(prev => deleteBackward(prev.text, prev.cursor));
+  }, [updateTc]);
 
   const deleteForwardAction = useCallback(() => {
-    setTc(prev => deleteForward(prev.text, prev.cursor));
-  }, []);
+    updateTc(prev => deleteForward(prev.text, prev.cursor));
+  }, [updateTc]);
 
   const moveCursorLeft = useCallback(() => {
-    setTc(prev => ({ text: prev.text, cursor: moveCursorBy(prev.text, prev.cursor, -1) }));
-  }, []);
+    updateTc(prev => ({ text: prev.text, cursor: moveCursorBy(prev.text, prev.cursor, -1) }));
+  }, [updateTc]);
 
   const moveCursorRight = useCallback(() => {
-    setTc(prev => ({ text: prev.text, cursor: moveCursorBy(prev.text, prev.cursor, 1) }));
-  }, []);
+    updateTc(prev => ({ text: prev.text, cursor: moveCursorBy(prev.text, prev.cursor, 1) }));
+  }, [updateTc]);
 
   const moveCursorHome = useCallback(() => {
-    setTc(prev => ({ text: prev.text, cursor: 0 }));
-  }, []);
+    updateTc(prev => ({ text: prev.text, cursor: 0 }));
+  }, [updateTc]);
 
   const moveCursorEnd = useCallback(() => {
-    setTc(prev => ({ text: prev.text, cursor: prev.text.length }));
-  }, []);
+    updateTc(prev => ({ text: prev.text, cursor: prev.text.length }));
+  }, [updateTc]);
 
   const paste = useCallback((pastedText: string) => {
-    setTc(current => {
+    updateTc(current => {
       const result = applyPaste(current.text, pastedText);
       if (result.pastedContents) setPasted(result.pastedContents);
       return { text: result.text, cursor: result.text.length };
     });
-  }, []);
+  }, [updateTc]);
 
   const stash = useCallback(() => {
-    stashRef.current.stash(tc.text);
-    setTc({ text: "", cursor: 0 });
+    stashRef.current.stash(tcRef.current.text);
+    updateTc(() => ({ text: "", cursor: 0 }));
     setIsStashed(true);
-  }, [tc.text]);
+  }, [updateTc]);
 
   const restoreStash = useCallback(() => {
     const v = stashRef.current.restore();
-    if (v !== null) setTc({ text: v, cursor: v.length });
+    if (v !== null) updateTc(() => ({ text: v, cursor: v.length }));
     setIsStashed(false);
-  }, []);
+  }, [updateTc]);
+
+  const getSnapshot = useCallback((): TextCursor => tcRef.current, []);
 
   const cyclePermissionMode = useCallback(() => {
     setPermMode(m => nextPermissionMode(m));
@@ -427,6 +465,7 @@ export function usePromptInput(
     toggleFastMode,
     openEditor,
     openModelPicker,
+    getSnapshot,
   };
 
   return [state, actions];
