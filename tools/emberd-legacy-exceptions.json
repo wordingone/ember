@@ -1,0 +1,18 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema": "emberd-legacy-exceptions-v1",
+  "entries": [
+    {
+      "path": "receipts/ember-restart-3b/native-cost-calibration-seed83-replication.json",
+      "sha256": "a04292f2a73ef51d5da403d72f07f50870052847944e206e452b6c74af25b795",
+      "reason": "executed measurement receipt; keys custody.emberd_schedule_receipt_sha256 and custody.emberd_schedule were authoritative at measurement time; rewriting a hash-bearing receipt in place makes it a different document. See docs/naming-migrations.md."
+    },
+    {
+      "path": "manifests/ember-01-custody/public-issue-census.json",
+      "sha256": "e973d2285a5c6799cb58f8fd86aef11f272e728779612ea1bf21dcbcc1c111a9",
+      "reason": "verbatim cached GitHub issue titles for two still-open issues whose real titles literally start with 'emberd'; renaming the cache would make it diverge from the live source it censuses. See docs/naming-migrations.md."
+    }
+  ]
+}
