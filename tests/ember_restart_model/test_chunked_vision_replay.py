@@ -64,6 +64,23 @@ class ChunkedVisionReplayTests(unittest.TestCase):
         self.assertEqual(len(replay_plan.ordered_source_indices), self.record_count)
         self.assertFalse(any(isinstance(value, dict) for value in vars(replay_plan).values()))
 
+    def test_range_entry_rejects_negative_and_non_integer_image_markers(self) -> None:
+        replay_plan = build_owned_vision_scenes.build_replay_plan(
+            self.tokenizer,
+            count=self.record_count,
+            image_marker=self.image_marker,
+        )
+        for invalid_marker in (-1, "31998", None, True):
+            with self.subTest(image_marker=invalid_marker):
+                with self.assertRaisesRegex(ValueError, "replay marker"):
+                    build_owned_vision_scenes.build_records_range(
+                        self.tokenizer,
+                        replay_plan=replay_plan,
+                        start_index=0,
+                        count=1,
+                        image_marker=invalid_marker,
+                    )
+
     def test_verifier_rejects_omission_duplicate_and_reorder_straddling_511_512(self) -> None:
         records = build_owned_vision_scenes.build_records(
             self.tokenizer,
