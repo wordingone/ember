@@ -30,6 +30,13 @@ POLICY_SCHEMA = "ember-authority-v1"
 ACTIVE_GOAL_ID = "EMBER-02"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 ACTIVE_WORKSTREAM_IDS = ["EMBER-02A", "EMBER-02B", "EMBER-02C"]
+GOAL_GRAPH_NODE_IDS = [
+    "EMBER-01",
+    "EMBER-02A",
+    "EMBER-02B",
+    "EMBER-02C",
+    "EMBER-02P",
+]
 WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
                'prefixes': ['configs/ember-restart-3b.json',
                             'docs/ember-restart-3b-',
@@ -78,12 +85,37 @@ WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
 EXPECTED_ACTIVE_GOAL_SUFFIX = (
     "goals/ember/ember-02-3b-foundation-birth/goal.md"
 )
+GOAL_GRAPH_SCHEMA = "ember-goal-graph-v1"
+GOAL_GRAPH_STATES = {
+    "ACTIVE",
+    "PRESTAGING",
+    "WAITING_ON_DEPENDENCY",
+    "CERTIFIED",
+}
 POLICY_RE = re.compile(
     r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
 )
 CONSERVATION_RE = re.compile(
     r"<!--\s*EMBER_CONSERVATION_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
 )
+EXECUTION_BOUNDARY_RE = re.compile(
+    r"<!--\s*EMBER_EXECUTION_BOUNDARY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
+)
+EXECUTION_BOUNDARY_SCHEMA = "ember-execution-boundary-v1"
+EXECUTION_CLASSES = {"authority_only", "goal_executing"}
+EXECUTION_OPERATIONS = {
+    "owned_3b_pretraining",
+    "owned_training_growth",
+    "owned_evaluation",
+    "owned_serving",
+}
+REQUIRED_BLOCKED_OPERATIONS = [
+    "sub_3b_new_network",
+    "borrowed_lineage_signal",
+    "historical_artifact_execution",
+    "capability_or_completion_claim",
+    "benchmark_credit_without_owned_checkpoint",
+]
 HISTORICAL_ONLY_MARKER = "<!-- EMBER_ARTIFACT_CLASS=historical_only -->"
 CONFIG_CLASSIFICATION_HEADER = [
     "path",
@@ -288,6 +320,13 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
         policy.get("active_workstream_ids") == ACTIVE_WORKSTREAM_IDS,
         "policy.active_workstream_ids",
         "active child workstreams must be exact and parent-bound",
+    )
+    expect(
+        errors,
+        4,
+        policy.get("goal_graph_node_ids") == GOAL_GRAPH_NODE_IDS,
+        "policy.goal_graph_node_ids",
+        "durable goal graph node set must be closed and exact",
     )
     expect(
         errors,
@@ -713,7 +752,209 @@ def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> No
             )
 
 
-def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | None:
+def parse_graph_selection(
+    selection_path: Path,
+    active_path: str,
+    policy: dict[str, Any] | None,
+    errors: list[dict[str, Any]],
+) -> str | None:
+    valid = True
+    selected_graph = Path(active_path)
+    if not selected_graph.is_absolute():
+        selected_graph = (selection_path.parent / selected_graph).resolve()
+    if selected_graph.name != "EMBER-GOAL-GRAPH.json":
+        errors.append(
+            finding(4, "selection.graph_path_invalid", str(selected_graph))
+        )
+        valid = False
+    if not selected_graph.is_file():
+        errors.append(
+            finding(4, "selection.graph_file_missing", str(selected_graph))
+        )
+        return None
+    try:
+        graph = json.loads(read_text(selected_graph))
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
+        errors.append(finding(4, "selection.graph_invalid", str(exc)))
+        return None
+    if not isinstance(graph, dict):
+        errors.append(finding(4, "selection.graph_invalid", "root must be an object"))
+        return None
+    if graph.get("schema_version") != GOAL_GRAPH_SCHEMA:
+        errors.append(
+            finding(
+                4,
+                "selection.graph_schema",
+                str(graph.get("schema_version", "<missing>")),
+            )
+        )
+        valid = False
+    program = graph.get("program")
+    if (
+        not isinstance(program, dict)
+        or program.get("id") != "EMBER"
+        or program.get("state") != "ACTIVE"
+    ):
+        errors.append(
+            finding(4, "selection.graph_program", "EMBER program must be ACTIVE")
+        )
+        valid = False
+    if policy is None:
+        errors.append(
+            finding(4, "selection.graph_policy_missing", "GOAL.md policy is unavailable")
+        )
+        return None
+    expected_workstreams = policy.get("active_workstream_ids")
+    if (
+        not isinstance(expected_workstreams, list)
+        or not expected_workstreams
+        or not all(isinstance(item, str) and item for item in expected_workstreams)
+    ):
+        errors.append(
+            finding(
+                4,
+                "selection.graph_policy_workstreams",
+                "active workstream policy is invalid",
+            )
+        )
+        return None
+    expected_graph_nodes = policy.get("goal_graph_node_ids")
+    if (
+        not isinstance(expected_graph_nodes, list)
+        or not expected_graph_nodes
+        or not all(isinstance(item, str) and item for item in expected_graph_nodes)
+        or len(expected_graph_nodes) != len(set(expected_graph_nodes))
+        or not set(expected_workstreams).issubset(expected_graph_nodes)
+    ):
+        errors.append(
+            finding(
+                4,
+                "selection.graph_policy_nodes",
+                "goal graph node policy is invalid",
+            )
+        )
+        return None
+    nodes = graph.get("nodes")
+    if not isinstance(nodes, list):
+        errors.append(finding(4, "selection.graph_nodes", "nodes must be an array"))
+        return None
+    by_id: dict[str, list[dict[str, Any]]] = {}
+    for node in nodes:
+        if (
+            not isinstance(node, dict)
+            or not isinstance(node.get("id"), str)
+            or not node["id"]
+        ):
+            errors.append(
+                finding(4, "selection.graph_node_id", "every node needs a string id")
+            )
+            valid = False
+            continue
+        by_id.setdefault(node["id"], []).append(node)
+    observed_node_ids = Counter(
+        node["id"]
+        for node in nodes
+        if isinstance(node, dict) and isinstance(node.get("id"), str)
+    )
+    if observed_node_ids != Counter(expected_graph_nodes):
+        errors.append(
+            finding(
+                4,
+                "selection.graph_node_set",
+                "graph node IDs must exactly equal goal_graph_node_ids",
+            )
+        )
+        valid = False
+    graph_root = selected_graph.parent.parent.resolve()
+    for workstream in expected_graph_nodes:
+        matches = by_id.get(workstream, [])
+        if len(matches) != 1:
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_workstream",
+                    f"{workstream}: expected exactly one node, found {len(matches)}",
+                )
+            )
+            valid = False
+            continue
+        node = matches[0]
+        if node.get("state") not in GOAL_GRAPH_STATES:
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_workstream_state",
+                    f"{workstream}: {node.get('state', '<missing>')}",
+                )
+            )
+            valid = False
+        raw_goal_path = node.get("goal_path")
+        declared_hash = node.get("goal_sha256")
+        if (
+            not isinstance(raw_goal_path, str)
+            or not raw_goal_path
+            or Path(raw_goal_path).is_absolute()
+        ):
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_path",
+                    f"{workstream}: invalid goal_path",
+                )
+            )
+            valid = False
+            continue
+        goal_path = (graph_root / raw_goal_path).resolve()
+        try:
+            goal_path.relative_to(graph_root)
+        except ValueError:
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_path_escape",
+                    f"{workstream}: {raw_goal_path}",
+                )
+            )
+            valid = False
+            continue
+        if not goal_path.is_file():
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_file_missing",
+                    f"{workstream}: {goal_path}",
+                )
+            )
+            valid = False
+            continue
+        actual_hash = hashlib.sha256(goal_path.read_bytes()).hexdigest()
+        if (
+            not isinstance(declared_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", declared_hash)
+            or declared_hash != actual_hash
+        ):
+            errors.append(
+                finding(
+                    4,
+                    "selection.graph_goal_hash_mismatch",
+                    f"{workstream}: declared goal bytes do not match",
+                )
+            )
+            valid = False
+    active_goal = policy.get("active_goal_id")
+    if not isinstance(active_goal, str) or not re.fullmatch(r"EMBER-\d{2}", active_goal):
+        errors.append(
+            finding(4, "selection.graph_policy_goal", str(active_goal or "<missing>"))
+        )
+        return None
+    return active_goal if valid else None
+
+
+def parse_selection(
+    path: Path | None,
+    errors: list[dict[str, Any]],
+    policy: dict[str, Any] | None = None,
+) -> str | None:
     if path is None:
         return None
     if not path.is_file():
@@ -735,10 +976,15 @@ def parse_selection(path: Path | None, errors: list[dict[str, Any]]) -> str | No
         errors.append(finding(4, "selection.not_active", "durable selection state must be active"))
         valid = False
     active_goal = values.get("active_goal", "")
+    active_path = values.get("active_goal_path", "")
+    if active_goal == "graph":
+        if not active_path or active_path == "none":
+            errors.append(finding(4, "selection.path_missing", "active_goal_path is absent"))
+            return None
+        return parse_graph_selection(path, active_path, policy, errors)
     if not re.fullmatch(r"EMBER-\d{2}", active_goal):
         errors.append(finding(4, "selection.goal_invalid", active_goal or "<missing>"))
         valid = False
-    active_path = values.get("active_goal_path", "")
     if not active_path or active_path == "none":
         errors.append(finding(4, "selection.path_missing", "active_goal_path is absent"))
         valid = False
@@ -1087,6 +1333,143 @@ def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
     for required in ("historical_only", "borrowed_reference", "target"):
         if required not in seen_classes:
             errors.append(finding(6, "state.required_class_missing", required))
+
+
+def check_execution_boundary(
+    root: Path,
+    policy: dict[str, Any] | None,
+    errors: list[dict[str, Any]],
+) -> None:
+    path = root / "CONTINUITY.md"
+    if not path.is_file():
+        errors.append(finding(7, "boundary.missing", "CONTINUITY.md is absent"))
+        return
+    try:
+        text = read_text(path)
+    except Exception as exc:
+        errors.append(finding(7, "boundary.unreadable", str(exc)))
+        return
+    matches = EXECUTION_BOUNDARY_RE.findall(text)
+    if not matches:
+        errors.append(
+            finding(7, "boundary.missing", "EMBER_EXECUTION_BOUNDARY_V1 is absent")
+        )
+        return
+    if len(matches) != 1:
+        errors.append(
+            finding(
+                7,
+                "boundary.duplicate",
+                f"expected one execution boundary, found {len(matches)}",
+            )
+        )
+        return
+    try:
+        boundary = json.loads(matches[0])
+    except json.JSONDecodeError as exc:
+        errors.append(finding(7, "boundary.invalid_json", str(exc)))
+        return
+    if not isinstance(boundary, dict):
+        errors.append(finding(7, "boundary.not_object", "boundary must be an object"))
+        return
+
+    expect(
+        errors,
+        7,
+        boundary.get("schema") == EXECUTION_BOUNDARY_SCHEMA,
+        "boundary.schema",
+        EXECUTION_BOUNDARY_SCHEMA,
+    )
+    execution_class = boundary.get("execution_class")
+    expect(
+        errors,
+        7,
+        execution_class in EXECUTION_CLASSES,
+        "boundary.execution_class_invalid",
+        str(execution_class),
+    )
+    for field in ("permitted_operations", "blocked_operations", "prerequisite_receipts"):
+        value = boundary.get(field)
+        expect(
+            errors,
+            7,
+            isinstance(value, list)
+            and bool(value)
+            and all(isinstance(item, str) and item.strip() for item in value),
+            "boundary.field_invalid",
+            field,
+        )
+    command = boundary.get("next_executable_command")
+    expect(
+        errors,
+        7,
+        isinstance(command, str) and bool(command.strip()),
+        "boundary.command_missing",
+        "next_executable_command",
+    )
+    blocked = boundary.get("blocked_operations")
+    if isinstance(blocked, list):
+        for operation in REQUIRED_BLOCKED_OPERATIONS:
+            expect(
+                errors,
+                7,
+                operation in blocked,
+                "boundary.blocked_operation_erased",
+                operation,
+            )
+    permitted = boundary.get("permitted_operations")
+    if isinstance(permitted, list):
+        if execution_class == "authority_only":
+            for operation in EXECUTION_OPERATIONS:
+                expect(
+                    errors,
+                    7,
+                    operation not in permitted,
+                    "boundary.authority_only_execution_op",
+                    operation,
+                )
+        elif execution_class == "goal_executing":
+            expect(
+                errors,
+                7,
+                "owned_3b_pretraining" in permitted,
+                "boundary.execution_op_missing",
+                "owned_3b_pretraining",
+            )
+
+    if policy is None:
+        return
+    expect(
+        errors,
+        7,
+        boundary.get("goal_id") == policy.get("active_goal_id"),
+        "boundary.goal_mismatch",
+        f"boundary={boundary.get('goal_id')}, policy={policy.get('active_goal_id')}",
+    )
+    expect(
+        errors,
+        7,
+        boundary.get("next_executed_outcome") == policy.get("next_executed_outcome"),
+        "boundary.outcome_mismatch",
+        "execution boundary and GOAL outcome differ",
+    )
+    allows_new_network = boundary.get("allows_new_network")
+    expect(
+        errors,
+        7,
+        isinstance(allows_new_network, bool)
+        and allows_new_network == policy.get("allows_new_network"),
+        "boundary.new_network_mismatch",
+        "execution boundary and GOAL network authority differ",
+    )
+    expect(
+        errors,
+        7,
+        (execution_class == "authority_only")
+        == (policy.get("authority_only_goal") is True),
+        "boundary.execution_class_mismatch",
+        "execution class and authority_only_goal differ",
+    )
 
 
 def validate_artifact_binding(
@@ -1487,9 +1870,9 @@ def verify(
             return build_certificate(staged_payload["errors"] + binding_errors)
 
     errors: list[dict[str, Any]] = []
-    active_goal = parse_selection(selection, errors)
     policy = parse_goal_policy(root, errors)
     check_policy(policy, errors)
+    active_goal = parse_selection(selection, errors, policy)
     if active_goal is not None and policy is not None:
         expect(
             errors,
@@ -1506,6 +1889,7 @@ def verify(
     check_lower_precedence_authority(root, errors)
     check_mechanism_registry(root, errors)
     check_state(root, errors)
+    check_execution_boundary(root, policy, errors)
     check_changed_artifact_bindings(
         root,
         policy,

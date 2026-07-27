@@ -16,7 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from model import RestartDecoderConfig, UnifiedDecoder
+import pretrain
 from pretrain import run_pretraining_segment
+from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, SELECTION_RECEIPT_SCHEMA_VERSION
 from verify_capability_record import expected_receipt
 
 
@@ -116,6 +118,117 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(result["global_step"], 3)
         self.assertEqual(checkpoints, [2, 3])
 
+    def test_bounded_canary_resumes_the_last_full_shard_record_without_skip_or_replay(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = self._domain_records(config)
+        model = UnifiedDecoder(config, genesis_seed=71)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        first_checkpoints: list[dict[str, object]] = []
+        first = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cpu"),
+            checkpoint_every=1, checkpoint_callback=lambda _step, state: first_checkpoints.append(state),
+            require_complete_coverage=False, max_records=3, data_shard_id="owned-four-domain-production-rung-v1",
+        )
+        self.assertEqual(first["data_cursor"]["record_index"], 3)
+        self.assertEqual(first["global_step"], 3)
+        self.assertEqual([state["data_cursor"]["record_index"] for state in first_checkpoints], [1, 2, 3])
+        resumed_checkpoints: list[dict[str, object]] = []
+        resumed = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cpu"),
+            checkpoint_every=1, checkpoint_callback=lambda _step, state: resumed_checkpoints.append(state),
+            initial_global_step=int(first["global_step"]), initial_tokens_seen=int(first["tokens_seen"]),
+            initial_data_cursor=int(first["data_cursor"]["record_index"]),
+            require_complete_coverage=False, max_records=1, data_shard_id="owned-four-domain-production-rung-v1",
+        )
+        self.assertEqual(resumed["data_cursor"]["record_index"], 4)
+        self.assertEqual(resumed["global_step"], 4)
+        self.assertEqual(resumed["expert_examples"], {"vision": 0, "audio": 0, "reasoning": 0, "tool": 1})
+        self.assertEqual([state["data_cursor"]["record_index"] for state in resumed_checkpoints], [4])
+    def test_forward_interruption_happens_before_optimizer_mutation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=61)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+        checkpoints: list[object] = []
+
+        def interrupted_forward(*_args: object, **_kwargs: object) -> torch.Tensor:
+            raise RuntimeError("injected pre-step interruption")
+
+        model.forward = interrupted_forward  # type: ignore[method-assign]
+        with self.assertRaisesRegex(RuntimeError, "pre-step interruption"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda _step, state: checkpoints.append(state), require_complete_coverage=False,
+            )
+        self.assertEqual(checkpoints, [])
+        self.assertEqual(optimizer.state, {})
+        self.assertTrue(all(torch.equal(value, before[name]) for name, value in model.state_dict().items()))
+
+    def test_post_update_interruption_carries_the_exact_resume_cursor(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=62)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        before = model.token_embedding.weight.detach().clone()
+        observed: list[tuple[int, dict[str, object]]] = []
+
+        def interrupt_after_checkpoint(step: int, state: dict[str, object]) -> None:
+            observed.append((step, state))
+            raise KeyboardInterrupt("injected post-update interruption")
+
+        with self.assertRaisesRegex(KeyboardInterrupt, "post-update interruption"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=interrupt_after_checkpoint, require_complete_coverage=False,
+            )
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0][0], 1)
+        self.assertEqual(observed[0][1]["data_cursor"], {"shard": "owned-pretraining", "record_index": 1, "global_step": 1, "tokens_seen": 3})
+        self.assertFalse(torch.equal(model.token_embedding.weight.detach(), before))
+        self.assertTrue(optimizer.state)
+
+    def test_empty_and_exhausted_segments_never_replay_or_synthesize_records(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least one owned record"):
+            run_pretraining_segment(
+                model=object(), optimizer=object(), records=[], config=object(), device=torch.device("cpu"),
+                checkpoint_every=1, checkpoint_callback=lambda _step, _state: None,
+            )
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=63)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        checkpoints: list[object] = []
+        result = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=[self._record(config, expert="vision")], config=config,
+            device=torch.device("cpu"), checkpoint_every=1, checkpoint_callback=lambda _step, state: checkpoints.append(state),
+            initial_global_step=11, initial_tokens_seen=2048, initial_data_cursor=1,
+            require_complete_coverage=False,
+        )
+        self.assertEqual(result["steps"], 0)
+        self.assertEqual(result["data_cursor"], {"shard": "owned-pretraining", "record_index": 1, "global_step": 11, "tokens_seen": 2048})
+        self.assertEqual(checkpoints, [])
+        self.assertEqual(optimizer.state, {})
+
+    def test_nonfinite_loss_refuses_before_backward_or_optimizer_mutation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=64)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+
+        def nonfinite_forward(input_ids: torch.Tensor, **_kwargs: object) -> torch.Tensor:
+            return torch.full((input_ids.shape[0], input_ids.shape[1], config.vocab_size), float("nan"))
+
+        model.forward = nonfinite_forward  # type: ignore[method-assign]
+        with self.assertRaisesRegex(RuntimeError, "non-finite loss"):
+            run_pretraining_segment(
+                model=model, optimizer=optimizer, records=[self._record(config, expert="vision")],
+                config=config, device=torch.device("cpu"), checkpoint_every=1,
+                checkpoint_callback=lambda _step, _state: None, require_complete_coverage=False,
+            )
+        self.assertEqual(optimizer.state, {})
+        self.assertTrue(all(torch.equal(value, before[name]) for name, value in model.state_dict().items()))
+
     def test_progress_callback_observes_every_completed_optimizer_step(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=28)
@@ -185,6 +298,96 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual([(span.start, span.length, span.modality) for span in calls[1][1]], [(1, 1, "audio")])
         self.assertEqual(calls[2][1], [])
         self.assertEqual(calls[3][1], [])
+    def test_selection_consumer_is_sequential_and_resume_cursor_matches_uninterrupted_updates(self) -> None:
+        """P2B consumes an iterable selection without Sequence access or record replay."""
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="vision", sample_id=f"selection-{index}") for index in range(3)]
+
+        class NoSequenceSelection:
+            receipt = {"schema_version": SELECTION_RECEIPT_SCHEMA_VERSION, "capability": "image"}
+
+            def __init__(self, values: list[dict[str, object]]) -> None:
+                self.values = values
+                self.yielded: list[str] = []
+
+            def __len__(self) -> int:
+                raise AssertionError("selection consumer must not call __len__")
+
+            def __getitem__(self, _index: object) -> dict[str, object]:
+                raise AssertionError("selection consumer must not call __getitem__")
+
+            def iter_from(self, cursor: object = None):
+                start = 0 if cursor is None else int(cursor["next_source_index"])
+                for index in range(start, len(self.values)):
+                    self.yielded.append(str(self.values[index]["sample_id"]))
+                    yield self.values[index], {
+                        "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                        "selection_receipt_sha256": "a" * 64,
+                        "selection_rule_id": "image_scene_split_train_v1",
+                        "selected_ordinal": index + 1,
+                        "next_source_index": index + 1,
+                    }
+
+        def run_segment(selection: NoSequenceSelection, *, max_records: int | None, initial_cursor: dict[str, object] | None = None, initial_step: int = 0, initial_tokens: int = 0) -> tuple[dict[str, object], list[tuple[int, dict[str, object]]]]:
+            model = UnifiedDecoder(config, genesis_seed=43)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            callbacks: list[tuple[int, dict[str, object]]] = []
+            result = getattr(pretrain, "run_selection_pretraining_segment")(
+                model=model, optimizer=optimizer, selection=selection, config=config, device=torch.device("cpu"),
+                checkpoint_every=1, checkpoint_callback=lambda step, state: callbacks.append((step, state)),
+                initial_selection_cursor=initial_cursor, initial_global_step=initial_step,
+                initial_tokens_seen=initial_tokens, max_records=max_records,
+                require_complete_coverage=False,
+            )
+            return result, callbacks
+
+        uninterrupted = NoSequenceSelection(records)
+        uninterrupted_result, uninterrupted_callbacks = run_segment(uninterrupted, max_records=None)
+        interrupted = NoSequenceSelection(records)
+        first, first_callbacks = run_segment(interrupted, max_records=2)
+        resumed, resumed_callbacks = run_segment(
+            interrupted, max_records=None,
+            initial_cursor=first["data_cursor"]["selection_cursor"],
+            initial_step=first["global_step"], initial_tokens=first["tokens_seen"],
+        )
+
+        self.assertEqual(uninterrupted.yielded, ["selection-0", "selection-1", "selection-2"])
+        self.assertEqual(interrupted.yielded, uninterrupted.yielded)
+        def assert_completed_callbacks(callbacks: list[tuple[int, dict[str, object]]], expected_steps: list[int]) -> None:
+            self.assertEqual([step for step, _state in callbacks], expected_steps)
+            for step, state in callbacks:
+                cursor = state["data_cursor"]
+                self.assertEqual(cursor["global_step"], step)
+                self.assertEqual(cursor["tokens_seen"], step * 3)
+                self.assertEqual(cursor["selection_cursor"], {
+                    "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                    "selection_receipt_sha256": "a" * 64,
+                    "selection_rule_id": "image_scene_split_train_v1",
+                    "selected_ordinal": step,
+                    "next_source_index": step,
+                })
+
+        assert_completed_callbacks(uninterrupted_callbacks, [1, 2, 3])
+        assert_completed_callbacks(first_callbacks, [1, 2])
+        assert_completed_callbacks(resumed_callbacks, [3])
+        self.assertEqual(resumed_callbacks[0][0], uninterrupted_callbacks[2][0])
+        self.assertEqual(resumed_callbacks[0][1]["global_step"], uninterrupted_callbacks[2][1]["global_step"])
+        self.assertEqual(resumed_callbacks[0][1]["data_cursor"], uninterrupted_callbacks[2][1]["data_cursor"])
+        self.assertEqual(first["global_step"], 2)
+        self.assertEqual(first["tokens_seen"], 6)
+        self.assertEqual(first["data_cursor"]["selection_cursor"], {
+            "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+            "selection_receipt_sha256": "a" * 64,
+            "selection_rule_id": "image_scene_split_train_v1",
+            "selected_ordinal": 2,
+            "next_source_index": 2,
+        })
+        self.assertEqual(resumed["data_cursor"]["selection_cursor"], uninterrupted_result["data_cursor"]["selection_cursor"])
+        self.assertEqual(resumed["global_step"], uninterrupted_result["global_step"])
+        self.assertEqual(resumed["tokens_seen"], uninterrupted_result["tokens_seen"])
+
+
 
 
 if __name__ == "__main__":

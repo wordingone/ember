@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/model-lifecycle.ts — managed model process lifecycle (load/unload toggle).
 //
 // Owns the handle for a local-spawned model process so it can be unloaded
@@ -14,15 +18,39 @@ export type ModelState = "unloaded" | "loading" | "loaded" | "external";
 
 export interface ManagedModelHandle {
   pid: number;
+  /**
+   * Child-only release: releases the exact owned process this handle was
+   * registered for (PID/handle-scoped — never a name-pattern match). issue
+   * #881: production registration (entrypoints/process-entry.ts) always
+   * supplies this from the real owned ServerHandle.kill(), so unloadModel
+   * never degrades to a no-op kill. Optional so the deps-injection test seam
+   * (spawnModel returning a bare {pid}) keeps working via the deps.killPid
+   * fallback in unloadModel below.
+   */
+  release?: () => void;
 }
 
 export interface ModelLifecycleDeps {
   spawnModel: () => ManagedModelHandle;
   killPid: (pid: number) => void;
   waitReady: (port?: number) => Promise<void>;
-  writeKillReceipt: (rec: { pid: number; match_rule: string }) => void;
+  /**
+   * Durable: appends to the authoritative kill-receipts ledger. issue #881:
+   * MUST be awaited and MUST complete before the child is released — never
+   * fire-and-forget. A rejection propagates and aborts the unload
+   * (fail-closed): the child is never released without a landed receipt.
+   */
+  writeKillReceipt: (rec: { pid: number; match_rule: string }) => Promise<void>;
   isExternal: () => boolean;
   now: () => string;
+  /**
+   * Path to the active checkpoint's identity manifest (cond3 inc2a). Threaded
+   * through so /model status|load can resolve+validate checkpoint identity
+   * via _resolveModelIdentity() before rendering/spawning -- fail-closed when
+   * absent or unresolvable (never a silent "no identity" render for a
+   * checkpoint that IS supposed to carry one).
+   */
+  manifestPath?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,6 +59,7 @@ export interface ModelLifecycleDeps {
 
 let currentState: ModelState = "unloaded";
 let trackedPid: number | null = null;
+let trackedRelease: (() => void) | null = null;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -53,13 +82,21 @@ export function registerManagedModel(handle: ManagedModelHandle): void {
   // External mode is determined at bootstrap via env, not here.
   // For this simple API, we just register the handle and set state to "loaded".
   trackedPid = handle.pid;
+  trackedRelease = handle.release ?? null;
   currentState = "loaded";
 }
 
 /**
- * Kill the tracked PID, writing a receipt first (before killPid call).
- * AC3: receipt written strictly before kill, state set to "unloaded", one-line status.
- * AC4: idempotent when already unloaded; in external mode never kills.
+ * Release the tracked model, writing a durable receipt first (before release).
+ * AC3: receipt written strictly before release, state set to "unloaded", one-line status.
+ * AC4: idempotent when already unloaded; in external mode never releases.
+ *
+ * issue #881: the receipt write is now AWAITED and DURABLE — a rejection propagates and
+ * aborts the unload before release ever runs (fail-closed; success is reported only after
+ * both the receipt landed and the child was actually released). Release itself prefers the
+ * real owned handle's release() (child-only, PID/handle-scoped — never a no-op, never a
+ * name-pattern match) registered by registerManagedModel; deps.killPid(pid) is the fallback
+ * for the deps-injection test seam / a registration that carried no handle.
  */
 export async function unloadModel(deps: ModelLifecycleDeps): Promise<string> {
   // If external, never kill
@@ -72,19 +109,24 @@ export async function unloadModel(deps: ModelLifecycleDeps): Promise<string> {
     return `model already unloaded`;
   }
 
-  // Unload: receipt BEFORE kill (AC3 strict ordering)
   const pid = trackedPid!;
-  deps.writeKillReceipt({
+  const release = trackedRelease ?? (() => deps.killPid(pid));
+
+  // Receipt-first (kill-discipline): AWAITED and durable. A rejection here throws out of
+  // unloadModel, leaving state/handle untouched — the child is never released without a
+  // landed receipt.
+  await deps.writeKillReceipt({
     pid,
     match_rule: `model child spawned this session`,
   });
 
-  // Now kill
-  deps.killPid(pid);
+  // Now release the real owned child (never a no-op, never name-pattern).
+  release();
 
   // Update state
   currentState = "unloaded";
   trackedPid = null;
+  trackedRelease = null;
 
   return `model unloaded (pid ${pid} freed)`;
 }
@@ -137,4 +179,5 @@ export async function loadModel(deps: ModelLifecycleDeps): Promise<string> {
 export function resetModelLifecycleForTests(): void {
   currentState = "unloaded";
   trackedPid = null;
+  trackedRelease = null;
 }

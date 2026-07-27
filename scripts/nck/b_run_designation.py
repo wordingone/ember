@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp-6b B-run designation resolver (part of #282).
 
 Mechanically resolves THE ember checkpoint for the official B3 run per the
@@ -40,10 +43,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # Frozen resolution window (UTC) — refusal outside unless registered deviation
 WINDOW_START = datetime(2026, 6, 20, 0, 0, 0, tzinfo=timezone.utc)
 WINDOW_END = datetime(2026, 6, 21, 23, 59, 59, tzinfo=timezone.utc)
-
-DEFAULT_LINEAGE = [
-    Path("<local-path>"),
-]
 
 _STAGED_MSG = (
     "STAGED: b_run_designation loaded but not triggered. "
@@ -202,7 +201,12 @@ def main() -> int:
         if a == "--checkpoints-dir":
             lineage.append(Path(args[i + 1]))
     if not lineage:
-        lineage = list(DEFAULT_LINEAGE)
+        print(
+            "DESIGNATION_REFUSE: at least one --checkpoints-dir is required "
+            "(no baked-in lineage default; original path was scrubbed for "
+            "public export, see issue #261)"
+        )
+        return 1
 
     if "--now" in args:
         raw = args[args.index("--now") + 1]

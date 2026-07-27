@@ -1,14 +1,41 @@
 #!/usr/bin/env python3
-"""Admit or block a docs/research/journal benchmark for Ember MVP goal-clear loops."""
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Admit or block a docs/research/journal benchmark for Ember MVP goal-clear loops.
+
+cond3 GAP-4: this harness previously froze an independent BENCHMARK-side identity
+(``ADMITTED_RESEARCH_BENCHMARK_IDS``, tasks/evaluator hashing below) but never validated
+the SUBJECT being scored -- so a score measured against a borrowed/tampered/absent
+checkpoint could launder into owned completion credit. ``resolve_subject_identity`` wires
+in the production identity validator (``ember_01_identity.validate_identity.validate_manifest``,
+reused, never reimplemented) with ``require_resolved=True`` and fails CLOSED -- raising
+``SubjectIdentityRefused`` before any admission receipt is built -- on any
+``IdentityValidationError``, missing/unreadable/invalid-JSON manifest, or unresolved
+identity field. A RESULT/score projection (``--eval-result-receipt``) routes through
+``evaluation_identity_binding.bind_evaluation_identity`` so a borrowed-subject receipt
+cannot be bound as owned evidence either.
+"""
 from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from receipt_write import checked_write
+
+_IDENTITY_DIR = Path(__file__).resolve().parent / "ember_01_identity"
+if str(_IDENTITY_DIR) not in sys.path:
+    sys.path.insert(0, str(_IDENTITY_DIR))
+
+from validate_identity import IdentityValidationError, validate_manifest  # noqa: E402
+from evaluation_identity_binding import (  # noqa: E402
+    EvaluationIdentityMismatch,
+    bind_evaluation_identity,
+)
 
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 TICKET = "EMBER-RESEARCH-BENCHMARK-ADMISSION"
@@ -19,6 +46,52 @@ ADMITTED_RESEARCH_BENCHMARK_IDS = {
     "ResearchBench",
     "PaperBench",
 }
+
+
+class SubjectIdentityRefused(RuntimeError):
+    """cond3 GAP-4: refuse admission -- the SUBJECT identity manifest failed validation.
+
+    Raised instead of accumulating a soft error, so a borrowed/tampered/absent subject
+    can never produce an admission receipt of any verdict -- not even BLOCKED. No owned
+    completion credit is reachable from this branch.
+    """
+
+
+def _harness_self_sha256() -> str:
+    return "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def resolve_subject_identity(subject_manifest_path: Path) -> dict[str, Any]:
+    """Load + validate the SUBJECT identity manifest, fail-closed (cond3 GAP-4).
+
+    Reuses the production validator
+    (``ember_01_identity.validate_identity.validate_manifest``) with
+    ``require_resolved=True`` -- never reimplements identity checking. Fails closed
+    (raises ``SubjectIdentityRefused``) on: an unreadable/missing manifest file,
+    invalid JSON, any ``IdentityValidationError`` from the validator (including an
+    unresolved identity/disposition field, which ``require_resolved`` surfaces as
+    ``field.unresolved`` findings).
+    """
+    try:
+        raw = subject_manifest_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SubjectIdentityRefused(
+            f"subject manifest unreadable: {subject_manifest_path}: {exc}"
+        ) from exc
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SubjectIdentityRefused(
+            f"subject manifest is not valid JSON: {subject_manifest_path}: {exc}"
+        ) from exc
+    try:
+        validated = validate_manifest(payload, require_resolved=True)
+    except IdentityValidationError as exc:
+        codes = ", ".join(finding.get("code", "?") for finding in exc.findings)
+        raise SubjectIdentityRefused(
+            f"subject manifest failed identity validation (require_resolved): {codes}"
+        ) from exc
+    return validated
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -56,7 +129,42 @@ def _task_count(tasks_path: Path, errors: list[str]) -> int:
     return len(rows)
 
 
-def build_admission_receipt(manifest_path: Path, operator_receipt_path: Path) -> dict[str, Any]:
+def build_admission_receipt(
+    manifest_path: Path,
+    operator_receipt_path: Path,
+    subject_manifest_path: Path,
+    eval_result_receipt_path: Path | None = None,
+) -> dict[str, Any]:
+    # cond3 GAP-4: resolve + validate the SUBJECT identity FIRST and fail closed --
+    # raises SubjectIdentityRefused, never reaching the errors-accumulation path below,
+    # so no admission receipt of any verdict is ever built from a borrowed subject.
+    subject = resolve_subject_identity(Path(subject_manifest_path))
+    subject_checkpoint = subject.get("checkpoint")
+    subject_checkpoint_sha256 = (
+        subject_checkpoint.get("byte_sha256") if isinstance(subject_checkpoint, dict) else None
+    )
+    subject_evaluation = subject.get("evaluation")
+    comparator_identity = (
+        subject_evaluation.get("comparator_identity") if isinstance(subject_evaluation, dict) else None
+    )
+    comparator_sha256 = (
+        subject_evaluation.get("comparator_sha256") if isinstance(subject_evaluation, dict) else None
+    )
+
+    # cond3 GAP-4 point 4: any RESULT/score projection routes through the production
+    # binding module -- never a hand-typed score -- so a receipt measured on a
+    # different checkpoint cannot be bound as this subject's owned evidence.
+    evaluation_binding: dict[str, Any] | None = None
+    if eval_result_receipt_path is not None:
+        eval_receipt = _load_json(Path(eval_result_receipt_path))
+        try:
+            bound = bind_evaluation_identity(subject, eval_receipt)
+        except EvaluationIdentityMismatch as exc:
+            raise SubjectIdentityRefused(
+                f"evaluation identity binding refused: {exc}"
+            ) from exc
+        evaluation_binding = bound.get("evaluation")
+
     errors: list[str] = []
     missing: list[str] = []
     manifest = _load_json(manifest_path)
@@ -123,6 +231,12 @@ def build_admission_receipt(manifest_path: Path, operator_receipt_path: Path) ->
         "operator_routed": operator_routed,
         "manual_selection": False,
         "real_external_heldout_ready": real_external_ready,
+        "subject_manifest_path": str(subject_manifest_path),
+        "subject_checkpoint_sha256": subject_checkpoint_sha256,
+        "comparator_identity": comparator_identity,
+        "comparator_sha256": comparator_sha256,
+        "harness_sha256": _harness_self_sha256(),
+        "evaluation_binding": evaluation_binding,
         "missing_artifacts": missing,
         "errors": errors,
         "required_next_receipts": [
@@ -158,11 +272,24 @@ def validate_admission_receipt(receipt: dict[str, Any]) -> list[str]:
             errors.append("evaluator_sha256")
         if receipt.get("errors"):
             errors.append("errors")
+        # cond3 GAP-4: no ADMITTED verdict without a validated, hashed SUBJECT identity.
+        if not receipt.get("subject_checkpoint_sha256"):
+            errors.append("subject_checkpoint_sha256")
+        if not receipt.get("harness_sha256"):
+            errors.append("harness_sha256")
     return errors
 
 
-def write_admission_receipt(out_path: Path, manifest_path: Path, operator_receipt_path: Path) -> dict[str, Any]:
-    receipt = build_admission_receipt(manifest_path, operator_receipt_path)
+def write_admission_receipt(
+    out_path: Path,
+    manifest_path: Path,
+    operator_receipt_path: Path,
+    subject_manifest_path: Path,
+    eval_result_receipt_path: Path | None = None,
+) -> dict[str, Any]:
+    receipt = build_admission_receipt(
+        manifest_path, operator_receipt_path, subject_manifest_path, eval_result_receipt_path
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     checked_write(str(out_path), receipt)
     return receipt
@@ -175,6 +302,18 @@ def main() -> int:
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--manifest")
     ap.add_argument("--operator-receipt")
+    ap.add_argument(
+        "--subject-manifest",
+        required=False,
+        help=(
+            "REQUIRED (except with --selftest): path to the SUBJECT identity manifest "
+            "(ember_01_identity schema) whose checkpoint the benchmark is scored "
+            "against. Validated via validate_identity.validate_manifest("
+            "require_resolved=True); a borrowed/tampered/absent subject refuses "
+            "admission outright (cond3 GAP-4)."
+        ),
+    )
+    ap.add_argument("--eval-result-receipt", required=False)
     ap.add_argument("--out")
     args = ap.parse_args()
 
@@ -183,11 +322,31 @@ def main() -> int:
 
         return ember_research_benchmark_harness_selftest.main()
 
-    if not (args.manifest and args.operator_receipt and args.out):
+    if not (args.manifest and args.operator_receipt and args.subject_manifest and args.out):
         ap.print_help()
         return 1
 
-    receipt = write_admission_receipt(Path(args.out), Path(args.manifest), Path(args.operator_receipt))
+    try:
+        receipt = write_admission_receipt(
+            Path(args.out),
+            Path(args.manifest),
+            Path(args.operator_receipt),
+            Path(args.subject_manifest),
+            Path(args.eval_result_receipt) if args.eval_result_receipt else None,
+        )
+    except SubjectIdentityRefused as exc:
+        print(
+            json.dumps(
+                {
+                    "ticket": TICKET,
+                    "verdict": "RESEARCH_BENCHMARK_BLOCKED",
+                    "errors": [f"subject_identity.refused: {exc}"],
+                },
+                indent=2,
+            )
+        )
+        return 2
+
     print(json.dumps(receipt, indent=2))
     return 0 if receipt["verdict"] == "RESEARCH_BENCHMARK_ADMITTED" else 2
 

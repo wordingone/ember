@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Admit a broader fresh D3-Gym multi-family slice for Ember's next loop."""
 from __future__ import annotations
 
@@ -9,7 +12,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_STATE_ROOT = Path(r"<local-path>")
 SOLVED_TASK_IDS = {"task_9", "task_10", "task_11", "task_12"}
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 D3_HF = "https://huggingface.co/datasets/osunlp/D3-Gym"
@@ -260,13 +262,18 @@ def build_admission_receipt(*, repo: Path, state_root: Path, out: Path) -> dict[
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
-    parser.add_argument("--state-root", default=str(DEFAULT_STATE_ROOT))
+    parser.add_argument("--state-root", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
     if args.selftest:
         import ember_d3_broader_multifamily_admission_selftest
 
         return ember_d3_broader_multifamily_admission_selftest.main()
+    if not args.state_root:
+        parser.error(
+            "--state-root is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
     repo = Path.cwd().resolve()
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = Path(args.out) if args.out else Path("receipts/ember-post-resident-discovery") / f"d3-broader-multifamily-admission-{ts}.json"

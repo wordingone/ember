@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/slash-dropdown.test.ts — behavioral tests for the slash-command completion
 // dropdown's pure logic (issue b22 item 1, ledgered since b14 as ember-cli-slash-dropdown).
 // Exemplar: the field's own "/" menu convention (Claude Code, Crush) per field-ux-map §8b/§9 —
@@ -19,6 +23,10 @@ import {
   SLASH_DROPDOWN_MAX_VISIBLE,
   truncateWithEllipsis,
   slashDropdownDescriptionWidth,
+  slashDropdownMaxVisible,
+  slashDropdownCanRender,
+  DROPDOWN_COMPACT_CHROME_ROWS,
+  DROPDOWN_BORDER_ROWS,
 } from "./slash-dropdown.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
@@ -197,5 +205,47 @@ describe("slashDropdownDescriptionWidth", () => {
   });
   it("never goes negative even when the name alone exceeds the panel width", () => {
     expect(slashDropdownDescriptionWidth(10, "an-extremely-long-command-name")).toBe(0);
+  });
+});
+
+describe("slashDropdownMaxVisible — the '+N more' row's own height must be budgeted (2026-07-25 counterparty finding)", () => {
+  it("the requested box height never exceeds the computed budget at a tight viewport that triggers overflow", () => {
+    // 10 matches at a 20-row terminal with variable chrome suppressed -- deliberately picked
+    // to force overflow (10 > SLASH_DROPDOWN_MAX_VISIBLE),
+    // which is exactly the case where a naive budget (one that doesn't reserve the indicator row)
+    // over-asks by one row.
+    const terminalRows = 20;
+    const matchCount = 10;
+    const cap = slashDropdownMaxVisible(terminalRows, matchCount);
+    const willOverflow = cap < matchCount;
+    const requestedHeight = DROPDOWN_BORDER_ROWS + cap + (willOverflow ? 1 : 0);
+    const budget = terminalRows - DROPDOWN_COMPACT_CHROME_ROWS;
+    expect(requestedHeight).toBeLessThanOrEqual(budget);
+  });
+
+  it("resolves to 0 -- not floored to 1 -- when the budget cannot fit even a single entry plus its indicator row", () => {
+    // 7 total rows: four compact prompt/status rows plus two palette borders leave one content
+    // row -- zero entries can fit once the required overflow indicator owns that final row.
+    // overflow. A floor of 1 here would silently over-ask by exactly one row, in exactly the
+    // scenario this whole fix removed for entries.
+    const cap = slashDropdownMaxVisible(7, 10);
+    expect(cap).toBe(0);
+    expect(slashDropdownCanRender(7, 10)).toBe(true);
+    expect(slashDropdownCanRender(6, 10)).toBe(false);
+    expect(slashDropdownCanRender(20, 0)).toBe(false);
+  });
+
+  it("does not reserve the indicator row when every match already fits (no overflow, no indicator to budget for)", () => {
+    // 3 matches comfortably fit within a generous budget -- capNoIndicator alone already covers
+    // matchCount, so the one-time recomputation must NOT fire (it would needlessly shrink the cap
+    // by one row for an indicator that will never render). The cap is the exact visible count,
+    // bounded by both matchCount and SLASH_DROPDOWN_MAX_VISIBLE.
+    const cap = slashDropdownMaxVisible(40, 3);
+    expect(cap).toBe(3);
+    // And downstream, the actual render only ever shows the 3 real matches, no phantom indicator.
+    const commands = ["a", "b", "c"].map((name) => ({ name, description: "", isEnabled: () => true, execute: async () => ({ type: "message" as const, message: "" }) }));
+    const display = computeSlashDropdownDisplay(commands, 0, cap);
+    expect(display.visible.length).toBe(3);
+    expect(display.overflowCount).toBe(0);
   });
 });

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/model-circuit-breaker.test.ts — issue #239: pure state-machine unit
 // for the cross-call retry circuit breaker. The existing per-turn retry
 // (api-backend.ts's shouldRetry/computeRetryDelay, wired in query-engine.ts
@@ -24,6 +28,7 @@ import {
   recordSuccess,
   markProbeStart,
   describeDegradedBanner,
+  describeRoundtripAge,
 } from "./model-circuit-breaker.ts";
 
 describe("createCircuitBreakerState", () => {
@@ -229,19 +234,102 @@ describe("markProbeStart / half-open lifecycle", () => {
       now: 0,
     });
     const probing = markProbeStart(opened, CIRCUIT_PROBE_INTERVAL_MS);
-    const closed = recordSuccess(probing);
+    const closed = recordSuccess(probing, CIRCUIT_PROBE_INTERVAL_MS + 1);
     expect(closed.state).toBe("closed");
     expect(closed.consecutiveFailures).toBe(0);
     expect(canAttempt(closed, CIRCUIT_PROBE_INTERVAL_MS + 1)).toEqual({ allowed: true, isProbe: false });
   });
 });
 
-describe("recordSuccess — resets from any state", () => {
-  it("closed-with-partial-failures -> closed, zeroed", () => {
+describe("recordSuccess — resets from any state (except lastSuccessAt, which it stamps)", () => {
+  it("closed-with-partial-failures -> closed, zeroed, lastSuccessAt stamped with now", () => {
     let s = createCircuitBreakerState();
     s = recordFailure(s, { status: 503, isNetworkError: false, endpoint: "e", reason: "HTTP 503", now: 1 });
-    s = recordSuccess(s);
-    expect(s).toEqual(createCircuitBreakerState());
+    s = recordSuccess(s, 2000);
+    expect(s).toEqual({ ...createCircuitBreakerState(), lastSuccessAt: 2000 });
+  });
+
+  it("open -> closed, zeroed, lastSuccessAt stamped with now", () => {
+    let s = recordFailure(createCircuitBreakerState(), {
+      status: 400,
+      isNetworkError: false,
+      endpoint: "e",
+      reason: "HTTP 400",
+      now: 0,
+    });
+    expect(s.state).toBe("open");
+    s = recordSuccess(s, 9000);
+    expect(s).toEqual({ ...createCircuitBreakerState(), lastSuccessAt: 9000 });
+  });
+});
+
+describe("lastSuccessAt — preserved across failures, never restarted by a bounce (#239 final acceptance)", () => {
+  it("a prior success survives a subsequent 4xx fail-fast open", () => {
+    let s = createCircuitBreakerState();
+    s = recordSuccess(s, 1000);
+    s = recordFailure(s, {
+      status: 400,
+      isNetworkError: false,
+      endpoint: "e",
+      reason: "HTTP 400",
+      now: 5000,
+    });
+    expect(s.state).toBe("open");
+    expect(s.lastSuccessAt).toBe(1000);
+  });
+
+  it("a prior success survives accumulating 5xx failures and a half-open bounce", () => {
+    let s = createCircuitBreakerState();
+    s = recordSuccess(s, 42);
+    for (let i = 0; i < CIRCUIT_MAX_ATTEMPTS; i++) {
+      s = recordFailure(s, { status: 503, isNetworkError: false, endpoint: "e", reason: "HTTP 503", now: 100 + i });
+    }
+    expect(s.state).toBe("open");
+    expect(s.lastSuccessAt).toBe(42);
+    const probing = markProbeStart(s, CIRCUIT_PROBE_INTERVAL_MS);
+    const bounced = recordFailure(probing, { status: 503, isNetworkError: false, endpoint: "e", reason: "HTTP 503", now: CIRCUIT_PROBE_INTERVAL_MS + 1 });
+    expect(bounced.state).toBe("open");
+    expect(bounced.lastSuccessAt).toBe(42);
+  });
+
+  it("never having succeeded leaves lastSuccessAt null through any number of failures", () => {
+    let s = createCircuitBreakerState();
+    for (let i = 0; i < CIRCUIT_MAX_ATTEMPTS; i++) {
+      s = recordFailure(s, { status: 503, isNetworkError: false, endpoint: "e", reason: "HTTP 503", now: i });
+    }
+    expect(s.lastSuccessAt).toBeNull();
+  });
+});
+
+describe("describeRoundtripAge — #239 final acceptance: status line last-successful-roundtrip age", () => {
+  it("never succeeded: ageMs and lastSuccessAt both null", () => {
+    const info = describeRoundtripAge(createCircuitBreakerState(), 10_000);
+    expect(info).toEqual({ lastSuccessAt: null, ageMs: null });
+  });
+
+  it("computes age from the last recorded success", () => {
+    let s = createCircuitBreakerState();
+    s = recordSuccess(s, 1000);
+    const info = describeRoundtripAge(s, 6500);
+    expect(info.lastSuccessAt).toBe(1000);
+    expect(info.ageMs).toBe(5500);
+  });
+
+  it("age is still reported while the circuit is OPEN — visible even mid-wedge", () => {
+    let s = createCircuitBreakerState();
+    s = recordSuccess(s, 1000);
+    s = recordFailure(s, { status: 400, isNetworkError: false, endpoint: "e", reason: "HTTP 400", now: 2000 });
+    expect(s.state).toBe("open");
+    const info = describeRoundtripAge(s, 20_000);
+    expect(info.lastSuccessAt).toBe(1000);
+    expect(info.ageMs).toBe(19_000);
+  });
+
+  it("never returns a negative age even if now < lastSuccessAt (clock skew guard)", () => {
+    let s = createCircuitBreakerState();
+    s = recordSuccess(s, 5000);
+    const info = describeRoundtripAge(s, 1000);
+    expect(info.ageMs).toBe(0);
   });
 });
 

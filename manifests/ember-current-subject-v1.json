@@ -1,0 +1,48 @@
+{
+  "schema_version": "ember-current-subject-v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "subject": {
+    "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+    "tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "optimizer_state_sha256": "ee864fc9779e7f0d943a08836253726a41f86679360f477a35d5348486f3162b",
+    "token_cursor": {
+      "global_step": 2,
+      "record_index": 2,
+      "token_offset": 2048,
+      "tokens_seen": 2048
+    },
+    "active_route": "shared",
+    "parameters": {
+      "active": 1020589568,
+      "allocated": 3839161856,
+      "episode_trainable": 1020589568,
+      "served": 3839161856,
+      "trainable": 3839161856,
+      "unique": 3839161856
+    },
+    "disposition": "CHECKPOINT_CANDIDATE_NOT_ADMITTED",
+    "capability_credit": "none",
+    "sufficient_pretraining_proven": false,
+    "predecessor": {
+      "checkpoint_manifest_sha256": "af954c22fb8fb7a0dc640bfd2e0ab97e8e4cde989607372fc45c3db7878699a4",
+      "tokens_seen": 1024,
+      "relationship": "historical_step1_predecessor"
+    },
+    "checkpoint_custody": {
+      "class": "private_checkpoint_bytes",
+      "locator_id": "semantic-seed83-retry1/checkpoint-semantic-seed-83-step-2",
+      "public_manifest_bytes_present": false
+    },
+    "evidence_paths": [
+      "docs/ember-restart/integration-contract-v1.md",
+      "manifests/ember-restart-eval-first-shared-raw-forward-v1.json",
+      "manifests/ember-restart-execution-authorities-v1.json",
+      "receipts/ember-restart-3b/native-cost-calibration-seed83-certificate.json"
+    ]
+  }
+}

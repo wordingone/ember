@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // rendering-pipeline — terminal renderer core: object pools, screen buffer,
 // double-buffered diff, optimizer, and render entry point.
 // Cross-layer deps (event-system) are injected as optional interfaces.
@@ -390,6 +394,27 @@ function resolveBorderColorStyle(colorName: string | undefined): Style {
  * observed bold+dim+inverse ("\x1b[1;2;7m") stack over what should be a plain dim "─" rule. */
 export interface PrevStyleTracker { current: Style; }
 
+/** Truncates a border title to `width` cells with a trailing "…" marker — never a bare
+ *  codepoint slice with nothing to show a viewer that content was lost. `width <= 0` returns
+ *  "" (paintBorder's fill loop handles the empty case); `width === 1` returns just the marker. */
+function truncateBorderTitle(title: string, width: number): string {
+  if (width <= 0) return "";
+  if (width === 1) return "…";
+  return `${title.slice(0, width - 1)}…`;
+}
+
+/**
+ * Computes which absolute row a bordered box's bottom edge paints on, given an ancestor's
+ * clip (R4b, state/operator-pass-2026-07-26.md W2 / frame-geometry.ts). Mirrors the D1 pin
+ * decision below exactly -- shared so paintBorder and the child-clip computation in
+ * renderNodeToOutput can never disagree about which row the border claims.
+ */
+function pinnedBorderBottomRow(ly: number, lh: number, clipRect: ClipRect): number {
+  const naturalBottomRow = ly + lh - 1;
+  const visibleBottomRow = Math.min(naturalBottomRow, clipRect.y + clipRect.height - 1);
+  return (ly >= clipRect.y && visibleBottomRow > ly) ? visibleBottomRow : naturalBottomRow;
+}
+
 /** Paints a box's perimeter (all 4 edges) at its own layout rect, clipped to
  * clipRect exactly like text painting. Embeds borderTitle in the top edge when
  * given (falls back to a truncated title, never throwing, when it overflows the
@@ -406,6 +431,33 @@ function paintBorder(
   const style  = resolveBorderColorStyle(node.borderColor);
   const inner  = Math.max(0, lw - 2);
 
+  // D1 (legibility scope addition, 2026-07): "the left orange banner has lost its bottom
+  // border -- the box does not close." Root cause: an ancestor's overflow:"hidden" (a Box
+  // flexShrink'ing under height pressure, e.g. repl.ts's `banner` wrapper around <Homescreen>)
+  // can hand this node a clipRect whose bottom edge sits ABOVE this box's own bottomRow
+  // (ly + lh - 1) while its topRow (ly) is still fully visible -- so the top edge painted fine
+  // and the bottom edge's writeAt() calls below all silently dropped, leaving an open-ended box.
+  // A bordered box should never render with one edge visible and the other silently missing:
+  // when the natural bottom edge falls outside the visible extent but the top edge and at least
+  // one more row below it are still visible, PIN the bottom edge to the last visible row instead
+  // of its own computedHeight-1 -- sacrificing interior content rows rather than the box's own
+  // closing edge. This is the render-time enforcement of "a container always closes" for every
+  // bordered Box, not just this one call site.
+  //
+  // R4b correction (state/operator-pass-2026-07-26.md W2, frame-geometry.ts): the "already
+  // independently clipped by the normal per-row/per-child clip, so no double-paint" assumption
+  // above was WRONG for a box whose own height resolves via the layout engine's "auto" content-sum
+  // (layout-engine.ts line ~461) rather than a definite number -- an ancestor's overflow crop pins
+  // *this* border to a row inside the box's real interior, but the child clip computed in
+  // renderNodeToOutput was intersected only against THIS box's own (unclipped, full-natural-height)
+  // interior, so a content row at exactly the pinned row was still "visible" by that separate
+  // check and got painted on the identical cell the border claims (the homescreen bottom-border
+  // content-bleed: NATIVE_HINT text sharing a row with "╰"). Fixed at the shared root: whenever a
+  // bordered box's children are given a clip (renderNodeToOutput, below), that clip's bottom is now
+  // additionally bounded by this same pinnedBorderBottomRow() -- the border row is never also a
+  // legal content row, independent of whether the box declared its own overflow:"hidden".
+  const bottomRow_ = pinnedBorderBottomRow(ly, lh, clipRect);
+
   const writeAt = (row: number, col: number, ch: string): void => {
     if (col < clipRect.x || col >= clipRect.x + clipRect.width) return;
     if (row < clipRect.y || row >= clipRect.y + clipRect.height) return;
@@ -416,8 +468,11 @@ function paintBorder(
   };
 
   // Top edge — plain horizontal run, or with the title embedded just after the
-  // corner glyph (a much-too-long title truncates to `inner` rather than throwing
-  // or being silently dropped).
+  // corner glyph. A too-long title never silently loses characters (legibility bar,
+  // 2026-07-26): it either drops its padding spaces to fit, or truncates with a
+  // visible "…" marker — the same discipline as clipToWidth/truncateAnsiLineToWidth
+  // elsewhere in this app. A raw `.slice(0, inner)` here was indistinguishable from
+  // an intentionally short title (no marker at all).
   let topMid: string;
   if (node.borderTitle && node.borderTitle.length > 0) {
     const padded = ` ${node.borderTitle} `;
@@ -425,8 +480,14 @@ function paintBorder(
       const leftFill  = 1;
       const rightFill = Math.max(0, inner - leftFill - padded.length);
       topMid = glyphs.horizontal.repeat(leftFill) + padded + glyphs.horizontal.repeat(rightFill);
+    } else if (node.borderTitle.length <= inner) {
+      // Fits without its wrapping spaces — not a content loss, just less breathing room.
+      const leftFill = Math.min(1, inner - node.borderTitle.length);
+      topMid = glyphs.horizontal.repeat(leftFill)
+        + node.borderTitle
+        + glyphs.horizontal.repeat(Math.max(0, inner - leftFill - node.borderTitle.length));
     } else {
-      const truncated = node.borderTitle.slice(0, inner);
+      const truncated = truncateBorderTitle(node.borderTitle, inner);
       topMid = truncated + glyphs.horizontal.repeat(Math.max(0, inner - truncated.length));
     }
   } else {
@@ -435,16 +496,18 @@ function paintBorder(
   const topRow = glyphs.topLeft + topMid + glyphs.topRight;
   for (let i = 0; i < topRow.length && i < lw; i++) writeAt(ly, lx + i, topRow[i]!);
 
-  // Side edges — vertical glyph at the leftmost/rightmost column of every row
-  // strictly between the top and bottom edges.
-  for (let r = 1; r < lh - 1; r++) {
-    writeAt(ly + r, lx, glyphs.vertical);
-    writeAt(ly + r, lx + lw - 1, glyphs.vertical);
+  // Side edges — vertical glyph at the leftmost/rightmost column of every row strictly between
+  // the top edge and the (possibly pinned) bottom edge.
+  for (let r = ly + 1; r < bottomRow_; r++) {
+    writeAt(r, lx, glyphs.vertical);
+    writeAt(r, lx + lw - 1, glyphs.vertical);
   }
 
-  // Bottom edge — plain horizontal run, no title.
+  // Bottom edge — plain horizontal run, no title. Painted at bottomRow_ (pinned to the last
+  // visible row when the box's true bottom edge is clipped away — see above), not unconditionally
+  // at ly + lh - 1.
   const bottomRow = glyphs.bottomLeft + glyphs.horizontal.repeat(inner) + glyphs.bottomRight;
-  for (let i = 0; i < bottomRow.length && i < lw; i++) writeAt(ly + lh - 1, lx + i, bottomRow[i]!);
+  for (let i = 0; i < bottomRow.length && i < lw; i++) writeAt(bottomRow_, lx + i, bottomRow[i]!);
 
   // Self-terminating (style-bleed.test.ts): a colored border leaves the real terminal state
   // non-default with nothing downstream aware it must reset. Explicitly closing out the color
@@ -538,9 +601,42 @@ export function renderNodeToOutput(
   // painted rect -- only when it declares overflow:"hidden", and only for what gets passed to
   // its OWN children -- makes overflow:"hidden" actually clip, without touching the default
   // ("visible") behavior any other node relies on.
-  const childClipRect: ClipRect = node.layout.overflow === "hidden"
-    ? intersectClipRect(clipRect, { x: lx, y: ly, width: lw, height: lh })
+  // D2 (legibility scope addition, 2026-07): the intersect rect below used to be the box's FULL
+  // OUTER rect (lx, ly, lw, lh) -- the exact same rect paintBorder uses for the border glyphs
+  // themselves. layout-engine.ts already insets CHILD POSITIONING by border width (reconciler.ts's
+  // applyBorderProps sets layout.border=1 whenever borderStyle is present), but an unwrapped/
+  // overlong Text child is not constrained by its own declared width at paint time -- only by
+  // whatever clipRect it inherits. So a bordered overflow:"hidden" Box's clip rect must ALSO be
+  // inset by its own border width, or overrunning content paints straight onto (and past) the
+  // border glyphs paintBorder already drew -- the operator's report: a watchdog line breaking
+  // through the blue container's right border, drawn OVER the border character and out past it.
+  // Mirrors layout-engine.ts lines ~272-275's own bt/br/bb/bl fallback-to-`border` computation so
+  // the two insets can never disagree. Zero-width/height when a border would consume the whole
+  // box is clamped by intersectClipRect's own Math.max(0, ...), same as any other empty rect.
+  const bt = node.layout.borderTop    || node.layout.border;
+  const br = node.layout.borderRight  || node.layout.border;
+  const bb = node.layout.borderBottom || node.layout.border;
+  const bl = node.layout.borderLeft   || node.layout.border;
+  let childClipRect: ClipRect = node.layout.overflow === "hidden"
+    ? intersectClipRect(clipRect, { x: lx + bl, y: ly + bt, width: lw - bl - br, height: lh - bt - bb })
     : clipRect;
+
+  // R4b (frame-geometry.ts, state/operator-pass-2026-07-26.md W2): a bordered box's own bottom
+  // edge can get PINNED to a row inside its real interior (paintBorder's D1 mechanism above, when
+  // an ancestor's overflow crop cuts this box short). That pin uses the box's INHERITED clipRect --
+  // the SAME `clipRect` this function received, not the just-computed childClipRect -- so this must
+  // reuse the identical calculation to guarantee agreement. Without this, a bordered box whose own
+  // height resolves via "auto" content-sum (unaware of the ancestor crop) hands its children a
+  // clip bounded only by ITS OWN full natural interior, and a content row landing exactly on the
+  // pinned border row was still "visible" by that separate check -- painted onto the identical
+  // cell the border claims. Reserving the pinned row exclusively for the border (children clip
+  // stops one row above it) is the fix; a no-op when no ancestor crop is pinning anything (the
+  // pinned row then equals the box's own natural bottom, already excluded by the border inset).
+  if (node.borderStyle) {
+    const pinnedBottom = pinnedBorderBottomRow(ly, lh, clipRect);
+    const clippedBottom = Math.min(childClipRect.y + childClipRect.height, pinnedBottom);
+    childClipRect = { ...childClipRect, height: Math.max(0, clippedBottom - childClipRect.y) };
+  }
 
   // Recurse into children
   for (const child of node.children) {
@@ -674,6 +770,8 @@ export interface RendererOptions {
   stream: { write(s: string): void };
   stdout: { columns: number; rows: number };
   debug?: boolean;
+  /** Called exactly once, after this renderer writes its first non-empty frame. */
+  onFirstFrameFlushed?: () => void;
 }
 
 export interface Renderer {
@@ -690,6 +788,7 @@ export function createRenderer(options: RendererOptions): Renderer {
 
   let prevFrame: Frame | null = null;
   let currentFrame: Frame | null = null;
+  let firstFrameFlushed = false;
   // issue #286: the diff in diffFrames() only ever iterates curr's own width/height, so on a
   // resize to SMALLER dimensions, cells the previous (larger) frame held outside the new bounds
   // are never targeted by any patch -- they're simply never mentioned again. That's fine on a
@@ -760,7 +859,13 @@ export function createRenderer(options: RendererOptions): Renderer {
       // non-empty, so plain content needing no SGR is written without SGR and inherits the
       // stale inverse. The reset makes each patch self-terminating, breaking the cross-patch leak.
       if (runs.length > 0) buf += "\x1b[m";
-      if (buf) stream.write(buf);
+      if (buf) {
+        stream.write(buf);
+        if (!firstFrameFlushed) {
+          firstFrameFlushed = true;
+          options.onFirstFrameFlushed?.();
+        }
+      }
 
       // M9-DIAG-LIVE: capture per-paint diagnostic for live root-cause
       try {

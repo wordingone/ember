@@ -2,11 +2,12 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
-import { createHash } from "crypto";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "fs";
+import { createHash, randomBytes } from "crypto";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { spawnSync } from "child_process";
+
+import { emberScratchDir } from "../utils/ember-scratch.ts";
 
 import type {
   ModelConfigCapabilities,
@@ -172,6 +173,21 @@ function defaultReadGitBlob(
   return result.stdout;
 }
 
+/** Thrown ONLY when an owned-development runtime bundle is otherwise honest and
+ *  self-consistent but was built at a source commit that is not the compiled
+ *  cockpit's own commit (state/specs/cockpit-stale-binding-demotion-acceptance-map-2026-07-25.md
+ *  section 3). This is the single case process-entry.ts's catch demotes to the
+ *  offline/reference seat instead of exiting the process -- gated on
+ *  `instanceof`, never on this class's message text. Every other failure in
+ *  this file (tamper, malformed manifest, missing files, resolver failure)
+ *  throws a plain Error and stays fatal. */
+export class OwnedSeatStaleBindingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OwnedSeatStaleBindingError";
+  }
+}
+
 export function captureDevelopmentResolver(
   manifestPath: string,
   repoRoot: string,
@@ -201,11 +217,37 @@ export function captureDevelopmentResolver(
   }
   const index = parseJsonObject(indexBytes, "runtime bundle index");
   requireExactFields(index, ["schema_version", "source_commit", "files"], "runtime bundle index");
-  if (
-    index["schema_version"] !== "ember-owned-runtime-bundle-v1" ||
-    index["source_commit"] !== expectedSourceCommit
-  ) {
-    throw new Error("runtime bundle is not bound to the exact compiled cockpit commit");
+  if (index["schema_version"] !== "ember-owned-runtime-bundle-v1") {
+    // Split out of the former compound condition deliberately: a wrong/unrecognised
+    // schema is a structurally different defect from a stale-but-honest commit binding,
+    // and only the latter may demote (acceptance map section 3 requires the typed error
+    // to be thrown ONLY for the stale-commit case -- lumping schema validity in with it
+    // would let a malformed index ride the same demotion path).
+    throw new Error("runtime bundle index schema is not recognised");
+  }
+  // The demotion branch below is the ONLY lenient outcome in this function, and
+  // it is reachable only for an index that is otherwise honest and
+  // self-consistent -- a bundle that is truthfully bound to a DIFFERENT but
+  // well-formed commit. So the shape of source_commit has to be established
+  // first: without this, `source_commit: null`, an object, an uppercase or
+  // non-hex string, or arbitrary garbage all simply fail the equality test and
+  // ride the demotion path, because "malformed" and "different" are the same
+  // answer to `!==`. The comment on the schema check above states exactly this
+  // intent and the equality check immediately undid it for a sibling field.
+  //
+  // The general form, and the reason this was missed: enumerating one traversal
+  // (schema-vs-stale) does not enumerate its siblings. Every field the lenient
+  // branch reads needs its own strict check ahead of that branch.
+  const indexSourceCommit = index["source_commit"];
+  if (typeof indexSourceCommit !== "string" || !/^[0-9a-f]{40}$/.test(indexSourceCommit)) {
+    throw new Error("runtime bundle index source commit is invalid");
+  }
+  if (indexSourceCommit !== expectedSourceCommit) {
+    throw new OwnedSeatStaleBindingError(
+      "runtime bundle is not bound to the exact compiled cockpit commit; the owned seat is " +
+      "refused and the cockpit continues OFFLINE. Use --reference-seat for explicit " +
+      "REFERENCE_ONLY parity testing or EMBER_GPU_FREE=1 for offline observation.",
+    );
   }
   const files = requireObject(index["files"], "runtime bundle files");
   const capturedFiles = new Map<string, Uint8Array>();
@@ -244,7 +286,11 @@ export function captureDevelopmentResolver(
   if (resolverBytes === undefined) {
     throw new Error("trusted runtime resolver was not captured");
   }
-  const snapshotRoot = mkdtempSync(join(tmpdir(), "ember-development-runtime-"));
+  const snapshotRoot = join(
+    emberScratchDir("development-runtime"),
+    `${process.pid}-${randomBytes(6).toString("hex")}`,
+  );
+  mkdirSync(snapshotRoot, { recursive: true });
   for (const [relativePath, payload] of capturedFiles) {
     const snapshotFile = join(snapshotRoot, relativePath);
     mkdirSync(dirname(snapshotFile), { recursive: true });
@@ -385,14 +431,36 @@ function parseOwnedLaunch(
     trustedVerifierRegistryPath: requireAbsolutePath("trusted_verifier_registry_path"),
   };
   if (
-    launch.runManifestPath !== expected.manifestPath ||
-    launch.trustedVerifierRegistryPath !== expected.registryPath ||
+    !sameResolvedPath(launch.runManifestPath, expected.manifestPath) ||
+    !sameResolvedPath(launch.trustedVerifierRegistryPath, expected.registryPath) ||
     [launch.checkpointDir, launch.modelConfigPath, launch.runManifestPath, launch.serverPath, launch.tokenizerPath, launch.trustedVerifierRegistryPath]
       .some((path) => !exists(path))
   ) {
     throw new Error("owned seat resolver returned an invalid launch descriptor");
   }
   return launch;
+}
+
+/**
+ * True iff `a` and `b` denote the SAME real file. Trust-critical path compare:
+ * the runtime snapshot dir is canonicalized at creation (emberScratchDir ->
+ * realpathSync.native) and the Python resolver echoes Path.resolve()'d paths,
+ * so a raw `===` normally holds. This makes the compare self-sufficiently
+ * case-correct instead of depending on that invariant being maintained
+ * elsewhere: canonicalize BOTH via realpathSync.native (also resolves 8.3
+ * short names and symlinks). If either path is not present on disk (e.g. an
+ * injected test mock, or a not-yet-created path), fall back to a
+ * case-insensitive compare on case-insensitive filesystems (win32/darwin) and
+ * an exact compare elsewhere. The binding is never RELAXED: two genuinely
+ * different files differ under realpath AND under the case-folded fallback.
+ */
+function sameResolvedPath(a: string, b: string): boolean {
+  try {
+    return realpathSync.native(a) === realpathSync.native(b);
+  } catch {
+    const caseInsensitiveFs = process.platform === "win32" || process.platform === "darwin";
+    return caseInsensitiveFs ? a.toLowerCase() === b.toLowerCase() : a === b;
+  }
 }
 
 const DEVELOPMENT_LAUNCH_FIELDS = [
@@ -452,7 +520,7 @@ function parseDevelopmentLaunch(
     tokenizerPath: requireAbsolutePath("tokenizer_path"),
   };
   if (
-    launch.developmentManifestPath !== expected.manifestPath ||
+    !sameResolvedPath(launch.developmentManifestPath, expected.manifestPath) ||
     [launch.checkpointDir, launch.developmentManifestPath, launch.modelConfigPath, launch.serverPath, launch.tokenizerPath]
       .some((path) => !exists(path))
   ) {

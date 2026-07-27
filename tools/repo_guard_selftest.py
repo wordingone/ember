@@ -102,6 +102,59 @@ def run_guard(tmp: Path, extra_env: dict | None = None) -> tuple[int, str]:
     return proc.returncode, proc.stdout + proc.stderr
 
 
+def run_guard_from_trusted_kernel(
+    subject: Path,
+    kernel: Path,
+    extra_env: dict | None = None,
+) -> tuple[int, str]:
+    """Run the kernel's guard bytes against a separate subject checkout."""
+    import os
+    env = dict(os.environ)
+    env.pop("REPO_GUARD_NAMES", None)
+    env.update(
+        {
+            "CI": "true",
+            "GITHUB_ACTIONS": "true",
+            "REPO_GUARD_KERNEL_ROOT": kernel.as_posix(),
+            "REPO_GUARD_SUBJECT_ROOT": subject.as_posix(),
+        }
+    )
+    if extra_env:
+        env.update(extra_env)
+    proc = subprocess.run(
+        [GIT_BASH, (kernel / "tools" / "repo-guard.sh").as_posix()],
+        cwd=str(subject),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+def make_split_kernel(test_word: str) -> Path:
+    """Build the smallest real trusted kernel with a test-only hashed denylist."""
+    kernel = Path(tempfile.mkdtemp(prefix="repo-guard-kernel-"))
+    for relative in (
+        "tools/repo-guard.sh",
+        "tools/check_line_endings.py",
+        "tools/check_names_hashed.py",
+        "scripts/verify_authority_conservation.py",
+    ):
+        source = REPO_ROOT / relative
+        target = kernel / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    (kernel / "tools" / "repo-guard-denylist.sha256").write_text(
+        hashlib.sha256(test_word.encode("utf-8")).hexdigest() + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (kernel / "tools" / "repo-guard-names-exclude.txt").write_text(
+        "", encoding="utf-8", newline="\n"
+    )
+    return kernel
+
+
 def cleanup(tmp: Path) -> None:
     shutil.rmtree(tmp, ignore_errors=True)
 
@@ -315,6 +368,194 @@ def test_ci_fail_closed_empty_hashed_denylist():
         cleanup(tmp)
 
 
+# ---------------------------------------------------------------------------
+# RED: a subject cannot replace the guard/helper that judges itself
+# ---------------------------------------------------------------------------
+def test_trusted_kernel_ignores_subject_guard_and_helpers():
+    tmp = make_fixture("fix/selftest-trusted-kernel")
+    try:
+        (tmp / ".github" / "workflows").mkdir(parents=True)
+        (tmp / ".github" / "workflows" / "repo-guard.yml").write_text(
+            "name: candidate-bypass\n"
+            "on: pull_request\n"
+            "jobs:\n"
+            "  guard:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: exit 0\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (tmp / "tools" / "repo-guard.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            "printf 'CANDIDATE_GUARD_EXECUTED\\n'\n"
+            "exit 0\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (tmp / "scripts" / "verify_authority_conservation.py").write_text(
+            "from pathlib import Path\n"
+            "Path('candidate-helper-ran').write_text('unsafe', encoding='utf-8')\n"
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (tmp / "INVARIANT.md").unlink()
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc != 0, f"trusted kernel accepted a subject-bypassed authority failure\n{out}"
+        assert "FAIL [authority]" in out, out
+        assert "CANDIDATE_GUARD_EXECUTED" not in out, out
+        assert not (tmp / "candidate-helper-ran").exists(), (
+            "trusted guard executed the subject-authored authority helper"
+        )
+    finally:
+        cleanup(tmp)
+
+
+def test_split_kernel_scans_subject_guard_for_runtime_names():
+    tmp = make_fixture("fix/selftest-split-subject-name")
+    try:
+        test_word = "subjectguardnametestonly"
+        (tmp / "tools" / "repo-guard.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            f"# candidate-smuggled marker: {test_word}\n"
+            "exit 0\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": test_word},
+        )
+        assert rc != 0, f"trusted split kernel accepted a name in subject guard bytes\n{out}"
+        assert "FAIL [names]" in out, out
+        assert "tools/repo-guard.sh:2" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_split_kernel_hashed_scan_covers_every_subject_guard_surface():
+    test_word = "subjecthashnametestonly"
+    for relative in (
+        "tools/repo-guard.sh",
+        "tools/check_names_hashed.py",
+        "tools/.repo-guard-denylist",
+        "tools/.repo-guard-denylist.example",
+        "tools/repo-guard-names-exclude.txt",
+    ):
+        tmp = make_fixture("fix/selftest-split-hashed-surface")
+        kernel = make_split_kernel(test_word)
+        try:
+            commit_fixture(tmp)
+            target = tmp / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                f"candidate subject marker {test_word}\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            subprocess.run(
+                ["git", "add", "-f", relative],
+                cwd=str(tmp),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                [
+                    "git", "-c", "user.email=selftest@example.invalid",
+                    "-c", "user.name=selftest", "commit", "-m",
+                    f"add split surface {relative}",
+                ],
+                cwd=str(tmp),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            rc, out = run_guard_from_trusted_kernel(tmp, kernel)
+            assert rc != 0, (
+                f"trusted split hashed scan accepted marker in {relative}\n{out}"
+            )
+            assert "FAIL [names-hashed]" in out, out
+            assert relative in out, out
+        finally:
+            cleanup(kernel)
+            cleanup(tmp)
+
+
+def test_split_kernel_scans_subject_guard_for_absolute_paths():
+    tmp = make_fixture("fix/selftest-split-subject-path")
+    try:
+        (tmp / "tools" / "repo-guard.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            "# candidate-smuggled path: " + "C:" + "/Users/example/private\n"
+            "exit 0\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+
+        rc, out = run_guard_from_trusted_kernel(
+            tmp,
+            REPO_ROOT,
+            extra_env={"REPO_GUARD_NAMES": "guardnamethatdoesnotappear"},
+        )
+        assert rc != 0, f"trusted split kernel accepted a subject guard path\n{out}"
+        assert "FAIL [paths]" in out, out
+        assert "tools/repo-guard.sh:2" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_required_workflow_uses_base_pinned_kernel():
+    text = (REPO_ROOT / ".github" / "workflows" / "repo-guard.yml").read_text(
+        encoding="utf-8"
+    )
+    required = (
+        "pull_request_target:",
+        "path: guard-kernel",
+        "path: guard-subject",
+        "REPO_GUARD_KERNEL_ROOT:",
+        "REPO_GUARD_SUBJECT_ROOT:",
+        'bash "${kernel}/tools/repo-guard.sh"',
+        'python "${kernel}/scripts/check_pr_authority_binding.py"',
+        "persist-credentials: false",
+        "permissions:",
+        "contents: read",
+        "pull-requests: read",
+    )
+    for marker in required:
+        assert marker in text, f"trusted workflow marker missing: {marker}"
+    assert "\n  pull_request:\n" not in text, (
+        "candidate-authored pull_request workflow cannot be the required trust gate"
+    )
+    assert text.count("persist-credentials: false") == 3
+    kernel_checkout = text.split(
+        "- name: Checkout trusted guard kernel", 1
+    )[1].split("- name: Checkout pull-request merge subject", 1)[0]
+    assert "ref:" not in kernel_checkout, (
+        "trusted kernel must resolve the current protected-base tip, not an event-stale base SHA"
+    )
+    assert (
+        "github.event_name == 'pull_request_target' && "
+        "github.event.pull_request.base.sha || github.event.before"
+    ) in text, "push and pull-request events must both bind an explicit changed-range base"
+    assert "explicit range base is unavailable; refusing weaker tree-only fallback" in text
+    assert "pull_request_target resolves the current" in text
+    assert "push resolves the triggering protected commit" in text
+    assert 'bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"' in text
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -325,6 +566,11 @@ ALL_TESTS = [
     test_ci_fail_closed_empty_hashed_denylist,
     test_red_name_outside_exclude_scope,
     test_green_name_inside_excluded_path,
+    test_trusted_kernel_ignores_subject_guard_and_helpers,
+    test_split_kernel_scans_subject_guard_for_runtime_names,
+    test_split_kernel_hashed_scan_covers_every_subject_guard_surface,
+    test_split_kernel_scans_subject_guard_for_absolute_paths,
+    test_required_workflow_uses_base_pinned_kernel,
 ]
 
 

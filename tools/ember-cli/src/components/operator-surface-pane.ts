@@ -14,6 +14,8 @@ import {
   visibleActivityFeedLines,
   type ActivityFeedLine,
 } from "./activity-feed-pane.ts";
+import { renderChart, sparklineRow } from "../ink/chart.ts";
+import { HOST_METRIC_IDS, type HostMetricId, type HostMetricSeries, type HostTelemetrySnapshot } from "../services/host-telemetry-poller.ts";
 
 export interface OperatorSourceIdentity {
   publicCommit?: string;
@@ -29,16 +31,29 @@ export interface OperatorSurfaceInput {
   nowMs?: number;
   maxAgentLines?: number;
   plotWidth?: number;
+  /** Path-truncation budget for the activity-feed line's path suffix, shrunk by the caller to
+   *  the ACTUAL pane width (legibility bar, 2026-07-26) rather than the fixed 48-char default —
+   *  a narrow pane used to hand a 48-char-budgeted line to the outer renderer, which then
+   *  silently hard-clipped it further with no marker at all. */
+  pathMaxLen?: number;
+  /** Host telemetry snapshot from useHostTelemetryPoller — needs no run in flight. When
+   *  present, the six host curves are BOUND; SOURCE UNBOUND survives only for a source that
+   *  genuinely has no producer wired. */
+  host?: HostTelemetrySnapshot;
 }
 
 export type OperatorRunStatus = "RUNNING" | "STALE" | "IDLE" | "OFFLINE";
+export type OperatorControlAction = "START" | "PAUSE" | "RESUME" | "RESTART";
 
 export interface OperatorSeriesPoint {
   runId: string;
   step: number;
   loss?: number;
   totalSteps?: number;
-  throughput?: number;
+  tokensPerSecond?: number;
+  learningRate?: number;
+  gpuWatts?: number;
+  boardEnergyJoulesTotal?: number;
   vramUsedGib?: number;
   gpuUtilizationPct?: number;
   ts: string;
@@ -110,19 +125,23 @@ function validTrainStep(event: TelemetryEvent, nowMs: number = Date.now()): Oper
   if (!runId || !finiteNumber(step) || !Number.isInteger(step) || step < 1 || !finiteNumber(timestamp) || timestamp > nowMs) return undefined;
   const lossValue = event.payload["loss"];
   const loss = finiteNumber(lossValue) ? lossValue : undefined;
-  const stepMs = event.payload["step_ms"];
+  const directNonnegative = (value: unknown): number | undefined =>
+    finiteNumber(value) && value >= 0 ? value : undefined;
+  const tokensPerSecond = directNonnegative(event.payload["tokens_per_second"]);
+  const learningRate = directNonnegative(event.payload["learning_rate"]);
+  const gpuWatts = directNonnegative(event.payload["gpu_watts"]);
+  const boardEnergyJoulesTotal = directNonnegative(event.payload["board_energy_joules_total"]);
   const free = event.payload["free_gib"];
   const total = event.payload["total_gib"];
-  const throughput = finiteNumber(stepMs) && stepMs > 0 ? 60_000 / stepMs : undefined;
   const vramUsedGib = finiteNumber(free) && finiteNumber(total) && free >= 0 && total > 0 && free <= total
     ? total - free
     : undefined;
   const gpuValue = event.payload["gpu_utilization_pct"];
   const gpuUtilizationPct = finiteNumber(gpuValue) && gpuValue >= 0 && gpuValue <= 100 ? gpuValue : undefined;
-  if (loss === undefined && throughput === undefined && vramUsedGib === undefined && gpuUtilizationPct === undefined) return undefined;
+  if (loss === undefined && tokensPerSecond === undefined && learningRate === undefined && gpuWatts === undefined && boardEnergyJoulesTotal === undefined && vramUsedGib === undefined && gpuUtilizationPct === undefined) return undefined;
   const totalStepsValue = event.payload["total_steps"];
   const totalSteps = finiteNumber(totalStepsValue) && Number.isInteger(totalStepsValue) && totalStepsValue > 0 ? totalStepsValue : undefined;
-  return { runId, step, totalSteps, loss, throughput, vramUsedGib, gpuUtilizationPct, ts: event.ts };
+  return { runId, step, totalSteps, loss, tokensPerSecond, learningRate, gpuWatts, boardEnergyJoulesTotal, vramUsedGib, gpuUtilizationPct, ts: event.ts };
 }
 
 interface SelectedRunEvidence {
@@ -235,8 +254,15 @@ function eventMetricSamples(
     .sort((left, right) => left.step - right.step || Date.parse(left.ts) - Date.parse(right.ts));
 }
 
-function familyLines(title: string, samples: OperatorMetricPoint[], unbound: string, maxPoints: number, checkpointSteps: Set<number>): string[] {
-  if (samples.length === 0) return [`${unbound}: SOURCE UNBOUND`];
+/**
+ * "SOURCE UNBOUND" and "AWAITING FIRST SAMPLE" are different facts and must not share a
+ * rendering: UNBOUND says this metric can never arrive right now (no live run to bind to);
+ * AWAITING says the run IS live and could still produce it -- the run is simply not there yet
+ * for this particular field. `isLive` is the selected run's RUNNING status, computed once by the
+ * caller from the same evidence the rest of the pane already trusts (getOperatorRunStatus).
+ */
+function familyLines(title: string, samples: OperatorMetricPoint[], unbound: string, maxPoints: number, checkpointSteps: Set<number>, isLive: boolean): string[] {
+  if (samples.length === 0) return [`${unbound}: ${isLive ? "AWAITING FIRST SAMPLE" : "SOURCE UNBOUND"}`];
   return plotLines(title, samples, checkpointSteps, maxPoints);
 }
 
@@ -245,12 +271,22 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   const maxPoints = Math.max(2, Math.floor(plotWidth) - 8);
   const selection = selectedRunEvidence(telemetry, nowMs);
   const runId = selection?.runId;
-  const points = runId
+  const rawPoints = runId
     ? telemetry.recentEvents
         .map((event) => validTrainStep(event, nowMs))
         .filter((point): point is OperatorSeriesPoint => point?.runId === runId)
         .sort((left, right) => left.step - right.step || Date.parse(left.ts) - Date.parse(right.ts))
     : [];
+  let lastEnergy = Number.NEGATIVE_INFINITY;
+  const points = rawPoints.map((point) => {
+    if (point.boardEnergyJoulesTotal === undefined) return point;
+    if (point.boardEnergyJoulesTotal < lastEnergy) {
+      const { boardEnergyJoulesTotal: _rejected, ...truthfulPoint } = point;
+      return truthfulPoint;
+    }
+    lastEnergy = point.boardEnergyJoulesTotal;
+    return point;
+  });
   const checkpoints = runId
     ? telemetry.recentEvents
         .filter((event) => event.kind === "checkpoint" && eventRunId(event) === runId)
@@ -265,21 +301,30 @@ export function buildOperatorSurfaceGraphs(telemetry: TelemetryState, plotWidth:
   const loss = plotLines("loss", valueSamples(points, (point) => point.loss), checkpointSteps, maxPoints);
   const gpu = valueSamples(points, (point) => point.gpuUtilizationPct);
   const vram = valueSamples(points, (point) => point.vramUsedGib);
-  const throughput = valueSamples(points, (point) => point.throughput);
+  const tokensPerSecond = valueSamples(points, (point) => point.tokensPerSecond);
+  const learningRate = valueSamples(points, (point) => point.learningRate);
+  const gpuWatts = valueSamples(points, (point) => point.gpuWatts);
+  const boardEnergy = valueSamples(points, (point) => point.boardEnergyJoulesTotal);
   const modelGrowth = eventMetricSamples(telemetry, runId, "model_growth", "value", nowMs);
   const capability = eventMetricSamples(telemetry, runId, "capability_score", "score", nowMs);
   const latestTrainTs = selection?.latestTs;
+  // Whether the selected run is live RIGHT NOW, by the same evidence the rest of the pane
+  // already trusts -- gates the SOURCE UNBOUND / AWAITING FIRST SAMPLE choice below.
+  const isLive = getOperatorRunStatus(telemetry, nowMs, runId) === "RUNNING";
   const decorate = (lines: string[]): string[] =>
     channelIsOffline(telemetry, runId, latestTrainTs) ? decorateHistory(lines, "OFFLINE/HISTORICAL") : lines;
   const lossLines = decorate(loss);
   const resourceLines = decorate([
     "RESOURCE EFFICIENCY",
-    ...familyLines("GPU utilization %", gpu, "GPU UTILIZATION", maxPoints, checkpointSteps),
-    ...familyLines("VRAM GiB", vram, "VRAM", maxPoints, checkpointSteps),
-    ...familyLines("throughput", throughput, "THROUGHPUT/SPEED", maxPoints, checkpointSteps),
+    ...familyLines("GPU utilization %", gpu, "GPU UTILIZATION", maxPoints, checkpointSteps, isLive),
+    ...familyLines("VRAM GiB", vram, "VRAM", maxPoints, checkpointSteps, isLive),
+    ...familyLines("tokens/s", tokensPerSecond, "TOKENS/S", maxPoints, checkpointSteps, isLive),
+    ...familyLines("learning rate", learningRate, "LEARNING RATE", maxPoints, checkpointSteps, isLive),
+    ...familyLines("GPU watts", gpuWatts, "GPU WATTS", maxPoints, checkpointSteps, isLive),
+    ...familyLines("board energy joules", boardEnergy, "ENERGY", maxPoints, checkpointSteps, isLive),
   ]);
-  const modelGrowthLines = decorate(familyLines("model growth", modelGrowth, "MODEL GROWTH", maxPoints, checkpointSteps));
-  const capabilityLines = decorate(familyLines("capability score", capability, "CAPABILITY SCORES", maxPoints, checkpointSteps));
+  const modelGrowthLines = decorate(familyLines("model growth", modelGrowth, "MODEL GROWTH", maxPoints, checkpointSteps, isLive));
+  const capabilityLines = decorate(familyLines("capability score", capability, "CAPABILITY SCORES", maxPoints, checkpointSteps, isLive));
   return {
     runId,
     points,
@@ -339,6 +384,7 @@ export function buildOperatorSurfaceSnapshot({
   nowMs = Date.now(),
   maxAgentLines = 6,
   plotWidth = 80,
+  pathMaxLen,
 }: OperatorSurfaceInput): OperatorSurfaceSnapshot {
   const rawGraphs = buildOperatorSurfaceGraphs(telemetry, plotWidth, nowMs);
   const status = getOperatorRunStatus(telemetry, nowMs, rawGraphs.runId);
@@ -352,8 +398,8 @@ export function buildOperatorSurfaceSnapshot({
         ? `step ${latestPoint.step}/${latestPoint.totalSteps}`
         : `step ${latestPoint.step}`);
     }
-    if (finiteNumber(latestPoint.throughput)) {
-      metrics.push(`throughput ${latestPoint.throughput.toFixed(1)} step/min`);
+    if (finiteNumber(latestPoint.tokensPerSecond)) {
+      metrics.push(`tokens/s ${latestPoint.tokensPerSecond.toFixed(1)}`);
     }
   }
 
@@ -392,7 +438,7 @@ export function buildOperatorSurfaceSnapshot({
 
   const visible = visibleActivityFeedLines(activityLines, maxAgentLines);
   const agentLines = visible.length > 0
-    ? visible.map((line) => formatActivityFeedLine(line, nowMs))
+    ? visible.map((line) => finiteNumber(pathMaxLen) ? formatActivityFeedLine(line, nowMs, pathMaxLen) : formatActivityFeedLine(line, nowMs))
     : [EMPTY_STATE_TEXT];
 
   return {
@@ -405,10 +451,109 @@ export function buildOperatorSurfaceSnapshot({
 }
 
 export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
+  onControl?: (action: OperatorControlAction, runId?: string) => void;
   width?: number;
   height?: number;
   terminalColumns?: number;
   terminalRows?: number;
+  /** Index into OPERATOR_CONTROL_ACTIONS currently holding keyboard traversal focus, or
+   *  undefined when the pane itself does not have keyboard focus (R2b). Drives the visible
+   *  focus marker — a control that is focused with no way to see which one is focused is the
+   *  same failure class as a control that renders and does nothing. */
+  focusedControlIndex?: number;
+  /** Reason surfaced when a disabled control's accelerator or activation was attempted (R2b
+   *  acceptance row 7) — silently doing nothing is the exact failure R2 was filed for. */
+  disabledActionReason?: string;
+}
+
+// ---------------------------------------------------------------------------
+// R2b — keyboard-reachable operator controls
+// ---------------------------------------------------------------------------
+
+/** Canonical traversal/visual order for the four operator controls. Exported so repl.ts's
+ *  keyboard handler shares the exact same order and index space as this pane's rendering —
+ *  divergence here would make "focus visits all four controls in visual order" a lie. */
+export const OPERATOR_CONTROL_ACTIONS = ["START", "PAUSE", "RESUME", "RESTART"] as const;
+
+/** Single-key accelerator per control (lowercase). Shown decorated in the control's own label
+ *  via operatorControlLabel so the mnemonic is always visible, never a hidden binding. */
+export const OPERATOR_CONTROL_ACCELERATORS: Record<OperatorControlAction, string> = {
+  START: "s",
+  PAUSE: "p",
+  RESUME: "u",
+  RESTART: "t",
+};
+
+/** Decorates the accelerator letter inside the action name itself, e.g. "[(S)TART]",
+ *  "[RES(U)ME]" — derived generically from OPERATOR_CONTROL_ACCELERATORS rather than a
+ *  hand-maintained label table, so the two can never drift apart. */
+export function operatorControlLabel(action: OperatorControlAction): string {
+  const accel = OPERATOR_CONTROL_ACCELERATORS[action].toUpperCase();
+  const index = action.indexOf(accel);
+  const decorated = index < 0
+    ? `${action}(${accel})`
+    : `${action.slice(0, index)}(${accel})${action.slice(index + 1)}`;
+  return `[${decorated}]`;
+}
+
+const OPERATOR_CONTROL_DISABLED_REASONS: Record<OperatorControlAction, string> = {
+  START: "a run is already active",
+  PAUSE: "no running run",
+  RESUME: "no paused run",
+  RESTART: "no stale or offline run to restart",
+};
+
+/** Reason surfaced (R2b acceptance row 7) when a disabled control's accelerator or focused
+ *  activation is attempted — a fixed, generic reason per action is sufficient; the point is
+ *  that SOMETHING is surfaced rather than nothing. */
+export function operatorControlDisabledReason(action: OperatorControlAction): string {
+  return OPERATOR_CONTROL_DISABLED_REASONS[action];
+}
+
+/** Same enablement rule the pane's own render uses, exported so repl.ts's keyboard traversal
+ *  and accelerator dispatch can skip/reject a disabled control using the IDENTICAL predicate —
+ *  a second, hand-copied version of this rule is exactly how "looks reachable, isn't" bugs are
+ *  born. */
+export function isOperatorControlEnabled(
+  action: OperatorControlAction,
+  status: OperatorRunStatus,
+  telemetry: TelemetryState,
+): boolean {
+  return action === "START" ? status === "IDLE"
+    : action === "PAUSE" ? status === "RUNNING"
+    : action === "RESUME" ? telemetry.runStatus?.phase === "PAUSED"
+    : status === "STALE" || status === "OFFLINE";
+}
+
+/**
+ * Pure traversal-step function: from `current` (use -1 to mean "not yet entered the set"), moves
+ * `direction` (+1/-1) steps, skipping any index whose `enabledMask` entry is false, and returns
+ * the landed index or null when the step runs off either end of the set (acceptance row 1's
+ * "leaves the set", row 6's "the disabled control is skipped"). This is the SAME function
+ * repl.ts's keyboard handler calls on every Tab/Arrow press and on pane-entry (entry is just
+ * `nextOperatorFocusIndex(-1, 1, enabledMask)`) — there is no second, hand-copied traversal rule
+ * that could drift from what actually ships.
+ */
+export function nextOperatorFocusIndex(
+  current: number,
+  direction: 1 | -1,
+  enabledMask: readonly boolean[],
+): number | null {
+  let next = current + direction;
+  while (next >= 0 && next < enabledMask.length && !enabledMask[next]) next += direction;
+  return next >= 0 && next < enabledMask.length ? next : null;
+}
+
+/** The same {status, runId} pair the pane derives internally via buildOperatorSurfaceGraphs +
+ *  getOperatorRunStatus, exposed so repl.ts's keyboard path can evaluate isOperatorControlEnabled
+ *  and resolve the runId a dispatched control command targets, without re-deriving run selection
+ *  by a second, divergent path. */
+export function operatorControlStatus(
+  telemetry: TelemetryState,
+  nowMs: number = Date.now(),
+): { status: OperatorRunStatus; runId?: string } {
+  const graphs = buildOperatorSurfaceGraphs(telemetry, 80, nowMs);
+  return { status: getOperatorRunStatus(telemetry, nowMs, graphs.runId), runId: graphs.runId };
 }
 
 function sharedWindow<T extends { step: number }>(samples: T[], maxPoints: number, checkpointSteps: Set<number> = new Set()): T[] {
@@ -419,86 +564,392 @@ function boundedSurfaceLine(line: string, width: number): string {
   return line.length <= width ? line : `${line.slice(0, Math.max(0, width - 1))}\u2026`;
 }
 
-function compactMetricLine(
+/** A metric is growable (eligible to receive surplus interior height, R1d) once it has at least
+ *  two real samples to plot -- the same threshold this function already used to choose the
+ *  single-row spark path over SOURCE UNBOUND / INSUFFICIENT REAL HISTORY. Fewer than two real
+ *  samples means there is nothing a taller plot would show, so those rows take no share. */
+function metricIsGrowable(points: Array<{ step: number; value?: number }>): boolean {
+  return points.filter((point) => finiteNumber(point.value)).length >= 2;
+}
+
+/** Renders one metric family at `rows` tall. `rows <= 1` is BYTE-IDENTICAL to the pre-R1d
+ *  single-row sparkline (same per-point glyph mapping, not a resample) -- this is the exact-fit
+ *  acceptance row (#4): a mount with no surplus must produce today's frame unchanged. `rows > 1`
+ *  spends the Braille canvas's 4x vertical resolution via the SAME renderChart primitive
+ *  host-telemetry curves already use, min/max-resampled so a spike still survives compression. */
+function compactMetricLines(
   label: string,
   points: Array<{ step: number; value?: number }>,
   columns: number,
   statusTag: string | undefined,
-): string {
+  isLive: boolean,
+  rows: number = 1,
+): string[] {
   const finite = points.filter((point) => finiteNumber(point.value));
   const prefix = `${label.padEnd(20, " ")}${statusTag ? `${statusTag} ` : ""}`;
-  if (finite.length === 0) return `${prefix}SOURCE UNBOUND`;
-  if (finite.length < 2) return `${prefix}INSUFFICIENT REAL HISTORY`;
-  const min = Math.min(...finite.map((point) => point.value!));
-  const max = Math.max(...finite.map((point) => point.value!));
-  const span = max - min;
-  const glyphs = points.map((point) => {
-    if (!finiteNumber(point.value)) return "\u00b7";
-    const level = span === 0 ? 7 : Math.floor(((point.value - min) / span) * 7);
-    return PLOT_GLYPHS[Math.max(0, Math.min(7, level))];
-  }).join("");
-  return `${prefix}${glyphs.slice(0, columns)}`;
+  if (finite.length === 0) return [`${prefix}${isLive ? "AWAITING FIRST SAMPLE" : "SOURCE UNBOUND"}`];
+  if (finite.length < 2) return [`${prefix}INSUFFICIENT REAL HISTORY`];
+  if (rows <= 1) {
+    const min = Math.min(...finite.map((point) => point.value!));
+    const max = Math.max(...finite.map((point) => point.value!));
+    const span = max - min;
+    const glyphs = points.map((point) => {
+      if (!finiteNumber(point.value)) return "\u00b7";
+      const level = span === 0 ? 7 : Math.floor(((point.value - min) / span) * 7);
+      return PLOT_GLYPHS[Math.max(0, Math.min(7, level))];
+    }).join("");
+    return [`${prefix}${glyphs.slice(0, columns)}`];
+  }
+  const samples: Array<number | null> = points.map((point) => (finiteNumber(point.value) ? point.value! : null));
+  const chart = renderChart(samples, { width: columns, height: Math.floor(rows) });
+  const blankPrefix = " ".repeat(prefix.length);
+  return chart.rows.map((row, index) => `${index === 0 ? prefix : blankPrefix}${row}`);
 }
 
-function compactSharedGraphLines(snapshot: OperatorSurfaceSnapshot, plotColumns: number): string[] {
+/**
+ * One row-producing unit of the graph stream (R1d). `growable` blocks (metric families with at
+ * least two real samples) are the ones surplus interior height distributes across; `render(1)`
+ * on every block, fixed or chart, is EXACTLY today's flat line list -- the byte-identical
+ * exact-fit case (acceptance #4) is nothing more than every block asked for its floor.
+ */
+interface GraphBlock {
+  readonly growable: boolean;
+  render(rows: number): string[];
+}
+
+function fixedBlock(line: string): GraphBlock {
+  return { growable: false, render: () => [line] };
+}
+
+function chartBlock(growable: boolean, render: (rows: number) => string[]): GraphBlock {
+  return { growable, render };
+}
+
+function compactSharedGraphBlocks(snapshot: OperatorSurfaceSnapshot, plotColumns: number, hostBound: boolean = false): GraphBlock[] {
   const checkpointSteps = new Set(snapshot.graphs.checkpoints.map((checkpoint) => checkpoint.step));
   const axisByStep = new Map<number, { step: number }>();
   for (const point of snapshot.graphs.points) axisByStep.set(point.step, { step: point.step });
-  for (const point of snapshot.graphs.modelGrowthPoints) axisByStep.set(point.step, { step: point.step });
-  for (const point of snapshot.graphs.capabilityPoints) axisByStep.set(point.step, { step: point.step });
   for (const step of checkpointSteps) axisByStep.set(step, { step });
   const axisSamples = sharedWindow([...axisByStep.values()].sort((left, right) => left.step - right.step), plotColumns, checkpointSteps);
   const stateTag = snapshot.status === "STALE" ? "STALE/HISTORICAL" : snapshot.status === "OFFLINE" ? "OFFLINE/HISTORICAL" : undefined;
+  const isLive = snapshot.status === "RUNNING";
   const pointMetric = (value: (point: OperatorSeriesPoint) => number | undefined) =>
     axisSamples.map((axisPoint) => {
       const point = snapshot.graphs.points.find((candidate) => candidate.step === axisPoint.step);
       return { step: axisPoint.step, value: point ? value(point) : undefined };
     });
-  const eventMetric = (points: OperatorMetricPoint[]) =>
-    axisSamples.map((axisPoint) => ({ step: axisPoint.step, value: points.find((point) => point.step === axisPoint.step)?.value }));
   const axis = axisSamples.length > 0
     ? `step/time ${axisSamples.map((point) => point.step).join(" ")}`
     : "step/time INSUFFICIENT REAL HISTORY";
   const marker = axisSamples.length > 0
     ? `checkpoint ${axisSamples.map((point) => checkpointSteps.has(point.step) ? "▲" : "·").join("")}`
     : "checkpoint INSUFFICIENT REAL HISTORY";
+  const metricBlock = (label: string, points: Array<{ step: number; value?: number }>): GraphBlock =>
+    chartBlock(metricIsGrowable(points), (rows) => compactMetricLines(label, points, plotColumns, stateTag, isLive, rows));
+  // When the host-telemetry source is bound, its always-present VRAM/GPU curves make the
+  // run-event GPU-utilization / VRAM / GPU-watts rows redundant — omitting them here is what
+  // lets ten curves (four training + six host) fit the height budget without the layout engine
+  // collapsing arbitrary rows. Without a bound host source the legacy full section stands.
+  const gpuBlocks: GraphBlock[] = hostBound ? [] : [
+    metricBlock("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct)),
+    metricBlock("VRAM GiB", pointMetric((point) => point.vramUsedGib)),
+  ];
+  const gpuWattsBlocks: GraphBlock[] = hostBound ? [] : [
+    metricBlock("GPU watts", pointMetric((point) => point.gpuWatts)),
+  ];
   return [
-    `TRAINING/LOSS${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("loss", pointMetric((point) => point.loss), plotColumns, stateTag),
-    `RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("GPU utilization %", pointMetric((point) => point.gpuUtilizationPct), plotColumns, stateTag),
-    compactMetricLine("VRAM GiB", pointMetric((point) => point.vramUsedGib), plotColumns, stateTag),
-    compactMetricLine("throughput/speed", pointMetric((point) => point.throughput), plotColumns, stateTag),
-    `MODEL GROWTH${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("model growth", eventMetric(snapshot.graphs.modelGrowthPoints), plotColumns, stateTag),
-    `CAPABILITY SCORES${stateTag ? ` [${stateTag}]` : ""}`,
-    compactMetricLine("capability score", eventMetric(snapshot.graphs.capabilityPoints), plotColumns, stateTag),
-    boundedSurfaceLine(axis, plotColumns + 20),
-    boundedSurfaceLine(marker, plotColumns + 20),
+    fixedBlock(`TRAINING/LOSS${stateTag ? ` [${stateTag}]` : ""}`),
+    metricBlock("loss", pointMetric((point) => point.loss)),
+    fixedBlock(`RESOURCE EFFICIENCY${stateTag ? ` [${stateTag}]` : ""}`),
+    ...gpuBlocks,
+    metricBlock("tokens/s", pointMetric((point) => point.tokensPerSecond)),
+    metricBlock("learning rate", pointMetric((point) => point.learningRate)),
+    ...gpuWattsBlocks,
+    metricBlock("energy joules", pointMetric((point) => point.boardEnergyJoulesTotal)),
+    fixedBlock(boundedSurfaceLine(axis, plotColumns + 20)),
+    fixedBlock(boundedSurfaceLine(marker, plotColumns + 20)),
   ];
 }
+/** Leading columns reserved for the keyboard-focus marker (R2b) — reserved UNCONDITIONALLY so
+ *  gaining/losing keyboard focus never reflows the controls row; only the marker glyph itself
+ *  changes. */
+const FOCUS_MARKER_WIDTH = 2;
+const FOCUS_MARKER_ON = "▸ ";
+const FOCUS_MARKER_OFF = "  ";
+
+/** Per-action label width including its own trailing gap (paddingRight:1 on the control's own
+ *  Box) — used to pack controls into rows that never split a label mid-word (legibility bar,
+ *  2026-07-26: "no control label is truncated — controls are the last thing to lose
+ *  characters, never the first"). Measures the DECORATED label (accelerator-annotated, R2b),
+ *  since that is what actually renders — measuring the bare action name would under-count. */
+function controlLabelWidth(action: OperatorControlAction): number {
+  return FOCUS_MARKER_WIDTH + operatorControlLabel(action).length + 1;
+}
+
+/** Packs the four control labels into as few rows as fit `availableWidth`, greedily, never
+ *  splitting a label — every row always gets at least one full label even if that label alone
+ *  exceeds `availableWidth` (a too-narrow pane gets its own row per control, not a clipped one).
+ *  This REPLACES relying on flexWrap for the controls row: the layout engine declares a
+ *  `flexWrap` property but never actually implements wrapping (dead prop, verified by reading
+ *  layout-engine.ts), so a too-narrow controls row used to run past the pane and get raw-clipped
+ *  by the outer overflow:"hidden" box with no marker at all ("[START] [PAUSE] [RESUME] [RES").
+ *  Reflowing into rows here needs no layout-engine change and never truncates anything. */
+export function layoutControlRows(actions: readonly string[], availableWidth: number): string[][] {
+  const rows: string[][] = [[]];
+  let used = 0;
+  for (const action of actions) {
+    const w = controlLabelWidth(action as OperatorControlAction);
+    const current = rows[rows.length - 1]!;
+    if (current.length > 0 && used + w > availableWidth) {
+      rows.push([action]);
+      used = w;
+    } else {
+      current.push(action);
+      used += w;
+    }
+  }
+  return rows;
+}
+
+export const HOST_METRIC_LABELS: Record<HostMetricId, string> = {
+  memory: "host memory GiB",
+  ram: "host RAM GiB",
+  vram: "host VRAM GiB",
+  cpu: "host CPU %",
+  gpu: "host GPU %",
+  disk: "host disk %",
+};
+
+/** A host series is growable (R1d) once it holds at least two REAL (non-null, finite) samples --
+ *  the floor a taller plot needs to show anything a one-row sparkline doesn't already. A series
+ *  that is unbound, empty, or entirely null stays at its single text/axis row and takes no
+ *  share, same threshold `metricIsGrowable` uses for the training families. */
+function hostSeriesIsGrowable(series: HostMetricSeries | undefined): boolean {
+  if (!series) return false;
+  let count = 0;
+  for (const value of series.values) {
+    if (value !== null && Number.isFinite(value)) count += 1;
+    if (count >= 2) return true;
+  }
+  return false;
+}
+
+/**
+ * One host-metric's lines, `rows` tall. ORDER INVARIANT (frozen spec): "is this source bound" is
+ * decided FIRST, "does it have samples" only after. A bound-but-empty series renders an empty
+ * axis (all-gap sparkline), and can NEVER fall through to the SOURCE UNBOUND path —
+ * unbound-before-bound is the named defect. `rows <= 1` is BYTE-IDENTICAL to the pre-R1d single
+ * line (same `sparklineRow` call); `rows > 1` spends the surplus via the same Braille
+ * `renderChart` primitive the multi-row training families use.
+ */
+export function hostMetricLines(id: HostMetricId, series: HostMetricSeries | undefined, columns: number, rows: number = 1): string[] {
+  const prefix = HOST_METRIC_LABELS[id].padEnd(20, " ");
+  if (!series) return [`${prefix}SOURCE UNBOUND`]; // genuinely no producer wired
+  // Bound from here down. Empty -> empty axis; null latest -> gap glyphs + the stated reason.
+  const latest = series.values.length > 0 ? series.values[series.values.length - 1] : undefined;
+  const reason = latest === null && series.unavailableReason ? ` [${series.unavailableReason}]` : "";
+  // R1e (state/operator-pass-2026-07-26.md W3-diagnosed -- corrected root cause): the caller's
+  // total line budget (`20 + plotColumns`, this component's own innerWidth) has ZERO slack beyond
+  // `prefix.length + columns` -- the outer `boundedSurfaceLine` pass silently truncated any
+  // trailing `reason` bracket the moment one was present, e.g. "loss SOURCE UNBOU…" losing the
+  // reason text entirely rather than the axis losing a cell. Reserving `reason`'s own width out of
+  // the plot budget up front keeps the line's TOTAL length identical to before (so nothing else
+  // downstream changes) while the reason text itself survives instead of getting clipped.
+  const spendWidth = Math.max(1, columns - reason.length);
+  if (rows <= 1) {
+    const spark = sparklineRow(series.values, spendWidth);
+    return [`${prefix}${spark}${reason}`];
+  }
+  const chart = renderChart(series.values, { width: spendWidth, height: Math.floor(rows) });
+  const blankPrefix = " ".repeat(prefix.length);
+  return chart.rows.map((row, index) => {
+    const label = index === 0 ? prefix : blankPrefix;
+    const trailer = index === chart.rows.length - 1 ? reason : "";
+    return `${label}${row}${trailer}`;
+  });
+}
+
+/** Legacy single-line accessor, preserved for existing direct callers/tests: today's one-row
+ *  rendering, byte-identical to before R1d. */
+export function hostMetricLine(id: HostMetricId, series: HostMetricSeries | undefined, columns: number): string {
+  return hostMetricLines(id, series, columns, 1)[0]!;
+}
+
+function hostTelemetryBlocks(host: HostTelemetrySnapshot | undefined, columns: number): GraphBlock[] {
+  return [
+    fixedBlock("HOST TELEMETRY"),
+    ...HOST_METRIC_IDS.map((id) =>
+      chartBlock(hostSeriesIsGrowable(host?.[id]), (rows) => hostMetricLines(id, host?.[id], columns, rows)),
+    ),
+  ];
+}
+
+/** The six always-present host curves. Present with or without a live run — that is the whole
+ *  point: the resting panel is bound, and a live run ADDS training curves without dropping any
+ *  of these. Legacy flat accessor: today's floor-only rendering, byte-identical to before R1d. */
+export function hostTelemetryLines(host: HostTelemetrySnapshot | undefined, columns: number): string[] {
+  return hostTelemetryBlocks(host, columns).flatMap((block) => block.render(1));
+}
+
 export function OperatorSurfacePane({
   width,
   height,
   terminalColumns,
   terminalRows,
+  onControl,
+  focusedControlIndex,
+  disabledActionReason,
   ...input
 }: OperatorSurfacePaneProps): React.ReactElement {
   const terminalWidth = finiteNumber(terminalColumns) ? terminalColumns : 1727;
   const terminalHeight = finiteNumber(terminalRows) ? terminalRows : 1447;
   const effectiveWidth = Math.max(20, Math.min(finiteNumber(width) ? width : 36, terminalWidth));
   const effectiveHeight = Math.max(8, Math.min(finiteNumber(height) ? height : 24, terminalHeight));
+  // Inner content width once the pane's own borderStyle:"single" (1 col each side, line 616) AND
+  // paddingX:1 (1 col each side, line 625) are BOTH accounted for — 4 columns total, not 2. This
+  // under-counted (border-only omitted) before D2 (legibility scope addition, 2026-07): the
+  // rendering pipeline's clip rect now structurally reserves the border column regardless (see
+  // ink/rendering-pipeline.ts renderNodeToOutput), so the 2-column-too-generous bound could no
+  // longer overwrite the border glyph itself, but it would still let boundedSurfaceLine's marker
+  // land 2 columns later than the true content budget — i.e. silent hard-clipping (no marker) of
+  // the last 2 characters by the render pipeline's own clip, exactly the "silent clipping" defect
+  // class this whole pass exists to kill, just moved one layer down. innerWidth is the single
+  // source of truth every line below is bounded against, so no line can ever reach the outer
+  // overflow:"hidden" box wider than its true content budget, and any shortening always carries
+  // a visible "…" marker (boundedSurfaceLine) rather than a raw, unmarked cut.
+  const innerWidth = Math.max(1, effectiveWidth - 4);
+  const adaptivePathMaxLen = Math.max(8, innerWidth - 20);
   const snapshot = buildOperatorSurfaceSnapshot({
     ...input,
     plotWidth: Math.max(8, effectiveWidth - 4),
+    pathMaxLen: adaptivePathMaxLen,
   });
   const statusColor = snapshot.status === "RUNNING" ? "green" : snapshot.status === "OFFLINE" ? "red" : "yellow";
   const plotColumns = Math.max(8, effectiveWidth - 24);
-  const graphLines = compactSharedGraphLines(snapshot, plotColumns);
+  // Section order is height-contention policy: RESTING (no run points), the host curves ARE the
+  // panel's content and lead; LIVE, the training sections lead and host follows, so a
+  // height-constrained live viewport keeps its training headings (the pre-existing contract)
+  // while the host curves remain present in the row stream for any viewport tall enough.
+  // No host prop at all = the producer is not wired into this mount (legacy/test mounts); the
+  // legacy families already render that state. A WIRED host with a missing/empty series is the
+  // per-series bound/unbound decision inside hostMetricLine — that is where the order invariant
+  // lives, and it is never skipped when the producer exists.
+  const hostBlocks = input.host === undefined ? [] : hostTelemetryBlocks(input.host, plotColumns);
+  const trainingBlocks = compactSharedGraphBlocks(snapshot, plotColumns, input.host !== undefined);
+  // Section order is the height-contention policy (above); block order is what both the
+  // end-trim and the R1d surplus-distribution below walk in, so "first ones in section order"
+  // (the frozen remainder-placement rule) means exactly this array's order.
+  const orderedGraphBlocks: GraphBlock[] = snapshot.graphs.points.length === 0
+    ? [...hostBlocks, ...trainingBlocks]
+    : [...trainingBlocks, ...hostBlocks];
+  const growableBlockIndices = orderedGraphBlocks
+    .map((block, index) => (block.growable ? index : -1))
+    .filter((index) => index >= 0);
+  // Every block at its floor (rows=1) is EXACTLY today's flat line list, one line per block —
+  // the count the fixed-chrome budget below compares against, and the byte-identical output
+  // acceptance row #4 requires when there is no surplus to distribute.
+  const baselineBlockCount = orderedGraphBlocks.length;
   const compactMetrics = snapshot.metrics.length > 0
-    ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, effectiveWidth - 4)]
+    ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, innerWidth)]
     : [];
-  const compactAgentLines = snapshot.agentLines.slice(-1);
+  const compactAgentLines = snapshot.agentLines.slice(-1).map((line) => boundedSurfaceLine(line, innerWidth));
+  const sourceLineText = boundedSurfaceLine(snapshot.source, innerWidth);
+
+  const CONTROL_ACTIONS = OPERATOR_CONTROL_ACTIONS;
+  const controlEnabled = (action: (typeof CONTROL_ACTIONS)[number]): boolean =>
+    isOperatorControlEnabled(action, snapshot.status, input.telemetry);
+  const renderControl = (action: (typeof CONTROL_ACTIONS)[number]): React.ReactElement => {
+    const enabled = controlEnabled(action);
+    const focused = focusedControlIndex === CONTROL_ACTIONS.indexOf(action);
+    return React.createElement(
+      Box,
+      {
+        key: `control-${action}`,
+        flexShrink: 0,
+        paddingRight: 1,
+        onClick: enabled ? () => onControl?.(action, snapshot.graphs.runId) : undefined,
+      },
+      React.createElement(
+        Text,
+        { color: focused ? "cyan" : enabled ? "green" : "gray", bold: focused },
+        `${focused ? FOCUS_MARKER_ON : FOCUS_MARKER_OFF}${operatorControlLabel(action)}`,
+      ),
+    );
+  };
+  const controlRows = layoutControlRows(CONTROL_ACTIONS, innerWidth);
+  // Single row -> render flat, exactly as before (preserves the existing flat "controls" shape
+  // at every width wide enough to hold all four labels). Multiple rows only when the pane is too
+  // narrow for one row -> each row is its own full-width labels, never a clipped one.
+  const controlsElement = controlRows.length <= 1
+    ? React.createElement(
+        Box,
+        { key: "controls", flexDirection: "row", flexShrink: 0 },
+        ...CONTROL_ACTIONS.map(renderControl),
+      )
+    : React.createElement(
+        Box,
+        { key: "controls", flexDirection: "column", flexShrink: 0 },
+        ...controlRows.map((row, rowIndex) =>
+          React.createElement(
+            Box,
+            { key: `controls-row-${rowIndex}`, flexDirection: "row", flexShrink: 0 },
+            ...row.map((action) => renderControl(action as (typeof CONTROL_ACTIONS)[number])),
+          ),
+        ),
+      );
+
+  // Height budget (cure 2026-07-26): the pane used to emit every graph row and let the layout
+  // engine clip against the pane height — under height pressure that engine collapses ARBITRARY
+  // MIDDLE rows (the RESOURCE EFFICIENCY heading and the host VRAM curve were both observed
+  // vanishing from the middle while rows above and below rendered). Arbitrary loss is the
+  // defect; deterministic loss is not. So: count the fixed chrome rows EXACTLY as the body below
+  // constructs them — 2 border rows + status + control rows + metrics + source + stream title +
+  // agent lines (each a single non-wrapping Text row, every string already bounded to
+  // innerWidth) — and trim the graph stream from the END to the remaining budget, stating the
+  // drop on the last row. Trimming from the end keeps the precedence the section ordering
+  // already encodes: leading training headings and curves survive, the host tail yields. When
+  // the budget does not bind (graphLines fits), the stream passes through UNTOUCHED — zero
+  // behaviour change for any mount with room, which is exactly what a chrome-row miscount would
+  // break (the first attempt at this budget overcounted and truncated roomy mounts).
+  const disabledReasonLines = disabledActionReason
+    ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
+    : [];
+  const fixedChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length + compactMetrics.length + 1 + 1 + compactAgentLines.length;
+  const graphRowBudget = effectiveHeight - fixedChromeRows;
+  // R1d: the pane used to stop here once end-trim didn't bind — a fitting or roomy mount passed
+  // the flat one-row-per-chart stream through UNTOUCHED, which is exactly the under-subscribed
+  // half this spec fills. The over-subscribed branch (graphRowBudget < baseline) is UNCHANGED:
+  // trim from the end, state the drop, same as before. Only when there is genuine surplus
+  // (graphRowBudget > baseline) does distribution run, and only across growable blocks; zero
+  // growable blocks or zero/negative surplus falls through to the same untouched pass-through
+  // the exact-fit case always had (skip-path S1/S6).
+  const rawGraphLines: string[] = baselineBlockCount > graphRowBudget
+    ? (() => {
+        const baseline = orderedGraphBlocks.flatMap((block) => block.render(1));
+        return graphRowBudget >= 1
+          ? [
+              ...baseline.slice(0, graphRowBudget - 1),
+              `… ${baseline.length - (graphRowBudget - 1)} more rows`,
+            ]
+          : [];
+      })()
+    : (() => {
+        const surplus = graphRowBudget - baselineBlockCount;
+        if (surplus <= 0 || growableBlockIndices.length === 0) {
+          return orderedGraphBlocks.flatMap((block) => block.render(1));
+        }
+        // Even growth across bound charts; the remainder goes to the FIRST ones in section
+        // order (conjunction C2: deterministic across two renders of the same size).
+        const perChart = Math.floor(surplus / growableBlockIndices.length);
+        const remainder = surplus % growableBlockIndices.length;
+        const rowsForBlock = new Map<number, number>();
+        growableBlockIndices.forEach((blockIndex, orderIndex) => {
+          rowsForBlock.set(blockIndex, 1 + perChart + (orderIndex < remainder ? 1 : 0));
+        });
+        return orderedGraphBlocks.flatMap((block, index) => block.render(rowsForBlock.get(index) ?? 1));
+      })();
+  const visibleGraphLines = rawGraphLines.map((line) => boundedSurfaceLine(line, innerWidth));
+
   const body = React.createElement(
     Box,
     {
@@ -514,9 +965,11 @@ export function OperatorSurfacePane({
       paddingX: 1,
     },
     React.createElement(Text, { key: "status", color: statusColor, bold: true }, snapshot.status),
+    controlsElement,
+    ...disabledReasonLines.map((line) => React.createElement(Text, { key: `disabled-reason-${line}`, color: "yellow" }, line)),
     ...compactMetrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
-    React.createElement(Text, { key: "source", dimColor: true }, snapshot.source),
-    ...graphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
+    React.createElement(Text, { key: "source", dimColor: true }, sourceLineText),
+    ...visibleGraphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
     React.createElement(Text, { key: "stream-title", color: "magenta", bold: true }, "ACTIVITY/EVENT FEED"),
     ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
   );

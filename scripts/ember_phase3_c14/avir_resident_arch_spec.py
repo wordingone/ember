@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """avir_resident_arch_spec.py — Clean-room [REDACTED]-cli resident harness ARCHITECTURE spec
 and parity-gap manifest.
 
@@ -286,7 +289,12 @@ AVIR_SURFACE_MANIFEST: List[AvirSurface] = [
         adapter_surface="ember_c14_real_adapter.py:EmberModelShell (PORTED, CPU only)",
         next_command=(
             "Add vram_budget_mb param to EmberModelShell.__init__; "
-            "assert torch.cuda.memory_allocated() + vram_budget_mb < VRAM_CAP before load."
+            "assert scripts.vram_ground_truth.nvidia_smi_free_mib(0) >= vram_budget_mb "
+            "before load. (gh issue #244: memory_allocated()/mem_get_info() are "
+            "within-process torch self-reports that WDDM inflates by the full "
+            "cross-process oversubscribable pool -- ~17 GiB measured invisible on a "
+            "resident-server box; a cap assert built on either is fail-open by "
+            "construction. Ground truth is an nvidia-smi cross-process query.)"
         ),
     ),
     AvirSurface(

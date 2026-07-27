@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
-import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane, PLOT_PREFIX_WIDTH } from "./operator-surface-pane.ts";
+import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane, PLOT_PREFIX_WIDTH, layoutControlRows } from "./operator-surface-pane.ts";
 import type { TelemetryState } from "../services/telemetry-watch.ts";
 import type { ActivityFeedLine } from "./activity-feed-pane.ts";
 
@@ -23,7 +23,7 @@ describe("OperatorSurfacePane", () => {
   test("derives scalar status metrics and binds checkpoint to the active run", () => {
     const snapshot = buildOperatorSurfaceSnapshot({
       telemetry: telemetry({
-        recentEvents: [train("run-1", 12, "2026-07-17T17:30:00.000Z", 1.25, { step_ms: 500, total_steps: 100 })],
+        recentEvents: [train("run-1", 12, "2026-07-17T17:30:00.000Z", 1.25, { step_ms: 500, total_steps: 100, tokens_per_second: 240 })],
         activeRun: { runId: "run-1", step: 12, totalSteps: 100, loss: 1.25, stepMs: 500, lastTs: "2026-07-17T17:30:00.000Z" },
         lastGovernor: { runId: "run-1", vramUsedGib: 7.5, vramTotalGib: 24, fractionApplied: 0.5 },
         lastCheckpoint: { runId: "run-1", step: 10, checkpointManifestSha256: "a".repeat(64), lastTs: "2026-07-17T17:29:00.000Z" },
@@ -33,7 +33,7 @@ describe("OperatorSurfacePane", () => {
       nowMs: Date.parse("2026-07-17T17:30:01.000Z"),
     });
     expect(snapshot.status).toBe("RUNNING");
-    expect(snapshot.metrics).toEqual(["loss 1.25", "step 12/100", "throughput 120.0 step/min", "VRAM 7.5/24.0 GiB", `checkpoint step 10 ${"a".repeat(12)}${ellipsis}`]);
+    expect(snapshot.metrics).toEqual(["loss 1.25", "step 12/100", "tokens/s 240.0", "VRAM 7.5/24.0 GiB", `checkpoint step 10 ${"a".repeat(12)}${ellipsis}`]);
     expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
     expect(snapshot.agentLines[0]).toContain("[receipt] checkpoint receipt landed [receipts/run/checkpoint.json]");
   });
@@ -41,9 +41,9 @@ describe("OperatorSurfacePane", () => {
   test("renders exact plotted glyph rows with a shared step/time axis and checkpoint marker", () => {
     const graphTelemetry = telemetry({
       recentEvents: [
-        train("run-a", 2, "2026-07-17T17:30:01.000Z", 1.5, { step_ms: 500, free_gib: 10, total_gib: 24, gpu_utilization_pct: 60 }),
-        train("run-a", 1, "2026-07-17T17:30:02.000Z", 2.5, { step_ms: 1000, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 }),
-        train("run-a", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 250, free_gib: 8, total_gib: 24, gpu_utilization_pct: 70 }),
+        train("run-a", 2, "2026-07-17T17:30:01.000Z", 1.5, { step_ms: 500, tokens_per_second: 200, free_gib: 10, total_gib: 24, gpu_utilization_pct: 60 }),
+        train("run-a", 1, "2026-07-17T17:30:02.000Z", 2.5, { step_ms: 1000, tokens_per_second: 100, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 }),
+        train("run-a", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 250, tokens_per_second: 400, free_gib: 8, total_gib: 24, gpu_utilization_pct: 70 }),
         { ts: "2026-07-17T17:30:03.100Z", kind: "checkpoint", source: "journal", payload: { run_id: "run-a", step: 3, checkpoint_manifest_sha256: "a".repeat(64) } },
         { ts: "2026-07-17T17:30:03.200Z", kind: "checkpoint", source: "journal", payload: { run_id: "foreign", step: 77, checkpoint_manifest_sha256: "b".repeat(64) } },
         { ts: "2026-07-17T17:30:03.300Z", kind: "model_growth", source: "journal", payload: { run_id: "run-a", step: 1, value: 1 } },
@@ -64,7 +64,7 @@ describe("OperatorSurfacePane", () => {
     expect(graphs.loss).not.toContain("loss 2.50 1.50 1.00");
     expect(graphs.resource.find((line) => line.startsWith("GPU utilization % plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▄█");
     expect(graphs.resource.find((line) => line.startsWith("VRAM GiB plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▄▁█");
-    expect(graphs.resource.find((line) => line.startsWith("throughput plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▃█");
+    expect(graphs.resource.find((line) => line.startsWith("tokens/s plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▃█");
     expect(graphs.modelGrowth.find((line) => line.startsWith("model growth plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▄█");
     expect(graphs.capability.find((line) => line.startsWith("capability score plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe("▁▄█");
     expect(graphs.checkpoints).toEqual([{ step: 3, label: "checkpoint" }]);
@@ -78,7 +78,10 @@ describe("OperatorSurfacePane", () => {
     expect(graphs.loss.find((line) => line.startsWith("loss plot "))!.slice(PLOT_PREFIX_WIDTH)).toBe(String.fromCodePoint(0x2588)+String.fromCodePoint(0x2581));
     expect(graphs.resource).toContain("GPU UTILIZATION: SOURCE UNBOUND");
     expect(graphs.resource).toContain("VRAM: SOURCE UNBOUND");
-    expect(graphs.resource).toContain("THROUGHPUT/SPEED: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("TOKENS/S: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("LEARNING RATE: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("GPU WATTS: SOURCE UNBOUND");
+    expect(graphs.resource).toContain("ENERGY: SOURCE UNBOUND");
   });
 
   test("filters mixed runs, malformed points, and foreign checkpoint events", () => {
@@ -166,14 +169,14 @@ describe("OperatorSurfacePane", () => {
     const snapshot = buildOperatorSurfaceSnapshot({
       telemetry: telemetry({ recentEvents: [
         train("run-a", 100, "2026-07-17T17:30:00.000Z", 9, { step_ms: 1000 }),
-        train("run-a", 10, "2026-07-17T17:30:59.000Z", 1, { step_ms: 500 }),
+        train("run-a", 10, "2026-07-17T17:30:59.000Z", 1, { step_ms: 500, tokens_per_second: 222 }),
       ] }),
       activityLines: [],
       nowMs: Date.parse("2026-07-17T17:31:00.000Z"),
     });
     expect(snapshot.metrics).toContain("loss 1.00");
     expect(snapshot.metrics).toContain("step 10");
-    expect(snapshot.metrics).toContain("throughput 120.0 step/min");
+    expect(snapshot.metrics).toContain("tokens/s 222.0");
     expect(snapshot.metrics).not.toContain("loss 9.00");
     expect(snapshot.metrics).not.toContain("step 100");
   });
@@ -194,6 +197,32 @@ describe("OperatorSurfacePane", () => {
     const snapshot = buildOperatorSurfaceSnapshot({ telemetry: telemetry(), activityLines: [], sourceIdentity: { publicCommit: "f".repeat(40), binarySha256: "b".repeat(64) } });
     expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
   });
+  // #924: a producer that independently verified the claim (sourceBindingVerified: true)
+  // renders the bound commit + binary digest instead of the fail-closed placeholder.
+  test("verified source binding renders the bound commit and binary digest", () => {
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry(),
+      activityLines: [],
+      sourceIdentity: { publicCommit: "f".repeat(40), binarySha256: "b".repeat(64), sourceBindingVerified: true },
+    });
+    expect(snapshot.source).toBe(`source ${"f".repeat(12)}${ellipsis} binary ${"b".repeat(12)}${ellipsis}`);
+  });
+  test("sourceBindingVerified true with a malformed commit still stays unverified (fail-closed)", () => {
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry(),
+      activityLines: [],
+      sourceIdentity: { publicCommit: "not-a-sha", binarySha256: "b".repeat(64), sourceBindingVerified: true },
+    });
+    expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
+  });
+  test("sourceBindingVerified true with a missing binary hash still stays unverified (fail-closed)", () => {
+    const snapshot = buildOperatorSurfaceSnapshot({
+      telemetry: telemetry(),
+      activityLines: [],
+      sourceIdentity: { publicCommit: "f".repeat(40), sourceBindingVerified: true },
+    });
+    expect(snapshot.source).toBe("SOURCE UNVERIFIED/UNBOUND");
+  });
 
   test("mounted pane renders all four bounded families and stays inside narrow terminal bounds", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: [train("run-a", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000, free_gib: 10, total_gib: 24 }), train("run-a", 2, "2026-07-17T17:30:02.000Z", 1, { step_ms: 500, free_gib: 9, total_gib: 24 }), { ts: "2026-07-17T17:30:02.100Z", kind: "checkpoint", source: "journal", payload: { run_id: "run-a", step: 2, checkpoint_manifest_sha256: "a".repeat(64) } }], activeRun: { runId: "run-a", step: 2, loss: 1, stepMs: 500, lastTs: "2026-07-17T17:30:02.000Z" } }), activityLines: [], width: 60, height: 20, terminalColumns: 60, terminalRows: 20, nowMs: Date.parse("2026-07-17T17:30:03.000Z") });
@@ -203,8 +232,8 @@ describe("OperatorSurfacePane", () => {
     expect(body.props.height).toBeLessThanOrEqual(20);
     expect(rows.some((row: string) => row.includes("TRAINING/LOSS"))).toBe(true);
     expect(rows.some((row: string) => row.includes("RESOURCE EFFICIENCY"))).toBe(true);
-    expect(rows.some((row: string) => row.includes("MODEL GROWTH"))).toBe(true);
-    expect(rows.some((row: string) => row.includes("CAPABILITY SCORES"))).toBe(true);
+    expect(rows.some((row: string) => row.includes("MODEL GROWTH"))).toBe(false);
+    expect(rows.some((row: string) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row: string) => row.includes("checkpoint ·▲"))).toBe(true);
     expect(rows).not.toContain("AGENT STREAM");
   });
@@ -232,9 +261,11 @@ describe("OperatorSurfacePane", () => {
     const frame = buildFrame(60, 20);
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
-    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY", "MODEL GROWTH", "CAPABILITY SCORES"]) {
+    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
       expect(rows.some((row) => row.includes(heading))).toBe(true);
     }
+    expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
+    expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row) => row.includes("STALE") || row.includes("RUNNING"))).toBe(true);
   });
 
@@ -260,14 +291,19 @@ describe("OperatorSurfacePane", () => {
     const frame = buildFrame(80, 24);
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
-    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY", "MODEL GROWTH", "CAPABILITY SCORES"]) {
+    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
       expect(rows.some((row) => row.includes(heading))).toBe(true);
     }
+    expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
+    expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row) => row.includes("step/time"))).toBe(true);
     expect(rows.some((row) => row.includes("checkpoint"))).toBe(true);
     expect(rows.filter((row) => row.includes("step/time")).length).toBe(1);
     expect(rows.filter((row) => row.includes("checkpoint")).length).toBe(1);
-    expect(rows.some((row) => row.includes(String.fromCodePoint(0x2588)))).toBe(true);
+    // R1d: at 80x24 with room to spare, the loss chart GROWS beyond one row and renders via the
+    // Braille canvas (U+2800-U+28FF) rather than the flat single-row block glyph (U+2588) --
+    // either is a real, non-blank plotted value, which is the substantive claim here.
+    expect(rows.some((row) => /[█⠀-⣿]/.test(row))).toBe(true);
     expect(rows.some((row) => row.includes("loss 2 1"))).toBe(false);
   });
   test("downsamples long histories to plot width while preserving checkpoint alignment", () => {
@@ -316,37 +352,35 @@ describe("OperatorSurfacePane", () => {
   test("parses resource-only events independently, bounds GPU utilization, and rejects future timestamps", () => {
     const graphs = buildOperatorSurfaceGraphs(telemetry({
       recentEvents: [
-        { ts: "2026-07-17T17:30:01.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 1, step_ms: 1000, free_gib: 10, total_gib: 24, gpu_utilization_pct: 120 } },
-        { ts: "2026-07-17T17:30:02.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 2, step_ms: 500, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 } },
+        { ts: "2026-07-17T17:30:01.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 1, step_ms: 1000, tokens_per_second: 100, free_gib: 10, total_gib: 24, gpu_utilization_pct: 120 } },
+        { ts: "2026-07-17T17:30:02.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 2, step_ms: 500, tokens_per_second: 200, free_gib: 9, total_gib: 24, gpu_utilization_pct: 50 } },
         { ts: "2099-01-01T00:00:00.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-r", step: 3, step_ms: 250, free_gib: 8, total_gib: 24, gpu_utilization_pct: 50 } },
       ],
     }));
     expect(graphs.points.map((point) => point.step)).toEqual([1, 2]);
     expect(graphs.loss).toContain("LOSS: INSUFFICIENT REAL HISTORY");
-    expect(graphs.resource.some((line: string) => line.startsWith("throughput plot "))).toBe(true);
+    expect(graphs.resource.some((line: string) => line.startsWith("tokens/s plot "))).toBe(true);
     expect(graphs.resource).toContain("GPU UTILIZATION %: INSUFFICIENT REAL HISTORY");
   });
 
   test("uses one union step grid with gaps instead of left-packing families", () => {
     const events = [
-      train("run-grid", 1, "2026-07-17T17:30:01.000Z", 3, { step_ms: 1000 }),
-      train("run-grid", 2, "2026-07-17T17:30:02.000Z", 2, { step_ms: 900 }),
-      train("run-grid", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 800 }),
-      { ts: "2026-07-17T17:30:02.100Z", kind: "model_growth", source: "journal", payload: { run_id: "run-grid", step: 2, value: 20 } },
-      { ts: "2026-07-17T17:30:03.100Z", kind: "model_growth", source: "journal", payload: { run_id: "run-grid", step: 3, value: 30 } },
-      { ts: "2026-07-17T17:30:04.100Z", kind: "model_growth", source: "journal", payload: { run_id: "run-grid", step: 4, value: 40 } },
-      { ts: "2026-07-17T17:30:02.200Z", kind: "capability_score", source: "journal", payload: { run_id: "run-grid", step: 2, score: 0.2 } },
-      { ts: "2026-07-17T17:30:03.200Z", kind: "capability_score", source: "journal", payload: { run_id: "run-grid", step: 3, score: 0.3 } },
-      { ts: "2026-07-17T17:30:04.200Z", kind: "capability_score", source: "journal", payload: { run_id: "run-grid", step: 4, score: 0.4 } },
+      train("run-grid", 1, "2026-07-17T17:30:01.000Z", 3, { step_ms: 1000, tokens_per_second: 100 }),
+      train("run-grid", 2, "2026-07-17T17:30:02.000Z", 2, { step_ms: 900, learning_rate: 0.001 }),
+      train("run-grid", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 800, tokens_per_second: 300, learning_rate: 0.0005 }),
     ];
-    const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
+    // Pinned to the exact-fit height for this fixture (R1d acceptance #4): zero surplus, so
+    // every metric line stays at its pre-R1d single-row rendering -- this test's per-point gap
+    // alignment is a claim about THAT rendering, not about growth, which a taller mount would
+    // now correctly trigger (covered separately by the R1d growth tests).
+    const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 20, terminalColumns: 80, terminalRows: 20, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
     const body = (element as any).props.children;
     const text = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string") as string[];
-    expect(text.find((line) => line.startsWith("step/time"))).toContain("1 2 3 4");
-    const modelLine = text.find((line) => line.startsWith("model growth"))!;
-    const capabilityLine = text.find((line) => line.startsWith("capability score"))!;
-    expect(modelLine.slice(20, 24).startsWith(String.fromCodePoint(0x00b7))).toBe(true);
-    expect(capabilityLine.slice(20, 24).startsWith(String.fromCodePoint(0x00b7))).toBe(true);
+    expect(text.find((line) => line.startsWith("step/time"))).toContain("1 2 3");
+    const tokenLine = text.find((line) => line.startsWith("tokens/s"))!;
+    const learningRateLine = text.find((line) => line.startsWith("learning rate"))!;
+    expect(tokenLine.slice(20, 23)).toContain(String.fromCodePoint(0x00b7));
+    expect(learningRateLine.slice(20, 23).startsWith(String.fromCodePoint(0x00b7))).toBe(true);
   });
 
   test("retains final point and latest checkpoint markers when markers exceed capacity", () => {
@@ -359,9 +393,250 @@ describe("OperatorSurfacePane", () => {
     expect(marker.slice(PLOT_PREFIX_WIDTH).length).toBeLessThanOrEqual(4);
     expect(marker.slice(PLOT_PREFIX_WIDTH)).toContain(String.fromCodePoint(0x25b2));
   });
+  test("uses direct tokens/s and measured LR/energy/watts, never step_ms-derived throughput", () => {
+    const graphs = buildOperatorSurfaceGraphs(telemetry({ recentEvents: [
+      train("run-measured", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000, tokens_per_second: 100, learning_rate: 0.001, gpu_watts: 200, board_energy_joules_total: 200 }),
+      train("run-measured", 2, "2026-07-17T17:30:02.000Z", 1, { step_ms: 500, tokens_per_second: 250, learning_rate: 0.0005, gpu_watts: 220, board_energy_joules_total: 420 }),
+    ] }), 80, Date.parse("2026-07-17T17:30:03.000Z"));
+    expect(graphs.points.map((point) => point.tokensPerSecond)).toEqual([100, 250]);
+    expect(graphs.points.map((point) => point.learningRate)).toEqual([0.001, 0.0005]);
+    expect(graphs.points.map((point) => point.gpuWatts)).toEqual([200, 220]);
+    expect(graphs.points.map((point) => point.boardEnergyJoulesTotal)).toEqual([200, 420]);
+    expect(graphs.points.map((point) => (point as any).throughput)).toEqual([undefined, undefined]);
+  });
+
+  test("rejects decreasing cumulative energy instead of plotting a fabricated reset", () => {
+    const graphs = buildOperatorSurfaceGraphs(telemetry({ recentEvents: [
+      train("run-energy", 1, "2026-07-17T17:30:01.000Z", 2, { board_energy_joules_total: 200 }),
+      train("run-energy", 2, "2026-07-17T17:30:02.000Z", 1.5, { board_energy_joules_total: 150 }),
+      train("run-energy", 3, "2026-07-17T17:30:03.000Z", 1, { board_energy_joules_total: 320 }),
+    ] }), 80, Date.parse("2026-07-17T17:30:04.000Z"));
+    expect(graphs.points.map((point) => point.boardEnergyJoulesTotal)).toEqual([200, undefined, 320]);
+    expect(graphs.resource.find((line) => line.startsWith("board energy joules plot "))!.slice("board energy joules plot ".length)).toHaveLength(2);
+  });
+
+  test("renders lifecycle controls and invokes the enabled action exactly once", () => {
+    const calls: Array<{ action: string; runId?: string }> = [];
+    const element = OperatorSurfacePane({
+
+      telemetry: telemetry({ recentEvents: [train("run-control", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 100 })] }),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: Date.parse("2026-07-17T17:30:02.000Z"),
+      onControl: (action, runId) => calls.push({ action, runId }),
+    });
+    const body = (element as any).props.children;
+    const controlRow = (body.props.children as any[]).find((child) => child?.key === "controls");
+    const controls = controlRow.props.children as any[];
+    // R2b: labels now carry the focus marker slot (unfocused = two leading spaces) and the
+    // accelerator-decorated action name -- see operatorControlLabel.
+    expect(controls.map((control) => control.props.children.props.children)).toEqual([
+      "  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]",
+    ]);
+    const pause = controls.find((control) => control.props.children.props.children === "  [(P)AUSE]");
+    expect(typeof pause.props.onClick).toBe("function");
+    pause.props.onClick();
+    expect(calls).toEqual([{ action: "PAUSE", runId: "run-control" }]);
+  });
+  test("RED->GREEN: a metric with zero samples on an actively RUNNING run reads AWAITING FIRST SAMPLE, not SOURCE UNBOUND", () => {
+    // The run IS live (a train_step arrived just now, well inside ACTIVE_RUN_TTL_MS) and IS
+    // emitting some fields (loss, tokens_per_second) -- gpu_watts simply hasn't shown up in any
+    // event yet. That is a temporal "no samples so far, may still arrive" state, structurally
+    // different from a dead/idle channel where the metric can never arrive. Before this test the
+    // two states rendered identically as "SOURCE UNBOUND".
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const graphs = buildOperatorSurfaceGraphs(telemetry({
+      recentEvents: [
+        train("run-live", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-live", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ],
+    }), 80, now);
+    expect(graphs.resource).toContain("GPU WATTS: AWAITING FIRST SAMPLE");
+    expect(graphs.resource).not.toContain("GPU WATTS: SOURCE UNBOUND");
+  });
+
+  test("RED->GREEN: a metric with zero samples on a dead/idle channel still reads SOURCE UNBOUND", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const graphs = buildOperatorSurfaceGraphs(telemetry(), 80, now);
+    expect(graphs.modelGrowth).toEqual(["MODEL GROWTH: SOURCE UNBOUND"]);
+    const staleRun = buildOperatorSurfaceGraphs(telemetry({
+      recentEvents: [train("run-cold", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 50 })],
+    }), 80, now);
+    expect(staleRun.resource).toContain("GPU WATTS: SOURCE UNBOUND");
+    expect(staleRun.resource).not.toContain("GPU WATTS: AWAITING FIRST SAMPLE");
+  });
+
+  test("RED->GREEN: the rendered compact pane distinguishes AWAITING FIRST SAMPLE from SOURCE UNBOUND at the same call site the operator sees", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const runningElement = OperatorSurfacePane({
+      telemetry: telemetry({ recentEvents: [
+        train("run-compact", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-compact", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ] }),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: now,
+    });
+    const runningBody = (runningElement as any).props.children;
+    const runningRows = (runningBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
+    expect(runningRows.some((row: string) => row.startsWith("GPU watts") && row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
+
+    const idleElement = OperatorSurfacePane({
+      telemetry: telemetry(),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: now,
+    });
+    const idleBody = (idleElement as any).props.children;
+    const idleRows = (idleBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
+    expect(idleRows.some((row: string) => row.startsWith("GPU watts") && row.includes("SOURCE UNBOUND"))).toBe(true);
+  });
+
+  test("legibility width sweep: AWAITING FIRST SAMPLE / SOURCE UNBOUND / a plotted curve are all distinguishable at 40, 60, and 80 columns", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    for (const width of [40, 60, 80]) {
+      const element = OperatorSurfacePane({
+        telemetry: telemetry({ recentEvents: [
+          train("run-sweep", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+          train("run-sweep", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+        ] }),
+        activityLines: [], width, height: 24, terminalColumns: width, terminalRows: 24,
+        nowMs: now,
+      });
+      const body = (element as any).props.children;
+      const rows = (body.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string") as string[];
+      // A live curve (tokens/s has 2 real samples): must render plotted glyphs, not a fixed word.
+      const tokensRow = rows.find((row) => row.startsWith("tokens/s"));
+      expect(tokensRow).toBeDefined();
+      expect(tokensRow).not.toContain("SOURCE UNBOUND");
+      expect(tokensRow).not.toContain("AWAITING FIRST SAMPLE");
+      // A metric this run hasn't produced yet, while running: AWAITING, never UNBOUND.
+      const gpuWattsRow = rows.find((row) => row.startsWith("GPU watts"));
+      // D2 rebase interaction (legibility scope addition, 2026-07-26): "GPU watts" padded to 20
+      // cols + "AWAITING FIRST SAMPLE" (21 chars) is 41 characters -- it never fit inside the
+      // pane's true content budget (innerWidth = effectiveWidth - 4, border + padding both
+      // accounted for) at 40 columns (innerWidth 36); it only appeared to fit before because
+      // this test predates the legibility pass's border+padding accounting fix and read the
+      // pre-fix, over-generous bound. At 40 columns the correct behavior is a visible "…"
+      // marker, never a silent full-text assumption; 60/80 columns have room for the phrase
+      // whole and keep the original assertion.
+      expect(gpuWattsRow).not.toContain("SOURCE UNBOUND");
+      if (width === 40) {
+        expect(gpuWattsRow).toContain("AWAITING FIRST");
+        expect(gpuWattsRow).toContain("…");
+        expect(gpuWattsRow).not.toContain("AWAITING FIRST SAMPLE");
+      } else {
+        expect(gpuWattsRow).toContain("AWAITING FIRST SAMPLE");
+      }
+    }
+  });
+
+  test("legibility width sweep: the real Ink viewport renders both labels without a truncated/blank row at 40 columns", () => {
+    const chunks: string[] = [];
+    const element = React.createElement(OperatorSurfacePane, {
+      telemetry: telemetry({ recentEvents: [
+        train("run-sweep-ink", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-sweep-ink", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ] }),
+      activityLines: [], width: 40, height: 24, terminalColumns: 40, terminalRows: 24,
+      nowMs: Date.parse("2026-07-26T00:00:05.000Z"),
+    });
+    const handle = mountInk(element, { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns: 40, rows: 24 } });
+    handle.unmount();
+    const frame = buildFrame(40, 24);
+    parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
+    const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
+    expect(rows.every((row) => row.length === 40)).toBe(true);
+    expect(rows.some((row) => row.includes("AWAITING"))).toBe(true);
+    // R1d: room at 24 rows may grow the chart into Braille output (U+2800-U+28FF) instead of the
+    // flat single-row block/eighth glyphs -- any of the three is a real plotted value.
+    expect(rows.some((row) => /[█▁⠀-⣿]/.test(row))).toBe(true);
+  });
+
   test("renders a truthful activity pane title", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], width: 48 });
     expect((element as any).props["data-operator-surface"]).toBe("right-pane");
     expect((element as any).props.children.props.borderTitle).toBe("LIVE RUN / ACTIVITY/EVENT FEED");
+  });
+
+  // -------------------------------------------------------------------------
+  // Legibility bar (2026-07-26): "no control label is truncated — controls are the last thing
+  // to lose characters, never the first" + "the layout reflows... two columns cut in half is
+  // never the answer." RED on pre-fix master: the controls Box was a flat flexDirection:"row"
+  // with no wrap (flexWrap is a dead prop in layout-engine.ts) — at a narrow pane the outer
+  // overflow:"hidden" box raw-clipped the row mid-label: "[START] [PAUSE] [RESUME] [RES".
+  // -------------------------------------------------------------------------
+  describe("layoutControlRows — controls never truncate, they wrap instead", () => {
+    test("packs all four controls on one row when the width comfortably fits them", () => {
+      expect(layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 80)).toEqual([
+        ["START", "PAUSE", "RESUME", "RESTART"],
+      ]);
+    });
+
+    test("wraps to multiple rows, never splitting a label, at a narrow width", () => {
+      const rows = layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 20);
+      const flatLabels = rows.flat();
+      expect(flatLabels).toEqual(["START", "PAUSE", "RESUME", "RESTART"]);
+      for (const row of rows) {
+        const rowWidth = row.reduce((sum, action) => sum + `[${action}]`.length + 1, 0);
+        expect(rowWidth).toBeLessThanOrEqual(20 + `[${row[row.length - 1]}]`.length + 1); // never demands the row shrink a label
+      }
+    });
+
+    test("even a pathologically narrow width gives every label its own row rather than cutting it", () => {
+      const rows = layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 1);
+      expect(rows.flat()).toEqual(["START", "PAUSE", "RESUME", "RESTART"]);
+      expect(rows.every((row) => row.length === 1)).toBe(true);
+    });
+  });
+
+  test("at a narrow pane width, every control label renders IN FULL across wrapped rows instead of being clipped", () => {
+    const element = OperatorSurfacePane({
+      telemetry: telemetry({ recentEvents: [train("run-narrow", 1, "2026-07-17T17:30:01.000Z", 2)] }),
+      activityLines: [], width: 24, height: 20, terminalColumns: 24, terminalRows: 20,
+      nowMs: Date.parse("2026-07-17T17:30:02.000Z"),
+    });
+    const body = (element as any).props.children;
+    const controlsElement = (body.props.children as any[]).find((child) => child?.key === "controls");
+    // Recursively collect every rendered control label string ("[START]" etc.) regardless of
+    // whether they sit flat or nested under wrapped row Boxes.
+    const collectLabels = (node: any): string[] => {
+      if (!node || typeof node !== "object") return [];
+      const kids = node.props?.children;
+      if (typeof kids === "string") return [kids];
+      if (Array.isArray(kids)) return kids.flatMap(collectLabels);
+      if (kids && typeof kids === "object") return collectLabels(kids);
+      return [];
+    };
+    const labels = collectLabels(controlsElement);
+    expect(labels).toEqual(["  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]"]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Legibility bar: "no metric value is truncated... shortens by an explicit, defined rule with
+  // a visible marker — never silent character-level clipping." RED on pre-fix master: graph/
+  // metric/source/agent lines were handed to the outer overflow:"hidden" box unbounded, which
+  // hard-clipped anything too long with NO marker ("SOURCE UN" instead of "SOURCE UNBOUND").
+  // -------------------------------------------------------------------------
+  test("no rendered content line exceeds the pane's inner width, and any shortened line carries a visible marker", () => {
+    const element = OperatorSurfacePane({
+      telemetry: telemetry({
+        channelStatus: "OFFLINE",
+        recentEvents: [train("run-x", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000 })],
+      }),
+      activityLines: [{ ts: "2026-07-17T17:30:00.000Z", source: "watchdog", text: "871 watchdog events collapsed into one summary line for the report", path: "Z:\\repo\\ember\\tools\\ember-cli\\state\\process-watch.json" }],
+      width: 36, height: 20, terminalColumns: 36, terminalRows: 20,
+      nowMs: Date.parse("2026-07-17T17:30:05.000Z"),
+    });
+    const body = (element as any).props.children;
+    const innerWidth = 36 - 2;
+    const rows = (body.props.children as any[])
+      .map((child) => child?.props?.children)
+      .filter((value) => typeof value === "string");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.length).toBeLessThanOrEqual(innerWidth);
+    }
+    // The exact silent-clip fragment this bug produced in production ("SOURCE UN" cut mid-word,
+    // e.g. a metric-family row) must never appear again: any row containing "SOURCE UN" either
+    // completes it to "SOURCE UNBOUND"/"SOURCE UNVERIFIED/UNBOUND" or carries the ellipsis marker.
+    expect(rows.some((row: string) => row.includes("SOURCE UN") && !row.includes("SOURCE UNBOUND") && !row.includes("SOURCE UNVERIFIED") && !row.includes(ellipsis))).toBe(false);
   });
 });

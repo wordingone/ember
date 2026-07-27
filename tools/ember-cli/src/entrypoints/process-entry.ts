@@ -22,10 +22,11 @@ import type { ModelSeatDecision, SelectedModelContract } from "./model-seat.ts";
 import {
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
+  OwnedSeatStaleBindingError,
   verifyOwnedEndpointIdentity,
 } from "./owned-seat-loader.ts";
 import { ensureOwnedServer } from "./owned-server-supervisor.ts";
-import { handshakeConfiguredEmberd } from "../services/emberd-rpc.ts";
+import { handshakeConfiguredEmberLab } from "../services/ember-lab-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
@@ -35,7 +36,7 @@ import type { Tool } from "../core/tool-interface.ts";
 import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -91,6 +92,7 @@ const FAST_PATH_FLAGS = new Set<string>([
   "--computer-use-mcp",
   "--daemon-worker",
   "--mcp",
+  "--watch",
 ]);
 
 const FAST_PATH_SUBCMDS = new Set<string>([
@@ -532,6 +534,8 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  --mcp                          Run as an MCP server over stdio\n` +
       `  --daemon-worker                Run as a background daemon worker\n` +
       `  --reference-seat               Explicitly run a borrowed model as REFERENCE_ONLY\n` +
+      `  --watch [--interval N]         Ambient observatory: refresh the /cockpit monitor board\n` +
+      `                                 every N seconds (default 5) until Ctrl-C\n` +
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
@@ -589,6 +593,47 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       debug:   args.includes("--debug"),
       verbose: args.includes("--verbose"),
     });
+    return true;
+  }
+
+  // gh issue #34 (C-OBS): non-interactive ambient observatory mode. Model-free (it only reads the
+  // goalforge contract tree -- no model call), so it belongs in dispatchFastPath rather than
+  // requiring a resolved model seat. Rebuilt against this real entrypoint after the #405 cleanup
+  // removed the previous unwired composer -- see core/watch-loop.ts's header for the full history.
+  if (first === "--watch") {
+    const { parseWatchArgs, runAmbientWatch, realSleep, registerRealSigint } =
+      await import("../core/watch-loop.ts");
+    const parsed = parseWatchArgs(argv);
+    if (parsed.error) {
+      process.stderr.write(`ember --watch: ${parsed.error}\n`);
+      process.exit(1);
+      return true;
+    }
+    const { GOALFORGE_ROOT, buildEmberWorldState } = await import("../core/ember-world-state.ts");
+    if (!GOALFORGE_ROOT) {
+      process.stderr.write(
+        "ember --watch: world-state source not configured -- set EMBER_GOALFORGE_ROOT to the goalforge contract tree's path.\n",
+      );
+      process.exit(1);
+      return true;
+    }
+    const { renderMonitorPanel, colorEnabledFor } = await import("../core/monitor-render.ts");
+    const { findNewestReceipts, renderReceiptsTail } = await import("../core/watch-render.ts");
+    await runAmbientWatch({
+      goalforgeRoot: GOALFORGE_ROOT,
+      intervalMs: parsed.intervalMs,
+      colorEnabled: colorEnabledFor(process.stdout.isTTY, process.env),
+      width: process.stdout.columns || 80,
+      write: (text: string) => { process.stdout.write(text); },
+      now: () => Date.now(),
+      sleep: realSleep,
+      registerSigint: registerRealSigint,
+      buildState: buildEmberWorldState,
+      findReceipts: findNewestReceipts,
+      renderPanel: renderMonitorPanel,
+      renderTail: renderReceiptsTail,
+    });
+    process.exit(0);
     return true;
   }
 
@@ -670,7 +715,7 @@ export interface MainOptions {
   loadOwnedDevelopmentIdentityFn?: typeof loadOwnedDevelopmentIdentity;
   verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
   ensureOwnedServerFn?: typeof ensureOwnedServer;
-  handshakeEmberdFn?: typeof handshakeConfiguredEmberd;
+  handshakeEmberLabFn?: typeof handshakeConfiguredEmberLab;
   builtinToolsFn?: () => Promise<Tool[]>;
   initFn?:         (opts: {
     serverUrl?: string | null;
@@ -722,7 +767,12 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // is unset. cmd.exe cannot produce an empty-string env var (`set VAR=` deletes it), so
   // this must key off "is GPU_FREE set" alone -- an empty-string EMBER_MODEL_URL is not a
   // reachable signal from a Windows .bat launcher.
-  const gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
+  // mutable: the stale-owned-binding demotion below (acceptance map section 3/4, D1) routes
+  // the seat construction AND the server-spawn decision below (the `serverUrl` branch that
+  // reads this same variable) through the identical GPU-free path -- otherwise the seat would
+  // report OFFLINE while the code below it still tried to spawn a managed server, which is
+  // exactly the half-demoted shape the map's D1 forbids.
+  let gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
   const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
   const seatInput = {
     argv: rawArgv,
@@ -738,7 +788,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   let seatDecision = resolveModelSeat(seatInput);
   if (!seatDecision.allowed) {
     try {
-      const repoRoot = resolveEmberRepoRootOrCwd({}, "[ember-cli]");
+      const repoRoot = resolveEmberSourceRootOrCwd({}, "[ember-cli]");
       const configHome = getEmberConfigHomeDir();
       const admittedIdentity = (opts.loadOwnedIdentityFn ?? loadOwnedModelIdentity)({
         repoRoot,
@@ -758,10 +808,24 @@ export async function main(opts: MainOptions = {}): Promise<void> {
         seatDecision = resolveModelSeat({ ...seatInput, ownedIdentity });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write("[ember] ERROR: " + message + "\n");
-      doExitMain(1);
-      return;
+      // Demotion is gated on the error's TYPE, never on its message text -- a
+      // stale-but-honest owned binding must not take the whole process down (the
+      // owned seat is allowed to be offline until the model is born), but every
+      // other failure here (tamper, malformed manifest, missing files, resolver
+      // failure) is a genuine internal error and must still be fatal. See
+      // state/specs/cockpit-stale-binding-demotion-acceptance-map-2026-07-25.md
+      // section 3 -- a message-substring test is the textual-proxy failure class
+      // recorded in state/failure-classes/semantic-validation-without-bytes-2026-07-25.md.
+      if (error instanceof OwnedSeatStaleBindingError) {
+        process.stderr.write("[ember] NOTICE: " + error.message + "\n");
+        gpuFreeRequested = true;
+        seatDecision = resolveModelSeat({ ...seatInput, gpuFreeRequested: true });
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write("[ember] ERROR: " + message + "\n");
+        doExitMain(1);
+        return;
+      }
     }
   }
   const argv = seatDecision.argv;
@@ -839,10 +903,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
 
   if (seatDecision.ownedIdentity) {
     try {
-      await (opts.handshakeEmberdFn ?? handshakeConfiguredEmberd)();
+      await (opts.handshakeEmberLabFn ?? handshakeConfiguredEmberLab)();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write("[ember] ERROR: emberd handshake failed (" + message + ")\n");
+      process.stderr.write("[ember] ERROR: ember-lab handshake failed (" + message + ")\n");
       doExitMain(1);
       return;
     }
@@ -1009,7 +1073,15 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       }
 
       detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
-      registerManagedModel({ pid: serverHandle.process.pid! });
+      // issue #881: preserve the REAL owned server handle through registration — release()
+      // forwards to the actual ServerHandle.kill() (child-only, SIGTERM to the exact spawned
+      // process; see makeServerHandle above), never a bare pid the unload path has to guess
+      // how to kill. Registering only {pid} discarded this handle and made /model unload a
+      // no-op kill.
+      registerManagedModel({
+        pid: serverHandle.process.pid!,
+        release: () => serverHandle.kill(),
+      });
       void serverHandle; // handle held in closure via cleanup hooks
     }
   }
@@ -1099,7 +1171,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     import("../ink/components.ts"),
     import("../core/frontend-shell.ts"),
   ]);
-  const root          = frontendShell.createRoot();
+  const { emitReadySentinel } = await import("../cli/ready-sentinel.ts");
+  const root = frontendShell.createRoot({
+    onFirstFrameFlushed: () => emitReadySentinel(process.stdout),
+  });
 
   let resolveExit!: () => void;
   const exitPromise = new Promise<void>((r) => { resolveExit = r; });
@@ -1124,7 +1199,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       permissionMode:   "bypass" as const,
       baseSystemPrompt: "",
     },
-    cwd:    resolveEmberRepoRootOrCwd({}, "[ember-cli]"),
+    cwd:    resolveEmberSourceRootOrCwd({}, "[ember-cli]"),
     onExit: (): void => { resolveExit(); },
   };
 
@@ -1147,6 +1222,9 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       // the live context: its resize listener + 250ms/_refreshSize() poller (ink/components.ts)
       // now actually reach the REPL, so a live terminal resize reflows instead of leaving stale-
       // width content for the terminal to hard-wrap.
+      //
+      // Readiness is emitted by the renderer-owned first-frame callback passed
+      // to createRoot above. Unrelated stdout writes cannot satisfy that gate.
       r.render(
         React.createElement(
           InkApp,
