@@ -1,0 +1,4368 @@
+{
+  "issues": [
+    {
+      "affected_milestones": [
+        "EMBER-02",
+        "EMBER-05"
+      ],
+      "body_sha256": "54f35903e94a6b1f2631a925de24c0a363723f11a40a1338a480422b26767c88",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 3,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-19T13:40:56Z",
+      "title": "C14: execute owned-core resident-training gate run (design v1.2)",
+      "url": "https://github.com/wordingone/ember/issues/3"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "94d2a71e572956eb7e8b4d7f911c535e5dc99c7c7b1584058aad26ef0bb94762",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 7,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-18T15:21:48Z",
+      "title": "Two-law receipts: P1 energy envelope + P2 first BOOTSTRAP_PASS",
+      "url": "https://github.com/wordingone/ember/issues/7"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "8952fe8ca6e73a9947af06303f285c9ba5ef6d94d9127fb6a944754c55d2a791",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 8,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-19T03:48:19Z",
+      "title": "C-GROW v3: iso-FLOP growth-operator comparison redesign",
+      "url": "https://github.com/wordingone/ember/issues/8"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "82cf63b27213da109166af603c69a5385920aae32132a4074dd9e93699866227",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 12,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-18T15:21:44Z",
+      "title": "Surface-3: execute pre-registered A0-A7 head-to-head battery to one conjunctive verdict receipt",
+      "url": "https://github.com/wordingone/ember/issues/12"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-01",
+        "EMBER-06"
+      ],
+      "body_sha256": "bc9ab53b94f5a79dff5b3ddb4d16fa340dbff9382f8ebbc8464dc6496420f374",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "affects:EMBER-06",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 14,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-19T05:12:08Z",
+      "title": "Governance clocks: surface-drop attestation, fired-trigger review, amendment acceptance-object, milestone-lattice mirror, PR-review-record predicate",
+      "url": "https://github.com/wordingone/ember/issues/14"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "c94193d05fe07e773548d29168d2100d72575b89ca3159ccd7547716045b7b44",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 20,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-19T13:44:57Z",
+      "title": "C11: duration-milestone receipts ride the C14 battery windows (1h leg first)",
+      "url": "https://github.com/wordingone/ember/issues/20"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02",
+        "EMBER-05",
+        "EMBER-07",
+        "EMBER-08",
+        "EMBER-09"
+      ],
+      "body_sha256": "1d60a039f73bf4ca44f5555622f8618e326e0ac2386c4642398d601fa46107ab",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "affects:EMBER-07",
+        "affects:EMBER-08",
+        "affects:EMBER-09",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 29,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-16T17:36:57Z",
+      "title": "C-SCALE apex: staged scale-credibility campaign (owned >3e9 via growth chain + at-scale native finetune)",
+      "url": "https://github.com/wordingone/ember/issues/29"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-01"
+      ],
+      "body_sha256": "143116fd7a0c9cd5676547956d517c18bf0f9083e8f8e780689005c38d7dcaf0",
+      "classification_basis": "manual_lossless_historical_crosswalk",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "mixed_historical",
+      "intended_state": "open",
+      "number": 35,
+      "rationale": "This historical roadmap-shaped contract spans or predates the current canonical decomposition. Preserve the original issue and map its remaining clauses without rewriting its history.",
+      "snapshot_updated_at": "2026-07-18T14:47:49Z",
+      "title": "GOAL.md contract-integrity audit: 13 internal defects, 26 unwatched mandates, 7 doc-reality divergences — cure plan",
+      "url": "https://github.com/wordingone/ember/issues/35"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "6ae9bc1bf995f72f746e36bca0242b659077d3cbcafdbb455b04a3dc90593e0a",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 37,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-19T03:49:10Z",
+      "title": "8l contingency: mechanism-redesign ladder (adapter locus / objective / presentation) — fires only on A20 rung 2",
+      "url": "https://github.com/wordingone/ember/issues/37"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "19d9cd4145ebc8b5a12eab34ea899fb8591645e0a07a13b1f910e15d69979ae6",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 46,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-19T04:09:07Z",
+      "title": "ember-cli vs avir-cli behavioral parity audit — round 1 results + cure campaign",
+      "url": "https://github.com/wordingone/ember/issues/46"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-09"
+      ],
+      "body_sha256": "6472a3339021a7e81a1a6256a99c8296e9510a768861ff68f5c3738df8d0c0cc",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-09",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-09",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 47,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-09.",
+      "snapshot_updated_at": "2026-07-04T03:02:21Z",
+      "title": "R3 feasibility receipt: 4-bit frozen 27B-class base + trainable slice, one train step + one inference pass co-resident on the 4090",
+      "url": "https://github.com/wordingone/ember/issues/47"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "4e3537ff75f19b2f464d5ff075ee44c6657a0667ef6efdd999f566ad335bf7ef",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 53,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-19T05:17:42Z",
+      "title": "GPU window runbook: C11 flip -> E2B GATE-1/2 -> R3 phase B — frozen sequence + read-only pre-flight",
+      "url": "https://github.com/wordingone/ember/issues/53"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "56eaddbca5c1054c220ad70dcc1c44b4feac81c72b7772a2422b7e0b0659b4fc",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 54,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-19T14:33:22Z",
+      "title": "ember-cli: flame animation jitters horizontally (per-frame width variance suspected) + art below bar",
+      "url": "https://github.com/wordingone/ember/issues/54"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "84241e3b1dfc6f3123691f4fba395ac2468ebad2ebbc4ff176b36cac9ff2bf18",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 55,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-04T02:42:44Z",
+      "title": "Inference-to-training translation system: clocked cure for the 06-27 god-stack mandate (partial-activation FOR TRAINING, per operator)",
+      "url": "https://github.com/wordingone/ember/issues/55"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-06"
+      ],
+      "body_sha256": "d9b1c22ce2cc06a5a805a2873962ed044d0932cc843c1befee9fc0753a15aa07",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-06",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 92,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-04T18:11:43Z",
+      "title": "Autonomy-relinquishment ladder: transfer the maintainer's levers to ember itself (R0-R5, invariant-gated)",
+      "url": "https://github.com/wordingone/ember/issues/92"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "f44c4eeea3aef332ecc0117fd3db226cb894e4a21935221fc583f14d80bc4fe3",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 98,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-04T18:24:53Z",
+      "title": "C11 rebuild: genuinely re-earn the 1-hour and 3-hour developmental-duration milestones (audit finding, issue #97 item 1)",
+      "url": "https://github.com/wordingone/ember/issues/98"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-11"
+      ],
+      "body_sha256": "a7b631b819e05fa348a0871a6778dab56a01288ac2eb641a5af43dd8deee0beb",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-11",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-11",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 99,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-11.",
+      "snapshot_updated_at": "2026-07-19T11:49:07Z",
+      "title": "Publish checkpoints: rung-1 terminal + W1 from-scratch control to HF (public reproducibility)",
+      "url": "https://github.com/wordingone/ember/issues/99"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "f535ae847b5b66506e135ab61ba7d85e3204ae19285999bb4ce1427475c9ecaa",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 105,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:20:50Z",
+      "title": "C-LADM control-class strengthening: model-authored same-task wrong attempts for the 48 backfilled tasks",
+      "url": "https://github.com/wordingone/ember/issues/105"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "110d78081b5940a30fc649dfa4303d629bd506504ade3cf711e825781d84ad02",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 107,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-04T18:09:20Z",
+      "title": "C11: 24h tier re-earn — the banked crossing rests 12.5% on discredited inheritance",
+      "url": "https://github.com/wordingone/ember/issues/107"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "8b1be0e3c929bfed2bb67c99868819c54ef069de118061dd3daab251e1239e4e",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 111,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-05T18:05:23Z",
+      "title": "ember-cli TUI quality bar: must-win capability checklist (standing target list, now clocked)",
+      "url": "https://github.com/wordingone/ember/issues/111"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "8b61ed848595028f8092777d796766b5e9b79a14d10f432c87a53f9ac11f3699",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 113,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-06T21:58:21Z",
+      "title": "W2 G-arm runner: grow rung-1 terminal to 2x FF, train per preregistration, emit the frozen dump contract",
+      "url": "https://github.com/wordingone/ember/issues/113"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03",
+        "EMBER-05"
+      ],
+      "body_sha256": "bd060cbfc12b82e4305ebf2c8718ff7be0419bbdcc753229214719c838022f6a",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 118,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-16T18:48:00Z",
+      "title": "P1 energy-law receipt program: §6b derived retrofits, first envelope points, H-MLI #1, measured-watts, ECON-PASS window fix",
+      "url": "https://github.com/wordingone/ember/issues/118"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "f958a16403a1f8e8e4b098e3b6bc98280b6d1f2490d584128d495d9e1088d8ce",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 121,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-09T16:02:22Z",
+      "title": "W1 real GPU control run: decontam-gated launch, §6b-instrumented at birth, measured-watts (first on the GPU queue)",
+      "url": "https://github.com/wordingone/ember/issues/121"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "b455ba5b80f4191c532583394439ef695eb5051bc6220cf5a50bd11c29700ee6",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 123,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T07:14:17Z",
+      "title": "C8 pre-registration: earn-to-grow protocol — falsifiers F1-F4, deletion arms, transfer, prior-art sweep gate",
+      "url": "https://github.com/wordingone/ember/issues/123"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03",
+        "EMBER-05"
+      ],
+      "body_sha256": "5e3b5ab32b486890d560e007987d5b29d888b6fa71f9fd679f6f944492883137",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 124,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-05T07:50:12Z",
+      "title": "Flywheel-turn run under frozen kernel: dB/dround > 0 receipt (publication conjunct (a), rides the C14 resident window)",
+      "url": "https://github.com/wordingone/ember/issues/124"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "9bff30b442298470b1bf43f4786ac030f6d9cf3c2be915004bf3f75d75db8936",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 125,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-09T16:55:08Z",
+      "title": "Owned-core capacity: 244K -> >=1.1e6 params (function-preserving widen + stabilize) — unspecced dependency of C14 B1 / row 18",
+      "url": "https://github.com/wordingone/ember/issues/125"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "276fa6ff9dfae517a3dfe3875661c0d0c00f54ac6ca016dfeacbd4139ac2bf6e",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 126,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-05T08:52:51Z",
+      "title": "P1 envelope sweep: 6 LR-matched budgets + H-MLI rider (pre-registered protocol, §7.2 8-point floor)",
+      "url": "https://github.com/wordingone/ember/issues/126"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "5b406f73abbd3a49f27b8b47f6d356e8205b3d76437a51f0a3960fae3cd6fe10",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 139,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-09T21:05:44Z",
+      "title": "C-E2B gap-closing re-run: scorer hook-in + surpass attempt (board row's cure path)",
+      "url": "https://github.com/wordingone/ember/issues/139"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "4f3f9d34ab39def2347d8b36ec99e85bef8aad5bb1cfd6b294127b9a9ae2c264",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 140,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-05T11:29:46Z",
+      "title": "C-SURFACE2 live-telemetry re-capture: replay provenance is the named defect",
+      "url": "https://github.com/wordingone/ember/issues/140"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "6d8d91bcdba1c19acd81bfd4ca305bcabeb6e9719db8fd33d83e02958302e033",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 141,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-05T11:29:47Z",
+      "title": "C15 tiny BitNet/1.58-bit comparison: trigger-gated spec (fires on first fp16 neural resident PASS)",
+      "url": "https://github.com/wordingone/ember/issues/141"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "3ebb2f14b2b0c10faf93cb36b2bb00a85c55bd2238855e4b1672e685ccccb90a",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 149,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-05T20:05:03Z",
+      "title": "Public-tree board parity: classify + migrate the evidence behind every RED-on-public condition",
+      "url": "https://github.com/wordingone/ember/issues/149"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "5e38b0d4658a06b451282cb234c30b70f7f226c058d42ff217c3741eec76182e",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 154,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-06T01:59:39Z",
+      "title": "Operator protocol: the maintainer session operates the ember agent through ember-cli, as a human would",
+      "url": "https://github.com/wordingone/ember/issues/154"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-06"
+      ],
+      "body_sha256": "ce2abbc96739eec321a03215128591786058ea721c66cb517e5e9e086a7cceb4",
+      "classification_basis": "existing_milestone",
+      "desired_labels": [
+        "affects:EMBER-06",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-06",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 155,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-06.",
+      "snapshot_updated_at": "2026-07-16T17:37:01Z",
+      "title": "Research re-open queue: directed tracks return to the GPU under the field-contribution bar",
+      "url": "https://github.com/wordingone/ember/issues/155"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "270f15b00e2d4b374e41f3013f85db1779b36fbb88bbdeba3fbd9fcacb52ffe5",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 158,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-05T16:12:55Z",
+      "title": "ember-native engine (ember.cpp): collapse training+inference into one owned substrate — trigger ladder + rung-0 kernel seam",
+      "url": "https://github.com/wordingone/ember/issues/158"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "f5975a7560db480c0e794a712ea1047969e326840d7bca15b0fe2113bcd671eb",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 159,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-16T19:02:46Z",
+      "title": "ember-cli hardening bar: zero CLI-side crashes, battle-test harness (predecessor-CLI standard)",
+      "url": "https://github.com/wordingone/ember/issues/159"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "6e4ea3faacc5ee46da50934421748a099e893866b6d3266ffaf5adf6a24ed741",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 200,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-06T02:56:46Z",
+      "title": "ember-cli: automations primitive (scheduled goal runs) — field-exemplar-grounded spec for the R-ladder's self-directed rungs",
+      "url": "https://github.com/wordingone/ember/issues/200"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "ff317288f706af87704beeec636bf9a6ea2d34502f6a1d38fae19ba47246a33d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 203,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-06T03:00:09Z",
+      "title": "Corpus hygiene: v0-00025.bin carries massively repeated content (~117x mean 13-gram recurrence) — training-data quality concern independent of decontam",
+      "url": "https://github.com/wordingone/ember/issues/203"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-06"
+      ],
+      "body_sha256": "9cb66520958604b7a3c32527623989641ff9e491e1acbce815d9ed575470c395",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-06",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-06",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 206,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-06.",
+      "snapshot_updated_at": "2026-07-06T04:51:52Z",
+      "title": "Research-core priority inversion: arms produce zero terminal receipts while machinery consumes windows (operator callout 2026-07-06)",
+      "url": "https://github.com/wordingone/ember/issues/206"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-10"
+      ],
+      "body_sha256": "f48c8e10d22015019672f6334dfaad70008c84bf54080a60469a9ccae39c8eed",
+      "classification_basis": "existing_milestone",
+      "desired_labels": [
+        "affects:EMBER-10",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-10",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 207,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-10.",
+      "snapshot_updated_at": "2026-07-16T17:37:04Z",
+      "title": "BOTTLENECK LEDGER: single-4090 full local FM creation — standing dispatch authority (operator mandate, third push, 2026-07-06)",
+      "url": "https://github.com/wordingone/ember/issues/207"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "71d02a6f23c17546fd43c75417a0463989a454b166c9836bff4f825343023278",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 211,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-10T05:20:12Z",
+      "title": "ember-cli /goal: 1:1 port of the codex goal-mode mechanism, then improve (constitutional organ)",
+      "url": "https://github.com/wordingone/ember/issues/211"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "98c14f9fb92991cfc7ff10509cb469fd781a257ee8f35594b52fce20cc4aa825",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 214,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-16T16:18:49Z",
+      "title": "Observatory flame-truth: the flame renders the organism's real internal state (P-C constitutional)",
+      "url": "https://github.com/wordingone/ember/issues/214"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "02e6546c91658018ebdc701fc63d17b285278434e2e5f73ece3466a6c124fea6",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 216,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-10T21:14:45Z",
+      "title": "Pre-existing test failures in the resident-training core (verifier-conditioned update no-op suspicion + two gate-predicate failures)",
+      "url": "https://github.com/wordingone/ember/issues/216"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "a17fcced1053d1aea16077a37394fb5f90855e3840b49f94c1dd4572762f2d55",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 222,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-06T11:10:00Z",
+      "title": "c7_deletion_test standalone selftest fails its own load-bearing bar (deletion_gap -0.1250 vs >=0.1200)",
+      "url": "https://github.com/wordingone/ember/issues/222"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "dcd71aad1976d05a41db8a4792dd45012fdbebf736396b1356788c4fd686fad5",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 235,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-06T14:28:01Z",
+      "title": "Disposition of the unmerged chore/board-suite-port line — audit for other only-there artifacts, then retire",
+      "url": "https://github.com/wordingone/ember/issues/235"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "ba5fd35ee17c6cd03a6ec621689e3d566c6e61d97b3a94f6ada47ad6bddd3683",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 239,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-21T06:27:27Z",
+      "title": "cockpit: HTTP 400/error retry loop has no circuit breaker — 20h invisible wedge",
+      "url": "https://github.com/wordingone/ember/issues/239"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "c97bf16d133014653736e9ef0519f22395288edb639046c60f9eb5821eb1a5a1",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 240,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-21T08:21:11Z",
+      "title": "cockpit transcript: raw tool_result JSON and internal debug objects rendered to the user",
+      "url": "https://github.com/wordingone/ember/issues/240"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "8cea5bc35a8d6b43175fd83c6b3b36cef3a78c08c271930aaa4834fe52a59caf",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 241,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-10T00:53:57Z",
+      "title": "rung-3 (4.24B) un-fail: per-layer grad-fuse + momentum precision — two grounded moves, no new research",
+      "url": "https://github.com/wordingone/ember/issues/241"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "68d386f2f1979488bcae5e61baa22148225567ee82a39a529936f82abe41075f",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 242,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-06T15:39:02Z",
+      "title": "ember-cli live-verification program: every feature is presumed BROKEN until live-demonstrated",
+      "url": "https://github.com/wordingone/ember/issues/242"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "f5e7ab9b3434abd6a57a77db103dac1a8759463233e4ff8bc0162b2c4917ed7c",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 247,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-19T14:02:10Z",
+      "title": "repo-guard [names] scan is blind to non-UTF-8 (UTF-16/32 BOM) tracked files",
+      "url": "https://github.com/wordingone/ember/issues/247"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-11"
+      ],
+      "body_sha256": "6b61a9e59f4941d2ab218d056bd501347cb7d405f46132d7ed59a8f17d8b2d22",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-11",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 248,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-06T16:31:28Z",
+      "title": "Repo organization: scripts/ 79.6% and receipts/ 59% loose-at-root, no claim-to-receipt index — pre-paper floor + ranked cleanup plan",
+      "url": "https://github.com/wordingone/ember/issues/248"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "2ad40b9864b3041c2707ba3dfa31a0364d8b3233115a9a0b4e8423e65403a638",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 252,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-06T16:09:39Z",
+      "title": "Dead controls: Esc-interrupt, Alt+P, Alt+O, Ctrl+E/Ctrl+G are wired no-ops; slash autocomplete never renders; 3 unreconciled permission-mode state machines",
+      "url": "https://github.com/wordingone/ember/issues/252"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "93f101b2c8c440e7b9d3c440fcc2e35d7b2078bbef6cfb2e574c16bc3f8ace50",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 259,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-06T17:29:30Z",
+      "title": "Redaction pass rewrites functional code segments (REDACTION-BROKE-PATH class)",
+      "url": "https://github.com/wordingone/ember/issues/259"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-01"
+      ],
+      "body_sha256": "b95b33ba141287c0ebf4dfe45d2195392d7e918c3b7dd6470f4bc1f7255866ca",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 265,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-09T21:05:48Z",
+      "title": "C-MANIFEST denominator: refounded Constitution broke the 'planned pieces' source — reconciliation ruling",
+      "url": "https://github.com/wordingone/ember/issues/265"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "41d23361d3e045ed5b509a6a67a9932778d896570d7926d2c3f64e559ec96a3b",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 267,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-16T19:02:41Z",
+      "title": "ember-cli: maxOutputTokens/sampling caps not applied to external EMBER_MODEL_URL endpoints (managed-spawn-only today)",
+      "url": "https://github.com/wordingone/ember/issues/267"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-02"
+      ],
+      "body_sha256": "6b1fd4522f27d770f2bd2b31accc64d311db9b59522cd761852b6a8e73d7ea32",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 275,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-06T18:43:44Z",
+      "title": "eval-batch tokenizer-binding receipt missing (P2-G1 contamination-audit finding)",
+      "url": "https://github.com/wordingone/ember/issues/275"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "c342d8f29a5cee0271fc6aa532daacb975e8aaa3d08082f1ebaf12d151251b37",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 279,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-03.",
+      "snapshot_updated_at": "2026-07-06T19:49:49Z",
+      "title": "goal-continuation engine has no re-arm: a transiently-blocked poke is a permanently lost wakeup",
+      "url": "https://github.com/wordingone/ember/issues/279"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "db91e24e3657d76fba8d7768e14aa11f67da21553e5e7e098d7fec43e7ec34f8",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 280,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-06T21:58:19Z",
+      "title": "grow operator: exact duplication never breaks twin symmetry — rung-1 grow was capacity-null as-run (K1; gates W2 G-arm launch)",
+      "url": "https://github.com/wordingone/ember/issues/280"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00"
+      ],
+      "body_sha256": "e7e32faf781bcbbc79818ab3e14da3d820928234e35cd152843db22b5207c69b",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-00",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 281,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-00.",
+      "snapshot_updated_at": "2026-07-06T21:09:52Z",
+      "title": "INVARIANT genesis: mechanization spec (stamping chokepoint, C-INV probe, receipt chain-link, incidents ledger, ceremony order)",
+      "url": "https://github.com/wordingone/ember/issues/281"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-02"
+      ],
+      "body_sha256": "1a7eec28ce18df100e2e1d7ef780d0ac3832e6f4cbfb003726193c2ed52d6f6d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 285,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-06T20:37:58Z",
+      "title": "Clean corpus v1: external-model-free assembly + tokenizer re-freeze + fresh pretrain (the road to the first invariant-protected checkpoint)",
+      "url": "https://github.com/wordingone/ember/issues/285"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "8c1ceee9745014e7207272c6d0352e05335b34094eaa398d0bf31e8e4d364f09",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 286,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-06T20:45:35Z",
+      "title": "ember-cli welcome/status surface: 8 named layout+rendering defects vs field exemplar (fixed-width, border corruption, void dominance, status-bar artifacts)",
+      "url": "https://github.com/wordingone/ember/issues/286"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "86c9cf361baf8fa3fe2083338452851ec24d609e2eec9fd794cbbc31dafe613b",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 290,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-06T21:35:19Z",
+      "title": "decontam mp scan: headroom assert scope + worker teardown on main-process death",
+      "url": "https://github.com/wordingone/ember/issues/290"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "734b09b47206d695b1984f7da82a202c3ae0b315df707d047e02b4a432a5ee50",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 292,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-09T09:59:27Z",
+      "title": "ember-cli: resize-back to a previously-seen size not detected (stdout.columns stuck at intermediate size)",
+      "url": "https://github.com/wordingone/ember/issues/292"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "d7f45f4a82cc61374f1d881aee2d034b5719f00a17622d2632fd5197371eba69",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 303,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-19T00:57:44Z",
+      "title": "cockpit: live window shows zero activity while the organism works; bottom UI region missized vs top",
+      "url": "https://github.com/wordingone/ember/issues/303"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "c0a1c9100c450b63026c16aa80b23fa47d3d92a20da1c971db0b9f7e31e8934d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 315,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-07T04:06:59Z",
+      "title": "P4: clean-corpus map v1 + L3 boundary ruling v2 (PROPOSED) — ratification + obtainability probes",
+      "url": "https://github.com/wordingone/ember/issues/315"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "57aa5a2794dab9698b1a99409bc7377b477961ac64dabb437fac0598c3bdb55b",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 317,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-07T04:49:28Z",
+      "title": "repo hygiene: tracked receipts/manifests carry machine-local absolute paths",
+      "url": "https://github.com/wordingone/ember/issues/317"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "34cdff196ddb2685f49cca7e8a562f9fadb5e3d13ea4732709ed948ebbb1bad6",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 320,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-07T06:41:49Z",
+      "title": "gate gap: C-BASE degeneracy hardening checks loss VARIANCE but not loss LEVEL — a random-logits receipt passes",
+      "url": "https://github.com/wordingone/ember/issues/320"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "acaf32dbf1aa10702499d13e41a87834be2cc23b678c4f8592621f0f498e0500",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 321,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-08T10:57:54Z",
+      "title": "T1 pilot pre-registration v1.1-PROPOSED: ember-lineage OCR bootstrap (M0-M3, panel-hardened)",
+      "url": "https://github.com/wordingone/ember/issues/321"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "c29c3d29650d81b67f8b2de030f9c795c6f689a7b076d725dd757876dcc7f843",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 322,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-07T07:04:00Z",
+      "title": "W1 launch-blocked: #121's live path references an unlanded lineage + two spec-vs-code defects in w1_collapse_control_run.py",
+      "url": "https://github.com/wordingone/ember/issues/322"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "d9e008da4f6afdf5689cd4c6f5d6e3ff87a00250aa9f873264413f1d93ba2c0a",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 324,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-19T05:21:08Z",
+      "title": "Unlanded-lineage audit: third recurrence of the goalforge orphan class (capacity.py, manifest_sha.py/joules.py) — sweep + standing inventory",
+      "url": "https://github.com/wordingone/ember/issues/324"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "32dc40395ce9ff7b23f584a0ee8323b10d38c672c17b3c6be0e6f46cbea341bc",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 331,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-07T08:38:05Z",
+      "title": "MP contamination scanner: round-robin shard distribution skips 7 of 25 true shard boundaries (boundary-window coverage gap)",
+      "url": "https://github.com/wordingone/ember/issues/331"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "763e01bf88d663560e2a5228879b62992dd69022241aef016ec233594b98d3ce",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 335,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-07T09:14:28Z",
+      "title": "Tighten classify_contamination_self_matches: interval-overlap should be strict containment (boundary-straddling foreign match could classify as self)",
+      "url": "https://github.com/wordingone/ember/issues/335"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "1daa0185caa4c83c53a1224a705a95f7f6a46724f268d90c930279a74cbba812",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 339,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-07T10:01:05Z",
+      "title": "W1 interpretation pre-registration: reading rules for the control-arm tokens_to_match receipt (filed before the confirmation receipt)",
+      "url": "https://github.com/wordingone/ember/issues/339"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "461b208b99547e2fa658218330e850c7b027a9eac2dde2b34c3c5f942629858d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 344,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-16T19:02:23Z",
+      "title": "Cockpit boot loads the resident inference model unconditionally — needs GPU-lease awareness (OOM-killed a live training leg)",
+      "url": "https://github.com/wordingone/ember/issues/344"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "d499e5a7c56e15e0c6dc937220cefb9158fe1fb52f5b480567162b8520515073",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 345,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-07T10:53:18Z",
+      "title": "W1 post-receipt check battery: target re-eval + eval-noise + grow-step marginal control (builder-dispatchable, gated on the clean W1 receipt)",
+      "url": "https://github.com/wordingone/ember/issues/345"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "49bc8c9bd59c57a07bf41dc04acee188dcae9ccd74da2838b503c75a52463b2f",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 354,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-03.",
+      "snapshot_updated_at": "2026-07-07T11:51:57Z",
+      "title": "ConPTY injects NUL bytes into styled non-ASCII glyph runs (Windows console-host layer)",
+      "url": "https://github.com/wordingone/ember/issues/354"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "f0cadb933f71c6473af3939d22f191abfe4b64d9080ee55c21a85ba92d3715c1",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 362,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-18T18:06:59Z",
+      "title": "Cockpit liveness watchdog: standing loop for the body's up/corpse/wrong-state detection",
+      "url": "https://github.com/wordingone/ember/issues/362"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "6c9c2e351d5f070352e744e6c9dffbf224797d1aade63798a7837f8d5390fdec",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 367,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-07T13:32:57Z",
+      "title": "Lease-window placeholder: the cockpit's screen slot must say WHY it is empty",
+      "url": "https://github.com/wordingone/ember/issues/367"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "0e9183a5a421c52f0c33ff4851f8b3f5c012965a92c75d89926ff3350867afd2",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 370,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-07T13:59:53Z",
+      "title": "Contamination recheck must not cost 25 CPU-minutes per launch: persistent corpus n-gram index + GPU overlap",
+      "url": "https://github.com/wordingone/ember/issues/370"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "33700cc0ad8cc09ed5d083672e1e33556d3d6a86b4ad8f63b113a8e405da2e12",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 372,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-08T07:34:27Z",
+      "title": "W1c prereg (FROZEN): K>=10 fresh-batch paired fp32 CI — the #339 §4.1 mandatory gate",
+      "url": "https://github.com/wordingone/ember/issues/372"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "aebe38aa9c3666ddc9523f3659de0ef54d774d7ec17a1560f90b258a22b8627e",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 378,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-18T07:28:32Z",
+      "title": "Custody class: UNTRACKED cited receipts vanished from receipts/ twice (v0-live, c9-cadence) — cited receipts must be tracked + probed",
+      "url": "https://github.com/wordingone/ember/issues/378"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "2a66a7e02faf15c69b131911dee74500b93e0b6e0f2d2f6a2a523b6434a8f1dd",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 400,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-19T14:19:18Z",
+      "title": "Board-time writers to canonical receipts/ round 2: milestone-reconciliation + publication-gate (the #387 sweep missed them)",
+      "url": "https://github.com/wordingone/ember/issues/400"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "f82fe3af8255f5cf3ee5c526a2ffcb2346f9953223075da6cf005d78e47427c9",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 406,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-08T04:23:13Z",
+      "title": "Shared _function_preservation_check() segfaults at rung-2 scale (memory lifecycle: two models resident, uncollected)",
+      "url": "https://github.com/wordingone/ember/issues/406"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "5dc4fdccc865e1a5e59df3c6304669c49ba14fec7c94f3e97ccbed7205b2a7db",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 413,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-08T06:12:13Z",
+      "title": "Cockpit process death is invisible: frozen pixels pass for a live body (liveness gap)",
+      "url": "https://github.com/wordingone/ember/issues/413"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "674b32e20ea501e6fe10372c4dcfb4ba38fd1480b7de21e52c07d16ad2f830a3",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 421,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-08T07:04:17Z",
+      "title": "repo-guard branch-name check + GitHub rename API footgun: renaming a branch with an open PR auto-closes the PR (2 occurrences 2026-07-08)",
+      "url": "https://github.com/wordingone/ember/issues/421"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "9635f7afc7b10e937e2602f443f9b219f954731e075be6596fceec611b1fe97e",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 427,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-01.",
+      "snapshot_updated_at": "2026-07-08T07:54:47Z",
+      "title": "VOID receipts record truncated 16-hex sha prefixes in supersedes[] — void_supersession requires full 64-char digests",
+      "url": "https://github.com/wordingone/ember/issues/427"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "71dfb2edc619f0df20e012398d72c2bcc3eb44b5ea850117b193f50adad319f3",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 440,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-08T16:06:52Z",
+      "title": "Corpus defect: massive late-region near-duplication in shards-v0 (shard-19 x1044 concentration + tail zero-clean) — repair-vs-certify decision tree",
+      "url": "https://github.com/wordingone/ember/issues/440"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "a075fc4942a19eade2f2e53ac0f8a5160551e26935063d2c912ce0a1da2432a2",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 449,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T09:00:57Z",
+      "title": "PREREG: rung-2 d_comm prediction — per-class, per-convention, frozen before the rung-2 grow event",
+      "url": "https://github.com/wordingone/ember/issues/449"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "5dfb7d4ea3b607d4251739dfc8a3310654ebc1a1c2b6c8249eb87a0cf4164749",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 457,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-08T16:00:54Z",
+      "title": "Commit-exhaustion crash class: Windows commit limit (16GB fixed-init pagefile) unifies all 2026-07-08 native crashes + clean MemoryErrors; cures = file-backed optimizer state + commit-aware preflights",
+      "url": "https://github.com/wordingone/ember/issues/457"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "e5b7ff7ebf63531f705259ff84daa09f48efbe6425abf4d763614e61a1060436",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 466,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-08T23:15:51Z",
+      "title": "rung-2 REAL grow event + production stabilization: combined runner spec (B1/B2/B3 capture + 30-step stabilization under the receipts-proven config)",
+      "url": "https://github.com/wordingone/ember/issues/466"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "6f42edf4920b4db59557ccc66e4ddea284465bc60a81d7770b8cf674f6129925",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 480,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T13:19:11Z",
+      "title": "rung-2 stabilize: production config re-spec against the 30.9GiB wall receipt (grad-ckpt / batch / offload)",
+      "url": "https://github.com/wordingone/ember/issues/480"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "95685553c96680c25a3126448c6971189468122419344f56fe341b87563fe7de",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 481,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-19T05:06:05Z",
+      "title": "public-surface legibility: stranger-audit cures (C-code collision, stale README, on-ramp, state-home pointer)",
+      "url": "https://github.com/wordingone/ember/issues/481"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-04",
+        "EMBER-06"
+      ],
+      "body_sha256": "e758c2a44c8176b6e22ec9e589196a05c97b662c95276a01680cf70e4997c4bf",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-04",
+        "affects:EMBER-06",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 483,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-04, EMBER-06.",
+      "snapshot_updated_at": "2026-07-08T22:22:16Z",
+      "title": "A/B/C loop revival: episodic loop re-run under the cured gate (rung A) + first goal-organ-driven session (rung B)",
+      "url": "https://github.com/wordingone/ember/issues/483"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "eaca640aef2abdf9948023868de79ccc744e99e7e5d257ffffdeb2d2260fa9db",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 485,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-17T17:27:20Z",
+      "title": "the body has never displayed the organism: ember-cli must render LIVE activity (operator: 3 weeks up, zero events ever seen)",
+      "url": "https://github.com/wordingone/ember/issues/485"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-05"
+      ],
+      "body_sha256": "965801369d5a842362d83f08373de863ea98388e769183a62efccfcaa7f6d9f0",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 488,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-19T05:19:52Z",
+      "title": "repo hygiene law: growth is not progress — retention rules, consolidation cadence, size-vs-progress metric, first cleanup pass",
+      "url": "https://github.com/wordingone/ember/issues/488"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "43e58db81fa6a7dbb13ac52480442dd63d316c8233c65593f4c2eafd38b9fe70",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 502,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-09T00:39:29Z",
+      "title": "redaction placeholders in executable code are landmines",
+      "url": "https://github.com/wordingone/ember/issues/502"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "08ceb8c26b64b3661c67f7957f4681951861483b8d409f50472465f924e99c06",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 507,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-09T01:58:28Z",
+      "title": "ember-cli native GitHub identity: App-token client + gh tools (credential-agnostic build; App install is a separate leg)",
+      "url": "https://github.com/wordingone/ember/issues/507"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "b3117378d63e95eee3728ac07413204f1b7f001be6091edad0dd7e69b2698852",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 508,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-18T07:28:32Z",
+      "title": "Serve the ember-created cbase 2.2B behind an OpenAI-compatible endpoint (external-benchmark test-subject leg)",
+      "url": "https://github.com/wordingone/ember/issues/508"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-01"
+      ],
+      "body_sha256": "5d275e44eb23bc98b935df5a98015eff003f53f5a7de8ec24f6acd1a21dd182c",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 511,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-09T03:08:13Z",
+      "title": "totality runner must refuse or loudly stamp a stale/dirty run tree (board ran 7 commits behind master, silently)",
+      "url": "https://github.com/wordingone/ember/issues/511"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "33d695d976b838005ef6d34ecbe3f709a64afd06d1332e00245c6db05ff5ecd3",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 518,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-19T01:55:44Z",
+      "title": "ember-cli: activity must render as transcript blocks in the conversation, not statusline ticker lines (operator category correction, second receipt)",
+      "url": "https://github.com/wordingone/ember/issues/518"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "5663439bfd7e16dac114ab2588ac7dbe6e20552067a44b77566f5b82488a8738",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 522,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-09T05:54:30Z",
+      "title": "Serving topology wiring: registry consumers, watchdog drift leg, marker-path constant (follow-up to #516/PR #520)",
+      "url": "https://github.com/wordingone/ember/issues/522"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "41ee7df163465479104776776cb1cbe1778d28eb807541ababf06549df4e002f",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 525,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-09T07:20:55Z",
+      "title": "chore: receipt path-hygiene convention + shared redaction utility (write repo-relative at the source)",
+      "url": "https://github.com/wordingone/ember/issues/525"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "0d6cf95bab75286aef82019f38b89e932b0ccc9a92aa8df05b2d6ddc32508392",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 530,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-09T07:49:39Z",
+      "title": "ember-cli: UserTeammateMessage renderer (AC11 task_assignment) tested but unwired in repl renderMsgDispatch",
+      "url": "https://github.com/wordingone/ember/issues/530"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "c5ef689e70ed9411c5ac81f1101920726d46f9767e1c6fe359e64715daf78043",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 531,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-09T08:16:23Z",
+      "title": "custody: re-verify every sha-pinned in-tree artifact named by a receipt (freeze-artifact integrity probe)",
+      "url": "https://github.com/wordingone/ember/issues/531"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "cb7941f62d05f3671198de483fe6f850eab34f8b164fcd659ddd4c91378bdd13",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 534,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-19T05:08:33Z",
+      "title": "feat: frozen-tokenizer reconstruction script + serve preflight (serving-tokenizer custody mechanization)",
+      "url": "https://github.com/wordingone/ember/issues/534"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "8f23c9ac00dd9dce02492f708a03757283d93f086d009f9748f72dad0327867f",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 537,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-09T08:49:44Z",
+      "title": "fix: C2 regression — landing redaction rewrote bytes inside hash-pinned evidence; restore byte-exact + hash-pin law",
+      "url": "https://github.com/wordingone/ember/issues/537"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "75be1839da9f58bbb72a613d8006209a5b9ce39f6910906cbc54ac292781d17c",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 538,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-09T09:36:50Z",
+      "title": "redaction utility: tracked, pin-aware, enumerated-fields-only (hard-fail on hash-pinned bytes)",
+      "url": "https://github.com/wordingone/ember/issues/538"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "05deb640b0e3232099292a0ada603ea50907774948441a6ddfbb41c5bd60eacf",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 545,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-09T11:04:43Z",
+      "title": "liveness-watchdog: main-tree freshness leg — operator screen must auto-follow remote master post-merge",
+      "url": "https://github.com/wordingone/ember/issues/545"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00"
+      ],
+      "body_sha256": "50a7b055974c89f00d11c3c711c61bf48c7342df6a21467ae1617d85eddacc56",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-00",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 546,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-00.",
+      "snapshot_updated_at": "2026-07-09T11:05:09Z",
+      "title": "SS5 nativization-motion measurement: the borrowed-substrate bill has no standing metric (constitution names a drive nothing watches)",
+      "url": "https://github.com/wordingone/ember/issues/546"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-02",
+        "EMBER-11"
+      ],
+      "body_sha256": "79f0873d7bd5647b06ebe5dacd6ba8cecf8ae0af27182f296fb6fde22eb65e5a",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "affects:EMBER-11",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 552,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-16T17:37:02Z",
+      "title": "paper admissibility shields: contamination scan (model-free) + provenance manifest + compute ledger + freeze mechanics",
+      "url": "https://github.com/wordingone/ember/issues/552"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "de38b8810550bcd0693202dde2d678f07723ec296d49de7475a0b98f61ad2905",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 558,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-09T13:32:22Z",
+      "title": "W1c K-certified batch production orchestrator (rebuild on the frozen two-part predicate)",
+      "url": "https://github.com/wordingone/ember/issues/558"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "3701c3d101adc2a13aaaf82e103eb98e3bc673f574d16d33a04b11ab9f4878bb",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 561,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-19T01:18:30Z",
+      "title": "ember-cli render integrity: locked banner/input regions + edge-triggered event feed (operator-reported flood + layout break)",
+      "url": "https://github.com/wordingone/ember/issues/561"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "9ae5ac4823a5ec6e1dee6a89cb7515e655bc9ee0540f0e3155f78ba8f428fe83",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 562,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-09T14:23:00Z",
+      "title": "The body owns its liveness: absorb watchdog functions into ember-cli, retire the external daemon to an OS-native restart rule",
+      "url": "https://github.com/wordingone/ember/issues/562"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "23375c39301300257139e5798492fc1ea78a6236a320d4c5a563ef573158409d",
+      "classification_basis": "existing_milestone",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 565,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-03.",
+      "snapshot_updated_at": "2026-07-16T17:36:54Z",
+      "title": "ember-cli is a conversational agent surface: the resident-colleague bar (operator reframe, P-C)",
+      "url": "https://github.com/wordingone/ember/issues/565"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "8b028045ed3101cdb556b1f0b6164a8fb2b9a4843b77ecb8ef87f45b51f2a887",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 567,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-09T14:46:08Z",
+      "title": "Spec lattice: full-tree audit receipt (196 docs), the ember-cli coverage gap, and the spec-consumer wiring rule",
+      "url": "https://github.com/wordingone/ember/issues/567"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "d0aa12af12581d7a57769ec76ec5859e6ed4bc69cf550b221d7e8ca194790980",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 576,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-09T17:26:26Z",
+      "title": "watchdog tail-poll mega-burst on cockpit relaunch (~2^16 identical lines from one kill-receipt row)",
+      "url": "https://github.com/wordingone/ember/issues/576"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "4007ec125117a5e94fa8b6d13a1373592143a400e6a2e02af5dc19abcc56af79",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 577,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-09T18:15:12Z",
+      "title": "grow boundary: saved optimizer bundle carries pre-grow shapes - load policy must satisfy the momentum-provenance register constraint",
+      "url": "https://github.com/wordingone/ember/issues/577"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-02"
+      ],
+      "body_sha256": "320d311a2a088fc1bc71122830ba32f104f2ecda34274984851a897022e12680",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 580,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-19T02:43:26Z",
+      "title": "optimizer-state param-id conflation: global model-state ordering used as muon-local slot keys (3 sites, shared-module fix + retro-audit)",
+      "url": "https://github.com/wordingone/ember/issues/580"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "52fed8365b8f45486dd85bd308816814614db69a0fbeaa0eeaa256324568151f",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 582,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-09T18:38:11Z",
+      "title": "C8 governed-run pre-launch obligations: freeze-hash, MDE, F3 instrument list, F2 generator, run-ledger (executable tracker)",
+      "url": "https://github.com/wordingone/ember/issues/582"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "e0340ba6e41bf6fd2dad84f7ae79c42d2243ceb1576816520937f4216fe8bcb5",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 585,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T05:50:37Z",
+      "title": "c8: seed-variance runner + 5-seed post-freeze variance receipts at cheap rung (feeds #582 O2 MDE)",
+      "url": "https://github.com/wordingone/ember/issues/585"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "7b6d5a02ccc67ce7e319748e7b2197049fdf57596eb66568a27af7512aa2b32a",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 586,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-09T19:15:25Z",
+      "title": "c(-1) annex round-4: 12 decisive receipts uncovered (board 20260709T184357Z)",
+      "url": "https://github.com/wordingone/ember/issues/586"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "6cf49e0f1567a72f53dcd11aeb30cccae7bf76f8dd747c44aa5a717e68905031",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 591,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-10T18:37:09Z",
+      "title": "gpu-window execution queue: ordered prereg-gated dispatch for every GPU leg",
+      "url": "https://github.com/wordingone/ember/issues/591"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "346ae763f959213424fd4d25c12d20b4723eb284674c60560851d353e3628840",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 593,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-09T23:38:20Z",
+      "title": "a1 eval-freeze execution: declare eval_freeze_hash, quarantine pre-freeze receipts, first-ever predicate scan",
+      "url": "https://github.com/wordingone/ember/issues/593"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "2b77942d39d6de31ad8302bb94de1df71beb2fef1b116053e5ae96f404941f60",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 594,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-10T03:55:54Z",
+      "title": "stab480 v9 respec: optimizer hot-loop pace defect (k3 fire) - NS-on-GPU streaming, in-process commit read, grad-memmap persistence",
+      "url": "https://github.com/wordingone/ember/issues/594"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "4d60a850f5ff71fbfc8d5203146c4cc8dc75b4fcc8893f0ba29c695c953c6a43",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 611,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-19T14:37:16Z",
+      "title": "Serving contract: watchdog restore target must be named (refs #464)",
+      "url": "https://github.com/wordingone/ember/issues/611"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "37f895c1b7f09fd5552081c4d7984191be28d658e793958e9b20fa61e0bfab96",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 612,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-01.",
+      "snapshot_updated_at": "2026-07-10T00:18:10Z",
+      "title": "C-INV errata path for 75/114 unstamped post-genesis receipts (refs #608)",
+      "url": "https://github.com/wordingone/ember/issues/612"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "ee09ad3747578dc100dfa1ada2f274d2b7e02a92122a38cd445855faaa103606",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 627,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-10T17:43:23Z",
+      "title": "stabilize v9 cure: R2 in-process governor + R3 shadow-grad persistence + R4 pace gate + counters + AC2 pace-smoke (refs #480 #594)",
+      "url": "https://github.com/wordingone/ember/issues/627"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-05"
+      ],
+      "body_sha256": "1f1dd136b19dcea2e18835173154ae8ccafc4182e0f7d4b1f6f6113aed67be64",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 630,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-01, EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T05:28:13Z",
+      "title": "C8 O5 run-ledger: accepts fake hashes, tz-naive time compare, counts rows not runs, no launcher binding",
+      "url": "https://github.com/wordingone/ember/issues/630"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-06"
+      ],
+      "body_sha256": "50b9e4289deb16761e164c8fb320ae9bdaa81ffbd0b3d6bc2b02edf8410e8b3d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-06",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 642,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-10T05:30:40Z",
+      "title": "goal organ: floor-conformance audit — clause-by-clause receipt table vs docs/goal-mode-mechanism.md (refs #211)",
+      "url": "https://github.com/wordingone/ember/issues/642"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02",
+        "EMBER-10"
+      ],
+      "body_sha256": "dbbfa873137005f295a641405fdf8394dc15adc2056d476536c90faedcf08222",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-10",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 648,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-19T04:35:49Z",
+      "title": "Corpus program: the AI-lab 11-domain floor (charter execution tracker)",
+      "url": "https://github.com/wordingone/ember/issues/648"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "848bcc244f27f38a1dea091e8e3351824a7ae42799ef47884a34df5b4d869090",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 649,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:36:36Z",
+      "title": "Corpus domain A: Mathematical Foundations — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/649"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "023adad1247f580716936760a24b4c09d60dcbd06b7c385c52ece4e34c66c771",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 650,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:39:12Z",
+      "title": "Corpus domain B: Statistics / Measurement / Inference — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/650"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "2d9b4834431c92200383101be34353140ebd9dc77cf6b551640beba888d3479d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 651,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:40:11Z",
+      "title": "Corpus domain C: Physics / Dynamical Systems / Resource Reality — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/651"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "70fe5fdd5fc462ace18a7c97190bf242be38b3c534ffa5ed7a02d312490147c2",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 652,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:41:11Z",
+      "title": "Corpus domain D: Computer Science / Algorithms / Systems — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/652"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "74faf9882e5a2b741abd0b4684795ed23a8a08f9724188f3bf25e474ec0eb5e7",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 653,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:42:05Z",
+      "title": "Corpus domain E: ML / AI / Model Science — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/653"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "6f0291fc1844c35690b98610d0da5ed506bf017479e9139b529e14b629abc84f",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 654,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:43:01Z",
+      "title": "Corpus domain F: Training Infrastructure / CUDA / Kernels / Hardware — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/654"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "85ecf61dee4c3c47726e3ac10f22672e1e6917ae8fc48518c96d2683806bbe60",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 655,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:43:42Z",
+      "title": "Corpus domain G: Formal Logic / Verification / Proof — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/655"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "988404ef18746d1fd86faadadc375dc23ed6a136d5cbce4deb553e6779928f41",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 656,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:44:24Z",
+      "title": "Corpus domain H: Software Engineering / Debugging / Testing — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/656"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "3cff0b0e8a445d5b5bb1c10b03f747efa1f860b74c1f4e31099648918827a36c",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 657,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:45:17Z",
+      "title": "Corpus domain I: Data / Corpus / Evaluation / Decontamination — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/657"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "e789f9f984ca85aeb8e6cdaf08b4593efbc3eeeabf186f8341bd4c5b51b86abd",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 658,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:45:58Z",
+      "title": "Corpus domain J: Scientific Method / Lab Operation / Receipts — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/658"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "d78ef07bedc40f4bccb3afcb53d0a44daafc80e93d161f15b91f2af12de6ef3b",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 659,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T04:46:44Z",
+      "title": "Corpus domain K: Application Worlds — acquisition spec",
+      "url": "https://github.com/wordingone/ember/issues/659"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-06"
+      ],
+      "body_sha256": "53530e1aaf67562a301fe27dce584044134afeceada8be0c01ec6b1bde8dc785",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-06",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-06",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 663,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-06.",
+      "snapshot_updated_at": "2026-07-19T04:48:23Z",
+      "title": "goal organ: update_goal(Complete) has no code-level completion-proof gate (floor clause 4 gap)",
+      "url": "https://github.com/wordingone/ember/issues/663"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "6868685073bd78942316ba0c8a6c8228457fb68aa294f957cb08fd2917f23e53",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 667,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-19T04:49:35Z",
+      "title": "iGRPO rig control wiring: run_rig hardcodes N=4,G=4 — run_phase3_contract's advertised N/M counts silently ignored",
+      "url": "https://github.com/wordingone/ember/issues/667"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "4cb2425e528544c632311cba593f3ca6e64e205536e37c1d0a7efbee4bcfd8fd",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 672,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-19T04:51:29Z",
+      "title": "main-tree integrity: 554 tracked receipt files found deleted from the working tree (board renders read a falsified evidence surface)",
+      "url": "https://github.com/wordingone/ember/issues/672"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "d9249e79663a1662ab47dabf769f3d193f9eac9a9e279b92070682ce81da7aab",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 674,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-10T23:38:11Z",
+      "title": "PREREG (canonical public port): BitNet 102M matched-pilot — frozen single-variable ternary-vs-BF16 twin, launch-blocked on exact-twin preflight",
+      "url": "https://github.com/wordingone/ember/issues/674"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "001a94638ad5ab6cee1309a8d5aa6676198db51e1c8b38eb270675b1e5fdf0d3",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 675,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T23:57:26Z",
+      "title": "CONTRACT (canonical public port): Q2 actual-update successor — orientation-only historical claims, analytic two-sided-Haar null, future-event capture",
+      "url": "https://github.com/wordingone/ember/issues/675"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-02"
+      ],
+      "body_sha256": "46f7b97c569a54b5fdf1c6ed9996e7bccc02e5d1ef84cee4a8fd898413f80930",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 676,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-10T23:57:28Z",
+      "title": "BitNet 102M implementation preflight: exact GPU twin (GQA+QK-norm), realized ternary counts, manifest identity + mismatch refusal, 50M exact-twin smoke pair",
+      "url": "https://github.com/wordingone/ember/issues/676"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-02"
+      ],
+      "body_sha256": "2f872f4f3bc2e5f51dd71d1ebc58c048f81bf4d5ee6b13acc9762843efebff1b",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 677,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-11T00:07:55Z",
+      "title": "checkpoint receipt chain broken: BUILD transplant note promises momentum_provenance + per-tensor RMS in manifest.json — fields never written",
+      "url": "https://github.com/wordingone/ember/issues/677"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "1bba3c5339c4a7ab60df53054f5fd1ec913504f9ce0457f1d41098208fea7973",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 679,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-10T14:16:00Z",
+      "title": "MTP parameter-accounting errata: 368,354,304 vs 433,890,304",
+      "url": "https://github.com/wordingone/ember/issues/679"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "c4f794643ea163cb313fc893637006452ac6abf6ca6ac9b3c1bbe8b1b2b19219",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 682,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T00:57:44Z",
+      "title": "v0_pretrain_launch_gate g_shards(): NC-relative shard resolution ignores --shard-dir and structurally fails in every worktree",
+      "url": "https://github.com/wordingone/ember/issues/682"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-09"
+      ],
+      "body_sha256": "427fdf03929709c1a6b19a4c3b7d23f3003fb5fe3fff9fbe65c28d3dbd557f04",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-09",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-09",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 685,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-09.",
+      "snapshot_updated_at": "2026-07-11T00:07:59Z",
+      "title": "Extract HF-format tokenizer from the 27B reference GGUF — unblocks arc_challenge/hellaswag/mmlu_pro loglikelihood evals",
+      "url": "https://github.com/wordingone/ember/issues/685"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "94f258e9a2c73553ccf177f092f7807013ee8d633e176d07d340346a7342f8ef",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 688,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-10T23:58:51Z",
+      "title": "config accounting: machine-readable MTP-split param fields + gate/check updates (completes #680 errata)",
+      "url": "https://github.com/wordingone/ember/issues/688"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "2bd06bcd703e61204603024e505eb1a72f880e68223379f9a87259af9f8a948a",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 689,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-10T17:35:22Z",
+      "title": "50M dense/ternary pair: three executable credibility gaps (exact-head audit of #681)",
+      "url": "https://github.com/wordingone/ember/issues/689"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "ef5627f08160cd0f37ebc2c8fd80bec2d95c575a3669d11513efa32cddda86ba",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 696,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-16T19:02:28Z",
+      "title": "ember-cli: wire brain-server supervisor into a real consumer path (follow-up to #122)",
+      "url": "https://github.com/wordingone/ember/issues/696"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-03"
+      ],
+      "body_sha256": "9fdd90d98a2b2695a1af37133878f501fb899aa098bde7d25cf0647992737dde",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 697,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-10T17:46:19Z",
+      "title": "totality runner: bind renders to the remote head (stale-checkout race painted a false RED)",
+      "url": "https://github.com/wordingone/ember/issues/697"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-00",
+        "EMBER-01"
+      ],
+      "body_sha256": "982ac27047679a4e026219708695585754f50444722e07cb7cf31df07d001782",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 700,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-00, EMBER-01.",
+      "snapshot_updated_at": "2026-07-10T18:00:48Z",
+      "title": "C-INV: drive residual uncovered_post_cutoff to 0 (IND-3 post-run + no-producer drift receipts + #694 interaction)",
+      "url": "https://github.com/wordingone/ember/issues/700"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "2ceaa8e274402696eba8ec16ff8f642931be68ea55dd976fb0362bce79b7437d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 701,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T05:16:27Z",
+      "title": "barrier/compute: C-GROW FLOPs-to-fixed-capability crossing experiment (2.4309x is matched-step only)",
+      "url": "https://github.com/wordingone/ember/issues/701"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "2fd42f3a26044305317b29ddd8c768061fdde2c4e80a00addfb78288db0d3641",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 702,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T02:43:27Z",
+      "title": "barrier/mem-traffic: step-time attribution + PCIe throughput profile of the 2.2B offload path",
+      "url": "https://github.com/wordingone/ember/issues/702"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "e1ac8f12811520e4285cce016a7a30f8084f6ff2a9bdb793d5d26439cca481eb",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 703,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T05:21:22Z",
+      "title": "barrier/data-eff: n-gram/PPM byte-level blending capability floor (zero-parameter baseline)",
+      "url": "https://github.com/wordingone/ember/issues/703"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "b828ac172fdb7519e4dd73f650565f1747e35ecd7ed9147dbfbd8607f7b24b6b",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 704,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T00:08:56Z",
+      "title": "barrier/opt-state: int8 file-backed optimizer-state screen",
+      "url": "https://github.com/wordingone/ember/issues/704"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "35f5ed84815e61115ea7d0a2ee937150c21aeb4f43404201e1e55aca5b58e00d",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 705,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T23:58:00Z",
+      "title": "barrier/capability: unified capability-per-token receipt at every rung boundary",
+      "url": "https://github.com/wordingone/ember/issues/705"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "b13a87044dd7f7d58600cfc0793f9713af8ba90fe83bf321083a430aca97eec7",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 707,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-15T20:01:15Z",
+      "title": "barrier/opt-state: FACTOR-1 factored optimizer state (~997x reduction hypothesis) + staged-grad copy elimination",
+      "url": "https://github.com/wordingone/ember/issues/707"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "42cecbdf97d9a426bfb4621739bf0fd213f1ca30bbab8f25009ee97a0b7487aa",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 711,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T04:22:21Z",
+      "title": "barrier/data-efficiency: curriculum-ordering causality (3-arm PPM-surprisal ordering) - axis-2 decisive experiment",
+      "url": "https://github.com/wordingone/ember/issues/711"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "101d724aadf0244b2dae500945efc61d278b1943d1355322f246612f495b3544",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 716,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-10T20:43:30Z",
+      "title": "C-AUTO claim-verification path is stub-forgeable - harden before first R0 claim (audit MAJOR)",
+      "url": "https://github.com/wordingone/ember/issues/716"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02",
+        "EMBER-05"
+      ],
+      "body_sha256": "3a70b3e9a2e397c8d7e1ba9cc80ae7698d72e4600027ed101a73cc4128d11f5f",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 718,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02, EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T23:30:39Z",
+      "title": "Reusable update-survival preflight: BF16 update-granularity silent-freeze is a systemic hazard (3 independent instances 2026-07-10)",
+      "url": "https://github.com/wordingone/ember/issues/718"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02",
+        "EMBER-05"
+      ],
+      "body_sha256": "cdb599972fb00a673fd33410d972b44c9f8ca6067dfaf7b62084bb58663de429",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 722,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02, EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T23:25:22Z",
+      "title": "H-Q prereg (FROZEN): MTP horizon-quality screen - B(+2,+3) vs C(+1,+1) under common max-horizon mask, paired fixed-token delta",
+      "url": "https://github.com/wordingone/ember/issues/722"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "ef94951e44e58f34174d87d36ade8e189323ae345fb0a3591e5f8b2e5b6db588",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 723,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-10T23:44:32Z",
+      "title": "TRAJGATE-1 prereg (FROZEN): trajectory-gated self-reweighting screen - reference-free noise-band suppression vs matched-mass instantaneous control (axes 2x6, first #705-gated mechanism)",
+      "url": "https://github.com/wordingone/ember/issues/723"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "a38793f38910b0a1cdacd80b62b46669db5b7fac6d94720e76cf5f59162ec179",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 735,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T04:33:21Z",
+      "title": "baseline: trustworthy end-to-end baseline closure — W1 step25→50 replay (leg A) + program-level eval-suite baseline (leg B)",
+      "url": "https://github.com/wordingone/ember/issues/735"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "583b6a72272f773090daeef70afe4f1c097c2a0a4998c1fc3529ecf8c3548a2b",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 739,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-19T13:32:16Z",
+      "title": "exp: #711 ordering-screen CPU apparatus (intervals/manifest/permutation/scorer/verdict) per frozen v2+A7",
+      "url": "https://github.com/wordingone/ember/issues/739"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "b18524b5ef392a8b4c93ffa78862df43e9f441487289492c2ce3064ce6829918",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 744,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T02:42:04Z",
+      "title": "Frozen tokenizer.json has decoder:null despite ByteLevel pre_tokenizer — decode() returns raw ByteLevel pseudo-text",
+      "url": "https://github.com/wordingone/ember/issues/744"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-02"
+      ],
+      "body_sha256": "151c7cb727b37cfb5541b19da8a254f1ebfd3bfb38ea2343a2794b419d26b4a0",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 748,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-11T03:16:51Z",
+      "title": "trajgate lineage sidecar: checkpoint-evidence parent edges (follow-up to #737)",
+      "url": "https://github.com/wordingone/ember/issues/748"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "07b337a14f5e5c0285cfcee782b454e7e0d3d57df9911db9882f40e11da2f361",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 756,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-18T20:43:28Z",
+      "title": "liveness watchdog: commit-footprint governor (restart-on-leak) - cockpit hit 8.75GB at boot vs <2GB class",
+      "url": "https://github.com/wordingone/ember/issues/756"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "5e545a030267e63b2e4be8cd1a0f460c4d619e37223367e178ec460a42e200b8",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 757,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T00:57:44Z",
+      "title": "Leg-B scorer: in-process teacher-forced loglikelihood apparatus (serve_cbase_openai cannot score lm_eval tasks)",
+      "url": "https://github.com/wordingone/ember/issues/757"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "c4763b1825c8c585972b991acbf78611a26ac2998eb596cecb654c8d1caaa278",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 760,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T05:52:38Z",
+      "title": "W1/LACK-4 P0: heldout eval harness for the cbase class + receipted disjoint heldout slice",
+      "url": "https://github.com/wordingone/ember/issues/760"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "fe0850c787e0e05ad4565b715e05d259cf1b033888620e7a0f3988eddc93ea93",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 763,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T07:45:17Z",
+      "title": "governor.py reconciliation: land stage C-PORT precision ladder + in-run commit governor (dedicated reviewed PR)",
+      "url": "https://github.com/wordingone/ember/issues/763"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "e2b17bb0f1bac5bb2edb49a3418957ce6848ffaf415ebcfd0b3bbb06d5e00d92",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 764,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T15:59:26Z",
+      "title": "FACTOR-1 lever micro-bench: inner-optimizer-step floor per cure lever at 434M + 2.2B state shapes",
+      "url": "https://github.com/wordingone/ember/issues/764"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "37d2f753b4425a73106056d316157f7330c356007821945166e8ef3c85a4b055",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 767,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T07:19:16Z",
+      "title": "run_v0_segment resume path: eager 12.6GiB ungated load + heap-rebinding optimizer restore (memmap state silently detached at 2.2B)",
+      "url": "https://github.com/wordingone/ember/issues/767"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "dc3cc08eb23a6a25c54e7d3207ad5f9e232780eaa19d9d57dc5d8bf4be57def0",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 768,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T07:16:16Z",
+      "title": "timeshare_pretrain argparse surface diverged from conv_c03/cbase wrapper callers; mixture selftest T1 pre-existing failure",
+      "url": "https://github.com/wordingone/ember/issues/768"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "7c5d2eca723c04b9a3b96f6ac913ad2fe8d695fe67d75793c5fed0dc1e44ef9d",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 774,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-11T12:19:29Z",
+      "title": "runbook: coordinated GPU yield window 2026-07-11 (lease tokens, #702 rerun + #764 legs + #449 rider)",
+      "url": "https://github.com/wordingone/ember/issues/774"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "5b818fc918d297f04390a7c40b75440eb15000ff37b46918329c9d42cb1c4740",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 776,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T08:19:09Z",
+      "title": "tracked tokenizer.json fails direct from_str load (blocks tokenizer-dependent tests)",
+      "url": "https://github.com/wordingone/ember/issues/776"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "3dbb50fa4f30a3bbc9ca881941bf41cffdc87cf10598fb2d0c72853db0069355",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 778,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T08:52:32Z",
+      "title": "Pre-existing test failures disclosed at #777 landing: v0-pretrain-config drift (batch 4 vs 16, version 3 vs 4) + inf-perplexity defect",
+      "url": "https://github.com/wordingone/ember/issues/778"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "1339839cfe1d53851b1f63d3caa44a505a1af9a311d3cbd9733760f719493def",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 779,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T09:00:58Z",
+      "title": "PHASE-0 FIRST SIGNAL RUN (frozen run spec): rung-2 stabilization checkpoint series through the merged #726 runner",
+      "url": "https://github.com/wordingone/ember/issues/779"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "c7de07e01912405969c9647c1d76f5808ed9e62187b0cff5cdeb8a05776e99e3",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 782,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T11:55:22Z",
+      "title": "exp703 stage-2 frozen run spec: claim-A standalone byte-PPM floor (document-level BPB) + stage-B lattice route selection",
+      "url": "https://github.com/wordingone/ember/issues/782"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "9a03aa4f545e93642ec01d8d89ea9b5588d90451593aec258bb9377978dca4c6",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 784,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-11T10:53:35Z",
+      "title": "attribution/microbench staging-drive gate gap: preflight must measure the STAGING path's drive with the full phase-grown bill (ENOSPC killed the first #702 2.2B window leg)",
+      "url": "https://github.com/wordingone/ember/issues/784"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "e22a7d8fb3c29e578a2072218587fd6c931eea02f2aaaa26ef6e5333ce54d711",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 785,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-17T23:54:53Z",
+      "title": "C-BASE clause (d): fresh grow-operator dry-run under the hardened evidence schema (replay chain + probe-executed verification)",
+      "url": "https://github.com/wordingone/ember/issues/785"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "be7625782434ab24a31369a473546a7a535ddf3b4e3631f554b8181f7300a6ab",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 786,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T16:35:16Z",
+      "title": "Reproducible native ACCESS_VIOLATION in timeshare_pretrain.run_v0_segment CPU-sanity path at rung-2 scale (exit 3221225477)",
+      "url": "https://github.com/wordingone/ember/issues/786"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "4805b18db1827080c4123048969a89403254dda02ab73844dbc6a875bd09d6b9",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 787,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-19T14:35:06Z",
+      "title": "702 follow-through: per-branch executor specs frozen pre-receipt (copies-split probe, pinned-staging bound, residency economics)",
+      "url": "https://github.com/wordingone/ember/issues/787"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "28f14ac610df8136fc39c83495cf2f7f544387a61c83e23ecbbc8a3ca50b11b0",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 788,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-11T12:43:07Z",
+      "title": "Board-audit: *.INVALID.quarantine suffix sweep (quarantine-blindness hardening, refs #774 #702)",
+      "url": "https://github.com/wordingone/ember/issues/788"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "fd20b34606ee7287607fc1aeeb6df2aa23ee399f2173217c306cff73c13292f7",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 791,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-11T15:12:12Z",
+      "title": "Branch-A executor: NS5-residency yield-window economics — restore-cost constant + break-even table",
+      "url": "https://github.com/wordingone/ember/issues/791"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "62fe4a4d1eacffea4d1b963015cbdf479490cce78f686e73483525460dae3527",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 793,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T12:40:38Z",
+      "title": "timeshare_pretrain _check_launch_interlock does not forward shard_dir to v0_pretrain_launch_gate.gate() (caller-wiring gap)",
+      "url": "https://github.com/wordingone/ember/issues/793"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "cc4076c0118cad12205e36b736ea754c1be6746b6fe83319497639b5db4f02f9",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 795,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T17:09:08Z",
+      "title": "P1 step-price recalibration + rung-3 config pricing from attribution-702 measured components",
+      "url": "https://github.com/wordingone/ember/issues/795"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "632b462f90f87e8bb8fdba543935a25ac730ccf25c1ea712ad1daacb96143d96",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 796,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-18T16:55:58Z",
+      "title": "liveness-watchdog: headless respawns, no window attachment, no backoff alarm, races coordinator relaunches",
+      "url": "https://github.com/wordingone/ember/issues/796"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-05"
+      ],
+      "body_sha256": "0aae824f4da6e922d1bd6fdcdcb596a057a091896803c66b2b1166a60dd8f918",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-05",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 798,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-05.",
+      "snapshot_updated_at": "2026-07-11T16:32:40Z",
+      "title": "Screen-1 FROZEN PREREG: PPM oracle-bound screen for #703 (byte-level blending floor) — kill table frozen before any run",
+      "url": "https://github.com/wordingone/ember/issues/798"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "74ed87a253fb552376cdf8cb4ac1b3c6bc5304a78f034c337bed0eaec7b8c59a",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 801,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-11T17:09:09Z",
+      "title": "attribution successor instrument: per-optimizer inner-step span split (Muon/AdamW/NS5) + code-SHA binding",
+      "url": "https://github.com/wordingone/ember/issues/801"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "f55dc42e31cf302a165b482a8a228c21d56244c2c5ec35616a9cb95ae7367c45",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 802,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-11T16:16:44Z",
+      "title": "llama-server (:8082 tenant) has no supervisor loop — 20+ min unreceipted death window, caught only by a lane's pre-start check",
+      "url": "https://github.com/wordingone/ember/issues/802"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "0936c8c80df214e0f014e745760027c4313290eea0581324afd5d714ee43bd72",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 803,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-16T19:02:52Z",
+      "title": "Rung-3 working candidate FROZEN: ff=45863 (N=3,000,054,784 minimal 3B overshoot) + construction-tenancy plan — final freeze gated on 3 named receipts",
+      "url": "https://github.com/wordingone/ember/issues/803"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01",
+        "EMBER-03"
+      ],
+      "body_sha256": "992775317ba259435cd3a9fced5093f0c1d9c98def93ef40ef9fe150535e63ac",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": null,
+      "disposition": "cross_cutting",
+      "intended_state": "open",
+      "number": 804,
+      "rationale": "The issue names obligations belonging to multiple canonical milestones and therefore remains standalone.",
+      "snapshot_updated_at": "2026-07-11T17:36:21Z",
+      "title": "Probe evidence-scan hygiene: landed board renders are OUTPUTS, never evidence inputs (two spurious flips in one render)",
+      "url": "https://github.com/wordingone/ember/issues/804"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "82110f8fafcbf60bfeb719bde4e23ba795412adb12c0058f4237a0c9343adfbe",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 805,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-01.",
+      "snapshot_updated_at": "2026-07-16T19:03:27Z",
+      "title": "Issue-close sweep loop: 274 open issues, refs-never-closes discipline has no matching close half",
+      "url": "https://github.com/wordingone/ember/issues/805"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "d22de97155e6e36b5d5a4dd54e913de72a18ee8a317e90045c6c7777b48394b7",
+      "classification_basis": "explicit_title_milestone",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 812,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-18T16:13:08Z",
+      "title": "[EMBER-02] Bind clean-genesis 3B trainer input identity and shard forwarding end to end",
+      "url": "https://github.com/wordingone/ember/issues/812"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "89a4bd3bd50be02931a3d3e63b242f1013aae976122c89329e2542a9a1549274",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 869,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-16T14:45:35Z",
+      "title": "Add verifier-bound specialist microbatch execution",
+      "url": "https://github.com/wordingone/ember/issues/869"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "f416511eea852fc0062f5c70156716ebf0183f121206321fccf39abc8803635a",
+      "classification_basis": "explicit_title_milestone",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 872,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-02.",
+      "snapshot_updated_at": "2026-07-16T17:37:57Z",
+      "title": "[EMBER-02C] Land full-closure frozen evaluator integration",
+      "url": "https://github.com/wordingone/ember/issues/872"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-04"
+      ],
+      "body_sha256": "4cc8bea3da4bc9eddec1d7f63627b3548605f50b980c659d046a92faa49b4700",
+      "classification_basis": "explicit_title_milestone",
+      "desired_labels": [
+        "affects:EMBER-04",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-04",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 873,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-04.",
+      "snapshot_updated_at": "2026-07-16T17:38:00Z",
+      "title": "[EMBER-04] Implement grounded memory, world-model, and dreaming loop",
+      "url": "https://github.com/wordingone/ember/issues/873"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-07"
+      ],
+      "body_sha256": "7acecf69fe7348cbacc6cc49d93b8c64fcbc13b014ff60228d00e8fce99c629d",
+      "classification_basis": "explicit_title_milestone",
+      "desired_labels": [
+        "affects:EMBER-07",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-07",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 874,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-07.",
+      "snapshot_updated_at": "2026-07-16T17:38:01Z",
+      "title": "[EMBER-07] Execute owned 7B rung",
+      "url": "https://github.com/wordingone/ember/issues/874"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-08"
+      ],
+      "body_sha256": "3214ec8aeaab4e10671b4934f5dbbf14e5da0ad06d8b43c035bdff76c12aef42",
+      "classification_basis": "explicit_title_milestone",
+      "desired_labels": [
+        "affects:EMBER-08",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-08",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 875,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-08.",
+      "snapshot_updated_at": "2026-07-16T17:38:03Z",
+      "title": "[EMBER-08] Execute owned 15B rung",
+      "url": "https://github.com/wordingone/ember/issues/875"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-09"
+      ],
+      "body_sha256": "760c1da5d515c03dd49e27b7c358d7280160e0bbae4115ab783c636423eea975",
+      "classification_basis": "explicit_title_milestone",
+      "desired_labels": [
+        "affects:EMBER-09",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-09",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 876,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-09.",
+      "snapshot_updated_at": "2026-07-16T17:38:05Z",
+      "title": "[EMBER-09] Execute owned over-27B rung",
+      "url": "https://github.com/wordingone/ember/issues/876"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-11"
+      ],
+      "body_sha256": "991c5ed290db51b4ea503263bf726f7ca3f757d1940f03edf3b3447eb9306d1d",
+      "classification_basis": "explicit_title_milestone",
+      "desired_labels": [
+        "affects:EMBER-11",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-11",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 877,
+      "rationale": "The issue title or existing canonical milestone explicitly binds the remaining contract to EMBER-11.",
+      "snapshot_updated_at": "2026-07-16T17:38:07Z",
+      "title": "[EMBER-11] Publish independent local Ember release",
+      "url": "https://github.com/wordingone/ember/issues/877"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "a7f2c9ee7354813a80b0a04e725947c22d7ada7ef8a4d1facd4e7f46da54b1da",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 887,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-17T00:40:47Z",
+      "title": "Cockpit training telemetry can look live after trainer crash; emit FAILED and render STALE",
+      "url": "https://github.com/wordingone/ember/issues/887"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "867a4011cb899aa3b09eaa939bd182a3284ae1c3aa5528635d0ee03cc0601d5c",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 894,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-17T17:29:20Z",
+      "title": "Cockpit live view is missing the expected right-side training graphs",
+      "url": "https://github.com/wordingone/ember/issues/894"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "14133cca14883f4fa2cfae3cb662072a3fcb55b0c2ff52588bd0f094d5b44c86",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 896,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-17T03:54:43Z",
+      "title": "Defer low-commit checkpoint publication within a finite fail-closed bound",
+      "url": "https://github.com/wordingone/ember/issues/896"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "a1f2b2ec76837a9bed1afac899443458a26e8a88a4dc7427ef8bd5634f4cee26",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 898,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-18T18:17:25Z",
+      "title": "emberd absolute resource guard: OS-enforced commit/VRAM ceilings on every spawned run — kill the per-callsite preflight class",
+      "url": "https://github.com/wordingone/ember/issues/898"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "83daee4e197674020c2d346403e2cb10a668b9123089aad48db19a755b3ca875",
+      "classification_basis": "manual_clause_subject_review",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 917,
+      "rationale": "Manual clause-subject review of this otherwise ambiguous title binds the remaining public contract to EMBER-03.",
+      "snapshot_updated_at": "2026-07-19T12:49:04Z",
+      "title": "emberd: rehearsal-first dispatch + operator-alone operability (defect-class kill, not per-bug fixes)",
+      "url": "https://github.com/wordingone/ember/issues/917"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "b70a4e64733480cac76e409424516870fd4ba881e210b7109f3c6cf15108a062",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 930,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-19T15:21:49Z",
+      "title": "Make checkpoint artifacts directory-durable and add receipted ledger recovery",
+      "url": "https://github.com/wordingone/ember/issues/930"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-03"
+      ],
+      "body_sha256": "fb3abd728e9a00bc1bfba816934ec8a4d4c01d15f14f9b8b1244f498f927194c",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-03",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 1043,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-03.",
+      "snapshot_updated_at": "2026-07-24T14:57:06Z",
+      "title": "cockpit: left-pane right-edge mid-word cutoff — implement Text wrap prop + per-region wrap/ellipsize policy",
+      "url": "https://github.com/wordingone/ember/issues/1043"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-02"
+      ],
+      "body_sha256": "a856cc700a17ca1c89d146139c5050462599c4442ec51d2b0ef314ca61679b81",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-02",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 1056,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-02.",
+      "snapshot_updated_at": "2026-07-25T08:32:43Z",
+      "title": "Implement modern sparse checkpoint save that round-trips through /model checkpoint load",
+      "url": "https://github.com/wordingone/ember/issues/1056"
+    },
+    {
+      "affected_milestones": [
+        "EMBER-01"
+      ],
+      "body_sha256": "62386fe905d28ed7685fe9a9efb5cdcadfc21854d062af064bbba90436a00a5c",
+      "classification_basis": "deterministic_title_vocabulary",
+      "desired_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "desired_parent_subissue": "roadmap-parent:EMBER-01",
+      "disposition": "single_milestone",
+      "intended_state": "open",
+      "number": 1075,
+      "rationale": "The public issue title has one unambiguous milestone subject under the closed classification vocabulary: EMBER-01.",
+      "snapshot_updated_at": "2026-07-25T19:23:31Z",
+      "title": "repo-guard runs the candidate's own copy of the guard, so the required check is not base-trusted",
+      "url": "https://github.com/wordingone/ember/issues/1075"
+    }
+  ],
+  "repository": "wordingone/ember",
+  "schema_version": "ember-roadmap-issue-reconciliation-v1",
+  "source_issue_count": 214,
+  "source_master_sha": "73ba2165cb87e5d9e38c93ac8da667ba0c4b923a"
+}

@@ -1,0 +1,96 @@
+{
+  "schema_version": "ember-public-execution-graph-v1",
+  "program": {
+    "id": "EMBER",
+    "state": "ACTIVE",
+    "target_milestone": "EMBER-02",
+    "active_certificate_gate": "EMBER-01"
+  },
+  "semantics": {
+    "target_milestone": "The next product outcome being pursued.",
+    "active_certificate_gate": "The prerequisite whose exact completion evidence is still required before birth, certification, credit, or evaluation.",
+    "prestaging": "Independent preparation may proceed, but it grants no milestone credit.",
+    "waiting_on_prerequisite": "Only prerequisite-consuming operations are unavailable; the milestone contract remains intact."
+  },
+  "nodes": [
+    {
+      "id": "EMBER-00",
+      "contract": "docs/roadmap/milestones/EMBER-00.md",
+      "state": "AUTHORITY_IN_FORCE",
+      "depends_on": []
+    },
+    {
+      "id": "EMBER-01",
+      "contract": "docs/roadmap/milestones/EMBER-01.md",
+      "state": "ACTIVE_CERTIFICATION_GATE",
+      "depends_on": ["EMBER-00"]
+    },
+    {
+      "id": "EMBER-02",
+      "contract": "docs/roadmap/milestones/EMBER-02.md",
+      "state": "TARGET_PRESTAGING",
+      "depends_on": ["EMBER-01"],
+      "workstreams": [
+        {"id": "EMBER-02A", "scope": "integration and certified runtime", "state": "PRESTAGING"},
+        {"id": "EMBER-02B", "scope": "model, data, and training", "state": "PRESTAGING"},
+        {"id": "EMBER-02C", "scope": "checkpoint-bound evaluation", "state": "PRESTAGING"},
+        {"id": "EMBER-02P", "scope": "local foundation-model creation primitive", "state": "PRESTAGING"}
+      ]
+    },
+    {
+      "id": "EMBER-03",
+      "contract": "docs/roadmap/milestones/EMBER-03.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-02"]
+    },
+    {
+      "id": "EMBER-04",
+      "contract": "docs/roadmap/milestones/EMBER-04.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-03"]
+    },
+    {
+      "id": "EMBER-05",
+      "contract": "docs/roadmap/milestones/EMBER-05.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-04"]
+    },
+    {
+      "id": "EMBER-06",
+      "contract": "docs/roadmap/milestones/EMBER-06.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-05"]
+    },
+    {
+      "id": "EMBER-07",
+      "contract": "docs/roadmap/milestones/EMBER-07.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-06"]
+    },
+    {
+      "id": "EMBER-08",
+      "contract": "docs/roadmap/milestones/EMBER-08.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-07"]
+    },
+    {
+      "id": "EMBER-09",
+      "contract": "docs/roadmap/milestones/EMBER-09.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-08"]
+    },
+    {
+      "id": "EMBER-10",
+      "contract": "docs/roadmap/milestones/EMBER-10.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-09"]
+    },
+    {
+      "id": "EMBER-11",
+      "contract": "docs/roadmap/milestones/EMBER-11.md",
+      "state": "WAITING_ON_PREREQUISITE",
+      "depends_on": ["EMBER-10"]
+    }
+  ],
+  "credit_rule": "No scheduling state, preparation, pull request, issue closure, parameter allocation, or smoke run grants milestone credit. Only the exact version-controlled completion certificate can do so."
+}
