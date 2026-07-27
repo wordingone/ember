@@ -228,6 +228,69 @@ describe("train command", () => {
     }
   });
 
+  it("binds each offer to the session that minted it without spending it on foreign confirmation", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-session-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      const certifiedSpawns: RecordedSpawn[] = [];
+      const cmd = createTrainCommand({
+        pythonBin: "python",
+        repoRoot: scratch,
+        certifiedLaunchScriptPath: path.join(
+          scratch,
+          "tools",
+          "ember-restart-3b",
+          "certified_train_launch.py",
+        ),
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: (executable, args) => {
+          certifiedSpawns.push({ executable, args });
+          return {
+            status: 0,
+            stdout: JSON.stringify({
+              execution_receipt: "receipt.json",
+              artifact_root: "artifacts/run",
+            }),
+          };
+        },
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const mintingCtx = { ...mockCtx, sessionId: "minting-session" };
+      const foreignCtx = { ...mockCtx, sessionId: "foreign-session" };
+
+      const offerResult = await tryDispatchSlashCommand(
+        "/train",
+        mintingCtx,
+        dispatchDeps,
+      );
+      const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+
+      const foreignResult = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        foreignCtx,
+        dispatchDeps,
+      );
+      expect(foreignResult?.exitCode).toBe(1);
+      expect(foreignResult?.message).toContain("not valid for this session");
+      expect(certifiedSpawns).toHaveLength(0);
+
+      const ownerResult = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        mintingCtx,
+        dispatchDeps,
+      );
+      expect(ownerResult?.exitCode).toBeUndefined();
+      expect(ownerResult?.message).toContain("receipt.json");
+      expect(certifiedSpawns).toHaveLength(1);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   // =========================================================================
   // Registration
   // =========================================================================
