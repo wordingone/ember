@@ -106,7 +106,9 @@ class OwnedOpenAiServerTests(unittest.TestCase):
 
             admitted = resolve_central_owned_admission(
                 run_manifest=manifest, snapshot_manifest=snapshot,
-                trusted_verifier_registry=root / "registry.json", checkpoint_sha256=checkpoint, runner=runner,
+                trusted_verifier_registry=root / "registry.json",
+                trusted_verifier_registry_approval=root / "approval.json",
+                checkpoint_sha256=checkpoint, runner=runner,
             )
         self.assertEqual(admitted["checkpoint_sha256"], checkpoint)
     def test_development_identity_and_sse_completion_are_non_admissible(self) -> None:
@@ -347,6 +349,8 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 "--run-manifest", "run.json",
                 "--trusted-verifier-registry", "registry.json",
                 "--expected-registry-root-sha256", "d" * 64,
+                "--trusted-verifier-registry-approval", "approval.json",
+                "--expected-registry-approval-sha256", "e" * 64,
                 "--mode", "INTERACTIVE",
                 "--parent-pid", str(os.getpid()),
                 "--device", "cpu",
@@ -357,6 +361,8 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(events[1][0], "load")
         self.assertEqual(load.call_args.kwargs["config_path"], Path("config.json"))
         self.assertEqual(load.call_args.kwargs["expected_registry_root_sha256"], "d" * 64)
+        self.assertEqual(load.call_args.kwargs["trusted_verifier_registry_approval"], Path("approval.json"))
+        self.assertEqual(load.call_args.kwargs["expected_registry_approval_sha256"], "e" * 64)
         self.assertIsNone(load.call_args.kwargs["frozen_split"])
         create.assert_called_once_with(runtime, host="127.0.0.1", port=8000, mode="INTERACTIVE")
         server.serve_forever.assert_called_once_with()
@@ -781,18 +787,20 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         resolved = resolve_central_owned_admission(
             run_manifest=Path("run.json"),
             trusted_verifier_registry=Path("registry.json"),
+            trusted_verifier_registry_approval=Path("approval.json"),
             checkpoint_sha256=checkpoint,
             runner=runner,
         )
         self.assertEqual(resolved, payload)
         self.assertEqual(calls[0][1], "-I")
-        self.assertEqual(calls[0][-3:], ["run.json", "--trusted-verifier-registry", "registry.json"])
+        self.assertEqual(calls[0][-5:], ["run.json", "--trusted-verifier-registry", "registry.json", "--trusted-verifier-registry-approval", "approval.json"])
 
         payload["checkpoint_sha256"] = "b" * 64
         with self.assertRaisesRegex(ValueError, "checkpoint hash"):
             resolve_central_owned_admission(
                 run_manifest=Path("run.json"),
                 trusted_verifier_registry=Path("registry.json"),
+                trusted_verifier_registry_approval=Path("approval.json"),
                 checkpoint_sha256=checkpoint,
                 runner=runner,
             )
@@ -876,6 +884,20 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
         )
         return run_manifest_path
 
+    def _write_registry_approval(
+        self,
+        root: Path,
+        registry_path: Path,
+        *,
+        approved_registry_sha256: str | None = None,
+    ) -> tuple[Path, str]:
+        approval_path = root / "registry-approval.json"
+        approval_path.write_text(json.dumps({
+            "schema_version": "ember-trusted-verifier-registry-approval-v1",
+            "trusted_verifier_registry_sha256": approved_registry_sha256 or hashlib.sha256(registry_path.read_bytes()).hexdigest(),
+        }, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+        return approval_path, hashlib.sha256(approval_path.read_bytes()).hexdigest()
+
     def test_valid_real_checkpoint_loads_and_emits_pass_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -891,6 +913,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
             )
             registry_path = root / "registry.json"
             registry_path.write_text("{}", encoding="utf-8")
+            approval_path, approval_sha256 = self._write_registry_approval(root, registry_path)
 
             admission_payload = {
                 "valid": True,
@@ -913,6 +936,8 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                     frozen_split=None,
                     trusted_verifier_registry=registry_path,
                     expected_registry_root_sha256=hashlib.sha256(registry_path.read_bytes()).hexdigest(),
+                    trusted_verifier_registry_approval=approval_path,
+                    expected_registry_approval_sha256=approval_sha256,
                     device="cpu",
                     emit_validation_receipt=receipts.append,
                 )
@@ -931,6 +956,8 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
             self.assertEqual(receipt["actual_checkpoint_sha256"], real_checkpoint_sha256)
             self.assertEqual(receipt["claimed_checkpoint_sha256"], real_checkpoint_sha256)
             self.assertEqual(receipt["manifest_sha256"], real_checkpoint_sha256)
+            self.assertEqual(receipt["trusted_verifier_registry_sha256"], hashlib.sha256(registry_path.read_bytes()).hexdigest())
+            self.assertEqual(receipt["trusted_verifier_registry_approval_sha256"], approval_sha256)
             self.assertEqual(receipt["manifest_path"], str(checkpoint_dir / "checkpoint-manifest.json"))
             self.assertIn("ts", receipt)
 
@@ -966,6 +993,10 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
             # it does not match the forged file's own hash.
             pinned_root_sha256 = hashlib.sha256(b'{"verifiers": {"legit": {"sha256": "f" * 64}}}').hexdigest()
             self.assertNotEqual(pinned_root_sha256, forged_root_sha256)
+            approval_path, approval_sha256 = self._write_registry_approval(
+                root, forged_registry_path,
+                approved_registry_sha256=pinned_root_sha256,
+            )
 
             resolver = MagicMock()
             with (
@@ -982,9 +1013,54 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                         frozen_split=None,
                         trusted_verifier_registry=forged_registry_path,
                         expected_registry_root_sha256=pinned_root_sha256,
+                        trusted_verifier_registry_approval=approval_path,
+                        expected_registry_approval_sha256=approval_sha256,
                         device="cpu",
                     )
             # Fail-closed BEFORE the registry is ever handed to the resolver subprocess.
+            resolver.assert_not_called()
+
+    def test_registry_approval_is_byte_bound_and_authorizes_exact_registry_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint_dir = root / "checkpoint"
+            checkpoint_dir.mkdir()
+            (checkpoint_dir / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            run_manifest = root / "run.json"
+            run_manifest.write_text("{}", encoding="utf-8")
+            registry = root / "registry.json"
+            registry.write_text("{}", encoding="utf-8")
+            registry_sha256 = hashlib.sha256(registry.read_bytes()).hexdigest()
+            approval = root / "approval.json"
+            approval.write_text(json.dumps({
+                "schema_version": "ember-trusted-verifier-registry-approval-v1",
+                "trusted_verifier_registry_sha256": "f" * 64,
+            }, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+            approval_sha256 = hashlib.sha256(approval.read_bytes()).hexdigest()
+            resolver = MagicMock()
+
+            with patch("serve_owned_openai.resolve_central_owned_admission", resolver):
+                with self.assertRaisesRegex(ValueError, "does not authorize"):
+                    LoadedOwnedRuntime.from_paths(
+                        checkpoint=checkpoint_dir,
+                        tokenizer_path=root / "tokenizer.json",
+                        config_path=root / "config.json",
+                        run_manifest=run_manifest,
+                        frozen_split=None,
+                        trusted_verifier_registry=registry,
+                        expected_registry_root_sha256=registry_sha256,
+                        trusted_verifier_registry_approval=approval,
+                        expected_registry_approval_sha256=approval_sha256,
+                        device="cpu",
+                    )
+                with self.assertRaisesRegex(ValueError, "approval hash does not match"):
+                    LoadedOwnedRuntime.from_paths(
+                        checkpoint=checkpoint_dir, tokenizer_path=root / "tokenizer.json",
+                        config_path=root / "config.json", run_manifest=run_manifest, frozen_split=None,
+                        trusted_verifier_registry=registry, expected_registry_root_sha256=registry_sha256,
+                        trusted_verifier_registry_approval=approval,
+                        expected_registry_approval_sha256="0" * 64, device="cpu",
+                    )
             resolver.assert_not_called()
 
     def test_tampered_checkpoint_manifest_fails_closed_against_stale_admission_claim(self) -> None:
@@ -1005,6 +1081,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
             )
             registry_path = root / "registry.json"
             registry_path.write_text("{}", encoding="utf-8")
+            approval_path, approval_sha256 = self._write_registry_approval(root, registry_path)
 
             # Stale admission: bound to the checkpoint's ORIGINAL (pre-tamper) bytes.
             stale_admission_payload = {
@@ -1041,6 +1118,8 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                         frozen_split=None,
                         trusted_verifier_registry=registry_path,
                         expected_registry_root_sha256=hashlib.sha256(registry_path.read_bytes()).hexdigest(),
+                        trusted_verifier_registry_approval=approval_path,
+                        expected_registry_approval_sha256=approval_sha256,
                         device="cpu",
                         emit_validation_receipt=receipts.append,
                     )
@@ -1060,6 +1139,8 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                     frozen_split=None,
                     trusted_verifier_registry=Path(directory) / "registry.json",
                     expected_registry_root_sha256="0" * 64,
+                    trusted_verifier_registry_approval=Path(directory) / "approval.json",
+                    expected_registry_approval_sha256="1" * 64,
                     device="cpu",
                 )
 
@@ -1077,6 +1158,8 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                     frozen_split=None,
                     trusted_verifier_registry=Path(directory) / "registry.json",
                     expected_registry_root_sha256="0" * 64,
+                    trusted_verifier_registry_approval=Path(directory) / "approval.json",
+                    expected_registry_approval_sha256="1" * 64,
                     device="cpu",
                 )
 
@@ -1097,6 +1180,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
             )
             registry_path = root / "registry.json"
             registry_path.write_text("{}", encoding="utf-8")
+            approval_path, approval_sha256 = self._write_registry_approval(root, registry_path)
 
             admission_payload = {
                 "valid": True,
@@ -1130,8 +1214,55 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
                         frozen_split=None,
                         trusted_verifier_registry=registry_path,
                         expected_registry_root_sha256=hashlib.sha256(registry_path.read_bytes()).hexdigest(),
+                        trusted_verifier_registry_approval=approval_path,
+                        expected_registry_approval_sha256=approval_sha256,
                         device="cpu",
                     )
+
+    def test_registry_and_approval_are_snapshotted_before_resolver_consumption(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "checkpoint"
+            checkpoint.mkdir()
+            (checkpoint / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+            run_manifest = root / "run.json"
+            run_manifest.write_text("{}", encoding="utf-8")
+            registry = root / "registry.json"
+            registry_bytes = b'{"schema_version":"registry-v1"}'
+            registry.write_bytes(registry_bytes)
+            registry_sha256 = hashlib.sha256(registry_bytes).hexdigest()
+            approval, approval_sha256 = self._write_registry_approval(root, registry)
+            approval_bytes = approval.read_bytes()
+            observed_snapshots: list[Path] = []
+
+            def resolver(**kwargs: object) -> dict[str, object]:
+                registry_snapshot = Path(kwargs["trusted_verifier_registry"])
+                approval_snapshot = Path(kwargs["trusted_verifier_registry_approval"])
+                observed_snapshots.extend((registry_snapshot, approval_snapshot))
+                self.assertNotEqual(registry_snapshot, registry)
+                self.assertNotEqual(approval_snapshot, approval)
+                self.assertEqual(registry_snapshot.read_bytes(), registry_bytes)
+                self.assertEqual(approval_snapshot.read_bytes(), approval_bytes)
+                registry.write_bytes(b"substituted")
+                approval.write_bytes(b"substituted")
+                raise RuntimeError("stop after snapshot assertions")
+
+            with patch("serve_owned_openai.resolve_central_owned_admission", side_effect=resolver):
+                with self.assertRaisesRegex(RuntimeError, "stop after snapshot assertions"):
+                    LoadedOwnedRuntime.from_paths(
+                        checkpoint=checkpoint,
+                        tokenizer_path=root / "tokenizer.json",
+                        config_path=root / "config.json",
+                        run_manifest=run_manifest,
+                        frozen_split=None,
+                        trusted_verifier_registry=registry,
+                        expected_registry_root_sha256=registry_sha256,
+                        trusted_verifier_registry_approval=approval,
+                        expected_registry_approval_sha256=approval_sha256,
+                        device="cpu",
+                    )
+            self.assertEqual(len(observed_snapshots), 2)
+            self.assertTrue(all(not path.exists() for path in observed_snapshots))
 
 
 if __name__ == "__main__":
