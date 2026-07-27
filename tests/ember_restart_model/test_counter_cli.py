@@ -29,7 +29,7 @@ from checkpoint_artifacts import load_checkpoint_artifacts
 import parameter_counter
 from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION, canonical_record_bytes, open_specialist_stream
 from model import RestartDecoderConfig, UnifiedDecoder
-from checkpoint_fixture import write_checkpoint_artifacts
+from .checkpoint_fixture import write_checkpoint_artifacts
 
 
 
