@@ -20,6 +20,8 @@ export type OwnedServerLaunch =
       modelConfigPath: string;
       runManifestPath: string;
       trustedVerifierRegistryPath: string;
+      trustedVerifierRegistryApprovalPath: string;
+      trustedVerifierRegistryApprovalSha256: string;
     })
   | (OwnedServerLaunchBase & {
       authorityKind: "DEVELOPMENT";

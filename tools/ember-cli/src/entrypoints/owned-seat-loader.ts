@@ -60,6 +60,7 @@ export interface OwnedSeatLoaderInput {
   configHome: string;
   manifestPath?: string;
   verifierRegistryPath?: string;
+  verifierRegistryApprovalPath?: string;
   pythonExecutable?: string;
 }
 
@@ -392,11 +393,13 @@ const OWNED_LAUNCH_FIELDS = [
   "server_path",
   "tokenizer_path",
   "trusted_verifier_registry_path",
+  "trusted_verifier_registry_approval_path",
+  "trusted_verifier_registry_approval_sha256",
 ] as const;
 
 function parseOwnedLaunch(
   value: unknown,
-  expected: { manifestPath: string; registryPath: string; pythonExecutable: string },
+  expected: { manifestPath: string; registryPath: string; registryApprovalPath: string; pythonExecutable: string },
   exists: (path: string) => boolean,
 ): OwnedServerLaunch {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -429,11 +432,14 @@ function parseOwnedLaunch(
     serverPath: requireAbsolutePath("server_path"),
     tokenizerPath: requireAbsolutePath("tokenizer_path"),
     trustedVerifierRegistryPath: requireAbsolutePath("trusted_verifier_registry_path"),
+    trustedVerifierRegistryApprovalPath: requireAbsolutePath("trusted_verifier_registry_approval_path"),
+    trustedVerifierRegistryApprovalSha256: typeof payload["trusted_verifier_registry_approval_sha256"] === "string" && /^[0-9a-f]{64}$/.test(payload["trusted_verifier_registry_approval_sha256"]) ? payload["trusted_verifier_registry_approval_sha256"] : (() => { throw new Error("owned seat resolver returned an invalid launch descriptor"); })(),
   };
   if (
     !sameResolvedPath(launch.runManifestPath, expected.manifestPath) ||
     !sameResolvedPath(launch.trustedVerifierRegistryPath, expected.registryPath) ||
-    [launch.checkpointDir, launch.modelConfigPath, launch.runManifestPath, launch.serverPath, launch.tokenizerPath, launch.trustedVerifierRegistryPath]
+    !sameResolvedPath(launch.trustedVerifierRegistryApprovalPath, expected.registryApprovalPath) ||
+    [launch.checkpointDir, launch.modelConfigPath, launch.runManifestPath, launch.serverPath, launch.tokenizerPath, launch.trustedVerifierRegistryPath, launch.trustedVerifierRegistryApprovalPath]
       .some((path) => !exists(path))
   ) {
     throw new Error("owned seat resolver returned an invalid launch descriptor");
@@ -554,6 +560,14 @@ export function loadOwnedModelIdentity(
     throw new Error("trusted verifier registry does not exist: " + registryPath);
   }
 
+  const registryApprovalPath = resolve(
+    input.verifierRegistryApprovalPath ??
+      join(input.configHome, "owned", "trusted-registry-approval.json"),
+  );
+  if (!exists(registryApprovalPath)) {
+    throw new Error("trusted verifier registry approval does not exist: " + registryApprovalPath);
+  }
+
   const resolverPath = resolve(
     input.repoRoot,
     "scripts",
@@ -569,6 +583,8 @@ export function loadOwnedModelIdentity(
     manifestPath,
     "--trusted-verifier-registry",
     registryPath,
+    "--trusted-verifier-registry-approval",
+    registryApprovalPath,
   ]);
   if (result.status !== 0) {
     throw new Error("owned admission rejected: " + resolverError(result));
@@ -619,7 +635,7 @@ export function loadOwnedModelIdentity(
   const modelConfigCapabilities = parseModelConfigCapabilities(payload, modelConfigSha256);
   const launch = parseOwnedLaunch(
     payload["launch"],
-    { manifestPath, registryPath, pythonExecutable: input.pythonExecutable ?? "python" },
+    { manifestPath, registryPath, registryApprovalPath, pythonExecutable: input.pythonExecutable ?? "python" },
     exists,
   );
   return {

@@ -51,7 +51,24 @@ def _write_cert_manifest(tmp_path: Path, cert: dict, name: str = "cert-manifest.
 # in scripts/ember_restart/test_seat_identity_bridge.py.
 
 
-def _resolve(manifest: Path) -> subprocess.CompletedProcess[str]:
+def _approval(manifest: Path) -> Path:
+    registry = manifest.parent / "trusted-verifiers.json"
+    approval = manifest.parent / "trusted-registry-approval.json"
+    _write_json(
+        approval,
+        {
+            "schema_version": "ember-trusted-verifier-registry-approval-v1",
+            "trusted_verifier_registry_sha256": hashlib.sha256(registry.read_bytes()).hexdigest(),
+        },
+    )
+    return approval
+
+
+def _resolve(
+    manifest: Path,
+    approval: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    approval = approval or _approval(manifest)
     return subprocess.run(
         [
             sys.executable,
@@ -59,6 +76,8 @@ def _resolve(manifest: Path) -> subprocess.CompletedProcess[str]:
             str(manifest),
             "--trusted-verifier-registry",
             str(manifest.parent / "trusted-verifiers.json"),
+            "--trusted-verifier-registry-approval",
+            str(approval),
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -148,7 +167,11 @@ def test_axis6_production_path_reaches_seat_identity_bridge(tmp_path: Path, monk
         return {"valid": False, "seat": None, "errors": ["spy: refused by design"]}
 
     monkeypatch.setattr(cli_seat, "derive_seat_identity", _spy)
-    result = cli_seat.resolve_owned_seat(manifest_path, tmp_path / "trusted-verifiers.json")
+    result = cli_seat.resolve_owned_seat(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        _approval(manifest_path),
+    )
 
     assert len(calls) == 1, "production default path did not reach derive_seat_identity exactly once"
     seat_config, repo_root = calls[0]
@@ -281,3 +304,38 @@ def test_shard_tamper_with_unchanged_index_json_refused_through_production_path(
     payload = json.loads(result.stdout)
     assert payload["valid"] is False
     assert payload["seat"] is None
+
+
+def test_resolver_requires_external_registry_approval(tmp_path: Path, monkeypatch):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    registry = tmp_path / "trusted-verifiers.json"
+    approval = _approval(manifest_path)
+
+    def _admitted_bridge(_seat_config, *, repo_root):
+        assert repo_root == cli_seat.REPO_ROOT
+        return {
+            "valid": True,
+            "seat": {
+                "admitted": True,
+                "checkpointSha256": "a" * 64,
+                "modelConfigSha256": manifest["architecture"]["model_config"]["sha256"],
+                "tokenizerSha256": manifest["tokenizer"]["sha256"],
+            },
+            "errors": [],
+        }
+
+    monkeypatch.setattr(cli_seat, "derive_seat_identity", _admitted_bridge)
+    accepted = cli_seat.resolve_owned_seat(manifest_path, registry, approval)
+    assert accepted["valid"] is True
+
+    replaced = json.loads(registry.read_text(encoding="utf-8"))
+    replaced["verifiers"][0]["criterion_ids"] = ["candidate-replacement"]
+    _write_json(registry, replaced)
+    manifest["trusted_verifier_registry_sha256"] = hashlib.sha256(registry.read_bytes()).hexdigest()
+    _write_json(manifest_path, manifest)
+
+    rejected = cli_seat.resolve_owned_seat(manifest_path, registry, approval)
+    assert rejected["valid"] is False
+    assert any("external authority hash mismatch" in error for error in rejected["errors"])
