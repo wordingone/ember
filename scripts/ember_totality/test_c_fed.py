@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember totality test — Condition C-FED (status probe / TDD).
 
 C-FED — federation design (free compute, egress-gated; user reframe 2026-06-23).
@@ -40,6 +43,8 @@ import os
 import re
 import subprocess
 import sys
+
+from evidence_scan_hygiene import is_board_render_output
 
 # --- Locate <external-state> robustly across WSL mount conventions ----------------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -174,7 +179,11 @@ def candidate_files():
     ]
     for pat in name_pats:
         for p in glob.glob(pat, recursive=True):
-            if os.path.isfile(p) and not _under_meta_audit_family(p):
+            if (
+                os.path.isfile(p)
+                and not _under_meta_audit_family(p)
+                and not is_board_render_output(p)
+            ):
                 out.add(p)
     # Content-based: any md/json/txt under docs|receipts that actually contains
     # a word-boundary "egress" or "federation" (defeats the regression trap).
@@ -186,6 +195,8 @@ def candidate_files():
             if os.path.splitext(p)[1].lower() not in (".md", ".json", ".txt"):
                 continue
             if _under_meta_audit_family(p):
+                continue
+            if is_board_render_output(p):
                 continue
             try:
                 with open(p, "r", encoding="utf-8", errors="ignore") as fh:
@@ -238,6 +249,8 @@ def negative_scan_files():
         if os.path.splitext(q)[1].lower() not in (".md", ".json", ".txt"):
             continue
         if _under_meta_audit_family(q):
+            continue
+        if is_board_render_output(q):
             continue
         out.add(q)
     return sorted(out)

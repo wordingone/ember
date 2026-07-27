@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember totality test � Condition C12 (status probe / TDD).
 
 C12 � State-dependent cognitive modes.
@@ -44,6 +47,8 @@ import os
 import re
 import subprocess
 import sys
+
+from evidence_scan_hygiene import is_board_render_output
 
 # --- Locate <external-state> robustly across WSL mount conventions ----------------
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -118,7 +123,7 @@ def find_receipts(root):
             for name in sorted(os.listdir(d)):
                 if name.endswith(".json"):
                     p = os.path.join(d, name)
-                    if p not in seen:
+                    if p not in seen and not is_board_render_output(p):
                         seen.append(p)
         except OSError:
             continue
