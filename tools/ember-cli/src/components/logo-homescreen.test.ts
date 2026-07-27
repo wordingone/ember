@@ -7,7 +7,7 @@
 // Spec: state/field-ux-map.md §8b/§9; step-A mockups (state/design-mockups/welcome-homescreen...).
 
 import { describe, it, expect } from "bun:test";
-import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock, shortenDataRootForDisplay } from "./logo-homescreen.ts";
+import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock, shortenDataRootForDisplay, shortenPathForDisplay } from "./logo-homescreen.ts";
 import { color } from "./design-system.ts";
 
 // React.createElement returns a plain {type, props} tree -- inspectable without a renderer.
@@ -565,6 +565,47 @@ describe("Homescreen renders the Data: line without collapsing on a long worktre
     const state = { dataRoot: "Z:\\M\\ember" };
     const rendered = Homescreen({ state, viewportWidth: 190 });
     expect(findTextChild(rendered, "Data: Z:\\M\\ember")).toBe(true);
+  });
+});
+
+// Legibility bar (2026-07-26): the cwd line used a FIXED 40-char budget (LEFT_TEXT_WIDTH)
+// regardless of the actual terminal width -- clipToWidth compared the raw path against 40, said
+// "fits", and the outer renderer then silently hard-clipped it at the real (narrower) column with
+// no marker at all: "C:\Users\Admin\ember-wt\opprob" in production, no ellipsis whatsoever. RED on
+// pre-fix master: identityTextWidth/shortenPathForDisplay did not exist, and renderIdentityBlock's
+// clipToWidth(state.cwd, LEFT_TEXT_WIDTH) never shrank below 40 no matter how narrow the terminal.
+describe("shortenPathForDisplay — left-truncation with a visible marker, for any path surface", () => {
+  it("returns a short path unchanged when it already fits the budget", () => {
+    expect(shortenPathForDisplay("C:\\Users\\Admin\\ember-wt", 40)).toBe("C:\\Users\\Admin\\ember-wt");
+  });
+
+  it("shortens a long path to its last two segments with a LEADING ellipsis (drops the front, keeps the identifying tail)", () => {
+    const long = "C:\\Users\\Admin\\ember-wt\\legibility-0743\\deep\\nested\\dir";
+    const result = shortenPathForDisplay(long, 24);
+    expect(result.startsWith("…")).toBe(true);
+    expect(result.endsWith("nested\\dir")).toBe(true);
+  });
+
+  it("a path with two or fewer segments is returned unchanged (nothing meaningful to trim)", () => {
+    const oneLongSegment = "C:\\" + "x".repeat(60);
+    expect(shortenPathForDisplay(oneLongSegment, 40)).toBe(oneLongSegment);
+  });
+});
+
+describe("Homescreen's cwd line shrinks its truncation budget to the ACTUAL narrow viewport (legibility bar)", () => {
+  it("at a narrow viewport, a long cwd is truncated with a visible marker instead of showing the full untruncated path", () => {
+    const state = { cwd: "C:\\Users\\Admin\\ember-wt\\legibility-0743\\tools\\ember-cli\\opprobrious-long-worktree-name" };
+    const rendered = Homescreen({ state, viewportWidth: 24 });
+    // Never the full, untruncated path at a viewport this narrow.
+    expect(findTextChild(rendered, state.cwd)).toBe(false);
+    // Always carries a visible truncation marker somewhere in the cwd line.
+    expect(findTextWhere(rendered, (s) => s.includes("…") && s.includes("ember-cli"))).toBe(true);
+  });
+
+  it("at a wide viewport, a short cwd renders in full (no information lost when there's room)", () => {
+    const state = { cwd: "C:\\M\\ember" };
+    const rendered = Homescreen({ state, viewportWidth: 190 });
+    expect(findTextChild(rendered, "C:\\M\\ember")).toBe(true);
   });
 });
 

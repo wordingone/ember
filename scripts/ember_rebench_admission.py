@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Admit locally materialized RE-Bench for the Ember external benchmark path."""
 from __future__ import annotations
 
@@ -13,7 +16,6 @@ from typing import Any
 
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 
-DEFAULT_REBENCH_ROOT = Path(r"<local-path>")
 DEFAULT_OUT_DIR = Path("receipts/ember-post-resident-discovery")
 REBENCH_GITHUB = "https://github.com/METR/RE-Bench"
 REBENCH_ARXIV = "https://arxiv.org/abs/2411.15114"
@@ -233,12 +235,17 @@ def build_admission_receipt(*, repo: Path, rebench_root: Path, out: Path) -> dic
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
-    parser.add_argument("--rebench-root", default=str(DEFAULT_REBENCH_ROOT))
+    parser.add_argument("--rebench-root", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
     if args.selftest:
         import ember_rebench_admission_selftest
         return ember_rebench_admission_selftest.main()
+    if not args.rebench_root:
+        parser.error(
+            "--rebench-root is required unless --selftest is used (no baked-in "
+            "default; original path was scrubbed for public export, see issue #261)"
+        )
     repo = Path.cwd().resolve()
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = Path(args.out) if args.out else DEFAULT_OUT_DIR / f"rebench-admission-{ts}.json"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # repo-guard — the structural-invariant kernel for this repository.
 #
 # One script, run identically by (1) the local pre-commit/pre-push hook,
@@ -29,7 +30,27 @@
 # Tunables (env): MAX_STATE_LINES (default 150), MAX_BRANCHES (default 25).
 
 set -u
-cd "$(git rev-parse --show-toplevel)" || { echo "repo-guard: not in a git repo"; exit 2; }
+SUBJECT_ROOT="${REPO_GUARD_SUBJECT_ROOT:-}"
+if [ -z "$SUBJECT_ROOT" ]; then
+  SUBJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+    echo "repo-guard: not in a git repo"
+    exit 2
+  }
+fi
+KERNEL_ROOT="${REPO_GUARD_KERNEL_ROOT:-$SUBJECT_ROOT}"
+SUBJECT_ROOT="$(cd "$SUBJECT_ROOT" 2>/dev/null && pwd -P)" || {
+  echo "repo-guard: subject root is unavailable"
+  exit 2
+}
+KERNEL_ROOT="$(cd "$KERNEL_ROOT" 2>/dev/null && pwd -P)" || {
+  echo "repo-guard: kernel root is unavailable"
+  exit 2
+}
+git -C "$SUBJECT_ROOT" rev-parse --show-toplevel >/dev/null 2>&1 || {
+  echo "repo-guard: subject root is not a git repository"
+  exit 2
+}
+cd "$SUBJECT_ROOT" || exit 2
 
 FAIL=0
 note() { printf '  - %s\n' "$1"; }
@@ -63,7 +84,7 @@ else
 fi
 
 # ---- 1b. tracked text files must be LF-only ------------------------------
-if python tools/check_line_endings.py; then
+if python "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -91,8 +112,7 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # frozen-before. Enumerated individually -- NEVER directory globs. Each entry
 # has a REDACTIONS.md row. The operator-name checks still cover these files
 # in full (this exclusion applies ONLY to the paths grep).
-PATHPAT_EXCLUDE=(
-  ':(exclude)tools/repo-guard.sh'
+PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)scripts/test_w1b_continuation.py'
   ':(exclude)tools/ember-cli/src/core/monitor-render.test.ts'
   ':(exclude)tools/ember-cli/src/components/homescreen-mock1-parity.test.ts'
@@ -100,21 +120,25 @@ PATHPAT_EXCLUDE=(
   ':(exclude)receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json'
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
 )
+PATHPAT_SELF_EXCLUDE_ARGS=()
+if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
+  PATHPAT_SELF_EXCLUDE_ARGS=(':(exclude)tools/repo-guard.sh')
+fi
 # Commit-time invocation (REPO_GUARD_SCOPE=staged, set by .githooks/pre-commit)
 # scans only the ADDED lines of the staged diff, so a branch carrying
 # pre-existing tracked residue with this shape does not block every commit
 # regardless of what the commit actually introduces. The tree-wide scan
 # (default, no env var) is unchanged and is what CI / the freshness monitor
-# run. Same PATHPAT, same PATHPAT_EXCLUDE pathspecs, applied to the diff.
+# run. Same PATHPAT and conditional/fixture pathspecs, applied to the diff.
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
-  if git diff --cached -U0 --no-color -- . "${PATHPAT_EXCLUDE[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+  if git diff --cached -U0 --no-color -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
     fail "paths" "absolute local filesystem paths in staged changes"
     sed 's/^/      /' /tmp/rg_paths | head -20
   else
     ok "paths" "no absolute local paths (staged scope)"
   fi
 else
-  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_EXCLUDE[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
     fail "paths" "absolute local filesystem paths in tracked files"
     sed 's/^/      /' /tmp/rg_paths | head -20
   else
@@ -125,7 +149,15 @@ fi
 # ---- 2b. no local path fragments in tracked text (avir/, /mnt refs) -------
 # Detect patterns like /mnt/..../M/avir/ or /M/avir that carry developer-local context.
 PATHFRAG='(/mnt/[^/]*/M/avir/)|(/M/avir)'
-if git grep -nIE "$PATHFRAG" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/check_names_hashed.py' ':(exclude)tools/repo-guard-denylist.sha256' >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
+PATHFRAG_SELF_EXCLUDE_ARGS=()
+if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
+  PATHFRAG_SELF_EXCLUDE_ARGS=(
+    ':(exclude)tools/repo-guard.sh'
+    ':(exclude)tools/check_names_hashed.py'
+    ':(exclude)tools/repo-guard-denylist.sha256'
+  )
+fi
+if git grep -nIE "$PATHFRAG" -- . "${PATHFRAG_SELF_EXCLUDE_ARGS[@]}" >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
   fail "path-frags" "local WSL/mount path fragments in tracked files"
   sed 's/^/      /' /tmp/rg_pathfrags | head -20
 else
@@ -143,29 +175,46 @@ fi
 # SKIP all NAME checks if backup exemption is applied (exact-match private mirror only)
 if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
   NAMES_EXCLUDE_ARGS=()
-  if [ -f tools/repo-guard-names-exclude.txt ]; then
+  NAMES_EXCLUDE_FILE="$KERNEL_ROOT/tools/repo-guard-names-exclude.txt"
+  if [ -f "$NAMES_EXCLUDE_FILE" ]; then
     while IFS= read -r prefix; do
       prefix="$(printf '%s' "$prefix" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       [ -z "$prefix" ] && continue
       case "$prefix" in \#*) continue ;; esac
       NAMES_EXCLUDE_ARGS+=(":(exclude)${prefix}")
-    done < tools/repo-guard-names-exclude.txt
+    done < "$NAMES_EXCLUDE_FILE"
+  fi
+  NAMES_SELF_EXCLUDE_ARGS=()
+  if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
+    NAMES_SELF_EXCLUDE_ARGS=(
+      ':(exclude)tools/repo-guard.sh'
+      ':(exclude)tools/.repo-guard-denylist'
+    )
   fi
   NAMES=""
   if [ -n "${REPO_GUARD_NAMES:-}" ]; then
     NAMES="$REPO_GUARD_NAMES"
-  elif [ -f tools/.repo-guard-denylist ]; then
+  elif [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ] && [ -f tools/.repo-guard-denylist ]; then
     NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
   fi
   if [ -n "$NAMES" ]; then
-    if git grep -nIiE "\b(${NAMES})\b" -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/.repo-guard-denylist' "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
+    if git grep -nIiE "\b(${NAMES})\b" -- . "${NAMES_SELF_EXCLUDE_ARGS[@]}" "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
       fail "names" "operator names in tracked files"
       sed 's/^/      /' /tmp/rg_names | head -20
     else
       ok "names" "none found"
     fi
-  elif [ -f tools/repo-guard-denylist.sha256 ]; then
-    HASHED_OUT="$(python tools/check_names_hashed.py 2>&1)"
+  elif [ -f "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" ]; then
+    HASHED_SELF_ARGS=()
+    if [ "$KERNEL_ROOT" != "$SUBJECT_ROOT" ]; then
+      HASHED_SELF_ARGS+=(--scan-guard-surfaces)
+    fi
+    HASHED_OUT="$(
+      python "$KERNEL_ROOT/tools/check_names_hashed.py" \
+        --root "$SUBJECT_ROOT" \
+        --denylist "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" \
+        --names-exclude "$NAMES_EXCLUDE_FILE" "${HASHED_SELF_ARGS[@]}" 2>&1
+    )"
     HASHED_RC=$?
     case "$HASHED_RC" in
       0) ok "names" "none found (hashed denylist)" ;;
@@ -256,8 +305,8 @@ if [ -n "$RANGE" ]; then
 fi
 
 # ---- 9. authority and totality conservation -----------------------------
-if [ ! -f scripts/verify_authority_conservation.py ]; then
-  fail "authority" "scripts/verify_authority_conservation.py is missing"
+if [ ! -f "$KERNEL_ROOT/scripts/verify_authority_conservation.py" ]; then
+  fail "authority" "trusted scripts/verify_authority_conservation.py is missing"
 else
   AUTHORITY_ARGS=(--root .)
   if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
@@ -265,7 +314,7 @@ else
   elif [ -n "$RANGE" ]; then
     AUTHORITY_ARGS+=(--changed-range "$RANGE")
   fi
-  AUTHORITY_OUT="$(python scripts/verify_authority_conservation.py "${AUTHORITY_ARGS[@]}" 2>&1)"
+  AUTHORITY_OUT="$(python "$KERNEL_ROOT/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
   AUTHORITY_RC=$?
   if [ "$AUTHORITY_RC" -eq 0 ]; then
     ok "authority" "EMBER authority conservation certificate passes"

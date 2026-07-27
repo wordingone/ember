@@ -1,0 +1,23 @@
+{
+  "architecture": "cond3-artifact-b: 2x2 float32 linear probe, no experts, no router",
+  "backend.command": "cond3-artifact-b: backend launch command, python -m ember_serve --fixture",
+  "backend.executable": "cond3-artifact-b: backend executable identity stub, ember-serve-fixture v1",
+  "backend.process_receipt": "cond3-artifact-b: process receipt, candidate not currently running",
+  "data.accepted_input.authority_record": "cond3-artifact-b: accepted-training-input authority record, github-issue-1015",
+  "data.accepted_input.caller": "cond3-artifact-b: forwarding caller identity, scripts/ember_restart/build_cond3_artifact_b_fixture.py",
+  "data.accepted_input.forwarding_receipt": "cond3-artifact-b: forwarding receipt, input accepted 2026-07-23",
+  "data.accepted_input.gate": "cond3-artifact-b: accepted-input gate decision, PASS",
+  "data.accepted_input.shard_manifest": "cond3-artifact-b: shard manifest, 1 shard, 0 rows dropped",
+  "data.accepted_input.validator": "cond3-artifact-b: accepted-input validator program v1",
+  "data.corpus": "cond3-artifact-b-corpus-fixture: owned pre-birth candidate corpus shard",
+  "data.curriculum": "cond3-artifact-b-curriculum-fixture: single-stage, no curriculum switches",
+  "data.ordering": "cond3-artifact-b-ordering-fixture: deterministic shard order [0]",
+  "data.verifier": "cond3-artifact-b-verifier-fixture: accepted-input verifier v1 stub",
+  "evaluation.comparator": "cond3-artifact-b: evaluation comparator stub, none selected pre-birth",
+  "evaluation.harness": "cond3-artifact-b: evaluation harness stub, no benchmark executed pre-birth",
+  "evaluation.receipt": "cond3-artifact-b: evaluation receipt, counts_toward_owned_completion=false",
+  "tokenizer": "cond3-artifact-b-tokenizer-fixture: byte-level, vocab_size=256",
+  "training.numerics": "cond3-artifact-b: numerics profile bf16-activations-fp32-master",
+  "training.optimizer_state": "cond3-artifact-b: optimizer state, adamw, step=100, no exposure yet",
+  "training.stopping_rule_receipt": "cond3-artifact-b: sufficient-pretraining-v1 criterion NOT_REACHED at step 100"
+}

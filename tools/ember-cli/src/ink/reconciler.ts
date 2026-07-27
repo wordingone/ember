@@ -608,6 +608,7 @@ export interface MountOptions {
   stream: { write(s: string): void };
   stdout: { columns: number; rows: number };
   debug?: boolean;
+  onFirstFrameFlushed?: () => void;
 }
 
 /**
@@ -628,6 +629,7 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     stream: options.stream,
     stdout: options.stdout,
     debug:  options.debug,
+    onFirstFrameFlushed: options.onFirstFrameFlushed,
   });
 
   const container: InkContainer = {

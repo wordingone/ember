@@ -41,3 +41,4 @@ baseline/**/*.md text eol=lf
 baseline/**/*.json text eol=lf
 baseline/**/*.jsonl text eol=lf
 INVARIANT.md -text
+tests/fixtures/ember-cli/issue-243/live-resize-v1/** -text -diff

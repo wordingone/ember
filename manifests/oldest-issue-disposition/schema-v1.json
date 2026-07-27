@@ -1,0 +1,368 @@
+{
+  "$defs": {
+    "closeEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "blob_sha1": {
+          "$ref": "#/$defs/sha1"
+        },
+        "citation": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "clean_checkout": {
+          "const": true
+        },
+        "commit_sha": {
+          "$ref": "#/$defs/sha1"
+        },
+        "passed": {
+          "const": true
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "production_shaped": {
+          "const": true
+        },
+        "test_command": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "citation",
+        "commit_sha",
+        "path",
+        "blob_sha1",
+        "test_command",
+        "production_shaped",
+        "clean_checkout",
+        "passed"
+      ],
+      "type": "object"
+    },
+    "comment": {
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "body_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "url": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "url",
+        "body_sha256",
+        "author",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "authorityReview": {
+      "additionalProperties": false,
+      "properties": {
+        "citation": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "reviewed_commit_sha": {
+          "$ref": "#/$defs/sha1"
+        },
+        "reviewer": {
+          "const": "delegated-authority"
+        },
+        "verdict": {
+          "const": "PASS"
+        }
+      },
+      "required": [
+        "reviewer",
+        "verdict",
+        "citation",
+        "reviewed_commit_sha"
+      ],
+      "type": "object"
+    },
+    "sha1": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sourceClause": {
+      "additionalProperties": false,
+      "properties": {
+        "citation": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "issue_body",
+            "issue_comment"
+          ]
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "status": {
+          "enum": [
+            "BOUND",
+            "UNBOUND",
+            "SUPERSEDED",
+            "NEGATIVE"
+          ]
+        }
+      },
+      "required": [
+        "source_kind",
+        "citation",
+        "source_sha256",
+        "status"
+      ],
+      "type": "object"
+    },
+    "timestamp": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "type": "string"
+    },
+    "unboundClause": {
+      "additionalProperties": false,
+      "properties": {
+        "citation": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "citation",
+        "source_sha256",
+        "description"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/wordingone/ember/manifests/oldest-issue-disposition/schema-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "goal_id": {
+          "const": "EMBER-02"
+        },
+        "next_executed_outcome": {
+          "const": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+        },
+        "workstream_id": {
+          "const": "EMBER-02A"
+        }
+      },
+      "required": [
+        "goal_id",
+        "workstream_id",
+        "next_executed_outcome"
+      ],
+      "type": "object"
+    },
+    "capture": {
+      "type": "object"
+    },
+    "capture_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "deletion_or_issue_mutation_authority": {
+      "const": "NOT_GRANTED"
+    },
+    "disposition_counts": {
+      "additionalProperties": false,
+      "properties": {
+        "CLOSE": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "NEGATIVE-KEEP": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "PARTIAL": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "SUPERSEDED": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "CLOSE",
+        "NEGATIVE-KEEP",
+        "PARTIAL",
+        "SUPERSEDED"
+      ],
+      "type": "object"
+    },
+    "master_sha": {
+      "$ref": "#/$defs/sha1"
+    },
+    "packet_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "public_issue_mutation_performed": {
+      "const": false
+    },
+    "receipts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_issue_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "close_evidence": {
+            "items": {
+              "$ref": "#/$defs/closeEvidence"
+            },
+            "type": "array"
+          },
+          "disposition": {
+            "enum": [
+              "CLOSE",
+              "PARTIAL",
+              "SUPERSEDED",
+              "NEGATIVE-KEEP"
+            ]
+          },
+          "issue_number": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "issue_url": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "authority_review": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/authorityReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receipt_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "replacement_citation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retained_lesson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "smallest_binding_action": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_clause_inventory": {
+            "items": {
+              "$ref": "#/$defs/sourceClause"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "unbound_clause": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/unboundClause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "issue_number",
+          "issue_url",
+          "capture_issue_sha256",
+          "disposition",
+          "source_clause_inventory",
+          "unbound_clause",
+          "smallest_binding_action",
+          "replacement_citation",
+          "retained_lesson",
+          "close_evidence",
+          "authority_review",
+          "receipt_sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 20,
+      "minItems": 20,
+      "type": "array"
+    },
+    "repository": {
+      "const": "wordingone/ember"
+    },
+    "schema_version": {
+      "const": "ember-oldest-issue-disposition-packet-v1"
+    },
+    "selection_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "required": [
+    "authority",
+    "schema_version",
+    "repository",
+    "master_sha",
+    "capture",
+    "capture_sha256",
+    "selection_sha256",
+    "receipts",
+    "disposition_counts",
+    "deletion_or_issue_mutation_authority",
+    "public_issue_mutation_performed",
+    "packet_sha256"
+  ],
+  "title": "Ember oldest open issue disposition packet",
+  "type": "object"
+}

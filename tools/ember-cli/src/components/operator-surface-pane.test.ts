@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
-import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane, PLOT_PREFIX_WIDTH } from "./operator-surface-pane.ts";
+import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane, PLOT_PREFIX_WIDTH, layoutControlRows } from "./operator-surface-pane.ts";
 import type { TelemetryState } from "../services/telemetry-watch.ts";
 import type { ActivityFeedLine } from "./activity-feed-pane.ts";
 
@@ -300,7 +300,10 @@ describe("OperatorSurfacePane", () => {
     expect(rows.some((row) => row.includes("checkpoint"))).toBe(true);
     expect(rows.filter((row) => row.includes("step/time")).length).toBe(1);
     expect(rows.filter((row) => row.includes("checkpoint")).length).toBe(1);
-    expect(rows.some((row) => row.includes(String.fromCodePoint(0x2588)))).toBe(true);
+    // R1d: at 80x24 with room to spare, the loss chart GROWS beyond one row and renders via the
+    // Braille canvas (U+2800-U+28FF) rather than the flat single-row block glyph (U+2588) --
+    // either is a real, non-blank plotted value, which is the substantive claim here.
+    expect(rows.some((row) => /[█⠀-⣿]/.test(row))).toBe(true);
     expect(rows.some((row) => row.includes("loss 2 1"))).toBe(false);
   });
   test("downsamples long histories to plot width while preserving checkpoint alignment", () => {
@@ -366,7 +369,11 @@ describe("OperatorSurfacePane", () => {
       train("run-grid", 2, "2026-07-17T17:30:02.000Z", 2, { step_ms: 900, learning_rate: 0.001 }),
       train("run-grid", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 800, tokens_per_second: 300, learning_rate: 0.0005 }),
     ];
-    const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
+    // Pinned to the exact-fit height for this fixture (R1d acceptance #4): zero surplus, so
+    // every metric line stays at its pre-R1d single-row rendering -- this test's per-point gap
+    // alignment is a claim about THAT rendering, not about growth, which a taller mount would
+    // now correctly trigger (covered separately by the R1d growth tests).
+    const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 20, terminalColumns: 80, terminalRows: 20, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
     const body = (element as any).props.children;
     const text = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string") as string[];
     expect(text.find((line) => line.startsWith("step/time"))).toContain("1 2 3");
@@ -420,15 +427,216 @@ describe("OperatorSurfacePane", () => {
     const body = (element as any).props.children;
     const controlRow = (body.props.children as any[]).find((child) => child?.key === "controls");
     const controls = controlRow.props.children as any[];
-    expect(controls.map((control) => control.props.children.props.children)).toEqual(["[START]", "[PAUSE]", "[RESUME]", "[RESTART]"]);
-    const pause = controls.find((control) => control.props.children.props.children === "[PAUSE]");
+    // R2b: labels now carry the focus marker slot (unfocused = two leading spaces) and the
+    // accelerator-decorated action name -- see operatorControlLabel.
+    expect(controls.map((control) => control.props.children.props.children)).toEqual([
+      "  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]",
+    ]);
+    const pause = controls.find((control) => control.props.children.props.children === "  [(P)AUSE]");
     expect(typeof pause.props.onClick).toBe("function");
     pause.props.onClick();
     expect(calls).toEqual([{ action: "PAUSE", runId: "run-control" }]);
   });
+  test("RED->GREEN: a metric with zero samples on an actively RUNNING run reads AWAITING FIRST SAMPLE, not SOURCE UNBOUND", () => {
+    // The run IS live (a train_step arrived just now, well inside ACTIVE_RUN_TTL_MS) and IS
+    // emitting some fields (loss, tokens_per_second) -- gpu_watts simply hasn't shown up in any
+    // event yet. That is a temporal "no samples so far, may still arrive" state, structurally
+    // different from a dead/idle channel where the metric can never arrive. Before this test the
+    // two states rendered identically as "SOURCE UNBOUND".
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const graphs = buildOperatorSurfaceGraphs(telemetry({
+      recentEvents: [
+        train("run-live", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-live", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ],
+    }), 80, now);
+    expect(graphs.resource).toContain("GPU WATTS: AWAITING FIRST SAMPLE");
+    expect(graphs.resource).not.toContain("GPU WATTS: SOURCE UNBOUND");
+  });
+
+  test("RED->GREEN: a metric with zero samples on a dead/idle channel still reads SOURCE UNBOUND", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const graphs = buildOperatorSurfaceGraphs(telemetry(), 80, now);
+    expect(graphs.modelGrowth).toEqual(["MODEL GROWTH: SOURCE UNBOUND"]);
+    const staleRun = buildOperatorSurfaceGraphs(telemetry({
+      recentEvents: [train("run-cold", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 50 })],
+    }), 80, now);
+    expect(staleRun.resource).toContain("GPU WATTS: SOURCE UNBOUND");
+    expect(staleRun.resource).not.toContain("GPU WATTS: AWAITING FIRST SAMPLE");
+  });
+
+  test("RED->GREEN: the rendered compact pane distinguishes AWAITING FIRST SAMPLE from SOURCE UNBOUND at the same call site the operator sees", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    const runningElement = OperatorSurfacePane({
+      telemetry: telemetry({ recentEvents: [
+        train("run-compact", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-compact", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ] }),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: now,
+    });
+    const runningBody = (runningElement as any).props.children;
+    const runningRows = (runningBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
+    expect(runningRows.some((row: string) => row.startsWith("GPU watts") && row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
+
+    const idleElement = OperatorSurfacePane({
+      telemetry: telemetry(),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: now,
+    });
+    const idleBody = (idleElement as any).props.children;
+    const idleRows = (idleBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
+    expect(idleRows.some((row: string) => row.startsWith("GPU watts") && row.includes("SOURCE UNBOUND"))).toBe(true);
+  });
+
+  test("legibility width sweep: AWAITING FIRST SAMPLE / SOURCE UNBOUND / a plotted curve are all distinguishable at 40, 60, and 80 columns", () => {
+    const now = Date.parse("2026-07-26T00:00:05.000Z");
+    for (const width of [40, 60, 80]) {
+      const element = OperatorSurfacePane({
+        telemetry: telemetry({ recentEvents: [
+          train("run-sweep", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+          train("run-sweep", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+        ] }),
+        activityLines: [], width, height: 24, terminalColumns: width, terminalRows: 24,
+        nowMs: now,
+      });
+      const body = (element as any).props.children;
+      const rows = (body.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string") as string[];
+      // A live curve (tokens/s has 2 real samples): must render plotted glyphs, not a fixed word.
+      const tokensRow = rows.find((row) => row.startsWith("tokens/s"));
+      expect(tokensRow).toBeDefined();
+      expect(tokensRow).not.toContain("SOURCE UNBOUND");
+      expect(tokensRow).not.toContain("AWAITING FIRST SAMPLE");
+      // A metric this run hasn't produced yet, while running: AWAITING, never UNBOUND.
+      const gpuWattsRow = rows.find((row) => row.startsWith("GPU watts"));
+      // D2 rebase interaction (legibility scope addition, 2026-07-26): "GPU watts" padded to 20
+      // cols + "AWAITING FIRST SAMPLE" (21 chars) is 41 characters -- it never fit inside the
+      // pane's true content budget (innerWidth = effectiveWidth - 4, border + padding both
+      // accounted for) at 40 columns (innerWidth 36); it only appeared to fit before because
+      // this test predates the legibility pass's border+padding accounting fix and read the
+      // pre-fix, over-generous bound. At 40 columns the correct behavior is a visible "…"
+      // marker, never a silent full-text assumption; 60/80 columns have room for the phrase
+      // whole and keep the original assertion.
+      expect(gpuWattsRow).not.toContain("SOURCE UNBOUND");
+      if (width === 40) {
+        expect(gpuWattsRow).toContain("AWAITING FIRST");
+        expect(gpuWattsRow).toContain("…");
+        expect(gpuWattsRow).not.toContain("AWAITING FIRST SAMPLE");
+      } else {
+        expect(gpuWattsRow).toContain("AWAITING FIRST SAMPLE");
+      }
+    }
+  });
+
+  test("legibility width sweep: the real Ink viewport renders both labels without a truncated/blank row at 40 columns", () => {
+    const chunks: string[] = [];
+    const element = React.createElement(OperatorSurfacePane, {
+      telemetry: telemetry({ recentEvents: [
+        train("run-sweep-ink", 1, "2026-07-26T00:00:04.000Z", 1.2, { tokens_per_second: 100 }),
+        train("run-sweep-ink", 2, "2026-07-26T00:00:05.000Z", 1.1, { tokens_per_second: 110 }),
+      ] }),
+      activityLines: [], width: 40, height: 24, terminalColumns: 40, terminalRows: 24,
+      nowMs: Date.parse("2026-07-26T00:00:05.000Z"),
+    });
+    const handle = mountInk(element, { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns: 40, rows: 24 } });
+    handle.unmount();
+    const frame = buildFrame(40, 24);
+    parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
+    const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
+    expect(rows.every((row) => row.length === 40)).toBe(true);
+    expect(rows.some((row) => row.includes("AWAITING"))).toBe(true);
+    // R1d: room at 24 rows may grow the chart into Braille output (U+2800-U+28FF) instead of the
+    // flat single-row block/eighth glyphs -- any of the three is a real plotted value.
+    expect(rows.some((row) => /[█▁⠀-⣿]/.test(row))).toBe(true);
+  });
+
   test("renders a truthful activity pane title", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry(), activityLines: [], width: 48 });
     expect((element as any).props["data-operator-surface"]).toBe("right-pane");
     expect((element as any).props.children.props.borderTitle).toBe("LIVE RUN / ACTIVITY/EVENT FEED");
+  });
+
+  // -------------------------------------------------------------------------
+  // Legibility bar (2026-07-26): "no control label is truncated — controls are the last thing
+  // to lose characters, never the first" + "the layout reflows... two columns cut in half is
+  // never the answer." RED on pre-fix master: the controls Box was a flat flexDirection:"row"
+  // with no wrap (flexWrap is a dead prop in layout-engine.ts) — at a narrow pane the outer
+  // overflow:"hidden" box raw-clipped the row mid-label: "[START] [PAUSE] [RESUME] [RES".
+  // -------------------------------------------------------------------------
+  describe("layoutControlRows — controls never truncate, they wrap instead", () => {
+    test("packs all four controls on one row when the width comfortably fits them", () => {
+      expect(layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 80)).toEqual([
+        ["START", "PAUSE", "RESUME", "RESTART"],
+      ]);
+    });
+
+    test("wraps to multiple rows, never splitting a label, at a narrow width", () => {
+      const rows = layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 20);
+      const flatLabels = rows.flat();
+      expect(flatLabels).toEqual(["START", "PAUSE", "RESUME", "RESTART"]);
+      for (const row of rows) {
+        const rowWidth = row.reduce((sum, action) => sum + `[${action}]`.length + 1, 0);
+        expect(rowWidth).toBeLessThanOrEqual(20 + `[${row[row.length - 1]}]`.length + 1); // never demands the row shrink a label
+      }
+    });
+
+    test("even a pathologically narrow width gives every label its own row rather than cutting it", () => {
+      const rows = layoutControlRows(["START", "PAUSE", "RESUME", "RESTART"], 1);
+      expect(rows.flat()).toEqual(["START", "PAUSE", "RESUME", "RESTART"]);
+      expect(rows.every((row) => row.length === 1)).toBe(true);
+    });
+  });
+
+  test("at a narrow pane width, every control label renders IN FULL across wrapped rows instead of being clipped", () => {
+    const element = OperatorSurfacePane({
+      telemetry: telemetry({ recentEvents: [train("run-narrow", 1, "2026-07-17T17:30:01.000Z", 2)] }),
+      activityLines: [], width: 24, height: 20, terminalColumns: 24, terminalRows: 20,
+      nowMs: Date.parse("2026-07-17T17:30:02.000Z"),
+    });
+    const body = (element as any).props.children;
+    const controlsElement = (body.props.children as any[]).find((child) => child?.key === "controls");
+    // Recursively collect every rendered control label string ("[START]" etc.) regardless of
+    // whether they sit flat or nested under wrapped row Boxes.
+    const collectLabels = (node: any): string[] => {
+      if (!node || typeof node !== "object") return [];
+      const kids = node.props?.children;
+      if (typeof kids === "string") return [kids];
+      if (Array.isArray(kids)) return kids.flatMap(collectLabels);
+      if (kids && typeof kids === "object") return collectLabels(kids);
+      return [];
+    };
+    const labels = collectLabels(controlsElement);
+    expect(labels).toEqual(["  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]"]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Legibility bar: "no metric value is truncated... shortens by an explicit, defined rule with
+  // a visible marker — never silent character-level clipping." RED on pre-fix master: graph/
+  // metric/source/agent lines were handed to the outer overflow:"hidden" box unbounded, which
+  // hard-clipped anything too long with NO marker ("SOURCE UN" instead of "SOURCE UNBOUND").
+  // -------------------------------------------------------------------------
+  test("no rendered content line exceeds the pane's inner width, and any shortened line carries a visible marker", () => {
+    const element = OperatorSurfacePane({
+      telemetry: telemetry({
+        channelStatus: "OFFLINE",
+        recentEvents: [train("run-x", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000 })],
+      }),
+      activityLines: [{ ts: "2026-07-17T17:30:00.000Z", source: "watchdog", text: "871 watchdog events collapsed into one summary line for the report", path: "Z:\\repo\\ember\\tools\\ember-cli\\state\\process-watch.json" }],
+      width: 36, height: 20, terminalColumns: 36, terminalRows: 20,
+      nowMs: Date.parse("2026-07-17T17:30:05.000Z"),
+    });
+    const body = (element as any).props.children;
+    const innerWidth = 36 - 2;
+    const rows = (body.props.children as any[])
+      .map((child) => child?.props?.children)
+      .filter((value) => typeof value === "string");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.length).toBeLessThanOrEqual(innerWidth);
+    }
+    // The exact silent-clip fragment this bug produced in production ("SOURCE UN" cut mid-word,
+    // e.g. a metric-family row) must never appear again: any row containing "SOURCE UN" either
+    // completes it to "SOURCE UNBOUND"/"SOURCE UNVERIFIED/UNBOUND" or carries the ellipsis marker.
+    expect(rows.some((row: string) => row.includes("SOURCE UN") && !row.includes("SOURCE UNBOUND") && !row.includes("SOURCE UNVERIFIED") && !row.includes(ellipsis))).toBe(false);
   });
 });

@@ -1,0 +1,102 @@
+{
+  "schema_version": "ember-public-custody-branch-retirement-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "record_type": "REMOTE_BRANCH_RETIREMENT_RECEIPT",
+  "claim_boundary": "repository-custody-only; no capability, training, checkpoint, or admission claim",
+  "repository": "wordingone/ember",
+  "master_sha_at_record": "80f8fe3055457f4550a6d9dd66687826e5446f77",
+  "batch_id": "C1-BRANCH-RETIREMENT-775-20260719",
+  "ref": "refs/heads/fix/210-receipt-spend-field",
+  "retired_head_sha": "294def11e4952295e47e3effa8ccb97ebc517af2",
+  "authorization": {
+    "scope": "exactly this ref and no other ref",
+    "expected_old_sha": "294def11e4952295e47e3effa8ccb97ebc517af2",
+    "expires_at": "2026-07-19T18:45:00-07:00",
+    "precondition": "fresh exact-ref GET matched expected_old_sha"
+  },
+  "merged_lineage": {
+    "pull_request": 775,
+    "pull_request_url": "https://github.com/wordingone/ember/pull/775",
+    "pull_request_state": "MERGED",
+    "merged_at": "2026-07-11T08:26:04Z",
+    "base_sha": "93b5b7260ddca9c0fa8344e93924d4ab16190895",
+    "branch_head_sha": "294def11e4952295e47e3effa8ccb97ebc517af2",
+    "merge_sha": "0bfa3a46a3dcf7c1693a6c92025442386b2c21d6",
+    "actual_merge_parent_sha": "93b5b7260ddca9c0fa8344e93924d4ab16190895",
+    "merge_is_ancestor_of_master": true
+  },
+  "patch_equivalence": {
+    "base_to_branch_head": {
+      "status": "ahead",
+      "ahead_by": 1,
+      "behind_by": 0,
+      "paths": [
+        {
+          "path": "receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
+          "status": "added",
+          "additions": 1,
+          "deletions": 0,
+          "terminal_blob": "c8fdf638ca251bfb5b976c77587b378fcfaec684"
+        },
+        {
+          "path": "receipts/ember-c-scale/land210i-harness-entry-receipt.json",
+          "status": "added",
+          "additions": 1,
+          "deletions": 0,
+          "terminal_blob": "1c2f41872dab34f0cc7db17e464db4d4df6fe345"
+        }
+      ]
+    },
+    "actual_merge_parent_to_merge": {
+      "status": "ahead",
+      "ahead_by": 1,
+      "behind_by": 0,
+      "paths_equal_to_base_to_branch_head": true,
+      "terminal_blobs_equal_to_branch_head": true
+    }
+  },
+  "reconstruction": {
+    "commands": [
+      "git fetch origin refs/pull/775/head:refs/reconstruct/branch-retirement-775",
+      "test \"$(git rev-parse --verify refs/reconstruct/branch-retirement-775^{commit})\" = \"294def11e4952295e47e3effa8ccb97ebc517af2\"",
+      "git show --stat 294def11e4952295e47e3effa8ccb97ebc517af2",
+      "git diff --stat 93b5b7260ddca9c0fa8344e93924d4ab16190895..294def11e4952295e47e3effa8ccb97ebc517af2",
+      "git diff --stat 93b5b7260ddca9c0fa8344e93924d4ab16190895..0bfa3a46a3dcf7c1693a6c92025442386b2c21d6",
+      "git diff --exit-code 294def11e4952295e47e3effa8ccb97ebc517af2:receipts/ember-c-scale/land210g-experiment-runners-receipt.json 0bfa3a46a3dcf7c1693a6c92025442386b2c21d6:receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
+      "git diff --exit-code 294def11e4952295e47e3effa8ccb97ebc517af2:receipts/ember-c-scale/land210i-harness-entry-receipt.json 0bfa3a46a3dcf7c1693a6c92025442386b2c21d6:receipts/ember-c-scale/land210i-harness-entry-receipt.json"
+    ],
+    "pre_delete_git_transport_attempt": {
+      "command_shape": "git push --force-with-lease=refs/heads/fix/210-receipt-spend-field:294def11e4952295e47e3effa8ccb97ebc517af2 origin :refs/heads/fix/210-receipt-spend-field",
+      "wrapper_exit_code": 1,
+      "result": "REFUSED_BEFORE_REMOTE_MUTATION",
+      "failure": "Windows CreateFileMapping access error followed by unavailable GitHub credential prompt"
+    },
+    "authorized_api_delete": {
+      "command": "gh api -X DELETE repos/wordingone/ember/git/refs/heads/fix%2F210-receipt-spend-field",
+      "wrapper_exit_code": 0,
+      "stdout": "",
+      "result": "remote deletion accepted"
+    }
+  },
+  "post_delete_verification": {
+    "exact_ref_get": {
+      "ref": "refs/heads/fix/210-receipt-spend-field",
+      "http_status": 404,
+      "result": "ABSENT",
+      "observed_at": "2026-07-19T10:30:06.8549094Z"
+    },
+    "branch_count": {
+      "before": 246,
+      "after": 245,
+      "net_delta": -1,
+      "page_counts_after": [100, 100, 45],
+      "observed_at": "2026-07-19T10:30:18.8700997Z"
+    }
+  },
+  "public_receipt": {
+    "required_follow_up": "post this record's immutable commit URL on PR #775",
+    "no_private_paths": true
+  }
+}

@@ -411,6 +411,51 @@ export function ModelMetricsBar({ metrics }: ModelMetricsBarProps): React.ReactE
 }
 
 // ---------------------------------------------------------------------------
+// Width-aware segment reflow (legibility bar, 2026-07-26): the bar row used to append the mode
+// indicator, the mode text ("bypass permissions on"), the model-metrics meter, and the roundtrip
+// indicator with no width accounting at all — a narrow terminal let the outer renderer silently
+// hard-clip the row mid-word ("bypass permissions on ·" with nothing after it and no marker).
+// The core identity text is never dropped or truncated as long as it alone fits; DECORATIONS
+// (the optional trailing segments) disappear in priority order under width pressure instead —
+// "the layout reflows" for a status line means fewer segments, not a clipped one.
+// ---------------------------------------------------------------------------
+
+/** One optional trailing segment (its own separator is implicit: SEGMENT_SEPARATOR + text). */
+export interface StatusBarOptionalSegment {
+  key: string;
+  text: string;
+}
+
+export interface FittedStatusBarLine {
+  /** The core text, unmodified unless it alone exceeds `width` (then marker-truncated). */
+  core: string;
+  /** Optional segments that survive, in their original order. */
+  kept: StatusBarOptionalSegment[];
+}
+
+/** Chooses which optional segments survive at `width` columns, dropping from the END of
+ *  `optional` (lowest priority — callers order `optional` highest-priority first) until the
+ *  core + surviving segments fit. `width` undefined/non-finite means "no constraint known yet"
+ *  (e.g. first render before layout settles) — nothing is dropped. The core itself is truncated
+ *  with a visible "…" marker only when it alone cannot fit even with zero optional segments —
+ *  never a silent clip. */
+export function fitStatusBarLine(
+  core: string,
+  optional: StatusBarOptionalSegment[],
+  width: number | undefined,
+): FittedStatusBarLine {
+  if (width === undefined || !Number.isFinite(width) || width <= 0) return { core, kept: optional };
+  const segmentWidth = (s: StatusBarOptionalSegment): number => SEGMENT_SEPARATOR.length + s.text.length;
+  let kept = optional;
+  while (kept.length > 0 && core.length + kept.reduce((sum, s) => sum + segmentWidth(s), 0) > width) {
+    kept = kept.slice(0, -1);
+  }
+  if (core.length <= width) return { core, kept };
+  if (width === 1) return { core: "…", kept: [] };
+  return { core: `${core.slice(0, width - 1)}…`, kept: [] };
+}
+
+// ---------------------------------------------------------------------------
 // StatusLine — root status-bar component (uses useInput)
 // ---------------------------------------------------------------------------
 
@@ -436,6 +481,12 @@ export interface StatusLineProps {
    *  Absent → indicator hidden (no guarded client wired yet); present → always rendered,
    *  healthy or degraded alike, so a wedge is visible even without a tripped circuit. */
   roundtripAge?: RoundtripAgeState;
+  /** Render only the single bounded base bar; all transient detail rows remain in state. */
+  compact?: boolean;
+  /** Available column width for the bar row (mainColumnWidth from the caller). Absent → no
+   *  width constraint is applied (legacy behavior). Legibility bar, 2026-07-26: without this,
+   *  the bar row had no way to know it was about to overflow the pane it renders in. */
+  width?: number;
 }
 
 export function StatusLine({
@@ -450,6 +501,8 @@ export function StatusLine({
   degraded,
   outage,
   roundtripAge,
+  compact = false,
+  width,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
     if (key.shift && key.tab)    { permissionMode.cycle(); return; }
@@ -457,9 +510,23 @@ export function StatusLine({
     if (key.ctrl && _input === "t") { taskPanel.toggle(); return; }
   });
 
-  const text = statusBarText(permissionMode.mode, taskPanel.visible);
+  const text = statusBarText(permissionMode.mode, compact ? false : taskPanel.visible);
   const modeIndicator = renderModeIndicator(cognitiveMode ?? "observe", false);
-  const telemetryLabel = telemetryMemoKey(telemetry);
+  const telemetryLabel = compact ? null : telemetryMemoKey(telemetry);
+
+  // Core = "<mode glyph+label> · <bypass/regular text>" — the identity the operator must always
+  // be able to read. Optional segments are ordered highest-priority FIRST: model metrics (ember's
+  // unique-capability meter) survive longer than the roundtrip age indicator when width runs out.
+  const coreText = `${modeIndicator}${SEGMENT_SEPARATOR}${text}`;
+  const modelMetricsText = !compact && modelMetrics != null ? formatModelMetrics(modelMetrics) : null;
+  const roundtripText = !compact && roundtripAge != null ? formatRoundtripAgeText(roundtripAge, Date.now()) : null;
+  const optionalSegments: StatusBarOptionalSegment[] = [
+    ...(modelMetricsText != null ? [{ key: "metrics", text: modelMetricsText }] : []),
+    ...(roundtripText != null ? [{ key: "roundtrip", text: roundtripText }] : []),
+  ];
+  const fitted = fitStatusBarLine(coreText, optionalSegments, width);
+  const keptKeys = new Set(fitted.kept.map((s) => s.key));
+  const coreOverflowed = fitted.core !== coreText;
 
   return React.createElement(
     // #561 P0-A: StatusLine is fixed bottom chrome, never a flex-shrink target — see the same
@@ -467,19 +534,19 @@ export function StatusLine({
     // shrinks this box toward 0 rows and it vanishes from the frame.
     Box,
     { flexDirection: "column", flexShrink: 0 },
-    outage != null
+    !compact && outage != null
       ? React.createElement(OutageBanner, { key: "outage", outage })
       : null,
-    degraded != null
+    !compact && degraded != null
       ? React.createElement(DegradedBanner, { key: "degraded", degraded })
       : null,
-    effort != null
+    !compact && effort != null
       ? React.createElement(EffortCallout, { key: "effort", effort })
       : null,
-    coordinator != null
+    !compact && coordinator != null
       ? React.createElement(CoordinatorAgentStatus, { key: "coord", coordinator })
       : null,
-    taskPanel.visible
+    !compact && taskPanel.visible
       ? React.createElement(TaskListV2, { key: "tasks", tasks: taskPanel.tasks })
       : null,
     telemetryLabel != null
@@ -487,21 +554,33 @@ export function StatusLine({
       : null,
     React.createElement(
       Box,
-      { key: "bar", flexDirection: "row" },
-      React.createElement(Text, { key: "mode", dimColor: true }, modeIndicator),
-      React.createElement(Text, { key: "sep", dimColor: true }, SEGMENT_SEPARATOR),
-      React.createElement(Text, { key: "text" }, text),
-      // Live model metrics meter — absent when no server is connected.
+      { key: "bar", flexDirection: "row", height: compact ? 1 : undefined, overflow: compact ? "hidden" : undefined },
+      // Legibility bar (2026-07-26): the core identity text is never dropped and, once it alone
+      // no longer fits `width`, renders as ONE marker-truncated string (fitted.core) instead of
+      // three separate always-present fragments that the outer box used to hard-clip raw
+      // ("bypass permissions on ·" with nothing after and no marker). coreOverflowed only ever
+      // happens at pathologically narrow widths — every normal width keeps the original
+      // mode/sep/text coloring.
+      coreOverflowed
+        ? React.createElement(Text, { key: "core", dimColor: true }, fitted.core)
+        : React.createElement(React.Fragment, { key: "core" },
+            React.createElement(Text, { key: "mode", dimColor: true }, modeIndicator),
+            React.createElement(Text, { key: "sep", dimColor: true }, SEGMENT_SEPARATOR),
+            React.createElement(Text, { key: "text" }, text),
+          ),
+      // Live model metrics meter — absent when no server is connected, OR dropped first under
+      // width pressure so the core identity text above always survives.
       // Neither competitor can show local VRAM/throughput; this scores 0 for them.
-      modelMetrics != null
+      !compact && modelMetrics != null && keptKeys.has("metrics")
         ? React.createElement(React.Fragment, { key: "metrics" },
             React.createElement(Text, { key: "msep", dimColor: true }, SEGMENT_SEPARATOR),
             React.createElement(ModelMetricsBar, { key: "mbar", metrics: modelMetrics }),
           )
         : null,
-      // issue #239: always-visible last-successful-roundtrip age — never hidden the
-      // way DegradedBanner is, since it must read as "wedged" even before any circuit trips.
-      roundtripAge != null
+      // issue #239: always-visible last-successful-roundtrip age — never hidden the way
+      // DegradedBanner is UNLESS width pressure demands it (legibility bar takes priority over
+      // "never hidden": an unreadable wedge indicator helps nobody).
+      !compact && roundtripAge != null && keptKeys.has("roundtrip")
         ? React.createElement(React.Fragment, { key: "roundtrip" },
             React.createElement(Text, { key: "rsep", dimColor: true }, SEGMENT_SEPARATOR),
             React.createElement(RoundtripAgeIndicator, { key: "rbar", roundtripAge }),

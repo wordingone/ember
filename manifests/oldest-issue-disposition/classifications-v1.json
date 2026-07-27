@@ -1,0 +1,187 @@
+{
+  "expected_issue_numbers": [
+    3,
+    7,
+    8,
+    12,
+    14,
+    20,
+    29,
+    35,
+    37,
+    46,
+    47,
+    53,
+    54,
+    55,
+    92,
+    98,
+    99,
+    105,
+    107,
+    111
+  ],
+  "rows": [
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 3,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the current resident-training gate and publish one current-master receipt with empty invalid_codes plus the named C14/C4/C5 reruns.",
+      "unbound_description": "No current public PASS receipt binds the resident-training runner and required board probes."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 7,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run the measured P1 energy-envelope points and the first real BOOTSTRAP_PASS under one governed receipt pair.",
+      "unbound_description": "Measured P1 energy-envelope points and a real BOOTSTRAP_PASS receipt remain absent."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 8,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the preregistered iso-FLOP grow-versus-scratch comparison with net2net identity and deletion-control receipts.",
+      "unbound_description": "The complete iso-FLOP growth comparison and its preregistered conjunctive verdict are not publicly bound."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 12,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute all eight frozen axes and publish the single PASS, FAIL, or UNEVALUABLE conjunctive verdict consumed by the board probe.",
+      "unbound_description": "No preregistration-bound eight-axis conjunctive verdict and consuming board receipt exists."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 14,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run one registry-wired governance probe covering every named predicate and publish its operator-acceptance objects.",
+      "unbound_description": "The five governance-clock predicates are not jointly bound by a current machine receipt."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 20,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Re-earn the one-hour and three-hour windows and publish executed evidence pointers plus the hardened C11 GREEN receipt.",
+      "unbound_description": "Fresh earned one-hour and three-hour duration receipts with deletion sensitivity remain absent."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 29,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and freeze the staged S1-S5 apex receipt with owned growth lineage, token bill, W2 finetune, deletion linkage, and working-set governance.",
+      "unbound_description": "The staged owned-scale apex receipt has not been produced."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 35,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Resolve every listed contract-text divergence and publish an operator-ratified machine findings receipt.",
+      "unbound_description": "The contract-integrity defect classes are not all resolved by a current audit and acceptance object."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 37,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Produce the exact A20 rung-1 and rung-2 ruling, then execute the frozen mechanism-redesign arm if its trigger fires.",
+      "unbound_description": "The A20 rung-2 trigger verdict and required follow-on mechanism receipt are absent."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 46,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the complete ember-cli versus avir-cli parity matrix, including predecessor coverage and idle-flame behavior, and publish the fresh-reader receipt.",
+      "unbound_description": "No current receipt proves the complete behavioral parity matrix."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 47,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run one native 4090 single-process 27B-class co-resident train-step and inference-pass experiment and publish all five measured assertions.",
+      "unbound_description": "A real non-dry-run 27B-class co-residency receipt is not publicly bound."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 53,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the frozen S0-S5 GPU window in order and publish the resolved commands, predicates, and numbered window receipts.",
+      "unbound_description": "The live S0-S5 GPU-window preflight and execution receipt set is incomplete."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 54,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Publish pre/post per-frame dimension evidence from the current installed CLI and rerun the named jitter regression.",
+      "unbound_description": "The current installed binary lacks a two-sided per-frame geometry receipt proving the jitter cure."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 55,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Land the complete inference-to-training translation gap table with citations and an in-tree citation gate.",
+      "unbound_description": "The complete cited training-translation map and enforcing gate are absent."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 92,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute the R0-R5 autonomy ladder with five clean receipted windows per rung and publish the invariant-gated transfer evidence.",
+      "unbound_description": "No executed R0-R5 autonomy-ladder evidence exists."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 98,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Run fresh independent one-hour and three-hour chains and publish active-runs visibility plus hardened C11 GREEN and old-chain RED evidence.",
+      "unbound_description": "The rebuilt one-hour and three-hour developmental-duration chains remain unearned."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 99,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Stage, name, upload, and verify the current reachable checkpoint on Hugging Face with an immutable revision receipt.",
+      "unbound_description": "No reachable current checkpoint staging and upload receipt is public."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 105,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Backfill model-authored same-task wrong attempts for all 48 tasks and publish append-only pool, dedup PASS, and C-LADM GREEN receipts.",
+      "unbound_description": "The 48-task model-authored wrong-attempt control class is incomplete."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 107,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Complete a fresh 24-hour continuation after the rebuilt one-hour and three-hour chain and publish inherited-versus-fresh timing plus hardened C11 evidence.",
+      "unbound_description": "The 24-hour tier has not been re-earned on the corrected duration chain."
+    },
+    {
+      "disposition": "PARTIAL",
+      "issue_number": 111,
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Make /train execute the governed training run under the existing preflight and certified-launch gates, then publish CLI-frame and execution-receipt evidence.",
+      "unbound_description": "The rendered /train command is discoverable but explicitly does not launch training, so canonical Ember CLI operability remains unproved."
+    }
+  ],
+  "schema_version": "ember-oldest-issue-classifications-v1"
+}

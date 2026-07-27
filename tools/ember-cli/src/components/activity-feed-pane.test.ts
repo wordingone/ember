@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/activity-feed-pane.test.ts — issue #485 rung 1: pure formatting + render tests
 // for the activity feed pane. Follows the DegradedBanner/EffortCallout convention (call the
 // component function directly, inspect the returned element's props — no render harness).
@@ -5,6 +8,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   truncateMiddle,
+  truncatePathLeft,
   visibleActivityFeedLines,
   formatActivityFeedLine,
   ActivityFeedPane,
@@ -43,6 +47,34 @@ describe("truncateMiddle", () => {
   it("never grows the string", () => {
     const long = "a".repeat(200);
     expect(truncateMiddle(long, 50).length).toBeLessThanOrEqual(50);
+  });
+});
+
+// Legibility bar (2026-07-26): "paths truncate from the left with a marker, consistently
+// everywhere" -- the operator's own measured defect showed one path rendered middle-truncated
+// (via truncateMiddle above) and a sibling path in the same frame hard-clipped raw with NO marker
+// at all. truncatePathLeft is the one rule every path surface now routes through.
+describe("truncatePathLeft", () => {
+  it("returns the string unchanged when within the limit", () => {
+    expect(truncatePathLeft("short.json", 48)).toBe("short.json");
+  });
+
+  it("drops the FRONT of a long path and keeps the tail, with a single leading ellipsis", () => {
+    const long = "Z:\\repo\\ember\\tools\\ember-cli\\state\\process-watch.json";
+    const result = truncatePathLeft(long, 20);
+    expect(result.length).toBeLessThanOrEqual(20);
+    expect(result.startsWith("…")).toBe(true);
+    expect(long.endsWith(result.slice(1))).toBe(true);
+  });
+
+  it("never grows the string", () => {
+    const long = "a".repeat(200);
+    expect(truncatePathLeft(long, 50).length).toBeLessThanOrEqual(50);
+  });
+
+  it("a budget of 1 renders just the marker; a budget of 0 renders empty", () => {
+    expect(truncatePathLeft("a".repeat(10), 1)).toBe("…");
+    expect(truncatePathLeft("a".repeat(10), 0)).toBe("");
   });
 });
 
@@ -87,6 +119,18 @@ describe("formatActivityFeedLine", () => {
     const result = formatActivityFeedLine(line({ path: longPath }), Date.parse(line().ts), 30);
     expect(result).toContain("…");
     expect(result).not.toContain(longPath);
+  });
+
+  // Legibility bar (2026-07-26): path truncation is left-truncation (drop the front, keep the
+  // identifying tail) everywhere, not middle-truncation -- RED on pre-fix master, which routed
+  // this through truncateMiddle (keeps BOTH head and tail).
+  it("truncates the path from the LEFT (keeps the filename tail, drops the front)", () => {
+    const longPath = "Z:\\repo\\ember\\tools\\ember-cli\\state\\process-watch.json";
+    const result = formatActivityFeedLine(line({ path: longPath }), Date.parse(line().ts), 20);
+    expect(result).toContain(truncatePathLeft(longPath, 20));
+    expect(result).toContain("[…");
+    expect(result).toContain("process-watch.json");
+    expect(result).not.toContain("Z:\\repo\\ember");
   });
 });
 

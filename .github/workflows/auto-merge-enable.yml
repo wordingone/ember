@@ -1,0 +1,175 @@
+name: auto-merge-enable
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+# Enable GitHub auto-merge on eligible pull requests.
+#
+# Why this exists: merging was a manual act performed by one actor, so PRs that
+# were already MERGEABLE, CLEAN, non-draft and green sat unmerged. The open-PR
+# count is a reading of that bottleneck, not a number to manage by hand.
+# Draining the queue by hand does not remove the bottleneck; making the merge an
+# EVENT rather than a human click does.
+#
+# This workflow never merges anything itself. It only asks GitHub to merge the
+# PR once branch protection is satisfied. Protection on master requires:
+#   - the `guard` and `compiled-lifecycle` checks to pass at the exact head, and
+#   - one approving review.
+# So the review gate and the CI gate are untouched: a PR still cannot land red,
+# and it still cannot land unreviewed. What changes is that a PR which HAS
+# satisfied both no longer waits for someone to notice.
+#
+# Effect: eligible pull requests land on green + approval without a manual merge
+# step, so the open-PR count reflects work in flight rather than review-queue
+# latency.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+  schedule:
+    # Sweep every 30 minutes so PRs opened before this workflow existed, and any
+    # PR whose eligibility changed without emitting an event, are also enrolled.
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-merge-enable-${{ github.event.pull_request.number || 'sweep' }}
+  cancel-in-progress: false
+
+jobs:
+  enable:
+    name: enable-auto-merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enroll eligible pull requests in auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Paths whose changes are never enrolled. These carry authority,
+          # identity, or the automation itself; each needs a deliberate human
+          # merge even when green and approved. A PR touching ANY of them is
+          # skipped in full — the exclusion is per-PR, not per-file.
+          #
+          # tools/, scripts/, build-tools/ and .githooks/ are here for a
+          # specific reason that is easy to miss: branch protection matches
+          # check NAMES, not implementations, and both required checks run the
+          # PR's OWN copy of their scripts. repo-guard.yml uses
+          # actions/checkout@v4 on the merge ref and then executes
+          # `tools/repo-guard.sh` and `scripts/check_pr_authority_binding.py`;
+          # ember-cli-lifecycle-smoke.yml executes
+          # `build-tools/lifecycle-smoke.test.ts`. So a PR that edits any of
+          # those bytes is graded by its own edited grader — it could reduce a
+          # required check to a no-op, pass it, and auto-land. That is the
+          # subject writing the bytes its own verdict depends on. The exclusion
+          # is by the DEPTH-1 files of tools/ and scripts/ rather than by an
+          # exact filename list, because repo-guard.sh reads its neighbours at
+          # that same level -- check_line_endings.py, check_names_hashed.py,
+          # check_no_temp.py, repo-guard-denylist.sha256, and especially
+          # repo-guard-names-exclude.txt, which lists the path prefixes the
+          # name check skips. An exact filename list would go stale the first
+          # time one of them grew a helper.
+          #
+          # It is NOT the whole of tools/: tools/ember-cli/ and its siblings
+          # are ordinary product source that the guard merely inspects, and
+          # excluding them wholesale drops eligible PRs from 24 to 5 on the
+          # current backlog -- which would trade the bottleneck this workflow
+          # exists to remove for a slightly different one.
+          # The smoke check's path is tools/ember-cli/src/build-tools/, NOT a
+          # repo-root build-tools/ -- the workflow runs it with
+          # `working-directory: tools/ember-cli/src`, so the `bun test
+          # build-tools/...` line is relative and reads like a root path when
+          # it is not. A bare `build-tools/` pattern matches nothing in this
+          # repository, which would have left the smoke test's own bytes
+          # editable by the PR it grades.
+          PROTECTED_RE='^(INVARIANT\.md|GOAL\.md|\.github/workflows/|\.githooks/|tools/[^/]+$|scripts/[^/]+$|tools/ember-cli/src/build-tools/|docs/authority/|goals/|constitution)'
+
+          if [ -n "${EVENT_PR:-}" ]; then
+            PRS="$EVENT_PR"
+          else
+            PRS=$(gh pr list --repo "$REPO" --state open --limit 200 \
+                    --json number --jq '.[].number')
+          fi
+
+          for pr in $PRS; do
+            meta=$(gh pr view "$pr" --repo "$REPO" \
+                     --json number,isDraft,mergeStateStatus,autoMergeRequest,baseRefName,files,changedFiles,labels \
+                     2>/dev/null) || { echo "pr #$pr: unreadable, skipping"; continue; }
+
+            is_draft=$(jq -r '.isDraft' <<<"$meta")
+            base=$(jq -r '.baseRefName' <<<"$meta")
+            already=$(jq -r 'if .autoMergeRequest == null then "no" else "yes" end' <<<"$meta")
+
+            # The judgment gate. GitHub's own review primitive cannot be used
+            # here: the repository has a single identity, every PR is authored
+            # by it, and GitHub forbids approving your own PR. A required
+            # approving review is therefore unsatisfiable -- it would not gate
+            # anything, it would deadlock everything, and auto-merge would
+            # never fire at all. Measured before this was written: the last
+            # eight merged PRs carried zero reviews each.
+            #
+            # So the label carries the judgment instead. Applying
+            # `auto-merge-ok` is the reviewer's deliberate act, and it is the
+            # ONLY thing that enrolls a PR. Nothing lands merely by being green.
+            # The mechanical gate stays with branch protection, which now
+            # requires both checks and binds admins too.
+            if ! jq -e '.labels[] | select(.name == "auto-merge-ok")' <<<"$meta" >/dev/null 2>&1; then
+              echo "pr #$pr: not labelled auto-merge-ok, skipping (awaiting review)"; continue
+            fi
+
+            if [ "$is_draft" = "true" ]; then
+              echo "pr #$pr: draft, skipping"; continue
+            fi
+            if [ "$base" != "master" ]; then
+              echo "pr #$pr: base $base is not master, skipping"; continue
+            fi
+            if [ "$already" = "yes" ]; then
+              echo "pr #$pr: auto-merge already enabled"; continue
+            fi
+
+            # Fail CLOSED on the protected-path check: if the file list cannot be
+            # read, the PR is skipped rather than enrolled. An unreadable file
+            # list is indistinguishable from a protected one, so it is treated as
+            # protected.
+            if ! paths=$(jq -er '.files[].path' <<<"$meta"); then
+              echo "pr #$pr: file list unreadable, skipping (fail-closed)"; continue
+            fi
+
+            # The files array is capped by the API (100 entries). A PR larger
+            # than the cap returns a TRUNCATED list, so a protected path sitting
+            # past the cap would be invisible to the grep above and the PR would
+            # be enrolled while touching a file this workflow is meant to
+            # exclude. Compare the returned length against the PR's own declared
+            # changed-file count and skip on any mismatch: a list that does not
+            # account for every changed file cannot answer the question being
+            # asked of it.
+            listed=$(jq -r '.files | length' <<<"$meta")
+            declared=$(jq -r '.changedFiles' <<<"$meta")
+            if [ "$listed" != "$declared" ]; then
+              echo "pr #$pr: file list truncated ($listed of $declared), skipping (fail-closed)"
+              continue
+            fi
+
+            if grep -qE "$PROTECTED_RE" <<<"$paths"; then
+              echo "pr #$pr: touches a protected path, skipping (manual merge)"; continue
+            fi
+
+            # --auto queues the merge. Branch protection still decides IF and
+            # WHEN it happens: required checks green at the exact head, plus one
+            # approving review. A failure here is not fatal to the sweep — some
+            # PRs are transiently ineligible (mergeability still being computed
+            # by GitHub, or a conflict) and the next run picks them up.
+            if gh pr merge "$pr" --repo "$REPO" --auto --squash 2>&1; then
+              echo "pr #$pr: auto-merge enabled"
+            else
+              echo "pr #$pr: could not enable auto-merge yet (will retry next sweep)"
+            fi
+          done

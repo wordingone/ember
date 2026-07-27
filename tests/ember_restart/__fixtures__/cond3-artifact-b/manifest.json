@@ -1,0 +1,174 @@
+{
+  "architecture": {
+    "sha256": "b90af815e62ef5534c1200d30e47b6af36c18ab2d8ec76c72ca198c143b41006",
+    "source": "scripts/ember_restart/build_cond3_artifact_b_fixture.py:EVIDENCE['architecture']"
+  },
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "backend": {
+    "device": "cpu",
+    "executable_sha256": "b825b97ece937bc2959bf7b57fc3b3251fa43f375d421450bcdf7ac10045a3d6",
+    "process_identity": {
+      "command_sha256": "e917948c59cc4842f98d8e774439728a2465b2bab76a902166d12145b9eccf84",
+      "executable_sha256": "b825b97ece937bc2959bf7b57fc3b3251fa43f375d421450bcdf7ac10045a3d6",
+      "nonce": "cond3-artifact-b-nonce-fixture",
+      "pid": 1,
+      "start_time_utc": "2026-07-23T00:00:00Z"
+    },
+    "process_receipt_sha256": "8c6d8606611f582173974747ec58ff4ffdf03befd40dde982a591e1622ccbe39",
+    "protocol": "fixture-v1",
+    "resource_lease_id": "cond3-artifact-b-lease-fixture",
+    "runtime_dependencies": []
+  },
+  "capabilities": {
+    "native_modalities": {
+      "audio": {
+        "evidence_receipts": [],
+        "state": "INAPPLICABLE"
+      },
+      "image": {
+        "evidence_receipts": [],
+        "state": "INAPPLICABLE"
+      },
+      "text": {
+        "evidence_receipts": [],
+        "state": "UNVERIFIED"
+      }
+    },
+    "reasoning": {
+      "evidence_receipts": [],
+      "state": "UNVERIFIED"
+    },
+    "structured_tool_use": {
+      "evidence_receipts": [],
+      "state": "UNVERIFIED"
+    }
+  },
+  "checkpoint": {
+    "ancestry": [],
+    "byte_sha256": "886213a22796f03ee94a6988c3378fb60d916a05878c26190ab9ba74f49c098a",
+    "format": "synthetic-bytes-v1",
+    "recovery_state": "CLEAN",
+    "tensors": [
+      {
+        "dtype": "float32",
+        "name": "cond3.artifact_b.weight",
+        "sha256": "886213a22796f03ee94a6988c3378fb60d916a05878c26190ab9ba74f49c098a",
+        "shape": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  "data": {
+    "accepted_input": {
+      "authority": "CURRENT_EXECUTABLE",
+      "authority_id": "ember-01-issue-1015",
+      "authority_record_sha256": "bbf58b3bbef0a26564b56448641f67000fa1a3a06097653609bbeee31a32c68a",
+      "caller_sha256": "553913b82d09c86f00f06b88a47ab6f28076959e7b5c6db0489ba244f553a91c",
+      "forwarding_receipt_sha256": "246997c6f244e319e9945f4584e4d293ad2a9d12e2621562af2dbcd1534a4d90",
+      "gate_sha256": "6f7163fd95eaed4f569eb23947c127ccc147ee22a228743034fc4d57c4360bf5",
+      "input_id": "github-issue-1015",
+      "shard_manifest_sha256": "79cbbfb67508cce4bf1e662a78500f40ff717bdd76ef3eb7d635716536a7160f",
+      "validator_sha256": "f74b68661cbc69424a62c842e7352af548497d0c171e2019dce1d5a6e8e38a6f"
+    },
+    "clean_genesis": true,
+    "corpus_id": "cond3-artifact-b-corpus",
+    "curriculum_sha256": "c06a8cdae9e514e92700c2a466ecf7cad6d684838f93cb1edd81e048a2c7370a",
+    "ordering_sha256": "6581e8a29bb245d2f0d5d858d9ceede6040591d608cf25b367a8bbc836614043",
+    "sha256": "452836ecda990ed059cc05608ab9a6c04557a92220088f53cbced61d92c06abc",
+    "verifier_sha256": "b2b7557af6782dd8795a44e75c0b9a84e5de225ae4658d3df8dbabf5c850178d"
+  },
+  "evaluation": {
+    "benchmark_id": "cond3-artifact-b-benchmark-fixture",
+    "comparator_identity": "cond3-artifact-b-comparator-fixture",
+    "comparator_sha256": "00f84111c38d709847cd80d907f02d8964814de9490c5770015296426f0201df",
+    "counts_toward_owned_completion": false,
+    "harness_sha256": "ff593c054bb4b11c5d6204a836bf7c7076b02367f7944d791c407931f7fd2819",
+    "receipt_sha256": "fdab9d95e8dbcbd769ab0914c52d46b71d2563f64d9b1e3bc6ada54dd9b75350",
+    "score": {
+      "unit": "not-evaluated-pre-birth-candidate",
+      "value": 0.0
+    },
+    "split": "fixture",
+    "subject_checkpoint_sha256": "886213a22796f03ee94a6988c3378fb60d916a05878c26190ab9ba74f49c098a",
+    "uncertainty": {
+      "unit": "not-evaluated-pre-birth-candidate",
+      "value": 0.0
+    },
+    "version": "v1"
+  },
+  "identity": {
+    "checkpoint_id": "checkpoint-cond3-artifact-b",
+    "disposition": "OWNED_CANDIDATE",
+    "experiment_id": "experiment-cond3-artifact-b",
+    "model_id": "ember-cond3-artifact-b-candidate",
+    "run_id": "run-cond3-artifact-b",
+    "selected_as_owned_ember": false
+  },
+  "mechanisms": {
+    "deletion_objects": [],
+    "dreaming_updates": [],
+    "experts": [],
+    "memory_substrates": [],
+    "permanent_merges": [],
+    "router": [],
+    "temporary_adapters": [],
+    "world_models": []
+  },
+  "parameters": {
+    "active": 4,
+    "actually_trained": 0,
+    "allocated": 4,
+    "evidence_receipts": {
+      "active": [],
+      "actually_trained": [],
+      "allocated": [],
+      "served": [],
+      "trainable": [],
+      "unique": []
+    },
+    "served": 4,
+    "trainable": 4,
+    "unique": 4
+  },
+  "provenance": {
+    "exclusion_reasons": [],
+    "learned_signal_sources": [
+      "owned_training_data"
+    ],
+    "neural_capability_credit_sources": [
+      "owned_checkpoint"
+    ],
+    "ownership": "OWNED_CLEAN_GENESIS"
+  },
+  "schema": "ember-model-experiment-identity-v1",
+  "tokenizer": {
+    "id": "cond3-artifact-b-tokenizer",
+    "sha256": "49cb5a552f9a47fb04fb239d0f1b4171c8ebbda257bab5459650cb27b7e11fdc"
+  },
+  "training": {
+    "effective_tokens": 1000,
+    "modality_mixture": {
+      "audio": 0.0,
+      "image": 0.0,
+      "text": 1.0
+    },
+    "numerics": {
+      "profile": "bf16-activations-fp32-master",
+      "sha256": "0fd3a05bc8ba8587ca7acd64c3316e9087dbba15cdd466b8516a25326ebc8b93"
+    },
+    "optimizer_state_sha256": "53632c336bdcde94d9cf891beddef79b32cd7409231d650c6e07848e6a931b15",
+    "steps": 100,
+    "stopping_rule": {
+      "criterion_id": "sufficient-pretraining-v1",
+      "receipt_sha256": "4b0a2598b036e6023411e6364f0d01c530dabf6b00df17d83883d353cf4a61ef",
+      "result": "NOT_REACHED"
+    }
+  },
+  "unresolved": []
+}

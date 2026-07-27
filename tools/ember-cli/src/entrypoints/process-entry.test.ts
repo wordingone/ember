@@ -36,6 +36,7 @@ import {
 import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
 import { _resetInitForTests } from "./session-init.ts";
 import type { OwnedModelIdentity } from "./model-seat.ts";
+import { OwnedSeatStaleBindingError } from "./owned-seat-loader.ts";
 import type { LoopDeps, CallModelParams } from "../query/query-loop-support.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { Tool } from "../core/tool-interface.ts";
@@ -1159,6 +1160,166 @@ describe("process-entry — main() end-to-end: EMBER_GPU_FREE precedence over pe
 });
 
 // ---------------------------------------------------------------------------
+// Acceptance map: state/specs/cockpit-stale-binding-demotion-acceptance-map-2026-07-25.md
+// Section 5, tests 1, 2 (x3), 4. This describe block proves the consumer-level half of the
+// cure: the catch at the top of main() around loadOwnedDevelopmentIdentity demotes on
+// `instanceof OwnedSeatStaleBindingError` and on nothing else. Test 3 (D3, matching bundle
+// admits unchanged) is proved at the loader level in owned-seat-loader.test.ts, since it is
+// captureDevelopmentResolver's own admission path and does not need a second, more expensive
+// main()-level rehearsal to be discriminating.
+// ---------------------------------------------------------------------------
+
+describe("process-entry — main() end-to-end: stale owned-binding demotes the seat, not the process (cockpit-stale-binding-demotion-acceptance-map)", () => {
+  let tmpDir: string;
+  let savedEnv: Record<string, string | undefined>;
+
+  beforeEach(async () => {
+    tmpDir = join(tmpdir(), `pe-seatdemote-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(tmpDir, { recursive: true });
+    savedEnv = saveEnv(["EMBER_HOME", "EMBER_MODEL_URL", "EMBER_MODEL_NAME", "EMBER_GPU_FREE"]);
+    delete process.env["EMBER_MODEL_URL"];
+    delete process.env["EMBER_MODEL_NAME"];
+    delete process.env["EMBER_GPU_FREE"];
+    process.env["EMBER_HOME"] = tmpDir;
+    _resetConfigHomeMemo();
+  });
+
+  afterEach(async () => {
+    restoreEnv(savedEnv);
+    _resetConfigHomeMemo();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  const STALE_BINDING_MESSAGE =
+    "runtime bundle is not bound to the exact compiled cockpit commit; the owned seat is " +
+    "refused and the cockpit continues OFFLINE. Use --reference-seat for explicit " +
+    "REFERENCE_ONLY parity testing or EMBER_GPU_FREE=1 for offline observation.";
+
+  it("test 1 (D1): a stale-commit binding demotes to OFFLINE -- the process reaches the panel, exit code is the normal cockpit exit, not 1", async () => {
+    let exitCode: number | null = null as number | null;
+    let spawnCalls = 0;
+    const stdoutCap = captureStdout();
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => undefined,
+        loadOwnedDevelopmentIdentityFn: () => { throw new OwnedSeatStaleBindingError(STALE_BINDING_MESSAGE); },
+        spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29991); },
+        waitReady: async () => {},
+        probeExisting: async () => false,
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        // headlessRunner's own exitCode (0, a normal completion) is what reaches doExit at
+        // the end of the headless path -- distinct from the fatal doExitMain(1) the map
+        // forbids on the demotion path. This is "the normal cockpit exit, not 1" (section 4).
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code) => { exitCode = code; },
+      });
+    } finally {
+      stdoutCap.restore();
+    }
+
+    // D1: the fatal doExitMain(1) branch never fires -- the process reaches the offline/
+    // reference seat and completes normally, the same GPU-free path issue #602's own tests
+    // already prove is a real, working panel path. No managed server is spawned.
+    expect(exitCode).toBe(0);
+    expect(spawnCalls).toBe(0);
+    expect(stdoutCap.output()).toContain("GPU-free");
+  });
+
+  it("test 2a (D2, line 201 shape): an index content-hash-mismatch error (typed as a plain Error) still exits 1", async () => {
+    let exitCode: number | null = null as number | null;
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      loadOwnedIdentityFn: () => undefined,
+      loadOwnedDevelopmentIdentityFn: () => { throw new Error("runtime bundle index content hash mismatch"); },
+      spawnServer: async () => makeFakeHandle(29990),
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async () => {},
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: (code) => { exitCode = code; },
+    });
+    expect(exitCode).toBe(1);
+  });
+
+  it("test 2b (D2, line 224 shape): an invalid trusted-source binding error (plain Error) still exits 1", async () => {
+    let exitCode: number | null = null as number | null;
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      loadOwnedIdentityFn: () => undefined,
+      loadOwnedDevelopmentIdentityFn: () => {
+        throw new Error("trusted runtime source binding is invalid: tools/ember-restart-3b/model.py");
+      },
+      spawnServer: async () => makeFakeHandle(29989),
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async () => {},
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: (code) => { exitCode = code; },
+    });
+    expect(exitCode).toBe(1);
+  });
+
+  it("test 2c (D2, line 239 shape): a source-does-not-match-Git-commit error (plain Error) still exits 1, and the message is not the demotion banner", async () => {
+    let exitCode: number | null = null as number | null;
+    let stderrText = "";
+    const origStderrWrite = process.stderr.write.bind(process.stderr);
+    // Capture the operator-facing text the same way the ERROR branch writes it, so this test
+    // proves both halves of D2: exit 1, AND the tamper case's own message survives unmodified
+    // -- it is never overwritten by or confused with the demotion banner.
+    process.stderr.write = ((chunk: unknown, ...rest: unknown[]) => {
+      stderrText += String(chunk);
+      return origStderrWrite(chunk as never, ...(rest as never[]));
+    }) as typeof process.stderr.write;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        loadOwnedIdentityFn: () => undefined,
+        loadOwnedDevelopmentIdentityFn: () => {
+          throw new Error("runtime source does not match the embedded Git commit: tools/ember-restart-3b/model.py");
+        },
+        spawnServer: async () => makeFakeHandle(29988),
+        waitReady: async () => {},
+        probeExisting: async () => false,
+        initFn: async () => {},
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (code) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = origStderrWrite;
+    }
+    expect(exitCode).toBe(1);
+    expect(stderrText).toContain("runtime source does not match the embedded Git commit");
+    expect(stderrText).not.toContain("continues OFFLINE");
+  });
+
+  it("test 4 (mandatory): a plain Error whose message is byte-identical to the stale-binding string still exits 1 -- proves the catch keys on instanceof, not on message text", async () => {
+    let exitCode: number | null = null as number | null;
+    let exitCalls = 0;
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      loadOwnedIdentityFn: () => undefined,
+      // A plain Error, not OwnedSeatStaleBindingError -- same bytes, different type. If the
+      // catch ever regresses to message-matching, this is the test that turns RED.
+      loadOwnedDevelopmentIdentityFn: () => { throw new Error(STALE_BINDING_MESSAGE); },
+      spawnServer: async () => makeFakeHandle(29987),
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async () => {},
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: (code) => { exitCode = code; exitCalls += 1; },
+    });
+    expect(exitCalls).toBe(1);
+    expect(exitCode).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // #159 cell 1 — boot matrix: every managed-spawn failure cell produces a clean
 // operator-facing error and a controlled exit, never an uncaught exception or a
 // silent hang. One receipt row per cell via hardening-receipts.ts.
@@ -1673,5 +1834,199 @@ describe("process-entry -> session-init production wiring (PR948 round-9 repair)
     const { deps } = await driveRealInitAndCapture(makeOwnedIdentity(false));
     const result = await deps.callModel({ ...baseParams });
     expect(result.stop_reason).toBe("end_turn");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// process-entry — `ember --watch [--interval N]` (gh issue #34, C-OBS)
+//
+// Execution-binding proof: this spawns a REAL subprocess through dispatchFastPath (the exact
+// function main() calls) against a fixture goalforge root, so it proves the production `--watch`
+// argv path actually reaches core/watch-loop.ts's real render code -- not just that watch-loop.ts
+// works when called directly (that unit coverage lives in core/watch-loop.test.ts). Subprocess
+// (not mock.module) for the same two reasons commands/world-state.test.ts uses one:
+// core/ember-world-state.ts's GOALFORGE_ROOT is a module-level const frozen at first import, and
+// bun:test's mock.module() corrupts the shared module registry for the rest of the test process.
+// ---------------------------------------------------------------------------
+
+describe("process-entry — dispatchFastPath('--watch') execution binding", () => {
+  const watchTmpDirs: string[] = [];
+
+  afterEach(async () => {
+    while (watchTmpDirs.length > 0) {
+      const dir = watchTmpDirs.pop()!;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  async function makeWatchFixtureRoot(): Promise<string> {
+    const root = join(
+      tmpdir(),
+      `ember-watch-fastpath-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    const boardDir = join(root, "scripts", "ember_totality", "receipts-totality");
+    await mkdir(boardDir, { recursive: true });
+    await mkdir(join(root, "docs"), { recursive: true });
+    await mkdir(join(root, "receipts"), { recursive: true });
+    await writeFile(join(root, "GOAL.md"), "# Watch Fixture Goal\n\n## Topology\n\nbody\n");
+    await writeFile(
+      join(root, "docs", "ember-debt-ledger.md"),
+      "## Current Blocker Packet\n\n(none)\n\n## Active Rows\n\n| ID | Class | Debt | X | Y | Status |\n| --- | --- | --- | --- | --- | --- |\n",
+    );
+    const receipt = {
+      ts: "20260725T000000Z",
+      rows: [{ condition: "C-OBS", status: "GREEN", reason: "fixture" }],
+      summary: { total: 1, green: 1, red: 0, completion_math: { pct_complete: 100 } },
+    };
+    await writeFile(
+      join(boardDir, "ember-totality-20260725T000000Z.json"),
+      JSON.stringify(receipt),
+    );
+    await writeFile(join(root, "receipts", "r1.json"), "{}");
+    watchTmpDirs.push(root);
+    return root;
+  }
+
+  const SRC_DIR = join(import.meta.dir, ".."); // tools/ember-cli/src
+
+  it(
+    "fires repeated refresh cycles through the real render path and exits cleanly on SIGINT",
+    async () => {
+      const root = await makeWatchFixtureRoot();
+      const specifier = join(SRC_DIR, "entrypoints", "process-entry.ts").split("\\").join("/");
+      const driverScript = [
+        `const { dispatchFastPath } = await import("file://${specifier}");`,
+        `const handled = await dispatchFastPath(["node", "ember", "--watch", "--interval", "0.2"]);`,
+        'if (!handled) { process.stderr.write("NOT_HANDLED" + String.fromCharCode(10)); process.exit(2); }',
+      ].join("\n");
+      const driverPath = join(root, "watch-driver.mjs");
+      await writeFile(driverPath, driverScript);
+
+      const proc = Bun.spawn({
+        cmd: ["node", driverPath],
+        cwd: SRC_DIR,
+        env: { ...process.env, EMBER_GOALFORGE_ROOT: root },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      // Let several refresh cycles fire (interval 0.2s), then send the real termination signal --
+      // this is the SIGINT lifecycle clause, exercised against the real process, not a fake.
+      await new Promise((r) => setTimeout(r, 900));
+      proc.kill("SIGINT");
+
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      expect(stderr).not.toContain("NOT_HANDLED");
+      // Real renderMonitorPanel/renderReceiptsTail output, not a placeholder: the fixture
+      // condition id and the fixture receipt path both must appear.
+      expect(stdout).toContain("C-OBS");
+      expect(stdout).toContain("r1.json");
+      // Repeated refresh: the bordered panel's top border must appear MORE THAN ONCE -- proof
+      // this is a loop, not a single render (the thing #405 explicitly warned never got wired).
+      const panelStarts = (stdout.match(/╭/g) ?? []).length;
+      expect(panelStarts).toBeGreaterThan(1);
+      // Clean SIGINT exit: no leftover process. Exit CODE is platform-dependent here --
+      // services/brain-server-supervisor.test.ts documents the same fact this codebase already
+      // knows: "on Windows this is an unconditional terminate" (Node's child.kill(signal) has no
+      // real POSIX signal to deliver on Windows, so the OS force-terminates rather than letting
+      // the child's own `process.on("SIGINT", ...)` handler run process.exit(0) -- the graceful
+      // in-process handler path is covered for real by core/watch-loop.test.ts's "clean SIGINT
+      // lifecycle" test, which invokes the actual registered handler function directly). What
+      // THIS test can assert cross-platform is the thing that actually matters operationally: the
+      // process is gone -- no orphaned ambient-watch process left running after termination.
+      expect(exitCode).not.toBeNull();
+      const isAlive = (): boolean => { try { process.kill(proc.pid!, 0); return true; } catch { return false; } };
+      expect(isAlive()).toBe(false);
+    },
+    20000,
+  );
+
+  it(
+    "refresh-error resilience: a missing board receipt reports an error line and the process is still alive to receive SIGINT",
+    async () => {
+      // No board receipt written -- buildEmberWorldState() throws every cycle; the loop must
+      // report it and keep running rather than crashing the ambient process.
+      const root = join(
+        tmpdir(),
+        `ember-watch-fastpath-error-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      await mkdir(root, { recursive: true });
+      watchTmpDirs.push(root);
+      const specifier = join(SRC_DIR, "entrypoints", "process-entry.ts").split("\\").join("/");
+      const driverScript = [
+        `const { dispatchFastPath } = await import("file://${specifier}");`,
+        `await dispatchFastPath(["node", "ember", "--watch", "--interval", "0.2"]);`,
+      ].join("\n");
+      const driverPath = join(root, "watch-driver-error.mjs");
+      await writeFile(driverPath, driverScript);
+
+      const proc = Bun.spawn({
+        cmd: ["node", driverPath],
+        cwd: SRC_DIR,
+        env: { ...process.env, EMBER_GOALFORGE_ROOT: root },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      await new Promise((r) => setTimeout(r, 700));
+      proc.kill("SIGINT");
+      const [stdout] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      expect(stdout).toContain("[watch] refresh error:");
+      // Same platform note as the sibling test above: exit CODE is not asserted here (Windows
+      // child.kill(signal) unconditionally terminates rather than invoking the in-process
+      // handler); what matters is the loop survived every erroring cycle up to this point
+      // (proven by the refresh-error line appearing, meaning it logged-and-continued rather than
+      // crashing) and left no process behind.
+      const isAlive = (): boolean => { try { process.kill(proc.pid!, 0); return true; } catch { return false; } };
+      expect(isAlive()).toBe(false);
+    },
+    20000,
+  );
+
+  it("rejects a hostile --interval before starting any loop (fail closed, non-zero exit, names the arg)", async () => {
+    const root = await makeWatchFixtureRoot();
+    const specifier = join(SRC_DIR, "entrypoints", "process-entry.ts").split("\\").join("/");
+    const driverScript = [
+      `const { dispatchFastPath } = await import("file://${specifier}");`,
+      `await dispatchFastPath(["node", "ember", "--watch", "--interval", "-3"]);`,
+    ].join("\n");
+    const driverPath = join(root, "watch-driver-bad-interval.mjs");
+    await writeFile(driverPath, driverScript);
+
+    const proc = Bun.spawn({
+      cmd: ["node", driverPath],
+      cwd: SRC_DIR,
+      env: { ...process.env, EMBER_GOALFORGE_ROOT: root },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("--interval");
+    expect(stderr).toContain("greater than 0");
+  }, 10000);
+});
+
+describe("process-entry — --watch fast-path flag detection", () => {
+  it("isFastPath detects --watch", () => {
+    expect(isFastPath(["node", "ember", "--watch"])).toBe(true);
+  });
+
+  it("isFastPath detects --watch with --interval", () => {
+    expect(isFastPath(["node", "ember", "--watch", "--interval", "5"])).toBe(true);
   });
 });

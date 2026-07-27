@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // border-title.test.ts — D4 (mock1 parity): the outer homescreen panel is titled "╭─ ember ─...─╮",
 // something no existing Box/border primitive supports (paintBorder only paints a uniform
 // perimeter). This adds an optional `borderTitle` prop, embedded in the TOP border edge, so
@@ -53,6 +56,23 @@ describe("Box borderTitle", () => {
     const plain = stripAnsi(out);
     expect(plain).toContain("╭");
     expect(plain).toContain("╮");
+  });
+
+  // Legibility bar (2026-07-26): a border title that overflows its box must carry a VISIBLE
+  // truncation marker, never a silent raw cut — a clipped title is otherwise indistinguishable
+  // from an intentionally short one. RED on pre-fix master: the top edge used to be
+  // `node.borderTitle.slice(0, inner)` with no ellipsis at all.
+  test("a title longer than the available width truncates with a visible ellipsis marker", () => {
+    const out = mountAndCapture(
+      React.createElement(Box, { borderStyle: "round", borderColor: "red", borderTitle: "LIVE RUN / ACTIVITY/EVENT FEED", width: 12, height: 4 },
+        React.createElement(Text, null, "hi"),
+      ),
+    );
+    const plain = stripAnsi(out);
+    const topLine = plain.split("\n")[0] ?? "";
+    expect(topLine).toContain("…");
+    // The raw silent-clip fragment this bug produced in production ("EVENT FEE-") must be gone.
+    expect(topLine).not.toContain("FEE-");
   });
 
   test("no borderTitle prop -> top edge is a uniform line, unaffected (no regression)", () => {

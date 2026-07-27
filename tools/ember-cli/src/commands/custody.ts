@@ -26,7 +26,10 @@ import {
   loadOwnedModelIdentity,
 } from "../entrypoints/owned-seat-loader.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import {
+  resolveEmberRepoRootOrCwd,
+  resolveEmberSourceRootOrCwd,
+} from "../utils/repo-root.ts";
 import {
   MalformedBindingArgError,
   parseBindingArg,
@@ -96,7 +99,7 @@ export function _defaultGetModelSeatDecision(): ModelSeatDecision {
   if (decision.allowed) return decision;
 
   try {
-    const repoRoot = resolveEmberRepoRootOrCwd({}, "[ember] /custody");
+    const repoRoot = resolveEmberSourceRootOrCwd({}, "[ember] /custody identity");
     const configHome = getEmberConfigHomeDir();
     const admittedIdentity = loadOwnedModelIdentity({
       repoRoot,
@@ -209,7 +212,7 @@ export function createCustodyCommand(deps: CustodyCommandDeps = {}): RegistryCom
   return {
     name: "custody",
     description:
-      "Show the current model seat classification (read-only): custody status; persist a machine-local root path: custody set <root_id>=<path>",
+      "Show the current model seat classification (read-only): custody status -- also reports the bound owned model's identity (sha256, on-disk directory) when an owned seat is active; persist a machine-local root path: custody set <root_id>=<path>",
     aliases: ["seat"],
     isEnabled(): boolean {
       return true;

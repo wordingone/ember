@@ -29,7 +29,7 @@ import {
   type VerifiedCheckpointBundle,
 } from "../services/checkpoint-load.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
-import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { saveCheckpoint, type CheckpointSaveDeps } from "../services/checkpoint-save.ts";
 import { appendFile, mkdir as fsMkdir, copyFile as fsCopyFile, rename as fsRename, rm as fsRm } from "fs/promises";
 import { existsSync } from "fs";
@@ -333,7 +333,7 @@ interface ModelCommandDeps {
  * init loaders verbatim; it does not reinvent identity resolution.
  */
 function _defaultLoadOwnedIdentity(cwd: string): OwnedModelIdentity | null {
-  const repoRoot = resolveEmberRepoRootOrCwd({ startDir: cwd }, "[ember-cli]");
+  const repoRoot = resolveEmberSourceRootOrCwd({ startDir: cwd }, "[ember-cli]");
   const configHome = getEmberConfigHomeDir();
   const admitted = loadOwnedModelIdentity({
     repoRoot,
@@ -425,7 +425,7 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
 
   return {
     name: "model",
-    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save. Inspect data/tokenizer lineage; legacy checkpoint save is not checkpoint-load compatible.",
+    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save. Inspect data/tokenizer lineage; legacy checkpoint save is not checkpoint-load compatible. Owned serving path: a validated owned identity takes the default owned seat, a borrowed model serves only as an explicitly requested reference seat, and with no owned identity the launch refuses unless you explicitly ask for model-free offline observation.",
     isEnabled(): boolean {
       return true;
     },
