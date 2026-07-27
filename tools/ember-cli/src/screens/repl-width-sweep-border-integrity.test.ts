@@ -37,10 +37,14 @@ function telemetry(overrides: Partial<TelemetryState> = {}): TelemetryState {
 function mountAndFrame(el: React.ReactElement, cols: number, rows: number): string[] {
   let buf = "";
   const stream = { write(s: string) { buf += s; } };
-  mountInk(el, { stream, stdout: { columns: cols, rows } });
-  const frame = buildFrame(cols, rows);
-  parseRenderedIntoFrame(buf, frame, new StylePool());
-  return frame.cells.map((line) => line.map((c) => c?.char ?? " ").join(""));
+  const handle = mountInk(el, { stream, stdout: { columns: cols, rows } });
+  try {
+    const frame = buildFrame(cols, rows);
+    parseRenderedIntoFrame(buf, frame, new StylePool());
+    return frame.cells.map((line) => line.map((c) => c?.char ?? " ").join(""));
+  } finally {
+    handle.unmount();
+  }
 }
 
 function minimalState(): AppState {

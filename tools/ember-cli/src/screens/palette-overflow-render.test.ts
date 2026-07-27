@@ -28,7 +28,7 @@
 // collide across mounts), so this file follows that file's proven-stable one-mount-per-file shape
 // rather than one mount per `it`.
 
-import { describe, it, expect } from "bun:test";
+import { afterAll, beforeAll, describe, it, expect } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
@@ -105,7 +105,10 @@ const captureStream = {
 };
 const config = { model: "qwen3.6-27b", permissionMode: "bypass" as const, baseSystemPrompt: "" };
 
-mountInk(
+let handle: ReturnType<typeof mountInk> | null = null;
+beforeAll(() => {
+  resetCommandRegistryForTests();
+  handle = mountInk(
   React.createElement(
     TerminalSizeContext.Provider,
     { value: { columns: COLS, rows: ROWS } },
@@ -117,7 +120,12 @@ mountInk(
     }),
   ),
   { stream: captureStream as unknown as { write(s: string): void }, stdout: { columns: COLS, rows: ROWS } },
-);
+  );
+});
+afterAll(() => {
+  handle?.unmount();
+});
+
 
 // Every registered builtin command this fixture cycles through (per
 // repl-slash-dropdown.test.ts's own `resetCommandRegistryForTests` comment: observatory, watch,

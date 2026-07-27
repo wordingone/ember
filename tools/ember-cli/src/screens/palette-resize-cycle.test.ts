@@ -144,6 +144,7 @@ describe("palette resize cycle 80x24 -> 40x24 -> 80x24 (countersigned cross-lane
     // 2026-07-25 counterparty finding: restore stdout's real dimensions in a `finally` so a
     // failing assertion mid-cycle doesn't leave the terminal mutated for every test that runs
     // after this one -- one real failure turning into a cascade of unrelated ones.
+    let handle: ReturnType<typeof mountInk> | null = null;
     try {
       Object.defineProperty(process.stdout, "columns", { value: 80, configurable: true });
       Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
@@ -156,7 +157,7 @@ describe("palette resize cycle 80x24 -> 40x24 -> 80x24 (countersigned cross-lane
       };
       const config = { model: "qwen3.6-27b", permissionMode: "bypass" as const, baseSystemPrompt: "" };
 
-      mountInk(
+      handle = mountInk(
         React.createElement(
           App,
           { onExit: () => {} },
@@ -189,6 +190,7 @@ describe("palette resize cycle 80x24 -> 40x24 -> 80x24 (countersigned cross-lane
       await flush();
       assertContract(chunks.join(""), allNames, "80x24 (restored)");
     } finally {
+      handle?.unmount();
       Object.defineProperty(process.stdout, "columns", { value: origColumns, configurable: true });
       Object.defineProperty(process.stdout, "rows",    { value: origRows,    configurable: true });
     }

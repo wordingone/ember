@@ -1,7 +1,7 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import React from "react";
 
 import { StatusLine } from "../components/status-bar.ts";
@@ -9,6 +9,13 @@ import { mountInk } from "../ink/reconciler.ts";
 import { telemetryMemoKey } from "../services/telemetry-label.ts";
 
 describe("cockpit training telemetry label", () => {
+  let mounted: ReturnType<typeof mountInk> | null = null;
+
+  afterEach(() => {
+    mounted?.unmount();
+    mounted = null;
+  });
+
   test("renders progress, step rate, VRAM, verified checkpoint, and model-chat downtime", () => {
     const label = telemetryMemoKey({
       recentEvents: [],
@@ -28,7 +35,7 @@ describe("cockpit training telemetry label", () => {
 
   test("mounts the live telemetry label through the production StatusLine render seam", () => {
     let output = "";
-    mountInk(
+    mounted = mountInk(
       React.createElement(StatusLine, {
         permissionMode: { mode: "bypass", cycle: () => {} },
         interrupt: { interrupt: () => {} },

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // screens/repl-goal-continuation-seam.test.ts — integration-level regression
 // test for ember #276 ("goal-mode continuation never fires on the compiled
 // binary"). Live acceptance leg (b) found: /goal <objective> persists a goal
@@ -127,7 +131,10 @@ function Harness({ onStartTurn }: HarnessProps): React.ReactElement {
 }
 
 describe("ember #276 — /goal continuation dispatch through the real turn loop", () => {
+  let mounted: ReturnType<typeof mountInk> | null;
+
   beforeEach(() => {
+    mounted = null;
     resetGoalRuntimeForTests();
     resetGoalContinuationTriggerForTests();
     setGoalStoreForTests(createGoalStore({ persistence: createInMemoryGoalPersistence() }));
@@ -136,6 +143,8 @@ describe("ember #276 — /goal continuation dispatch through the real turn loop"
   afterEach(() => {
     resetGoalRuntimeForTests();
     resetGoalContinuationTriggerForTests();
+    mounted?.unmount();
+    mounted = null;
   });
 
   it("fires a continuation turn shortly after /goal <objective> is submitted via the real keyboard path", async () => {
@@ -152,7 +161,7 @@ describe("ember #276 — /goal continuation dispatch through the real turn loop"
     };
 
     const stream = { write() {} };
-    mountInk(React.createElement(Harness, { onStartTurn }), {
+    mounted = mountInk(React.createElement(Harness, { onStartTurn }), {
       stream,
       stdout: { columns: 80, rows: 24 },
     });
