@@ -387,6 +387,10 @@ export function renderMsgDispatch(
   msg:           SessionMessage,
   lookups:       MessageLookups,
   viewportWidth: number = 80,
+  /** Live command registry, threaded through so the welcome screen's spine block resolves against
+   *  real commands. Omitted -> the block renders every spine function BLOCKED, which is honest but
+   *  useless; both call sites pass it. */
+  spineCommands?: readonly RegistryCommand[] | null,
 ): React.ReactElement {
   switch (msg.type) {
     case "welcome":
@@ -401,6 +405,8 @@ export function renderMsgDispatch(
         },
         viewportWidth,
         boardSummary: msg["boardSummary"] as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        spineCommands,
+        launchDir: process.cwd(),
       });
 
     case "user":
@@ -1052,11 +1058,15 @@ export function ReplScreen({
   // never confused with an actual crash.
   const outageBanner = useOutageBanner();
 
+  // Command registry state must be declared before renderMessage reads it. Keeping the state below
+  // the callback made the obvious dependency fix read a lexical binding before initialization.
+  const [slashCommands, setSlashCommands] = useState<RegistryCommand[]>([]);
+
   // Render dispatch (memoised per lookups + viewport width)
   const renderMessage = useCallback(
     (msg: SessionMessage) =>
-      renderMsgDispatch(msg, lookups as MessageLookups, terminalCols),
-    [lookups, terminalCols],
+      renderMsgDispatch(msg, lookups as MessageLookups, terminalCols, slashCommands),
+    [lookups, terminalCols, slashCommands],
   );
 
   // Transcript region
@@ -1107,7 +1117,6 @@ export function ReplScreen({
   // at mount; the dropdown itself is a pure function of the live input text + terminal width, so
   // it stays in sync with both typing (narrows the match list) and resize (b23's description
   // truncation re-derives its budget from `terminalCols` on every render).
-  const [slashCommands, setSlashCommands]           = useState<RegistryCommand[]>([]);
   const [dropdownSelectedIndex, setDropdownSelIndex] = useState(0);
 
   useEffect(() => {
@@ -1132,7 +1141,19 @@ export function ReplScreen({
       dataRoot: dataRoot ?? "",
     },
     viewportWidth: mainColumnWidth,
+    // The real terminal height, so the panel budgets its own variable content instead of trusting
+    // that a number someone measured once still holds. Passing it is what makes the budget reach
+    // production at all — the component defaults to no truncation when it is absent, which is the
+    // safe default and also the shape in which a "wired but never fed" boundary hides.
+    viewportHeight: terminalRows,
     boardSummary,
+    // The spine block resolves against the SAME registry that drives the slash palette, so a
+    // command shown on the first screen is by construction a command the operator can type.
+    spineCommands: slashCommands,
+    // Change 3 of the spine-on-first-screen spec: the cockpit binds state to the canonical repo
+    // root even when launched elsewhere (utils/repo-root.ts, issue #666). That is deliberate and
+    // stays; being silent about it is what was wrong.
+    launchDir: process.cwd(),
   };
   // While slash composition is active, the render below collapses every variable chrome row:
   // banner, spinner, stash/shimmer/queue/notification rows and status details. The surviving

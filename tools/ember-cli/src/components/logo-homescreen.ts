@@ -25,6 +25,8 @@ import React from "react";
 import { Box, Text, RawAnsi } from "../ink/components.ts";
 import { color, type FeatureFlags } from "./design-system.ts";
 import { renderFireballLines, FIREBALL_IDLE_POSE_FRAME } from "./fireball.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
+import { SPINE_FUNCTIONS, buildSpineRows, renderSpineBlock } from "./spine-first-screen.ts";
 import { formatReceiptAge, isReceiptStale } from "../core/receipt-age.ts";
 
 // ---------------------------------------------------------------------------
@@ -65,6 +67,17 @@ function identityTextWidth(viewportWidth: number): number {
  * leftCol-share assumption exactly (Math.max(LEFT_PANEL_MAX_WIDTH, WELCOME_THRESHOLD)), so leftCol
  * + rightCol always sum to the panel's content width with no gap and no overlap. */
 const LEFT_COL_WIDTH = Math.max(LEFT_PANEL_MAX_WIDTH, WELCOME_THRESHOLD);
+
+/** The panel's own top and bottom border rows, which every height budget must pay before content.
+ *  The budget itself is NOT a constant: it comes from the caller's real terminal height, because a
+ *  budget hardcoded to the 80x20 case truncates content on a 60-row terminal that has room for all
+ *  of it. Measured: the first version of this fix did exactly that and cost nine existing tests
+ *  their live-telemetry rows at no benefit to anyone. */
+const PANEL_BORDER_ROWS = 2;
+/** The identity block is a fixed-length list — null slots still occupy their row. */
+const IDENTITY_BLOCK_ROWS  = 5;
+/** Every feed prints a title and an underline before its first entry. */
+const FEED_CHROME_ROWS     = 2;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -396,10 +409,45 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
 // Homescreen — root welcome/status composite
 // ---------------------------------------------------------------------------
 
+/** Path comparison for the launch-root disclosure. Windows gives us backslashes from one source
+ *  and forward slashes from another for the same directory, and case differs on drive letters, so
+ *  a raw string compare would fire the disclosure on two spellings of one path — a warning that
+ *  cries wolf is worse than no warning. Trailing separators are stripped for the same reason. */
+export function samePathForDisplay(a: string, b: string): boolean {
+  const norm = (p: string) =>
+    p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/** Change 3: say so, once, plainly, when state is bound somewhere other than where you launched.
+ *  Renders nothing when the two agree or when the caller did not supply a launch directory —
+ *  silence here means "no discrepancy", which is the only reading that stays honest as callers
+ *  are wired up one at a time. */
+export function rootDisclosure(
+  canonicalRoot: string | undefined,
+  launchDir: string | undefined,
+): React.ReactElement | null {
+  if (!canonicalRoot || !launchDir) return null;
+  if (samePathForDisplay(canonicalRoot, launchDir)) return null;
+  return React.createElement(
+    Text,
+    { key: "root-disclosure", dimColor: true },
+    // Short enough that the PATH survives the 40-column budget. The live frame read
+    // The live frame clipped it to "...not the…", losing the clause that mattered; the path
+    // itself is the informative half, so the prefix shrank instead.
+    clipToWidth(`State root: ${canonicalRoot} (not here)`, LEFT_TEXT_WIDTH),
+  );
+}
+
 export interface HomescreenProps {
   state:          LogoState;
   flags?:         FeatureFlags;
   viewportWidth?: number;
+  /** The terminal's real row count. Supplied, the recent-activity feed is budgeted so the panel
+   *  cannot outgrow the screen and clip its own border; omitted, nothing is truncated at all.
+   *  Omission is the honest default: a component that guesses a height would silently drop content
+   *  on terminals with room to spare. */
+  viewportHeight?: number;
   /** Live animation clock for the identity block's Fireball (b14 item 2 reframe): the welcome
    * screen no longer freezes at a static pose -- the caller's own tick (the same clock driving the
    * bottom-chrome fireball) threads straight through. Defaults to 0 for callers that don't yet
@@ -410,6 +458,17 @@ export interface HomescreenProps {
   /** #413: liveness-clock input, current wall-clock ms. Defaults to Date.now() at call time
    *  (never memoized) -- tests pass a fixed value for determinism; real callers never need to. */
   nowMs?:         number;
+  /** Live command registry, for the spine block. Omitted or empty -> six BLOCKED rows, which is
+   *  the honest reading: nothing was proven drivable. It never shrinks to fewer rows. */
+  spineCommands?: readonly RegistryCommand[] | null;
+  /** The directory the operator actually launched from, when it differs from the canonical repo
+   *  root the cockpit binds its state to. Change 3 of the spine-on-first-screen spec: the binding
+   *  itself is deliberate (utils/repo-root.ts canonicalizeThroughWorktree, issue #666 — "refusing
+   *  to bind state paths to a worktree root the watchdog will never poll") and stays. What was
+   *  wrong is that the operator was never told: header, data line and watchdog tail all showed the
+   *  canonical path, and the one console line that said so scrolled away before the first frame
+   *  settled. Undefined, or equal to the canonical root, renders nothing. */
+  launchDir?:     string;
 }
 
 /** D4: the fireball's raster lines interleaved 1:1 with the identity block's own text lines
@@ -479,8 +538,11 @@ export function Homescreen({
   flags         = {},
   viewportWidth = 80,
   fireballTick  = FIREBALL_IDLE_POSE_FRAME,
+  viewportHeight,
   boardSummary,
   nowMs         = Date.now(),
+  spineCommands,
+  launchDir,
 }: HomescreenProps): React.ReactElement {
   // D4: one outer titled panel wraps the whole hero -- replaces WelcomeV2's own border entirely
   // (the B2 root cause: a child border wider than its parent leftCol clipped in row-flex mode).
@@ -503,9 +565,12 @@ export function Homescreen({
   // BOX width in stacked mode loses no content that wasn't already text-clipped.
   const rcWidth      = rightColWidth(viewportWidth);
   const leftColWidth = panelIsRow ? LEFT_COL_WIDTH : Math.max(1, viewportWidth - 2);
+  const disclosureRow = rootDisclosure(state.dataRoot, launchDir);
+  const updateRow      = state.updateAvailable ? 1 : 0;
 
   const leftCol = React.createElement(
     Box, { key: "left", flexDirection: "column", width: leftColWidth },
+    disclosureRow,
     state.updateAvailable
       ? React.createElement(
           Text, { key: "update", dimColor: true },
@@ -515,23 +580,92 @@ export function Homescreen({
     renderIdentityBlock(state, fireballTick, viewportWidth),
   );
 
+  // Change 1 of the spine-on-first-screen spec. The previous entries were
+  //   "Run /init to create an EMBER.md file with instructions for Ember"
+  //   `Try "what changed on the board today?"`
+  // Both are coding-assistant affordances. On a first launch they spent the most valuable real
+  // estate on the screen teaching a workflow that is not the spine, while custody, model,
+  // checkpoint, benchmark and train appeared nowhere at all. These name the spine instead, in the
+  // operator's words, and point at the block below rather than at an internal noun.
+  // Changes 1 and 2 of the spine-on-first-screen spec, merged into ONE feed rather than two.
+  //
+  // The previous entries here were
+  //   "Run /init to create an EMBER.md file with instructions for Ember"
+  //   `Try "what changed on the board today?"`
+  // Both are coding-assistant affordances, and on a first launch they spent the most valuable real
+  // estate on the screen teaching a workflow that is not the spine, while custody, model,
+  // checkpoint, benchmark and train appeared nowhere at all.
+  //
+  // Why merged: adding a separate six-row block BELOW the tips box pushed the panel past the
+  // bottom of an 80x20 terminal and the border's lower corners went off-screen —
+  // homescreen-border-clip.test.ts caught it. The honest response was not to relax that guard; a
+  // clipped panel is a real defect for a real operator on a real terminal. It was to notice that
+  // once the tips box's only remaining job is to point at the spine, the tips box and the spine
+  // block are the same thing. So the onboarding feed IS the spine now: net four lines rather than
+  // eight, and the first screen's teaching space finally teaches the product.
   const onboardingFeed: Feed = {
-    title:   "Tips for getting started",
-    entries: [
-      { text: "Run /init to create an EMBER.md file with instructions for Ember" },
-      { text: NATIVE_HINT },
-    ],
+    title:   "Spine — what Ember can be driven to do",
+    entries: renderSpineBlock(buildSpineRows(spineCommands), rightColWidth(viewportWidth))
+      .map((text) => ({ text })),
+    // No footer. It said "type any command shown", which the title already implies and each row
+    // demonstrates — and it cost the one row that put the panel at 21 in an 80x20 terminal, which
+    // pushed the bottom border off-screen. Measured, not guessed: bottom-border row 21, budget 20.
+    //
+    // This feed's height is fixed by construction: SPINE_FUNCTIONS.length rows, at every input.
+    // The variable rows on this screen are the left column's two optional lines and the recent
+    // feed's board-driven entries, and those are budgeted below.
   };
-  const recentFeed: Feed = {
-    title:   "Recent activity",
-    entries: recentFeedEntries(boardSummary, nowMs),
-    footer:  "/resume for more",
-  };
+
+  // PANEL HEIGHT, made structural rather than measured (independent review of this PR, 2026-07-25).
+  //
+  // The first version of this change left a comment here saying the panel "lands at exactly 20 rows
+  // at 80x20, there is no slack". That was true of ONE state — the state the border-clip test
+  // mounts, with no board summary, no update line, and no launch-root disclosure. Three things
+  // reachable in ordinary operation pushed it past 20: the disclosure row this very PR added (it
+  // fires exactly when you launch from a worktree, which is the case it exists for), the update
+  // line, and the recent feed's entries, which grow with live telemetry, condition transitions and
+  // the attention list — an UNBOUNDED list against a zero-slack budget.
+  //
+  // Widening the assertion would only have tracked the variance. Removing it is stronger: the
+  // right column's last feed absorbs whatever the left column spends, so the total is a consequence
+  // of the arithmetic below rather than something a test happens to observe. Anything that does not
+  // fit is reported as "+n more" — one row, always, so the count cannot leak through the summary of
+  // itself — and /resume still shows all of it.
+  const leftRows       = IDENTITY_BLOCK_ROWS + (disclosureRow ? 1 : 0) + updateRow;
+  const onboardingRows = FEED_CHROME_ROWS + SPINE_FUNCTIONS.length;
+  const recentAll      = recentFeedEntries(boardSummary, nowMs);
+  // Rows left for the recent feed once the fixed content has been charged. A full feed costs its
+  // chrome (title + underline), its footer, and at least one entry.
+  const contentBudget  = viewportHeight === undefined
+    ? Number.POSITIVE_INFINITY
+    : Math.max(0, viewportHeight - PANEL_BORDER_ROWS);
+  const recentRows     = contentBudget - leftRows - onboardingRows;
+  const RECENT_MIN     = FEED_CHROME_ROWS + 1 + 1;
+
+  // When the left column is at its fullest — disclosure AND update line both showing — there is no
+  // longer room for a titled feed at all. Clamping the entry count to a floor of 1 does not save
+  // it: the chrome and footer alone still overrun, which is what the worst-case border test caught
+  // on the first attempt at this fix. So below the minimum the feed collapses to a single line that
+  // still says how much is there and how to see it, and one line is a size the budget can always
+  // pay.
+  const recentEntryBudget = recentRows >= RECENT_MIN ? recentRows - FEED_CHROME_ROWS - 1 : 0;
+  const overflow          = Math.max(0, recentAll.length - Math.max(0, recentEntryBudget - 1));
+  const recentShown       = recentAll.length > recentEntryBudget
+    ? [...recentAll.slice(0, Math.max(0, recentEntryBudget - 1)), { text: `+${overflow} more` }]
+    : recentAll;
+  const recentFeed: Feed | null = recentEntryBudget > 0
+    ? { title: "Recent activity", entries: recentShown, footer: "/resume for more" }
+    : null;
+  const recentCollapsed = recentFeed
+    ? null
+    : `Recent activity: ${recentAll.length} (/resume)`;
 
   const rightCol = React.createElement(
     Box, { key: "right", flexDirection: "column", width: rcWidth },
     React.createElement(FeedComponent, { key: "onboarding", feed: onboardingFeed, width: rcWidth }),
-    React.createElement(FeedComponent, { key: "recent",     feed: recentFeed,     width: rcWidth }),
+    recentFeed
+      ? React.createElement(FeedComponent, { key: "recent", feed: recentFeed, width: rcWidth })
+      : React.createElement(Text, { key: "recent-collapsed", dimColor: true }, recentCollapsed),
   );
 
   const panelWidth  = panelIsRow
