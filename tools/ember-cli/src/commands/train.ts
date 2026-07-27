@@ -294,17 +294,18 @@ function _artifactFailureLine(label: string, artifact: ResolvedArtifact): string
 // components/spine-panel.ts:695/698 builds `deps.trainCommand ?? createTrainCommand()`
 // fresh inside the thunk it calls on every drive(), with no injected dep on that path --
 // so an offer minted through one instance was unfindable by a confirm routed through the
-// next instance, on the operator panel itself. Hoisting the store here makes "offers are
-// single-use and expire with the session" true BY CONSTRUCTION (there is only ever one
-// store, independent of how many RegistryCommand objects a caller happens to construct),
-// rather than true only under an unstated assumption about wiring. Offer ids likewise
-// carry a module-level counter PLUS a time+random component (not just an instance-local
-// counter) so two instances minting in the same tick can never collide.
+// next instance, on the operator panel itself. Hoisting the store here makes offers
+// discoverable across those command instances. Every entry is separately bound to the
+// CommandContext.sessionId that minted it, so module scope never becomes cross-session
+// authority. Offer ids likewise carry a module-level counter PLUS a time+random component
+// (not just an instance-local counter) so two instances minting in the same tick can never
+// collide.
 // ---------------------------------------------------------------------------
 
 interface TrainOffer {
   offerId: string;
   ts: string;
+  sessionId: string;
   certificate: string;
   declarationLedger: string;
   runSpec: string;
@@ -506,6 +507,15 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             exitCode: 1,
           };
         }
+        if (offer.sessionId !== ctx.sessionId) {
+          // Do not delete the offer: a foreign session cannot confirm or spend authority
+          // that remains valid only for the exact session that minted it.
+          return {
+            type: "message" as const,
+            message: `error: train-launch offer "${suppliedId}" is not valid for this session -- nothing was confirmed or spent.`,
+            exitCode: 1,
+          };
+        }
         // Single-use: remove BEFORE invoking, so a throw/failure in the consumer never
         // leaves a reusable offer behind (C7) and a second confirm for the same id is
         // always the S1/S2 unknown-offer path, regardless of outcome.
@@ -686,6 +696,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       trainOffers.set(offerId, {
         offerId,
         ts: new Date().toISOString(),
+        sessionId: ctx.sessionId,
         certificate: canonical.certificate,
         declarationLedger: canonical.declarationLedger,
         runSpec: canonical.runSpec,

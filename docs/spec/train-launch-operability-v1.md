@@ -61,7 +61,9 @@ confirm-only membrane:
    `--execute` path invokes today, with the resolved paths.
 
 Offer ids are single-use and expire with the session. A `/train confirm` for an unknown, spent or expired
-id takes no action and says so — matching the membrane's stated contract that a typo never steers.
+id takes no action and says so — matching the membrane's stated contract that a typo never steers. Each
+offer is bound to the exact `CommandContext.sessionId` that minted it; a different live session cannot
+confirm or spend it.
 
 ### 3. `--execute` stays
 
