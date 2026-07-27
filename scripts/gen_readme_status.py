@@ -46,6 +46,9 @@ import sys
 from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+from scripts.ember_totality import quarantine_sweep
 DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")
 CONTINUITY_PATH = os.path.join(ROOT, "CONTINUITY.md")
@@ -72,6 +75,13 @@ CURRENT_SUBJECT_FIELDS = {
 
 
 def newest_receipt_path(data_root):
+    findings = quarantine_sweep.discover_quarantines([("data-root", data_root)])
+    if findings:
+        paths = ", ".join(str(row["path"]) for row in findings)
+        raise SystemExit(
+            "gen_readme_status: refusing stale receipt fallback because exact "
+            f"{quarantine_sweep.QUARANTINE_SUFFIX} file(s) exist: {paths}"
+        )
     receipts_glob = os.path.join(data_root, "ember-totality-*.json")
     paths = sorted(glob.glob(receipts_glob))
     if not paths:
