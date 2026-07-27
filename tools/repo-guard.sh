@@ -158,6 +158,9 @@ fi
 
 # ---- 2b. no local path fragments in tracked text (avir/, /mnt refs) -------
 # Detect patterns like /mnt/..../M/avir/ or /M/avir that carry developer-local context.
+# Byte source under REPO_GUARD_SCOPE=staged is the git INDEX, not the
+# working tree -- `git grep --cached`, mirroring the emberd-legacy and
+# names checks. Non-staged scope is unchanged.
 PATHFRAG='(/mnt/[^/]*/M/avir/)|(/M/avir)'
 PATHFRAG_SELF_EXCLUDE_ARGS=()
 if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
@@ -167,9 +170,14 @@ if [ "$KERNEL_ROOT" = "$SUBJECT_ROOT" ]; then
     ':(exclude)tools/repo-guard-denylist.sha256'
   )
 fi
-if git grep -nIE "$PATHFRAG" -- . "${PATHFRAG_SELF_EXCLUDE_ARGS[@]}" >/tmp/rg_pathfrags 2>/dev/null && [ -s /tmp/rg_pathfrags ]; then
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  PATHFRAG_HITS="$(git grep --cached -nIE "$PATHFRAG" -- . "${PATHFRAG_SELF_EXCLUDE_ARGS[@]}" 2>/dev/null || true)"
+else
+  PATHFRAG_HITS="$(git grep -nIE "$PATHFRAG" -- . "${PATHFRAG_SELF_EXCLUDE_ARGS[@]}" 2>/dev/null || true)"
+fi
+if [ -n "$PATHFRAG_HITS" ]; then
   fail "path-frags" "local WSL/mount path fragments in tracked files"
-  sed 's/^/      /' /tmp/rg_pathfrags | head -20
+  printf '%s\n' "$PATHFRAG_HITS" | sed 's/^/      /' | head -20
 else
   ok "path-frags" "no local path fragments"
 fi
@@ -208,9 +216,20 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
     NAMES="$(grep -vE '^\s*(#|$)' tools/.repo-guard-denylist | paste -sd '|' -)"
   fi
   if [ -n "$NAMES" ]; then
-    if git grep -nIiE "\b(${NAMES})\b" -- . "${NAMES_SELF_EXCLUDE_ARGS[@]}" "${NAMES_EXCLUDE_ARGS[@]}" >/tmp/rg_names 2>/dev/null && [ -s /tmp/rg_names ]; then
+    # Byte source under REPO_GUARD_SCOPE=staged (what .githooks/pre-commit
+    # actually runs with) is the git INDEX, not the working tree -- `git
+    # grep --cached` here, mirroring the emberd-legacy check above. This is
+    # the operator-name denylist: a name staged then removed from the
+    # working tree before commit would previously grep clean while the
+    # commit that lands still carries it. Non-staged scope is unchanged.
+    if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+      NAMES_HIT="$(git grep --cached -nIiE "\b(${NAMES})\b" -- . "${NAMES_SELF_EXCLUDE_ARGS[@]}" "${NAMES_EXCLUDE_ARGS[@]}" 2>/dev/null || true)"
+    else
+      NAMES_HIT="$(git grep -nIiE "\b(${NAMES})\b" -- . "${NAMES_SELF_EXCLUDE_ARGS[@]}" "${NAMES_EXCLUDE_ARGS[@]}" 2>/dev/null || true)"
+    fi
+    if [ -n "$NAMES_HIT" ]; then
       fail "names" "operator names in tracked files"
-      sed 's/^/      /' /tmp/rg_names | head -20
+      printf '%s\n' "$NAMES_HIT" | sed 's/^/      /' | head -20
     else
       ok "names" "none found"
     fi
@@ -250,6 +269,64 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
   fi
 else
   ok "names" "SKIPPED (backup-remote exemption)"
+fi
+
+# ---- 3b. emberd legacy-name: content-addressed exceptions only -----------
+# Separate from the [names] check above and from its path-prefix
+# tools/repo-guard-names-exclude.txt, which is left exactly as-is. A tracked
+# path matching the legacy name passes ONLY if it is enumerated in
+# tools/emberd-legacy-exceptions.json AND its current content's sha256 equals
+# the digest recorded there — path alone is never sufficient (anyone can
+# rename a file into an exempted prefix; they cannot forge its digest).
+# Policy validity is unconditional: the exceptions file is parsed and
+# schema-validated on EVERY run, including a zero-hit tree — a missing,
+# empty, malformed, or unparseable exceptions file is a hard FAIL always,
+# never a silent pass, regardless of whether there is a legacy-name match to
+# adjudicate this run. Only the per-path adjudication is conditional on a
+# match existing; a clean tree with no legacy name anywhere still requires a
+# valid policy to pass.
+# Boundary is alnum-delimited, not \b: plain \b treats "_" as a word
+# character, so "emberd_schedule" (a real key in the receipt exception below)
+# would silently never match at all — invisible to the guard rather than
+# adjudicated. "(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)" still excludes the
+# two confirmed false positives ($EmberDir, toolsToEmberDefs — "emberd" as an
+# accidental mid-identifier substring, alnum on both sides) while catching
+# snake_case occurrences where "emberd" is its own semantic token.
+# See state/specs/ember-lab-absorption-contract-2026-07-25.md Part 4.
+# Byte source under REPO_GUARD_SCOPE=staged (what .githooks/pre-commit
+# actually runs with) is the git INDEX, not the working tree -- `git grep
+# --cached` here, and check_emberd_legacy_exceptions.py independently reads
+# `git show :path` for every matched-path digest and for the exceptions file
+# itself under the same scope. Reading working-tree bytes while committing
+# staged bytes was a real bypass: stage divergent content, restore the
+# working tree to the enumerated original, and a working-tree read never
+# sees what actually lands in the commit. Non-staged scope (default local/CI
+# run) is unchanged: working-tree bytes via plain `git grep`.
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  EMBERD_HITS="$(git grep --cached -nIiE '(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)' -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/emberd-legacy-exceptions.json' ':(exclude)tools/check_emberd_legacy_exceptions.py' 2>/dev/null || true)"
+else
+  EMBERD_HITS="$(git grep -nIiE '(^|[^A-Za-z0-9])emberd([^A-Za-z0-9]|$)' -- . ':(exclude)tools/repo-guard.sh' ':(exclude)tools/emberd-legacy-exceptions.json' ':(exclude)tools/check_emberd_legacy_exceptions.py' 2>/dev/null || true)"
+fi
+if [ -z "$EMBERD_HITS" ]; then
+  EMBERD_PATHS=""
+else
+  EMBERD_PATHS="$(printf '%s\n' "$EMBERD_HITS" | cut -d: -f1 | sort -u)"
+fi
+EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" python "$KERNEL_ROOT/tools/check_emberd_legacy_exceptions.py" 2>&1)"
+EMBERD_CHECK_RC=$?
+if [ "$EMBERD_CHECK_RC" -eq 0 ]; then
+  if [ -z "$EMBERD_HITS" ]; then
+    ok "emberd-legacy" "no tracked content matches the legacy name; exceptions policy validated"
+  else
+    ok "emberd-legacy" "$(printf '%s' "$EMBERD_CHECK_OUT" | head -1)"
+  fi
+else
+  if [ -z "$EMBERD_HITS" ]; then
+    fail "emberd-legacy" "committed exceptions policy is invalid (zero-hit tree)"
+  else
+    fail "emberd-legacy" "legacy name present outside the content-addressed exceptions"
+  fi
+  printf '%s\n' "$EMBERD_CHECK_OUT" | sed 's/^/      /'
 fi
 
 # ---- 4. exactly one root goal document -----------------------------------
