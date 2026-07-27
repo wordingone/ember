@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember Totality master spec — runner / board aggregator.
 
 Executes every test_*.py status probe in this directory, parses each probe's
@@ -111,6 +112,7 @@ REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, REPO_ROOT)
 from scripts.lib.invariant import stamp, INVARIANT_SHA256
 from scripts.ember_totality import receipt_chain_verify
+from scripts.ember_totality import quarantine_sweep
 
 try:  # pragma: no cover - best-effort console hardening, never fatal
     sys.stdout.reconfigure(encoding="utf-8")
@@ -1067,6 +1069,15 @@ def main():
               "absent artifact as a visibility failure, not an absence "
               "failure.")
     )
+    ap.add_argument(
+        "--receipt-staging-dir",
+        action="append",
+        default=[],
+        help=(
+            "additional run receipt-staging directory to include in the "
+            "standing exact-suffix quarantine sweep; repeatable"
+        ),
+    )
     args = ap.parse_args()
     if args.ts:
         print(f"NOTE: positional ts argument {args.ts!r} is DEPRECATED and "
@@ -1125,6 +1136,30 @@ def main():
                 "exit_code": None,
             })
             covered.add(cid)
+
+    # Issue #788: checked_write preserves a failed attempt as an exact
+    # *.INVALID.quarantine suffix. Ordinary receipt globs do not select it,
+    # so sweep independently before completion math to forbid stale GREEN.
+    quarantine_roots = [
+        ("receipts", os.path.join(effective_root, "receipts")),
+        ("staging", os.path.join(effective_root, "staging")),
+    ]
+    if args.artifact_root:
+        artifact_root = os.path.abspath(args.artifact_root)
+        quarantine_roots.extend(
+            [
+                ("artifact-receipts", os.path.join(artifact_root, "receipts")),
+                ("artifact-staging", os.path.join(artifact_root, "staging")),
+            ]
+        )
+    quarantine_roots.extend(
+        (f"run-receipt-staging-{index}", os.path.abspath(path))
+        for index, path in enumerate(args.receipt_staging_dir, start=1)
+    )
+    quarantine_findings = quarantine_sweep.discover_quarantines(quarantine_roots)
+    quarantine_sweep.apply_quarantine_flags(
+        rows, quarantine_findings, PROCESS_INVARIANTS
+    )
 
     # --- Process-invariant contract enforcement: C0/C9/C15 rows must NEVER
     # carry a STATE-condition status. If a probe crashed/timed out/violated
@@ -1284,9 +1319,16 @@ def main():
              # carry artifact_root_source ("env" | "repo-root") -- a GREEN
              # earned via an env-provided artifact root is auditable here.
              **({"artifact_root_source": r["artifact_root_source"]}
-                if "artifact_root_source" in r else {})}
+                if "artifact_root_source" in r else {}),
+             **({"quarantine_audit": r["quarantine_audit"]}
+                if "quarantine_audit" in r else {})}
             for r in rows
         ],
+        "quarantine_audit": {
+            "suffix": quarantine_sweep.QUARANTINE_SUFFIX,
+            "finding_count": len(quarantine_findings),
+            "findings": quarantine_findings,
+        },
         # Separate block for the 3 STANDING PROCESS-INVARIANT rows (GOAL.md
         # §4.0(9)), distinct from the unified `rows` array above -- they are
         # cadence-audit results (AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH),
