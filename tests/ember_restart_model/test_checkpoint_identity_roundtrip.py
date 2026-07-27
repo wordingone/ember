@@ -26,8 +26,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 from checkpoint_artifacts import CheckpointIdentityMismatch, load_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from checkpoint_fixture import write_checkpoint_artifacts  # noqa: E402  (test-only path seam)
+from .checkpoint_fixture import write_checkpoint_artifacts
 
 
 def _tiny_config() -> RestartDecoderConfig:
@@ -87,7 +86,10 @@ class CheckpointIdentityRoundtripTests(unittest.TestCase):
             root = Path(directory) / "checkpoint-0001"
             receipt = _write_real_checkpoint(root, launch_seed=13)
 
-            shared_path = root / "shared.pt"
+            shared_record = next(
+                record for record in receipt["shards"] if record["role"] == "shared_model"
+            )
+            shared_path = root / shared_record["path"]
             raw = bytearray(shared_path.read_bytes())
             raw[0] ^= 0xFF
             shared_path.write_bytes(bytes(raw))

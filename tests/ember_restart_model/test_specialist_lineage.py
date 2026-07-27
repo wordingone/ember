@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, published_checkpoint_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
-from checkpoint_fixture import write_checkpoint_artifacts
+from .checkpoint_fixture import write_checkpoint_artifacts
 
 
 
