@@ -13,11 +13,23 @@ denylist cases use an obviously-fake test word so the test is self-contained.
 Run: python tools/repo_guard_selftest.py
 """
 import hashlib
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+# The retired daemon name is assembled to avoid self-matching the guard.
+_LEGACY = "ember" + "d"
+_LEGACY_TAG = _LEGACY + "-legacy"
+_LEGACY_SCHEMA = _LEGACY + "-legacy-exceptions-v1"
+_LEGACY_POLICY_REL = "tools/" + _LEGACY + "-legacy-exceptions.json"
+_LEGACY_CHECKER_REL = "tools/check_" + _LEGACY + "_legacy_exceptions.py"
+_LEGACY_ENV_OVERRIDE = _LEGACY.upper() + "_EXCEPTIONS_PATH"
+
+# Assemble the local-path fragment for adversarial fixtures without self-matching.
+_AVIR_FRAG = "/M" + "/avir"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
@@ -26,6 +38,8 @@ GUARD_SUPPORT_FILES = [
     "tools/check_line_endings.py",
     "tools/check_text_encoding.py",
     "tools/check_names_hashed.py",
+    _LEGACY_CHECKER_REL,
+    _LEGACY_POLICY_REL,
     "scripts/verify_authority_conservation.py",
     "INVARIANT.md",
     "GOAL.md",
@@ -615,6 +629,7 @@ def test_required_workflow_uses_base_pinned_kernel():
         encoding="utf-8"
     )
     required = (
+        "pull_request:",
         "pull_request_target:",
         "path: guard-kernel",
         "path: guard-subject",
@@ -629,24 +644,420 @@ def test_required_workflow_uses_base_pinned_kernel():
     )
     for marker in required:
         assert marker in text, f"trusted workflow marker missing: {marker}"
-    assert "\n  pull_request:\n" not in text, (
-        "candidate-authored pull_request workflow cannot be the required trust gate"
+    assert (
+        "on:\n"
+        "  push:\n"
+        "  pull_request:\n"
+        "    branches: [master]\n"
+        "  pull_request_target:\n"
+    ) in text, (
+        "bootstrap must retain pull_request while restoring unfiltered push coverage"
     )
-    assert text.count("persist-credentials: false") == 3
+    assert text.count("persist-credentials: false") == 4
     kernel_checkout = text.split(
         "- name: Checkout trusted guard kernel", 1
-    )[1].split("- name: Checkout pull-request merge subject", 1)[0]
+    )[1].split("- name: Checkout bootstrap trusted guard kernel", 1)[0]
     assert "ref:" not in kernel_checkout, (
         "trusted kernel must resolve the current protected-base tip, not an event-stale base SHA"
     )
     assert (
-        "github.event_name == 'pull_request_target' && "
+        "(github.event_name == 'pull_request_target' || "
+        "github.event_name == 'pull_request') && "
         "github.event.pull_request.base.sha || github.event.before"
     ) in text, "push and pull-request events must both bind an explicit changed-range base"
     assert "explicit range base is unavailable; refusing weaker tree-only fallback" in text
     assert "pull_request_target resolves the current" in text
-    assert "push resolves the triggering protected commit" in text
+    assert "pull_request is a temporary bootstrap trigger" in text
+    assert "push is a same-tree self-check" in text
+    assert "pull_request_target is the separated trusted-kernel gate" in text
     assert 'bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"' in text
+
+
+def _legacy_zero_hit_fixture(branch: str) -> Path:
+    tmp = make_fixture(branch)
+    (tmp / "docs").mkdir(exist_ok=True)
+    (tmp / "docs" / "note.md").write_text(
+        "Nothing sensitive here, just ordinary prose.\n", encoding="utf-8", newline="\n",
+    )
+    return tmp
+
+
+def test_red_legacy_policy_missing_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-missing")
+    try:
+        (tmp / _LEGACY_POLICY_REL).unlink()
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (missing policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "does not exist" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_empty_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-empty")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_text("", encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (empty policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "is empty" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_invalid_utf8_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-badutf8")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_bytes(b"\xff\xfe\x00invalid\x80\x81")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (invalid UTF-8 policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "not valid UTF-8 JSON" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_invalid_json_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-badjson")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_text(
+            "{ this is not valid json ", encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (invalid JSON policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "not valid UTF-8 JSON" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_wrong_schema_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-wrongschema")
+    try:
+        (tmp / _LEGACY_POLICY_REL).write_text(
+            '["not", "an", "object"]', encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (wrong-schema policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "top level is not a JSON object" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_policy_malformed_entry_zero_hit():
+    tmp = _legacy_zero_hit_fixture("fix/selftest-red-legacy-badentry")
+    try:
+        doc = json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": "some/file.json", "unexpected_key": "boom"}],
+        })
+        (tmp / _LEGACY_POLICY_REL).write_text(doc, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (malformed entry policy, zero hits), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "no valid 'sha256'" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_legacy_policy_valid_zero_hit():
+    """The over-closure control: a genuinely valid policy on a zero-hit tree
+    must stay green both before and after the fix — this test must never go
+    red as a side effect of tightening zero-hit validation."""
+    tmp = _legacy_zero_hit_fixture("fix/selftest-green-legacy-valid")
+    try:
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected exit 0 (valid policy, zero hits), got {rc}\n{out}"
+        assert f"ok   [{_LEGACY_TAG}]" in out, out
+        assert "repo-guard: PASS" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_legacy_unlisted_hit_still_fails():
+    """Non-empty-hits path, unchanged: an unlisted legacy-name match still
+    fails the guard exactly as before this fix."""
+    tmp = make_fixture("fix/selftest-red-legacy-unlisted-hit")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "docs" / "note.md").write_text(
+            f"mentions {_LEGACY} here, not in the exceptions file\n",
+            encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit (unlisted hit), got {rc}\n{out}"
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "docs/note.md" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_legacy_legit_exception_still_passes():
+    """Non-empty-hits path, unchanged: a hit exactly covered by an enumerated
+    (path, sha256) exception still passes the guard exactly as before this
+    fix."""
+    tmp = make_fixture("fix/selftest-green-legacy-legit-exception")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        content = f"mentions {_LEGACY} here, covered by an exception\n"
+        (tmp / "docs" / "note.md").write_text(content, encoding="utf-8", newline="\n")
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        doc = json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": "docs/note.md", "sha256": digest, "reason": "selftest fixture"}],
+        })
+        (tmp / _LEGACY_POLICY_REL).write_text(doc, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected exit 0 (legit enumerated exception), got {rc}\n{out}"
+        assert f"ok   [{_LEGACY_TAG}]" in out, out
+        assert "repo-guard: PASS" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# RED: staged-scope byte provenance. REPO_GUARD_SCOPE=staged is what
+# .githooks/pre-commit actually runs the guard with — the check must
+# adjudicate the bytes about to be COMMITTED (the git index), never the
+# working tree, or a commit can carry unexcepted bytes past a green guard.
+# ---------------------------------------------------------------------------
+def test_red_legacy_staged_bypass_worktree_restore():
+    """Reproduction: commit an excepted file at its enumerated digest, stage
+    DIFFERENT bytes over it, then restore the working tree back to the
+    enumerated original WITHOUT re-staging — the index still holds the
+    unexcepted bytes while the working tree shows the (still excepted)
+    original. Under REPO_GUARD_SCOPE=staged the guard must fail on the
+    staged bytes; reading the working tree instead would wrongly pass."""
+    tmp = make_fixture("fix/selftest-red-legacy-staged-bypass")
+    try:
+        # Deliberately NOT under receipts/ -- that prefix carries its own,
+        # unrelated authority-conservation goal-binding requirement (section
+        # 9) that would contaminate this reproduction with a second, real
+        # failure reason. docs/ has no such coupling.
+        rel = "docs/legacy-note.md"
+        (tmp / "docs").mkdir(exist_ok=True)
+        original = f"historical note mentioning {_LEGACY}, frozen bytes\n"
+        digest = hashlib.sha256(original.encode("utf-8")).hexdigest()
+        (tmp / rel).write_text(original, encoding="utf-8", newline="\n")
+        doc = json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": rel, "sha256": digest, "reason": "selftest fixture"}],
+        })
+        (tmp / _LEGACY_POLICY_REL).write_text(doc, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        # Sanity: green with the original bytes, no staged mutation yet.
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        # Stage DIFFERENT bytes over the excepted file...
+        modified = f"historical note mentioning {_LEGACY}, EDITED bytes\n"
+        (tmp / rel).write_text(modified, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", rel], check=True)
+        # ...then restore ONLY the working tree to the enumerated original,
+        # WITHOUT re-staging — the index keeps the modified bytes.
+        (tmp / rel).write_text(original, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit: the staged bytes diverge from the "
+            "enumerated digest even though the working tree was restored "
+            f"to the original, got {rc}\n{out}"
+        )
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "current content digest is" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# RED: exceptions-path byte provenance. The policy path must be hardcoded —
+# an inherited/attacker-set exceptions-path override env var must have zero
+# effect (see _LEGACY_ENV_OVERRIDE above for the exact variable name).
+# ---------------------------------------------------------------------------
+def test_red_legacy_env_override_ignored():
+    """Reproduction: commit a tree with a real, unlisted legacy-name hit, so
+    the COMMITTED policy correctly fails it. Point the exceptions-path
+    override env var at an external, more permissive policy that DOES
+    enumerate the hit at its correct digest. If the override were honoured
+    the guard would wrongly pass; it must still fail against the committed
+    policy."""
+    tmp = make_fixture("fix/selftest-red-legacy-env-override")
+    external = None
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        content = f"mentions {_LEGACY} here, not enumerated in the real policy\n"
+        (tmp / "docs" / "note.md").write_text(content, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 != 0, f"fixture baseline should fail (unlisted hit): {rc0}\n{out0}"
+
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        external = tmp.parent / f"{tmp.name}-external-policy.json"
+        external.write_text(json.dumps({
+            "schema": _LEGACY_SCHEMA,
+            "entries": [{"path": "docs/note.md", "sha256": digest, "reason": "attacker-controlled"}],
+        }), encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={_LEGACY_ENV_OVERRIDE: str(external)})
+        assert rc != 0, (
+            "expected the external policy override to be IGNORED (guard "
+            f"must still fail against the committed policy), got {rc}\n{out}"
+        )
+        assert f"FAIL [{_LEGACY_TAG}]" in out, out
+        assert "docs/note.md" in out, out
+    finally:
+        cleanup(tmp)
+        if external is not None and external.exists():
+            external.unlink()
+
+
+# ---------------------------------------------------------------------------
+# RED: the same staged-scope byte-provenance seam as the legacy-name check,
+# reproduced against the other three checks that read tracked-file content
+# unconditionally: names (plaintext/env mode), names (hashed mode), and
+# path-frags. Each follows the identical shape -- commit clean content,
+# stage a violation, restore the working tree to clean WITHOUT re-staging,
+# confirm REPO_GUARD_SCOPE=staged still fails on the staged bytes.
+# ---------------------------------------------------------------------------
+def test_red_names_staged_bypass_worktree_restore():
+    """Plaintext/env-var operator-name mode (repo-guard.sh's own `git grep`,
+    REPO_GUARD_NAMES set). Priority case: this is the standing rule about
+    what may never enter git history."""
+    tmp = make_fixture("fix/selftest-red-names-staged-bypass")
+    try:
+        test_word = "widgetcotestonly"
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = "Nothing sensitive here, just ordinary prose.\n"
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp, extra_env={"REPO_GUARD_NAMES": test_word})
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = f"This mentions {test_word} in passing.\n"
+        (tmp / "docs" / "note.md").write_text(tainted, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", "docs/note.md"], check=True)
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged", "REPO_GUARD_NAMES": test_word})
+        assert rc != 0, (
+            "expected nonzero exit: the staged name-bearing bytes diverge "
+            f"from the restored clean working tree, got {rc}\n{out}"
+        )
+        assert "FAIL [names]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_names_hashed_staged_bypass_worktree_restore():
+    """Same reproduction, hashed-denylist mode (check_names_hashed.py, the
+    path taken when REPO_GUARD_NAMES is unset and a committed .sha256
+    denylist exists)."""
+    tmp = make_fixture("fix/selftest-red-names-hashed-staged-bypass")
+    try:
+        test_word = "widgetcotestonly"
+        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+            "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
+            encoding="utf-8", newline="\n",
+        )
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = "Nothing sensitive here, just ordinary prose.\n"
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = f"This mentions {test_word} in passing.\n"
+        (tmp / "docs" / "note.md").write_text(tainted, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", "docs/note.md"], check=True)
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit (hashed-denylist mode): the staged "
+            f"name-bearing bytes diverge from the restored clean working "
+            f"tree, got {rc}\n{out}"
+        )
+        assert "FAIL [names]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_pathfrags_staged_bypass_worktree_restore():
+    """Local WSL/mount path-fragment check (repo-guard.sh section 2b)."""
+    tmp = make_fixture("fix/selftest-red-pathfrags-staged-bypass")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = "Nothing sensitive here, just ordinary prose.\n"
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = f"See {_AVIR_FRAG} for the local copy.\n"
+        (tmp / "docs" / "note.md").write_text(tainted, encoding="utf-8", newline="\n")
+        subprocess.run(["git", "-C", str(tmp), "add", "docs/note.md"], check=True)
+        (tmp / "docs" / "note.md").write_text(clean, encoding="utf-8", newline="\n")
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit: the staged path-fragment bytes diverge "
+            f"from the restored clean working tree, got {rc}\n{out}"
+        )
+        assert "FAIL [path-frags]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_line_endings_staged_bypass_worktree_restore():
+    """The index must be inspected even if it contains CRLF bytes installed
+    without Git clean-filter normalization. A normal ``git add`` is not a valid
+    RED fixture because ``eol=lf`` converts CRLF to LF before the index write."""
+    tmp = make_fixture("fix/selftest-red-line-endings-staged-bypass")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        clean = b"ordinary LF-only prose\n"
+        (tmp / "docs" / "note.md").write_bytes(clean)
+        commit_fixture(tmp)
+
+        rc0, out0 = run_guard(tmp)
+        assert rc0 == 0, f"fixture setup is not green before mutation: {rc0}\n{out0}"
+
+        tainted = b"ordinary CRLF prose\r\n"
+        blob = subprocess.run(
+            ["git", "-C", str(tmp), "hash-object", "-w", "--stdin"],
+            input=tainted, capture_output=True, check=True,
+        ).stdout.decode("ascii").strip()
+        subprocess.run(
+            ["git", "-C", str(tmp), "update-index", "--cacheinfo",
+             f"100644,{blob},docs/note.md"],
+            check=True,
+        )
+        assert (tmp / "docs" / "note.md").read_bytes() == clean
+
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, (
+            "expected nonzero exit: the staged CRLF blob diverges from the "
+            f"restored LF-only working tree, got {rc}\n{out}"
+        )
+        assert "FAIL [line-endings]" in out, out
+    finally:
+        cleanup(tmp)
 
 
 ALL_TESTS = [
@@ -669,6 +1080,21 @@ ALL_TESTS = [
     test_split_kernel_hashed_scan_covers_every_subject_guard_surface,
     test_split_kernel_scans_subject_guard_for_absolute_paths,
     test_required_workflow_uses_base_pinned_kernel,
+    test_red_legacy_policy_missing_zero_hit,
+    test_red_legacy_policy_empty_zero_hit,
+    test_red_legacy_policy_invalid_utf8_zero_hit,
+    test_red_legacy_policy_invalid_json_zero_hit,
+    test_red_legacy_policy_wrong_schema_zero_hit,
+    test_red_legacy_policy_malformed_entry_zero_hit,
+    test_green_legacy_policy_valid_zero_hit,
+    test_red_legacy_unlisted_hit_still_fails,
+    test_green_legacy_legit_exception_still_passes,
+    test_red_legacy_staged_bypass_worktree_restore,
+    test_red_legacy_env_override_ignored,
+    test_red_names_staged_bypass_worktree_restore,
+    test_red_names_hashed_staged_bypass_worktree_restore,
+    test_red_pathfrags_staged_bypass_worktree_restore,
+    test_red_line_endings_staged_bypass_worktree_restore,
 ]
 
 
