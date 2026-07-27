@@ -28,6 +28,7 @@ import { join, resolve } from "node:path";
 import xtermHeadless from "@xterm/headless";
 const { Terminal } = xtermHeadless as unknown as { Terminal: new (opts: unknown) => any };
 import { spawn as spawnPty, type IPty } from "node-pty";
+import { headlessCaptureEnv } from "../services/headless-capture.ts";
 
 const COLS = 100;
 const ROWS = 30;
@@ -76,6 +77,7 @@ async function main(): Promise<void> {
       cwd: repoRoot,
       env: {
         ...process.env,
+        ...headlessCaptureEnv(),
         EMBER_HOME: home,
         EMBER_REPO_ROOT: repoRoot,
         EMBER_SOURCE_ROOT: repoRoot,
