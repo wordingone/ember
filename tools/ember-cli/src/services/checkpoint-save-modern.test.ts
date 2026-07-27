@@ -13,7 +13,7 @@ import { createHash } from "crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { copyFile, lstat, mkdir, rename, rm } from "fs/promises";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import {
   saveModernCheckpoint,
   type CheckpointSaveModernDeps,
@@ -84,7 +84,8 @@ function realFsDeps(overrides: Partial<CheckpointSaveModernDeps> = {}): Checkpoi
       }
     },
     mkdir: async (path) => {
-      await mkdir(path, { recursive: true });
+      await mkdir(dirname(path), { recursive: true });
+      await mkdir(path);
     },
     copyFileHashed: async (src, dest): Promise<CopiedArtifact> => {
       await copyFile(src, dest);
@@ -214,6 +215,66 @@ describe("saveModernCheckpoint (core)", () => {
 
     expect(mkdirCalled).toBe(false);
     expect(readdirSync(targetDir)).toEqual(["sentinel"]);
+  });
+
+  it("negative: a pre-existing staging directory is refused without copying into or deleting it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-staging-collision-"));
+    roots.push(root);
+    const sourceDir = join(root, "source");
+    mkdirSync(sourceDir);
+    writeV5Bundle(sourceDir);
+    const targetDir = join(root, "target");
+    const stagingDir = `${targetDir}.tmp-test`;
+    mkdirSync(stagingDir);
+    const sentinelPath = join(stagingDir, "sentinel");
+    writeFileSync(sentinelPath, "pre-existing");
+
+    let copyCalled = false;
+    await expect(
+      saveModernCheckpoint(
+        sourceDir,
+        targetDir,
+        realFsDeps({
+          copyFileHashed: async () => {
+            copyCalled = true;
+            throw new Error("copy must not run");
+          },
+        }),
+      ),
+    ).rejects.toThrow(/staging directory already exists/);
+
+    expect(copyCalled).toBe(false);
+    expect(readFileSync(sentinelPath, "utf8")).toBe("pre-existing");
+    expect(existsSync(targetDir)).toBe(false);
+  });
+
+  it("negative: a target nested under the verified source is refused before any write so the source stays a closed bundle", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-source-overlap-"));
+    roots.push(root);
+    const sourceDir = join(root, "source");
+    mkdirSync(sourceDir);
+    writeV5Bundle(sourceDir);
+    const targetDir = join(sourceDir, "nested-copy");
+
+    let mkdirCalled = false;
+    await expect(
+      saveModernCheckpoint(
+        sourceDir,
+        targetDir,
+        realFsDeps({
+          mkdir: async (path) => {
+            mkdirCalled = true;
+            await mkdir(path, { recursive: true });
+          },
+        }),
+      ),
+    ).rejects.toThrow(/destination overlaps the verified source bundle/);
+
+    expect(mkdirCalled).toBe(false);
+    expect(existsSync(targetDir)).toBe(false);
+    const sourceAfter = await verifyCheckpointBundle(sourceDir);
+    expect(sourceAfter.schemaVersion).toBe("ember-sparse-checkpoint-v5");
+    expect(sourceAfter.artifacts).toHaveLength(7);
   });
 
   it("negative: a tampered source (named shard changed, manifest unchanged) is refused before any write -- hostile byte substitution", async () => {

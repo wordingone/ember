@@ -33,7 +33,7 @@
 // re-serializing a subset would silently drop them while still passing the
 // loader (the over-closure trap the acceptance map names explicitly).
 
-import { basename, dirname, join } from "path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { requireNoReparseAncestry } from "./checkpoint-load.ts";
 import type { VerifiedCheckpointBundle } from "./checkpoint-load.ts";
 
@@ -64,6 +64,9 @@ export interface CheckpointSaveModernDeps {
    * the destination no-replace collision check, fail-closed and evaluated
    * BEFORE any staging write. */
   pathExists: (path: string) => Promise<boolean>;
+  /** Creates `path` as a newly owned staging directory. Implementations may
+   * create missing parents, but MUST fail atomically when the leaf already
+   * exists; cleanup is permitted only after this call succeeds. */
   mkdir: (path: string) => Promise<void>;
   /** Copies `src` to `dest` and returns the FRESHLY MEASURED sha256 + byte
    * count of the bytes actually landed at `dest` -- never the source
@@ -141,6 +144,26 @@ export async function saveModernCheckpoint(
   // SAME check /model checkpoint load performs. Never reimplemented.
   const source = await deps.verifyBundle(sourceCheckpointDir);
 
+  // The source verifier proves a CLOSED directory: its only entries are the
+  // manifest and named shards. Publishing the target anywhere beneath that
+  // directory would add an entry to the source after verification and make
+  // the source itself invalid, even though the nested copy verifies. Refuse
+  // the overlap before creating staging bytes.
+  const targetFromSource = relative(
+    source.checkpointDir,
+    resolve(targetDir),
+  );
+  if (
+    targetFromSource === "" ||
+    (!isAbsolute(targetFromSource) &&
+      targetFromSource !== ".." &&
+      !targetFromSource.startsWith(`..${sep}`))
+  ) {
+    throw new CheckpointSaveModernError(
+      "destination overlaps the verified source bundle",
+    );
+  }
+
   // 2a. Destination reparse ancestry: refuse BEFORE staging, not after
   // publishing. This check previously existed only inside the step-6
   // re-verification, which runs after the atomic rename -- so saving into a
@@ -174,9 +197,22 @@ export async function saveModernCheckpoint(
   }
 
   const stagingDir = deps.stagingPath(targetDir);
+  if (await deps.pathExists(stagingDir)) {
+    throw new CheckpointSaveModernError(
+      `staging directory already exists: ${stagingDir}`,
+    );
+  }
   try {
     await deps.mkdir(stagingDir);
+  } catch {
+    // Do not clean up a path whose exclusive creation failed: it may belong
+    // to another writer that won the race after the pre-check.
+    throw new CheckpointSaveModernError(
+      `staging directory could not be created exclusively: ${stagingDir}`,
+    );
+  }
 
+  try {
     // 3. Copy every shard FIRST, hash-binding each as it lands. Order
     // follows `source.artifacts` (already the manifest's own shard order);
     // the manifest itself is written last, below.

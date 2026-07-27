@@ -461,7 +461,11 @@ function _realCheckpointSaveModernDeps(
     verifyBundle,
     pathExists: _pathExists,
     mkdir: async (path) => {
-      await fsMkdir(path, { recursive: true });
+      // Create parents separately, then claim the staging leaf atomically.
+      // A recursive mkdir on the leaf silently succeeds when an unrelated
+      // directory already exists and later cleanup could delete those bytes.
+      await fsMkdir(dirname(path), { recursive: true });
+      await fsMkdir(path);
     },
     copyFileHashed: _copyFileHashed,
     rename: (from, to) => fsRename(from, to),
