@@ -21,6 +21,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn as spawnPty } from "node-pty";
+import { headlessCaptureEnv } from "../services/headless-capture.ts";
 import { READY_OSC } from "../cli/ready-sentinel.ts";
 
 function parseArgs(argv: string[]): { binary: string; timeoutMs: number; broken: boolean } {
@@ -65,7 +66,9 @@ export async function waitReadyProof(argv: string[]): Promise<void> {
     cols: 80,
     rows: 24,
     cwd: process.cwd(),
-    env,
+    // At the call site, not where `env` is built: the broken-boot branch below strips model-seat
+    // keys, and an instrument signal that a later `delete` can reach is not a guarantee.
+    env: { ...env, ...headlessCaptureEnv() },
   });
 
   let buffered = "";
