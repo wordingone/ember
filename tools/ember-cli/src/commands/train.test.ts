@@ -16,6 +16,7 @@ import {
   type LaunchPacketRunResult,
 } from "./train.ts";
 import type { CommandContext } from "../types/command-types.ts";
+import { tryDispatchSlashCommand } from "../services/slash-dispatch.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -89,17 +90,49 @@ function failingStdout(): string {
 }
 
 /** Build a command + a spawn recorder that never runs a real subprocess. */
-function makeCmd(runner: (spawns: RecordedSpawn[]) => LaunchPacketRunResult) {
+function makeCmd(
+  runner: (spawns: RecordedSpawn[]) => LaunchPacketRunResult,
+  repoRoot: string = "/fake/ember",
+) {
   const spawns: RecordedSpawn[] = [];
   const cmd = createTrainCommand({
     pythonBin: "python",
-    repoRoot: "/fake/ember",
+    repoRoot,
     runLaunchPacket: (executable, args) => {
       spawns.push({ executable, args });
       return runner(spawns);
     },
   });
   return { cmd, spawns };
+}
+
+/** The canonical launch-authority directory under a given repo root. */
+function canonicalDir(repoRoot: string): string {
+  return path.join(repoRoot, "receipts", "ember-02-launch-authority");
+}
+
+/** Writes a valid certificate.json / declaration-ledger.jsonl / run-spec.json triple at the
+ *  canonical launch-authority location under repoRoot. Content is minimal-but-well-formed --
+ *  the CLI-level check is existence + parseability, not the certified consumer's own deep
+ *  schema validation (that lives in certified_train_launch.py and is exercised separately). */
+function writeCanonicalArtifacts(repoRoot: string): void {
+  const dir = canonicalDir(repoRoot);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "certificate.json"),
+    JSON.stringify({ certificate_sha256: "a".repeat(64), certificate_legs: {} }),
+  );
+  fs.writeFileSync(
+    path.join(dir, "declaration-ledger.jsonl"),
+    [
+      JSON.stringify({ schema_version: "ember-spine-declaration-ledger-row-v1", row: 0 }),
+      JSON.stringify({ schema_version: "ember-spine-declaration-ledger-row-v1", row: 1 }),
+    ].join("\n") + "\n",
+  );
+  fs.writeFileSync(
+    path.join(dir, "run-spec.json"),
+    JSON.stringify({ mode: "bounded-canary", steps: 1 }),
+  );
 }
 
 function makeExecuteCmd(
@@ -141,6 +174,123 @@ function assertOnlyPreflightSpawned(spawns: RecordedSpawn[]): void {
 }
 
 describe("train command", () => {
+  it("routes the displayed /train confirm instruction through the production slash dispatcher", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-dispatch-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      const certifiedSpawns: RecordedSpawn[] = [];
+      const cmd = createTrainCommand({
+        pythonBin: "python",
+        repoRoot: scratch,
+        certifiedLaunchScriptPath: path.join(
+          scratch,
+          "tools",
+          "ember-restart-3b",
+          "certified_train_launch.py",
+        ),
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: (executable, args) => {
+          certifiedSpawns.push({ executable, args });
+          return {
+            status: 0,
+            stdout: JSON.stringify({
+              execution_receipt: "receipt.json",
+              artifact_root: "artifacts/run",
+            }),
+          };
+        },
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+
+      const offerResult = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      expect(offerResult?.message).toContain(`type "/train confirm ${offerId}"`);
+
+      // Bare text is a model turn, never a slash-command confirmation.
+      expect(
+        await tryDispatchSlashCommand(`confirm ${offerId}`, mockCtx, dispatchDeps),
+      ).toBeNull();
+
+      const confirmResult = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        mockCtx,
+        dispatchDeps,
+      );
+      expect(confirmResult?.exitCode).toBeUndefined();
+      expect(confirmResult?.message).toContain("receipt.json");
+      expect(certifiedSpawns).toHaveLength(1);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("binds each offer to the session that minted it without spending it on foreign confirmation", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-session-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      const certifiedSpawns: RecordedSpawn[] = [];
+      const cmd = createTrainCommand({
+        pythonBin: "python",
+        repoRoot: scratch,
+        certifiedLaunchScriptPath: path.join(
+          scratch,
+          "tools",
+          "ember-restart-3b",
+          "certified_train_launch.py",
+        ),
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: (executable, args) => {
+          certifiedSpawns.push({ executable, args });
+          return {
+            status: 0,
+            stdout: JSON.stringify({
+              execution_receipt: "receipt.json",
+              artifact_root: "artifacts/run",
+            }),
+          };
+        },
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const mintingCtx = { ...mockCtx, sessionId: "minting-session" };
+      const foreignCtx = { ...mockCtx, sessionId: "foreign-session" };
+
+      const offerResult = await tryDispatchSlashCommand(
+        "/train",
+        mintingCtx,
+        dispatchDeps,
+      );
+      const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+
+      const foreignResult = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        foreignCtx,
+        dispatchDeps,
+      );
+      expect(foreignResult?.exitCode).toBe(1);
+      expect(foreignResult?.message).toContain("not valid for this session");
+      expect(certifiedSpawns).toHaveLength(0);
+
+      const ownerResult = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        mintingCtx,
+        dispatchDeps,
+      );
+      expect(ownerResult?.exitCode).toBeUndefined();
+      expect(ownerResult?.message).toContain("receipt.json");
+      expect(certifiedSpawns).toHaveLength(1);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   // =========================================================================
   // Registration
   // =========================================================================
@@ -161,22 +311,29 @@ describe("train command", () => {
   // =========================================================================
   // POSITIVE: all preflights green (exit 0) -> surface the launch command
   // =========================================================================
-  describe("POSITIVE: all-green packet surfaces the launch command", () => {
-    it("exit 0 + valid summary -> surfaces the run_vertical_slice launch command string, exitCode success, no GPU spawn", async () => {
-      const { cmd, spawns } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }));
+  describe("POSITIVE: all-green packet + resolved artifacts offers the launch", () => {
+    it("exit 0 + valid summary + canonical artifacts present -> mints an OFFER instead of a paste-able command, no GPU spawn", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-offer-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const { cmd, spawns } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
 
-      const result = await cmd.execute("", mockCtx);
+        const result = await cmd.execute("", mockCtx);
 
-      expect(result?.type).toBe("message");
-      // Success => no error exitCode.
-      expect(result?.exitCode).toBeUndefined();
-      // The exact launch command string is surfaced.
-      expect(result?.message).toContain(REAL_LAUNCH_COMMAND);
-      expect(result?.message).toContain("launch-ready");
-      // It must be clear the CLI did NOT launch training.
-      expect(result?.message).toContain("does NOT launch training");
-      // Only the preflight ever ran; the training launch was never spawned.
-      assertOnlyPreflightSpawned(spawns);
+        expect(result?.type).toBe("message");
+        // Success => no error exitCode.
+        expect(result?.exitCode).toBeUndefined();
+        // The command is offered through the confirm-only membrane, not handed over as
+        // text to paste -- the raw command string is no longer surfaced by default.
+        expect(result?.message).not.toContain(REAL_LAUNCH_COMMAND);
+        expect(result?.message).toContain("launch-ready");
+        expect(result?.message).toMatch(/OFFER \S+ action=train-launch/);
+        expect(result?.message).toContain('type "/train confirm');
+        // Only the preflight ever ran; the training launch was never spawned.
+        assertOnlyPreflightSpawned(spawns);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
     });
 
     it("spawns launch_packet.py with --config pointing at the ember-restart-3b config", async () => {
@@ -441,6 +598,552 @@ describe("train command", () => {
   });
 });
 
+// =============================================================================
+// SPEC-train-launch-operability-v1.md acceptance map -- O1-O4, C1-C8, S1-S5, over-closure.
+// Every row here is a row in that frozen spec's acceptance map; the row id is in the test
+// name so a reviewer can bind test <-> row directly.
+// =============================================================================
+describe("acceptance map: train-launch-operability v1", () => {
+  describe("order invariants", () => {
+    it("O1: the preflight runs before any artifact resolution -- resolution never precedes it", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-o1-"));
+      try {
+        // Deliberately do NOT pre-write the canonical artifacts. The mock runner writes
+        // them itself, the instant it is invoked, then reports green. If resolution ran
+        // BEFORE the preflight, the artifacts would not exist yet and the command would
+        // fail closed on "absent" -- so an OFFER here is only possible if resolution ran
+        // strictly after this runner executed.
+        const cmd = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => {
+            writeCanonicalArtifacts(scratch);
+            return { status: 0, stdout: allGreenStdout() };
+          },
+        });
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.message).toMatch(/OFFER \S+/);
+        expect(result?.exitCode).toBeUndefined();
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("O2: an OFFER is emitted only after preflight green AND all three artifacts resolved", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-o2-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        fs.rmSync(path.join(canonicalDir(scratch), "run-spec.json"));
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.message).not.toContain("OFFER");
+        expect(result?.exitCode).toBe(1);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("O3: confirm invokes the consumer only for an id minted by a green preflight in this session", async () => {
+      const { cmd, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        { status: 0, stdout: JSON.stringify({ execution_receipt: "r.json", artifact_root: "a/" }) },
+      );
+      const result = await cmd.execute("confirm never-minted-1", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(certifiedSpawns).toHaveLength(0);
+      expect(result?.message.toLowerCase()).toContain("no outstanding");
+    });
+
+    it("O4: preflight red short-circuits -- no resolution, no offer, no consumer invocation", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-o4-"));
+      try {
+        // Artifacts ARE present and valid; if resolution ran despite the red preflight,
+        // it would succeed and (wrongly) mint an OFFER. It must not.
+        writeCanonicalArtifacts(scratch);
+        const { cmd } = makeCmd(() => ({ status: 1, stdout: failingStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).toContain("BLOCKED");
+        expect(result?.message).not.toContain("OFFER");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("O5: an offer minted through one command instance is confirmable through another (spine-panel.ts:695 builds a fresh instance per drive call with no injected dep)", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-o5-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const certifiedSpawns: RecordedSpawn[] = [];
+
+        // Two SEPARATE createTrainCommand() calls over the same repoRoot -- exactly what
+        // components/spine-panel.ts:695/698 does on every drive() call for the "train"
+        // key, since no trainCommand dep is normally injected there.
+        const mintingInstance = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+        const confirmingInstance = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+          runCertifiedLaunch: (executable, args) => {
+            certifiedSpawns.push({ executable, args });
+            return {
+              status: 0,
+              stdout: JSON.stringify({ execution_receipt: "r.json", artifact_root: "a/" }),
+            };
+          },
+        });
+
+        const offerResult = await mintingInstance.execute("", mockCtx);
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        expect(offerId).toBeDefined();
+
+        const confirmResult = await confirmingInstance.execute(`confirm ${offerId}`, mockCtx);
+
+        expect(confirmResult?.exitCode).toBeUndefined();
+        expect(confirmResult?.message.toLowerCase()).not.toContain("no outstanding");
+        expect(certifiedSpawns).toHaveLength(1);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("O6: two instances minting concurrently produce distinct offer ids", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-o6-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const instanceA = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+        const instanceB = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+
+        const [resultA, resultB] = await Promise.all([
+          instanceA.execute("", mockCtx),
+          instanceB.execute("", mockCtx),
+        ]);
+        const idA = resultA?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        const idB = resultB?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+
+        expect(idA).toBeDefined();
+        expect(idB).toBeDefined();
+        expect(idA).not.toBe(idB);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("conjunction rows", () => {
+    it("C1: preflight green + all three artifacts present -> OFFER emitted, no consumer invoked yet", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-c1-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const { cmd, spawns } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.message).toMatch(/OFFER \S+ action=train-launch/);
+        expect(result?.exitCode).toBeUndefined();
+        assertOnlyPreflightSpawned(spawns);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("C2: preflight green + certificate missing -> fail closed naming the certificate", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-c2-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        fs.rmSync(path.join(canonicalDir(scratch), "certificate.json"));
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).not.toContain("OFFER");
+        expect(result?.message.toLowerCase()).toContain("certificate");
+        expect(result?.message).not.toContain("declaration ledger:");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("C3: preflight green + ledger missing -> fail closed naming the ledger", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-c3-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        fs.rmSync(path.join(canonicalDir(scratch), "declaration-ledger.jsonl"));
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).not.toContain("OFFER");
+        expect(result?.message.toLowerCase()).toContain("declaration ledger");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("C4: preflight green + run-spec missing -> fail closed naming the run spec", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-c4-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        fs.rmSync(path.join(canonicalDir(scratch), "run-spec.json"));
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).not.toContain("OFFER");
+        expect(result?.message.toLowerCase()).toContain("run spec");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("C5: preflight red + all three artifacts present -> fail closed on the preflight; no offer", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-c5-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const { cmd } = makeCmd(() => ({ status: 1, stdout: failingStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).toContain("BLOCKED");
+        expect(result?.message).not.toContain("OFFER");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("C6: preflight red + artifacts missing -> fail closed on the preflight; no offer", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-c6-"));
+      try {
+        const { cmd } = makeCmd(() => ({ status: 1, stdout: failingStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).toContain("BLOCKED");
+        expect(result?.message).not.toContain("OFFER");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("C7: preflight green, artifacts present, but the runner throws -> fail closed, no offer left behind", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-c7-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const certifiedSpawns: RecordedSpawn[] = [];
+        const cmd = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+          runCertifiedLaunch: (executable, args) => {
+            certifiedSpawns.push({ executable, args });
+            throw new Error("spawnSync exploded");
+          },
+        });
+
+        const offerResult = await cmd.execute("", mockCtx);
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        expect(offerId).toBeDefined();
+
+        const confirmResult = await cmd.execute(`confirm ${offerId}`, mockCtx);
+        expect(confirmResult?.exitCode).toBe(1);
+        expect(certifiedSpawns).toHaveLength(1);
+
+        // The offer is spent -- a throw during confirm never leaves a reusable offer.
+        const secondConfirm = await cmd.execute(`confirm ${offerId}`, mockCtx);
+        expect(secondConfirm?.message.toLowerCase()).toContain("no outstanding");
+        expect(certifiedSpawns).toHaveLength(1);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("C8: --execute with explicit paths + preflight green -> consumer invoked with the explicit paths, canonical resolution not consulted", async () => {
+      // repoRoot does not exist on disk at all -- canonical resolution (fs reads under
+      // repoRoot/receipts/ember-02-launch-authority) would throw/fail if it were consulted.
+      // The explicit --execute path must never touch it.
+      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        {
+          status: 0,
+          stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+        },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(result?.exitCode).toBeUndefined();
+      expect(preflightSpawns).toHaveLength(1);
+      expect(certifiedSpawns[0]!.args).toEqual([
+        "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
+        "--root",
+        "/fake/ember",
+        "--certificate",
+        "c.json",
+        "--declaration-ledger",
+        "d.jsonl",
+        "--run-spec",
+        "r.json",
+      ]);
+    });
+  });
+
+  describe("skip-path rows", () => {
+    it("S1: confirm <id> with no prior /train this session -> no consumer invocation; unknown-offer message", async () => {
+      const { cmd, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        { status: 0, stdout: "{}" },
+      );
+
+      const result = await cmd.execute("confirm train-1", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(certifiedSpawns).toHaveLength(0);
+      expect(result?.message.toLowerCase()).toContain("no outstanding");
+    });
+
+    it("S2: confirm <id> for a spent id -> no second invocation", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-s2-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const certifiedSpawns: RecordedSpawn[] = [];
+        const cmd = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+          runCertifiedLaunch: (executable, args) => {
+            certifiedSpawns.push({ executable, args });
+            return { status: 0, stdout: JSON.stringify({ execution_receipt: "r.json", artifact_root: "a/" }) };
+          },
+        });
+
+        const offerResult = await cmd.execute("", mockCtx);
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        expect(offerId).toBeDefined();
+
+        const first = await cmd.execute(`confirm ${offerId}`, mockCtx);
+        expect(first?.exitCode).toBeUndefined();
+        expect(certifiedSpawns).toHaveLength(1);
+
+        const second = await cmd.execute(`confirm ${offerId}`, mockCtx);
+        expect(second?.exitCode).toBe(1);
+        expect(second?.message.toLowerCase()).toContain("no outstanding");
+        expect(certifiedSpawns).toHaveLength(1);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("S3: confirm with a malformed or absent id -> no action", async () => {
+      const { cmd, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        { status: 0, stdout: "{}" },
+      );
+
+      for (const args of ["confirm", "confirm  ", "confirm a b"]) {
+        const result = await cmd.execute(args, mockCtx);
+        expect(certifiedSpawns).toHaveLength(0);
+        expect(result?.exitCode).toBe(1);
+      }
+    });
+
+    it("S4: an artifact path exists but is an empty file -> fail closed, existence is not validity", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-s4-empty-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        fs.writeFileSync(path.join(canonicalDir(scratch), "certificate.json"), "");
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).not.toContain("OFFER");
+        expect(result?.message.toLowerCase()).toContain("certificate");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("S4: an artifact path exists but is unparseable -> fail closed, existence is not validity", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-s4-unparse-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        fs.writeFileSync(path.join(canonicalDir(scratch), "run-spec.json"), "{not json at all");
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).not.toContain("OFFER");
+        expect(result?.message.toLowerCase()).toContain("run spec");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("S4: a declaration-ledger.jsonl with one unparseable line -> fail closed", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-s4-jsonl-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        fs.writeFileSync(
+          path.join(canonicalDir(scratch), "declaration-ledger.jsonl"),
+          JSON.stringify({ row: 0 }) + "\nnot json\n",
+        );
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).not.toContain("OFFER");
+        expect(result?.message.toLowerCase()).toContain("declaration ledger");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("S5: --execute with only some of the three flags -> the existing usage error, unchanged", async () => {
+      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        { status: 0, stdout: "{}" },
+      );
+
+      const result = await cmd.execute("--execute --certificate certificate.json", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("--declaration-ledger");
+      expect(preflightSpawns).toHaveLength(0);
+      expect(certifiedSpawns).toHaveLength(0);
+    });
+  });
+
+  describe("over-closure guard", () => {
+    it("an unmodified real artifact set at the canonical paths produces an OFFER, not a false failure", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-overclosure-"));
+      try {
+        // Deliberately richer / more realistic content than the minimal C1 fixture, to
+        // catch a cure that fails closed on anything it doesn't recognize.
+        const dir = canonicalDir(scratch);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(
+          path.join(dir, "certificate.json"),
+          JSON.stringify(
+            {
+              certificate_sha256: "b".repeat(64),
+              certificate_legs: { storage: "pass", resource: "pass" },
+              authorized_scope: { mode: "bounded-canary", max_records: 100 },
+            },
+            null,
+            2,
+          ),
+        );
+        fs.writeFileSync(
+          path.join(dir, "declaration-ledger.jsonl"),
+          [
+            JSON.stringify({
+              schema_version: "ember-spine-declaration-ledger-row-v1",
+              event: "declared",
+              role: "operator",
+              certificate_sha256: "b".repeat(64),
+            }),
+            JSON.stringify({
+              schema_version: "ember-spine-declaration-ledger-row-v1",
+              event: "countersigned",
+              role: "witness",
+              certificate_sha256: "b".repeat(64),
+            }),
+          ].join("\n") + "\n",
+        );
+        fs.writeFileSync(
+          path.join(dir, "run-spec.json"),
+          JSON.stringify({ mode: "bounded-canary", steps: 10, sequence_length: 4096 }, null, 2),
+        );
+
+        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.message).toMatch(/OFFER \S+ action=train-launch/);
+        expect(result?.exitCode).toBeUndefined();
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("full happy path: OFFER -> confirm invokes the real fixed consumer", () => {
+    it("confirm <id> invokes exactly the same certified_train_launch.py consumer --execute would, with the resolved canonical paths", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-confirm-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const certifiedSpawns: RecordedSpawn[] = [];
+        const cmd = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          certifiedLaunchScriptPath: path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+          runCertifiedLaunch: (executable, args) => {
+            certifiedSpawns.push({ executable, args });
+            return {
+              status: 0,
+              stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+            };
+          },
+        });
+
+        const offerResult = await cmd.execute("", mockCtx);
+        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        expect(offerId).toBeDefined();
+
+        const confirmResult = await cmd.execute(`confirm ${offerId}`, mockCtx);
+
+        expect(confirmResult?.exitCode).toBeUndefined();
+        expect(confirmResult?.message).toContain("receipt.json");
+        expect(certifiedSpawns).toHaveLength(1);
+        expect(certifiedSpawns[0]!.args).toEqual([
+          path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
+          "--root",
+          scratch,
+          "--certificate",
+          path.join(canonicalDir(scratch), "certificate.json"),
+          "--declaration-ledger",
+          path.join(canonicalDir(scratch), "declaration-ledger.jsonl"),
+          "--run-spec",
+          path.join(canonicalDir(scratch), "run-spec.json"),
+        ]);
+        // The raw named launch command string is never present in argv or the response.
+        expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(REAL_LAUNCH_COMMAND);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+  });
+});
+
 describe("/train source-byte authority", () => {
   it("runs launch_packet.py and its config from the selected linked worktree, not its main checkout", async () => {
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-source-root-"));
@@ -460,6 +1163,10 @@ describe("/train source-byte authority", () => {
         path.join(worktreeRoot, ".git"),
         `gitdir: ${path.join(mainRoot, ".git", "worktrees", "lane")}\n`,
       );
+      // Not the subject of this test, but required for the default (no --execute) mode
+      // to reach a success exitCode now that it offers through the canonical
+      // launch-authority resolution instead of surfacing a paste-able command string.
+      writeCanonicalArtifacts(worktreeRoot);
 
       const spawns: RecordedSpawn[] = [];
       const cmd = createTrainCommand({

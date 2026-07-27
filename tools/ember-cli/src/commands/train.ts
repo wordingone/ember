@@ -14,6 +14,7 @@
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { spawnSync } from "child_process";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
 // ---------------------------------------------------------------------------
@@ -195,6 +196,128 @@ interface TrainCommandDeps {
   scriptPath?: string;
   /** certified_train_launch.py path override. */
   certifiedLaunchScriptPath?: string;
+  /** Canonical launch-authority certificate path override; defaults to
+   *  <repoRoot>/receipts/ember-02-launch-authority/certificate.json. */
+  certificatePath?: string;
+  /** Canonical launch-authority declaration-ledger path override; defaults to
+   *  <repoRoot>/receipts/ember-02-launch-authority/declaration-ledger.jsonl. */
+  declarationLedgerPath?: string;
+  /** Canonical launch-authority run-spec path override; defaults to
+   *  <repoRoot>/receipts/ember-02-launch-authority/run-spec.json. */
+  runSpecPath?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Canonical launch-authority artifact resolution (offer/confirm default path)
+// ---------------------------------------------------------------------------
+
+interface CanonicalArtifactPaths {
+  certificate: string;
+  declarationLedger: string;
+  runSpec: string;
+}
+
+function _canonicalArtifactPaths(
+  repoRoot: string,
+  deps: TrainCommandDeps,
+): CanonicalArtifactPaths {
+  const base = join(repoRoot, "receipts", "ember-02-launch-authority");
+  return {
+    certificate: deps.certificatePath ?? join(base, "certificate.json"),
+    declarationLedger: deps.declarationLedgerPath ?? join(base, "declaration-ledger.jsonl"),
+    runSpec: deps.runSpecPath ?? join(base, "run-spec.json"),
+  };
+}
+
+interface ResolvedArtifact {
+  path: string;
+  status: "ok" | "missing" | "invalid";
+  reason?: string;
+}
+
+/**
+ * Existence + parseability check for one launch-authority artifact. This is deliberately
+ * shallow -- the certified consumer (certified_train_launch.py) performs the deep schema
+ * and scope validation; this check only answers "is there something here worth offering",
+ * per SPEC-train-launch-operability-v1.md's acceptance map (S4: existence is not validity,
+ * so an empty or unparseable file at a resolved path still fails closed).
+ */
+function _resolveArtifact(path: string, kind: "json" | "jsonl"): ResolvedArtifact {
+  if (!existsSync(path)) {
+    return { path, status: "missing" };
+  }
+  let content: string;
+  try {
+    content = readFileSync(path, "utf8");
+  } catch {
+    return { path, status: "missing", reason: "unreadable" };
+  }
+  if (content.trim() === "") {
+    return { path, status: "invalid", reason: "empty file" };
+  }
+  if (kind === "json") {
+    try {
+      JSON.parse(content);
+    } catch {
+      return { path, status: "invalid", reason: "unparseable JSON" };
+    }
+    return { path, status: "ok" };
+  }
+  const lines = content.split(/\r?\n/).filter((line) => line.trim() !== "");
+  if (lines.length === 0) {
+    return { path, status: "invalid", reason: "empty file" };
+  }
+  for (const line of lines) {
+    try {
+      JSON.parse(line);
+    } catch {
+      return { path, status: "invalid", reason: "unparseable JSONL line" };
+    }
+  }
+  return { path, status: "ok" };
+}
+
+function _artifactFailureLine(label: string, artifact: ResolvedArtifact): string {
+  if (artifact.status === "missing") {
+    return `  - ${label}: absent at ${artifact.path}`;
+  }
+  return `  - ${label}: ${artifact.reason ?? "invalid"} at ${artifact.path}`;
+}
+
+// ---------------------------------------------------------------------------
+// Offer/confirm state (offer/confirm, panel's own idiom -- core/encounter-membrane.ts's
+// shape, reused rather than reinvented per SPEC-train-launch-operability-v1.md's kill
+// criterion).
+//
+// MODULE-scoped, deliberately, not per-instance (found fadv-review 2026-07-26, O5/O6):
+// command-registry.ts's getCommands(cwd) memoizes createTrainCommand() per cwd, but
+// components/spine-panel.ts:695/698 builds `deps.trainCommand ?? createTrainCommand()`
+// fresh inside the thunk it calls on every drive(), with no injected dep on that path --
+// so an offer minted through one instance was unfindable by a confirm routed through the
+// next instance, on the operator panel itself. Hoisting the store here makes offers
+// discoverable across those command instances. Every entry is separately bound to the
+// CommandContext.sessionId that minted it, so module scope never becomes cross-session
+// authority. Offer ids likewise carry a module-level counter PLUS a time+random component
+// (not just an instance-local counter) so two instances minting in the same tick can never
+// collide.
+// ---------------------------------------------------------------------------
+
+interface TrainOffer {
+  offerId: string;
+  ts: string;
+  sessionId: string;
+  certificate: string;
+  declarationLedger: string;
+  runSpec: string;
+}
+
+const trainOffers = new Map<string, TrainOffer>();
+let trainOfferCounter = 0;
+
+function _mintOfferId(): string {
+  trainOfferCounter += 1;
+  const entropy = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  return `train-${trainOfferCounter}-${entropy}`;
 }
 
 interface TrainArgs {
@@ -256,23 +379,97 @@ function _parseTrainArgs(raw: string): TrainArgs {
 }
 
 // ---------------------------------------------------------------------------
+// Certified-consumer result interpretation (shared by --execute and confirm)
+// ---------------------------------------------------------------------------
+
+/**
+ * Interprets a certified_train_launch.py run result into a CommandResult. Shared by both
+ * paths that may invoke the fixed consumer -- explicit `--execute` and `confirm <id>` --
+ * so the two paths can never drift into different response handling.
+ */
+function _interpretCertifiedResult(
+  certifiedResult: LaunchPacketRunResult,
+): { type: "message"; message: string; exitCode?: number } {
+  if (certifiedResult.status !== 0) {
+    const detail = certifiedResult.stdout.trim();
+    return {
+      type: "message" as const,
+      message: [
+        "error: certified train consumer refused or failed.",
+        detail || "No certified execution receipt was produced.",
+      ].join("\n"),
+      exitCode: certifiedResult.status ?? 1,
+    };
+  }
+  let execution: Record<string, unknown>;
+  try {
+    const parsedResult: unknown = JSON.parse(certifiedResult.stdout);
+    if (typeof parsedResult !== "object" || parsedResult === null) {
+      throw new Error("not an object");
+    }
+    execution = parsedResult as Record<string, unknown>;
+  } catch {
+    return {
+      type: "message" as const,
+      message: "error: certified train consumer exited 0 without a valid execution receipt response.",
+      exitCode: 1,
+    };
+  }
+  const executionReceipt = execution["execution_receipt"];
+  const artifactRoot = execution["artifact_root"];
+  if (
+    typeof executionReceipt !== "string" ||
+    executionReceipt === "" ||
+    typeof artifactRoot !== "string" ||
+    artifactRoot === ""
+  ) {
+    return {
+      type: "message" as const,
+      message: "error: certified train consumer response omitted execution_receipt or artifact_root.",
+      exitCode: 1,
+    };
+  }
+  return {
+    type: "message" as const,
+    message: [
+      "certified bounded canary process completed.",
+      `execution receipt: ${executionReceipt}`,
+      `artifact root: ${artifactRoot}`,
+    ].join("\n"),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
 /**
  * Creates the /train command. Registered in command-registry.ts as "train".
  *
- * Behavior (spec):
+ * Behavior (SPEC-train-launch-operability-v1.md):
  *  1. Spawn the cond7 launch-packet preflight FIRST (never training).
- *  2. Without `--execute`, surface the validated named command as text only.
- *  3. With `--execute` and all certificate paths, invoke exactly one fixed
- *     certified_train_launch.py consumer; never execute the named command string.
- *  4. Any malformed input, nonzero exit, or invalid response fails closed.
+ *  2. Without `--execute` and without a `confirm` subcommand: on a green preflight,
+ *     resolve the three canonical launch-authority artifacts and, if all three are
+ *     present and valid, mint a single-use OFFER through the panel's own confirm-only
+ *     idiom (core/encounter-membrane.ts's shape, reused rather than reinvented). No
+ *     command string is handed to the operator to paste.
+ *  3. `/train confirm <id>` invokes exactly the same fixed certified_train_launch.py consumer
+ *     `--execute` invokes, with the paths resolved at offer time -- only for an id
+ *     minted by a green preflight earlier in this session.
+ *  4. With `--execute` and all three certificate paths, invoke exactly one fixed
+ *     certified_train_launch.py consumer with the EXPLICIT paths; canonical resolution
+ *     is never consulted on this path. Never execute the named command string.
+ *  5. Any malformed input, nonzero exit, or invalid response fails closed.
  */
 export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand {
   const runLaunchPacket = deps.runLaunchPacket ?? _defaultLaunchPacketRunner;
   const runCertifiedLaunch =
     deps.runCertifiedLaunch ?? _defaultCertifiedLaunchRunner;
+
+  // Offer state is module-scoped (trainOffers, above) -- deliberately NOT redeclared
+  // here -- so it is single and session-scoped regardless of how many
+  // createTrainCommand() instances a caller constructs (registry vs spine-panel; see the
+  // comment on trainOffers above).
 
   return {
     name: "train",
@@ -281,9 +478,82 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       return true;
     },
     async execute(args: string, ctx: CommandContext) {
+      const trimmed = args.trim();
+
+      // "/train confirm <id>" routes here as the train command's bare-token subcommand, not a
+      // --flag invocation -- handled entirely separately, before the flag parser and
+      // before any preflight (O3: confirm invokes the consumer only for an id minted by
+      // a green preflight already recorded in this session; it never re-runs the
+      // preflight itself, since the offer was only minted after one already ran green).
+      if (trimmed === "confirm" || trimmed.startsWith("confirm ")) {
+        const parts = trimmed.split(/\s+/).filter((p) => p.length > 0);
+        const suppliedId = parts.length === 2 ? parts[1] : undefined;
+        if (!suppliedId) {
+          // S3: malformed or absent id -> no action.
+          return {
+            type: "message" as const,
+            message:
+              'error: "/train confirm" requires exactly one offer id -- usage: /train confirm <id>. No action taken.',
+            exitCode: 1,
+          };
+        }
+        const offer = trainOffers.get(suppliedId);
+        if (!offer) {
+          // S1 (no prior /train this session) and S2 (id already spent) both land here:
+          // the map has no entry, so no consumer invocation is possible either way.
+          return {
+            type: "message" as const,
+            message: `error: no outstanding train-launch offer for "${suppliedId}" -- nothing to confirm, never auto-acted. Run /train again to mint a fresh offer.`,
+            exitCode: 1,
+          };
+        }
+        if (offer.sessionId !== ctx.sessionId) {
+          // Do not delete the offer: a foreign session cannot confirm or spend authority
+          // that remains valid only for the exact session that minted it.
+          return {
+            type: "message" as const,
+            message: `error: train-launch offer "${suppliedId}" is not valid for this session -- nothing was confirmed or spent.`,
+            exitCode: 1,
+          };
+        }
+        // Single-use: remove BEFORE invoking, so a throw/failure in the consumer never
+        // leaves a reusable offer behind (C7) and a second confirm for the same id is
+        // always the S1/S2 unknown-offer path, regardless of outcome.
+        trainOffers.delete(suppliedId);
+
+        const repoRoot = deps.repoRoot ?? _defaultRepoRoot(ctx.cwd);
+        const pythonBin = deps.pythonBin ?? process.env["EMBER_PYTHON_BIN"] ?? "python";
+        const certifiedLaunchScriptPath =
+          deps.certifiedLaunchScriptPath ??
+          join(repoRoot, "tools", "ember-restart-3b", "certified_train_launch.py");
+
+        let certifiedResult: LaunchPacketRunResult;
+        try {
+          certifiedResult = runCertifiedLaunch(pythonBin, [
+            certifiedLaunchScriptPath,
+            "--root",
+            repoRoot,
+            "--certificate",
+            offer.certificate,
+            "--declaration-ledger",
+            offer.declarationLedger,
+            "--run-spec",
+            offer.runSpec,
+          ]);
+        } catch {
+          return {
+            type: "message" as const,
+            message:
+              "error: certified train consumer could not be started; no training process was authorized.",
+            exitCode: 1,
+          };
+        }
+        return _interpretCertifiedResult(certifiedResult);
+      }
+
       let trainArgs: TrainArgs;
       try {
-        trainArgs = _parseTrainArgs(args);
+        trainArgs = _parseTrainArgs(trimmed);
       } catch (error) {
         return {
           type: "message" as const,
@@ -364,6 +634,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       }
 
       if (trainArgs.execute) {
+        // Explicit flags always beat canonical resolution (C8): the canonical
+        // launch-authority tree under repoRoot is never consulted on this path.
         let certifiedResult: LaunchPacketRunResult;
         try {
           certifiedResult = runCertifiedLaunch(pythonBin, [
@@ -385,75 +657,61 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             exitCode: 1,
           };
         }
-        if (certifiedResult.status !== 0) {
-          const detail = certifiedResult.stdout.trim();
-          return {
-            type: "message" as const,
-            message: [
-              "error: certified train consumer refused or failed.",
-              detail || "No certified execution receipt was produced.",
-            ].join("\n"),
-            exitCode: certifiedResult.status ?? 1,
-          };
-        }
-        let execution: Record<string, unknown>;
-        try {
-          const parsedResult: unknown = JSON.parse(certifiedResult.stdout);
-          if (typeof parsedResult !== "object" || parsedResult === null) {
-            throw new Error("not an object");
-          }
-          execution = parsedResult as Record<string, unknown>;
-        } catch {
-          return {
-            type: "message" as const,
-            message:
-              "error: certified train consumer exited 0 without a valid execution receipt response.",
-            exitCode: 1,
-          };
-        }
-        const executionReceipt = execution["execution_receipt"];
-        const artifactRoot = execution["artifact_root"];
-        if (
-          typeof executionReceipt !== "string" ||
-          executionReceipt === "" ||
-          typeof artifactRoot !== "string" ||
-          artifactRoot === ""
-        ) {
-          return {
-            type: "message" as const,
-            message:
-              "error: certified train consumer response omitted execution_receipt or artifact_root.",
-            exitCode: 1,
-          };
-        }
+        return _interpretCertifiedResult(certifiedResult);
+      }
+
+      // Default mode (no --execute, extracted command validated above but no longer
+      // surfaced as text -- see extracted.command's non-use below): resolve the
+      // canonical launch-authority artifacts and offer the launch through the panel's
+      // confirm-only membrane rather than handing the operator a command to paste.
+      const canonical = _canonicalArtifactPaths(repoRoot, deps);
+      const resolvedCertificate = _resolveArtifact(canonical.certificate, "json");
+      const resolvedLedger = _resolveArtifact(canonical.declarationLedger, "jsonl");
+      const resolvedRunSpec = _resolveArtifact(canonical.runSpec, "json");
+
+      const failures: string[] = [];
+      if (resolvedCertificate.status !== "ok") {
+        failures.push(_artifactFailureLine("certificate", resolvedCertificate));
+      }
+      if (resolvedLedger.status !== "ok") {
+        failures.push(_artifactFailureLine("declaration ledger", resolvedLedger));
+      }
+      if (resolvedRunSpec.status !== "ok") {
+        failures.push(_artifactFailureLine("run spec", resolvedRunSpec));
+      }
+      if (failures.length > 0) {
         return {
           type: "message" as const,
           message: [
-            "certified bounded canary process completed.",
-            `execution receipt: ${executionReceipt}`,
-            `artifact root: ${artifactRoot}`,
+            "launch-packet: all preflights GREEN, but the launch-authority artifacts are not all present and valid -- training is BLOCKED (fail-closed).",
+            "missing/invalid prerequisites:",
+            ...failures,
+            "No offer minted.",
           ].join("\n"),
+          exitCode: 1,
         };
       }
 
-      // Success: surface the command STRING as text for the operator to run.
-      // (3) The command is NOT executed here -- this is the hard pre-training gate.
-      const lines = [
-        "launch-packet: all preflights GREEN -- EMBER-02 is launch-ready.",
-        "",
-        "This command does NOT launch training. Run the following yourself to start the governed clean-genesis 3B pretrain:",
-        "",
-        extracted.command,
-      ];
-      if (extracted.entrypoint) {
-        lines.push("", `entrypoint: ${extracted.entrypoint}`);
-      }
-      if (extracted.note) {
-        lines.push("", `note: ${extracted.note}`);
-      }
+      const offerId = _mintOfferId();
+      trainOffers.set(offerId, {
+        offerId,
+        ts: new Date().toISOString(),
+        sessionId: ctx.sessionId,
+        certificate: canonical.certificate,
+        declarationLedger: canonical.declarationLedger,
+        runSpec: canonical.runSpec,
+      });
       return {
         type: "message" as const,
-        message: lines.join("\n"),
+        message: [
+          "launch-packet: all preflights GREEN -- EMBER-02 is launch-ready.",
+          "launch-authority artifacts resolved:",
+          `  certificate: ${canonical.certificate}`,
+          `  declaration ledger: ${canonical.declarationLedger}`,
+          `  run spec: ${canonical.runSpec}`,
+          "",
+          `OFFER ${offerId} action=train-launch -- type "/train confirm ${offerId}" to proceed. Declining, a typo, or anything else takes no action; the confirm-only membrane never silently steers.`,
+        ].join("\n"),
       };
     },
   };
