@@ -163,7 +163,7 @@ async function main(): Promise<void> {
     console.log("=== FRAME 6: safe confirmation refused ===");
     console.log(confirmRefused);
 
-    if (!raw.join("").includes("no outstanding train-launch offer")) {
+    if (!confirmRefused.includes("no outstanding train-launch offer")) {
       throw new Error("compiled /train confirm route did not reach the fail-closed unknown-offer response");
     }
 
