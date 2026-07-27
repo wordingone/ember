@@ -629,7 +629,6 @@ def test_required_workflow_uses_base_pinned_kernel():
         encoding="utf-8"
     )
     required = (
-        "pull_request:",
         "pull_request_target:",
         "path: guard-kernel",
         "path: guard-subject",
@@ -644,37 +643,23 @@ def test_required_workflow_uses_base_pinned_kernel():
     )
     for marker in required:
         assert marker in text, f"trusted workflow marker missing: {marker}"
-    assert (
-        "on:\n"
-        "  push:\n"
-        "  pull_request:\n"
-        "    branches: [master]\n"
-        "  pull_request_target:\n"
-    ) in text, (
-        "bootstrap must retain pull_request while restoring unfiltered push coverage"
+    assert "\n  pull_request:\n" not in text, (
+        "candidate-authored pull_request workflow cannot be the required trust gate"
     )
-    assert text.count("persist-credentials: false") == 4
+    assert text.count("persist-credentials: false") == 3
     kernel_checkout = text.split(
         "- name: Checkout trusted guard kernel", 1
-    )[1].split("- name: Checkout bootstrap candidate kernel", 1)[0]
+    )[1].split("- name: Checkout pull-request merge subject", 1)[0]
     assert "ref:" not in kernel_checkout, (
         "trusted kernel must resolve the current protected-base tip, not an event-stale base SHA"
     )
     assert (
-        "(github.event_name == 'pull_request_target' || "
-        "github.event_name == 'pull_request') && "
+        "github.event_name == 'pull_request_target' && "
         "github.event.pull_request.base.sha || github.event.before"
     ) in text, "push and pull-request events must both bind an explicit changed-range base"
     assert "explicit range base is unavailable; refusing weaker tree-only fallback" in text
     assert "pull_request_target resolves the current" in text
-    assert "pull_request is a temporary bootstrap self-check" in text
-    assert "push is a same-tree self-check" in text
-    assert "pull_request_target is the separated trusted-kernel gate" in text
-    bootstrap_checkout = text.split(
-        "- name: Checkout bootstrap candidate kernel", 1
-    )[1].split("- name: Checkout pull-request merge subject", 1)[0]
-    assert "ref: refs/pull/${{ github.event.pull_request.number }}/merge" in bootstrap_checkout
-    assert "It is not the trust gate" in text
+    assert "push resolves the triggering protected commit" in text
     assert 'bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"' in text
 
 
