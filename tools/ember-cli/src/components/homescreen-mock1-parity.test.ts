@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // homescreen-mock1-parity.test.ts — B3 (gate-fail cure): team-lead's rasterized comparison of the
 // shipped homescreen against the approved mock1 (state/design-mockups/welcome-homescreen.mockup.ansi.txt)
 // found D3 (cwd text overflowing into the right column) and D4 (no outer panel, fireball never
@@ -82,12 +86,15 @@ describe("D3: no left-column child overflows into the right column", () => {
       }
     });
 
-    test(`at width ${cols}, "Tips for getting started" survives intact (not interleaved by cwd overflow)`, () => {
+    test(`at width ${cols}, the right column's feed title survives intact (not interleaved by cwd overflow)`, () => {
       const out = mountAndCapture(
         React.createElement(Homescreen, { state: { cwd: LONG_CWD, model: "qwen3.6-27b", version: "0.4.2" }, viewportWidth: cols }),
         cols,
       );
-      expect(out).toContain("Tips for getting started");
+      // The marker is whatever titles the right column's first feed. It was "Tips for getting
+      // started"; the spine block replaced that box (see logo-homescreen.ts). The assertion is
+      // about left-column overflow, not about the wording, so it follows the title.
+      expect(out).toContain("Spine — what Ember can be driven to do");
     });
   }
 });

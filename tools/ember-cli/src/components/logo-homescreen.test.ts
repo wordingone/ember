@@ -73,11 +73,26 @@ function colorForText(el: any, target: string): string | undefined {
  * element (props carry the feed data), it never invokes FeedComponent itself, so entry text is
  * not reachable by walking Homescreen's own return value alone (same technique as the B5 W6
  * rightColWidth test above). */
-function renderedRecentFeed(el: any): any {
+/** Locate a right-column feed by its element KEY rather than its index.
+ *
+ * These lookups were `children(rightCol)[0]` and `[1]`. That coupling made the ORDER of the feeds
+ * a load-bearing part of sixteen tests that are not about ordering at all, so adding a third feed
+ * to the right column broke every one of them with a failure message about board summaries. Keys
+ * are already set on each FeedComponent at the call site; matching on them says what the test
+ * actually means. */
+function feedByKey(el: any, key: string): any {
   const panel = findPanel(el);
   const rightCol = children(panel)[1];
-  const recentFeedEl = children(rightCol)[1];
-  return FeedComponent(recentFeedEl.props);
+  const found = children(rightCol).find((c: any) => c && c.key === key);
+  if (!found) {
+    const keys = children(rightCol).map((c: any) => c && c.key).join(", ");
+    throw new Error(`no right-column feed keyed "${key}"; present keys: ${keys}`);
+  }
+  return found;
+}
+
+function renderedRecentFeed(el: any): any {
+  return FeedComponent(feedByKey(el, "recent").props);
 }
 
 describe("Homescreen — recent-activity feed carries real board substance (B7 item 2: kill the void)", () => {
@@ -340,20 +355,38 @@ describe("Homescreen — identity tagline (team-lead: 'perfect -- keep it verbat
   });
 });
 
-describe("Homescreen — ember-native onboarding hint (not generic-agent phrasing)", () => {
-  it("onboarding feed includes an ember-native conversational hint", () => {
+describe("Homescreen — the first screen names the spine (not generic-agent phrasing)", () => {
+  // SUPERSEDES "onboarding feed includes an ember-native conversational hint", which asserted
+  // `Try "what changed on the board today?"`. That entry and its neighbour (`Run /init to create
+  // an EMBER.md file...`) were coding-assistant affordances: on a first launch they spent the most
+  // valuable space on the screen teaching a workflow that is not the spine, while custody, model,
+  // checkpoint, benchmark and train appeared nowhere. The pre-training gate asks whether an
+  // operator who has read no source file can DRIVE the spine, so the requirement here changed from
+  // "sounds ember-native" to "names the six spine functions". The anti-generic assertion below is
+  // kept verbatim — it was right then and it is right now.
+  it("names every spine function the gate requires, and none of the generic-agent phrasing", () => {
     const el = Homescreen({ state: {} });
-    const panel = findPanel(el);
-    const rightCol = children(panel)[1];
-    const onboardingFeedEl = children(rightCol)[0]; // a <FeedComponent feed=...> descriptor
+    const onboardingFeedEl = feedByKey(el, "onboarding"); // a <FeedComponent feed=...> descriptor
     const rendered = FeedComponent(onboardingFeedEl.props); // actually render it
     const entryTexts = children(rendered)
       .slice(2) // index 0 = title, index 1 = title-underline rule; entries start at 2
       .map((e: any) => e?.props?.children)
       .filter((t: any) => typeof t === "string");
-    expect(entryTexts).toContain(`Try "what changed on the board today?"`);
-    // never the generic phrasing team-lead flagged
+    const joined = entryTexts.join(" | ").toLowerCase();
+    for (const fn of [
+      "custody",
+      "tokenizer lineage",
+      "checkpoint save",
+      "owned serving path",
+      "benchmarking",
+      "training launch",
+    ]) {
+      expect(joined).toContain(fn);
+    }
+    // never the generic phrasing team-lead flagged, and never the two entries this replaced
     expect(entryTexts.some((t: string) => t.includes("explain this repo"))).toBe(false);
+    expect(entryTexts.some((t: string) => t.includes("EMBER.md"))).toBe(false);
+    expect(entryTexts.some((t: string) => t.includes("what changed on the board today"))).toBe(false);
   });
 });
 
@@ -610,11 +643,9 @@ describe("Homescreen's cwd line shrinks its truncation budget to the ACTUAL narr
 });
 
 describe("Homescreen wires the computed rightColWidth into rightCol's FeedComponents (B5 W6)", () => {
-  it("at 100 cols, the onboarding feed's rendered /init line is clipped with an ellipsis, not cut dead", () => {
+  it("at 100 cols, the onboarding feed's first rendered line is clipped with an ellipsis, not cut dead", () => {
     const el = Homescreen({ state: {}, viewportWidth: 100 });
-    const panel = findPanel(el);
-    const rightCol = children(panel)[1];
-    const onboardingFeedEl = children(rightCol)[0];
+    const onboardingFeedEl = feedByKey(el, "onboarding");
     expect(onboardingFeedEl.props.width).toBe(rightColWidth(100));
     const rendered = FeedComponent(onboardingFeedEl.props);
     const entry = children(rendered)[2];
