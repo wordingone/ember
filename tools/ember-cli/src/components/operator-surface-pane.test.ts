@@ -300,7 +300,10 @@ describe("OperatorSurfacePane", () => {
     expect(rows.some((row) => row.includes("checkpoint"))).toBe(true);
     expect(rows.filter((row) => row.includes("step/time")).length).toBe(1);
     expect(rows.filter((row) => row.includes("checkpoint")).length).toBe(1);
-    expect(rows.some((row) => row.includes(String.fromCodePoint(0x2588)))).toBe(true);
+    // R1d: at 80x24 with room to spare, the loss chart GROWS beyond one row and renders via the
+    // Braille canvas (U+2800-U+28FF) rather than the flat single-row block glyph (U+2588) --
+    // either is a real, non-blank plotted value, which is the substantive claim here.
+    expect(rows.some((row) => /[█⠀-⣿]/.test(row))).toBe(true);
     expect(rows.some((row) => row.includes("loss 2 1"))).toBe(false);
   });
   test("downsamples long histories to plot width while preserving checkpoint alignment", () => {
@@ -366,7 +369,11 @@ describe("OperatorSurfacePane", () => {
       train("run-grid", 2, "2026-07-17T17:30:02.000Z", 2, { step_ms: 900, learning_rate: 0.001 }),
       train("run-grid", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 800, tokens_per_second: 300, learning_rate: 0.0005 }),
     ];
-    const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
+    // Pinned to the exact-fit height for this fixture (R1d acceptance #4): zero surplus, so
+    // every metric line stays at its pre-R1d single-row rendering -- this test's per-point gap
+    // alignment is a claim about THAT rendering, not about growth, which a taller mount would
+    // now correctly trigger (covered separately by the R1d growth tests).
+    const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 20, terminalColumns: 80, terminalRows: 20, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
     const body = (element as any).props.children;
     const text = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string") as string[];
     expect(text.find((line) => line.startsWith("step/time"))).toContain("1 2 3");
@@ -538,7 +545,9 @@ describe("OperatorSurfacePane", () => {
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
     expect(rows.every((row) => row.length === 40)).toBe(true);
     expect(rows.some((row) => row.includes("AWAITING"))).toBe(true);
-    expect(rows.some((row) => row.includes(String.fromCodePoint(0x2588)) || row.includes(String.fromCodePoint(0x2581)))).toBe(true);
+    // R1d: room at 24 rows may grow the chart into Braille output (U+2800-U+28FF) instead of the
+    // flat single-row block/eighth glyphs -- any of the three is a real plotted value.
+    expect(rows.some((row) => /[█▁⠀-⣿]/.test(row))).toBe(true);
   });
 
   test("renders a truthful activity pane title", () => {
