@@ -1,0 +1,117 @@
+name: oldest-issue-disposition-capture
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: oldest-issue-disposition-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Require an exact master dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/master"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.sha }}
+
+      - name: Capture and verify the non-authorizing oldest-issue packet
+        id: capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${RUNNER_TEMP}/oldest-issue-disposition-raw"
+          out="${RUNNER_TEMP}/oldest-issue-disposition-artifact"
+          mkdir -p "${raw}" "${out}"
+          captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          api_master=$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)
+          test "${api_master}" = "${GITHUB_SHA}"
+
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100&sort=created&direction=asc" \
+            > "${raw}/issues_pre.json"
+          mapfile -t issue_numbers < <(
+            jq -r '
+              [.[][] | select(has("pull_request") | not)]
+              | sort_by(.created_at, .number)
+              | .[:20]
+              | .[].number
+            ' "${raw}/issues_pre.json"
+          )
+          test "${#issue_numbers[@]}" -eq 20
+          for number in "${issue_numbers[@]}"; do
+            gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100" \
+              > "${raw}/comments-${number}-pre.json"
+          done
+
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100&sort=created&direction=asc" \
+            > "${raw}/issues_post.json"
+          for number in "${issue_numbers[@]}"; do
+            gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100" \
+              > "${raw}/comments-${number}-post.json"
+          done
+
+          final_master=$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)
+          test "${final_master}" = "${GITHUB_SHA}"
+
+          bundle="${out}/ember-oldest-issue-disposition-015-raw-sources-v1.json"
+          python -B scripts/build_oldest_issue_raw_bundle.py \
+            --raw-root "${raw}" --output "${bundle}"
+
+          python -B scripts/oldest_issue_disposition.py capture \
+            --raw-root "${raw}" \
+            --master-sha "${GITHUB_SHA}" \
+            --captured-at "${captured_at}" \
+            --output "${out}/capture.json"
+          python -B scripts/build_oldest_issue_decisions.py \
+            --capture "${out}/capture.json" \
+            --classifications manifests/oldest-issue-disposition/classifications-v1.json \
+            --output "${out}/decisions.json"
+          python -B scripts/oldest_issue_disposition.py build \
+            --capture "${out}/capture.json" \
+            --decisions "${out}/decisions.json" \
+            --output "${out}/packet.json"
+          python -B scripts/oldest_issue_disposition.py verify \
+            --packet "${out}/packet.json" \
+            --expected-master-sha "${GITHUB_SHA}"
+          python -B scripts/verify_oldest_issue_disposition_packet.py \
+            --packet "${out}/packet.json" \
+            --raw-bundle "${bundle}" \
+            --classifications manifests/oldest-issue-disposition/classifications-v1.json \
+            --expected-master-sha "${GITHUB_SHA}"
+
+          cp "${raw}"/*.json "${out}/"
+          (
+            cd "${out}"
+            sha256sum ./*.json | sort -k2 > SHA256SUMS
+          )
+          echo "artifact_path=${out}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload immutable non-authorizing evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: oldest-issue-disposition-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ steps.capture.outputs.artifact_path }}
+          if-no-files-found: error
+          retention-days: 90

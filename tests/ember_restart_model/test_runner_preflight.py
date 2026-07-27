@@ -407,7 +407,10 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="a" * 64))
             result = run_vertical_slice.run_semantic(
                 seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
-                shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=2,
+                shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"),
+                expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64,
+                expected_architecture_sha256="a" * 64,
+                steps=2,
                 sequence_length=1024, checkpoint_interval=32, write_budget_bytes=24 * 1024**3,
                 resume_checkpoint=parent if resume else None,
             )
@@ -467,7 +470,9 @@ class RunnerPreflightTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "CUDA probe"):
                         run_vertical_slice.run_semantic(
                             seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
-                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
+                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"),
+                            expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64,
+                            expected_architecture_sha256="a" * 64, steps=1,
                             sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
                         )
         governor.assert_called_once_with()
@@ -480,7 +485,9 @@ class RunnerPreflightTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "semantic launch requires"):
                         run_vertical_slice.run_semantic(
                             seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
-                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=0,
+                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"),
+                            expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64,
+                            expected_architecture_sha256="a" * 64, steps=0,
                             sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
                         )
         governor.assert_not_called()
@@ -506,7 +513,9 @@ class RunnerPreflightTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "resource refusal"):
                         run_vertical_slice.run_semantic(
                             seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"),
-                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1,
+                            shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"),
+                            expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64,
+                            expected_architecture_sha256="a" * 64, steps=1,
                             sequence_length=1024, checkpoint_interval=1, write_budget_bytes=8 * 1024**3,
                         )
         governor.assert_called_once_with()
@@ -558,7 +567,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=AssertionError("governor")) as governor:
                         with patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA probe")) as cuda_probe:
                             with self.assertRaisesRegex(RuntimeError, "merged Ember integration contract"):
-                                run_vertical_slice.run_semantic(seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"), shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), steps=1, sequence_length=8, checkpoint_interval=1, write_budget_bytes=1)
+                                run_vertical_slice.run_semantic(seed=83, artifact_root=Path("B:/semantic-artifacts"), receipt_path=Path("receipt.json"), shards_root=Path("shards"), tokenizer_path=Path("tokenizer.json"), expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64, expected_architecture_sha256="a" * 64, steps=1, sequence_length=8, checkpoint_interval=1, write_budget_bytes=1)
             governor.assert_not_called()
             cuda_probe.assert_not_called()
 
@@ -830,7 +839,10 @@ class RunnerPreflightTests(unittest.TestCase):
                 [
                     "run_vertical_slice.py", "semantic", "--seed", "83", "--artifact-root", "B:/ember-artifacts",
                     "--receipt", "semantic/receipt.json", "--shards-root", "semantic/shards",
-                    "--tokenizer", "semantic/tokenizer.json", "--steps", "1", "--sequence-length", "1024", "--checkpoint-interval", "32", "--write-budget-gib", "24",
+                    "--tokenizer", "semantic/tokenizer.json",
+                    "--expected-receipt-sha256", "r" * 64, "--expected-tokenizer-sha256", "t" * 64,
+                    "--expected-architecture-sha256", "a" * 64,
+                    "--steps", "1", "--sequence-length", "1024", "--checkpoint-interval", "32", "--write-budget-gib", "24",
                 ],
             ):
                 run_vertical_slice.main()
@@ -840,6 +852,9 @@ class RunnerPreflightTests(unittest.TestCase):
             receipt_path=Path("semantic/receipt.json"),
             shards_root=Path("semantic/shards"),
             tokenizer_path=Path("semantic/tokenizer.json"),
+            expected_receipt_sha256="r" * 64,
+            expected_tokenizer_sha256="t" * 64,
+            expected_architecture_sha256="a" * 64,
             steps=1,
             sequence_length=1024,
             checkpoint_interval=32,

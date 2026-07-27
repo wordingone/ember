@@ -1,0 +1,1387 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "capture_sha256": "3184de232a05e9de1a125e6163450c5c3df251a4133c0bd00eb953b5747231b7",
+  "captured_at": "2026-07-26T10:08:50Z",
+  "excluded_pull_request_population": 44,
+  "issues": [
+    {
+      "author": "wordingone",
+      "body_sha256": "54f35903e94a6b1f2631a925de24c0a363723f11a40a1338a480422b26767c88",
+      "comment_count": 8,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "44c9235309d2ac22d9ba43ebd5e24fe3371dc3ab6d373c3797cda741eb508eb6",
+          "created_at": "2026-07-02T21:28:46Z",
+          "id": 4870625972,
+          "updated_at": "2026-07-02T21:28:46Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-4870625972"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "9af83809c5c4031e473878ed40607249515edf1aaa703cbd96453e9ea71e6f0f",
+          "created_at": "2026-07-02T23:23:18Z",
+          "id": 4871258304,
+          "updated_at": "2026-07-02T23:23:18Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-4871258304"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "827f01cdd426a940927fe264d3d213c1677f02b3dd1e36236590891378dda314",
+          "created_at": "2026-07-02T23:55:56Z",
+          "id": 4871398675,
+          "updated_at": "2026-07-02T23:55:56Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-4871398675"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "e74aeea6e1c61846778101a69d0e7821ed9a7ed05b16759bfadc34e0a0505cec",
+          "created_at": "2026-07-03T00:46:42Z",
+          "id": 4871622233,
+          "updated_at": "2026-07-03T00:46:42Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-4871622233"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "12c77e8dd89a2dbd8c1698db8171538cecebf21de6806f92322aef2c60783829",
+          "created_at": "2026-07-03T03:43:01Z",
+          "id": 4872377848,
+          "updated_at": "2026-07-03T03:43:01Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-4872377848"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "f1471e2306af445239cd134d92051aecc07a71837b3700dade7c4b0d3e6acd29",
+          "created_at": "2026-07-03T04:17:58Z",
+          "id": 4872543653,
+          "updated_at": "2026-07-03T04:17:58Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-4872543653"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "9aaacb3e9461a87b5e3185e8449660bc846f9d10c0a13e1373b662b9be2f7020",
+          "created_at": "2026-07-03T05:41:33Z",
+          "id": 4872936486,
+          "updated_at": "2026-07-03T05:41:33Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-4872936486"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "35d23747c3cb1b9529e7b5a7b3f1585f2ca60b359d102312dff009203390df4d",
+          "created_at": "2026-07-19T13:40:56Z",
+          "id": 5015936642,
+          "updated_at": "2026-07-19T13:40:56Z",
+          "url": "https://github.com/wordingone/ember/issues/3#issuecomment-5015936642"
+        }
+      ],
+      "created_at": "2026-07-02T20:20:43Z",
+      "labels": [],
+      "number": 3,
+      "source_stability": {
+        "comments_post_sha256": "906afdcc8792db4ed431c3d859d490199bb15d4e2cd4db563fd303dfdbd5a398",
+        "comments_pre_sha256": "906afdcc8792db4ed431c3d859d490199bb15d4e2cd4db563fd303dfdbd5a398",
+        "post_sha256": "4cd7e043d4ae20e5bef434a8ddd20ff80103bc121d81b3347ff1c347841e66a9",
+        "pre_sha256": "4cd7e043d4ae20e5bef434a8ddd20ff80103bc121d81b3347ff1c347841e66a9"
+      },
+      "state": "open",
+      "title": "C14: execute owned-core resident-training gate run (design v1.2)",
+      "updated_at": "2026-07-19T13:40:56Z",
+      "url": "https://github.com/wordingone/ember/issues/3"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "94d2a71e572956eb7e8b4d7f911c535e5dc99c7c7b1584058aad26ef0bb94762",
+      "comment_count": 1,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "8c7d7c146108b548e081242e8dd186c6c2aed16298a9ec7f711d6a5cf266d4f5",
+          "created_at": "2026-07-18T15:21:48Z",
+          "id": 5011794087,
+          "updated_at": "2026-07-18T15:21:48Z",
+          "url": "https://github.com/wordingone/ember/issues/7#issuecomment-5011794087"
+        }
+      ],
+      "created_at": "2026-07-02T20:21:28Z",
+      "labels": [],
+      "number": 7,
+      "source_stability": {
+        "comments_post_sha256": "8e96203009a04ab5d4f730bd9ca691a656c5abc65b8390807ef2978b7d2264f1",
+        "comments_pre_sha256": "8e96203009a04ab5d4f730bd9ca691a656c5abc65b8390807ef2978b7d2264f1",
+        "post_sha256": "dee1fbeccf653915aecd9ce8f8a99ee5fdb33880d6662c41ddf2386323720f20",
+        "pre_sha256": "dee1fbeccf653915aecd9ce8f8a99ee5fdb33880d6662c41ddf2386323720f20"
+      },
+      "state": "open",
+      "title": "Two-law receipts: P1 energy envelope + P2 first BOOTSTRAP_PASS",
+      "updated_at": "2026-07-18T15:21:48Z",
+      "url": "https://github.com/wordingone/ember/issues/7"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "8952fe8ca6e73a9947af06303f285c9ba5ef6d94d9127fb6a944754c55d2a791",
+      "comment_count": 1,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "bb263d49c23e094a3cdced28c8ae99ecc52282530bff04d928ec0404b7212150",
+          "created_at": "2026-07-19T03:48:19Z",
+          "id": 5014100423,
+          "updated_at": "2026-07-19T03:48:19Z",
+          "url": "https://github.com/wordingone/ember/issues/8#issuecomment-5014100423"
+        }
+      ],
+      "created_at": "2026-07-02T20:21:29Z",
+      "labels": [],
+      "number": 8,
+      "source_stability": {
+        "comments_post_sha256": "4f7bfb61c701de41ccda9c77b67e8c1fca549a77fa7f4fa497c52c934f1f8bfb",
+        "comments_pre_sha256": "4f7bfb61c701de41ccda9c77b67e8c1fca549a77fa7f4fa497c52c934f1f8bfb",
+        "post_sha256": "6a4655f8a76f2018ac69751bbd7c98742f1ebe280b7747e133f01cccd40ee2d8",
+        "pre_sha256": "6a4655f8a76f2018ac69751bbd7c98742f1ebe280b7747e133f01cccd40ee2d8"
+      },
+      "state": "open",
+      "title": "C-GROW v3: iso-FLOP growth-operator comparison redesign",
+      "updated_at": "2026-07-19T03:48:19Z",
+      "url": "https://github.com/wordingone/ember/issues/8"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "82cf63b27213da109166af603c69a5385920aae32132a4074dd9e93699866227",
+      "comment_count": 1,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "915054ac0073e04883ac590b534450e459dabb481bca3d22ecdb7f257d0b710a",
+          "created_at": "2026-07-18T15:21:44Z",
+          "id": 5011793874,
+          "updated_at": "2026-07-18T15:21:44Z",
+          "url": "https://github.com/wordingone/ember/issues/12#issuecomment-5011793874"
+        }
+      ],
+      "created_at": "2026-07-02T23:26:42Z",
+      "labels": [],
+      "number": 12,
+      "source_stability": {
+        "comments_post_sha256": "4b24dadccc1bf9bf6ace6e18dd07b33f073215296d0da2c4f7dc2eee2303f80e",
+        "comments_pre_sha256": "4b24dadccc1bf9bf6ace6e18dd07b33f073215296d0da2c4f7dc2eee2303f80e",
+        "post_sha256": "99ecdfa304247ce7a6a55e1c5d2519fedc255c22feefcf41409772eeef028076",
+        "pre_sha256": "99ecdfa304247ce7a6a55e1c5d2519fedc255c22feefcf41409772eeef028076"
+      },
+      "state": "open",
+      "title": "Surface-3: execute pre-registered A0-A7 head-to-head battery to one conjunctive verdict receipt",
+      "updated_at": "2026-07-18T15:21:44Z",
+      "url": "https://github.com/wordingone/ember/issues/12"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "bc9ab53b94f5a79dff5b3ddb4d16fa340dbff9382f8ebbc8464dc6496420f374",
+      "comment_count": 1,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "ed8a3ac35425441e600cb542b70eb5e9962e7908dba4a760d00316950993dd88",
+          "created_at": "2026-07-19T05:12:08Z",
+          "id": 5014506131,
+          "updated_at": "2026-07-19T05:12:08Z",
+          "url": "https://github.com/wordingone/ember/issues/14#issuecomment-5014506131"
+        }
+      ],
+      "created_at": "2026-07-02T23:26:44Z",
+      "labels": [],
+      "number": 14,
+      "source_stability": {
+        "comments_post_sha256": "b18f67c6dc462dd2499faf74a71a65b4e92f22169a12913eb16ddcf07fb90f73",
+        "comments_pre_sha256": "b18f67c6dc462dd2499faf74a71a65b4e92f22169a12913eb16ddcf07fb90f73",
+        "post_sha256": "00e3ad0fe22e393f76c849b866bf132e34eb708d2f1b472bd7fd1fb27aa24cbd",
+        "pre_sha256": "00e3ad0fe22e393f76c849b866bf132e34eb708d2f1b472bd7fd1fb27aa24cbd"
+      },
+      "state": "open",
+      "title": "Governance clocks: surface-drop attestation, fired-trigger review, amendment acceptance-object, milestone-lattice mirror, PR-review-record predicate",
+      "updated_at": "2026-07-19T05:12:08Z",
+      "url": "https://github.com/wordingone/ember/issues/14"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "c94193d05fe07e773548d29168d2100d72575b89ca3159ccd7547716045b7b44",
+      "comment_count": 3,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "e7bd68c6e04c74f4bd25b92da2823d175801fb821ffaeff6ce6c68c9b089f0aa",
+          "created_at": "2026-07-03T18:00:40Z",
+          "id": 4878487593,
+          "updated_at": "2026-07-03T18:00:40Z",
+          "url": "https://github.com/wordingone/ember/issues/20#issuecomment-4878487593"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "74ac1662cc810cef02853625b0ae577450e88824a797adcb96cb2fd402068d1a",
+          "created_at": "2026-07-03T22:21:02Z",
+          "id": 4879625953,
+          "updated_at": "2026-07-03T22:21:02Z",
+          "url": "https://github.com/wordingone/ember/issues/20#issuecomment-4879625953"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "3f9d5cfb721c6512e1b66703d2c2ae7e57e465c98cccc6632f55bc5148e82405",
+          "created_at": "2026-07-19T13:44:57Z",
+          "id": 5015948948,
+          "updated_at": "2026-07-19T13:44:57Z",
+          "url": "https://github.com/wordingone/ember/issues/20#issuecomment-5015948948"
+        }
+      ],
+      "created_at": "2026-07-03T04:57:23Z",
+      "labels": [],
+      "number": 20,
+      "source_stability": {
+        "comments_post_sha256": "11ae5ab9f2a22518d4b01c498f66eb9c117950d19c0b5d6faa35b913fecc00a1",
+        "comments_pre_sha256": "11ae5ab9f2a22518d4b01c498f66eb9c117950d19c0b5d6faa35b913fecc00a1",
+        "post_sha256": "aa1f03690cad0d44e3c880cb65d426316f5e0e94bc2795f59ca45a2ac941f24d",
+        "pre_sha256": "aa1f03690cad0d44e3c880cb65d426316f5e0e94bc2795f59ca45a2ac941f24d"
+      },
+      "state": "open",
+      "title": "C11: duration-milestone receipts ride the C14 battery windows (1h leg first)",
+      "updated_at": "2026-07-19T13:44:57Z",
+      "url": "https://github.com/wordingone/ember/issues/20"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "1d60a039f73bf4ca44f5555622f8618e326e0ac2386c4642398d601fa46107ab",
+      "comment_count": 3,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "a75cd8a85d581c3ca1f8ae1d799a1da9a3d99afbcf0b52547b458db30cd87b50",
+          "created_at": "2026-07-03T16:02:22Z",
+          "id": 4877874193,
+          "updated_at": "2026-07-03T16:02:22Z",
+          "url": "https://github.com/wordingone/ember/issues/29#issuecomment-4877874193"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "6adbaafaefb580dd124f5df2de4e150116bb38a555bfed9990586672f8f4ba94",
+          "created_at": "2026-07-03T20:06:37Z",
+          "id": 4879088540,
+          "updated_at": "2026-07-03T20:06:37Z",
+          "url": "https://github.com/wordingone/ember/issues/29#issuecomment-4879088540"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "e13587590f26eca78ff93f4229a91d8e59210b7c180edce8f2e77ea0078cf131",
+          "created_at": "2026-07-04T16:28:50Z",
+          "id": 4883055736,
+          "updated_at": "2026-07-04T16:28:50Z",
+          "url": "https://github.com/wordingone/ember/issues/29#issuecomment-4883055736"
+        }
+      ],
+      "created_at": "2026-07-03T08:05:19Z",
+      "labels": [],
+      "number": 29,
+      "source_stability": {
+        "comments_post_sha256": "373a8bb1054894ead8a96dc370e953e4827827a4661b25f819486b903c37032e",
+        "comments_pre_sha256": "373a8bb1054894ead8a96dc370e953e4827827a4661b25f819486b903c37032e",
+        "post_sha256": "170ee62d963d79f3f2abee93cdda0d3080478027d9da6218907f1cb94544441f",
+        "pre_sha256": "170ee62d963d79f3f2abee93cdda0d3080478027d9da6218907f1cb94544441f"
+      },
+      "state": "open",
+      "title": "C-SCALE apex: staged scale-credibility campaign (owned >3e9 via growth chain + at-scale native finetune)",
+      "updated_at": "2026-07-16T17:36:57Z",
+      "url": "https://github.com/wordingone/ember/issues/29"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "143116fd7a0c9cd5676547956d517c18bf0f9083e8f8e780689005c38d7dcaf0",
+      "comment_count": 6,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "3e0a4063093a76a85ada6bc094a1149e77afc381611a115c6cbd674a09d651c5",
+          "created_at": "2026-07-03T15:22:10Z",
+          "id": 4877624610,
+          "updated_at": "2026-07-03T15:22:10Z",
+          "url": "https://github.com/wordingone/ember/issues/35#issuecomment-4877624610"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "bde1aefafb1566f81b1fed006ba86d058a923ffe7a9243fa116edad6ede50a6f",
+          "created_at": "2026-07-03T15:39:40Z",
+          "id": 4877737030,
+          "updated_at": "2026-07-03T15:39:40Z",
+          "url": "https://github.com/wordingone/ember/issues/35#issuecomment-4877737030"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "5efa5914fb734fde4917193f9ec7c07c5ece217f48dccdd12a3853a13b4bc76d",
+          "created_at": "2026-07-04T15:02:10Z",
+          "id": 4882604662,
+          "updated_at": "2026-07-04T15:02:10Z",
+          "url": "https://github.com/wordingone/ember/issues/35#issuecomment-4882604662"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "907dcda8d73a7d80052001bb9b1ae6febf69b6e6107169ad585c2a761d44abc1",
+          "created_at": "2026-07-04T15:09:10Z",
+          "id": 4882644156,
+          "updated_at": "2026-07-04T15:09:10Z",
+          "url": "https://github.com/wordingone/ember/issues/35#issuecomment-4882644156"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "219534042b2049f2604ecf89c121ba6bc26e91f232d96e52857d61322b3d321b",
+          "created_at": "2026-07-04T15:54:51Z",
+          "id": 4882923162,
+          "updated_at": "2026-07-04T15:54:51Z",
+          "url": "https://github.com/wordingone/ember/issues/35#issuecomment-4882923162"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "bcd6b6e022f0e16b0c29d30cca7cfbaf4674c16a7aedcd8a2bd6ef95321b0d9d",
+          "created_at": "2026-07-18T14:47:49Z",
+          "id": 5011682084,
+          "updated_at": "2026-07-18T14:47:49Z",
+          "url": "https://github.com/wordingone/ember/issues/35#issuecomment-5011682084"
+        }
+      ],
+      "created_at": "2026-07-03T15:12:37Z",
+      "labels": [],
+      "number": 35,
+      "source_stability": {
+        "comments_post_sha256": "bb50aaccee6cfb0207601212fff01a17b6e72526d62ecef32bc458e48905c02f",
+        "comments_pre_sha256": "bb50aaccee6cfb0207601212fff01a17b6e72526d62ecef32bc458e48905c02f",
+        "post_sha256": "8689120e74340703738ff279f4c92ef8f59a2ca486068c4b6666c73c02364fff",
+        "pre_sha256": "8689120e74340703738ff279f4c92ef8f59a2ca486068c4b6666c73c02364fff"
+      },
+      "state": "open",
+      "title": "GOAL.md contract-integrity audit: 13 internal defects, 26 unwatched mandates, 7 doc-reality divergences — cure plan",
+      "updated_at": "2026-07-18T14:47:49Z",
+      "url": "https://github.com/wordingone/ember/issues/35"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "6ae9bc1bf995f72f746e36bca0242b659077d3cbcafdbb455b04a3dc90593e0a",
+      "comment_count": 3,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "82e41c2c252c0dfb19d8b7894b356394a735d77da812674d9f9ddc5298efebcd",
+          "created_at": "2026-07-03T21:54:42Z",
+          "id": 4879530901,
+          "updated_at": "2026-07-03T21:54:42Z",
+          "url": "https://github.com/wordingone/ember/issues/37#issuecomment-4879530901"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "75f7233b23a3c9961b9a3df3301a186b01b13ddd61ed77e2f29d0e7f0b217fed",
+          "created_at": "2026-07-03T22:14:55Z",
+          "id": 4879606156,
+          "updated_at": "2026-07-03T22:14:55Z",
+          "url": "https://github.com/wordingone/ember/issues/37#issuecomment-4879606156"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "a5288b3ece47f54fec1241258ede456a7d8ccf7362c5173a5fcf2892c4ca1286",
+          "created_at": "2026-07-19T03:49:10Z",
+          "id": 5014104742,
+          "updated_at": "2026-07-19T03:49:10Z",
+          "url": "https://github.com/wordingone/ember/issues/37#issuecomment-5014104742"
+        }
+      ],
+      "created_at": "2026-07-03T17:12:29Z",
+      "labels": [],
+      "number": 37,
+      "source_stability": {
+        "comments_post_sha256": "a5795659c49e221c71b977778c07b0dcc3edfe5f5292c7ddecf3cf5de344993c",
+        "comments_pre_sha256": "a5795659c49e221c71b977778c07b0dcc3edfe5f5292c7ddecf3cf5de344993c",
+        "post_sha256": "c9f66c570544e19771eb961495a16a8c98de5cf7de64e2330866d206169e092d",
+        "pre_sha256": "c9f66c570544e19771eb961495a16a8c98de5cf7de64e2330866d206169e092d"
+      },
+      "state": "open",
+      "title": "8l contingency: mechanism-redesign ladder (adapter locus / objective / presentation) — fires only on A20 rung 2",
+      "updated_at": "2026-07-19T03:49:10Z",
+      "url": "https://github.com/wordingone/ember/issues/37"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "19d9cd4145ebc8b5a12eab34ea899fb8591645e0a07a13b1f910e15d69979ae6",
+      "comment_count": 1,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "622e949b7b33538c0de289f4d16863e8e9ab1341a7fcaf9dbce110d97a314099",
+          "created_at": "2026-07-19T04:09:07Z",
+          "id": 5014190268,
+          "updated_at": "2026-07-19T04:09:07Z",
+          "url": "https://github.com/wordingone/ember/issues/46#issuecomment-5014190268"
+        }
+      ],
+      "created_at": "2026-07-04T00:08:35Z",
+      "labels": [],
+      "number": 46,
+      "source_stability": {
+        "comments_post_sha256": "162c942119c5d815736f6b3b1afb7c1335eb273c431dd5101df05471b7fbfaef",
+        "comments_pre_sha256": "162c942119c5d815736f6b3b1afb7c1335eb273c431dd5101df05471b7fbfaef",
+        "post_sha256": "20537b05ba4ff7ac14c2141bf4a38ffcdbf2555e0cc74fe61b24ace67741140f",
+        "pre_sha256": "20537b05ba4ff7ac14c2141bf4a38ffcdbf2555e0cc74fe61b24ace67741140f"
+      },
+      "state": "open",
+      "title": "ember-cli vs avir-cli behavioral parity audit — round 1 results + cure campaign",
+      "updated_at": "2026-07-19T04:09:07Z",
+      "url": "https://github.com/wordingone/ember/issues/46"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "6472a3339021a7e81a1a6256a99c8296e9510a768861ff68f5c3738df8d0c0cc",
+      "comment_count": 2,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "8e87f48cddbb36d20b23bf0220429d1c2f5f55616b4a064f1d3e2aeb4fd724dd",
+          "created_at": "2026-07-04T01:42:49Z",
+          "id": 4880214660,
+          "updated_at": "2026-07-04T01:42:49Z",
+          "url": "https://github.com/wordingone/ember/issues/47#issuecomment-4880214660"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "3c73f7212d98756556cc0adb3830aa179d1d8e8d001ea2f190126bbad1ffac00",
+          "created_at": "2026-07-04T03:02:21Z",
+          "id": 4880428606,
+          "updated_at": "2026-07-04T03:02:21Z",
+          "url": "https://github.com/wordingone/ember/issues/47#issuecomment-4880428606"
+        }
+      ],
+      "created_at": "2026-07-04T00:38:23Z",
+      "labels": [],
+      "number": 47,
+      "source_stability": {
+        "comments_post_sha256": "55dd8ffebd2baceb9cce5ee144096b980bd96c90777b222f6ae1707ef73a2845",
+        "comments_pre_sha256": "55dd8ffebd2baceb9cce5ee144096b980bd96c90777b222f6ae1707ef73a2845",
+        "post_sha256": "51fb6ce07d370fe043c9448cab3b1a2a09a3fa36b4cfca83f65865aff30db742",
+        "pre_sha256": "51fb6ce07d370fe043c9448cab3b1a2a09a3fa36b4cfca83f65865aff30db742"
+      },
+      "state": "open",
+      "title": "R3 feasibility receipt: 4-bit frozen 27B-class base + trainable slice, one train step + one inference pass co-resident on the 4090",
+      "updated_at": "2026-07-04T03:02:21Z",
+      "url": "https://github.com/wordingone/ember/issues/47"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "4e3537ff75f19b2f464d5ff075ee44c6657a0667ef6efdd999f566ad335bf7ef",
+      "comment_count": 15,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "d91e5fb55a6fb861d97265a554076077c2c07eaa01e2868134fa02e45d0cedf8",
+          "created_at": "2026-07-04T03:09:22Z",
+          "id": 4880445621,
+          "updated_at": "2026-07-04T03:09:22Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4880445621"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "abec11251895e13d5180e5894b1e2dd7036bb1f05fc3f645781b16814c615fed",
+          "created_at": "2026-07-04T04:08:56Z",
+          "id": 4880585732,
+          "updated_at": "2026-07-04T04:08:56Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4880585732"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "f2ff0f35c7d1bf046a1304fa7a8089440df4779e75f186ae003def5197c0f94d",
+          "created_at": "2026-07-04T04:29:16Z",
+          "id": 4880636280,
+          "updated_at": "2026-07-04T04:29:16Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4880636280"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "0797527e1ad809b1f2c6e2f13289d2946901ea465ce0bd40415f4ce0e86a32f9",
+          "created_at": "2026-07-04T05:38:08Z",
+          "id": 4880836521,
+          "updated_at": "2026-07-04T05:38:08Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4880836521"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "ee96dea169ff281af642bdbc31945ad5c5f287fa3956572298f6d3279a52eaf9",
+          "created_at": "2026-07-04T06:58:50Z",
+          "id": 4881062944,
+          "updated_at": "2026-07-04T06:58:50Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4881062944"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "7f7b68921e83f6b5b60a33d81719727f99e050052d51b893575af401d6033de0",
+          "created_at": "2026-07-04T07:33:36Z",
+          "id": 4881148424,
+          "updated_at": "2026-07-04T07:33:36Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4881148424"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "042d6697e2e5352b6b5189606e1927d14f656a5eb3931a57247211a1fce49f55",
+          "created_at": "2026-07-04T08:28:09Z",
+          "id": 4881296908,
+          "updated_at": "2026-07-04T08:28:09Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4881296908"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "495c76a2f85597855197403859c3bec5616ff821136f50239c2ef7fd1f0fc80e",
+          "created_at": "2026-07-04T09:01:06Z",
+          "id": 4881389768,
+          "updated_at": "2026-07-04T09:01:06Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4881389768"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "2ad4e4676ada2d2310bee20129248905ab182c10e580b0052ba35449de2fc2f8",
+          "created_at": "2026-07-04T10:02:14Z",
+          "id": 4881554436,
+          "updated_at": "2026-07-04T10:02:14Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4881554436"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "69fb7dbb38b628fa98414ff473f5527fde599150eb1639bab1328952dedb989c",
+          "created_at": "2026-07-04T12:10:33Z",
+          "id": 4881943677,
+          "updated_at": "2026-07-04T12:10:33Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4881943677"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "b8310f08f725649558709367887452e285f7ead1e677646166dd95599c08edb5",
+          "created_at": "2026-07-05T02:55:16Z",
+          "id": 4884630087,
+          "updated_at": "2026-07-05T02:55:16Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4884630087"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "301732dd2d443b3c444ece669bc7676375196d9a1fcb626fdef4c69313bf0cae",
+          "created_at": "2026-07-05T07:50:26Z",
+          "id": 4885293880,
+          "updated_at": "2026-07-05T07:50:26Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4885293880"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "b7de3c733024be8543d10b93bb174f441082fd1966e3a69c74bd8b09492ef65c",
+          "created_at": "2026-07-06T00:59:08Z",
+          "id": 4888268596,
+          "updated_at": "2026-07-06T00:59:08Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4888268596"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "ba73c271c5f27866d604e3baa55c6822e1a68ff1216cdbebadf0c97c3e5e15b3",
+          "created_at": "2026-07-10T04:14:06Z",
+          "id": 4931920411,
+          "updated_at": "2026-07-10T04:14:06Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-4931920411"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "4c190b94c381aff27ee579375926b9ef03793e7bfff4cca20c08f3870ab9d59d",
+          "created_at": "2026-07-19T05:17:42Z",
+          "id": 5014527502,
+          "updated_at": "2026-07-19T05:17:42Z",
+          "url": "https://github.com/wordingone/ember/issues/53#issuecomment-5014527502"
+        }
+      ],
+      "created_at": "2026-07-04T02:09:26Z",
+      "labels": [],
+      "number": 53,
+      "source_stability": {
+        "comments_post_sha256": "ba7bb34d8a72c904b8dd16b87f18759cbdbbb293de2ddc297a03c8591d5b1469",
+        "comments_pre_sha256": "ba7bb34d8a72c904b8dd16b87f18759cbdbbb293de2ddc297a03c8591d5b1469",
+        "post_sha256": "6a13cc049c7490df0bfac7d610cdd4f4354b5a1c5f0dcec0293d79e86a1119cf",
+        "pre_sha256": "6a13cc049c7490df0bfac7d610cdd4f4354b5a1c5f0dcec0293d79e86a1119cf"
+      },
+      "state": "open",
+      "title": "GPU window runbook: C11 flip -> E2B GATE-1/2 -> R3 phase B — frozen sequence + read-only pre-flight",
+      "updated_at": "2026-07-19T05:17:42Z",
+      "url": "https://github.com/wordingone/ember/issues/53"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "56eaddbca5c1054c220ad70dcc1c44b4feac81c72b7772a2422b7e0b0659b4fc",
+      "comment_count": 2,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "9178126b41fc38eeff7c9e87e94b59103f785276e20d8e2e05a4b1d2f957906c",
+          "created_at": "2026-07-04T03:05:51Z",
+          "id": 4880437174,
+          "updated_at": "2026-07-04T03:05:51Z",
+          "url": "https://github.com/wordingone/ember/issues/54#issuecomment-4880437174"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "e64f0c4cb5661edd7db88afaccebd854916ef2911cbd4141710320bc7d27a508",
+          "created_at": "2026-07-19T14:33:22Z",
+          "id": 5016104362,
+          "updated_at": "2026-07-19T14:33:22Z",
+          "url": "https://github.com/wordingone/ember/issues/54#issuecomment-5016104362"
+        }
+      ],
+      "created_at": "2026-07-04T02:40:28Z",
+      "labels": [],
+      "number": 54,
+      "source_stability": {
+        "comments_post_sha256": "a9dee4c14d942b350b744af371ca1e1a9d7644daced411fe18bf3af99f613ec8",
+        "comments_pre_sha256": "a9dee4c14d942b350b744af371ca1e1a9d7644daced411fe18bf3af99f613ec8",
+        "post_sha256": "08651985f24c3de85b2950272d36f3bc50b66412ec5e2481f042e8eb36181d89",
+        "pre_sha256": "08651985f24c3de85b2950272d36f3bc50b66412ec5e2481f042e8eb36181d89"
+      },
+      "state": "open",
+      "title": "ember-cli: flame animation jitters horizontally (per-frame width variance suspected) + art below bar",
+      "updated_at": "2026-07-19T14:33:22Z",
+      "url": "https://github.com/wordingone/ember/issues/54"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "84241e3b1dfc6f3123691f4fba395ac2468ebad2ebbc4ff176b36cac9ff2bf18",
+      "comment_count": 0,
+      "comments": [],
+      "created_at": "2026-07-04T02:42:44Z",
+      "labels": [],
+      "number": 55,
+      "source_stability": {
+        "comments_post_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "comments_pre_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "post_sha256": "910b58eab281a248b419849f3e271a4a6ac9ecdc5dd1c4d374c63d2909c6e4f5",
+        "pre_sha256": "910b58eab281a248b419849f3e271a4a6ac9ecdc5dd1c4d374c63d2909c6e4f5"
+      },
+      "state": "open",
+      "title": "Inference-to-training translation system: clocked cure for the 06-27 god-stack mandate (partial-activation FOR TRAINING, per operator)",
+      "updated_at": "2026-07-04T02:42:44Z",
+      "url": "https://github.com/wordingone/ember/issues/55"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "d9b1c22ce2cc06a5a805a2873962ed044d0932cc843c1befee9fc0753a15aa07",
+      "comment_count": 2,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "49b076e44ebad14abf340434520c8d0de0e11dc24da0deedf5e57c844e636dee",
+          "created_at": "2026-07-04T17:42:37Z",
+          "id": 4883266745,
+          "updated_at": "2026-07-04T17:42:37Z",
+          "url": "https://github.com/wordingone/ember/issues/92#issuecomment-4883266745"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "70d61aa5c24318ead6b324b6cbc8177fba0407a729aee6192c1a5f3e858d4896",
+          "created_at": "2026-07-04T18:11:43Z",
+          "id": 4883351369,
+          "updated_at": "2026-07-04T18:11:43Z",
+          "url": "https://github.com/wordingone/ember/issues/92#issuecomment-4883351369"
+        }
+      ],
+      "created_at": "2026-07-04T15:27:10Z",
+      "labels": [],
+      "number": 92,
+      "source_stability": {
+        "comments_post_sha256": "b170ae7c577b1964ebbc31f024aae4a7603f886643caca0fcc1751f44c854dc9",
+        "comments_pre_sha256": "b170ae7c577b1964ebbc31f024aae4a7603f886643caca0fcc1751f44c854dc9",
+        "post_sha256": "b135420f1b4131ed5effe8153280c9389984420229f67f5107d73f1fe73f3065",
+        "pre_sha256": "b135420f1b4131ed5effe8153280c9389984420229f67f5107d73f1fe73f3065"
+      },
+      "state": "open",
+      "title": "Autonomy-relinquishment ladder: transfer the maintainer's levers to ember itself (R0-R5, invariant-gated)",
+      "updated_at": "2026-07-04T18:11:43Z",
+      "url": "https://github.com/wordingone/ember/issues/92"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "f44c4eeea3aef332ecc0117fd3db226cb894e4a21935221fc583f14d80bc4fe3",
+      "comment_count": 1,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "a1b3646446ad5a53b22c4f56ed84558a92e8ac57335dcc1e1ddd0a2edc9b4484",
+          "created_at": "2026-07-04T18:24:53Z",
+          "id": 4883386082,
+          "updated_at": "2026-07-04T18:24:53Z",
+          "url": "https://github.com/wordingone/ember/issues/98#issuecomment-4883386082"
+        }
+      ],
+      "created_at": "2026-07-04T16:28:51Z",
+      "labels": [],
+      "number": 98,
+      "source_stability": {
+        "comments_post_sha256": "0afc6cca730ede5f76ca806a2179a3018282435046b42ae4f29de63695ff9427",
+        "comments_pre_sha256": "0afc6cca730ede5f76ca806a2179a3018282435046b42ae4f29de63695ff9427",
+        "post_sha256": "7ca3b427b58cbb9bb0c2a47ebc7faf8832ac0f8bf47e83e90f50620cba97f2b9",
+        "pre_sha256": "7ca3b427b58cbb9bb0c2a47ebc7faf8832ac0f8bf47e83e90f50620cba97f2b9"
+      },
+      "state": "open",
+      "title": "C11 rebuild: genuinely re-earn the 1-hour and 3-hour developmental-duration milestones (audit finding, issue #97 item 1)",
+      "updated_at": "2026-07-04T18:24:53Z",
+      "url": "https://github.com/wordingone/ember/issues/98"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "a7b631b819e05fa348a0871a6778dab56a01288ac2eb641a5af43dd8deee0beb",
+      "comment_count": 2,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "1c1d19d2b7802179ee94526b1112db40dee7a0e4bd93ff3702fc98af036b5254",
+          "created_at": "2026-07-04T18:32:30Z",
+          "id": 4883406312,
+          "updated_at": "2026-07-04T18:32:30Z",
+          "url": "https://github.com/wordingone/ember/issues/99#issuecomment-4883406312"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "d536216ec0fd029799c8881f3de5e6e130f717c75293155d639f5a6ac000c25a",
+          "created_at": "2026-07-19T11:49:07Z",
+          "id": 5015595316,
+          "updated_at": "2026-07-19T11:49:07Z",
+          "url": "https://github.com/wordingone/ember/issues/99#issuecomment-5015595316"
+        }
+      ],
+      "created_at": "2026-07-04T16:28:52Z",
+      "labels": [],
+      "number": 99,
+      "source_stability": {
+        "comments_post_sha256": "e23b5227ac675f907c8e82d6c4e7a010a83ac1aea59ff4fd2bc3698d7f14efa9",
+        "comments_pre_sha256": "e23b5227ac675f907c8e82d6c4e7a010a83ac1aea59ff4fd2bc3698d7f14efa9",
+        "post_sha256": "5f7de88121700a6fb79fefb0f3761bc6864a77c8fc9992f438ac054e8b608ba5",
+        "pre_sha256": "5f7de88121700a6fb79fefb0f3761bc6864a77c8fc9992f438ac054e8b608ba5"
+      },
+      "state": "open",
+      "title": "Publish checkpoints: rung-1 terminal + W1 from-scratch control to HF (public reproducibility)",
+      "updated_at": "2026-07-19T11:49:07Z",
+      "url": "https://github.com/wordingone/ember/issues/99"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "f535ae847b5b66506e135ab61ba7d85e3204ae19285999bb4ce1427475c9ecaa",
+      "comment_count": 1,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "b12f5f8813b5b2ce516e0de5bd58fa805e4ee7386a7de0b27c43ac888fc46759",
+          "created_at": "2026-07-19T04:20:50Z",
+          "id": 5014242946,
+          "updated_at": "2026-07-19T04:20:50Z",
+          "url": "https://github.com/wordingone/ember/issues/105#issuecomment-5014242946"
+        }
+      ],
+      "created_at": "2026-07-04T18:02:43Z",
+      "labels": [],
+      "number": 105,
+      "source_stability": {
+        "comments_post_sha256": "a542458f22d174c6cf49f7060ab0230fc9b9eecaefe6d45aff706d93365912c8",
+        "comments_pre_sha256": "a542458f22d174c6cf49f7060ab0230fc9b9eecaefe6d45aff706d93365912c8",
+        "post_sha256": "46c9de928fd168ecee19b4747fcb0dcec221a69f4bb13d4797e20d51d7c021d6",
+        "pre_sha256": "46c9de928fd168ecee19b4747fcb0dcec221a69f4bb13d4797e20d51d7c021d6"
+      },
+      "state": "open",
+      "title": "C-LADM control-class strengthening: model-authored same-task wrong attempts for the 48 backfilled tasks",
+      "updated_at": "2026-07-19T04:20:50Z",
+      "url": "https://github.com/wordingone/ember/issues/105"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "110d78081b5940a30fc649dfa4303d629bd506504ade3cf711e825781d84ad02",
+      "comment_count": 0,
+      "comments": [],
+      "created_at": "2026-07-04T18:09:20Z",
+      "labels": [],
+      "number": 107,
+      "source_stability": {
+        "comments_post_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "comments_pre_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "post_sha256": "c782de0b9086a0ca9280d3b0ce797fe01782083263512e94154c0c9e43306a93",
+        "pre_sha256": "c782de0b9086a0ca9280d3b0ce797fe01782083263512e94154c0c9e43306a93"
+      },
+      "state": "open",
+      "title": "C11: 24h tier re-earn — the banked crossing rests 12.5% on discredited inheritance",
+      "updated_at": "2026-07-04T18:09:20Z",
+      "url": "https://github.com/wordingone/ember/issues/107"
+    },
+    {
+      "author": "wordingone",
+      "body_sha256": "8b1be0e3c929bfed2bb67c99868819c54ef069de118061dd3daab251e1239e4e",
+      "comment_count": 2,
+      "comments": [
+        {
+          "author": "wordingone",
+          "body_sha256": "ee1c0fb465c5434256df07cb1eb325847c06667ce118dae9026597ea33cae1f0",
+          "created_at": "2026-07-04T21:29:22Z",
+          "id": 4883862019,
+          "updated_at": "2026-07-04T21:29:22Z",
+          "url": "https://github.com/wordingone/ember/issues/111#issuecomment-4883862019"
+        },
+        {
+          "author": "wordingone",
+          "body_sha256": "951a81331dff61ef4ed78384c1cc1f51acbf2913539781b8e69e1a739c4daac6",
+          "created_at": "2026-07-05T18:05:23Z",
+          "id": 4887074866,
+          "updated_at": "2026-07-05T18:05:23Z",
+          "url": "https://github.com/wordingone/ember/issues/111#issuecomment-4887074866"
+        }
+      ],
+      "created_at": "2026-07-04T18:20:52Z",
+      "labels": [],
+      "number": 111,
+      "source_stability": {
+        "comments_post_sha256": "f365f20f51cc55e1ab54c16e55c600527f831e1bc98891fad21be41e53ab2332",
+        "comments_pre_sha256": "f365f20f51cc55e1ab54c16e55c600527f831e1bc98891fad21be41e53ab2332",
+        "post_sha256": "de9ec77989bed45a60f9ed9dff20f457ce00ad82c039a3b38fa8412b6fe90003",
+        "pre_sha256": "de9ec77989bed45a60f9ed9dff20f457ce00ad82c039a3b38fa8412b6fe90003"
+      },
+      "state": "open",
+      "title": "ember-cli TUI quality bar: must-win capability checklist (standing target list, now clocked)",
+      "updated_at": "2026-07-05T18:05:23Z",
+      "url": "https://github.com/wordingone/ember/issues/111"
+    }
+  ],
+  "master_sha": "e8a89a39cee293d793543e025a0d03fee0181e6d",
+  "open_issue_population": 215,
+  "pagination": {
+    "comments": [
+      {
+        "issue_number": 3,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            8
+          ],
+          "page_size": 100,
+          "row_count": 8,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            8
+          ],
+          "page_size": 100,
+          "row_count": 8,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 7,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 8,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 12,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 14,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 20,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            3
+          ],
+          "page_size": 100,
+          "row_count": 3,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            3
+          ],
+          "page_size": 100,
+          "row_count": 3,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 29,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            3
+          ],
+          "page_size": 100,
+          "row_count": 3,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            3
+          ],
+          "page_size": 100,
+          "row_count": 3,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 35,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            6
+          ],
+          "page_size": 100,
+          "row_count": 6,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            6
+          ],
+          "page_size": 100,
+          "row_count": 6,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 37,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            3
+          ],
+          "page_size": 100,
+          "row_count": 3,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            3
+          ],
+          "page_size": 100,
+          "row_count": 3,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 46,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 47,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 53,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            15
+          ],
+          "page_size": 100,
+          "row_count": 15,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            15
+          ],
+          "page_size": 100,
+          "row_count": 15,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 54,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 55,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            0
+          ],
+          "page_size": 100,
+          "row_count": 0,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            0
+          ],
+          "page_size": 100,
+          "row_count": 0,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 92,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 98,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 99,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 105,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            1
+          ],
+          "page_size": 100,
+          "row_count": 1,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 107,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            0
+          ],
+          "page_size": 100,
+          "row_count": 0,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            0
+          ],
+          "page_size": 100,
+          "row_count": 0,
+          "terminal_page_short": true
+        }
+      },
+      {
+        "issue_number": 111,
+        "post": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        },
+        "pre": {
+          "complete": true,
+          "page_count": 1,
+          "page_lengths": [
+            2
+          ],
+          "page_size": 100,
+          "row_count": 2,
+          "terminal_page_short": true
+        }
+      }
+    ],
+    "issues_post": {
+      "complete": true,
+      "page_count": 3,
+      "page_lengths": [
+        100,
+        100,
+        59
+      ],
+      "page_size": 100,
+      "row_count": 259,
+      "terminal_page_short": true
+    },
+    "issues_pre": {
+      "complete": true,
+      "page_count": 3,
+      "page_lengths": [
+        100,
+        100,
+        59
+      ],
+      "page_size": 100,
+      "row_count": 259,
+      "terminal_page_short": true
+    }
+  },
+  "repository": "wordingone/ember",
+  "schema_version": "ember-oldest-issue-capture-v1",
+  "selection_sha256": "b9146e72cd5ab87afbe68714731b7170204cf4a701588db2d80ef03727cc7e9e",
+  "source_evidence": {
+    "comments-105-post.json": "8632fbff47b0c6303f5b56a36b76be81e7117323174669826833df2a4bd98a94",
+    "comments-105-pre.json": "8632fbff47b0c6303f5b56a36b76be81e7117323174669826833df2a4bd98a94",
+    "comments-107-post.json": "a930ec39e7339fde7af6a7f1009d621c595aab52ec9324dde1e8387212ae64aa",
+    "comments-107-pre.json": "a930ec39e7339fde7af6a7f1009d621c595aab52ec9324dde1e8387212ae64aa",
+    "comments-111-post.json": "3044f3c410725a4e1e4372377e1c739b18dd52a0c66bd12267aac550b90314ed",
+    "comments-111-pre.json": "3044f3c410725a4e1e4372377e1c739b18dd52a0c66bd12267aac550b90314ed",
+    "comments-12-post.json": "767a17f67be9fe0b85cfb616b6aa0422e6ab340e39d12a95c9a62c76190a9a08",
+    "comments-12-pre.json": "767a17f67be9fe0b85cfb616b6aa0422e6ab340e39d12a95c9a62c76190a9a08",
+    "comments-14-post.json": "05d03f726f61377d85f5da21942733a04058bc411c52a8fcdf672dd09a8dcb73",
+    "comments-14-pre.json": "05d03f726f61377d85f5da21942733a04058bc411c52a8fcdf672dd09a8dcb73",
+    "comments-20-post.json": "be61f98e75eec003719a9fb190126566df9304bf2c7b8321ed50913993096ac0",
+    "comments-20-pre.json": "be61f98e75eec003719a9fb190126566df9304bf2c7b8321ed50913993096ac0",
+    "comments-29-post.json": "7b81154bdfa7efbc264cf14448e67f9187801b94a4204130b2e39318e96368b7",
+    "comments-29-pre.json": "7b81154bdfa7efbc264cf14448e67f9187801b94a4204130b2e39318e96368b7",
+    "comments-3-post.json": "178b1269c5134ce907620473362bc4f94be01d4794990f00f12ded08d6edfdbb",
+    "comments-3-pre.json": "178b1269c5134ce907620473362bc4f94be01d4794990f00f12ded08d6edfdbb",
+    "comments-35-post.json": "5612e57aa9463c4309ee20083e30d7061191354c5176b0944f08dd40b9655195",
+    "comments-35-pre.json": "5612e57aa9463c4309ee20083e30d7061191354c5176b0944f08dd40b9655195",
+    "comments-37-post.json": "683ae063c403d284b6e8ac19a27dcae9cb0b0fd914bdf9b61d5a17858bb9e73e",
+    "comments-37-pre.json": "683ae063c403d284b6e8ac19a27dcae9cb0b0fd914bdf9b61d5a17858bb9e73e",
+    "comments-46-post.json": "67570491daf0c057228b4bf244bae79bf4f514f49daebd544e6f8609a4eaa330",
+    "comments-46-pre.json": "67570491daf0c057228b4bf244bae79bf4f514f49daebd544e6f8609a4eaa330",
+    "comments-47-post.json": "1aa3002f37e9dd1fa698d7851c14a5a0d15854b7d36542a172e02b02d3a399ea",
+    "comments-47-pre.json": "1aa3002f37e9dd1fa698d7851c14a5a0d15854b7d36542a172e02b02d3a399ea",
+    "comments-53-post.json": "01adc3b165edc08afddfd0146e768d07faeeffda6fabfff120c7e22a31282238",
+    "comments-53-pre.json": "01adc3b165edc08afddfd0146e768d07faeeffda6fabfff120c7e22a31282238",
+    "comments-54-post.json": "943d8c7b47208ab93135509768352b493b5a3bbb14c58ab24d2bbb245ce95351",
+    "comments-54-pre.json": "943d8c7b47208ab93135509768352b493b5a3bbb14c58ab24d2bbb245ce95351",
+    "comments-55-post.json": "a930ec39e7339fde7af6a7f1009d621c595aab52ec9324dde1e8387212ae64aa",
+    "comments-55-pre.json": "a930ec39e7339fde7af6a7f1009d621c595aab52ec9324dde1e8387212ae64aa",
+    "comments-7-post.json": "87a5347a999dddf78bd859a75d421821532f867d44ef4c34b13bf82052e5c696",
+    "comments-7-pre.json": "87a5347a999dddf78bd859a75d421821532f867d44ef4c34b13bf82052e5c696",
+    "comments-8-post.json": "5a13b136433d4e4fa5c5baa19153580e505bf02259e38b687aad8500ac2e9504",
+    "comments-8-pre.json": "5a13b136433d4e4fa5c5baa19153580e505bf02259e38b687aad8500ac2e9504",
+    "comments-92-post.json": "d89dd90c7ec3fb272a3f8393bcea95fed586ee95068766b346cb48e3be00aabf",
+    "comments-92-pre.json": "d89dd90c7ec3fb272a3f8393bcea95fed586ee95068766b346cb48e3be00aabf",
+    "comments-98-post.json": "cbacc3e68f473ac0c203e65960b3360deefea7c3f4afce51e9bcbe8b2e5e684a",
+    "comments-98-pre.json": "cbacc3e68f473ac0c203e65960b3360deefea7c3f4afce51e9bcbe8b2e5e684a",
+    "comments-99-post.json": "656cac5cae636243b17a7f277c599fa8332e9dd93309c965bf61562cca482c68",
+    "comments-99-pre.json": "656cac5cae636243b17a7f277c599fa8332e9dd93309c965bf61562cca482c68",
+    "issues_post.json": "eeccc2a308aef25c73144f29fae8097327055b92cbcf1cea0e61e3998b1f6c48",
+    "issues_pre.json": "eeccc2a308aef25c73144f29fae8097327055b92cbcf1cea0e61e3998b1f6c48"
+  }
+}

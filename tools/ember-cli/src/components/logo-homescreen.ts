@@ -44,8 +44,22 @@ const FIREBALL_GUTTER = "   ";
 /** B4 W1: mock1's real truecolor accent for "Local" -- never the dim ANSI-16 "green" literal. */
 const LOCAL_ACCENT_COLOR = "#4EC9A3";
 /** Safe text budget for the identity block's variable-length lines (tagline/cwd; model gets a
- * further-reduced budget below to leave room for its fixed " · Local" suffix on the same row). */
+ * further-reduced budget below to leave room for its fixed " · Local" suffix on the same row).
+ * This is a CEILING, not a fixed allowance — see identityTextWidth below (legibility bar,
+ * 2026-07-26): at narrow terminal widths the identity column claims less than this, and every
+ * caller used to clip against the ceiling regardless, so clipToWidth reported "fits" for a cwd
+ * path shorter than 40 chars while the actual on-screen column was narrower still — the outer
+ * renderer then silently hard-clipped it with no marker at all. */
 const LEFT_TEXT_WIDTH = 40;
+
+/** The identity block's actual usable text width at a given terminal width — never wider than
+ * LEFT_TEXT_WIDTH, and never wider than what the terminal can actually show once the fireball
+ * raster + gutter share the same row (identityLines sit beside FIREBALL_GUTTER, not the full
+ * viewport). Floors at 8 so a pathological tiny terminal still gets *something* legible rather
+ * than a zero-width budget. */
+function identityTextWidth(viewportWidth: number): number {
+  return Math.max(8, Math.min(LEFT_TEXT_WIDTH, viewportWidth - 4));
+}
 
 /** The identity block's actual column claim in row-flex layout -- matches rightColWidth's own
  * leftCol-share assumption exactly (Math.max(LEFT_PANEL_MAX_WIDTH, WELCOME_THRESHOLD)), so leftCol
@@ -165,6 +179,22 @@ export function clipToWidth(text: string, width: number): string {
   }
   if (lastSpace > 0) return budget.slice(0, lastSpace).join("") + "…";
   return budget.join("") + "…";
+}
+
+/** Shortens a filesystem path to its last two segments with a leading ellipsis marker once the
+ *  full path doesn't fit `budget` — the tail of a path (its deepest directories) is what actually
+ *  identifies which tree/worktree is active, so this drops the FRONT and keeps the back, same
+ *  direction shortenDataRootForDisplay below already uses for the "Data:" line. Legibility bar
+ *  (2026-07-26): "paths truncate from the left with a marker, consistently everywhere" — before
+ *  this, the cwd line had no path-aware shortening at all and relied on clipToWidth's generic
+ *  word-boundary clip (which drops the TAIL, the wrong end for a path). Short paths that already
+ *  fit are returned untouched. */
+export function shortenPathForDisplay(fullPath: string, budget: number): string {
+  if ([...fullPath].length <= budget) return fullPath;
+  const sep = fullPath.includes("\\") ? "\\" : "/";
+  const segments = fullPath.split(/[\\/]/).filter((s) => s.length > 0);
+  if (segments.length <= 2) return fullPath;
+  return `…${sep}${segments.slice(-2).join(sep)}`;
 }
 
 /** #303 narrow-viewport fix: `Data: <path>` collapsed to a bare "Data:…" at LEFT_TEXT_WIDTH --
@@ -389,10 +419,11 @@ export interface HomescreenProps {
  * fireball's), so degraded (EMBER_ASCII / non-color) single-line fireball output never silently
  * drops the tagline/model/cwd rows -- only the color-art rendering shrinks, identity content never
  * does. */
-function renderIdentityBlock(state: LogoState, fireballTick: number): React.ReactElement {
+function renderIdentityBlock(state: LogoState, fireballTick: number, viewportWidth: number = 80): React.ReactElement {
   const ascii = process.env["EMBER_ASCII"] === "1";
   const fireballLines = renderFireballLines("panel", "idle", fireballTick, { ascii, color: !ascii });
   const version2 = state.version ?? "0.0.0";
+  const textWidth = identityTextWidth(viewportWidth);
 
   const identityLines: Array<React.ReactElement | null> = [
     React.createElement(
@@ -403,26 +434,29 @@ function renderIdentityBlock(state: LogoState, fireballTick: number): React.Reac
       React.createElement(Text, { dimColor: true }, `  v${version2}`),
     ),
     React.createElement(
-      Text, { key: "l1", dimColor: true }, clipToWidth(IDENTITY_TAGLINE, LEFT_TEXT_WIDTH),
+      Text, { key: "l1", dimColor: true }, clipToWidth(IDENTITY_TAGLINE, textWidth),
     ),
     state.model
       ? React.createElement(
           Box, { key: "l2", flexDirection: "row" },
           React.createElement(
-            Text, null, clipToWidth(state.model, Math.max(1, LEFT_TEXT_WIDTH - 8)),
+            Text, null, clipToWidth(state.model, Math.max(1, textWidth - 8)),
           ),
           // B4 W1: mock1's real truecolor accent, never the dim ANSI-16 "green" literal.
           React.createElement(Text, { color: LOCAL_ACCENT_COLOR }, " \xB7 Local"),
         )
       : null,
     state.cwd
-      ? React.createElement(Text, { key: "l3", dimColor: true }, clipToWidth(state.cwd, LEFT_TEXT_WIDTH))
+      ? React.createElement(
+          Text, { key: "l3", dimColor: true },
+          clipToWidth(shortenPathForDisplay(state.cwd, textWidth), textWidth),
+        )
       : null,
     // #303: visible data-root indicator — a disconnected cockpit is immediately self-evident.
     state.dataRoot
       ? React.createElement(
           Text, { key: "l4", dimColor: true },
-          clipToWidth(`Data: ${shortenDataRootForDisplay(state.dataRoot, LEFT_TEXT_WIDTH)}`, LEFT_TEXT_WIDTH),
+          clipToWidth(`Data: ${shortenDataRootForDisplay(state.dataRoot, textWidth)}`, textWidth),
         )
       : null,
   ];
@@ -448,15 +482,37 @@ export function Homescreen({
   boardSummary,
   nowMs         = Date.now(),
 }: HomescreenProps): React.ReactElement {
+  // D4: one outer titled panel wraps the whole hero -- replaces WelcomeV2's own border entirely
+  // (the B2 root cause: a child border wider than its parent leftCol clipped in row-flex mode).
+  const panelIsRow  = viewportWidth >= LEFT_PANEL_MAX_WIDTH * 2;
+  // R4b (frame geometry, state/operator-pass-2026-07-26.md W2 -- corrected root cause): the
+  // homescreen panel's RIGHT border edge (both corners and every vertical side cell) was missing
+  // entirely whenever this screen renders beside a right-hand panel (repl.ts's operator-surface
+  // pane, mainColumnWidth around 50-60) -- not a content/border row collision at all. leftCol was
+  // ALWAYS given the fixed LEFT_COL_WIDTH (58, sized for the wide row-flex case), even in "stacked"
+  // (column) mode where leftCol and rightCol stack vertically and each should claim the FULL
+  // available content width, exactly like rightColWidth already does dynamically via its own
+  // `stacked` branch. So panelWidth's `Math.max(LEFT_COL_WIDTH, rcWidth) + 2` floor came out to
+  // 60 at a real 53-wide viewport -- 7 columns wider than the panel's parent ever had to give it --
+  // and every downstream write past column 52 (including the closing round corner glyphs and every
+  // right-edge vertical bar) silently fell outside the render pipeline's clipRect. Stacked mode's
+  // leftCol now claims the SAME dynamic content width as rightCol (viewportWidth - 2, i.e. what
+  // rightColWidth already returns for its own `stacked` branch); row mode is unchanged (leftCol
+  // keeps the fixed LEFT_COL_WIDTH share it was designed for). identityTextWidth() already clips
+  // leftCol's own text well below either width (viewportWidth - 4, floor 8), so narrowing leftCol's
+  // BOX width in stacked mode loses no content that wasn't already text-clipped.
+  const rcWidth      = rightColWidth(viewportWidth);
+  const leftColWidth = panelIsRow ? LEFT_COL_WIDTH : Math.max(1, viewportWidth - 2);
+
   const leftCol = React.createElement(
-    Box, { key: "left", flexDirection: "column", width: LEFT_COL_WIDTH },
+    Box, { key: "left", flexDirection: "column", width: leftColWidth },
     state.updateAvailable
       ? React.createElement(
           Text, { key: "update", dimColor: true },
           `Update available: v${state.updateAvailable} (run /update)`,
         )
       : null,
-    renderIdentityBlock(state, fireballTick),
+    renderIdentityBlock(state, fireballTick, viewportWidth),
   );
 
   const onboardingFeed: Feed = {
@@ -472,19 +528,25 @@ export function Homescreen({
     footer:  "/resume for more",
   };
 
-  const rcWidth = rightColWidth(viewportWidth);
   const rightCol = React.createElement(
     Box, { key: "right", flexDirection: "column", width: rcWidth },
     React.createElement(FeedComponent, { key: "onboarding", feed: onboardingFeed, width: rcWidth }),
     React.createElement(FeedComponent, { key: "recent",     feed: recentFeed,     width: rcWidth }),
   );
 
-  // D4: one outer titled panel wraps the whole hero -- replaces WelcomeV2's own border entirely
-  // (the B2 root cause: a child border wider than its parent leftCol clipped in row-flex mode).
-  const panelIsRow  = viewportWidth >= LEFT_PANEL_MAX_WIDTH * 2;
   const panelWidth  = panelIsRow
     ? LEFT_COL_WIDTH + rcWidth + 2
-    : Math.max(LEFT_COL_WIDTH, rcWidth) + 2;
+    : Math.max(leftColWidth, rcWidth) + 2;
+  // R4b (frame geometry, state/operator-pass-2026-07-26.md W2): this panel had no `overflow`
+  // declared, so when its own flexShrink allocation from the caller's column layout (repl.ts's
+  // "banner" wrapper) came in SHORTER than the panel's natural content height, the panel sized
+  // its OWN border to the shrunk height while its children (leftCol/rightCol Text lines) kept
+  // laying out every natural row uncapped -- the last content row and the panel's own bottom
+  // border then landed on the SAME frame row, the closing corner overwriting into content
+  // instead of getting its own row. `overflow:"hidden"` is the same fix already applied to every
+  // OTHER box in this codebase that must render a clean border under a shrunk allocation
+  // (operator-surface-pane.ts's own body Box, repl.ts's row/column wrappers): content beyond the
+  // panel's own interior is clipped, never painted onto the border.
   const panel = React.createElement(
     Box,
     {
@@ -494,6 +556,7 @@ export function Homescreen({
       borderStyle:   "round",
       borderColor:   color("identity", "fg", "dark"),
       borderTitle:   "ember",
+      overflow:      "hidden",
     },
     leftCol,
     rightCol,

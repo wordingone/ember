@@ -305,14 +305,17 @@ function commandText(args: string[], cwd: string): string {
   return Buffer.from(result.stdout).toString("utf8").trim();
 }
 
-interface ReproducibleBuildEvidence {
+export interface ReproducibleBuildEvidence {
   rebuildBinarySha256: string;
   builderExecutableBasename: string;
   builderExecutableSha256Before: string;
   builderVersion: string;
 }
 
-function rebuildBinaryFromSource(repoRoot: string, sourceCommit: string): ReproducibleBuildEvidence {
+export function rebuildBinaryFromSource(
+  repoRoot: string,
+  sourceCommit: string,
+): ReproducibleBuildEvidence {
   const sourceRoot = join(repoRoot, "tools", "ember-cli", "src");
   const ownedTemp = mkdtempSync(join(tmpdir(), "ember-issue-243-rebuild-"));
   const rebuiltBinary = join(ownedTemp, "ember.exe");
@@ -452,6 +455,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
         ...process.env,
         EMBER_HOME: home,
         EMBER_REPO_ROOT: repoRoot,
+        EMBER_SOURCE_ROOT: repoRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
       },
