@@ -5,7 +5,7 @@
 # Term classes (zero-FP coverage per #164 measurement):
 # - Bare-name terms t1..t13 (each measured 0 matches on master; raw terms live ONLY in the untracked plaintext source)
 # - Path-form terms p1..p9 (avir/<term> context shapes; raw terms untracked)
-# - Path fragments: avir/state, /M/avir
+# - Private state and mount fragments
 0f066c9b74c216ddd215acefdc27957bfebfe665448b1be8fa82270b091cbf8d
 113cc5f8969a348651d3f82c02013cfd3cae5ef1db872f626f85df1537e5c9e8
 27037fccea3062ee8ebaea07a9e2bf8dcb6511fd860ae993442aee0c512b8bbf
