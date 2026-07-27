@@ -403,6 +403,18 @@ function truncateBorderTitle(title: string, width: number): string {
   return `${title.slice(0, width - 1)}…`;
 }
 
+/**
+ * Computes which absolute row a bordered box's bottom edge paints on, given an ancestor's
+ * clip (R4b, state/operator-pass-2026-07-26.md W2 / frame-geometry.ts). Mirrors the D1 pin
+ * decision below exactly -- shared so paintBorder and the child-clip computation in
+ * renderNodeToOutput can never disagree about which row the border claims.
+ */
+function pinnedBorderBottomRow(ly: number, lh: number, clipRect: ClipRect): number {
+  const naturalBottomRow = ly + lh - 1;
+  const visibleBottomRow = Math.min(naturalBottomRow, clipRect.y + clipRect.height - 1);
+  return (ly >= clipRect.y && visibleBottomRow > ly) ? visibleBottomRow : naturalBottomRow;
+}
+
 /** Paints a box's perimeter (all 4 edges) at its own layout rect, clipped to
  * clipRect exactly like text painting. Embeds borderTitle in the top edge when
  * given (falls back to a truncated title, never throwing, when it overflows the
@@ -428,13 +440,23 @@ function paintBorder(
   // A bordered box should never render with one edge visible and the other silently missing:
   // when the natural bottom edge falls outside the visible extent but the top edge and at least
   // one more row below it are still visible, PIN the bottom edge to the last visible row instead
-  // of its own computedHeight-1 -- sacrificing interior content rows (already independently
-  // clipped by the normal per-row/per-child clip, so no double-paint) rather than the box's own
+  // of its own computedHeight-1 -- sacrificing interior content rows rather than the box's own
   // closing edge. This is the render-time enforcement of "a container always closes" for every
   // bordered Box, not just this one call site.
-  const naturalBottomRow = ly + lh - 1;
-  const visibleBottomRow = Math.min(naturalBottomRow, clipRect.y + clipRect.height - 1);
-  const bottomRow_ = (ly >= clipRect.y && visibleBottomRow > ly) ? visibleBottomRow : naturalBottomRow;
+  //
+  // R4b correction (state/operator-pass-2026-07-26.md W2, frame-geometry.ts): the "already
+  // independently clipped by the normal per-row/per-child clip, so no double-paint" assumption
+  // above was WRONG for a box whose own height resolves via the layout engine's "auto" content-sum
+  // (layout-engine.ts line ~461) rather than a definite number -- an ancestor's overflow crop pins
+  // *this* border to a row inside the box's real interior, but the child clip computed in
+  // renderNodeToOutput was intersected only against THIS box's own (unclipped, full-natural-height)
+  // interior, so a content row at exactly the pinned row was still "visible" by that separate
+  // check and got painted on the identical cell the border claims (the homescreen bottom-border
+  // content-bleed: NATIVE_HINT text sharing a row with "╰"). Fixed at the shared root: whenever a
+  // bordered box's children are given a clip (renderNodeToOutput, below), that clip's bottom is now
+  // additionally bounded by this same pinnedBorderBottomRow() -- the border row is never also a
+  // legal content row, independent of whether the box declared its own overflow:"hidden".
+  const bottomRow_ = pinnedBorderBottomRow(ly, lh, clipRect);
 
   const writeAt = (row: number, col: number, ch: string): void => {
     if (col < clipRect.x || col >= clipRect.x + clipRect.width) return;
@@ -595,9 +617,26 @@ export function renderNodeToOutput(
   const br = node.layout.borderRight  || node.layout.border;
   const bb = node.layout.borderBottom || node.layout.border;
   const bl = node.layout.borderLeft   || node.layout.border;
-  const childClipRect: ClipRect = node.layout.overflow === "hidden"
+  let childClipRect: ClipRect = node.layout.overflow === "hidden"
     ? intersectClipRect(clipRect, { x: lx + bl, y: ly + bt, width: lw - bl - br, height: lh - bt - bb })
     : clipRect;
+
+  // R4b (frame-geometry.ts, state/operator-pass-2026-07-26.md W2): a bordered box's own bottom
+  // edge can get PINNED to a row inside its real interior (paintBorder's D1 mechanism above, when
+  // an ancestor's overflow crop cuts this box short). That pin uses the box's INHERITED clipRect --
+  // the SAME `clipRect` this function received, not the just-computed childClipRect -- so this must
+  // reuse the identical calculation to guarantee agreement. Without this, a bordered box whose own
+  // height resolves via "auto" content-sum (unaware of the ancestor crop) hands its children a
+  // clip bounded only by ITS OWN full natural interior, and a content row landing exactly on the
+  // pinned border row was still "visible" by that separate check -- painted onto the identical
+  // cell the border claims. Reserving the pinned row exclusively for the border (children clip
+  // stops one row above it) is the fix; a no-op when no ancestor crop is pinning anything (the
+  // pinned row then equals the box's own natural bottom, already excluded by the border inset).
+  if (node.borderStyle) {
+    const pinnedBottom = pinnedBorderBottomRow(ly, lh, clipRect);
+    const clippedBottom = Math.min(childClipRect.y + childClipRect.height, pinnedBottom);
+    childClipRect = { ...childClipRect, height: Math.max(0, clippedBottom - childClipRect.y) };
+  }
 
   // Recurse into children
   for (const child of node.children) {
