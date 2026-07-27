@@ -1,0 +1,246 @@
+{
+  "contracts": [
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "070fa20d96bbfea264a2f00ff2849afe52877ffc9f41100e1e3afdde851d3c95"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "de205528dbb9360da58ca42efa847a895d54f5d1178533aa4ac1cd9dbb644555"
+        }
+      ],
+      "goal_id": "EMBER-00",
+      "normative_clause_count": 49,
+      "source_path": "ember-00-authority-totality-lock/goal.md",
+      "source_sha256": "192833d0dd3bb8f800bc01eb46931ac5ac99903021884764737e04f69ea24f7b"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "ddde37baadf5b26f2989131eb6f1b94e53ec88cd73cf7d4384b76574dd6135ca"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "41f9d206acca9facb59fe7779ddf241f46c08c0a857f4aa1b12ba8595c3b73cd"
+        }
+      ],
+      "goal_id": "EMBER-01",
+      "normative_clause_count": 59,
+      "source_path": "ember-01-custody-identity-experiment-spine/goal.md",
+      "source_sha256": "9c366ca933925ce247223b53cad3ab155a6b40b02f7e649f8e5ea3a220791bb8"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "66c6c74ccdbd706b420f8cfea0d28935f0f974770ac2f72ee154ce8915dcbc25"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "418f2b6d4087ba466768529e28b35a394b16bb7759a9966765fcfb8e973879ff"
+        }
+      ],
+      "goal_id": "EMBER-02",
+      "normative_clause_count": 71,
+      "source_path": "ember-02-3b-foundation-birth/goal.md",
+      "source_sha256": "76c143a4f1d56162da299f45d7a9d3e1cc7a4e49635b36f002d865203867ef80"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "86ee466a24a804775ea3eeafe3a438cdf06374b0913b81873c54df3cd5c1b58a"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "7833c15b3a71e59f09560c7232507ebceb0b8ddc1a2852ed9ea65a7b78910c20"
+        }
+      ],
+      "goal_id": "EMBER-03",
+      "normative_clause_count": 60,
+      "source_path": "ember-03-body-tools-operator-relationship/goal.md",
+      "source_sha256": "aef05eeeede4206b8ff60cec8c62f3d365f05dc7372d6911462f4babaf78c223"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "0eb3b12974c62b7ded97ac1b900049082b032ad327ed620a311553e932596598"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "2f9b06b95e85a20617ac6cf216c97f42466d7b1d6c7bb9669ec855b04306ce77"
+        }
+      ],
+      "goal_id": "EMBER-04",
+      "normative_clause_count": 58,
+      "source_path": "ember-04-grounded-memory-world-model-dreaming/goal.md",
+      "source_sha256": "4582b677b6ae2fc0766ce30c8c51f8999b0fe701311ee79415ca9019dbed38d4"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "c6422a29c03f26e27a8978a3601319b37f42d1c9f9d5917a62b70e8ed0e638e1"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "1d7addf0e4e40ea387efca0cd878b667700e768be2e16434d5ab5834f0e63bea"
+        }
+      ],
+      "goal_id": "EMBER-05",
+      "normative_clause_count": 59,
+      "source_path": "ember-05-3b-verified-expert-accretion-rung/goal.md",
+      "source_sha256": "c9402531adf52bad580e01a57da216aa8fd79e9d6005f4468a63a7f62953242b"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "68070cdd01fa8ead72dcc16e0d3947b206d0474d4950ba46c2390a81f7a3f74c"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "fc37ee3a377060dd226d537baf52cbe72a99b0416be84f3313c018d56b01e4f6"
+        }
+      ],
+      "goal_id": "EMBER-06",
+      "normative_clause_count": 59,
+      "source_path": "ember-06-autonomous-research-bootstrap/goal.md",
+      "source_sha256": "6ef22e709d5c95bf86dcc318110c5934a70d04618d702152ac992258dd0b5fdf"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "c9d022c128567f29871fb6a1347d6693ee703707435c5bf942033ed368a2da3d"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "947936ac1834e3c23475d34f1fbc005da9d31c2a93b671c4c73a40db9c5e01f0"
+        }
+      ],
+      "goal_id": "EMBER-07",
+      "normative_clause_count": 50,
+      "source_path": "ember-07-rung-7b/goal.md",
+      "source_sha256": "b2bb77728fafc5a853e209f82cb4050f7613572f2f5ee007ab854b1abf08e07c"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "953db1d61e454570de2c527fef2efbf42d52c65ad4fdc819a3e68889ac494af7"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "6fc7e080455601926375316498f00c5025fa48edcd356bd0806f0799c8b4ecc8"
+        }
+      ],
+      "goal_id": "EMBER-08",
+      "normative_clause_count": 50,
+      "source_path": "ember-08-rung-15b/goal.md",
+      "source_sha256": "111ceb2f38e28b4a174973a5d1bc50dbea39e164e18420d033a9e5873a1c3621"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "3be5bb188f47c1882b2e672252d80de77ffa65f38d4230c5382d347411878ea1"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "56d2853800ae875716b816d99b964aa220993b792b877788dfe3cc4ce77f4096"
+        }
+      ],
+      "goal_id": "EMBER-09",
+      "normative_clause_count": 60,
+      "source_path": "ember-09-rung-over-27b/goal.md",
+      "source_sha256": "9522b637d8840461ddbb5c8cfeb47b1652af3029fbd4a515881dff72df57d586"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "6eb07ba3ac4c24145b006c15704f3bfa6f6066e990513eec5f4abd6071e52b4f"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "77feccf7f9e27be5363734265d8a2cbc1dee0f2fae7958599b880c46029aa609"
+        }
+      ],
+      "goal_id": "EMBER-10",
+      "normative_clause_count": 53,
+      "source_path": "ember-10-general-sovereign-ai-lab/goal.md",
+      "source_sha256": "605ca045d2b537938a9818006a5041237ed9d26064aeb3f37a9c0b7dd5f6c254"
+    },
+    {
+      "excluded_operational_sections": [
+        {
+          "heading": "Agent allocation",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "7766157d5ccd0a6b57318a7565379c8ab625f86425be81bbaffe5a7c8c186740"
+        },
+        {
+          "heading": "Transition",
+          "reason": "Private staffing, session routing, and machine-local scheduling are represented publicly by durable roles and the execution graph.",
+          "relation": "non_normative_execution_metadata",
+          "source_sha256": "1647f0aa877362455aaa1dbca750fe898f9d6ab1a47194eeff7f96ed2ea09fa8"
+        }
+      ],
+      "goal_id": "EMBER-11",
+      "normative_clause_count": 60,
+      "source_path": "ember-11-independent-local-release/goal.md",
+      "source_sha256": "6fe7eeff5f80c6899a004fdc0f46b9a0e8ccaeb8a91a58bb1da89563f215f3ab"
+    }
+  ],
+  "schema_version": "ember-roadmap-source-contracts-v1",
+  "source_kind": "canonical_local_goal_files"
+}

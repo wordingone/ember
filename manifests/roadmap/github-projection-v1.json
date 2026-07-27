@@ -1,0 +1,3649 @@
+{
+  "issue_closures": [],
+  "issue_mutations": [
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "54f35903e94a6b1f2631a925de24c0a363723f11a40a1338a480422b26767c88",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-02",
+      "expected_updated_at": "2026-07-19T13:40:56Z",
+      "number": 3,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "94d2a71e572956eb7e8b4d7f911c535e5dc99c7c7b1584058aad26ef0bb94762",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-02",
+      "expected_updated_at": "2026-07-18T15:21:48Z",
+      "number": 7,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "8952fe8ca6e73a9947af06303f285c9ba5ef6d94d9127fb6a944754c55d2a791",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-05",
+      "expected_updated_at": "2026-07-19T03:48:19Z",
+      "number": 8,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "82cf63b27213da109166af603c69a5385920aae32132a4074dd9e93699866227",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-03",
+      "expected_updated_at": "2026-07-18T15:21:44Z",
+      "number": 12,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "affects:EMBER-06",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "bc9ab53b94f5a79dff5b3ddb4d16fa340dbff9382f8ebbc8464dc6496420f374",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T05:12:08Z",
+      "number": 14,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c94193d05fe07e773548d29168d2100d72575b89ca3159ccd7547716045b7b44",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-02",
+      "expected_updated_at": "2026-07-19T13:44:57Z",
+      "number": 20,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "affects:EMBER-07",
+        "affects:EMBER-08",
+        "affects:EMBER-09",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "1d60a039f73bf4ca44f5555622f8618e326e0ac2386c4642398d601fa46107ab",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-02",
+      "expected_updated_at": "2026-07-16T17:36:57Z",
+      "number": 29,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:historical",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "143116fd7a0c9cd5676547956d517c18bf0f9083e8f8e780689005c38d7dcaf0",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T14:47:49Z",
+      "number": 35,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6ae9bc1bf995f72f746e36bca0242b659077d3cbcafdbb455b04a3dc90593e0a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T03:49:10Z",
+      "number": 37,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "19d9cd4145ebc8b5a12eab34ea899fb8591645e0a07a13b1f910e15d69979ae6",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:09:07Z",
+      "number": 46,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-09",
+      "add_labels": [
+        "affects:EMBER-09",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6472a3339021a7e81a1a6256a99c8296e9510a768861ff68f5c3738df8d0c0cc",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-04T03:02:21Z",
+      "number": 47,
+      "set_milestone": "EMBER-09"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "4e3537ff75f19b2f464d5ff075ee44c6657a0667ef6efdd999f566ad335bf7ef",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T05:17:42Z",
+      "number": 53,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "56eaddbca5c1054c220ad70dcc1c44b4feac81c72b7772a2422b7e0b0659b4fc",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T14:33:22Z",
+      "number": 54,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "84241e3b1dfc6f3123691f4fba395ac2468ebad2ebbc4ff176b36cac9ff2bf18",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-04T02:42:44Z",
+      "number": 55,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-06",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d9b1c22ce2cc06a5a805a2873962ed044d0932cc843c1befee9fc0753a15aa07",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-04T18:11:43Z",
+      "number": 92,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f44c4eeea3aef332ecc0117fd3db226cb894e4a21935221fc583f14d80bc4fe3",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-04T18:24:53Z",
+      "number": 98,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-11",
+      "add_labels": [
+        "affects:EMBER-11",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "a7b631b819e05fa348a0871a6778dab56a01288ac2eb641a5af43dd8deee0beb",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T11:49:07Z",
+      "number": 99,
+      "set_milestone": "EMBER-11"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f535ae847b5b66506e135ab61ba7d85e3204ae19285999bb4ce1427475c9ecaa",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:20:50Z",
+      "number": 105,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "110d78081b5940a30fc649dfa4303d629bd506504ade3cf711e825781d84ad02",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-04T18:09:20Z",
+      "number": 107,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "8b1be0e3c929bfed2bb67c99868819c54ef069de118061dd3daab251e1239e4e",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-05T18:05:23Z",
+      "number": 111,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "8b61ed848595028f8092777d796766b5e9b79a14d10f432c87a53f9ac11f3699",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T21:58:21Z",
+      "number": 113,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-03",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "bd060cbfc12b82e4305ebf2c8718ff7be0419bbdcc753229214719c838022f6a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T18:48:00Z",
+      "number": 118,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f958a16403a1f8e8e4b098e3b6bc98280b6d1f2490d584128d495d9e1088d8ce",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T16:02:22Z",
+      "number": 121,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "b455ba5b80f4191c532583394439ef695eb5051bc6220cf5a50bd11c29700ee6",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T07:14:17Z",
+      "number": 123,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-03",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5e3b5ab32b486890d560e007987d5b29d888b6fa71f9fd679f6f944492883137",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-05T07:50:12Z",
+      "number": 124,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "9bff30b442298470b1bf43f4786ac030f6d9cf3c2be915004bf3f75d75db8936",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T16:55:08Z",
+      "number": 125,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "276fa6ff9dfae517a3dfe3875661c0d0c00f54ac6ca016dfeacbd4139ac2bf6e",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-05T08:52:51Z",
+      "number": 126,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5b406f73abbd3a49f27b8b47f6d356e8205b3d76437a51f0a3960fae3cd6fe10",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T21:05:44Z",
+      "number": 139,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "4f3f9d34ab39def2347d8b36ec99e85bef8aad5bb1cfd6b294127b9a9ae2c264",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-05T11:29:46Z",
+      "number": 140,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6d8d91bcdba1c19acd81bfd4ca305bcabeb6e9719db8fd33d83e02958302e033",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-05T11:29:47Z",
+      "number": 141,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "3ebb2f14b2b0c10faf93cb36b2bb00a85c55bd2238855e4b1672e685ccccb90a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-05T20:05:03Z",
+      "number": 149,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5e38b0d4658a06b451282cb234c30b70f7f226c058d42ff217c3741eec76182e",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T01:59:39Z",
+      "number": 154,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-06",
+      "add_labels": [
+        "affects:EMBER-06",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "ce2abbc96739eec321a03215128591786058ea721c66cb517e5e9e086a7cceb4",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-06",
+      "expected_updated_at": "2026-07-16T17:37:01Z",
+      "number": 155,
+      "set_milestone": "EMBER-06"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "270f15b00e2d4b374e41f3013f85db1779b36fbb88bbdeba3fbd9fcacb52ffe5",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-05T16:12:55Z",
+      "number": 158,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f5975a7560db480c0e794a712ea1047969e326840d7bca15b0fe2113bcd671eb",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T19:02:46Z",
+      "number": 159,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6e4ea3faacc5ee46da50934421748a099e893866b6d3266ffaf5adf6a24ed741",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T02:56:46Z",
+      "number": 200,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "ff317288f706af87704beeec636bf9a6ea2d34502f6a1d38fae19ba47246a33d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T03:00:09Z",
+      "number": 203,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-06",
+      "add_labels": [
+        "affects:EMBER-06",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "9cb66520958604b7a3c32527623989641ff9e491e1acbce815d9ed575470c395",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T04:51:52Z",
+      "number": 206,
+      "set_milestone": "EMBER-06"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-10",
+      "add_labels": [
+        "affects:EMBER-10",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f48c8e10d22015019672f6334dfaad70008c84bf54080a60469a9ccae39c8eed",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-10",
+      "expected_updated_at": "2026-07-16T17:37:04Z",
+      "number": 207,
+      "set_milestone": "EMBER-10"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "71d02a6f23c17546fd43c75417a0463989a454b166c9836bff4f825343023278",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T05:20:12Z",
+      "number": 211,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "98c14f9fb92991cfc7ff10509cb469fd781a257ee8f35594b52fce20cc4aa825",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T16:18:49Z",
+      "number": 214,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "02e6546c91658018ebdc701fc63d17b285278434e2e5f73ece3466a6c124fea6",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T21:14:45Z",
+      "number": 216,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "a17fcced1053d1aea16077a37394fb5f90855e3840b49f94c1dd4572762f2d55",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T11:10:00Z",
+      "number": 222,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "dcd71aad1976d05a41db8a4792dd45012fdbebf736396b1356788c4fd686fad5",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T14:28:01Z",
+      "number": 235,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "ba5fd35ee17c6cd03a6ec621689e3d566c6e61d97b3a94f6ada47ad6bddd3683",
+      "expected_labels": [
+        "bug"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-21T06:27:27Z",
+      "number": 239,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c97bf16d133014653736e9ef0519f22395288edb639046c60f9eb5821eb1a5a1",
+      "expected_labels": [
+        "bug"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-21T08:21:11Z",
+      "number": 240,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "8cea5bc35a8d6b43175fd83c6b3b36cef3a78c08c271930aaa4834fe52a59caf",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T00:53:57Z",
+      "number": 241,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "68d386f2f1979488bcae5e61baa22148225567ee82a39a529936f82abe41075f",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T15:39:02Z",
+      "number": 242,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f5e7ab9b3434abd6a57a77db103dac1a8759463233e4ff8bc0162b2c4917ed7c",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T14:02:10Z",
+      "number": 247,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-11",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6b61a9e59f4941d2ab218d056bd501347cb7d405f46132d7ed59a8f17d8b2d22",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T16:31:28Z",
+      "number": 248,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2ad40b9864b3041c2707ba3dfa31a0364d8b3233115a9a0b4e8423e65403a638",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T16:09:39Z",
+      "number": 252,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "93f101b2c8c440e7b9d3c440fcc2e35d7b2078bbef6cfb2e574c16bc3f8ace50",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T17:29:30Z",
+      "number": 259,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "b95b33ba141287c0ebf4dfe45d2195392d7e918c3b7dd6470f4bc1f7255866ca",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T21:05:48Z",
+      "number": 265,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "41d23361d3e045ed5b509a6a67a9932778d896570d7926d2c3f64e559ec96a3b",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T19:02:41Z",
+      "number": 267,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6b1fd4522f27d770f2bd2b31accc64d311db9b59522cd761852b6a8e73d7ea32",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T18:43:44Z",
+      "number": 275,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c342d8f29a5cee0271fc6aa532daacb975e8aaa3d08082f1ebaf12d151251b37",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T19:49:49Z",
+      "number": 279,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "db91e24e3657d76fba8d7768e14aa11f67da21553e5e7e098d7fec43e7ec34f8",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T21:58:19Z",
+      "number": 280,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-00",
+      "add_labels": [
+        "affects:EMBER-00",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e7e32faf781bcbbc79818ab3e14da3d820928234e35cd152843db22b5207c69b",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T21:09:52Z",
+      "number": 281,
+      "set_milestone": "EMBER-00"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "1a7eec28ce18df100e2e1d7ef780d0ac3832e6f4cbfb003726193c2ed52d6f6d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T20:37:58Z",
+      "number": 285,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "8c1ceee9745014e7207272c6d0352e05335b34094eaa398d0bf31e8e4d364f09",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T20:45:35Z",
+      "number": 286,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "86c9cf361baf8fa3fe2083338452851ec24d609e2eec9fd794cbbc31dafe613b",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-06T21:35:19Z",
+      "number": 290,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "734b09b47206d695b1984f7da82a202c3ae0b315df707d047e02b4a432a5ee50",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T09:59:27Z",
+      "number": 292,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d7f45f4a82cc61374f1d881aee2d034b5719f00a17622d2632fd5197371eba69",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T00:57:44Z",
+      "number": 303,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c0a1c9100c450b63026c16aa80b23fa47d3d92a20da1c971db0b9f7e31e8934d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T04:06:59Z",
+      "number": 315,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "57aa5a2794dab9698b1a99409bc7377b477961ac64dabb437fac0598c3bdb55b",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T04:49:28Z",
+      "number": 317,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "34cdff196ddb2685f49cca7e8a562f9fadb5e3d13ea4732709ed948ebbb1bad6",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T06:41:49Z",
+      "number": 320,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "acaf32dbf1aa10702499d13e41a87834be2cc23b678c4f8592621f0f498e0500",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T10:57:54Z",
+      "number": 321,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c29c3d29650d81b67f8b2de030f9c795c6f689a7b076d725dd757876dcc7f843",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T07:04:00Z",
+      "number": 322,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d9e008da4f6afdf5689cd4c6f5d6e3ff87a00250aa9f873264413f1d93ba2c0a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T05:21:08Z",
+      "number": 324,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "32dc40395ce9ff7b23f584a0ee8323b10d38c672c17b3c6be0e6f46cbea341bc",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T08:38:05Z",
+      "number": 331,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "763e01bf88d663560e2a5228879b62992dd69022241aef016ec233594b98d3ce",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T09:14:28Z",
+      "number": 335,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "1daa0185caa4c83c53a1224a705a95f7f6a46724f268d90c930279a74cbba812",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T10:01:05Z",
+      "number": 339,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "461b208b99547e2fa658218330e850c7b027a9eac2dde2b34c3c5f942629858d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T19:02:23Z",
+      "number": 344,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d499e5a7c56e15e0c6dc937220cefb9158fe1fb52f5b480567162b8520515073",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T10:53:18Z",
+      "number": 345,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "49bc8c9bd59c57a07bf41dc04acee188dcae9ccd74da2838b503c75a52463b2f",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T11:51:57Z",
+      "number": 354,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f0cadb933f71c6473af3939d22f191abfe4b64d9080ee55c21a85ba92d3715c1",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T18:06:59Z",
+      "number": 362,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6c9c2e351d5f070352e744e6c9dffbf224797d1aade63798a7837f8d5390fdec",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T13:32:57Z",
+      "number": 367,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "0e9183a5a421c52f0c33ff4851f8b3f5c012965a92c75d89926ff3350867afd2",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-07T13:59:53Z",
+      "number": 370,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "33700cc0ad8cc09ed5d083672e1e33556d3d6a86b4ad8f63b113a8e405da2e12",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T07:34:27Z",
+      "number": 372,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "aebe38aa9c3666ddc9523f3659de0ef54d774d7ec17a1560f90b258a22b8627e",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T07:28:32Z",
+      "number": 378,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2a66a7e02faf15c69b131911dee74500b93e0b6e0f2d2f6a2a523b6434a8f1dd",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T14:19:18Z",
+      "number": 400,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f82fe3af8255f5cf3ee5c526a2ffcb2346f9953223075da6cf005d78e47427c9",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T04:23:13Z",
+      "number": 406,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5dc4fdccc865e1a5e59df3c6304669c49ba14fec7c94f3e97ccbed7205b2a7db",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T06:12:13Z",
+      "number": 413,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "674b32e20ea501e6fe10372c4dcfb4ba38fd1480b7de21e52c07d16ad2f830a3",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T07:04:17Z",
+      "number": 421,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "9635f7afc7b10e937e2602f443f9b219f954731e075be6596fceec611b1fe97e",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T07:54:47Z",
+      "number": 427,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "71dfb2edc619f0df20e012398d72c2bcc3eb44b5ea850117b193f50adad319f3",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T16:06:52Z",
+      "number": 440,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "a075fc4942a19eade2f2e53ac0f8a5160551e26935063d2c912ce0a1da2432a2",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T09:00:57Z",
+      "number": 449,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5dfb7d4ea3b607d4251739dfc8a3310654ebc1a1c2b6c8249eb87a0cf4164749",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T16:00:54Z",
+      "number": 457,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e5b7ff7ebf63531f705259ff84daa09f48efbe6425abf4d763614e61a1060436",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T23:15:51Z",
+      "number": 466,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6f42edf4920b4db59557ccc66e4ddea284465bc60a81d7770b8cf674f6129925",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T13:19:11Z",
+      "number": 480,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "95685553c96680c25a3126448c6971189468122419344f56fe341b87563fe7de",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T05:06:05Z",
+      "number": 481,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-04",
+        "affects:EMBER-06",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e758c2a44c8176b6e22ec9e589196a05c97b662c95276a01680cf70e4997c4bf",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-08T22:22:16Z",
+      "number": 483,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "eaca640aef2abdf9948023868de79ccc744e99e7e5d257ffffdeb2d2260fa9db",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-17T17:27:20Z",
+      "number": 485,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "965801369d5a842362d83f08373de863ea98388e769183a62efccfcaa7f6d9f0",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T05:19:52Z",
+      "number": 488,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "43e58db81fa6a7dbb13ac52480442dd63d316c8233c65593f4c2eafd38b9fe70",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T00:39:29Z",
+      "number": 502,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "08ceb8c26b64b3661c67f7957f4681951861483b8d409f50472465f924e99c06",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T01:58:28Z",
+      "number": 507,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "b3117378d63e95eee3728ac07413204f1b7f001be6091edad0dd7e69b2698852",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T07:28:32Z",
+      "number": 508,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5d275e44eb23bc98b935df5a98015eff003f53f5a7de8ec24f6acd1a21dd182c",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T03:08:13Z",
+      "number": 511,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "33d695d976b838005ef6d34ecbe3f709a64afd06d1332e00245c6db05ff5ecd3",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T01:55:44Z",
+      "number": 518,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5663439bfd7e16dac114ab2588ac7dbe6e20552067a44b77566f5b82488a8738",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T05:54:30Z",
+      "number": 522,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "41ee7df163465479104776776cb1cbe1778d28eb807541ababf06549df4e002f",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T07:20:55Z",
+      "number": 525,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "0d6cf95bab75286aef82019f38b89e932b0ccc9a92aa8df05b2d6ddc32508392",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T07:49:39Z",
+      "number": 530,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c5ef689e70ed9411c5ac81f1101920726d46f9767e1c6fe359e64715daf78043",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T08:16:23Z",
+      "number": 531,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "cb7941f62d05f3671198de483fe6f850eab34f8b164fcd659ddd4c91378bdd13",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T05:08:33Z",
+      "number": 534,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "8f23c9ac00dd9dce02492f708a03757283d93f086d009f9748f72dad0327867f",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T08:49:44Z",
+      "number": 537,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "75be1839da9f58bbb72a613d8006209a5b9ce39f6910906cbc54ac292781d17c",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T09:36:50Z",
+      "number": 538,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "05deb640b0e3232099292a0ada603ea50907774948441a6ddfbb41c5bd60eacf",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T11:04:43Z",
+      "number": 545,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-00",
+      "add_labels": [
+        "affects:EMBER-00",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "50a7b055974c89f00d11c3c711c61bf48c7342df6a21467ae1617d85eddacc56",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T11:05:09Z",
+      "number": 546,
+      "set_milestone": "EMBER-00"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "affects:EMBER-11",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "79f0873d7bd5647b06ebe5dacd6ba8cecf8ae0af27182f296fb6fde22eb65e5a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T17:37:02Z",
+      "number": 552,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "de38b8810550bcd0693202dde2d678f07723ec296d49de7475a0b98f61ad2905",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T13:32:22Z",
+      "number": 558,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "3701c3d101adc2a13aaaf82e103eb98e3bc673f574d16d33a04b11ab9f4878bb",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T01:18:30Z",
+      "number": 561,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "9ae5ac4823a5ec6e1dee6a89cb7515e655bc9ee0540f0e3155f78ba8f428fe83",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T14:23:00Z",
+      "number": 562,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "23375c39301300257139e5798492fc1ea78a6236a320d4c5a563ef573158409d",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-03",
+      "expected_updated_at": "2026-07-16T17:36:54Z",
+      "number": 565,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "8b028045ed3101cdb556b1f0b6164a8fb2b9a4843b77ecb8ef87f45b51f2a887",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T14:46:08Z",
+      "number": 567,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d0aa12af12581d7a57769ec76ec5859e6ed4bc69cf550b221d7e8ca194790980",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T17:26:26Z",
+      "number": 576,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "4007ec125117a5e94fa8b6d13a1373592143a400e6a2e02af5dc19abcc56af79",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T18:15:12Z",
+      "number": 577,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "320d311a2a088fc1bc71122830ba32f104f2ecda34274984851a897022e12680",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T02:43:26Z",
+      "number": 580,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "52fed8365b8f45486dd85bd308816814614db69a0fbeaa0eeaa256324568151f",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T18:38:11Z",
+      "number": 582,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e0340ba6e41bf6fd2dad84f7ae79c42d2243ceb1576816520937f4216fe8bcb5",
+      "expected_labels": [
+        "independent-audit-lane"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T05:50:37Z",
+      "number": 585,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "7b6d5a02ccc67ce7e319748e7b2197049fdf57596eb66568a27af7512aa2b32a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T19:15:25Z",
+      "number": 586,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6cf49e0f1567a72f53dcd11aeb30cccae7bf76f8dd747c44aa5a717e68905031",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T18:37:09Z",
+      "number": 591,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "346ae763f959213424fd4d25c12d20b4723eb284674c60560851d353e3628840",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-09T23:38:20Z",
+      "number": 593,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2b77942d39d6de31ad8302bb94de1df71beb2fef1b116053e5ae96f404941f60",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T03:55:54Z",
+      "number": 594,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "4d60a850f5ff71fbfc8d5203146c4cc8dc75b4fcc8893f0ba29c695c953c6a43",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T14:37:16Z",
+      "number": 611,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "37f895c1b7f09fd5552081c4d7984191be28d658e793958e9b20fa61e0bfab96",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T00:18:10Z",
+      "number": 612,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "ee09ad3747578dc100dfa1ada2f274d2b7e02a92122a38cd445855faaa103606",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T17:43:23Z",
+      "number": 627,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "1f1dd136b19dcea2e18835173154ae8ccafc4182e0f7d4b1f6f6113aed67be64",
+      "expected_labels": [
+        "independent-audit-lane"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T05:28:13Z",
+      "number": 630,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-06",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "50b9e4289deb16761e164c8fb320ae9bdaa81ffbd0b3d6bc2b02edf8410e8b3d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T05:30:40Z",
+      "number": 642,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-10",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "dbbfa873137005f295a641405fdf8394dc15adc2056d476536c90faedcf08222",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:35:49Z",
+      "number": 648,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "848bcc244f27f38a1dea091e8e3351824a7ae42799ef47884a34df5b4d869090",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:36:36Z",
+      "number": 649,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "023adad1247f580716936760a24b4c09d60dcbd06b7c385c52ece4e34c66c771",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:39:12Z",
+      "number": 650,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2d9b4834431c92200383101be34353140ebd9dc77cf6b551640beba888d3479d",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:40:11Z",
+      "number": 651,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "70fe5fdd5fc462ace18a7c97190bf242be38b3c534ffa5ed7a02d312490147c2",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:41:11Z",
+      "number": 652,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "74faf9882e5a2b741abd0b4684795ed23a8a08f9724188f3bf25e474ec0eb5e7",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:42:05Z",
+      "number": 653,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6f0291fc1844c35690b98610d0da5ed506bf017479e9139b529e14b629abc84f",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:43:01Z",
+      "number": 654,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "85ecf61dee4c3c47726e3ac10f22672e1e6917ae8fc48518c96d2683806bbe60",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:43:42Z",
+      "number": 655,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "988404ef18746d1fd86faadadc375dc23ed6a136d5cbce4deb553e6779928f41",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:44:24Z",
+      "number": 656,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "3cff0b0e8a445d5b5bb1c10b03f747efa1f860b74c1f4e31099648918827a36c",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:45:17Z",
+      "number": 657,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e789f9f984ca85aeb8e6cdaf08b4593efbc3eeeabf186f8341bd4c5b51b86abd",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:45:58Z",
+      "number": 658,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d78ef07bedc40f4bccb3afcb53d0a44daafc80e93d161f15b91f2af12de6ef3b",
+      "expected_labels": [
+        "corpus"
+      ],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:46:44Z",
+      "number": 659,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-06",
+      "add_labels": [
+        "affects:EMBER-06",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "53530e1aaf67562a301fe27dce584044134afeceada8be0c01ec6b1bde8dc785",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:48:23Z",
+      "number": 663,
+      "set_milestone": "EMBER-06"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "6868685073bd78942316ba0c8a6c8228457fb68aa294f957cb08fd2917f23e53",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:49:35Z",
+      "number": 667,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "4cb2425e528544c632311cba593f3ca6e64e205536e37c1d0a7efbee4bcfd8fd",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T04:51:29Z",
+      "number": 672,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d9249e79663a1662ab47dabf769f3d193f9eac9a9e279b92070682ce81da7aab",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:38:11Z",
+      "number": 674,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "001a94638ad5ab6cee1309a8d5aa6676198db51e1c8b38eb270675b1e5fdf0d3",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:57:26Z",
+      "number": 675,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "46f7b97c569a54b5fdf1c6ed9996e7bccc02e5d1ef84cee4a8fd898413f80930",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:57:28Z",
+      "number": 676,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2f872f4f3bc2e5f51dd71d1ebc58c048f81bf4d5ee6b13acc9762843efebff1b",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T00:07:55Z",
+      "number": 677,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "1bba3c5339c4a7ab60df53054f5fd1ec913504f9ce0457f1d41098208fea7973",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T14:16:00Z",
+      "number": 679,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c4f794643ea163cb313fc893637006452ac6abf6ca6ac9b3c1bbe8b1b2b19219",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T00:57:44Z",
+      "number": 682,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-09",
+      "add_labels": [
+        "affects:EMBER-09",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "427fdf03929709c1a6b19a4c3b7d23f3003fb5fe3fff9fbe65c28d3dbd557f04",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T00:07:59Z",
+      "number": 685,
+      "set_milestone": "EMBER-09"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "94f258e9a2c73553ccf177f092f7807013ee8d633e176d07d340346a7342f8ef",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:58:51Z",
+      "number": 688,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2bd06bcd703e61204603024e505eb1a72f880e68223379f9a87259af9f8a948a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T17:35:22Z",
+      "number": 689,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "ef5627f08160cd0f37ebc2c8fd80bec2d95c575a3669d11513efa32cddda86ba",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T19:02:28Z",
+      "number": 696,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "9fdd90d98a2b2695a1af37133878f501fb899aa098bde7d25cf0647992737dde",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T17:46:19Z",
+      "number": 697,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-00",
+        "affects:EMBER-01",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "982ac27047679a4e026219708695585754f50444722e07cb7cf31df07d001782",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T18:00:48Z",
+      "number": 700,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2ceaa8e274402696eba8ec16ff8f642931be68ea55dd976fb0362bce79b7437d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T05:16:27Z",
+      "number": 701,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "2fd42f3a26044305317b29ddd8c768061fdde2c4e80a00addfb78288db0d3641",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T02:43:27Z",
+      "number": 702,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e1ac8f12811520e4285cce016a7a30f8084f6ff2a9bdb793d5d26439cca481eb",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T05:21:22Z",
+      "number": 703,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "b828ac172fdb7519e4dd73f650565f1747e35ecd7ed9147dbfbd8607f7b24b6b",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T00:08:56Z",
+      "number": 704,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "35f5ed84815e61115ea7d0a2ee937150c21aeb4f43404201e1e55aca5b58e00d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:58:00Z",
+      "number": 705,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "b13a87044dd7f7d58600cfc0793f9713af8ba90fe83bf321083a430aca97eec7",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-15T20:01:15Z",
+      "number": 707,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "42cecbdf97d9a426bfb4621739bf0fd213f1ca30bbab8f25009ee97a0b7487aa",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T04:22:21Z",
+      "number": 711,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "101d724aadf0244b2dae500945efc61d278b1943d1355322f246612f495b3544",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T20:43:30Z",
+      "number": 716,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "3a70b3e9a2e397c8d7e1ba9cc80ae7698d72e4600027ed101a73cc4128d11f5f",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:30:39Z",
+      "number": 718,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-02",
+        "affects:EMBER-05",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "cdb599972fb00a673fd33410d972b44c9f8ca6067dfaf7b62084bb58663de429",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:25:22Z",
+      "number": 722,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "ef94951e44e58f34174d87d36ade8e189323ae345fb0a3591e5f8b2e5b6db588",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-10T23:44:32Z",
+      "number": 723,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "a38793f38910b0a1cdacd80b62b46669db5b7fac6d94720e76cf5f59162ec179",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T04:33:21Z",
+      "number": 735,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "583b6a72272f773090daeef70afe4f1c097c2a0a4998c1fc3529ecf8c3548a2b",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T13:32:16Z",
+      "number": 739,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "b18524b5ef392a8b4c93ffa78862df43e9f441487289492c2ce3064ce6829918",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T02:42:04Z",
+      "number": 744,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-02",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "151c7cb727b37cfb5541b19da8a254f1ebfd3bfb38ea2343a2794b419d26b4a0",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T03:16:51Z",
+      "number": 748,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "07b337a14f5e5c0285cfcee782b454e7e0d3d57df9911db9882f40e11da2f361",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T20:43:28Z",
+      "number": 756,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5e545a030267e63b2e4be8cd1a0f460c4d619e37223367e178ec460a42e200b8",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T00:57:44Z",
+      "number": 757,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c4763b1825c8c585972b991acbf78611a26ac2998eb596cecb654c8d1caaa278",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T05:52:38Z",
+      "number": 760,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "fe0850c787e0e05ad4565b715e05d259cf1b033888620e7a0f3988eddc93ea93",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T07:45:17Z",
+      "number": 763,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e2b17bb0f1bac5bb2edb49a3418957ce6848ffaf415ebcfd0b3bbb06d5e00d92",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T15:59:26Z",
+      "number": 764,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "37d2f753b4425a73106056d316157f7330c356007821945166e8ef3c85a4b055",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T07:19:16Z",
+      "number": 767,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "dc3cc08eb23a6a25c54e7d3207ad5f9e232780eaa19d9d57dc5d8bf4be57def0",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T07:16:16Z",
+      "number": 768,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "7c5d2eca723c04b9a3b96f6ac913ad2fe8d695fe67d75793c5fed0dc1e44ef9d",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T12:19:29Z",
+      "number": 774,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "5b818fc918d297f04390a7c40b75440eb15000ff37b46918329c9d42cb1c4740",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T08:19:09Z",
+      "number": 776,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "3dbb50fa4f30a3bbc9ca881941bf41cffdc87cf10598fb2d0c72853db0069355",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T08:52:32Z",
+      "number": 778,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "1339839cfe1d53851b1f63d3caa44a505a1af9a311d3cbd9733760f719493def",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T09:00:58Z",
+      "number": 779,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "c7de07e01912405969c9647c1d76f5808ed9e62187b0cff5cdeb8a05776e99e3",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T11:55:22Z",
+      "number": 782,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "9a03aa4f545e93642ec01d8d89ea9b5588d90451593aec258bb9377978dca4c6",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T10:53:35Z",
+      "number": 784,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "e22a7d8fb3c29e578a2072218587fd6c931eea02f2aaaa26ef6e5333ce54d711",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-17T23:54:53Z",
+      "number": 785,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "be7625782434ab24a31369a473546a7a535ddf3b4e3631f554b8181f7300a6ab",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T16:35:16Z",
+      "number": 786,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "4805b18db1827080c4123048969a89403254dda02ab73844dbc6a875bd09d6b9",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T14:35:06Z",
+      "number": 787,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "28f14ac610df8136fc39c83495cf2f7f544387a61c83e23ecbbc8a3ca50b11b0",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T12:43:07Z",
+      "number": 788,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "fd20b34606ee7287607fc1aeeb6df2aa23ee399f2173217c306cff73c13292f7",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T15:12:12Z",
+      "number": 791,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "62fe4a4d1eacffea4d1b963015cbdf479490cce78f686e73483525460dae3527",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T12:40:38Z",
+      "number": 793,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "cc4076c0118cad12205e36b736ea754c1be6746b6fe83319497639b5db4f02f9",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T17:09:08Z",
+      "number": 795,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "632b462f90f87e8bb8fdba543935a25ac730ccf25c1ea712ad1daacb96143d96",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T16:55:58Z",
+      "number": 796,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-05",
+      "add_labels": [
+        "affects:EMBER-05",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "0aae824f4da6e922d1bd6fdcdcb596a057a091896803c66b2b1166a60dd8f918",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T16:32:40Z",
+      "number": 798,
+      "set_milestone": "EMBER-05"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "74ed87a253fb552376cdf8cb4ac1b3c6bc5304a78f034c337bed0eaec7b8c59a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T17:09:09Z",
+      "number": 801,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f55dc42e31cf302a165b482a8a228c21d56244c2c5ec35616a9cb95ae7367c45",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T16:16:44Z",
+      "number": 802,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "0936c8c80df214e0f014e745760027c4313290eea0581324afd5d714ee43bd72",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T19:02:52Z",
+      "number": 803,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": null,
+      "add_labels": [
+        "affects:EMBER-01",
+        "affects:EMBER-03",
+        "roadmap:cross-cutting",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "992775317ba259435cd3a9fced5093f0c1d9c98def93ef40ef9fe150535e63ac",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-11T17:36:21Z",
+      "number": 804,
+      "set_milestone": null
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "82110f8fafcbf60bfeb719bde4e23ba795412adb12c0058f4237a0c9343adfbe",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T19:03:27Z",
+      "number": 805,
+      "set_milestone": "EMBER-01"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "d22de97155e6e36b5d5a4dd54e913de72a18ee8a317e90045c6c7777b48394b7",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T16:13:08Z",
+      "number": 812,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "89a4bd3bd50be02931a3d3e63b242f1013aae976122c89329e2542a9a1549274",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T14:45:35Z",
+      "number": 869,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "f416511eea852fc0062f5c70156716ebf0183f121206321fccf39abc8803635a",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-16T17:37:57Z",
+      "number": 872,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-04",
+      "add_labels": [
+        "affects:EMBER-04",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "4cc8bea3da4bc9eddec1d7f63627b3548605f50b980c659d046a92faa49b4700",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-04",
+      "expected_updated_at": "2026-07-16T17:38:00Z",
+      "number": 873,
+      "set_milestone": "EMBER-04"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-07",
+      "add_labels": [
+        "affects:EMBER-07",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "7acecf69fe7348cbacc6cc49d93b8c64fcbc13b014ff60228d00e8fce99c629d",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-07",
+      "expected_updated_at": "2026-07-16T17:38:01Z",
+      "number": 874,
+      "set_milestone": "EMBER-07"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-08",
+      "add_labels": [
+        "affects:EMBER-08",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "3214ec8aeaab4e10671b4934f5dbbf14e5da0ad06d8b43c035bdff76c12aef42",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-08",
+      "expected_updated_at": "2026-07-16T17:38:03Z",
+      "number": 875,
+      "set_milestone": "EMBER-08"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-09",
+      "add_labels": [
+        "affects:EMBER-09",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "760c1da5d515c03dd49e27b7c358d7280160e0bbae4115ab783c636423eea975",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-09",
+      "expected_updated_at": "2026-07-16T17:38:05Z",
+      "number": 876,
+      "set_milestone": "EMBER-09"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-11",
+      "add_labels": [
+        "affects:EMBER-11",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "991c5ed290db51b4ea503263bf726f7ca3f757d1940f03edf3b3447eb9306d1d",
+      "expected_labels": [],
+      "expected_milestone_id": "EMBER-11",
+      "expected_updated_at": "2026-07-16T17:38:07Z",
+      "number": 877,
+      "set_milestone": "EMBER-11"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "a7f2c9ee7354813a80b0a04e725947c22d7ada7ef8a4d1facd4e7f46da54b1da",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-17T00:40:47Z",
+      "number": 887,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "867a4011cb899aa3b09eaa939bd182a3284ae1c3aa5528635d0ee03cc0601d5c",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-17T17:29:20Z",
+      "number": 894,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "14133cca14883f4fa2cfae3cb662072a3fcb55b0c2ff52588bd0f094d5b44c86",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-17T03:54:43Z",
+      "number": 896,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "a1f2b2ec76837a9bed1afac899443458a26e8a88a4dc7427ef8bd5634f4cee26",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-18T18:17:25Z",
+      "number": 898,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "83daee4e197674020c2d346403e2cb10a668b9123089aad48db19a755b3ca875",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T12:49:04Z",
+      "number": 917,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "b70a4e64733480cac76e409424516870fd4ba881e210b7109f3c6cf15108a062",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-19T15:21:49Z",
+      "number": 930,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-03",
+      "add_labels": [
+        "affects:EMBER-03",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "fb3abd728e9a00bc1bfba816934ec8a4d4c01d15f14f9b8b1244f498f927194c",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-24T14:57:06Z",
+      "number": 1043,
+      "set_milestone": "EMBER-03"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-02",
+      "add_labels": [
+        "affects:EMBER-02",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "a856cc700a17ca1c89d146139c5050462599c4442ec51d2b0ef314ca61679b81",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-25T08:32:43Z",
+      "number": 1056,
+      "set_milestone": "EMBER-02"
+    },
+    {
+      "add_as_subissue_of": "roadmap-parent:EMBER-01",
+      "add_labels": [
+        "affects:EMBER-01",
+        "roadmap:subissue",
+        "roadmap:tracked"
+      ],
+      "close": false,
+      "expected_body_sha256": "62386fe905d28ed7685fe9a9efb5cdcadfc21854d062af064bbba90436a00a5c",
+      "expected_labels": [],
+      "expected_milestone_id": null,
+      "expected_updated_at": "2026-07-25T19:23:31Z",
+      "number": 1075,
+      "set_milestone": "EMBER-01"
+    }
+  ],
+  "labels": [
+    {
+      "color": "1f6feb",
+      "description": "Accounted for by the version-controlled Ember roadmap",
+      "name": "roadmap:tracked"
+    },
+    {
+      "color": "8250df",
+      "description": "Canonical tracking issue for one Ember milestone",
+      "name": "roadmap:parent"
+    },
+    {
+      "color": "2da44e",
+      "description": "Entire remaining contract belongs to one milestone",
+      "name": "roadmap:subissue"
+    },
+    {
+      "color": "bf8700",
+      "description": "Remaining contract affects multiple milestones",
+      "name": "roadmap:cross-cutting"
+    },
+    {
+      "color": "9a6700",
+      "description": "Historical contract preserved during lossless reconciliation",
+      "name": "roadmap:historical"
+    },
+    {
+      "color": "cf222e",
+      "description": "Narrower disposition awaits clause-level evidence",
+      "name": "roadmap:evidence-pending"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-00",
+      "name": "affects:EMBER-00"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-01",
+      "name": "affects:EMBER-01"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-02",
+      "name": "affects:EMBER-02"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-03",
+      "name": "affects:EMBER-03"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-04",
+      "name": "affects:EMBER-04"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-05",
+      "name": "affects:EMBER-05"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-06",
+      "name": "affects:EMBER-06"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-07",
+      "name": "affects:EMBER-07"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-08",
+      "name": "affects:EMBER-08"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-09",
+      "name": "affects:EMBER-09"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-10",
+      "name": "affects:EMBER-10"
+    },
+    {
+      "color": "d4c5f9",
+      "description": "Work affects canonical milestone EMBER-11",
+      "name": "affects:EMBER-11"
+    }
+  ],
+  "milestones": [
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-00.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": null,
+      "milestone_id": "EMBER-00",
+      "state": "open",
+      "title": "EMBER-00 — Authority and totality lock"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-01.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": null,
+      "milestone_id": "EMBER-01",
+      "state": "open",
+      "title": "EMBER-01 — Custody, identity, and experiment spine"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-02.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 15,
+      "milestone_id": "EMBER-02",
+      "state": "open",
+      "title": "EMBER-02 — Three-billion-parameter foundation birth"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-03.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 12,
+      "milestone_id": "EMBER-03",
+      "state": "open",
+      "title": "EMBER-03 — Body, tools, and operator relationship"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-04.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 16,
+      "milestone_id": "EMBER-04",
+      "state": "open",
+      "title": "EMBER-04 — Grounded memory, world model, and dreaming"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-05.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 17,
+      "milestone_id": "EMBER-05",
+      "state": "open",
+      "title": "EMBER-05 — Three-billion-parameter Verified Expert Accretion rung"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-06.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 18,
+      "milestone_id": "EMBER-06",
+      "state": "open",
+      "title": "EMBER-06 — Autonomous AI-research bootstrap"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-07.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 20,
+      "milestone_id": "EMBER-07",
+      "state": "open",
+      "title": "EMBER-07 — Seven-billion-parameter hard rung"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-08.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 21,
+      "milestone_id": "EMBER-08",
+      "state": "open",
+      "title": "EMBER-08 — Fifteen-billion-parameter hard rung"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-09.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 22,
+      "milestone_id": "EMBER-09",
+      "state": "open",
+      "title": "EMBER-09 — Owned model above twenty-seven billion parameters"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-10.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 23,
+      "milestone_id": "EMBER-10",
+      "state": "open",
+      "title": "EMBER-10 — General sovereign local AI laboratory"
+    },
+    {
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-11.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "due_on": null,
+      "existing_number": 24,
+      "milestone_id": "EMBER-11",
+      "state": "open",
+      "title": "EMBER-11 — Independent local ownership and scientific release"
+    }
+  ],
+  "parent_issues": [
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-00 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-00.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-00"
+      ],
+      "milestone_id": "EMBER-00",
+      "title": "[ROADMAP][EMBER-00] Authority and totality lock",
+      "tracking_key": "roadmap-parent:EMBER-00"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-01 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-01.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-00"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-01"
+      ],
+      "milestone_id": "EMBER-01",
+      "title": "[ROADMAP][EMBER-01] Custody, identity, and experiment spine",
+      "tracking_key": "roadmap-parent:EMBER-01"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-02 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-02.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-01"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-02"
+      ],
+      "milestone_id": "EMBER-02",
+      "title": "[ROADMAP][EMBER-02] Three-billion-parameter foundation birth",
+      "tracking_key": "roadmap-parent:EMBER-02"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-03 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-03.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-02"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-03"
+      ],
+      "milestone_id": "EMBER-03",
+      "title": "[ROADMAP][EMBER-03] Body, tools, and operator relationship",
+      "tracking_key": "roadmap-parent:EMBER-03"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-04 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-04.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-03"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-04"
+      ],
+      "milestone_id": "EMBER-04",
+      "title": "[ROADMAP][EMBER-04] Grounded memory, world model, and dreaming",
+      "tracking_key": "roadmap-parent:EMBER-04"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-05 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-05.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-04"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-05"
+      ],
+      "milestone_id": "EMBER-05",
+      "title": "[ROADMAP][EMBER-05] Three-billion-parameter Verified Expert Accretion rung",
+      "tracking_key": "roadmap-parent:EMBER-05"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-06 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-06.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-05"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-06"
+      ],
+      "milestone_id": "EMBER-06",
+      "title": "[ROADMAP][EMBER-06] Autonomous AI-research bootstrap",
+      "tracking_key": "roadmap-parent:EMBER-06"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-07 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-07.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-06"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-07"
+      ],
+      "milestone_id": "EMBER-07",
+      "title": "[ROADMAP][EMBER-07] Seven-billion-parameter hard rung",
+      "tracking_key": "roadmap-parent:EMBER-07"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-08 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-08.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-07"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-08"
+      ],
+      "milestone_id": "EMBER-08",
+      "title": "[ROADMAP][EMBER-08] Fifteen-billion-parameter hard rung",
+      "tracking_key": "roadmap-parent:EMBER-08"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-09 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-09.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-08"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-09"
+      ],
+      "milestone_id": "EMBER-09",
+      "title": "[ROADMAP][EMBER-09] Owned model above twenty-seven billion parameters",
+      "tracking_key": "roadmap-parent:EMBER-09"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-10 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-10.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-09"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-10"
+      ],
+      "milestone_id": "EMBER-10",
+      "title": "[ROADMAP][EMBER-10] General sovereign local AI laboratory",
+      "tracking_key": "roadmap-parent:EMBER-10"
+    },
+    {
+      "body": "<!-- ember-roadmap-parent: EMBER-11 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-11.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "depends_on": [
+        "roadmap-parent:EMBER-10"
+      ],
+      "existing_number": null,
+      "labels": [
+        "roadmap:parent",
+        "affects:EMBER-11"
+      ],
+      "milestone_id": "EMBER-11",
+      "title": "[ROADMAP][EMBER-11] Independent local ownership and scientific release",
+      "tracking_key": "roadmap-parent:EMBER-11"
+    }
+  ],
+  "repository": "wordingone/ember",
+  "schema_version": "ember-roadmap-github-projection-v1",
+  "source_issue_count": 214,
+  "source_master_sha": "73ba2165cb87e5d9e38c93ac8da667ba0c4b923a"
+}
