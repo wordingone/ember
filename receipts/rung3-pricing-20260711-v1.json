@@ -1,0 +1,145 @@
+{
+  "schema_version": "ember-rung-pricing-receipt-v1",
+  "receipt_type": "historical_capacity_planning",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "source_commit": "94fc16408e382461370698f4098b4b8c0765d9cd",
+  "issue": 795,
+  "status": "ACCEPTED_HISTORICAL_DERIVATION",
+  "measurement_boundary": "DERIVATION_ONLY_NO_NEW_MEASUREMENT",
+  "sources": {
+    "attribution_receipt": {
+      "path": "receipts/attribution-702-20260711T135717Z-redacted-edition.json",
+      "sha256": "b0ee011a7afd121e218514ed982beb61ca6d1d7b405ec525deea91232f61edad"
+    },
+    "accepted_derivation_comment": "https://github.com/wordingone/ember/issues/795#issuecomment-4947223621",
+    "scope_correction_comment": "https://github.com/wordingone/ember/issues/795#issuecomment-4947959049"
+  },
+  "family_arithmetic": {
+    "total_parameters": "61440 * ff + 182232064",
+    "matrix_parameters": "total_parameters - 98345984",
+    "nonmatrix_parameters": 98345984,
+    "baseline": {
+      "ff": 32768,
+      "total_parameters": 2195497984,
+      "matrix_parameters": 2097152000
+    },
+    "calibration_band_divisor_and_multiplier": 1.22
+  },
+  "accepted_points": [
+    {
+      "label": "ff=49152 in-repo candidate",
+      "ff": 49152,
+      "total_parameters": 3202130944,
+      "matrix_parameters": 3103784960,
+      "nonmatrix_parameters": 98345984,
+      "seconds_per_step_center": 88.1,
+      "seconds_per_step_low": 72.2,
+      "seconds_per_step_high": 107.4,
+      "host_traffic_gib_per_step": 72.3,
+      "persistent_commit_gib": 36.2,
+      "raw_limit_margin_gib": 43.5,
+      "coresident_usable_margin_gib": -11.7,
+      "checkpoint_disk_gib": 18.3,
+      "binding_constraint": "CORESIDENT_COMMIT_TENANCY"
+    },
+    {
+      "label": "ff=45863 minimal 3B overshoot",
+      "ff": 45863,
+      "total_parameters": 3000054784,
+      "matrix_parameters": 2901708800,
+      "nonmatrix_parameters": 98345984,
+      "seconds_per_step_center": 82.3,
+      "seconds_per_step_low": 67.5,
+      "seconds_per_step_high": 100.5,
+      "host_traffic_gib_per_step": 67.8,
+      "persistent_commit_gib": 33.9,
+      "raw_limit_margin_gib": 45.7,
+      "coresident_usable_margin_gib": -9.4,
+      "checkpoint_disk_gib": 17.1,
+      "binding_constraint": "CORESIDENT_COMMIT_TENANCY"
+    },
+    {
+      "label": "4B candidate scan",
+      "ff": 62139,
+      "total_parameters": 4000052224,
+      "matrix_parameters": 3901706240,
+      "nonmatrix_parameters": 98345984,
+      "seconds_per_step_center": 110.7,
+      "seconds_per_step_low": 90.7,
+      "seconds_per_step_high": 135.0,
+      "host_traffic_gib_per_step": 90.1,
+      "persistent_commit_gib": 45.1,
+      "raw_limit_margin_gib": 34.5,
+      "coresident_usable_margin_gib": -20.6,
+      "checkpoint_disk_gib": 22.7,
+      "binding_constraint": "CORESIDENT_COMMIT_TENANCY"
+    },
+    {
+      "label": "5.5B candidate scan",
+      "ff": 86553,
+      "total_parameters": 5500048384,
+      "matrix_parameters": 5401702400,
+      "nonmatrix_parameters": 98345984,
+      "seconds_per_step_center": 153.1,
+      "seconds_per_step_low": 125.5,
+      "seconds_per_step_high": 186.8,
+      "host_traffic_gib_per_step": 123.7,
+      "persistent_commit_gib": 61.8,
+      "raw_limit_margin_gib": 17.8,
+      "coresident_usable_margin_gib": -37.4,
+      "checkpoint_disk_gib": 31.1,
+      "binding_constraint": "CORESIDENT_COMMIT_AND_SNAPSHOT_DISK_PRESSURE"
+    },
+    {
+      "label": "7B candidate scan",
+      "ff": 110967,
+      "total_parameters": 7000044544,
+      "matrix_parameters": 6901698560,
+      "nonmatrix_parameters": 98345984,
+      "seconds_per_step_center": 195.6,
+      "seconds_per_step_low": 160.3,
+      "seconds_per_step_high": 238.6,
+      "host_traffic_gib_per_step": 157.2,
+      "persistent_commit_gib": 78.6,
+      "raw_limit_margin_gib": 1.0,
+      "coresident_usable_margin_gib": -54.2,
+      "checkpoint_disk_gib": 39.5,
+      "binding_constraint": "GOVERNED_COMMIT_REFUSAL_AND_SNAPSHOT_DISK_PRESSURE"
+    }
+  ],
+  "corrections": {
+    "governed_commit_limit_gib": 79.603,
+    "mandatory_commit_margin_floor_gib": 6.0,
+    "governed_usable_commit_gib": 73.603,
+    "maximum_continuous_family_parameters": 6553102961,
+    "last_discrete_pass": {
+      "ff": 103692,
+      "total_parameters": 6553068544,
+      "commit_gib": 73.602615,
+      "margin_gib": 6.000385
+    },
+    "first_discrete_refusal": {
+      "ff": 103693,
+      "total_parameters": 6553129984,
+      "commit_gib": 73.603302,
+      "margin_gib": 5.999698
+    },
+    "disk_scope": "5.5B disk result was transient free-space pressure, not an intrinsic hardware ceiling"
+  },
+  "verdict": {
+    "historical_3b_constraint": "CONSTRUCTION_TENANCY_NOT_RAW_MACHINE_CAPACITY",
+    "frozen_rung3_config_found": false,
+    "new_training_run_performed": false,
+    "current_architecture_selection": false
+  },
+  "claim_boundary": {
+    "historical_capacity_planning_only": true,
+    "sufficient_pretraining": false,
+    "checkpoint_admission": false,
+    "benchmark_improvement": false,
+    "model_capability": false,
+    "scientific_breakthrough": false
+  }
+}
