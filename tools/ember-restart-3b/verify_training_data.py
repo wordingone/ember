@@ -34,6 +34,8 @@ CANONICAL_GENERATORS = {
     "tool": "build_owned_reasoning_tool_trajectories.py",
 }
 
+SPECIALIST_REPLAY_CHUNK_RECORDS = 512
+
 
 def _replay_bound_specialist_records(
     *, capability: str, generation: object, generator_path: Path, tokenizer: object,
@@ -51,21 +53,48 @@ def _replay_bound_specialist_records(
     expected_name = CANONICAL_GENERATORS[capability]
     if generator_path.resolve() != Path(__file__).with_name(expected_name).resolve():
         raise ValueError("specialist generator replay requires the canonical owned generator path")
+    vision_replay_plan = None
     if capability == "image":
-        from build_owned_vision_scenes import build_records
+        from build_owned_vision_scenes import build_replay_plan
         if raw_contract is None:
             raise ValueError("image generator replay lacks the bound marker")
-        replayed = build_records(tokenizer, count=count, image_marker=raw_contract["image_marker"])
-    elif capability == "audio":
-        from build_owned_audio_frames import build_records
-        if raw_contract is None:
-            raise ValueError("audio generator replay lacks the bound marker")
-        replayed = build_records(tokenizer, count=count, audio_marker=raw_contract["audio_marker"])
-    else:
-        from build_owned_reasoning_tool_trajectories import build_records
-        replayed = build_records(tokenizer, count=count, capability=capability)
-    if replayed != records:
-        raise ValueError("specialist records do not match the bound generator replay")
+        vision_replay_plan = build_replay_plan(
+            tokenizer,
+            count=count,
+            image_marker=raw_contract["image_marker"],
+        )
+    for start_index in range(0, count, SPECIALIST_REPLAY_CHUNK_RECORDS):
+        chunk_count = min(SPECIALIST_REPLAY_CHUNK_RECORDS, count - start_index)
+        if capability == "image":
+            from build_owned_vision_scenes import build_records_range
+            assert raw_contract is not None and vision_replay_plan is not None
+            replayed = build_records_range(
+                tokenizer,
+                replay_plan=vision_replay_plan,
+                start_index=start_index,
+                count=chunk_count,
+                image_marker=raw_contract["image_marker"],
+            )
+        elif capability == "audio":
+            from build_owned_audio_frames import build_records_range
+            if raw_contract is None:
+                raise ValueError("audio generator replay lacks the bound marker")
+            replayed = build_records_range(
+                tokenizer,
+                start_index=start_index,
+                count=chunk_count,
+                audio_marker=raw_contract["audio_marker"],
+            )
+        else:
+            from build_owned_reasoning_tool_trajectories import build_records_range
+            replayed = build_records_range(
+                tokenizer,
+                start_index=start_index,
+                count=chunk_count,
+                capability=capability,
+            )
+        if replayed != records[start_index : start_index + chunk_count]:
+            raise ValueError("specialist records do not match the bound generator replay")
 
 SPECIALIST_MINIMUMS = {
     "image": {"records": 4096, "tokens": 24576, "derivation": "raw_image_spatial_relation_execution"},
@@ -358,4 +387,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

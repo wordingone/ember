@@ -35,14 +35,18 @@ def _episode_frames(index: int) -> list[bytes]:
     pattern = patterns[index % len(patterns)]
     return [_frame(polarity, index * 4 + offset) for offset, polarity in enumerate(pattern)]
 
-def build_records(tokenizer: Any, *, count: int, audio_marker: int) -> list[dict[str, object]]:
-    """Build deterministic, diverse owned PCM episodes; targets derive from the raw frames."""
-    if not isinstance(count, int) or count < 512:
-        raise ValueError("owned audio semantic records require at least 512 episodes")
+def build_records_range(
+    tokenizer: Any, *, start_index: int, count: int, audio_marker: int,
+) -> list[dict[str, object]]:
+    """Build one exact source-index range for bounded verifier replay."""
+    if type(start_index) is not int or start_index < 0:
+        raise ValueError("owned audio range start must be a nonnegative integer")
+    if type(count) is not int or count <= 0:
+        raise ValueError("owned audio range count must be a positive integer")
     if not isinstance(audio_marker, int) or audio_marker < 0:
         raise ValueError("audio marker must be a nonnegative token ID")
     records: list[dict[str, object]] = []
-    for index in range(count):
+    for index in range(start_index, start_index + count):
         frames = _episode_frames(index)
         caption = audio_caption(frames)
         encoded = list(tokenizer.encode(caption).ids)
@@ -61,6 +65,15 @@ def build_records(tokenizer: Any, *, count: int, audio_marker: int) -> list[dict
             "capability_evidence": {"audio": {"caption_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(), "derivation": "raw_audio_signal_execution"}},
         })
     return records
+
+
+def build_records(tokenizer: Any, *, count: int, audio_marker: int) -> list[dict[str, object]]:
+    """Build deterministic, diverse owned PCM episodes; targets derive from the raw frames."""
+    if type(count) is not int or count < 512:
+        raise ValueError("owned audio semantic records require at least 512 episodes")
+    return build_records_range(tokenizer, start_index=0, count=count, audio_marker=audio_marker)
+
+
 def record_at(tokenizer: Any, *, count: int, audio_marker: int, index: int) -> dict[str, object]:
     """Regenerate one owned audio episode without allocating its family."""
     if not isinstance(count, int) or count < 512 or not isinstance(index, int) or not 0 <= index < count:
