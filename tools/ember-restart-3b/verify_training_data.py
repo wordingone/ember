@@ -53,14 +53,24 @@ def _replay_bound_specialist_records(
     expected_name = CANONICAL_GENERATORS[capability]
     if generator_path.resolve() != Path(__file__).with_name(expected_name).resolve():
         raise ValueError("specialist generator replay requires the canonical owned generator path")
+    vision_replay_plan = None
+    if capability == "image":
+        from build_owned_vision_scenes import build_replay_plan
+        if raw_contract is None:
+            raise ValueError("image generator replay lacks the bound marker")
+        vision_replay_plan = build_replay_plan(
+            tokenizer,
+            count=count,
+            image_marker=raw_contract["image_marker"],
+        )
     for start_index in range(0, count, SPECIALIST_REPLAY_CHUNK_RECORDS):
         chunk_count = min(SPECIALIST_REPLAY_CHUNK_RECORDS, count - start_index)
         if capability == "image":
             from build_owned_vision_scenes import build_records_range
-            if raw_contract is None:
-                raise ValueError("image generator replay lacks the bound marker")
+            assert raw_contract is not None and vision_replay_plan is not None
             replayed = build_records_range(
                 tokenizer,
+                replay_plan=vision_replay_plan,
                 start_index=start_index,
                 count=chunk_count,
                 image_marker=raw_contract["image_marker"],

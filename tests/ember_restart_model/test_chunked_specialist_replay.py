@@ -41,10 +41,23 @@ class ChunkedSpecialistReplayTests(unittest.TestCase):
         for module, kwargs in cases:
             with self.subTest(module=module.__name__, kwargs=kwargs):
                 full = module.build_records(tokenizer, count=512, **kwargs)
-                chunked = [
-                    *module.build_records_range(tokenizer, start_index=0, count=257, **kwargs),
-                    *module.build_records_range(tokenizer, start_index=257, count=255, **kwargs),
-                ]
+                if module is build_owned_vision_scenes:
+                    replay_plan = module.build_replay_plan(tokenizer, count=512, **kwargs)
+                    chunked = [
+                        *module.build_records_range(
+                            tokenizer, replay_plan=replay_plan,
+                            start_index=0, count=257, **kwargs,
+                        ),
+                        *module.build_records_range(
+                            tokenizer, replay_plan=replay_plan,
+                            start_index=257, count=255, **kwargs,
+                        ),
+                    ]
+                else:
+                    chunked = [
+                        *module.build_records_range(tokenizer, start_index=0, count=257, **kwargs),
+                        *module.build_records_range(tokenizer, start_index=257, count=255, **kwargs),
+                    ]
                 self.assertEqual(chunked, full)
 
     def test_ranges_reject_boolean_or_negative_indices_and_nonpositive_counts(self) -> None:
