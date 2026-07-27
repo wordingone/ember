@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from contextlib import AbstractContextManager
@@ -37,6 +38,11 @@ class Worktree:
     head: str
     branch: str | None
     detached: bool
+    # Git marks a record `prunable` when its directory is gone but the administrative
+    # metadata survives -- the exact shape produced by deleting a worktree by hand.
+    # Defaults False so a git old enough not to emit the attribute reads as live, which
+    # is the conservative direction: refusals stay refusals, nothing new is stepped over.
+    prunable: bool = False
 
 
 def canonical_path(value: str | Path) -> str:
@@ -78,6 +84,7 @@ def parse_worktrees(text: str) -> list[Worktree]:
                 head=str(fields["HEAD"]),
                 branch=fields.get("branch"),
                 detached=bool(fields.get("detached", False)),
+                prunable=bool(fields.get("prunable", False)),
             )
         )
 
@@ -393,6 +400,154 @@ def retire_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[s
     }
 
 
+def prune_one_worktree_metadata(repo: Path, target_path: str) -> bool:
+    """Remove the administrative directory of ONE worktree, identified by its path.
+
+    Git keeps a directory per linked worktree under ``$GIT_COMMON_DIR/worktrees/<name>``,
+    and the ``gitdir`` file inside it records that worktree's ``.git`` location. Matching
+    on that recorded path is how this stays exact: the caller names a path, and only the
+    record pointing at that path is touched. ``git worktree prune`` would do the same
+    thing for every stale record at once, which is the collateral this exists to avoid.
+
+    Returns whether a record was found and removed. Absent is not an error -- git may have
+    pruned it already, and reconcile's job is that the row and the metadata both end up
+    gone, not that this call was the one to do it.
+    """
+    admin_root = common_dir(repo) / "worktrees"
+    if not admin_root.is_dir():
+        return False
+    wanted = path_key(target_path)
+    for entry in sorted(admin_root.iterdir()):
+        pointer = entry / "gitdir"
+        if not pointer.is_file():
+            continue
+        try:
+            recorded = pointer.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if not recorded:
+            continue
+        # `gitdir` points at the worktree's `.git` FILE; its parent is the worktree.
+        if path_key(Path(recorded).parent) == wanted:
+            shutil.rmtree(entry, ignore_errors=False)
+            return True
+    return False
+
+
+def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[str, Any]:
+    """Clear ONE managed row whose worktree is genuinely gone.
+
+    MISSING_MANAGED_WORKTREE is raised by audit_state before it does anything, and
+    audit runs first inside create, retire and the pre-push guard. So a row whose
+    worktree no longer exists has no exit: every verb that could remove it refuses
+    to run until the thing it would remove is put back. The only way out today is
+    to physically reconstruct a worktree at the registered path -- absurd when the
+    ROW is what is wrong -- and until someone does, the check blocks pushes
+    repo-wide, so one owner's stale bookkeeping halts every other owner's
+    unrelated work. That happened twice on 2026-07-26 within ten minutes.
+
+    This verb is that exit, and it is deliberately the narrowest one that works:
+
+    * an EXACT path is required, so it can never become a sweep;
+    * only ``managed`` rows are eligible -- ``legacy_paths`` are the install-time
+      snapshot and are not this verb's to edit;
+    * it REFUSES when the worktree is live (that case is ``retire``, which has the
+      clean-tree and archive-ref checks this one deliberately lacks);
+    * it REFUSES when the path exists with any content, so it can never discard
+      bytes someone is still holding -- an empty directory is the only on-disk
+      state it will step over;
+    * it never deletes the branch. The row goes; the ref stays; nothing that was
+      committed can be lost by running this.
+
+    Fail-closed stays fail-closed. What changes is that a stale row has an exit
+    that is not "rebuild the directory you already deleted".
+    """
+    state = load_or_initialize(repo, state_file)
+    # Deliberately NOT audit_state(): audit raises on exactly the condition this
+    # verb exists to clear, so calling it here would reproduce the deadlock.
+    key = path_key(requested_path)
+    record = state["managed"].get(key)
+    if record is None:
+        if key in state["legacy_paths"]:
+            raise LifecycleError("LEGACY_PATH", canonical_path(requested_path))
+        raise LifecycleError("NOT_MANAGED", canonical_path(requested_path))
+
+    # PRUNABLE IS NOT LIVE, and the metadata transition is TARGET-SCOPED.
+    #
+    # The incident this verb exists for is an owner deleting the directory without
+    # retiring. That leaves git's administrative metadata behind, and a worktree with
+    # stale metadata is still listed by `git worktree list --porcelain` -- as PRUNABLE,
+    # but listed. Computing the live set first therefore classified exactly the failure
+    # shape as WORKTREE_LIVE and refused, so the verb deadlocked on its own reason for
+    # existing. `git worktree remove` clears the metadata cleanly, which is why a test
+    # written around it could not see this: the test constructed the one input shape the
+    # bug did not have.
+    #
+    # `git worktree prune` is the obvious answer and the wrong one. It is REPOSITORY-WIDE:
+    # reconciling A would clear the metadata of every other prunable worktree too, while
+    # this verb removes only A's row. Every other raw-deleted managed row would go from
+    # "listed, quietly stuck" to "not listed, and now MISSING_MANAGED_WORKTREE" -- which
+    # blocks pushes repo-wide. That is the same deadlock this verb exists to end, moved
+    # onto someone else's row, and it is exactly what an exact-path contract forbids.
+    #
+    # So: read the state instead of mutating it. Git already tells us which records are
+    # prunable, and a prunable record is not a live worktree. The refusal below now means
+    # what it says without anything having been changed to make it true.
+    #
+    # The live check runs ahead of the emptiness check, and that ordering is load-bearing:
+    # a LIVE worktree's directory is never empty, so checking emptiness first would refuse
+    # every live path with PATH_NOT_EMPTY and the WORKTREE_LIVE refusal -- the one that
+    # tells the caller to use `retire` -- would become unreachable. Live is the more
+    # specific condition, so it is answered first.
+    live = {row.key: row for row in list_worktrees(repo) if not row.prunable}
+    if key in live:
+        raise LifecycleError("WORKTREE_LIVE", live[key].path)
+
+    destination = Path(record["path"])
+    if destination.exists():
+        try:
+            leftovers = any(destination.iterdir())
+        except OSError as exc:
+            raise LifecycleError("PATH_UNREADABLE", f"{destination}: {exc}") from exc
+        if leftovers:
+            raise LifecycleError("PATH_NOT_EMPTY", str(destination))
+
+    # The metadata for THIS path, and nothing else. Leaving it would make the path an
+    # UNMANAGED_WORKTREE the moment its row is gone -- git still listing a worktree the
+    # registry no longer knows -- so the row and its metadata have to leave together.
+    # Removing the one administrative directory whose `gitdir` points at this path is
+    # precisely what prune would have done for this record, scoped to it.
+    prune_one_worktree_metadata(repo, record["path"])
+
+    # VERIFY THE OUTCOME, not the call. The remover reports False both for "already gone"
+    # and for "could not find or read the record", and those are opposite facts -- so its
+    # return value cannot decide anything. Ask git instead, under the same lock: if the
+    # path is still listed, the metadata survived, and popping the row here would turn a
+    # managed-but-stale worktree into an UNMANAGED one, which blocks the repo again. Same
+    # stranded state as the collateral bug, relocated onto the requested row.
+    #
+    # The re-list is authoritative in both directions, which is why it is the check rather
+    # than the boolean: it passes for the legitimate already-pruned case and fails for
+    # every way the removal can silently not happen.
+    if any(row.key == key for row in list_worktrees(repo)):
+        raise LifecycleError(
+            "METADATA_REMOVAL_FAILED",
+            f"{record['path']} is still registered with Git after target-scoped removal; row preserved",
+        )
+
+    state["managed"].pop(key)
+    state["updated_at"] = datetime.now(timezone.utc).isoformat()
+    write_state(state_file, state)
+    return {
+        "status": "RECONCILED",
+        "path": record["path"],
+        "owner": record.get("owner"),
+        "retained_branch": record.get("branch"),
+        "recorded_head": record.get("head"),
+        "ceiling": state["ceiling"],
+    }
+
+
 def emit(payload: dict[str, Any], quiet: bool) -> None:
     if not quiet:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -420,6 +575,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     retire_parser = subparsers.add_parser("retire")
     retire_parser.add_argument("--path", required=True)
+
+    reconcile_parser = subparsers.add_parser("reconcile")
+    reconcile_parser.add_argument(
+        "--path",
+        required=True,
+        help=(
+            "exact registered path of a managed row whose worktree is gone; "
+            "refuses when the worktree is live or the path has any content"
+        ),
+    )
     return parser
 
 
@@ -443,6 +608,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 emit(create_worktree(repo, state_file, args), False)
             elif args.command == "retire":
                 emit(retire_worktree(repo, state_file, args.path), False)
+            elif args.command == "reconcile":
+                emit(reconcile_worktree(repo, state_file, args.path), False)
             else:
                 raise AssertionError(args.command)
         return 0
