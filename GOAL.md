@@ -262,6 +262,15 @@ they cannot reduce, defer, replace, or reinterpret it.
 }
 -->
 
+## Public roadmap hierarchy
+
+The complete milestone decomposition is published at
+[`docs/roadmap/README.md`](docs/roadmap/README.md). It has exactly four
+surfaces: this constitutional goal, twelve version-controlled milestone
+contracts, one non-authoritative execution graph, and concrete GitHub
+issues/pull requests. The decomposition and tracking surfaces cannot reduce,
+defer, replace, or reinterpret this file.
+
 ## 1. One project, conserved in full
 
 Ember is one clean-genesis sovereign foundation intelligence and one local AI

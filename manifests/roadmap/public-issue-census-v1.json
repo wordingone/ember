@@ -1,0 +1,3006 @@
+{
+  "captured_at": "2026-07-27T14:59:36Z",
+  "counts": {
+    "labels": 12,
+    "milestones_all": 24,
+    "open_issues": 214,
+    "open_pull_requests": 19
+  },
+  "issues": [
+    {
+      "body_sha256": "54f35903e94a6b1f2631a925de24c0a363723f11a40a1338a480422b26767c88",
+      "comment_count": 8,
+      "created_at": "2026-07-02T20:20:43Z",
+      "labels": [],
+      "milestone": {
+        "number": 15,
+        "state": "open",
+        "title": "EMBER-02: Sufficiently pretrained owned 3B"
+      },
+      "number": 3,
+      "state": "open",
+      "title": "C14: execute owned-core resident-training gate run (design v1.2)",
+      "updated_at": "2026-07-19T13:40:56Z",
+      "url": "https://github.com/wordingone/ember/issues/3"
+    },
+    {
+      "body_sha256": "94d2a71e572956eb7e8b4d7f911c535e5dc99c7c7b1584058aad26ef0bb94762",
+      "comment_count": 1,
+      "created_at": "2026-07-02T20:21:28Z",
+      "labels": [],
+      "milestone": {
+        "number": 15,
+        "state": "open",
+        "title": "EMBER-02: Sufficiently pretrained owned 3B"
+      },
+      "number": 7,
+      "state": "open",
+      "title": "Two-law receipts: P1 energy envelope + P2 first BOOTSTRAP_PASS",
+      "updated_at": "2026-07-18T15:21:48Z",
+      "url": "https://github.com/wordingone/ember/issues/7"
+    },
+    {
+      "body_sha256": "8952fe8ca6e73a9947af06303f285c9ba5ef6d94d9127fb6a944754c55d2a791",
+      "comment_count": 1,
+      "created_at": "2026-07-02T20:21:29Z",
+      "labels": [],
+      "milestone": {
+        "number": 17,
+        "state": "open",
+        "title": "EMBER-05: Verified expert accretion at 3B"
+      },
+      "number": 8,
+      "state": "open",
+      "title": "C-GROW v3: iso-FLOP growth-operator comparison redesign",
+      "updated_at": "2026-07-19T03:48:19Z",
+      "url": "https://github.com/wordingone/ember/issues/8"
+    },
+    {
+      "body_sha256": "82cf63b27213da109166af603c69a5385920aae32132a4074dd9e93699866227",
+      "comment_count": 1,
+      "created_at": "2026-07-02T23:26:42Z",
+      "labels": [],
+      "milestone": {
+        "number": 12,
+        "state": "open",
+        "title": "EMBER-03: Owned body, tools, and operator relationship"
+      },
+      "number": 12,
+      "state": "open",
+      "title": "Surface-3: execute pre-registered A0-A7 head-to-head battery to one conjunctive verdict receipt",
+      "updated_at": "2026-07-18T15:21:44Z",
+      "url": "https://github.com/wordingone/ember/issues/12"
+    },
+    {
+      "body_sha256": "bc9ab53b94f5a79dff5b3ddb4d16fa340dbff9382f8ebbc8464dc6496420f374",
+      "comment_count": 1,
+      "created_at": "2026-07-02T23:26:44Z",
+      "labels": [],
+      "milestone": {
+        "number": 9,
+        "state": "open",
+        "title": "EMBER-CUSTODY-V2: Cursor and deadline enforcement"
+      },
+      "number": 14,
+      "state": "open",
+      "title": "Governance clocks: surface-drop attestation, fired-trigger review, amendment acceptance-object, milestone-lattice mirror, PR-review-record predicate",
+      "updated_at": "2026-07-19T05:12:08Z",
+      "url": "https://github.com/wordingone/ember/issues/14"
+    },
+    {
+      "body_sha256": "c94193d05fe07e773548d29168d2100d72575b89ca3159ccd7547716045b7b44",
+      "comment_count": 3,
+      "created_at": "2026-07-03T04:57:23Z",
+      "labels": [],
+      "milestone": {
+        "number": 15,
+        "state": "open",
+        "title": "EMBER-02: Sufficiently pretrained owned 3B"
+      },
+      "number": 20,
+      "state": "open",
+      "title": "C11: duration-milestone receipts ride the C14 battery windows (1h leg first)",
+      "updated_at": "2026-07-19T13:44:57Z",
+      "url": "https://github.com/wordingone/ember/issues/20"
+    },
+    {
+      "body_sha256": "1d60a039f73bf4ca44f5555622f8618e326e0ac2386c4642398d601fa46107ab",
+      "comment_count": 3,
+      "created_at": "2026-07-03T08:05:19Z",
+      "labels": [],
+      "milestone": {
+        "number": 15,
+        "state": "open",
+        "title": "EMBER-02: Sufficiently pretrained owned 3B"
+      },
+      "number": 29,
+      "state": "open",
+      "title": "C-SCALE apex: staged scale-credibility campaign (owned >3e9 via growth chain + at-scale native finetune)",
+      "updated_at": "2026-07-16T17:36:57Z",
+      "url": "https://github.com/wordingone/ember/issues/29"
+    },
+    {
+      "body_sha256": "143116fd7a0c9cd5676547956d517c18bf0f9083e8f8e780689005c38d7dcaf0",
+      "comment_count": 6,
+      "created_at": "2026-07-03T15:12:37Z",
+      "labels": [],
+      "milestone": {
+        "number": 9,
+        "state": "open",
+        "title": "EMBER-CUSTODY-V2: Cursor and deadline enforcement"
+      },
+      "number": 35,
+      "state": "open",
+      "title": "GOAL.md contract-integrity audit: 13 internal defects, 26 unwatched mandates, 7 doc-reality divergences — cure plan",
+      "updated_at": "2026-07-18T14:47:49Z",
+      "url": "https://github.com/wordingone/ember/issues/35"
+    },
+    {
+      "body_sha256": "6ae9bc1bf995f72f746e36bca0242b659077d3cbcafdbb455b04a3dc90593e0a",
+      "comment_count": 3,
+      "created_at": "2026-07-03T17:12:29Z",
+      "labels": [],
+      "milestone": null,
+      "number": 37,
+      "state": "open",
+      "title": "8l contingency: mechanism-redesign ladder (adapter locus / objective / presentation) — fires only on A20 rung 2",
+      "updated_at": "2026-07-19T03:49:10Z",
+      "url": "https://github.com/wordingone/ember/issues/37"
+    },
+    {
+      "body_sha256": "19d9cd4145ebc8b5a12eab34ea899fb8591645e0a07a13b1f910e15d69979ae6",
+      "comment_count": 1,
+      "created_at": "2026-07-04T00:08:35Z",
+      "labels": [],
+      "milestone": null,
+      "number": 46,
+      "state": "open",
+      "title": "ember-cli vs avir-cli behavioral parity audit — round 1 results + cure campaign",
+      "updated_at": "2026-07-19T04:09:07Z",
+      "url": "https://github.com/wordingone/ember/issues/46"
+    },
+    {
+      "body_sha256": "6472a3339021a7e81a1a6256a99c8296e9510a768861ff68f5c3738df8d0c0cc",
+      "comment_count": 2,
+      "created_at": "2026-07-04T00:38:23Z",
+      "labels": [],
+      "milestone": null,
+      "number": 47,
+      "state": "open",
+      "title": "R3 feasibility receipt: 4-bit frozen 27B-class base + trainable slice, one train step + one inference pass co-resident on the 4090",
+      "updated_at": "2026-07-04T03:02:21Z",
+      "url": "https://github.com/wordingone/ember/issues/47"
+    },
+    {
+      "body_sha256": "4e3537ff75f19b2f464d5ff075ee44c6657a0667ef6efdd999f566ad335bf7ef",
+      "comment_count": 15,
+      "created_at": "2026-07-04T02:09:26Z",
+      "labels": [],
+      "milestone": null,
+      "number": 53,
+      "state": "open",
+      "title": "GPU window runbook: C11 flip -> E2B GATE-1/2 -> R3 phase B — frozen sequence + read-only pre-flight",
+      "updated_at": "2026-07-19T05:17:42Z",
+      "url": "https://github.com/wordingone/ember/issues/53"
+    },
+    {
+      "body_sha256": "56eaddbca5c1054c220ad70dcc1c44b4feac81c72b7772a2422b7e0b0659b4fc",
+      "comment_count": 2,
+      "created_at": "2026-07-04T02:40:28Z",
+      "labels": [],
+      "milestone": null,
+      "number": 54,
+      "state": "open",
+      "title": "ember-cli: flame animation jitters horizontally (per-frame width variance suspected) + art below bar",
+      "updated_at": "2026-07-19T14:33:22Z",
+      "url": "https://github.com/wordingone/ember/issues/54"
+    },
+    {
+      "body_sha256": "84241e3b1dfc6f3123691f4fba395ac2468ebad2ebbc4ff176b36cac9ff2bf18",
+      "comment_count": 0,
+      "created_at": "2026-07-04T02:42:44Z",
+      "labels": [],
+      "milestone": null,
+      "number": 55,
+      "state": "open",
+      "title": "Inference-to-training translation system: clocked cure for the 06-27 god-stack mandate (partial-activation FOR TRAINING, per operator)",
+      "updated_at": "2026-07-04T02:42:44Z",
+      "url": "https://github.com/wordingone/ember/issues/55"
+    },
+    {
+      "body_sha256": "d9b1c22ce2cc06a5a805a2873962ed044d0932cc843c1befee9fc0753a15aa07",
+      "comment_count": 2,
+      "created_at": "2026-07-04T15:27:10Z",
+      "labels": [],
+      "milestone": null,
+      "number": 92,
+      "state": "open",
+      "title": "Autonomy-relinquishment ladder: transfer the maintainer's levers to ember itself (R0-R5, invariant-gated)",
+      "updated_at": "2026-07-04T18:11:43Z",
+      "url": "https://github.com/wordingone/ember/issues/92"
+    },
+    {
+      "body_sha256": "f44c4eeea3aef332ecc0117fd3db226cb894e4a21935221fc583f14d80bc4fe3",
+      "comment_count": 1,
+      "created_at": "2026-07-04T16:28:51Z",
+      "labels": [],
+      "milestone": null,
+      "number": 98,
+      "state": "open",
+      "title": "C11 rebuild: genuinely re-earn the 1-hour and 3-hour developmental-duration milestones (audit finding, issue #97 item 1)",
+      "updated_at": "2026-07-04T18:24:53Z",
+      "url": "https://github.com/wordingone/ember/issues/98"
+    },
+    {
+      "body_sha256": "a7b631b819e05fa348a0871a6778dab56a01288ac2eb641a5af43dd8deee0beb",
+      "comment_count": 2,
+      "created_at": "2026-07-04T16:28:52Z",
+      "labels": [],
+      "milestone": null,
+      "number": 99,
+      "state": "open",
+      "title": "Publish checkpoints: rung-1 terminal + W1 from-scratch control to HF (public reproducibility)",
+      "updated_at": "2026-07-19T11:49:07Z",
+      "url": "https://github.com/wordingone/ember/issues/99"
+    },
+    {
+      "body_sha256": "f535ae847b5b66506e135ab61ba7d85e3204ae19285999bb4ce1427475c9ecaa",
+      "comment_count": 1,
+      "created_at": "2026-07-04T18:02:43Z",
+      "labels": [],
+      "milestone": null,
+      "number": 105,
+      "state": "open",
+      "title": "C-LADM control-class strengthening: model-authored same-task wrong attempts for the 48 backfilled tasks",
+      "updated_at": "2026-07-19T04:20:50Z",
+      "url": "https://github.com/wordingone/ember/issues/105"
+    },
+    {
+      "body_sha256": "110d78081b5940a30fc649dfa4303d629bd506504ade3cf711e825781d84ad02",
+      "comment_count": 0,
+      "created_at": "2026-07-04T18:09:20Z",
+      "labels": [],
+      "milestone": null,
+      "number": 107,
+      "state": "open",
+      "title": "C11: 24h tier re-earn — the banked crossing rests 12.5% on discredited inheritance",
+      "updated_at": "2026-07-04T18:09:20Z",
+      "url": "https://github.com/wordingone/ember/issues/107"
+    },
+    {
+      "body_sha256": "8b1be0e3c929bfed2bb67c99868819c54ef069de118061dd3daab251e1239e4e",
+      "comment_count": 2,
+      "created_at": "2026-07-04T18:20:52Z",
+      "labels": [],
+      "milestone": null,
+      "number": 111,
+      "state": "open",
+      "title": "ember-cli TUI quality bar: must-win capability checklist (standing target list, now clocked)",
+      "updated_at": "2026-07-05T18:05:23Z",
+      "url": "https://github.com/wordingone/ember/issues/111"
+    },
+    {
+      "body_sha256": "8b61ed848595028f8092777d796766b5e9b79a14d10f432c87a53f9ac11f3699",
+      "comment_count": 5,
+      "created_at": "2026-07-04T20:50:37Z",
+      "labels": [],
+      "milestone": null,
+      "number": 113,
+      "state": "open",
+      "title": "W2 G-arm runner: grow rung-1 terminal to 2x FF, train per preregistration, emit the frozen dump contract",
+      "updated_at": "2026-07-06T21:58:21Z",
+      "url": "https://github.com/wordingone/ember/issues/113"
+    },
+    {
+      "body_sha256": "bd060cbfc12b82e4305ebf2c8718ff7be0419bbdcc753229214719c838022f6a",
+      "comment_count": 3,
+      "created_at": "2026-07-05T02:54:56Z",
+      "labels": [],
+      "milestone": {
+        "number": 13,
+        "state": "open",
+        "title": "EMBER-EFF-V1: Compute screens and efficiency profiler"
+      },
+      "number": 118,
+      "state": "open",
+      "title": "P1 energy-law receipt program: §6b derived retrofits, first envelope points, H-MLI #1, measured-watts, ECON-PASS window fix",
+      "updated_at": "2026-07-16T18:48:00Z",
+      "url": "https://github.com/wordingone/ember/issues/118"
+    },
+    {
+      "body_sha256": "f958a16403a1f8e8e4b098e3b6bc98280b6d1f2490d584128d495d9e1088d8ce",
+      "comment_count": 2,
+      "created_at": "2026-07-05T03:51:25Z",
+      "labels": [],
+      "milestone": null,
+      "number": 121,
+      "state": "open",
+      "title": "W1 real GPU control run: decontam-gated launch, §6b-instrumented at birth, measured-watts (first on the GPU queue)",
+      "updated_at": "2026-07-09T16:02:22Z",
+      "url": "https://github.com/wordingone/ember/issues/121"
+    },
+    {
+      "body_sha256": "b455ba5b80f4191c532583394439ef695eb5051bc6220cf5a50bd11c29700ee6",
+      "comment_count": 25,
+      "created_at": "2026-07-05T06:51:28Z",
+      "labels": [],
+      "milestone": null,
+      "number": 123,
+      "state": "open",
+      "title": "C8 pre-registration: earn-to-grow protocol — falsifiers F1-F4, deletion arms, transfer, prior-art sweep gate",
+      "updated_at": "2026-07-10T07:14:17Z",
+      "url": "https://github.com/wordingone/ember/issues/123"
+    },
+    {
+      "body_sha256": "5e3b5ab32b486890d560e007987d5b29d888b6fa71f9fd679f6f944492883137",
+      "comment_count": 0,
+      "created_at": "2026-07-05T07:50:12Z",
+      "labels": [],
+      "milestone": null,
+      "number": 124,
+      "state": "open",
+      "title": "Flywheel-turn run under frozen kernel: dB/dround > 0 receipt (publication conjunct (a), rides the C14 resident window)",
+      "updated_at": "2026-07-05T07:50:12Z",
+      "url": "https://github.com/wordingone/ember/issues/124"
+    },
+    {
+      "body_sha256": "9bff30b442298470b1bf43f4786ac030f6d9cf3c2be915004bf3f75d75db8936",
+      "comment_count": 3,
+      "created_at": "2026-07-05T08:21:39Z",
+      "labels": [],
+      "milestone": null,
+      "number": 125,
+      "state": "open",
+      "title": "Owned-core capacity: 244K -> >=1.1e6 params (function-preserving widen + stabilize) — unspecced dependency of C14 B1 / row 18",
+      "updated_at": "2026-07-09T16:55:08Z",
+      "url": "https://github.com/wordingone/ember/issues/125"
+    },
+    {
+      "body_sha256": "276fa6ff9dfae517a3dfe3875661c0d0c00f54ac6ca016dfeacbd4139ac2bf6e",
+      "comment_count": 0,
+      "created_at": "2026-07-05T08:52:51Z",
+      "labels": [],
+      "milestone": null,
+      "number": 126,
+      "state": "open",
+      "title": "P1 envelope sweep: 6 LR-matched budgets + H-MLI rider (pre-registered protocol, §7.2 8-point floor)",
+      "updated_at": "2026-07-05T08:52:51Z",
+      "url": "https://github.com/wordingone/ember/issues/126"
+    },
+    {
+      "body_sha256": "5b406f73abbd3a49f27b8b47f6d356e8205b3d76437a51f0a3960fae3cd6fe10",
+      "comment_count": 2,
+      "created_at": "2026-07-05T11:29:45Z",
+      "labels": [],
+      "milestone": null,
+      "number": 139,
+      "state": "open",
+      "title": "C-E2B gap-closing re-run: scorer hook-in + surpass attempt (board row's cure path)",
+      "updated_at": "2026-07-09T21:05:44Z",
+      "url": "https://github.com/wordingone/ember/issues/139"
+    },
+    {
+      "body_sha256": "4f3f9d34ab39def2347d8b36ec99e85bef8aad5bb1cfd6b294127b9a9ae2c264",
+      "comment_count": 0,
+      "created_at": "2026-07-05T11:29:46Z",
+      "labels": [],
+      "milestone": null,
+      "number": 140,
+      "state": "open",
+      "title": "C-SURFACE2 live-telemetry re-capture: replay provenance is the named defect",
+      "updated_at": "2026-07-05T11:29:46Z",
+      "url": "https://github.com/wordingone/ember/issues/140"
+    },
+    {
+      "body_sha256": "6d8d91bcdba1c19acd81bfd4ca305bcabeb6e9719db8fd33d83e02958302e033",
+      "comment_count": 0,
+      "created_at": "2026-07-05T11:29:47Z",
+      "labels": [],
+      "milestone": null,
+      "number": 141,
+      "state": "open",
+      "title": "C15 tiny BitNet/1.58-bit comparison: trigger-gated spec (fires on first fp16 neural resident PASS)",
+      "updated_at": "2026-07-05T11:29:47Z",
+      "url": "https://github.com/wordingone/ember/issues/141"
+    },
+    {
+      "body_sha256": "3ebb2f14b2b0c10faf93cb36b2bb00a85c55bd2238855e4b1672e685ccccb90a",
+      "comment_count": 1,
+      "created_at": "2026-07-05T13:21:29Z",
+      "labels": [],
+      "milestone": null,
+      "number": 149,
+      "state": "open",
+      "title": "Public-tree board parity: classify + migrate the evidence behind every RED-on-public condition",
+      "updated_at": "2026-07-05T20:05:03Z",
+      "url": "https://github.com/wordingone/ember/issues/149"
+    },
+    {
+      "body_sha256": "5e38b0d4658a06b451282cb234c30b70f7f226c058d42ff217c3741eec76182e",
+      "comment_count": 2,
+      "created_at": "2026-07-05T15:26:41Z",
+      "labels": [],
+      "milestone": null,
+      "number": 154,
+      "state": "open",
+      "title": "Operator protocol: the maintainer session operates the ember agent through ember-cli, as a human would",
+      "updated_at": "2026-07-06T01:59:39Z",
+      "url": "https://github.com/wordingone/ember/issues/154"
+    },
+    {
+      "body_sha256": "ce2abbc96739eec321a03215128591786058ea721c66cb517e5e9e086a7cceb4",
+      "comment_count": 4,
+      "created_at": "2026-07-05T15:36:34Z",
+      "labels": [],
+      "milestone": {
+        "number": 18,
+        "state": "open",
+        "title": "EMBER-06: Autonomous research bootstrap"
+      },
+      "number": 155,
+      "state": "open",
+      "title": "Research re-open queue: directed tracks return to the GPU under the field-contribution bar",
+      "updated_at": "2026-07-16T17:37:01Z",
+      "url": "https://github.com/wordingone/ember/issues/155"
+    },
+    {
+      "body_sha256": "270f15b00e2d4b374e41f3013f85db1779b36fbb88bbdeba3fbd9fcacb52ffe5",
+      "comment_count": 0,
+      "created_at": "2026-07-05T16:12:55Z",
+      "labels": [],
+      "milestone": null,
+      "number": 158,
+      "state": "open",
+      "title": "ember-native engine (ember.cpp): collapse training+inference into one owned substrate — trigger ladder + rung-0 kernel seam",
+      "updated_at": "2026-07-05T16:12:55Z",
+      "url": "https://github.com/wordingone/ember/issues/158"
+    },
+    {
+      "body_sha256": "f5975a7560db480c0e794a712ea1047969e326840d7bca15b0fe2113bcd671eb",
+      "comment_count": 2,
+      "created_at": "2026-07-05T16:17:04Z",
+      "labels": [],
+      "milestone": null,
+      "number": 159,
+      "state": "open",
+      "title": "ember-cli hardening bar: zero CLI-side crashes, battle-test harness (predecessor-CLI standard)",
+      "updated_at": "2026-07-16T19:02:46Z",
+      "url": "https://github.com/wordingone/ember/issues/159"
+    },
+    {
+      "body_sha256": "6e4ea3faacc5ee46da50934421748a099e893866b6d3266ffaf5adf6a24ed741",
+      "comment_count": 1,
+      "created_at": "2026-07-06T01:48:25Z",
+      "labels": [],
+      "milestone": null,
+      "number": 200,
+      "state": "open",
+      "title": "ember-cli: automations primitive (scheduled goal runs) — field-exemplar-grounded spec for the R-ladder's self-directed rungs",
+      "updated_at": "2026-07-06T02:56:46Z",
+      "url": "https://github.com/wordingone/ember/issues/200"
+    },
+    {
+      "body_sha256": "ff317288f706af87704beeec636bf9a6ea2d34502f6a1d38fae19ba47246a33d",
+      "comment_count": 0,
+      "created_at": "2026-07-06T03:00:09Z",
+      "labels": [],
+      "milestone": null,
+      "number": 203,
+      "state": "open",
+      "title": "Corpus hygiene: v0-00025.bin carries massively repeated content (~117x mean 13-gram recurrence) — training-data quality concern independent of decontam",
+      "updated_at": "2026-07-06T03:00:09Z",
+      "url": "https://github.com/wordingone/ember/issues/203"
+    },
+    {
+      "body_sha256": "9cb66520958604b7a3c32527623989641ff9e491e1acbce815d9ed575470c395",
+      "comment_count": 0,
+      "created_at": "2026-07-06T03:26:09Z",
+      "labels": [],
+      "milestone": null,
+      "number": 206,
+      "state": "open",
+      "title": "Research-core priority inversion: arms produce zero terminal receipts while machinery consumes windows (operator callout 2026-07-06)",
+      "updated_at": "2026-07-06T04:51:52Z",
+      "url": "https://github.com/wordingone/ember/issues/206"
+    },
+    {
+      "body_sha256": "f48c8e10d22015019672f6334dfaad70008c84bf54080a60469a9ccae39c8eed",
+      "comment_count": 26,
+      "created_at": "2026-07-06T03:32:55Z",
+      "labels": [],
+      "milestone": {
+        "number": 23,
+        "state": "open",
+        "title": "EMBER-10: Sovereign local AI lab"
+      },
+      "number": 207,
+      "state": "open",
+      "title": "BOTTLENECK LEDGER: single-4090 full local FM creation — standing dispatch authority (operator mandate, third push, 2026-07-06)",
+      "updated_at": "2026-07-16T17:37:04Z",
+      "url": "https://github.com/wordingone/ember/issues/207"
+    },
+    {
+      "body_sha256": "71d02a6f23c17546fd43c75417a0463989a454b166c9836bff4f825343023278",
+      "comment_count": 1,
+      "created_at": "2026-07-06T04:35:44Z",
+      "labels": [],
+      "milestone": null,
+      "number": 211,
+      "state": "open",
+      "title": "ember-cli /goal: 1:1 port of the codex goal-mode mechanism, then improve (constitutional organ)",
+      "updated_at": "2026-07-10T05:20:12Z",
+      "url": "https://github.com/wordingone/ember/issues/211"
+    },
+    {
+      "body_sha256": "98c14f9fb92991cfc7ff10509cb469fd781a257ee8f35594b52fce20cc4aa825",
+      "comment_count": 2,
+      "created_at": "2026-07-06T04:52:42Z",
+      "labels": [],
+      "milestone": null,
+      "number": 214,
+      "state": "open",
+      "title": "Observatory flame-truth: the flame renders the organism's real internal state (P-C constitutional)",
+      "updated_at": "2026-07-16T16:18:49Z",
+      "url": "https://github.com/wordingone/ember/issues/214"
+    },
+    {
+      "body_sha256": "02e6546c91658018ebdc701fc63d17b285278434e2e5f73ece3466a6c124fea6",
+      "comment_count": 6,
+      "created_at": "2026-07-06T10:06:15Z",
+      "labels": [],
+      "milestone": null,
+      "number": 216,
+      "state": "open",
+      "title": "Pre-existing test failures in the resident-training core (verifier-conditioned update no-op suspicion + two gate-predicate failures)",
+      "updated_at": "2026-07-10T21:14:45Z",
+      "url": "https://github.com/wordingone/ember/issues/216"
+    },
+    {
+      "body_sha256": "a17fcced1053d1aea16077a37394fb5f90855e3840b49f94c1dd4572762f2d55",
+      "comment_count": 0,
+      "created_at": "2026-07-06T11:10:00Z",
+      "labels": [],
+      "milestone": null,
+      "number": 222,
+      "state": "open",
+      "title": "c7_deletion_test standalone selftest fails its own load-bearing bar (deletion_gap -0.1250 vs >=0.1200)",
+      "updated_at": "2026-07-06T11:10:00Z",
+      "url": "https://github.com/wordingone/ember/issues/222"
+    },
+    {
+      "body_sha256": "dcd71aad1976d05a41db8a4792dd45012fdbebf736396b1356788c4fd686fad5",
+      "comment_count": 0,
+      "created_at": "2026-07-06T14:28:01Z",
+      "labels": [],
+      "milestone": null,
+      "number": 235,
+      "state": "open",
+      "title": "Disposition of the unmerged chore/board-suite-port line — audit for other only-there artifacts, then retire",
+      "updated_at": "2026-07-06T14:28:01Z",
+      "url": "https://github.com/wordingone/ember/issues/235"
+    },
+    {
+      "body_sha256": "ba5fd35ee17c6cd03a6ec621689e3d566c6e61d97b3a94f6ada47ad6bddd3683",
+      "comment_count": 6,
+      "created_at": "2026-07-06T15:07:00Z",
+      "labels": [
+        "bug"
+      ],
+      "milestone": null,
+      "number": 239,
+      "state": "open",
+      "title": "cockpit: HTTP 400/error retry loop has no circuit breaker — 20h invisible wedge",
+      "updated_at": "2026-07-21T06:27:27Z",
+      "url": "https://github.com/wordingone/ember/issues/239"
+    },
+    {
+      "body_sha256": "c97bf16d133014653736e9ef0519f22395288edb639046c60f9eb5821eb1a5a1",
+      "comment_count": 1,
+      "created_at": "2026-07-06T15:07:02Z",
+      "labels": [
+        "bug"
+      ],
+      "milestone": null,
+      "number": 240,
+      "state": "open",
+      "title": "cockpit transcript: raw tool_result JSON and internal debug objects rendered to the user",
+      "updated_at": "2026-07-21T08:21:11Z",
+      "url": "https://github.com/wordingone/ember/issues/240"
+    },
+    {
+      "body_sha256": "8cea5bc35a8d6b43175fd83c6b3b36cef3a78c08c271930aaa4834fe52a59caf",
+      "comment_count": 1,
+      "created_at": "2026-07-06T15:14:03Z",
+      "labels": [],
+      "milestone": null,
+      "number": 241,
+      "state": "open",
+      "title": "rung-3 (4.24B) un-fail: per-layer grad-fuse + momentum precision — two grounded moves, no new research",
+      "updated_at": "2026-07-10T00:53:57Z",
+      "url": "https://github.com/wordingone/ember/issues/241"
+    },
+    {
+      "body_sha256": "68d386f2f1979488bcae5e61baa22148225567ee82a39a529936f82abe41075f",
+      "comment_count": 1,
+      "created_at": "2026-07-06T15:15:29Z",
+      "labels": [],
+      "milestone": null,
+      "number": 242,
+      "state": "open",
+      "title": "ember-cli live-verification program: every feature is presumed BROKEN until live-demonstrated",
+      "updated_at": "2026-07-06T15:39:02Z",
+      "url": "https://github.com/wordingone/ember/issues/242"
+    },
+    {
+      "body_sha256": "f5e7ab9b3434abd6a57a77db103dac1a8759463233e4ff8bc0162b2c4917ed7c",
+      "comment_count": 2,
+      "created_at": "2026-07-06T15:52:59Z",
+      "labels": [],
+      "milestone": null,
+      "number": 247,
+      "state": "open",
+      "title": "repo-guard [names] scan is blind to non-UTF-8 (UTF-16/32 BOM) tracked files",
+      "updated_at": "2026-07-19T14:02:10Z",
+      "url": "https://github.com/wordingone/ember/issues/247"
+    },
+    {
+      "body_sha256": "6b61a9e59f4941d2ab218d056bd501347cb7d405f46132d7ed59a8f17d8b2d22",
+      "comment_count": 1,
+      "created_at": "2026-07-06T16:01:13Z",
+      "labels": [],
+      "milestone": null,
+      "number": 248,
+      "state": "open",
+      "title": "Repo organization: scripts/ 79.6% and receipts/ 59% loose-at-root, no claim-to-receipt index — pre-paper floor + ranked cleanup plan",
+      "updated_at": "2026-07-06T16:31:28Z",
+      "url": "https://github.com/wordingone/ember/issues/248"
+    },
+    {
+      "body_sha256": "2ad40b9864b3041c2707ba3dfa31a0364d8b3233115a9a0b4e8423e65403a638",
+      "comment_count": 0,
+      "created_at": "2026-07-06T16:09:39Z",
+      "labels": [],
+      "milestone": null,
+      "number": 252,
+      "state": "open",
+      "title": "Dead controls: Esc-interrupt, Alt+P, Alt+O, Ctrl+E/Ctrl+G are wired no-ops; slash autocomplete never renders; 3 unreconciled permission-mode state machines",
+      "updated_at": "2026-07-06T16:09:39Z",
+      "url": "https://github.com/wordingone/ember/issues/252"
+    },
+    {
+      "body_sha256": "93f101b2c8c440e7b9d3c440fcc2e35d7b2078bbef6cfb2e574c16bc3f8ace50",
+      "comment_count": 1,
+      "created_at": "2026-07-06T16:55:08Z",
+      "labels": [],
+      "milestone": null,
+      "number": 259,
+      "state": "open",
+      "title": "Redaction pass rewrites functional code segments (REDACTION-BROKE-PATH class)",
+      "updated_at": "2026-07-06T17:29:30Z",
+      "url": "https://github.com/wordingone/ember/issues/259"
+    },
+    {
+      "body_sha256": "b95b33ba141287c0ebf4dfe45d2195392d7e918c3b7dd6470f4bc1f7255866ca",
+      "comment_count": 1,
+      "created_at": "2026-07-06T17:30:08Z",
+      "labels": [],
+      "milestone": null,
+      "number": 265,
+      "state": "open",
+      "title": "C-MANIFEST denominator: refounded Constitution broke the 'planned pieces' source — reconciliation ruling",
+      "updated_at": "2026-07-09T21:05:48Z",
+      "url": "https://github.com/wordingone/ember/issues/265"
+    },
+    {
+      "body_sha256": "41d23361d3e045ed5b509a6a67a9932778d896570d7926d2c3f64e559ec96a3b",
+      "comment_count": 1,
+      "created_at": "2026-07-06T17:38:44Z",
+      "labels": [],
+      "milestone": null,
+      "number": 267,
+      "state": "open",
+      "title": "ember-cli: maxOutputTokens/sampling caps not applied to external EMBER_MODEL_URL endpoints (managed-spawn-only today)",
+      "updated_at": "2026-07-16T19:02:41Z",
+      "url": "https://github.com/wordingone/ember/issues/267"
+    },
+    {
+      "body_sha256": "6b1fd4522f27d770f2bd2b31accc64d311db9b59522cd761852b6a8e73d7ea32",
+      "comment_count": 0,
+      "created_at": "2026-07-06T18:43:44Z",
+      "labels": [],
+      "milestone": null,
+      "number": 275,
+      "state": "open",
+      "title": "eval-batch tokenizer-binding receipt missing (P2-G1 contamination-audit finding)",
+      "updated_at": "2026-07-06T18:43:44Z",
+      "url": "https://github.com/wordingone/ember/issues/275"
+    },
+    {
+      "body_sha256": "c342d8f29a5cee0271fc6aa532daacb975e8aaa3d08082f1ebaf12d151251b37",
+      "comment_count": 0,
+      "created_at": "2026-07-06T19:49:49Z",
+      "labels": [],
+      "milestone": null,
+      "number": 279,
+      "state": "open",
+      "title": "goal-continuation engine has no re-arm: a transiently-blocked poke is a permanently lost wakeup",
+      "updated_at": "2026-07-06T19:49:49Z",
+      "url": "https://github.com/wordingone/ember/issues/279"
+    },
+    {
+      "body_sha256": "db91e24e3657d76fba8d7768e14aa11f67da21553e5e7e098d7fec43e7ec34f8",
+      "comment_count": 2,
+      "created_at": "2026-07-06T20:03:59Z",
+      "labels": [],
+      "milestone": null,
+      "number": 280,
+      "state": "open",
+      "title": "grow operator: exact duplication never breaks twin symmetry — rung-1 grow was capacity-null as-run (K1; gates W2 G-arm launch)",
+      "updated_at": "2026-07-06T21:58:19Z",
+      "url": "https://github.com/wordingone/ember/issues/280"
+    },
+    {
+      "body_sha256": "e7e32faf781bcbbc79818ab3e14da3d820928234e35cd152843db22b5207c69b",
+      "comment_count": 2,
+      "created_at": "2026-07-06T20:09:37Z",
+      "labels": [],
+      "milestone": null,
+      "number": 281,
+      "state": "open",
+      "title": "INVARIANT genesis: mechanization spec (stamping chokepoint, C-INV probe, receipt chain-link, incidents ledger, ceremony order)",
+      "updated_at": "2026-07-06T21:09:52Z",
+      "url": "https://github.com/wordingone/ember/issues/281"
+    },
+    {
+      "body_sha256": "1a7eec28ce18df100e2e1d7ef780d0ac3832e6f4cbfb003726193c2ed52d6f6d",
+      "comment_count": 0,
+      "created_at": "2026-07-06T20:37:58Z",
+      "labels": [],
+      "milestone": null,
+      "number": 285,
+      "state": "open",
+      "title": "Clean corpus v1: external-model-free assembly + tokenizer re-freeze + fresh pretrain (the road to the first invariant-protected checkpoint)",
+      "updated_at": "2026-07-06T20:37:58Z",
+      "url": "https://github.com/wordingone/ember/issues/285"
+    },
+    {
+      "body_sha256": "8c1ceee9745014e7207272c6d0352e05335b34094eaa398d0bf31e8e4d364f09",
+      "comment_count": 0,
+      "created_at": "2026-07-06T20:45:35Z",
+      "labels": [],
+      "milestone": null,
+      "number": 286,
+      "state": "open",
+      "title": "ember-cli welcome/status surface: 8 named layout+rendering defects vs field exemplar (fixed-width, border corruption, void dominance, status-bar artifacts)",
+      "updated_at": "2026-07-06T20:45:35Z",
+      "url": "https://github.com/wordingone/ember/issues/286"
+    },
+    {
+      "body_sha256": "86c9cf361baf8fa3fe2083338452851ec24d609e2eec9fd794cbbc31dafe613b",
+      "comment_count": 0,
+      "created_at": "2026-07-06T21:35:19Z",
+      "labels": [],
+      "milestone": null,
+      "number": 290,
+      "state": "open",
+      "title": "decontam mp scan: headroom assert scope + worker teardown on main-process death",
+      "updated_at": "2026-07-06T21:35:19Z",
+      "url": "https://github.com/wordingone/ember/issues/290"
+    },
+    {
+      "body_sha256": "734b09b47206d695b1984f7da82a202c3ae0b315df707d047e02b4a432a5ee50",
+      "comment_count": 2,
+      "created_at": "2026-07-06T21:54:21Z",
+      "labels": [],
+      "milestone": null,
+      "number": 292,
+      "state": "open",
+      "title": "ember-cli: resize-back to a previously-seen size not detected (stdout.columns stuck at intermediate size)",
+      "updated_at": "2026-07-09T09:59:27Z",
+      "url": "https://github.com/wordingone/ember/issues/292"
+    },
+    {
+      "body_sha256": "d7f45f4a82cc61374f1d881aee2d034b5719f00a17622d2632fd5197371eba69",
+      "comment_count": 3,
+      "created_at": "2026-07-07T00:49:58Z",
+      "labels": [],
+      "milestone": {
+        "number": 11,
+        "state": "open",
+        "title": "EMBER-03A: Visible live-graphs panel"
+      },
+      "number": 303,
+      "state": "open",
+      "title": "cockpit: live window shows zero activity while the organism works; bottom UI region missized vs top",
+      "updated_at": "2026-07-19T00:57:44Z",
+      "url": "https://github.com/wordingone/ember/issues/303"
+    },
+    {
+      "body_sha256": "c0a1c9100c450b63026c16aa80b23fa47d3d92a20da1c971db0b9f7e31e8934d",
+      "comment_count": 0,
+      "created_at": "2026-07-07T04:06:59Z",
+      "labels": [],
+      "milestone": null,
+      "number": 315,
+      "state": "open",
+      "title": "P4: clean-corpus map v1 + L3 boundary ruling v2 (PROPOSED) — ratification + obtainability probes",
+      "updated_at": "2026-07-07T04:06:59Z",
+      "url": "https://github.com/wordingone/ember/issues/315"
+    },
+    {
+      "body_sha256": "57aa5a2794dab9698b1a99409bc7377b477961ac64dabb437fac0598c3bdb55b",
+      "comment_count": 0,
+      "created_at": "2026-07-07T04:49:28Z",
+      "labels": [],
+      "milestone": null,
+      "number": 317,
+      "state": "open",
+      "title": "repo hygiene: tracked receipts/manifests carry machine-local absolute paths",
+      "updated_at": "2026-07-07T04:49:28Z",
+      "url": "https://github.com/wordingone/ember/issues/317"
+    },
+    {
+      "body_sha256": "34cdff196ddb2685f49cca7e8a562f9fadb5e3d13ea4732709ed948ebbb1bad6",
+      "comment_count": 1,
+      "created_at": "2026-07-07T05:40:29Z",
+      "labels": [],
+      "milestone": null,
+      "number": 320,
+      "state": "open",
+      "title": "gate gap: C-BASE degeneracy hardening checks loss VARIANCE but not loss LEVEL — a random-logits receipt passes",
+      "updated_at": "2026-07-07T06:41:49Z",
+      "url": "https://github.com/wordingone/ember/issues/320"
+    },
+    {
+      "body_sha256": "acaf32dbf1aa10702499d13e41a87834be2cc23b678c4f8592621f0f498e0500",
+      "comment_count": 6,
+      "created_at": "2026-07-07T06:03:33Z",
+      "labels": [],
+      "milestone": null,
+      "number": 321,
+      "state": "open",
+      "title": "T1 pilot pre-registration v1.1-PROPOSED: ember-lineage OCR bootstrap (M0-M3, panel-hardened)",
+      "updated_at": "2026-07-08T10:57:54Z",
+      "url": "https://github.com/wordingone/ember/issues/321"
+    },
+    {
+      "body_sha256": "c29c3d29650d81b67f8b2de030f9c795c6f689a7b076d725dd757876dcc7f843",
+      "comment_count": 0,
+      "created_at": "2026-07-07T07:04:00Z",
+      "labels": [],
+      "milestone": null,
+      "number": 322,
+      "state": "open",
+      "title": "W1 launch-blocked: #121's live path references an unlanded lineage + two spec-vs-code defects in w1_collapse_control_run.py",
+      "updated_at": "2026-07-07T07:04:00Z",
+      "url": "https://github.com/wordingone/ember/issues/322"
+    },
+    {
+      "body_sha256": "d9e008da4f6afdf5689cd4c6f5d6e3ff87a00250aa9f873264413f1d93ba2c0a",
+      "comment_count": 1,
+      "created_at": "2026-07-07T07:32:40Z",
+      "labels": [],
+      "milestone": null,
+      "number": 324,
+      "state": "open",
+      "title": "Unlanded-lineage audit: third recurrence of the goalforge orphan class (capacity.py, manifest_sha.py/joules.py) — sweep + standing inventory",
+      "updated_at": "2026-07-19T05:21:08Z",
+      "url": "https://github.com/wordingone/ember/issues/324"
+    },
+    {
+      "body_sha256": "32dc40395ce9ff7b23f584a0ee8323b10d38c672c17b3c6be0e6f46cbea341bc",
+      "comment_count": 0,
+      "created_at": "2026-07-07T08:38:05Z",
+      "labels": [],
+      "milestone": null,
+      "number": 331,
+      "state": "open",
+      "title": "MP contamination scanner: round-robin shard distribution skips 7 of 25 true shard boundaries (boundary-window coverage gap)",
+      "updated_at": "2026-07-07T08:38:05Z",
+      "url": "https://github.com/wordingone/ember/issues/331"
+    },
+    {
+      "body_sha256": "763e01bf88d663560e2a5228879b62992dd69022241aef016ec233594b98d3ce",
+      "comment_count": 0,
+      "created_at": "2026-07-07T09:14:28Z",
+      "labels": [],
+      "milestone": null,
+      "number": 335,
+      "state": "open",
+      "title": "Tighten classify_contamination_self_matches: interval-overlap should be strict containment (boundary-straddling foreign match could classify as self)",
+      "updated_at": "2026-07-07T09:14:28Z",
+      "url": "https://github.com/wordingone/ember/issues/335"
+    },
+    {
+      "body_sha256": "1daa0185caa4c83c53a1224a705a95f7f6a46724f268d90c930279a74cbba812",
+      "comment_count": 0,
+      "created_at": "2026-07-07T10:01:05Z",
+      "labels": [],
+      "milestone": null,
+      "number": 339,
+      "state": "open",
+      "title": "W1 interpretation pre-registration: reading rules for the control-arm tokens_to_match receipt (filed before the confirmation receipt)",
+      "updated_at": "2026-07-07T10:01:05Z",
+      "url": "https://github.com/wordingone/ember/issues/339"
+    },
+    {
+      "body_sha256": "461b208b99547e2fa658218330e850c7b027a9eac2dde2b34c3c5f942629858d",
+      "comment_count": 2,
+      "created_at": "2026-07-07T10:46:30Z",
+      "labels": [],
+      "milestone": null,
+      "number": 344,
+      "state": "open",
+      "title": "Cockpit boot loads the resident inference model unconditionally — needs GPU-lease awareness (OOM-killed a live training leg)",
+      "updated_at": "2026-07-16T19:02:23Z",
+      "url": "https://github.com/wordingone/ember/issues/344"
+    },
+    {
+      "body_sha256": "d499e5a7c56e15e0c6dc937220cefb9158fe1fb52f5b480567162b8520515073",
+      "comment_count": 0,
+      "created_at": "2026-07-07T10:53:18Z",
+      "labels": [],
+      "milestone": null,
+      "number": 345,
+      "state": "open",
+      "title": "W1 post-receipt check battery: target re-eval + eval-noise + grow-step marginal control (builder-dispatchable, gated on the clean W1 receipt)",
+      "updated_at": "2026-07-07T10:53:18Z",
+      "url": "https://github.com/wordingone/ember/issues/345"
+    },
+    {
+      "body_sha256": "49bc8c9bd59c57a07bf41dc04acee188dcae9ccd74da2838b503c75a52463b2f",
+      "comment_count": 1,
+      "created_at": "2026-07-07T11:46:53Z",
+      "labels": [],
+      "milestone": null,
+      "number": 354,
+      "state": "open",
+      "title": "ConPTY injects NUL bytes into styled non-ASCII glyph runs (Windows console-host layer)",
+      "updated_at": "2026-07-07T11:51:57Z",
+      "url": "https://github.com/wordingone/ember/issues/354"
+    },
+    {
+      "body_sha256": "f0cadb933f71c6473af3939d22f191abfe4b64d9080ee55c21a85ba92d3715c1",
+      "comment_count": 5,
+      "created_at": "2026-07-07T12:34:49Z",
+      "labels": [],
+      "milestone": null,
+      "number": 362,
+      "state": "open",
+      "title": "Cockpit liveness watchdog: standing loop for the body's up/corpse/wrong-state detection",
+      "updated_at": "2026-07-18T18:06:59Z",
+      "url": "https://github.com/wordingone/ember/issues/362"
+    },
+    {
+      "body_sha256": "6c9c2e351d5f070352e744e6c9dffbf224797d1aade63798a7837f8d5390fdec",
+      "comment_count": 0,
+      "created_at": "2026-07-07T13:32:57Z",
+      "labels": [],
+      "milestone": null,
+      "number": 367,
+      "state": "open",
+      "title": "Lease-window placeholder: the cockpit's screen slot must say WHY it is empty",
+      "updated_at": "2026-07-07T13:32:57Z",
+      "url": "https://github.com/wordingone/ember/issues/367"
+    },
+    {
+      "body_sha256": "0e9183a5a421c52f0c33ff4851f8b3f5c012965a92c75d89926ff3350867afd2",
+      "comment_count": 0,
+      "created_at": "2026-07-07T13:59:53Z",
+      "labels": [],
+      "milestone": null,
+      "number": 370,
+      "state": "open",
+      "title": "Contamination recheck must not cost 25 CPU-minutes per launch: persistent corpus n-gram index + GPU overlap",
+      "updated_at": "2026-07-07T13:59:53Z",
+      "url": "https://github.com/wordingone/ember/issues/370"
+    },
+    {
+      "body_sha256": "33700cc0ad8cc09ed5d083672e1e33556d3d6a86b4ad8f63b113a8e405da2e12",
+      "comment_count": 6,
+      "created_at": "2026-07-07T14:52:19Z",
+      "labels": [],
+      "milestone": null,
+      "number": 372,
+      "state": "open",
+      "title": "W1c prereg (FROZEN): K>=10 fresh-batch paired fp32 CI — the #339 §4.1 mandatory gate",
+      "updated_at": "2026-07-08T07:34:27Z",
+      "url": "https://github.com/wordingone/ember/issues/372"
+    },
+    {
+      "body_sha256": "aebe38aa9c3666ddc9523f3659de0ef54d774d7ec17a1560f90b258a22b8627e",
+      "comment_count": 4,
+      "created_at": "2026-07-07T15:50:05Z",
+      "labels": [],
+      "milestone": null,
+      "number": 378,
+      "state": "open",
+      "title": "Custody class: UNTRACKED cited receipts vanished from receipts/ twice (v0-live, c9-cadence) — cited receipts must be tracked + probed",
+      "updated_at": "2026-07-18T07:28:32Z",
+      "url": "https://github.com/wordingone/ember/issues/378"
+    },
+    {
+      "body_sha256": "2a66a7e02faf15c69b131911dee74500b93e0b6e0f2d2f6a2a523b6434a8f1dd",
+      "comment_count": 3,
+      "created_at": "2026-07-07T20:59:15Z",
+      "labels": [],
+      "milestone": null,
+      "number": 400,
+      "state": "open",
+      "title": "Board-time writers to canonical receipts/ round 2: milestone-reconciliation + publication-gate (the #387 sweep missed them)",
+      "updated_at": "2026-07-19T14:19:18Z",
+      "url": "https://github.com/wordingone/ember/issues/400"
+    },
+    {
+      "body_sha256": "f82fe3af8255f5cf3ee5c526a2ffcb2346f9953223075da6cf005d78e47427c9",
+      "comment_count": 0,
+      "created_at": "2026-07-08T04:23:13Z",
+      "labels": [],
+      "milestone": null,
+      "number": 406,
+      "state": "open",
+      "title": "Shared _function_preservation_check() segfaults at rung-2 scale (memory lifecycle: two models resident, uncollected)",
+      "updated_at": "2026-07-08T04:23:13Z",
+      "url": "https://github.com/wordingone/ember/issues/406"
+    },
+    {
+      "body_sha256": "5dc4fdccc865e1a5e59df3c6304669c49ba14fec7c94f3e97ccbed7205b2a7db",
+      "comment_count": 1,
+      "created_at": "2026-07-08T06:11:35Z",
+      "labels": [],
+      "milestone": null,
+      "number": 413,
+      "state": "open",
+      "title": "Cockpit process death is invisible: frozen pixels pass for a live body (liveness gap)",
+      "updated_at": "2026-07-08T06:12:13Z",
+      "url": "https://github.com/wordingone/ember/issues/413"
+    },
+    {
+      "body_sha256": "674b32e20ea501e6fe10372c4dcfb4ba38fd1480b7de21e52c07d16ad2f830a3",
+      "comment_count": 0,
+      "created_at": "2026-07-08T07:04:17Z",
+      "labels": [],
+      "milestone": null,
+      "number": 421,
+      "state": "open",
+      "title": "repo-guard branch-name check + GitHub rename API footgun: renaming a branch with an open PR auto-closes the PR (2 occurrences 2026-07-08)",
+      "updated_at": "2026-07-08T07:04:17Z",
+      "url": "https://github.com/wordingone/ember/issues/421"
+    },
+    {
+      "body_sha256": "9635f7afc7b10e937e2602f443f9b219f954731e075be6596fceec611b1fe97e",
+      "comment_count": 0,
+      "created_at": "2026-07-08T07:54:47Z",
+      "labels": [],
+      "milestone": null,
+      "number": 427,
+      "state": "open",
+      "title": "VOID receipts record truncated 16-hex sha prefixes in supersedes[] — void_supersession requires full 64-char digests",
+      "updated_at": "2026-07-08T07:54:47Z",
+      "url": "https://github.com/wordingone/ember/issues/427"
+    },
+    {
+      "body_sha256": "71dfb2edc619f0df20e012398d72c2bcc3eb44b5ea850117b193f50adad319f3",
+      "comment_count": 3,
+      "created_at": "2026-07-08T11:50:12Z",
+      "labels": [],
+      "milestone": null,
+      "number": 440,
+      "state": "open",
+      "title": "Corpus defect: massive late-region near-duplication in shards-v0 (shard-19 x1044 concentration + tail zero-clean) — repair-vs-certify decision tree",
+      "updated_at": "2026-07-08T16:06:52Z",
+      "url": "https://github.com/wordingone/ember/issues/440"
+    },
+    {
+      "body_sha256": "a075fc4942a19eade2f2e53ac0f8a5160551e26935063d2c912ce0a1da2432a2",
+      "comment_count": 15,
+      "created_at": "2026-07-08T14:15:57Z",
+      "labels": [],
+      "milestone": null,
+      "number": 449,
+      "state": "open",
+      "title": "PREREG: rung-2 d_comm prediction — per-class, per-convention, frozen before the rung-2 grow event",
+      "updated_at": "2026-07-11T09:00:57Z",
+      "url": "https://github.com/wordingone/ember/issues/449"
+    },
+    {
+      "body_sha256": "5dfb7d4ea3b607d4251739dfc8a3310654ebc1a1c2b6c8249eb87a0cf4164749",
+      "comment_count": 2,
+      "created_at": "2026-07-08T15:35:26Z",
+      "labels": [],
+      "milestone": null,
+      "number": 457,
+      "state": "open",
+      "title": "Commit-exhaustion crash class: Windows commit limit (16GB fixed-init pagefile) unifies all 2026-07-08 native crashes + clean MemoryErrors; cures = file-backed optimizer state + commit-aware preflights",
+      "updated_at": "2026-07-08T16:00:54Z",
+      "url": "https://github.com/wordingone/ember/issues/457"
+    },
+    {
+      "body_sha256": "e5b7ff7ebf63531f705259ff84daa09f48efbe6425abf4d763614e61a1060436",
+      "comment_count": 2,
+      "created_at": "2026-07-08T18:34:52Z",
+      "labels": [],
+      "milestone": null,
+      "number": 466,
+      "state": "open",
+      "title": "rung-2 REAL grow event + production stabilization: combined runner spec (B1/B2/B3 capture + 30-step stabilization under the receipts-proven config)",
+      "updated_at": "2026-07-08T23:15:51Z",
+      "url": "https://github.com/wordingone/ember/issues/466"
+    },
+    {
+      "body_sha256": "6f42edf4920b4db59557ccc66e4ddea284465bc60a81d7770b8cf674f6129925",
+      "comment_count": 13,
+      "created_at": "2026-07-08T21:45:03Z",
+      "labels": [],
+      "milestone": null,
+      "number": 480,
+      "state": "open",
+      "title": "rung-2 stabilize: production config re-spec against the 30.9GiB wall receipt (grad-ckpt / batch / offload)",
+      "updated_at": "2026-07-10T13:19:11Z",
+      "url": "https://github.com/wordingone/ember/issues/480"
+    },
+    {
+      "body_sha256": "95685553c96680c25a3126448c6971189468122419344f56fe341b87563fe7de",
+      "comment_count": 6,
+      "created_at": "2026-07-08T21:47:46Z",
+      "labels": [],
+      "milestone": null,
+      "number": 481,
+      "state": "open",
+      "title": "public-surface legibility: stranger-audit cures (C-code collision, stale README, on-ramp, state-home pointer)",
+      "updated_at": "2026-07-19T05:06:05Z",
+      "url": "https://github.com/wordingone/ember/issues/481"
+    },
+    {
+      "body_sha256": "e758c2a44c8176b6e22ec9e589196a05c97b662c95276a01680cf70e4997c4bf",
+      "comment_count": 1,
+      "created_at": "2026-07-08T22:08:41Z",
+      "labels": [],
+      "milestone": null,
+      "number": 483,
+      "state": "open",
+      "title": "A/B/C loop revival: episodic loop re-run under the cured gate (rung A) + first goal-organ-driven session (rung B)",
+      "updated_at": "2026-07-08T22:22:16Z",
+      "url": "https://github.com/wordingone/ember/issues/483"
+    },
+    {
+      "body_sha256": "eaca640aef2abdf9948023868de79ccc744e99e7e5d257ffffdeb2d2260fa9db",
+      "comment_count": 2,
+      "created_at": "2026-07-08T22:16:27Z",
+      "labels": [],
+      "milestone": null,
+      "number": 485,
+      "state": "open",
+      "title": "the body has never displayed the organism: ember-cli must render LIVE activity (operator: 3 weeks up, zero events ever seen)",
+      "updated_at": "2026-07-17T17:27:20Z",
+      "url": "https://github.com/wordingone/ember/issues/485"
+    },
+    {
+      "body_sha256": "965801369d5a842362d83f08373de863ea98388e769183a62efccfcaa7f6d9f0",
+      "comment_count": 1,
+      "created_at": "2026-07-08T22:47:21Z",
+      "labels": [],
+      "milestone": null,
+      "number": 488,
+      "state": "open",
+      "title": "repo hygiene law: growth is not progress — retention rules, consolidation cadence, size-vs-progress metric, first cleanup pass",
+      "updated_at": "2026-07-19T05:19:52Z",
+      "url": "https://github.com/wordingone/ember/issues/488"
+    },
+    {
+      "body_sha256": "43e58db81fa6a7dbb13ac52480442dd63d316c8233c65593f4c2eafd38b9fe70",
+      "comment_count": 0,
+      "created_at": "2026-07-09T00:39:29Z",
+      "labels": [],
+      "milestone": null,
+      "number": 502,
+      "state": "open",
+      "title": "redaction placeholders in executable code are landmines",
+      "updated_at": "2026-07-09T00:39:29Z",
+      "url": "https://github.com/wordingone/ember/issues/502"
+    },
+    {
+      "body_sha256": "08ceb8c26b64b3661c67f7957f4681951861483b8d409f50472465f924e99c06",
+      "comment_count": 0,
+      "created_at": "2026-07-09T01:58:28Z",
+      "labels": [],
+      "milestone": null,
+      "number": 507,
+      "state": "open",
+      "title": "ember-cli native GitHub identity: App-token client + gh tools (credential-agnostic build; App install is a separate leg)",
+      "updated_at": "2026-07-09T01:58:28Z",
+      "url": "https://github.com/wordingone/ember/issues/507"
+    },
+    {
+      "body_sha256": "b3117378d63e95eee3728ac07413204f1b7f001be6091edad0dd7e69b2698852",
+      "comment_count": 3,
+      "created_at": "2026-07-09T02:32:54Z",
+      "labels": [],
+      "milestone": null,
+      "number": 508,
+      "state": "open",
+      "title": "Serve the ember-created cbase 2.2B behind an OpenAI-compatible endpoint (external-benchmark test-subject leg)",
+      "updated_at": "2026-07-18T07:28:32Z",
+      "url": "https://github.com/wordingone/ember/issues/508"
+    },
+    {
+      "body_sha256": "5d275e44eb23bc98b935df5a98015eff003f53f5a7de8ec24f6acd1a21dd182c",
+      "comment_count": 0,
+      "created_at": "2026-07-09T03:08:13Z",
+      "labels": [],
+      "milestone": null,
+      "number": 511,
+      "state": "open",
+      "title": "totality runner must refuse or loudly stamp a stale/dirty run tree (board ran 7 commits behind master, silently)",
+      "updated_at": "2026-07-09T03:08:13Z",
+      "url": "https://github.com/wordingone/ember/issues/511"
+    },
+    {
+      "body_sha256": "33d695d976b838005ef6d34ecbe3f709a64afd06d1332e00245c6db05ff5ecd3",
+      "comment_count": 3,
+      "created_at": "2026-07-09T05:19:26Z",
+      "labels": [],
+      "milestone": null,
+      "number": 518,
+      "state": "open",
+      "title": "ember-cli: activity must render as transcript blocks in the conversation, not statusline ticker lines (operator category correction, second receipt)",
+      "updated_at": "2026-07-19T01:55:44Z",
+      "url": "https://github.com/wordingone/ember/issues/518"
+    },
+    {
+      "body_sha256": "5663439bfd7e16dac114ab2588ac7dbe6e20552067a44b77566f5b82488a8738",
+      "comment_count": 0,
+      "created_at": "2026-07-09T05:54:30Z",
+      "labels": [],
+      "milestone": null,
+      "number": 522,
+      "state": "open",
+      "title": "Serving topology wiring: registry consumers, watchdog drift leg, marker-path constant (follow-up to #516/PR #520)",
+      "updated_at": "2026-07-09T05:54:30Z",
+      "url": "https://github.com/wordingone/ember/issues/522"
+    },
+    {
+      "body_sha256": "41ee7df163465479104776776cb1cbe1778d28eb807541ababf06549df4e002f",
+      "comment_count": 2,
+      "created_at": "2026-07-09T07:08:48Z",
+      "labels": [],
+      "milestone": null,
+      "number": 525,
+      "state": "open",
+      "title": "chore: receipt path-hygiene convention + shared redaction utility (write repo-relative at the source)",
+      "updated_at": "2026-07-09T07:20:55Z",
+      "url": "https://github.com/wordingone/ember/issues/525"
+    },
+    {
+      "body_sha256": "0d6cf95bab75286aef82019f38b89e932b0ccc9a92aa8df05b2d6ddc32508392",
+      "comment_count": 0,
+      "created_at": "2026-07-09T07:49:39Z",
+      "labels": [],
+      "milestone": null,
+      "number": 530,
+      "state": "open",
+      "title": "ember-cli: UserTeammateMessage renderer (AC11 task_assignment) tested but unwired in repl renderMsgDispatch",
+      "updated_at": "2026-07-09T07:49:39Z",
+      "url": "https://github.com/wordingone/ember/issues/530"
+    },
+    {
+      "body_sha256": "c5ef689e70ed9411c5ac81f1101920726d46f9767e1c6fe359e64715daf78043",
+      "comment_count": 1,
+      "created_at": "2026-07-09T07:52:59Z",
+      "labels": [],
+      "milestone": null,
+      "number": 531,
+      "state": "open",
+      "title": "custody: re-verify every sha-pinned in-tree artifact named by a receipt (freeze-artifact integrity probe)",
+      "updated_at": "2026-07-09T08:16:23Z",
+      "url": "https://github.com/wordingone/ember/issues/531"
+    },
+    {
+      "body_sha256": "cb7941f62d05f3671198de483fe6f850eab34f8b164fcd659ddd4c91378bdd13",
+      "comment_count": 1,
+      "created_at": "2026-07-09T08:32:06Z",
+      "labels": [],
+      "milestone": null,
+      "number": 534,
+      "state": "open",
+      "title": "feat: frozen-tokenizer reconstruction script + serve preflight (serving-tokenizer custody mechanization)",
+      "updated_at": "2026-07-19T05:08:33Z",
+      "url": "https://github.com/wordingone/ember/issues/534"
+    },
+    {
+      "body_sha256": "8f23c9ac00dd9dce02492f708a03757283d93f086d009f9748f72dad0327867f",
+      "comment_count": 0,
+      "created_at": "2026-07-09T08:49:44Z",
+      "labels": [],
+      "milestone": null,
+      "number": 537,
+      "state": "open",
+      "title": "fix: C2 regression — landing redaction rewrote bytes inside hash-pinned evidence; restore byte-exact + hash-pin law",
+      "updated_at": "2026-07-09T08:49:44Z",
+      "url": "https://github.com/wordingone/ember/issues/537"
+    },
+    {
+      "body_sha256": "75be1839da9f58bbb72a613d8006209a5b9ce39f6910906cbc54ac292781d17c",
+      "comment_count": 0,
+      "created_at": "2026-07-09T09:36:50Z",
+      "labels": [],
+      "milestone": null,
+      "number": 538,
+      "state": "open",
+      "title": "redaction utility: tracked, pin-aware, enumerated-fields-only (hard-fail on hash-pinned bytes)",
+      "updated_at": "2026-07-09T09:36:50Z",
+      "url": "https://github.com/wordingone/ember/issues/538"
+    },
+    {
+      "body_sha256": "05deb640b0e3232099292a0ada603ea50907774948441a6ddfbb41c5bd60eacf",
+      "comment_count": 0,
+      "created_at": "2026-07-09T11:04:43Z",
+      "labels": [],
+      "milestone": null,
+      "number": 545,
+      "state": "open",
+      "title": "liveness-watchdog: main-tree freshness leg — operator screen must auto-follow remote master post-merge",
+      "updated_at": "2026-07-09T11:04:43Z",
+      "url": "https://github.com/wordingone/ember/issues/545"
+    },
+    {
+      "body_sha256": "50a7b055974c89f00d11c3c711c61bf48c7342df6a21467ae1617d85eddacc56",
+      "comment_count": 0,
+      "created_at": "2026-07-09T11:05:09Z",
+      "labels": [],
+      "milestone": null,
+      "number": 546,
+      "state": "open",
+      "title": "SS5 nativization-motion measurement: the borrowed-substrate bill has no standing metric (constitution names a drive nothing watches)",
+      "updated_at": "2026-07-09T11:05:09Z",
+      "url": "https://github.com/wordingone/ember/issues/546"
+    },
+    {
+      "body_sha256": "79f0873d7bd5647b06ebe5dacd6ba8cecf8ae0af27182f296fb6fde22eb65e5a",
+      "comment_count": 0,
+      "created_at": "2026-07-09T12:31:46Z",
+      "labels": [],
+      "milestone": {
+        "number": 19,
+        "state": "open",
+        "title": "EMBER-PUBLICATION-V1: Paper and reproducible research primitive"
+      },
+      "number": 552,
+      "state": "open",
+      "title": "paper admissibility shields: contamination scan (model-free) + provenance manifest + compute ledger + freeze mechanics",
+      "updated_at": "2026-07-16T17:37:02Z",
+      "url": "https://github.com/wordingone/ember/issues/552"
+    },
+    {
+      "body_sha256": "de38b8810550bcd0693202dde2d678f07723ec296d49de7475a0b98f61ad2905",
+      "comment_count": 0,
+      "created_at": "2026-07-09T13:32:22Z",
+      "labels": [],
+      "milestone": null,
+      "number": 558,
+      "state": "open",
+      "title": "W1c K-certified batch production orchestrator (rebuild on the frozen two-part predicate)",
+      "updated_at": "2026-07-09T13:32:22Z",
+      "url": "https://github.com/wordingone/ember/issues/558"
+    },
+    {
+      "body_sha256": "3701c3d101adc2a13aaaf82e103eb98e3bc673f574d16d33a04b11ab9f4878bb",
+      "comment_count": 3,
+      "created_at": "2026-07-09T13:54:59Z",
+      "labels": [],
+      "milestone": null,
+      "number": 561,
+      "state": "open",
+      "title": "ember-cli render integrity: locked banner/input regions + edge-triggered event feed (operator-reported flood + layout break)",
+      "updated_at": "2026-07-19T01:18:30Z",
+      "url": "https://github.com/wordingone/ember/issues/561"
+    },
+    {
+      "body_sha256": "9ae5ac4823a5ec6e1dee6a89cb7515e655bc9ee0540f0e3155f78ba8f428fe83",
+      "comment_count": 1,
+      "created_at": "2026-07-09T14:01:38Z",
+      "labels": [],
+      "milestone": null,
+      "number": 562,
+      "state": "open",
+      "title": "The body owns its liveness: absorb watchdog functions into ember-cli, retire the external daemon to an OS-native restart rule",
+      "updated_at": "2026-07-09T14:23:00Z",
+      "url": "https://github.com/wordingone/ember/issues/562"
+    },
+    {
+      "body_sha256": "23375c39301300257139e5798492fc1ea78a6236a320d4c5a563ef573158409d",
+      "comment_count": 0,
+      "created_at": "2026-07-09T14:33:28Z",
+      "labels": [],
+      "milestone": {
+        "number": 12,
+        "state": "open",
+        "title": "EMBER-03: Owned body, tools, and operator relationship"
+      },
+      "number": 565,
+      "state": "open",
+      "title": "ember-cli is a conversational agent surface: the resident-colleague bar (operator reframe, P-C)",
+      "updated_at": "2026-07-16T17:36:54Z",
+      "url": "https://github.com/wordingone/ember/issues/565"
+    },
+    {
+      "body_sha256": "8b028045ed3101cdb556b1f0b6164a8fb2b9a4843b77ecb8ef87f45b51f2a887",
+      "comment_count": 0,
+      "created_at": "2026-07-09T14:46:08Z",
+      "labels": [],
+      "milestone": null,
+      "number": 567,
+      "state": "open",
+      "title": "Spec lattice: full-tree audit receipt (196 docs), the ember-cli coverage gap, and the spec-consumer wiring rule",
+      "updated_at": "2026-07-09T14:46:08Z",
+      "url": "https://github.com/wordingone/ember/issues/567"
+    },
+    {
+      "body_sha256": "d0aa12af12581d7a57769ec76ec5859e6ed4bc69cf550b221d7e8ca194790980",
+      "comment_count": 1,
+      "created_at": "2026-07-09T16:57:27Z",
+      "labels": [],
+      "milestone": null,
+      "number": 576,
+      "state": "open",
+      "title": "watchdog tail-poll mega-burst on cockpit relaunch (~2^16 identical lines from one kill-receipt row)",
+      "updated_at": "2026-07-09T17:26:26Z",
+      "url": "https://github.com/wordingone/ember/issues/576"
+    },
+    {
+      "body_sha256": "4007ec125117a5e94fa8b6d13a1373592143a400e6a2e02af5dc19abcc56af79",
+      "comment_count": 3,
+      "created_at": "2026-07-09T17:14:31Z",
+      "labels": [],
+      "milestone": null,
+      "number": 577,
+      "state": "open",
+      "title": "grow boundary: saved optimizer bundle carries pre-grow shapes - load policy must satisfy the momentum-provenance register constraint",
+      "updated_at": "2026-07-09T18:15:12Z",
+      "url": "https://github.com/wordingone/ember/issues/577"
+    },
+    {
+      "body_sha256": "320d311a2a088fc1bc71122830ba32f104f2ecda34274984851a897022e12680",
+      "comment_count": 11,
+      "created_at": "2026-07-09T18:15:13Z",
+      "labels": [],
+      "milestone": null,
+      "number": 580,
+      "state": "open",
+      "title": "optimizer-state param-id conflation: global model-state ordering used as muon-local slot keys (3 sites, shared-module fix + retro-audit)",
+      "updated_at": "2026-07-19T02:43:26Z",
+      "url": "https://github.com/wordingone/ember/issues/580"
+    },
+    {
+      "body_sha256": "52fed8365b8f45486dd85bd308816814614db69a0fbeaa0eeaa256324568151f",
+      "comment_count": 0,
+      "created_at": "2026-07-09T18:38:11Z",
+      "labels": [],
+      "milestone": null,
+      "number": 582,
+      "state": "open",
+      "title": "C8 governed-run pre-launch obligations: freeze-hash, MDE, F3 instrument list, F2 generator, run-ledger (executable tracker)",
+      "updated_at": "2026-07-09T18:38:11Z",
+      "url": "https://github.com/wordingone/ember/issues/582"
+    },
+    {
+      "body_sha256": "e0340ba6e41bf6fd2dad84f7ae79c42d2243ceb1576816520937f4216fe8bcb5",
+      "comment_count": 9,
+      "created_at": "2026-07-09T19:15:13Z",
+      "labels": [
+        "independent-audit-lane"
+      ],
+      "milestone": null,
+      "number": 585,
+      "state": "open",
+      "title": "c8: seed-variance runner + 5-seed post-freeze variance receipts at cheap rung (feeds #582 O2 MDE)",
+      "updated_at": "2026-07-10T05:50:37Z",
+      "url": "https://github.com/wordingone/ember/issues/585"
+    },
+    {
+      "body_sha256": "7b6d5a02ccc67ce7e319748e7b2197049fdf57596eb66568a27af7512aa2b32a",
+      "comment_count": 0,
+      "created_at": "2026-07-09T19:15:25Z",
+      "labels": [],
+      "milestone": null,
+      "number": 586,
+      "state": "open",
+      "title": "c(-1) annex round-4: 12 decisive receipts uncovered (board 20260709T184357Z)",
+      "updated_at": "2026-07-09T19:15:25Z",
+      "url": "https://github.com/wordingone/ember/issues/586"
+    },
+    {
+      "body_sha256": "6cf49e0f1567a72f53dcd11aeb30cccae7bf76f8dd747c44aa5a717e68905031",
+      "comment_count": 12,
+      "created_at": "2026-07-09T20:57:51Z",
+      "labels": [],
+      "milestone": null,
+      "number": 591,
+      "state": "open",
+      "title": "gpu-window execution queue: ordered prereg-gated dispatch for every GPU leg",
+      "updated_at": "2026-07-10T18:37:09Z",
+      "url": "https://github.com/wordingone/ember/issues/591"
+    },
+    {
+      "body_sha256": "346ae763f959213424fd4d25c12d20b4723eb284674c60560851d353e3628840",
+      "comment_count": 2,
+      "created_at": "2026-07-09T21:08:15Z",
+      "labels": [],
+      "milestone": null,
+      "number": 593,
+      "state": "open",
+      "title": "a1 eval-freeze execution: declare eval_freeze_hash, quarantine pre-freeze receipts, first-ever predicate scan",
+      "updated_at": "2026-07-09T23:38:20Z",
+      "url": "https://github.com/wordingone/ember/issues/593"
+    },
+    {
+      "body_sha256": "2b77942d39d6de31ad8302bb94de1df71beb2fef1b116053e5ae96f404941f60",
+      "comment_count": 5,
+      "created_at": "2026-07-09T21:48:28Z",
+      "labels": [],
+      "milestone": null,
+      "number": 594,
+      "state": "open",
+      "title": "stab480 v9 respec: optimizer hot-loop pace defect (k3 fire) - NS-on-GPU streaming, in-process commit read, grad-memmap persistence",
+      "updated_at": "2026-07-10T03:55:54Z",
+      "url": "https://github.com/wordingone/ember/issues/594"
+    },
+    {
+      "body_sha256": "4d60a850f5ff71fbfc8d5203146c4cc8dc75b4fcc8893f0ba29c695c953c6a43",
+      "comment_count": 1,
+      "created_at": "2026-07-10T00:18:09Z",
+      "labels": [],
+      "milestone": null,
+      "number": 611,
+      "state": "open",
+      "title": "Serving contract: watchdog restore target must be named (refs #464)",
+      "updated_at": "2026-07-19T14:37:16Z",
+      "url": "https://github.com/wordingone/ember/issues/611"
+    },
+    {
+      "body_sha256": "37f895c1b7f09fd5552081c4d7984191be28d658e793958e9b20fa61e0bfab96",
+      "comment_count": 0,
+      "created_at": "2026-07-10T00:18:10Z",
+      "labels": [],
+      "milestone": null,
+      "number": 612,
+      "state": "open",
+      "title": "C-INV errata path for 75/114 unstamped post-genesis receipts (refs #608)",
+      "updated_at": "2026-07-10T00:18:10Z",
+      "url": "https://github.com/wordingone/ember/issues/612"
+    },
+    {
+      "body_sha256": "ee09ad3747578dc100dfa1ada2f274d2b7e02a92122a38cd445855faaa103606",
+      "comment_count": 4,
+      "created_at": "2026-07-10T03:55:53Z",
+      "labels": [],
+      "milestone": null,
+      "number": 627,
+      "state": "open",
+      "title": "stabilize v9 cure: R2 in-process governor + R3 shadow-grad persistence + R4 pace gate + counters + AC2 pace-smoke (refs #480 #594)",
+      "updated_at": "2026-07-10T17:43:23Z",
+      "url": "https://github.com/wordingone/ember/issues/627"
+    },
+    {
+      "body_sha256": "1f1dd136b19dcea2e18835173154ae8ccafc4182e0f7d4b1f6f6113aed67be64",
+      "comment_count": 1,
+      "created_at": "2026-07-10T04:00:28Z",
+      "labels": [
+        "independent-audit-lane"
+      ],
+      "milestone": null,
+      "number": 630,
+      "state": "open",
+      "title": "C8 O5 run-ledger: accepts fake hashes, tz-naive time compare, counts rows not runs, no launcher binding",
+      "updated_at": "2026-07-10T05:28:13Z",
+      "url": "https://github.com/wordingone/ember/issues/630"
+    },
+    {
+      "body_sha256": "50b9e4289deb16761e164c8fb320ae9bdaa81ffbd0b3d6bc2b02edf8410e8b3d",
+      "comment_count": 0,
+      "created_at": "2026-07-10T05:30:40Z",
+      "labels": [],
+      "milestone": null,
+      "number": 642,
+      "state": "open",
+      "title": "goal organ: floor-conformance audit — clause-by-clause receipt table vs docs/goal-mode-mechanism.md (refs #211)",
+      "updated_at": "2026-07-10T05:30:40Z",
+      "url": "https://github.com/wordingone/ember/issues/642"
+    },
+    {
+      "body_sha256": "dbbfa873137005f295a641405fdf8394dc15adc2056d476536c90faedcf08222",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:53:56Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 7,
+        "state": "open",
+        "title": "EMBER-CORPUS-V1: Specialist receipts and acquisition plan"
+      },
+      "number": 648,
+      "state": "open",
+      "title": "Corpus program: the AI-lab 11-domain floor (charter execution tracker)",
+      "updated_at": "2026-07-19T04:35:49Z",
+      "url": "https://github.com/wordingone/ember/issues/648"
+    },
+    {
+      "body_sha256": "848bcc244f27f38a1dea091e8e3351824a7ae42799ef47884a34df5b4d869090",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:55:16Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 649,
+      "state": "open",
+      "title": "Corpus domain A: Mathematical Foundations — acquisition spec",
+      "updated_at": "2026-07-19T04:36:36Z",
+      "url": "https://github.com/wordingone/ember/issues/649"
+    },
+    {
+      "body_sha256": "023adad1247f580716936760a24b4c09d60dcbd06b7c385c52ece4e34c66c771",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:55:40Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 650,
+      "state": "open",
+      "title": "Corpus domain B: Statistics / Measurement / Inference — acquisition spec",
+      "updated_at": "2026-07-19T04:39:12Z",
+      "url": "https://github.com/wordingone/ember/issues/650"
+    },
+    {
+      "body_sha256": "2d9b4834431c92200383101be34353140ebd9dc77cf6b551640beba888d3479d",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:56:05Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 651,
+      "state": "open",
+      "title": "Corpus domain C: Physics / Dynamical Systems / Resource Reality — acquisition spec",
+      "updated_at": "2026-07-19T04:40:11Z",
+      "url": "https://github.com/wordingone/ember/issues/651"
+    },
+    {
+      "body_sha256": "70fe5fdd5fc462ace18a7c97190bf242be38b3c534ffa5ed7a02d312490147c2",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:56:32Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 652,
+      "state": "open",
+      "title": "Corpus domain D: Computer Science / Algorithms / Systems — acquisition spec",
+      "updated_at": "2026-07-19T04:41:11Z",
+      "url": "https://github.com/wordingone/ember/issues/652"
+    },
+    {
+      "body_sha256": "74faf9882e5a2b741abd0b4684795ed23a8a08f9724188f3bf25e474ec0eb5e7",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:56:55Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 653,
+      "state": "open",
+      "title": "Corpus domain E: ML / AI / Model Science — acquisition spec",
+      "updated_at": "2026-07-19T04:42:05Z",
+      "url": "https://github.com/wordingone/ember/issues/653"
+    },
+    {
+      "body_sha256": "6f0291fc1844c35690b98610d0da5ed506bf017479e9139b529e14b629abc84f",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:57:21Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 654,
+      "state": "open",
+      "title": "Corpus domain F: Training Infrastructure / CUDA / Kernels / Hardware — acquisition spec",
+      "updated_at": "2026-07-19T04:43:01Z",
+      "url": "https://github.com/wordingone/ember/issues/654"
+    },
+    {
+      "body_sha256": "85ecf61dee4c3c47726e3ac10f22672e1e6917ae8fc48518c96d2683806bbe60",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:57:41Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 655,
+      "state": "open",
+      "title": "Corpus domain G: Formal Logic / Verification / Proof — acquisition spec",
+      "updated_at": "2026-07-19T04:43:42Z",
+      "url": "https://github.com/wordingone/ember/issues/655"
+    },
+    {
+      "body_sha256": "988404ef18746d1fd86faadadc375dc23ed6a136d5cbce4deb553e6779928f41",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:57:55Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 656,
+      "state": "open",
+      "title": "Corpus domain H: Software Engineering / Debugging / Testing — acquisition spec",
+      "updated_at": "2026-07-19T04:44:24Z",
+      "url": "https://github.com/wordingone/ember/issues/656"
+    },
+    {
+      "body_sha256": "3cff0b0e8a445d5b5bb1c10b03f747efa1f860b74c1f4e31099648918827a36c",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:58:14Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 657,
+      "state": "open",
+      "title": "Corpus domain I: Data / Corpus / Evaluation / Decontamination — acquisition spec",
+      "updated_at": "2026-07-19T04:45:17Z",
+      "url": "https://github.com/wordingone/ember/issues/657"
+    },
+    {
+      "body_sha256": "e789f9f984ca85aeb8e6cdaf08b4593efbc3eeeabf186f8341bd4c5b51b86abd",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:58:27Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 658,
+      "state": "open",
+      "title": "Corpus domain J: Scientific Method / Lab Operation / Receipts — acquisition spec",
+      "updated_at": "2026-07-19T04:45:58Z",
+      "url": "https://github.com/wordingone/ember/issues/658"
+    },
+    {
+      "body_sha256": "d78ef07bedc40f4bccb3afcb53d0a44daafc80e93d161f15b91f2af12de6ef3b",
+      "comment_count": 1,
+      "created_at": "2026-07-10T05:58:47Z",
+      "labels": [
+        "corpus"
+      ],
+      "milestone": {
+        "number": 14,
+        "state": "open",
+        "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+      },
+      "number": 659,
+      "state": "open",
+      "title": "Corpus domain K: Application Worlds — acquisition spec",
+      "updated_at": "2026-07-19T04:46:44Z",
+      "url": "https://github.com/wordingone/ember/issues/659"
+    },
+    {
+      "body_sha256": "53530e1aaf67562a301fe27dce584044134afeceada8be0c01ec6b1bde8dc785",
+      "comment_count": 1,
+      "created_at": "2026-07-10T06:34:48Z",
+      "labels": [],
+      "milestone": null,
+      "number": 663,
+      "state": "open",
+      "title": "goal organ: update_goal(Complete) has no code-level completion-proof gate (floor clause 4 gap)",
+      "updated_at": "2026-07-19T04:48:23Z",
+      "url": "https://github.com/wordingone/ember/issues/663"
+    },
+    {
+      "body_sha256": "6868685073bd78942316ba0c8a6c8228457fb68aa294f957cb08fd2917f23e53",
+      "comment_count": 2,
+      "created_at": "2026-07-10T13:09:34Z",
+      "labels": [],
+      "milestone": null,
+      "number": 667,
+      "state": "open",
+      "title": "iGRPO rig control wiring: run_rig hardcodes N=4,G=4 — run_phase3_contract's advertised N/M counts silently ignored",
+      "updated_at": "2026-07-19T04:49:35Z",
+      "url": "https://github.com/wordingone/ember/issues/667"
+    },
+    {
+      "body_sha256": "4cb2425e528544c632311cba593f3ca6e64e205536e37c1d0a7efbee4bcfd8fd",
+      "comment_count": 1,
+      "created_at": "2026-07-10T13:44:23Z",
+      "labels": [],
+      "milestone": null,
+      "number": 672,
+      "state": "open",
+      "title": "main-tree integrity: 554 tracked receipt files found deleted from the working tree (board renders read a falsified evidence surface)",
+      "updated_at": "2026-07-19T04:51:29Z",
+      "url": "https://github.com/wordingone/ember/issues/672"
+    },
+    {
+      "body_sha256": "d9249e79663a1662ab47dabf769f3d193f9eac9a9e279b92070682ce81da7aab",
+      "comment_count": 3,
+      "created_at": "2026-07-10T14:01:52Z",
+      "labels": [],
+      "milestone": null,
+      "number": 674,
+      "state": "open",
+      "title": "PREREG (canonical public port): BitNet 102M matched-pilot — frozen single-variable ternary-vs-BF16 twin, launch-blocked on exact-twin preflight",
+      "updated_at": "2026-07-10T23:38:11Z",
+      "url": "https://github.com/wordingone/ember/issues/674"
+    },
+    {
+      "body_sha256": "001a94638ad5ab6cee1309a8d5aa6676198db51e1c8b38eb270675b1e5fdf0d3",
+      "comment_count": 1,
+      "created_at": "2026-07-10T14:01:53Z",
+      "labels": [],
+      "milestone": null,
+      "number": 675,
+      "state": "open",
+      "title": "CONTRACT (canonical public port): Q2 actual-update successor — orientation-only historical claims, analytic two-sided-Haar null, future-event capture",
+      "updated_at": "2026-07-10T23:57:26Z",
+      "url": "https://github.com/wordingone/ember/issues/675"
+    },
+    {
+      "body_sha256": "46f7b97c569a54b5fdf1c6ed9996e7bccc02e5d1ef84cee4a8fd898413f80930",
+      "comment_count": 1,
+      "created_at": "2026-07-10T14:01:55Z",
+      "labels": [],
+      "milestone": null,
+      "number": 676,
+      "state": "open",
+      "title": "BitNet 102M implementation preflight: exact GPU twin (GQA+QK-norm), realized ternary counts, manifest identity + mismatch refusal, 50M exact-twin smoke pair",
+      "updated_at": "2026-07-10T23:57:28Z",
+      "url": "https://github.com/wordingone/ember/issues/676"
+    },
+    {
+      "body_sha256": "2f872f4f3bc2e5f51dd71d1ebc58c048f81bf4d5ee6b13acc9762843efebff1b",
+      "comment_count": 2,
+      "created_at": "2026-07-10T14:06:02Z",
+      "labels": [],
+      "milestone": null,
+      "number": 677,
+      "state": "open",
+      "title": "checkpoint receipt chain broken: BUILD transplant note promises momentum_provenance + per-tensor RMS in manifest.json — fields never written",
+      "updated_at": "2026-07-11T00:07:55Z",
+      "url": "https://github.com/wordingone/ember/issues/677"
+    },
+    {
+      "body_sha256": "1bba3c5339c4a7ab60df53054f5fd1ec913504f9ce0457f1d41098208fea7973",
+      "comment_count": 1,
+      "created_at": "2026-07-10T14:15:42Z",
+      "labels": [],
+      "milestone": null,
+      "number": 679,
+      "state": "open",
+      "title": "MTP parameter-accounting errata: 368,354,304 vs 433,890,304",
+      "updated_at": "2026-07-10T14:16:00Z",
+      "url": "https://github.com/wordingone/ember/issues/679"
+    },
+    {
+      "body_sha256": "c4f794643ea163cb313fc893637006452ac6abf6ca6ac9b3c1bbe8b1b2b19219",
+      "comment_count": 3,
+      "created_at": "2026-07-10T14:25:50Z",
+      "labels": [],
+      "milestone": null,
+      "number": 682,
+      "state": "open",
+      "title": "v0_pretrain_launch_gate g_shards(): NC-relative shard resolution ignores --shard-dir and structurally fails in every worktree",
+      "updated_at": "2026-07-19T00:57:44Z",
+      "url": "https://github.com/wordingone/ember/issues/682"
+    },
+    {
+      "body_sha256": "427fdf03929709c1a6b19a4c3b7d23f3003fb5fe3fff9fbe65c28d3dbd557f04",
+      "comment_count": 1,
+      "created_at": "2026-07-10T15:18:08Z",
+      "labels": [],
+      "milestone": null,
+      "number": 685,
+      "state": "open",
+      "title": "Extract HF-format tokenizer from the 27B reference GGUF — unblocks arc_challenge/hellaswag/mmlu_pro loglikelihood evals",
+      "updated_at": "2026-07-11T00:07:59Z",
+      "url": "https://github.com/wordingone/ember/issues/685"
+    },
+    {
+      "body_sha256": "94f258e9a2c73553ccf177f092f7807013ee8d633e176d07d340346a7342f8ef",
+      "comment_count": 2,
+      "created_at": "2026-07-10T16:34:48Z",
+      "labels": [],
+      "milestone": null,
+      "number": 688,
+      "state": "open",
+      "title": "config accounting: machine-readable MTP-split param fields + gate/check updates (completes #680 errata)",
+      "updated_at": "2026-07-10T23:58:51Z",
+      "url": "https://github.com/wordingone/ember/issues/688"
+    },
+    {
+      "body_sha256": "2bd06bcd703e61204603024e505eb1a72f880e68223379f9a87259af9f8a948a",
+      "comment_count": 1,
+      "created_at": "2026-07-10T16:34:49Z",
+      "labels": [],
+      "milestone": null,
+      "number": 689,
+      "state": "open",
+      "title": "50M dense/ternary pair: three executable credibility gaps (exact-head audit of #681)",
+      "updated_at": "2026-07-10T17:35:22Z",
+      "url": "https://github.com/wordingone/ember/issues/689"
+    },
+    {
+      "body_sha256": "ef5627f08160cd0f37ebc2c8fd80bec2d95c575a3669d11513efa32cddda86ba",
+      "comment_count": 1,
+      "created_at": "2026-07-10T17:42:11Z",
+      "labels": [],
+      "milestone": null,
+      "number": 696,
+      "state": "open",
+      "title": "ember-cli: wire brain-server supervisor into a real consumer path (follow-up to #122)",
+      "updated_at": "2026-07-16T19:02:28Z",
+      "url": "https://github.com/wordingone/ember/issues/696"
+    },
+    {
+      "body_sha256": "9fdd90d98a2b2695a1af37133878f501fb899aa098bde7d25cf0647992737dde",
+      "comment_count": 0,
+      "created_at": "2026-07-10T17:46:19Z",
+      "labels": [],
+      "milestone": null,
+      "number": 697,
+      "state": "open",
+      "title": "totality runner: bind renders to the remote head (stale-checkout race painted a false RED)",
+      "updated_at": "2026-07-10T17:46:19Z",
+      "url": "https://github.com/wordingone/ember/issues/697"
+    },
+    {
+      "body_sha256": "982ac27047679a4e026219708695585754f50444722e07cb7cf31df07d001782",
+      "comment_count": 0,
+      "created_at": "2026-07-10T18:00:48Z",
+      "labels": [],
+      "milestone": null,
+      "number": 700,
+      "state": "open",
+      "title": "C-INV: drive residual uncovered_post_cutoff to 0 (IND-3 post-run + no-producer drift receipts + #694 interaction)",
+      "updated_at": "2026-07-10T18:00:48Z",
+      "url": "https://github.com/wordingone/ember/issues/700"
+    },
+    {
+      "body_sha256": "2ceaa8e274402696eba8ec16ff8f642931be68ea55dd976fb0362bce79b7437d",
+      "comment_count": 4,
+      "created_at": "2026-07-10T18:08:39Z",
+      "labels": [],
+      "milestone": null,
+      "number": 701,
+      "state": "open",
+      "title": "barrier/compute: C-GROW FLOPs-to-fixed-capability crossing experiment (2.4309x is matched-step only)",
+      "updated_at": "2026-07-11T05:16:27Z",
+      "url": "https://github.com/wordingone/ember/issues/701"
+    },
+    {
+      "body_sha256": "2fd42f3a26044305317b29ddd8c768061fdde2c4e80a00addfb78288db0d3641",
+      "comment_count": 26,
+      "created_at": "2026-07-10T18:12:45Z",
+      "labels": [],
+      "milestone": null,
+      "number": 702,
+      "state": "open",
+      "title": "barrier/mem-traffic: step-time attribution + PCIe throughput profile of the 2.2B offload path",
+      "updated_at": "2026-07-19T02:43:27Z",
+      "url": "https://github.com/wordingone/ember/issues/702"
+    },
+    {
+      "body_sha256": "e1ac8f12811520e4285cce016a7a30f8084f6ff2a9bdb793d5d26439cca481eb",
+      "comment_count": 7,
+      "created_at": "2026-07-10T18:12:46Z",
+      "labels": [],
+      "milestone": null,
+      "number": 703,
+      "state": "open",
+      "title": "barrier/data-eff: n-gram/PPM byte-level blending capability floor (zero-parameter baseline)",
+      "updated_at": "2026-07-11T05:21:22Z",
+      "url": "https://github.com/wordingone/ember/issues/703"
+    },
+    {
+      "body_sha256": "b828ac172fdb7519e4dd73f650565f1747e35ecd7ed9147dbfbd8607f7b24b6b",
+      "comment_count": 3,
+      "created_at": "2026-07-10T18:12:47Z",
+      "labels": [],
+      "milestone": null,
+      "number": 704,
+      "state": "open",
+      "title": "barrier/opt-state: int8 file-backed optimizer-state screen",
+      "updated_at": "2026-07-11T00:08:56Z",
+      "url": "https://github.com/wordingone/ember/issues/704"
+    },
+    {
+      "body_sha256": "35f5ed84815e61115ea7d0a2ee937150c21aeb4f43404201e1e55aca5b58e00d",
+      "comment_count": 3,
+      "created_at": "2026-07-10T18:12:49Z",
+      "labels": [],
+      "milestone": null,
+      "number": 705,
+      "state": "open",
+      "title": "barrier/capability: unified capability-per-token receipt at every rung boundary",
+      "updated_at": "2026-07-10T23:58:00Z",
+      "url": "https://github.com/wordingone/ember/issues/705"
+    },
+    {
+      "body_sha256": "b13a87044dd7f7d58600cfc0793f9713af8ba90fe83bf321083a430aca97eec7",
+      "comment_count": 13,
+      "created_at": "2026-07-10T18:20:50Z",
+      "labels": [],
+      "milestone": null,
+      "number": 707,
+      "state": "open",
+      "title": "barrier/opt-state: FACTOR-1 factored optimizer state (~997x reduction hypothesis) + staged-grad copy elimination",
+      "updated_at": "2026-07-15T20:01:15Z",
+      "url": "https://github.com/wordingone/ember/issues/707"
+    },
+    {
+      "body_sha256": "42cecbdf97d9a426bfb4621739bf0fd213f1ca30bbab8f25009ee97a0b7487aa",
+      "comment_count": 16,
+      "created_at": "2026-07-10T19:26:44Z",
+      "labels": [],
+      "milestone": null,
+      "number": 711,
+      "state": "open",
+      "title": "barrier/data-efficiency: curriculum-ordering causality (3-arm PPM-surprisal ordering) - axis-2 decisive experiment",
+      "updated_at": "2026-07-11T04:22:21Z",
+      "url": "https://github.com/wordingone/ember/issues/711"
+    },
+    {
+      "body_sha256": "101d724aadf0244b2dae500945efc61d278b1943d1355322f246612f495b3544",
+      "comment_count": 0,
+      "created_at": "2026-07-10T20:43:30Z",
+      "labels": [],
+      "milestone": null,
+      "number": 716,
+      "state": "open",
+      "title": "C-AUTO claim-verification path is stub-forgeable - harden before first R0 claim (audit MAJOR)",
+      "updated_at": "2026-07-10T20:43:30Z",
+      "url": "https://github.com/wordingone/ember/issues/716"
+    },
+    {
+      "body_sha256": "3a70b3e9a2e397c8d7e1ba9cc80ae7698d72e4600027ed101a73cc4128d11f5f",
+      "comment_count": 2,
+      "created_at": "2026-07-10T21:12:00Z",
+      "labels": [],
+      "milestone": null,
+      "number": 718,
+      "state": "open",
+      "title": "Reusable update-survival preflight: BF16 update-granularity silent-freeze is a systemic hazard (3 independent instances 2026-07-10)",
+      "updated_at": "2026-07-10T23:30:39Z",
+      "url": "https://github.com/wordingone/ember/issues/718"
+    },
+    {
+      "body_sha256": "cdb599972fb00a673fd33410d972b44c9f8ca6067dfaf7b62084bb58663de429",
+      "comment_count": 3,
+      "created_at": "2026-07-10T21:47:39Z",
+      "labels": [],
+      "milestone": null,
+      "number": 722,
+      "state": "open",
+      "title": "H-Q prereg (FROZEN): MTP horizon-quality screen - B(+2,+3) vs C(+1,+1) under common max-horizon mask, paired fixed-token delta",
+      "updated_at": "2026-07-10T23:25:22Z",
+      "url": "https://github.com/wordingone/ember/issues/722"
+    },
+    {
+      "body_sha256": "ef94951e44e58f34174d87d36ade8e189323ae345fb0a3591e5f8b2e5b6db588",
+      "comment_count": 6,
+      "created_at": "2026-07-10T21:58:38Z",
+      "labels": [],
+      "milestone": null,
+      "number": 723,
+      "state": "open",
+      "title": "TRAJGATE-1 prereg (FROZEN): trajectory-gated self-reweighting screen - reference-free noise-band suppression vs matched-mass instantaneous control (axes 2x6, first #705-gated mechanism)",
+      "updated_at": "2026-07-10T23:44:32Z",
+      "url": "https://github.com/wordingone/ember/issues/723"
+    },
+    {
+      "body_sha256": "a38793f38910b0a1cdacd80b62b46669db5b7fac6d94720e76cf5f59162ec179",
+      "comment_count": 1,
+      "created_at": "2026-07-11T00:19:32Z",
+      "labels": [],
+      "milestone": null,
+      "number": 735,
+      "state": "open",
+      "title": "baseline: trustworthy end-to-end baseline closure — W1 step25→50 replay (leg A) + program-level eval-suite baseline (leg B)",
+      "updated_at": "2026-07-11T04:33:21Z",
+      "url": "https://github.com/wordingone/ember/issues/735"
+    },
+    {
+      "body_sha256": "583b6a72272f773090daeef70afe4f1c097c2a0a4998c1fc3529ecf8c3548a2b",
+      "comment_count": 2,
+      "created_at": "2026-07-11T01:29:33Z",
+      "labels": [],
+      "milestone": null,
+      "number": 739,
+      "state": "open",
+      "title": "exp: #711 ordering-screen CPU apparatus (intervals/manifest/permutation/scorer/verdict) per frozen v2+A7",
+      "updated_at": "2026-07-19T13:32:16Z",
+      "url": "https://github.com/wordingone/ember/issues/739"
+    },
+    {
+      "body_sha256": "b18524b5ef392a8b4c93ffa78862df43e9f441487289492c2ce3064ce6829918",
+      "comment_count": 0,
+      "created_at": "2026-07-11T02:42:04Z",
+      "labels": [],
+      "milestone": null,
+      "number": 744,
+      "state": "open",
+      "title": "Frozen tokenizer.json has decoder:null despite ByteLevel pre_tokenizer — decode() returns raw ByteLevel pseudo-text",
+      "updated_at": "2026-07-11T02:42:04Z",
+      "url": "https://github.com/wordingone/ember/issues/744"
+    },
+    {
+      "body_sha256": "151c7cb727b37cfb5541b19da8a254f1ebfd3bfb38ea2343a2794b419d26b4a0",
+      "comment_count": 0,
+      "created_at": "2026-07-11T03:16:51Z",
+      "labels": [],
+      "milestone": null,
+      "number": 748,
+      "state": "open",
+      "title": "trajgate lineage sidecar: checkpoint-evidence parent edges (follow-up to #737)",
+      "updated_at": "2026-07-11T03:16:51Z",
+      "url": "https://github.com/wordingone/ember/issues/748"
+    },
+    {
+      "body_sha256": "07b337a14f5e5c0285cfcee782b454e7e0d3d57df9911db9882f40e11da2f361",
+      "comment_count": 8,
+      "created_at": "2026-07-11T04:40:43Z",
+      "labels": [],
+      "milestone": null,
+      "number": 756,
+      "state": "open",
+      "title": "liveness watchdog: commit-footprint governor (restart-on-leak) - cockpit hit 8.75GB at boot vs <2GB class",
+      "updated_at": "2026-07-18T20:43:28Z",
+      "url": "https://github.com/wordingone/ember/issues/756"
+    },
+    {
+      "body_sha256": "5e545a030267e63b2e4be8cd1a0f460c4d619e37223367e178ec460a42e200b8",
+      "comment_count": 10,
+      "created_at": "2026-07-11T05:05:31Z",
+      "labels": [],
+      "milestone": null,
+      "number": 757,
+      "state": "open",
+      "title": "Leg-B scorer: in-process teacher-forced loglikelihood apparatus (serve_cbase_openai cannot score lm_eval tasks)",
+      "updated_at": "2026-07-19T00:57:44Z",
+      "url": "https://github.com/wordingone/ember/issues/757"
+    },
+    {
+      "body_sha256": "c4763b1825c8c585972b991acbf78611a26ac2998eb596cecb654c8d1caaa278",
+      "comment_count": 0,
+      "created_at": "2026-07-11T05:52:38Z",
+      "labels": [],
+      "milestone": null,
+      "number": 760,
+      "state": "open",
+      "title": "W1/LACK-4 P0: heldout eval harness for the cbase class + receipted disjoint heldout slice",
+      "updated_at": "2026-07-11T05:52:38Z",
+      "url": "https://github.com/wordingone/ember/issues/760"
+    },
+    {
+      "body_sha256": "fe0850c787e0e05ad4565b715e05d259cf1b033888620e7a0f3988eddc93ea93",
+      "comment_count": 2,
+      "created_at": "2026-07-11T06:10:06Z",
+      "labels": [],
+      "milestone": null,
+      "number": 763,
+      "state": "open",
+      "title": "governor.py reconciliation: land stage C-PORT precision ladder + in-run commit governor (dedicated reviewed PR)",
+      "updated_at": "2026-07-11T07:45:17Z",
+      "url": "https://github.com/wordingone/ember/issues/763"
+    },
+    {
+      "body_sha256": "e2b17bb0f1bac5bb2edb49a3418957ce6848ffaf415ebcfd0b3bbb06d5e00d92",
+      "comment_count": 26,
+      "created_at": "2026-07-11T06:27:46Z",
+      "labels": [],
+      "milestone": null,
+      "number": 764,
+      "state": "open",
+      "title": "FACTOR-1 lever micro-bench: inner-optimizer-step floor per cure lever at 434M + 2.2B state shapes",
+      "updated_at": "2026-07-11T15:59:26Z",
+      "url": "https://github.com/wordingone/ember/issues/764"
+    },
+    {
+      "body_sha256": "37d2f753b4425a73106056d316157f7330c356007821945166e8ef3c85a4b055",
+      "comment_count": 2,
+      "created_at": "2026-07-11T07:16:15Z",
+      "labels": [],
+      "milestone": null,
+      "number": 767,
+      "state": "open",
+      "title": "run_v0_segment resume path: eager 12.6GiB ungated load + heap-rebinding optimizer restore (memmap state silently detached at 2.2B)",
+      "updated_at": "2026-07-11T07:19:16Z",
+      "url": "https://github.com/wordingone/ember/issues/767"
+    },
+    {
+      "body_sha256": "dc3cc08eb23a6a25c54e7d3207ad5f9e232780eaa19d9d57dc5d8bf4be57def0",
+      "comment_count": 0,
+      "created_at": "2026-07-11T07:16:16Z",
+      "labels": [],
+      "milestone": null,
+      "number": 768,
+      "state": "open",
+      "title": "timeshare_pretrain argparse surface diverged from conv_c03/cbase wrapper callers; mixture selftest T1 pre-existing failure",
+      "updated_at": "2026-07-11T07:16:16Z",
+      "url": "https://github.com/wordingone/ember/issues/768"
+    },
+    {
+      "body_sha256": "7c5d2eca723c04b9a3b96f6ac913ad2fe8d695fe67d75793c5fed0dc1e44ef9d",
+      "comment_count": 4,
+      "created_at": "2026-07-11T08:13:32Z",
+      "labels": [],
+      "milestone": null,
+      "number": 774,
+      "state": "open",
+      "title": "runbook: coordinated GPU yield window 2026-07-11 (lease tokens, #702 rerun + #764 legs + #449 rider)",
+      "updated_at": "2026-07-11T12:19:29Z",
+      "url": "https://github.com/wordingone/ember/issues/774"
+    },
+    {
+      "body_sha256": "5b818fc918d297f04390a7c40b75440eb15000ff37b46918329c9d42cb1c4740",
+      "comment_count": 0,
+      "created_at": "2026-07-11T08:19:09Z",
+      "labels": [],
+      "milestone": null,
+      "number": 776,
+      "state": "open",
+      "title": "tracked tokenizer.json fails direct from_str load (blocks tokenizer-dependent tests)",
+      "updated_at": "2026-07-11T08:19:09Z",
+      "url": "https://github.com/wordingone/ember/issues/776"
+    },
+    {
+      "body_sha256": "3dbb50fa4f30a3bbc9ca881941bf41cffdc87cf10598fb2d0c72853db0069355",
+      "comment_count": 0,
+      "created_at": "2026-07-11T08:52:32Z",
+      "labels": [],
+      "milestone": null,
+      "number": 778,
+      "state": "open",
+      "title": "Pre-existing test failures disclosed at #777 landing: v0-pretrain-config drift (batch 4 vs 16, version 3 vs 4) + inf-perplexity defect",
+      "updated_at": "2026-07-11T08:52:32Z",
+      "url": "https://github.com/wordingone/ember/issues/778"
+    },
+    {
+      "body_sha256": "1339839cfe1d53851b1f63d3caa44a505a1af9a311d3cbd9733760f719493def",
+      "comment_count": 0,
+      "created_at": "2026-07-11T09:00:58Z",
+      "labels": [],
+      "milestone": null,
+      "number": 779,
+      "state": "open",
+      "title": "PHASE-0 FIRST SIGNAL RUN (frozen run spec): rung-2 stabilization checkpoint series through the merged #726 runner",
+      "updated_at": "2026-07-11T09:00:58Z",
+      "url": "https://github.com/wordingone/ember/issues/779"
+    },
+    {
+      "body_sha256": "c7de07e01912405969c9647c1d76f5808ed9e62187b0cff5cdeb8a05776e99e3",
+      "comment_count": 6,
+      "created_at": "2026-07-11T10:11:55Z",
+      "labels": [],
+      "milestone": null,
+      "number": 782,
+      "state": "open",
+      "title": "exp703 stage-2 frozen run spec: claim-A standalone byte-PPM floor (document-level BPB) + stage-B lattice route selection",
+      "updated_at": "2026-07-11T11:55:22Z",
+      "url": "https://github.com/wordingone/ember/issues/782"
+    },
+    {
+      "body_sha256": "9a03aa4f545e93642ec01d8d89ea9b5588d90451593aec258bb9377978dca4c6",
+      "comment_count": 1,
+      "created_at": "2026-07-11T10:45:20Z",
+      "labels": [],
+      "milestone": null,
+      "number": 784,
+      "state": "open",
+      "title": "attribution/microbench staging-drive gate gap: preflight must measure the STAGING path's drive with the full phase-grown bill (ENOSPC killed the first #702 2.2B window leg)",
+      "updated_at": "2026-07-11T10:53:35Z",
+      "url": "https://github.com/wordingone/ember/issues/784"
+    },
+    {
+      "body_sha256": "e22a7d8fb3c29e578a2072218587fd6c931eea02f2aaaa26ef6e5333ce54d711",
+      "comment_count": 0,
+      "created_at": "2026-07-11T11:13:12Z",
+      "labels": [],
+      "milestone": null,
+      "number": 785,
+      "state": "open",
+      "title": "C-BASE clause (d): fresh grow-operator dry-run under the hardened evidence schema (replay chain + probe-executed verification)",
+      "updated_at": "2026-07-17T23:54:53Z",
+      "url": "https://github.com/wordingone/ember/issues/785"
+    },
+    {
+      "body_sha256": "be7625782434ab24a31369a473546a7a535ddf3b4e3631f554b8181f7300a6ab",
+      "comment_count": 3,
+      "created_at": "2026-07-11T11:26:24Z",
+      "labels": [],
+      "milestone": null,
+      "number": 786,
+      "state": "open",
+      "title": "Reproducible native ACCESS_VIOLATION in timeshare_pretrain.run_v0_segment CPU-sanity path at rung-2 scale (exit 3221225477)",
+      "updated_at": "2026-07-11T16:35:16Z",
+      "url": "https://github.com/wordingone/ember/issues/786"
+    },
+    {
+      "body_sha256": "4805b18db1827080c4123048969a89403254dda02ab73844dbc6a875bd09d6b9",
+      "comment_count": 2,
+      "created_at": "2026-07-11T12:10:34Z",
+      "labels": [],
+      "milestone": null,
+      "number": 787,
+      "state": "open",
+      "title": "702 follow-through: per-branch executor specs frozen pre-receipt (copies-split probe, pinned-staging bound, residency economics)",
+      "updated_at": "2026-07-19T14:35:06Z",
+      "url": "https://github.com/wordingone/ember/issues/787"
+    },
+    {
+      "body_sha256": "28f14ac610df8136fc39c83495cf2f7f544387a61c83e23ecbbc8a3ca50b11b0",
+      "comment_count": 0,
+      "created_at": "2026-07-11T12:43:07Z",
+      "labels": [],
+      "milestone": null,
+      "number": 788,
+      "state": "open",
+      "title": "Board-audit: *.INVALID.quarantine suffix sweep (quarantine-blindness hardening, refs #774 #702)",
+      "updated_at": "2026-07-11T12:43:07Z",
+      "url": "https://github.com/wordingone/ember/issues/788"
+    },
+    {
+      "body_sha256": "fd20b34606ee7287607fc1aeeb6df2aa23ee399f2173217c306cff73c13292f7",
+      "comment_count": 1,
+      "created_at": "2026-07-11T14:17:11Z",
+      "labels": [],
+      "milestone": null,
+      "number": 791,
+      "state": "open",
+      "title": "Branch-A executor: NS5-residency yield-window economics — restore-cost constant + break-even table",
+      "updated_at": "2026-07-11T15:12:12Z",
+      "url": "https://github.com/wordingone/ember/issues/791"
+    },
+    {
+      "body_sha256": "62fe4a4d1eacffea4d1b963015cbdf479490cce78f686e73483525460dae3527",
+      "comment_count": 3,
+      "created_at": "2026-07-11T14:24:53Z",
+      "labels": [],
+      "milestone": null,
+      "number": 793,
+      "state": "open",
+      "title": "timeshare_pretrain _check_launch_interlock does not forward shard_dir to v0_pretrain_launch_gate.gate() (caller-wiring gap)",
+      "updated_at": "2026-07-19T12:40:38Z",
+      "url": "https://github.com/wordingone/ember/issues/793"
+    },
+    {
+      "body_sha256": "cc4076c0118cad12205e36b736ea754c1be6746b6fe83319497639b5db4f02f9",
+      "comment_count": 2,
+      "created_at": "2026-07-11T15:24:36Z",
+      "labels": [],
+      "milestone": null,
+      "number": 795,
+      "state": "open",
+      "title": "P1 step-price recalibration + rung-3 config pricing from attribution-702 measured components",
+      "updated_at": "2026-07-11T17:09:08Z",
+      "url": "https://github.com/wordingone/ember/issues/795"
+    },
+    {
+      "body_sha256": "632b462f90f87e8bb8fdba543935a25ac730ccf25c1ea712ad1daacb96143d96",
+      "comment_count": 1,
+      "created_at": "2026-07-11T15:25:52Z",
+      "labels": [],
+      "milestone": null,
+      "number": 796,
+      "state": "open",
+      "title": "liveness-watchdog: headless respawns, no window attachment, no backoff alarm, races coordinator relaunches",
+      "updated_at": "2026-07-18T16:55:58Z",
+      "url": "https://github.com/wordingone/ember/issues/796"
+    },
+    {
+      "body_sha256": "0aae824f4da6e922d1bd6fdcdcb596a057a091896803c66b2b1166a60dd8f918",
+      "comment_count": 2,
+      "created_at": "2026-07-11T15:40:08Z",
+      "labels": [],
+      "milestone": null,
+      "number": 798,
+      "state": "open",
+      "title": "Screen-1 FROZEN PREREG: PPM oracle-bound screen for #703 (byte-level blending floor) — kill table frozen before any run",
+      "updated_at": "2026-07-11T16:32:40Z",
+      "url": "https://github.com/wordingone/ember/issues/798"
+    },
+    {
+      "body_sha256": "74ed87a253fb552376cdf8cb4ac1b3c6bc5304a78f034c337bed0eaec7b8c59a",
+      "comment_count": 3,
+      "created_at": "2026-07-11T16:08:07Z",
+      "labels": [],
+      "milestone": null,
+      "number": 801,
+      "state": "open",
+      "title": "attribution successor instrument: per-optimizer inner-step span split (Muon/AdamW/NS5) + code-SHA binding",
+      "updated_at": "2026-07-11T17:09:09Z",
+      "url": "https://github.com/wordingone/ember/issues/801"
+    },
+    {
+      "body_sha256": "f55dc42e31cf302a165b482a8a228c21d56244c2c5ec35616a9cb95ae7367c45",
+      "comment_count": 0,
+      "created_at": "2026-07-11T16:16:44Z",
+      "labels": [],
+      "milestone": null,
+      "number": 802,
+      "state": "open",
+      "title": "llama-server (:8082 tenant) has no supervisor loop — 20+ min unreceipted death window, caught only by a lane's pre-start check",
+      "updated_at": "2026-07-11T16:16:44Z",
+      "url": "https://github.com/wordingone/ember/issues/802"
+    },
+    {
+      "body_sha256": "0936c8c80df214e0f014e745760027c4313290eea0581324afd5d714ee43bd72",
+      "comment_count": 2,
+      "created_at": "2026-07-11T16:20:32Z",
+      "labels": [],
+      "milestone": null,
+      "number": 803,
+      "state": "open",
+      "title": "Rung-3 working candidate FROZEN: ff=45863 (N=3,000,054,784 minimal 3B overshoot) + construction-tenancy plan — final freeze gated on 3 named receipts",
+      "updated_at": "2026-07-16T19:02:52Z",
+      "url": "https://github.com/wordingone/ember/issues/803"
+    },
+    {
+      "body_sha256": "992775317ba259435cd3a9fced5093f0c1d9c98def93ef40ef9fe150535e63ac",
+      "comment_count": 0,
+      "created_at": "2026-07-11T17:36:21Z",
+      "labels": [],
+      "milestone": null,
+      "number": 804,
+      "state": "open",
+      "title": "Probe evidence-scan hygiene: landed board renders are OUTPUTS, never evidence inputs (two spurious flips in one render)",
+      "updated_at": "2026-07-11T17:36:21Z",
+      "url": "https://github.com/wordingone/ember/issues/804"
+    },
+    {
+      "body_sha256": "82110f8fafcbf60bfeb719bde4e23ba795412adb12c0058f4237a0c9343adfbe",
+      "comment_count": 3,
+      "created_at": "2026-07-11T17:36:53Z",
+      "labels": [],
+      "milestone": {
+        "number": 10,
+        "state": "open",
+        "title": "EMBER-ISSUES-T1: Evidence classification and PR closures"
+      },
+      "number": 805,
+      "state": "open",
+      "title": "Issue-close sweep loop: 274 open issues, refs-never-closes discipline has no matching close half",
+      "updated_at": "2026-07-16T19:03:27Z",
+      "url": "https://github.com/wordingone/ember/issues/805"
+    },
+    {
+      "body_sha256": "d22de97155e6e36b5d5a4dd54e913de72a18ee8a317e90045c6c7777b48394b7",
+      "comment_count": 11,
+      "created_at": "2026-07-13T07:58:19Z",
+      "labels": [],
+      "milestone": {
+        "number": 6,
+        "state": "open",
+        "title": "EMBER-02A: Vision-v4 safe dispatch"
+      },
+      "number": 812,
+      "state": "open",
+      "title": "[EMBER-02] Bind clean-genesis 3B trainer input identity and shard forwarding end to end",
+      "updated_at": "2026-07-18T16:13:08Z",
+      "url": "https://github.com/wordingone/ember/issues/812"
+    },
+    {
+      "body_sha256": "89a4bd3bd50be02931a3d3e63b242f1013aae976122c89329e2542a9a1549274",
+      "comment_count": 0,
+      "created_at": "2026-07-16T14:45:35Z",
+      "labels": [],
+      "milestone": null,
+      "number": 869,
+      "state": "open",
+      "title": "Add verifier-bound specialist microbatch execution",
+      "updated_at": "2026-07-16T14:45:35Z",
+      "url": "https://github.com/wordingone/ember/issues/869"
+    },
+    {
+      "body_sha256": "f416511eea852fc0062f5c70156716ebf0183f121206321fccf39abc8803635a",
+      "comment_count": 0,
+      "created_at": "2026-07-16T17:37:57Z",
+      "labels": [],
+      "milestone": {
+        "number": 8,
+        "state": "open",
+        "title": "EMBER-02C: Frozen evaluator integration"
+      },
+      "number": 872,
+      "state": "open",
+      "title": "[EMBER-02C] Land full-closure frozen evaluator integration",
+      "updated_at": "2026-07-16T17:37:57Z",
+      "url": "https://github.com/wordingone/ember/issues/872"
+    },
+    {
+      "body_sha256": "4cc8bea3da4bc9eddec1d7f63627b3548605f50b980c659d046a92faa49b4700",
+      "comment_count": 0,
+      "created_at": "2026-07-16T17:38:00Z",
+      "labels": [],
+      "milestone": {
+        "number": 16,
+        "state": "open",
+        "title": "EMBER-04: Grounded memory, world model, dreaming"
+      },
+      "number": 873,
+      "state": "open",
+      "title": "[EMBER-04] Implement grounded memory, world-model, and dreaming loop",
+      "updated_at": "2026-07-16T17:38:00Z",
+      "url": "https://github.com/wordingone/ember/issues/873"
+    },
+    {
+      "body_sha256": "7acecf69fe7348cbacc6cc49d93b8c64fcbc13b014ff60228d00e8fce99c629d",
+      "comment_count": 0,
+      "created_at": "2026-07-16T17:38:01Z",
+      "labels": [],
+      "milestone": {
+        "number": 20,
+        "state": "open",
+        "title": "EMBER-07: 7B rung"
+      },
+      "number": 874,
+      "state": "open",
+      "title": "[EMBER-07] Execute owned 7B rung",
+      "updated_at": "2026-07-16T17:38:01Z",
+      "url": "https://github.com/wordingone/ember/issues/874"
+    },
+    {
+      "body_sha256": "3214ec8aeaab4e10671b4934f5dbbf14e5da0ad06d8b43c035bdff76c12aef42",
+      "comment_count": 0,
+      "created_at": "2026-07-16T17:38:03Z",
+      "labels": [],
+      "milestone": {
+        "number": 21,
+        "state": "open",
+        "title": "EMBER-08: 15B rung"
+      },
+      "number": 875,
+      "state": "open",
+      "title": "[EMBER-08] Execute owned 15B rung",
+      "updated_at": "2026-07-16T17:38:03Z",
+      "url": "https://github.com/wordingone/ember/issues/875"
+    },
+    {
+      "body_sha256": "760c1da5d515c03dd49e27b7c358d7280160e0bbae4115ab783c636423eea975",
+      "comment_count": 0,
+      "created_at": "2026-07-16T17:38:05Z",
+      "labels": [],
+      "milestone": {
+        "number": 22,
+        "state": "open",
+        "title": "EMBER-09: Owned over-27B rung"
+      },
+      "number": 876,
+      "state": "open",
+      "title": "[EMBER-09] Execute owned over-27B rung",
+      "updated_at": "2026-07-16T17:38:05Z",
+      "url": "https://github.com/wordingone/ember/issues/876"
+    },
+    {
+      "body_sha256": "991c5ed290db51b4ea503263bf726f7ca3f757d1940f03edf3b3447eb9306d1d",
+      "comment_count": 0,
+      "created_at": "2026-07-16T17:38:07Z",
+      "labels": [],
+      "milestone": {
+        "number": 24,
+        "state": "open",
+        "title": "EMBER-11: Independent local release"
+      },
+      "number": 877,
+      "state": "open",
+      "title": "[EMBER-11] Publish independent local Ember release",
+      "updated_at": "2026-07-16T17:38:07Z",
+      "url": "https://github.com/wordingone/ember/issues/877"
+    },
+    {
+      "body_sha256": "a7f2c9ee7354813a80b0a04e725947c22d7ada7ef8a4d1facd4e7f46da54b1da",
+      "comment_count": 0,
+      "created_at": "2026-07-17T00:40:47Z",
+      "labels": [],
+      "milestone": null,
+      "number": 887,
+      "state": "open",
+      "title": "Cockpit training telemetry can look live after trainer crash; emit FAILED and render STALE",
+      "updated_at": "2026-07-17T00:40:47Z",
+      "url": "https://github.com/wordingone/ember/issues/887"
+    },
+    {
+      "body_sha256": "867a4011cb899aa3b09eaa939bd182a3284ae1c3aa5528635d0ee03cc0601d5c",
+      "comment_count": 1,
+      "created_at": "2026-07-17T03:23:19Z",
+      "labels": [],
+      "milestone": null,
+      "number": 894,
+      "state": "open",
+      "title": "Cockpit live view is missing the expected right-side training graphs",
+      "updated_at": "2026-07-17T17:29:20Z",
+      "url": "https://github.com/wordingone/ember/issues/894"
+    },
+    {
+      "body_sha256": "14133cca14883f4fa2cfae3cb662072a3fcb55b0c2ff52588bd0f094d5b44c86",
+      "comment_count": 0,
+      "created_at": "2026-07-17T03:54:43Z",
+      "labels": [],
+      "milestone": null,
+      "number": 896,
+      "state": "open",
+      "title": "Defer low-commit checkpoint publication within a finite fail-closed bound",
+      "updated_at": "2026-07-17T03:54:43Z",
+      "url": "https://github.com/wordingone/ember/issues/896"
+    },
+    {
+      "body_sha256": "a1f2b2ec76837a9bed1afac899443458a26e8a88a4dc7427ef8bd5634f4cee26",
+      "comment_count": 7,
+      "created_at": "2026-07-17T04:04:05Z",
+      "labels": [],
+      "milestone": null,
+      "number": 898,
+      "state": "open",
+      "title": "emberd absolute resource guard: OS-enforced commit/VRAM ceilings on every spawned run — kill the per-callsite preflight class",
+      "updated_at": "2026-07-18T18:17:25Z",
+      "url": "https://github.com/wordingone/ember/issues/898"
+    },
+    {
+      "body_sha256": "83daee4e197674020c2d346403e2cb10a668b9123089aad48db19a755b3ca875",
+      "comment_count": 6,
+      "created_at": "2026-07-17T14:36:24Z",
+      "labels": [],
+      "milestone": null,
+      "number": 917,
+      "state": "open",
+      "title": "emberd: rehearsal-first dispatch + operator-alone operability (defect-class kill, not per-bug fixes)",
+      "updated_at": "2026-07-19T12:49:04Z",
+      "url": "https://github.com/wordingone/ember/issues/917"
+    },
+    {
+      "body_sha256": "b70a4e64733480cac76e409424516870fd4ba881e210b7109f3c6cf15108a062",
+      "comment_count": 7,
+      "created_at": "2026-07-18T01:27:32Z",
+      "labels": [],
+      "milestone": null,
+      "number": 930,
+      "state": "open",
+      "title": "Make checkpoint artifacts directory-durable and add receipted ledger recovery",
+      "updated_at": "2026-07-19T15:21:49Z",
+      "url": "https://github.com/wordingone/ember/issues/930"
+    },
+    {
+      "body_sha256": "fb3abd728e9a00bc1bfba816934ec8a4d4c01d15f14f9b8b1244f498f927194c",
+      "comment_count": 0,
+      "created_at": "2026-07-24T14:57:06Z",
+      "labels": [],
+      "milestone": null,
+      "number": 1043,
+      "state": "open",
+      "title": "cockpit: left-pane right-edge mid-word cutoff — implement Text wrap prop + per-region wrap/ellipsize policy",
+      "updated_at": "2026-07-24T14:57:06Z",
+      "url": "https://github.com/wordingone/ember/issues/1043"
+    },
+    {
+      "body_sha256": "a856cc700a17ca1c89d146139c5050462599c4442ec51d2b0ef314ca61679b81",
+      "comment_count": 1,
+      "created_at": "2026-07-25T07:34:28Z",
+      "labels": [],
+      "milestone": null,
+      "number": 1056,
+      "state": "open",
+      "title": "Implement modern sparse checkpoint save that round-trips through /model checkpoint load",
+      "updated_at": "2026-07-25T08:32:43Z",
+      "url": "https://github.com/wordingone/ember/issues/1056"
+    },
+    {
+      "body_sha256": "62386fe905d28ed7685fe9a9efb5cdcadfc21854d062af064bbba90436a00a5c",
+      "comment_count": 0,
+      "created_at": "2026-07-25T19:23:31Z",
+      "labels": [],
+      "milestone": null,
+      "number": 1075,
+      "state": "open",
+      "title": "repo-guard runs the candidate's own copy of the guard, so the required check is not base-trusted",
+      "updated_at": "2026-07-25T19:23:31Z",
+      "url": "https://github.com/wordingone/ember/issues/1075"
+    }
+  ],
+  "labels": [
+    {
+      "color": "0E8A16",
+      "description": "Reviewed and cleared to auto-merge once required checks pass",
+      "name": "auto-merge-ok"
+    },
+    {
+      "color": "d73a4a",
+      "description": "Something isn't working",
+      "name": "bug"
+    },
+    {
+      "color": "1d76db",
+      "description": "AI-lab corpus program",
+      "name": "corpus"
+    },
+    {
+      "color": "0075ca",
+      "description": "Improvements or additions to documentation",
+      "name": "documentation"
+    },
+    {
+      "color": "cfd3d7",
+      "description": "This issue or pull request already exists",
+      "name": "duplicate"
+    },
+    {
+      "color": "a2eeef",
+      "description": "New feature or request",
+      "name": "enhancement"
+    },
+    {
+      "color": "7057ff",
+      "description": "Good for newcomers",
+      "name": "good first issue"
+    },
+    {
+      "color": "008672",
+      "description": "Extra attention is needed",
+      "name": "help wanted"
+    },
+    {
+      "color": "5319e7",
+      "description": "Independent audit — falsification lead",
+      "name": "independent-audit-lane"
+    },
+    {
+      "color": "e4e669",
+      "description": "This doesn't seem right",
+      "name": "invalid"
+    },
+    {
+      "color": "d876e3",
+      "description": "Further information is requested",
+      "name": "question"
+    },
+    {
+      "color": "ffffff",
+      "description": "This will not be worked on",
+      "name": "wontfix"
+    }
+  ],
+  "milestones": [
+    {
+      "closed_issues": 0,
+      "description_sha256": "b45197250e5b25afe0e86ed3573ecf64991496576242068421ebec54530c8446",
+      "number": 1,
+      "open_issues": 0,
+      "state": "closed",
+      "title": "M1: Owned-base identity (C-BASE)"
+    },
+    {
+      "closed_issues": 8,
+      "description_sha256": "126e0983a860dfeae369b77fc307e491a6940a9ebbce247839a083d91ccde48c",
+      "number": 2,
+      "open_issues": 0,
+      "state": "closed",
+      "title": "M2: Resident training organ (C14 keystone)"
+    },
+    {
+      "closed_issues": 1,
+      "description_sha256": "d31c5fcc3c5cc9f94c07924d9a8b454a7b3ee7d042a5c887479b9c35d08b5808",
+      "number": 3,
+      "open_issues": 0,
+      "state": "closed",
+      "title": "M3: Independence receipts (C-IND)"
+    },
+    {
+      "closed_issues": 5,
+      "description_sha256": "da801e9ec828b56927d3ea464ab7cfd54029d2dc5c4eca1a43a9bc83d6934373",
+      "number": 4,
+      "open_issues": 0,
+      "state": "closed",
+      "title": "M4: Two-law receipts (P1 energy / P2 growth)"
+    },
+    {
+      "closed_issues": 7,
+      "description_sha256": "13c536fc0680e8ede76f0018886cb5baf21c4d2af6ce1e7b9214a3edb2b109c0",
+      "number": 5,
+      "open_issues": 0,
+      "state": "closed",
+      "title": "M5: Scale credibility (C-SCALE apex)"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "51edb7471774024476d5d05e2f0fcb6b320187e0627d0bc6a2c56a272e0bdd48",
+      "number": 6,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-02A: Vision-v4 safe dispatch"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "198a3a9f0c6a5b37b78e1d039433b6bd26bfb2e1eb65f36f737b0dda67fd94c4",
+      "number": 7,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-CORPUS-V1: Specialist receipts and acquisition plan"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "823c5c38b9af119ff76d6004ab05b1fc88b7d41e52124543e904350cd027be89",
+      "number": 8,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-02C: Frozen evaluator integration"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "9155e03fd41f8bc587d66da9d20bf300c67003647a052e0681e645d3912624c5",
+      "number": 9,
+      "open_issues": 2,
+      "state": "open",
+      "title": "EMBER-CUSTODY-V2: Cursor and deadline enforcement"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "8e812ff1a862fadd70ea943be72f9d43701dd6b5dcbb94cc66de3c97e3555858",
+      "number": 10,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-ISSUES-T1: Evidence classification and PR closures"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "497cffca1ccda85a6266a50cd66311a07e32ff209fce6cb5bb13fb13cbc09a70",
+      "number": 11,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-03A: Visible live-graphs panel"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "646c1b049c2e288e91d7c8cca89c4c2829c3c5ff52f33109866d53f4e9ddfbf3",
+      "number": 12,
+      "open_issues": 2,
+      "state": "open",
+      "title": "EMBER-03: Owned body, tools, and operator relationship"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "97833a6b0c11605b4831f63ade7bb0200e3095eb68564c61f05b7d8568582876",
+      "number": 13,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-EFF-V1: Compute screens and efficiency profiler"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "4b6f5dee78029f3f64e0ab23cfcbe99ef165d6350fb9150844dff8fa3ee1dcb8",
+      "number": 14,
+      "open_issues": 11,
+      "state": "open",
+      "title": "EMBER-CORPUS-FLOOR: Verified 11-domain coverage"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "2d882af6105a2d5a9c363f56d6e6bb13038b3ff38c0cf8498622b92057c91ad0",
+      "number": 15,
+      "open_issues": 4,
+      "state": "open",
+      "title": "EMBER-02: Sufficiently pretrained owned 3B"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "7d2440d7711339c8c3ce5bd71a8641d34e58e1b232d822519d305e61aacc401b",
+      "number": 16,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-04: Grounded memory, world model, dreaming"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "d1852b70b22c07d51c1e74ed78cbb374fefdd6f7f109d7a5074229e8bef9ec36",
+      "number": 17,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-05: Verified expert accretion at 3B"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "2963c7b4ec691f4ce7975d01e88b38a1fed8ad1f5604f1aa7d3f6f7c502b4e72",
+      "number": 18,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-06: Autonomous research bootstrap"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "1d7709996d0f211b07eba29f851b1cd485fca9293343f38bdb00325b9aeba7fb",
+      "number": 19,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-PUBLICATION-V1: Paper and reproducible research primitive"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "c0e873a0577cbaf8bb7e8b35fdebe1cfd4a58ce75283fbcdb3421fc3aeb20957",
+      "number": 20,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-07: 7B rung"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "7d0f84cac6178506f2e4fded3ea9219bd2aadc1507030c64c3d3614fe638dc54",
+      "number": 21,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-08: 15B rung"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "01df3c616418541b1769cf49122a3058178f45fc1396e88f320c62e5ff935227",
+      "number": 22,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-09: Owned over-27B rung"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "3cc24ccac43342aca2d817edac5dcc93d88b00aec649043d2214015570bc3e1b",
+      "number": 23,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-10: Sovereign local AI lab"
+    },
+    {
+      "closed_issues": 0,
+      "description_sha256": "60d5f3007d1f37d418c433e6a017dd3ff20ae228849d853f66b42a259a0f7b63",
+      "number": 24,
+      "open_issues": 1,
+      "state": "open",
+      "title": "EMBER-11: Independent local release"
+    }
+  ],
+  "public_master_sha": "73ba2165cb87e5d9e38c93ac8da667ba0c4b923a",
+  "repository": "wordingone/ember",
+  "schema_version": "ember-roadmap-public-state-v1"
+}
