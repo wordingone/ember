@@ -50,16 +50,9 @@ def _registry_approval(approval_path: Path) -> tuple[str, str]:
 def resolve_owned_seat(
     manifest_path: Path,
     verifier_registry: Path,
-    verifier_registry_approval: Path | None,
+    verifier_registry_approval: Path,
 ) -> dict[str, Any]:
-    if verifier_registry_approval is None:
-        # Narrow compatibility bridge for the pre-receiver admitted server.
-        # The public loader always supplies external approval; the 02B receiver
-        # removes this legacy call path before the final supervisor activation.
-        expected_registry_sha256 = hashlib.sha256(verifier_registry.read_bytes()).hexdigest()
-        approval_sha256 = None
-    else:
-        expected_registry_sha256, approval_sha256 = _registry_approval(verifier_registry_approval)
+    expected_registry_sha256, approval_sha256 = _registry_approval(verifier_registry_approval)
     validation = validate_manifest(
         manifest_path,
         verifier_registry,
@@ -135,12 +128,9 @@ def resolve_owned_seat(
         "tokenizer_path": str(tokenizer_path),
         "trusted_verifier_registry_path": str(verifier_registry.resolve()),
         "trusted_verifier_registry_sha256": expected_registry_sha256,
+        "trusted_verifier_registry_approval_path": str(verifier_registry_approval.resolve()),
+        "trusted_verifier_registry_approval_sha256": approval_sha256,
     }
-    if verifier_registry_approval is not None:
-        launch.update({
-            "trusted_verifier_registry_approval_path": str(verifier_registry_approval.resolve()),
-            "trusted_verifier_registry_approval_sha256": approval_sha256,
-        })
 
     return {
         "valid": True,
@@ -163,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--trusted-verifier-registry", required=True, type=Path)
-    parser.add_argument("--trusted-verifier-registry-approval", type=Path)
+    parser.add_argument("--trusted-verifier-registry-approval", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
         result = resolve_owned_seat(

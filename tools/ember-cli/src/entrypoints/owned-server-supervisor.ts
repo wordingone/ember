@@ -133,6 +133,11 @@ export function buildOwnedServerCommand(
         "--config", launch.modelConfigPath,
         "--run-manifest", launch.runManifestPath,
         "--trusted-verifier-registry", launch.trustedVerifierRegistryPath,
+        "--expected-registry-root-sha256", launch.trustedVerifierRegistrySha256,
+        "--trusted-verifier-registry-approval",
+        launch.trustedVerifierRegistryApprovalPath,
+        "--expected-registry-approval-sha256",
+        launch.trustedVerifierRegistryApprovalSha256,
       ]
     : [
         "--config", launch.modelConfigPath,
