@@ -23,7 +23,25 @@ export interface CheckpointLoadFsDeps {
   open: (
     path: string,
     flags: "r",
-  ) => Promise<Pick<Awaited<ReturnType<typeof open>>, "stat" | "read" | "close">>;
+  ) => Promise<{
+    stat: () => Promise<Stats>;
+    // Narrowed to the ONE calling convention this module ever actually uses (always 4 positional
+    // args, see the two `handle.read(buffer, offset, length, position)` call sites below) rather
+    // than borrowing FileHandle's full overload set via Pick<Awaited<ReturnType<typeof open>>,
+    // ...>. That wider type let offset/length/position be `number | null | undefined` (FileHandle
+    // also supports a 1-2 arg options-object calling form this module never uses), which forced
+    // every deps.open mock to defensively handle calling conventions it will never see. A real
+    // fs/promises FileHandle still satisfies this narrower shape unchanged (its `read` supports
+    // strictly more calling conventions than this one, and its return value's extra `buffer`
+    // field is a superset of `{ bytesRead }`) -- DEFAULT_FS_DEPS below is the proof.
+    read: (
+      buffer: Buffer,
+      offset: number,
+      length: number,
+      position: number,
+    ) => Promise<{ bytesRead: number }>;
+    close: () => Promise<void>;
+  }>;
 }
 
 const DEFAULT_FS_DEPS: CheckpointLoadFsDeps = {
