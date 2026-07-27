@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 import checkpoint_artifacts
 import durable_io
 
-from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
@@ -291,6 +291,41 @@ class CheckpointArtifactTests(unittest.TestCase):
                 streaming_peak_bytes=4_000,
                 reserve_bytes=6_000,
             )
+
+    def test_commit_preflight_insufficient_headroom_raises_the_deferrable_type(self) -> None:
+        """A low-commit preflight refusal is a distinguishable DEFERRED_LOW_COMMIT
+        signal, not an undifferentiated writer/storage failure -- and it never
+        creates any staging or published bytes, so nothing selectable is lost."""
+        with self.assertRaises(CheckpointDeferredLowCommit) as context:
+            checkpoint_commit_preflight(
+                available_commit_bytes=9_999,
+                streaming_peak_bytes=4_000,
+                reserve_bytes=6_000,
+            )
+        error = context.exception
+        self.assertEqual(error.available_commit_bytes, 9_999)
+        self.assertEqual(error.required_commit_bytes, 10_000)
+        self.assertEqual(error.streaming_peak_bytes, 4_000)
+        self.assertEqual(error.reserve_bytes, 6_000)
+
+    def test_low_commit_preflight_refusal_publishes_nothing(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=15)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "checkpoint-low-commit"
+            with self.assertRaises(CheckpointDeferredLowCommit):
+                _write_checkpoint_artifacts_public(
+                    model, optimizer, target, launch_seed=15,
+                    rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                    data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+                    model_config_sha256="c" * 64, contract_sha256="d" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    host_commit_reserve_bytes=2**63,
+                    pre_publish_verifier=lambda _candidate, _receipt: None,
+                )
+            self.assertFalse(target.exists())
+            self.assertEqual(list(Path(directory).iterdir()), [])
 
     def test_checkpoint_capacity_uses_fixed_pagefile_maximum_not_current_limit(self) -> None:
         gib = 1024**3

@@ -1651,5 +1651,190 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(payload["outcome"], "STOPPED_BY_BUDGET")
         self.assertIn("declared file write budget exceeded", payload["stop_reason"])
 
+    def test_checkpoint_low_commit_deferral_policy_reads_its_own_module_local_file(self) -> None:
+        policy_path = run_vertical_slice.default_checkpoint_low_commit_deferral_policy_path()
+        self.assertEqual(policy_path.name, "checkpoint-low-commit-deferral-policy.json")
+        self.assertTrue(policy_path.is_file())
+        policy = run_vertical_slice.checkpoint_low_commit_deferral_policy(policy_path)
+        self.assertEqual(policy, {"max_deferrals": 3, "max_uncheckpointed_step_distance": 2000})
+
+    def test_publish_checkpoint_with_low_commit_deferral_defaults_to_the_module_local_policy(self) -> None:
+        """Never touches the frozen ember-restart-3b.json production contract: that
+        config's exact bytes are hash-bound into checked-in input-identity/
+        production-rung/specialist-stream receipts, so any edit to it cascades into
+        unrelated regenerated fixtures. The deferral policy is operational tuning
+        and lives alongside this module instead, resolved with no config_path
+        argument required."""
+        from checkpoint_artifacts import CheckpointDeferredLowCommit
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            config_path = directory / "config.json"
+            config_path.write_text(json.dumps({
+                "checkpoints": {"retention": {"max_serialized_gib": 1, "preserve_last_known_good": True}},
+            }), encoding="utf-8")
+            checkpoint_parent = directory / "checkpoints"
+
+            def publish() -> tuple[dict[str, object], dict[str, object]]:
+                raise CheckpointDeferredLowCommit(
+                    available_commit_bytes=1, required_commit_bytes=2,
+                    streaming_peak_bytes=1, reserve_bytes=1,
+                )
+
+            state: dict[str, int] = {"count": 0}
+            result = run_vertical_slice._publish_checkpoint_with_low_commit_deferral(
+                checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=1,
+                last_checkpointed_step=0, deferral_state=state, publish=publish,
+                telemetry_path=None, telemetry_run_id=None,
+            )
+            self.assertIsNone(result)
+            self.assertEqual(state["count"], 1)
+
+    def test_checkpoint_low_commit_deferral_policy_rejects_invalid_shapes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            policy_path = Path(directory) / "policy.json"
+            for policy_payload in (
+                {},
+                {"low_commit_deferral": "not-a-dict"},
+                {"low_commit_deferral": {"max_deferrals": -1, "max_uncheckpointed_step_distance": 10}},
+                {"low_commit_deferral": {"max_deferrals": 0, "max_uncheckpointed_step_distance": 0}},
+                {"low_commit_deferral": {"max_deferrals": 0}},
+            ):
+                policy_path.write_text(json.dumps(policy_payload), encoding="utf-8")
+                with self.subTest(policy_payload=policy_payload), self.assertRaisesRegex(ValueError, "low-commit deferral"):
+                    run_vertical_slice.checkpoint_low_commit_deferral_policy(policy_path)
+
+    def test_checkpoint_low_commit_deferral_policy_fails_closed_when_the_file_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            policy_path = Path(directory) / "policy.json"
+            with self.assertRaisesRegex(ValueError, "missing or unreadable"):
+                run_vertical_slice.checkpoint_low_commit_deferral_policy(policy_path)
+
+    def _low_commit_deferral_config(self, directory: Path, *, max_deferrals: int, max_distance: int) -> tuple[Path, Path]:
+        config_path = directory / "config.json"
+        config_path.write_text(json.dumps({
+            "checkpoints": {"retention": {"max_serialized_gib": 1, "preserve_last_known_good": True}},
+        }), encoding="utf-8")
+        policy_path = directory / "policy.json"
+        policy_path.write_text(json.dumps({
+            "low_commit_deferral": {
+                "max_deferrals": max_deferrals,
+                "max_uncheckpointed_step_distance": max_distance,
+            },
+        }), encoding="utf-8")
+        return config_path, policy_path
+
+    def test_publish_checkpoint_with_low_commit_deferral_preserves_prior_and_receipts(self) -> None:
+        from checkpoint_artifacts import CheckpointDeferredLowCommit
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            config_path, policy_path = self._low_commit_deferral_config(directory, max_deferrals=2, max_distance=100)
+            checkpoint_parent = directory / "checkpoints"
+            telemetry_path = directory / "telemetry.jsonl"
+
+            def publish() -> tuple[dict[str, object], dict[str, object]]:
+                raise CheckpointDeferredLowCommit(
+                    available_commit_bytes=1_000, required_commit_bytes=5_000,
+                    streaming_peak_bytes=4_000, reserve_bytes=1_000,
+                )
+
+            state: dict[str, int] = {"count": 0}
+            result = run_vertical_slice._publish_checkpoint_with_low_commit_deferral(
+                checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=10,
+                last_checkpointed_step=0, deferral_state=state, publish=publish,
+                telemetry_path=telemetry_path, telemetry_run_id="run-1", policy_path=policy_path,
+            )
+            self.assertIsNone(result)
+            self.assertEqual(state["count"], 1)
+            # no checkpoint bundle, staging, or quarantine artifact was ever created --
+            # the sole prior known-good checkpoint (if any) stays untouched/selectable.
+            self.assertEqual(list(checkpoint_parent.glob("checkpoint-*")), [])
+            receipts = list((checkpoint_parent / ".checkpoint-deferrals").glob("*.json"))
+            self.assertEqual(len(receipts), 1)
+            receipt = json.loads(receipts[0].read_text(encoding="utf-8"))
+            self.assertEqual(receipt["schema_version"], "ember-checkpoint-deferred-low-commit-v1")
+            self.assertEqual(receipt["status"], "DEFERRED_LOW_COMMIT")
+            self.assertEqual(receipt["global_step"], 10)
+            self.assertEqual(receipt["deferral_count"], 1)
+            self.assertEqual(receipt["uncheckpointed_step_distance"], 10)
+            self.assertEqual(receipt["available_commit_bytes"], 1_000)
+            self.assertEqual(receipt["required_commit_bytes"], 5_000)
+            self.assertEqual(receipt["streaming_peak_bytes"], 4_000)
+            self.assertEqual(receipt["reserve_bytes"], 1_000)
+            events = [json.loads(line) for line in telemetry_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["kind"], "checkpoint_deferred")
+            self.assertEqual(events[0]["payload"]["status"], "DEFERRED_LOW_COMMIT")
+            self.assertEqual(events[0]["payload"]["deferral_count"], 1)
+
+    def test_publish_checkpoint_with_low_commit_deferral_fails_closed_past_max_deferrals(self) -> None:
+        from checkpoint_artifacts import CheckpointDeferredLowCommit
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            config_path, policy_path = self._low_commit_deferral_config(directory, max_deferrals=1, max_distance=1000)
+            checkpoint_parent = directory / "checkpoints"
+
+            def publish() -> tuple[dict[str, object], dict[str, object]]:
+                raise CheckpointDeferredLowCommit(
+                    available_commit_bytes=1, required_commit_bytes=2,
+                    streaming_peak_bytes=1, reserve_bytes=1,
+                )
+
+            state: dict[str, int] = {"count": 0}
+            first = run_vertical_slice._publish_checkpoint_with_low_commit_deferral(
+                checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=5,
+                last_checkpointed_step=0, deferral_state=state, publish=publish,
+                telemetry_path=None, telemetry_run_id=None, policy_path=policy_path,
+            )
+            self.assertIsNone(first)
+            with self.assertRaisesRegex(RuntimeError, "checkpoint low-commit deferral bound exceeded"):
+                run_vertical_slice._publish_checkpoint_with_low_commit_deferral(
+                    checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=6,
+                    last_checkpointed_step=0, deferral_state=state, publish=publish,
+                    telemetry_path=None, telemetry_run_id=None, policy_path=policy_path,
+                )
+            self.assertEqual(state["count"], 2)
+            self.assertEqual(len(list((checkpoint_parent / ".checkpoint-deferrals").glob("*.json"))), 2)
+
+    def test_publish_checkpoint_with_low_commit_deferral_fails_closed_past_step_distance(self) -> None:
+        from checkpoint_artifacts import CheckpointDeferredLowCommit
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            config_path, policy_path = self._low_commit_deferral_config(directory, max_deferrals=100, max_distance=5)
+            checkpoint_parent = directory / "checkpoints"
+
+            def publish() -> tuple[dict[str, object], dict[str, object]]:
+                raise CheckpointDeferredLowCommit(
+                    available_commit_bytes=1, required_commit_bytes=2,
+                    streaming_peak_bytes=1, reserve_bytes=1,
+                )
+
+            state: dict[str, int] = {"count": 0}
+            with self.assertRaisesRegex(RuntimeError, "uncheckpointed_step_distance"):
+                run_vertical_slice._publish_checkpoint_with_low_commit_deferral(
+                    checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=50,
+                    last_checkpointed_step=0, deferral_state=state, publish=publish,
+                    telemetry_path=None, telemetry_run_id=None, policy_path=policy_path,
+                )
+
+    def test_publish_checkpoint_with_low_commit_deferral_publishes_normally_on_success(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            config_path, policy_path = self._low_commit_deferral_config(directory, max_deferrals=1, max_distance=10)
+            checkpoint_parent = directory / "checkpoints"
+            published = ({"checkpoint": "ok"}, {"receipt": "ok"})
+
+            def publish() -> tuple[dict[str, object], dict[str, object]]:
+                return published
+
+            state: dict[str, int] = {"count": 0}
+            result = run_vertical_slice._publish_checkpoint_with_low_commit_deferral(
+                checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=3,
+                last_checkpointed_step=0, deferral_state=state, publish=publish,
+                telemetry_path=None, telemetry_run_id=None, policy_path=policy_path,
+            )
+            self.assertEqual(result, published)
+            self.assertEqual(state["count"], 0)
+            self.assertFalse((checkpoint_parent / ".checkpoint-deferrals").exists())
+
 if __name__ == "__main__":
     unittest.main()

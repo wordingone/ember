@@ -25,7 +25,7 @@ from typing import Any, Callable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -343,7 +343,7 @@ def validate_specialist_execution_slice(
 def append_training_telemetry(path: Path, *, kind: str, payload: dict[str, object]) -> None:
     """Append one bounded, path-free cockpit event from the canonical trainer."""
 
-    if kind not in {"run_status", "train_step", "checkpoint"}:
+    if kind not in {"run_status", "train_step", "checkpoint", "checkpoint_deferred"}:
         raise ValueError("training telemetry kind is not authorized")
     if any("path" in key.lower() for key in payload):
         raise ValueError("training telemetry payload must not disclose filesystem paths")
@@ -442,6 +442,147 @@ def checkpoint_host_commit_reserve_bytes(config_path: Path) -> int:
     if type(reserve_gib) is not int or reserve_gib < 1:
         raise ValueError("checkpoint host commit reserve must be a positive integer GiB value")
     return reserve_gib * 1024**3
+
+
+_LOW_COMMIT_DEFERRAL_RECEIPT_LIMIT = 8 * 1024
+
+
+def default_checkpoint_low_commit_deferral_policy_path() -> Path:
+    """The finite retry-bound policy lives in its own file, deliberately never inside
+    the frozen ``ember-restart-3b.json`` production contract: that config's exact
+    bytes are hash-bound into checked-in input-identity/production-rung/
+    specialist-stream receipts (``model_config_sha256`` / ``model_config.sha256``),
+    so editing it cascades into unrelated regenerated fixtures. The deferral policy
+    is operational tuning, not part of that identity chain, so it lives alongside
+    this module instead."""
+    return Path(__file__).resolve().with_name("checkpoint-low-commit-deferral-policy.json")
+
+
+def checkpoint_low_commit_deferral_policy(policy_path: Path) -> dict[str, int]:
+    """Load the finite retry bound for DEFERRED_LOW_COMMIT checkpoint publications."""
+    try:
+        payload = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("checkpoint low-commit deferral policy file is missing or unreadable") from error
+    policy = payload.get("low_commit_deferral") if isinstance(payload, dict) else None
+    if not isinstance(policy, dict):
+        raise ValueError("checkpoint low-commit deferral policy has an invalid shape")
+    max_deferrals = policy.get("max_deferrals")
+    max_uncheckpointed_step_distance = policy.get("max_uncheckpointed_step_distance")
+    if type(max_deferrals) is not int or max_deferrals < 0:
+        raise ValueError("checkpoint low-commit deferral max_deferrals must be a nonnegative integer")
+    if type(max_uncheckpointed_step_distance) is not int or max_uncheckpointed_step_distance < 1:
+        raise ValueError("checkpoint low-commit deferral max_uncheckpointed_step_distance must be a positive integer")
+    return {
+        "max_deferrals": max_deferrals,
+        "max_uncheckpointed_step_distance": max_uncheckpointed_step_distance,
+    }
+
+
+def _write_low_commit_deferral_receipt(
+    checkpoint_parent: Path,
+    *,
+    global_step: int,
+    deferral_count: int,
+    uncheckpointed_step_distance: int,
+    error: CheckpointDeferredLowCommit,
+) -> Path:
+    """Bounded, receipted evidence for one DEFERRED_LOW_COMMIT checkpoint boundary.
+
+    Never overlaps the published-checkpoint or staging namespaces, so it can never
+    be mistaken for a selectable checkpoint candidate.
+    """
+    receipts_dir = checkpoint_parent / ".checkpoint-deferrals"
+    receipts_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": "ember-checkpoint-deferred-low-commit-v1",
+        "status": "DEFERRED_LOW_COMMIT",
+        "global_step": global_step,
+        "deferral_count": deferral_count,
+        "uncheckpointed_step_distance": uncheckpointed_step_distance,
+        "available_commit_bytes": error.available_commit_bytes,
+        "required_commit_bytes": error.required_commit_bytes,
+        "streaming_peak_bytes": error.streaming_peak_bytes,
+        "reserve_bytes": error.reserve_bytes,
+        "observed_at_ns": time.time_ns(),
+    }
+    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    if len(encoded) >= _LOW_COMMIT_DEFERRAL_RECEIPT_LIMIT:
+        raise RuntimeError("checkpoint low-commit deferral receipt exceeds its bounded retention limit")
+    digest = hashlib.sha256(encoded).hexdigest()
+    target = receipts_dir / f"deferred-low-commit-step-{global_step}-{digest[:16]}.json"
+    atomic_create_durable(target, encoded)
+    return target
+
+
+def _publish_checkpoint_with_low_commit_deferral(
+    *,
+    checkpoint_parent: Path,
+    config_path: Path,
+    global_step: int,
+    last_checkpointed_step: int,
+    deferral_state: dict[str, int],
+    publish: Callable[[], tuple[dict[str, object], dict[str, object]]],
+    telemetry_path: Path | None,
+    telemetry_run_id: str | None,
+    policy_path: Path | None = None,
+) -> tuple[dict[str, object], dict[str, object]] | None:
+    """Publish one checkpoint boundary, deferring (never silently dropping, never
+    continuing indefinitely) on insufficient host commit headroom.
+
+    Returns the new ``(checkpoint, parameter_receipt)`` pair on a normal publish.
+    Returns ``None`` when this boundary was DEFERRED_LOW_COMMIT: the caller's prior
+    known-good checkpoint stays exactly as it was -- untouched, still the sole
+    selectable candidate -- because :func:`checkpoint_commit_preflight` always runs
+    before any staging directory is created. Raises (fail-closed) once the finite
+    deferral count or uncheckpointed-step distance bound configured in the policy
+    file (default: :func:`default_checkpoint_low_commit_deferral_policy_path`) is
+    exceeded.
+    """
+    policy = checkpoint_low_commit_deferral_policy(
+        policy_path if policy_path is not None else default_checkpoint_low_commit_deferral_policy_path()
+    )
+    try:
+        return _retain_after_success(
+            checkpoint_parent,
+            max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
+            receipt_aware=True,
+            operation=publish,
+        )
+    except CheckpointDeferredLowCommit as error:
+        deferral_state["count"] += 1
+        distance = global_step - last_checkpointed_step
+        receipt_path = _write_low_commit_deferral_receipt(
+            checkpoint_parent,
+            global_step=global_step,
+            deferral_count=deferral_state["count"],
+            uncheckpointed_step_distance=distance,
+            error=error,
+        )
+        if telemetry_path is not None and telemetry_run_id is not None:
+            append_training_telemetry(telemetry_path, kind="checkpoint_deferred", payload={
+                "run_id": telemetry_run_id,
+                "step": global_step,
+                "status": "DEFERRED_LOW_COMMIT",
+                "deferral_count": deferral_state["count"],
+                "uncheckpointed_step_distance": distance,
+                "available_commit_bytes": error.available_commit_bytes,
+                "required_commit_bytes": error.required_commit_bytes,
+                "streaming_peak_bytes": error.streaming_peak_bytes,
+                "reserve_bytes": error.reserve_bytes,
+                "receipt_sha256": _sha256(receipt_path),
+            })
+        if (
+            deferral_state["count"] > policy["max_deferrals"]
+            or distance > policy["max_uncheckpointed_step_distance"]
+        ):
+            raise RuntimeError(
+                "checkpoint low-commit deferral bound exceeded: "
+                f"deferral_count={deferral_state['count']} (max {policy['max_deferrals']}), "
+                f"uncheckpointed_step_distance={distance} "
+                f"(max {policy['max_uncheckpointed_step_distance']})"
+            ) from error
+        return None
 
 
 def semantic_publication_plan(*, steps: int, checkpoint_interval: int, checkpoint_byte_bound: int, write_budget_bytes: int, initial_global_step: int = 0) -> dict[str, int]:
@@ -2266,9 +2407,11 @@ def run(
     parameter_receipt: dict[str, object] | None = None
     latest_parent_manifest = Path(specialist_lineage["parent_manifest"]) if specialist_lineage is not None else None
     published_specialist_records = 0
+    low_commit_deferral_state = {"count": 0}
+    last_checkpointed_step = int(resume_cursor["global_step"])
 
     def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
-        nonlocal checkpoint, parameter_receipt, latest_parent_manifest, published_specialist_records
+        nonlocal checkpoint, parameter_receipt, latest_parent_manifest, published_specialist_records, last_checkpointed_step
         data_cursor = dict(state["data_cursor"])
         data_cursor["input_identity_receipt_sha256"] = _json_sha256(input_receipt)
         data_cursor["governor"] = governor_receipt
@@ -2324,12 +2467,20 @@ def run(
             )
             return published, verified_holder["receipt"]
 
-        checkpoint, parameter_receipt = _retain_after_success(
-            checkpoint_parent,
-            max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
-            receipt_aware=True,
-            operation=publish_and_verify,
+        result = _publish_checkpoint_with_low_commit_deferral(
+            checkpoint_parent=checkpoint_parent,
+            config_path=config_path,
+            global_step=global_step,
+            last_checkpointed_step=last_checkpointed_step,
+            deferral_state=low_commit_deferral_state,
+            publish=publish_and_verify,
+            telemetry_path=telemetry_path,
+            telemetry_run_id=telemetry_run_id,
         )
+        if result is None:
+            return
+        checkpoint, parameter_receipt = result
+        last_checkpointed_step = global_step
         if current_lineage is not None:
             latest_parent_manifest = checkpoint_target / "checkpoint-manifest.json"
             published_specialist_records = int(data_cursor["record_index"])
@@ -2600,9 +2751,11 @@ def run_semantic(
     torch.cuda.reset_peak_memory_stats()
     checkpoint: dict[str, object] | None = None
     parameter_receipt: dict[str, object] | None = None
+    low_commit_deferral_state = {"count": 0}
+    last_checkpointed_step = initial_global_step
 
     def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
-        nonlocal checkpoint, parameter_receipt
+        nonlocal checkpoint, parameter_receipt, last_checkpointed_step
         checkpoint_root = checkpoint_parent / f"checkpoint-semantic-seed-{seed}-step-{global_step}"
         verified_holder: dict[str, object] = {}
 
@@ -2634,12 +2787,20 @@ def run_semantic(
             )
             return published, verified_holder["receipt"]
 
-        checkpoint, parameter_receipt = _retain_after_success(
-            checkpoint_parent,
-            max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
-            receipt_aware=True,
-            operation=publish_and_verify,
+        result = _publish_checkpoint_with_low_commit_deferral(
+            checkpoint_parent=checkpoint_parent,
+            config_path=config_path,
+            global_step=global_step,
+            last_checkpointed_step=last_checkpointed_step,
+            deferral_state=low_commit_deferral_state,
+            publish=publish_and_verify,
+            telemetry_path=None,
+            telemetry_run_id=None,
         )
+        if result is None:
+            return
+        checkpoint, parameter_receipt = result
+        last_checkpointed_step = global_step
 
     segment = run_manifest_bound_semantic_segment(
         model=model,
