@@ -21,6 +21,7 @@ import {
 } from "node:path";
 import { Terminal } from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
+import { headlessCaptureEnv } from "../services/headless-capture.ts";
 import { buildCommitBanner } from "./build-cockpit.ts";
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -458,6 +459,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
         EMBER_SOURCE_ROOT: repoRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
+        ...headlessCaptureEnv(),
       },
     });
     child.onData((data) => {

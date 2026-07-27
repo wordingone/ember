@@ -25,6 +25,7 @@ import { readFile, stat, writeFile, open } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { isHeadlessCapture } from "./headless-capture.ts";
 import { appendLineWithDirs, stripBom } from "../utils/file-operations.ts";
 import type { ActivityFeedLine, ActivityFeedSource } from "../components/activity-feed-pane.ts";
 import type { GoalReceiptRow } from "./goal-receipts.ts";
@@ -435,6 +436,9 @@ export interface ActivityFeedDeps {
   /** P0-B: persistent path->mtime watermark, survives a process restart (see loadWatermark /
    *  persistWatermark below). Defaults to state/activity-feed-watermark.json. */
   watermarkPath?: string;
+  /** Overrides process.env -- tests inject a fixed environment. Read only for the
+   *  headless-capture check, which decides whether this engine may PUBLISH its watermark. */
+  env?: Record<string, string | undefined>;
   /** #576: diagnostic log for the tail-poll path's boot behavior (one row per pollTail() tick +
    *  one row per startActivityFeed()/freshTailState() call). Defaults to
    *  state/activity-feed-tailpoll-debug.jsonl. */
@@ -660,9 +664,20 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
   // a file whose current mtime already matches this map was rendered in a PRIOR run and must
   // never replay just because the process restarted.
   const watermark: Watermark = loadWatermarkSync(watermarkPath);
+  // A capture harness drives the real binary, and repl.ts mounts this engine unconditionally with
+  // default deps -- so the harness advances the watermark at the MAIN repo root (the resolver
+  // converges every worktree onto it) and the operator's NEXT cockpit boot reads that map and
+  // suppresses replay. The receipts were "rendered" to a PTY nobody was reading. This is the
+  // mirror of the heartbeat defect: there a dead cockpit looked alive, here unseen events look
+  // seen. Reading the watermark is left alone -- only PUBLISHING it is the harm, and reading
+  // keeps the instrument's behaviour faithful to the cockpit's.
+  const suppressWatermarkWrites = isHeadlessCapture(deps.env);
   let watermarkDirty = false;
   function persistWatermark(): void {
     boundRecordKeys(watermark, MAX_TRACKED_PATHS);
+    // Checked before the dirty flag and before the timer is armed, so a capture run schedules no
+    // write at all rather than arming one that later no-ops.
+    if (suppressWatermarkWrites) return;
     if (watermarkDirty) return; // a write is already scheduled; it will pick up the latest map
     watermarkDirty = true;
     setTimeout(() => {

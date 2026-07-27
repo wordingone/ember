@@ -23,6 +23,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
+import { isHeadlessCapture, HEADLESS_CAPTURE_ENV } from "./headless-capture.ts";
+
+// Re-exported so this module's existing importers and tests keep one import site. The
+// predicate itself lives in headless-capture.ts because the heartbeat is only ONE of the
+// side effects a capture harness inherits -- see that module's header.
+export { isHeadlessCapture, HEADLESS_CAPTURE_ENV };
+/** @deprecated name kept for the tests that named it first; prefer isHeadlessCapture. */
+export const shouldSuppressForHeadlessCapture = isHeadlessCapture;
 
 export interface LivenessHeartbeatRow {
   ts:      string; // ISO8601Z -- when this heartbeat was written
@@ -33,6 +41,8 @@ export interface LivenessHeartbeatRow {
 export interface LivenessHeartbeatWriterOptions {
   /** Overrides the resolved repo root -- tests point this at a scratch directory. */
   repoRoot?: string;
+  /** Overrides process.env -- tests inject a fixed environment. */
+  env?: Record<string, string | undefined>;
   /** Overrides process.pid -- tests inject a fixed value. */
   pid?: number;
   /** Build SHA / package version stamped into every row. Defaults to "unknown" rather than
@@ -61,6 +71,23 @@ export function createLivenessHeartbeatWriter(
 ): LivenessHeartbeatWriter {
   const pid     = options.pid ?? process.pid;
   const version = options.version ?? "unknown";
+
+  // ORDER IS LOAD-BEARING: this runs BEFORE repo-root resolution, so a capture run publishes
+  // nothing even on the path where resolution SUCCEEDS -- which is every normal run, and the only
+  // path that reaches the watchdog. Placing it after resolution would leave the defect intact and
+  // only cover the failure case, which was already inert.
+  if (isHeadlessCapture(options.env)) {
+    console.warn(
+      `[liveness-heartbeat] ${HEADLESS_CAPTURE_ENV}=1 -- this process is a capture harness, not ` +
+        `the cockpit; heartbeat writer is INERT (no file will ever be created or written).`,
+    );
+    return {
+      filePath: null,
+      write() {
+        // Deliberate no-op -- an inert writer never touches disk.
+      },
+    };
+  }
 
   // PR954 round 2: the heartbeat path is authoritative state the watchdog polls -- it
   // must go through the STRICT resolver (resolveEmberRepoRoot), never

@@ -20,6 +20,7 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
+import { headlessCaptureEnv } from "../services/headless-capture.ts";
 import { READY_OSC } from "../cli/ready-sentinel.ts";
 import { buildCommitBanner } from "./build-cockpit.ts";
 import {
@@ -703,6 +704,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         EMBER_SOURCE_ROOT: repoRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
+        ...headlessCaptureEnv(),
       },
     });
     child.onData((data) => {
