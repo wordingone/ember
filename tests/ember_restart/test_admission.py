@@ -460,6 +460,14 @@ print(json.dumps({
     }
     _write_json(manifest_path, manifest)
 
+    registry_approval = tmp_path / "trusted-registry-approval.json"
+    _write_json(
+        registry_approval,
+        {
+            "schema_version": "ember-trusted-verifier-registry-approval-v1",
+            "trusted_verifier_registry_sha256": _sha256(registry),
+        },
+    )
     result = subprocess.run(
         [
             sys.executable,
@@ -468,6 +476,8 @@ print(json.dumps({
             str(manifest_path),
             "--trusted-verifier-registry",
             str(registry),
+            "--trusted-verifier-registry-approval",
+            str(registry_approval),
         ],
         cwd=REPO_ROOT,
         text=True,

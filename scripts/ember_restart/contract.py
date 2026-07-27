@@ -931,12 +931,17 @@ def _load_bound_json(
 def _load_trusted_verifiers(
     registry_path: Path | None,
     errors: list[str],
+    expected_registry_sha256: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     if registry_path is None:
         errors.append("trusted_verifier_registry: required for checkpoint claims")
         return {}
     try:
-        payload = json.loads(registry_path.read_text(encoding="utf-8"))
+        registry_bytes = registry_path.read_bytes()
+        if expected_registry_sha256 is not None and hashlib.sha256(registry_bytes).hexdigest() != expected_registry_sha256:
+            errors.append("trusted_verifier_registry: external authority hash mismatch")
+            return {}
+        payload = json.loads(registry_bytes)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         errors.append(f"trusted_verifier_registry: {exc}")
         return {}
@@ -1755,9 +1760,29 @@ def _verify_admission(
             errors.append("cli serving manifest: identity_path must equal /v1/models")
 
 
+def _load_trusted_verifier_registry_approval(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    try:
+        raw = path.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"trusted_verifier_registry_approval: {exc}") from exc
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema_version", "trusted_verifier_registry_sha256"
+    }:
+        raise ValueError("trusted_verifier_registry_approval: closed schema required")
+    if payload.get("schema_version") != "ember-trusted-verifier-registry-approval-v1":
+        raise ValueError("trusted_verifier_registry_approval: invalid schema_version")
+    registry_sha256 = payload.get("trusted_verifier_registry_sha256")
+    if not isinstance(registry_sha256, str) or not SHA256_RE.fullmatch(registry_sha256):
+        raise ValueError("trusted_verifier_registry_approval: expected lowercase SHA-256")
+    return registry_sha256
+
 def validate_manifest(
     path: Path,
     trusted_verifier_registry: Path | None = None,
+    expected_trusted_verifier_registry_sha256: str | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     try:
@@ -1777,7 +1802,9 @@ def validate_manifest(
     if not isinstance(source_commit, str) or not COMMIT_RE.fullmatch(source_commit):
         errors.append("source_commit: expected lowercase 40-character Git SHA")
     root = path.resolve().parent
-    trusted_verifiers = _load_trusted_verifiers(trusted_verifier_registry, errors)
+    if stage == "OWNED_ADMITTED" and (not isinstance(expected_trusted_verifier_registry_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_trusted_verifier_registry_sha256)):
+        errors.append("trusted_verifier_registry: external authority hash is required for OWNED_ADMITTED")
+    trusted_verifiers = _load_trusted_verifiers(trusted_verifier_registry, errors, expected_trusted_verifier_registry_sha256)
     _verify_lineage(manifest, errors)
     _verify_architecture(root, manifest, trusted_verifiers, errors)
     _verify_data(root, manifest, trusted_verifiers, errors)
@@ -1799,8 +1826,17 @@ def main(argv: list[str] | None = None) -> int:
     validate = subparsers.add_parser("validate")
     validate.add_argument("manifest", type=Path)
     validate.add_argument("--trusted-verifier-registry", type=Path)
+    validate.add_argument("--trusted-verifier-registry-approval", type=Path)
     args = parser.parse_args(argv)
-    result = validate_manifest(args.manifest, args.trusted_verifier_registry)
+    try:
+        expected_registry_sha256 = _load_trusted_verifier_registry_approval(
+            args.trusted_verifier_registry_approval
+        )
+    except ValueError as exc:
+        result = {"valid": False, "stage": None, "errors": [str(exc)]}
+        print(json.dumps(result, sort_keys=True))
+        return 1
+    result = validate_manifest(args.manifest, args.trusted_verifier_registry, expected_registry_sha256)
     print(json.dumps(result, sort_keys=True))
     return 0 if result["valid"] else 1
 

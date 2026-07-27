@@ -42,6 +42,9 @@ function identity(): OwnedModelIdentity {
       serverPath: "C:\\repo\\tools\\ember-restart-3b\\serve_owned_openai.py",
       tokenizerPath: "C:\\owned\\tokenizer.json",
       trustedVerifierRegistryPath: "C:\\owned\\trusted-verifiers.json",
+      trustedVerifierRegistrySha256: "d".repeat(64),
+      trustedVerifierRegistryApprovalPath: "C:\\owned\\trusted-registry-approval.json",
+      trustedVerifierRegistryApprovalSha256: "e".repeat(64),
     },
   };
 }
