@@ -119,9 +119,9 @@ selection.
 
 - INVARIANT.md - unamendable identity
 - GOAL.md - complete project and machine contract
-- STATE.md - exact current artifact identities and maturity
+- STATE.md - compatibility pointer only; exact artifact identities and maturity live in CONTINUITY.md
 - docs/goal-clear-protocol.md - proof required for completion
 - docs/ember-authority-matrix.md - D-001 through D-062 conservation matrix
 - docs/ember-completeness.md - preserved legacy M/C manifest and diagnostic tally input
-- CONTINUITY.md - current execution boundary and resume order
+- CONTINUITY.md - exact current artifact identities, maturity, execution boundary, and resume order
 - GOVERNANCE.md - authority, provenance, and landing rules
