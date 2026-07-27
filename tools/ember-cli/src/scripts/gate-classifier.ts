@@ -31,17 +31,48 @@ export type Verdict = "RED" | "GREEN" | "QUARANTINE-PASS";
  * must not be read as a clean result.
  */
 export function parseSummary(output: string): RunSummary {
-  const passMatch = output.match(/^\s*(\d+)\s+pass\s*$/m);
-  const failMatch = output.match(/^\s*(\d+)\s+fail\s*$/m);
-  const ranMatch = output.match(/Ran\s+\d+\s+tests?\s+across\s+\d+\s+files?/);
-  if (!passMatch || !failMatch || !ranMatch) {
-    return { hasSummary: false, passCount: null, failCount: null };
+  const lines = output.split(/\r?\n/);
+  let latest: RunSummary | null = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const passMatch = lines[index]?.match(/^\s*(\d+)\s+pass\s*$/);
+    if (!passMatch) continue;
+
+    const passCount = Number(passMatch[1]);
+    if (!Number.isSafeInteger(passCount)) continue;
+
+    let cursor = index + 1;
+    let excludedCount = 0;
+    while (cursor < lines.length) {
+      const excludedMatch = lines[cursor]?.match(/^\s*(\d+)\s+(?:skip|todo)\s*$/);
+      if (!excludedMatch) break;
+      const count = Number(excludedMatch[1]);
+      if (!Number.isSafeInteger(count)) {
+        excludedCount = -1;
+        break;
+      }
+      excludedCount += count;
+      cursor += 1;
+    }
+    if (excludedCount < 0) continue;
+
+    const failMatch = lines[cursor]?.match(/^\s*(\d+)\s+fail\s*$/);
+    const expectMatch = lines[cursor + 1]?.match(/^\s*(\d+)\s+expect\(\)\s+calls?\s*$/);
+    const ranMatch = lines[cursor + 2]?.match(
+      /^\s*Ran\s+(\d+)\s+tests?\s+across\s+\d+\s+files?\.\s+\[[^\]]+\]\s*$/,
+    );
+    if (!failMatch || !expectMatch || !ranMatch) continue;
+
+    const failCount = Number(failMatch[1]);
+    const expectCount = Number(expectMatch[1]);
+    const ranCount = Number(ranMatch[1]);
+    if (![failCount, expectCount, ranCount].every(Number.isSafeInteger)) continue;
+    if (passCount + excludedCount + failCount !== ranCount) continue;
+
+    latest = { hasSummary: true, passCount, failCount };
   }
-  return {
-    hasSummary: true,
-    passCount: Number(passMatch[1]),
-    failCount: Number(failMatch[1]),
-  };
+
+  return latest ?? { hasSummary: false, passCount: null, failCount: null };
 }
 
 /**

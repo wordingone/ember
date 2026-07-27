@@ -81,6 +81,39 @@ describe("parseSummary — real bun output shapes", () => {
     const partial = `bun test v1.3.12 (700fc117)\n\n 3 pass\n 0 fail\n`;
     expect(parseSummary(partial)).toEqual({ hasSummary: false, passCount: null, failCount: null });
   });
+
+  test("noncontiguous summary-like lines cannot be spliced into a clean result", () => {
+    const mixed = `bun test v1.3.12 (700fc117)
+
+ 3 pass
+arbitrary child output between summary lines
+ 0 fail
+ 3 expect() calls
+Ran 3 tests across 1 file. [10.00ms]`;
+    expect(parseSummary(mixed)).toEqual({ hasSummary: false, passCount: null, failCount: null });
+  });
+
+  test("the last complete summary block is authoritative when output contains nested runs", () => {
+    const nested = `${GREEN_OUTPUT}
+
+nested command finished; outer run follows
+
+ 8 pass
+ 2 fail
+ 19 expect() calls
+Ran 10 tests across 2 files. [20.00ms]`;
+    expect(parseSummary(nested)).toEqual({ hasSummary: true, passCount: 8, failCount: 2 });
+  });
+
+  test("summary counts must reconcile with the reported number of tests", () => {
+    const inconsistent = `bun test v1.3.12 (700fc117)
+
+ 9 pass
+ 0 fail
+ 9 expect() calls
+Ran 10 tests across 1 file. [10.00ms]`;
+    expect(parseSummary(inconsistent)).toEqual({ hasSummary: false, passCount: null, failCount: null });
+  });
 });
 
 describe("verdict — decision table", () => {

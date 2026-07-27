@@ -23,7 +23,7 @@
 // project's repl-goal-continuation-seam.test.ts precedent, so the test
 // exercises the actual fix shape rather than a hand-rolled stand-in.
 
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import React, { useRef, useState, useEffect } from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { useInput, _deliverKeyEvent } from "../ink/hooks.ts";
@@ -92,18 +92,25 @@ describe("ember #283 — Enter pressed while busy queues, never drops, the submi
   let calls: Array<[string, string]>;
   let submitPrompt: (text: string, origin: "keyboard" | "operator") => Promise<void>;
   let controls: Controls;
+  let mounted: ReturnType<typeof mountInk> | null;
 
   beforeEach(() => {
     calls = [];
+    mounted = null;
     submitPrompt = async (text, origin) => {
       calls.push([text, origin]);
     };
     controls = { setBusy: () => {}, pendingSubmitRef: null };
   });
 
+  afterEach(() => {
+    mounted?.unmount();
+    mounted = null;
+  });
+
   it("queues the Enter-while-busy text, then flushes it through submitPrompt once idle", async () => {
     const stream = { write() {} };
-    mountInk(React.createElement(Harness, { submitPrompt, controls }), {
+    mounted = mountInk(React.createElement(Harness, { submitPrompt, controls }), {
       stream,
       stdout: { columns: 80, rows: 24 },
     });

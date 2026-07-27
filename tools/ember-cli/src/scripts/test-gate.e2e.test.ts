@@ -89,7 +89,7 @@ interface GateRunOutcome {
 
 async function runGate(quarantine: string[]): Promise<GateRunOutcome> {
   const proc = Bun.spawn(
-    ["bun", "run", "test:gate", "--timeout-ms=5000"],
+    [process.execPath, "run", "test:gate", "--timeout-ms=5000"],
     {
       cwd: EMBER_CLI_SRC,
       env: {

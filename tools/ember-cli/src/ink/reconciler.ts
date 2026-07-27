@@ -680,7 +680,7 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     },
     unmount(): void {
       removeMouseDispatcher();
-      rec.updateContainer(null, root, null, null);
+      _syncRender(null);
       renderer.unmount();
     },
     container,

@@ -21,7 +21,7 @@
 // unavailableReason then rendered IDENTICAL to a genuinely-never-polled empty series (both just a
 // gap-glyph axis, no visible text), which is exactly the "distinguish empty from all-null"
 // requirement failing silently. Verified below at the pane's real production width.
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
@@ -42,6 +42,13 @@ function renderedLines(raw: string, columns: number, rows: number): string[] {
 }
 
 describe("host telemetry wiring at the real production entry point (ReplScreen)", () => {
+  let mounted: ReturnType<typeof mountInk> | null = null;
+
+  afterEach(() => {
+    mounted?.unmount();
+    mounted = null;
+  });
+
   test("pushGpuSample fires through the real hook chain: vram/gpu carry a real sample, not a zero-entry series", async () => {
     resetCommandRegistryForTests();
     let raw = "";
@@ -57,7 +64,7 @@ describe("host telemetry wiring at the real production entry point (ReplScreen)"
         onExit: () => {},
       }),
     );
-    mountInk(element, { stream: { write(s: string) { raw += s; } }, stdout: { columns, rows } });
+    mounted = mountInk(element, { stream: { write(s: string) { raw += s; } }, stdout: { columns, rows } });
     await flushRepl();
     const lines = renderedLines(raw, columns, rows);
 

@@ -27,7 +27,12 @@
 //   GATE_QUARANTINE_JSON — a JSON string array replacing the real quarantine-list.ts contents.
 
 import { QUARANTINE as REAL_QUARANTINE } from "./quarantine-list.ts";
-import { parseSummary, verdict, type ClassifyInput } from "./gate-classifier.ts";
+import {
+  parseSummary,
+  verdict,
+  type ClassifyInput,
+  type RunSummary,
+} from "./gate-classifier.ts";
 import { drainAvailable } from "./drain-stream.ts";
 
 // Forward-slashed, always -- verified empirically (2026-07-19) that Bun.spawn's executable-path
@@ -45,7 +50,7 @@ const QUARANTINE: readonly string[] = process.env["GATE_QUARANTINE_JSON"]
   ? (JSON.parse(process.env["GATE_QUARANTINE_JSON"]) as string[])
   : REAL_QUARANTINE;
 
-interface RunResult extends ClassifyInput {
+interface RunResult extends ClassifyInput, RunSummary {
   label: string;
   tail: string;
 }
@@ -53,7 +58,10 @@ interface RunResult extends ClassifyInput {
 const DRAIN_IDLE_MS = 1_000;
 
 async function runOne(args: string[], label: string, timeoutMs: number): Promise<RunResult> {
-  const proc = Bun.spawn(["bun", "test", ...args], {
+  // Bind child execution to the exact Bun binary running this gate. On Windows, a bare "bun"
+  // resolves in PowerShell through bun.cmd/bun.ps1 but uv_spawn does not execute those shims,
+  // producing ENOENT before any test can run.
+  const proc = Bun.spawn([process.execPath, "test", ...args], {
     cwd: SRC_ROOT,
     stdout: "pipe",
     stderr: "pipe",
