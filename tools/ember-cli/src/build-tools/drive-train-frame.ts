@@ -26,7 +26,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import xtermHeadless from "@xterm/headless";
-const { Terminal } = xtermHeadless as unknown as { Terminal: new (opts: unknown) => Terminal };
+const { Terminal } = xtermHeadless as unknown as { Terminal: new (opts: unknown) => any };
 import { spawn as spawnPty, type IPty } from "node-pty";
 
 const COLS = 100;
