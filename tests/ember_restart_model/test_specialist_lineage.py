@@ -18,7 +18,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources
+from checkpoint_artifacts import load_checkpoint_artifacts, preflight_specialist_lineage_sources, published_checkpoint_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from checkpoint_fixture import write_checkpoint_artifacts
 
@@ -100,7 +100,7 @@ class SpecialistLineageTests(unittest.TestCase):
             root_model = UnifiedDecoder(config, genesis_seed=83)
             root_optimizer = torch.optim.AdamW(root_model.parameters(), lr=1e-4)
             _write_root(root_model, root_optimizer, base / "root")
-        parent = json.loads(manifest_path.read_text(encoding="utf-8"))
+        parent = published_checkpoint_receipt(base / "root")
         candidate = UnifiedDecoder(config, genesis_seed=991)
         optimizer = torch.optim.AdamW(candidate.parameters(), lr=1e-4)
         load_checkpoint_artifacts(candidate, optimizer, base / "root", {**parent, "checkpoint_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest()})
@@ -134,8 +134,8 @@ class SpecialistLineageTests(unittest.TestCase):
             parent, parent_manifest, _candidate, _optimizer = self._root_and_candidate(base)
             receipt = self._write_vision_successor(base, parent_manifest=parent_manifest, root_manifest=parent_manifest)
             parent_sha256 = hashlib.sha256(parent_manifest.read_bytes()).hexdigest()
-        self.assertEqual(receipt["schema_version"], "ember-sparse-checkpoint-v4")
-        self.assertEqual(receipt["contract_version"], 4)
+        self.assertEqual(receipt["schema_version"], "ember-sparse-checkpoint-v5")
+        self.assertEqual(receipt["contract_version"], 5)
         self.assertEqual(receipt["lineage"]["parent_checkpoint_sha256"], parent_sha256)
         self.assertEqual(receipt["lineage"]["root_genesis_checkpoint_sha256"], parent_sha256)
         self.assertEqual(receipt["lineage"]["trained_expert_ids"], ["vision"])
@@ -380,8 +380,8 @@ class SpecialistLineageTests(unittest.TestCase):
             optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
             original = checkpoint_artifacts._write_json_atomic
 
-            def write_manifest_then_plant_unrecorded(root: Path, filename: str, payload: object) -> Path:
-                manifest_path = original(root, filename, payload)
+            def write_manifest_then_plant_unrecorded(root: Path, filename: str, payload: object, **kwargs: object) -> Path:
+                manifest_path = original(root, filename, payload, **kwargs)
                 (root / "unrecorded.bin").write_bytes(b"unaccounted")
                 return manifest_path
 
@@ -403,10 +403,10 @@ class SpecialistLineageTests(unittest.TestCase):
             optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
             import checkpoint_artifacts
             original = checkpoint_artifacts._write_atomic
-            def fail_replay(root: Path, filename: str, writer: object) -> Path:
+            def fail_replay(root: Path, filename: str, writer: object, **kwargs: object) -> Path:
                 if filename == "replay-state.pt":
                     raise RuntimeError("injected write failure")
-                return original(root, filename, writer)
+                return original(root, filename, writer, **kwargs)
             with patch.object(checkpoint_artifacts, "_write_atomic", side_effect=fail_replay):
                 with self.assertRaisesRegex(RuntimeError, "injected write failure"):
                     write_checkpoint_artifacts(model, optimizer, base / "failed", launch_seed=83, rng_state=_rng_state(), data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())

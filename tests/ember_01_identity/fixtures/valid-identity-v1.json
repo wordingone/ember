@@ -1,0 +1,189 @@
+{
+  "authority": {
+    "goal_id": "EMBER-01",
+    "workstream_id": "EMBER-01C",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema": "ember-model-experiment-identity-v1",
+  "identity": {
+    "model_id": "ember-candidate-fixture",
+    "experiment_id": "experiment-fixture-001",
+    "run_id": "run-fixture-001",
+    "checkpoint_id": "checkpoint-fixture-001",
+    "disposition": "OWNED_CANDIDATE",
+    "selected_as_owned_ember": false
+  },
+  "architecture": {
+    "source": "architecture/fixture.py",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "checkpoint": {
+    "format": "synthetic-bytes-v1",
+    "byte_sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+    "tensors": [
+      {
+        "name": "fixture.weight",
+        "shape": [2, 2],
+        "dtype": "float32",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "ancestry": [
+      {
+        "checkpoint_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "relationship": "clean_genesis_parent"
+      }
+    ],
+    "recovery_state": "CLEAN"
+  },
+  "tokenizer": {
+    "id": "owned-tokenizer-fixture",
+    "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "data": {
+    "corpus_id": "owned-corpus-fixture",
+    "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "ordering_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "curriculum_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "verifier_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "clean_genesis": true,
+    "accepted_input": {
+      "input_id": "github-issue-812",
+      "authority_id": "ember-02-issue-812",
+      "authority_record_sha256": "cb77071a43d117d78edb5a7687bd9fcdb0ad8213326bc168dc7e00a3dcf42554",
+      "authority": "UNRESOLVED",
+      "shard_manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "caller_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "gate_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "validator_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "forwarding_receipt_sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+    }
+  },
+  "parameters": {
+    "allocated": 3000000000,
+    "unique": 3000000000,
+    "active": 2500000000,
+    "trainable": 500000000,
+    "served": 3000000000,
+    "actually_trained": 500000000,
+    "evidence_receipts": {
+      "allocated": [],
+      "unique": [],
+      "active": [],
+      "trainable": [],
+      "served": [],
+      "actually_trained": []
+    }
+  },
+  "training": {
+    "steps": 100,
+    "effective_tokens": 1000000,
+    "modality_mixture": {
+      "text": 0.5,
+      "image": 0.25,
+      "audio": 0.25
+    },
+    "optimizer_state_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "numerics": {
+      "profile": "bf16-activations-fp32-master",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "stopping_rule": {
+      "criterion_id": "sufficient-pretraining-v1",
+      "result": "NOT_REACHED",
+      "receipt_sha256": {
+        "status": "unresolved",
+        "reason": "synthetic candidate has no sufficient-pretraining proof"
+      }
+    }
+  },
+  "capabilities": {
+    "native_modalities": {
+      "text": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "image": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      },
+      "audio": {
+        "state": "UNVERIFIED",
+        "evidence_receipts": []
+      }
+    },
+    "reasoning": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    },
+    "structured_tool_use": {
+      "state": "UNVERIFIED",
+      "evidence_receipts": []
+    }
+  },
+  "mechanisms": {
+    "experts": [],
+    "router": [],
+    "temporary_adapters": [],
+    "permanent_merges": [],
+    "memory_substrates": [],
+    "world_models": [],
+    "dreaming_updates": [],
+    "deletion_objects": []
+  },
+  "backend": {
+    "executable_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "process_identity": {
+      "status": "unresolved",
+      "reason": "synthetic fixture is not running"
+    },
+    "process_receipt_sha256": {
+      "status": "unresolved",
+      "reason": "synthetic fixture has no process receipt"
+    },
+    "protocol": "fixture-v1",
+    "device": "cpu",
+    "runtime_dependencies": [],
+    "resource_lease_id": {
+      "status": "unresolved",
+      "reason": "synthetic fixture has no lease"
+    }
+  },
+  "evaluation": {
+    "benchmark_id": "terminal-bench-2.1",
+    "version": "v1",
+    "split": "fixture",
+    "harness_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "subject_checkpoint_sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+    "comparator_identity": "fixture-comparator",
+    "comparator_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "score": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "uncertainty": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "receipt_sha256": {
+      "status": "unresolved",
+      "reason": "no benchmark was executed"
+    },
+    "counts_toward_owned_completion": false
+  },
+  "provenance": {
+    "ownership": "OWNED_CLEAN_GENESIS",
+    "exclusion_reasons": [],
+    "learned_signal_sources": ["owned_training_data"],
+    "neural_capability_credit_sources": ["owned_checkpoint"]
+  },
+  "unresolved": [
+    "training.stopping_rule.receipt_sha256",
+    "backend.process_identity",
+    "backend.process_receipt_sha256",
+    "backend.resource_lease_id",
+    "evaluation.score",
+    "evaluation.uncertainty",
+    "evaluation.receipt_sha256"
+  ]
+}

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // frontend-shell.ts — TUI boot surface: Ink render wrapper, REPL launcher,
 // and project onboarding state. This module is the TUI-specific entry; the
 // headless path lives in cli/headless-repl.ts.
@@ -173,6 +177,8 @@ export interface RenderOptions {
   debug?: boolean;
   exitOnCtrlC?: boolean;
   patchConsole?: boolean;
+  /** Renderer-owned callback after the first non-empty frame reaches stdout. */
+  onFirstFrameFlushed?: () => void;
 }
 
 // Lazy import holder for Ink render (avoids import cost in headless sessions)
@@ -235,7 +241,7 @@ let _rootHandle: MountHandle | null = null;
  * AC2: Returns the same root instance on repeated calls within a process
  * (memoized at the module level). Uses the custom reconciler in production.
  */
-export function createRoot(_options?: RenderOptions): { render: (node: ReactElement) => void } {
+export function createRoot(options?: RenderOptions): { render: (node: ReactElement) => void } {
   if (_rootInstance !== null) return _rootInstance;
 
   const stream = process.stdout as { write(s: string): void };
@@ -272,7 +278,11 @@ export function createRoot(_options?: RenderOptions): { render: (node: ReactElem
           _rootHandle.update(wrapped);
         } else {
           // First render — create the mount
-          _rootHandle = mountInk(wrapped, { stream, stdout });
+          _rootHandle = mountInk(wrapped, {
+            stream,
+            stdout,
+            onFirstFrameFlushed: options?.onFirstFrameFlushed,
+          });
         }
       }).catch(() => { /* degrade silently */ });
     },

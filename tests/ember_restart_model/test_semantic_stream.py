@@ -136,3 +136,70 @@ class SemanticStreamTests(unittest.TestCase):
             result["data_cursor"],
             {"shard": "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12], "record_index": 2, "receipt_sha256": stream.receipt_sha256, "tokenizer_sha256": stream.tokenizer_sha256, "shard_index": 0, "token_offset": 4, "global_step": 2, "tokens_seen": 4},
         )
+    def test_resume_cursor_rejects_declared_identity_or_counter_drift_before_training(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13, 14]])
+            stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer)
+            baseline = {
+                "shard": "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12],
+                "record_index": 1,
+                "receipt_sha256": stream.receipt_sha256,
+                "tokenizer_sha256": stream.tokenizer_sha256,
+                "shard_index": 0,
+                "token_offset": 2,
+                "global_step": 1,
+                "tokens_seen": 2,
+            }
+            for field, value in (("shard", "TOKEN-SHARDS-V0:wrong"), ("record_index", 0), ("global_step", 0), ("tokens_seen", 0)):
+                cursor = dict(baseline)
+                cursor[field] = value
+                with self.assertRaisesRegex(ValueError, "semantic stream resume cursor identity"):
+                    run_manifest_bound_semantic_segment(
+                        model=object(), optimizer=object(), stream=stream, config=object(), device=torch.device("cpu"),
+                        sequence_length=2, steps=1, checkpoint_every=1, checkpoint_callback=lambda _step, _state: None,
+                        initial_data_cursor=cursor, initial_global_step=1, initial_tokens_seen=2,
+                    )
+    def test_interrupted_resume_uses_each_receipt_bound_episode_once_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13, 14]])
+            stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer)
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+
+            def train(model: UnifiedDecoder, optimizer: torch.optim.Optimizer, *, steps: int, cursor: dict[str, object] | None = None, initial_step: int = 0, initial_tokens: int = 0) -> tuple[list[list[int]], dict[str, object]]:
+                observed: list[list[int]] = []
+                original_forward = model.forward
+
+                def forward(input_ids: torch.Tensor, **kwargs: object) -> torch.Tensor:
+                    observed.extend(input_ids.detach().cpu().tolist())
+                    return original_forward(input_ids, **kwargs)
+
+                model.forward = forward  # type: ignore[method-assign]
+                checkpoints: list[dict[str, object]] = []
+                result = run_manifest_bound_semantic_segment(
+                    model=model, optimizer=optimizer, stream=stream, config=config, device=torch.device("cpu"),
+                    sequence_length=2, steps=steps, checkpoint_every=1,
+                    checkpoint_callback=lambda _step, state: checkpoints.append(dict(state["data_cursor"])),
+                    initial_data_cursor=cursor, initial_global_step=initial_step, initial_tokens_seen=initial_tokens,
+                )
+                self.assertEqual(checkpoints[-1], result["data_cursor"])
+                return observed, result["data_cursor"]
+
+            uninterrupted_model = UnifiedDecoder(config, genesis_seed=71)
+            uninterrupted, uninterrupted_cursor = train(uninterrupted_model, torch.optim.AdamW(uninterrupted_model.parameters(), lr=1e-3), steps=3)
+
+            first_model = UnifiedDecoder(config, genesis_seed=71)
+            first_optimizer = torch.optim.AdamW(first_model.parameters(), lr=1e-3)
+            first, cursor = train(first_model, first_optimizer, steps=1)
+            resumed_model = UnifiedDecoder(config, genesis_seed=999)
+            resumed_model.load_state_dict(first_model.state_dict())
+            resumed_optimizer = torch.optim.AdamW(resumed_model.parameters(), lr=1e-3)
+            resumed_optimizer.load_state_dict(first_optimizer.state_dict())
+            remaining, resumed_cursor = train(
+                resumed_model, resumed_optimizer, steps=2, cursor=cursor, initial_step=1, initial_tokens=2,
+            )
+
+        self.assertEqual(first + remaining, uninterrupted)
+        self.assertEqual(first + remaining, [[8, 9], [10, 11], [12, 13]])
+        self.assertEqual(resumed_cursor, uninterrupted_cursor)

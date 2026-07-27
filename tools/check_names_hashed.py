@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_names_hashed.py — hashed-denylist mode for tools/repo-guard.sh's names check.
 
 Purpose: the plaintext names check (REPO_GUARD_NAMES env var or the git-ignored
@@ -34,9 +37,9 @@ from pathlib import Path
 
 TOKEN_RE = re.compile(r"[A-Za-z]{3,}")
 
-# Files the check never scans: the guard script and the hash list both legitimately
-# mention the mechanism by name/shape without being a violation, and this script
-# itself may carry example tokens in its own docstring/tests.
+# Self-authored guard files skipped only when kernel and subject are the same tree:
+# they legitimately mention the mechanism by name/shape. A separate trusted kernel
+# must scan the untrusted subject's copies, enabled by --scan-guard-surfaces.
 SELF_EXCLUDE = {
     "tools/repo-guard.sh",
     "tools/check_names_hashed.py",
@@ -82,7 +85,12 @@ def load_names_exclude_prefixes(path: Path) -> list[str]:
     return prefixes
 
 
-def tracked_text_files(root: Path, exclude_prefixes: list[str] | None = None) -> list[str]:
+def tracked_text_files(
+    root: Path,
+    exclude_prefixes: list[str] | None = None,
+    *,
+    scan_guard_surfaces: bool = False,
+) -> list[str]:
     out = subprocess.run(
         ["git", "-C", str(root), "ls-files"],
         capture_output=True, text=True, check=True,
@@ -91,7 +99,7 @@ def tracked_text_files(root: Path, exclude_prefixes: list[str] | None = None) ->
     files = []
     for rel in out.stdout.splitlines():
         rel = rel.strip()
-        if not rel or rel in SELF_EXCLUDE:
+        if not rel or (not scan_guard_surfaces and rel in SELF_EXCLUDE):
             continue
         if any(rel.startswith(p) for p in prefixes):
             continue
@@ -111,7 +119,13 @@ def is_probably_text(path: Path) -> bool:
         return False
 
 
-def run_check(root: Path, denylist_path: Path, names_exclude_path: Path | None = None) -> int:
+def run_check(
+    root: Path,
+    denylist_path: Path,
+    names_exclude_path: Path | None = None,
+    *,
+    scan_guard_surfaces: bool = False,
+) -> int:
     denylist = load_denylist(denylist_path)
     if not denylist:
         print(f"skip [names-hashed] no usable denylist at {denylist_path}")
@@ -120,7 +134,9 @@ def run_check(root: Path, denylist_path: Path, names_exclude_path: Path | None =
     exclude_prefixes = load_names_exclude_prefixes(names_exclude_path or (root / DEFAULT_NAMES_EXCLUDE))
 
     findings: list[str] = []
-    for rel in tracked_text_files(root, exclude_prefixes):
+    for rel in tracked_text_files(
+        root, exclude_prefixes, scan_guard_surfaces=scan_guard_surfaces
+    ):
         full = root / rel
         if not full.is_file() or not is_probably_text(full):
             continue
@@ -176,6 +192,11 @@ def main() -> int:
     ap.add_argument("--denylist-plain", default=None, help="(--generate mode) plaintext source, one name per line")
     ap.add_argument("--out", default=None, help="(--generate mode) output .sha256 path")
     ap.add_argument("--names-exclude", default=None, help="path-prefix exclusion list (default: tools/repo-guard-names-exclude.txt)")
+    ap.add_argument(
+        "--scan-guard-surfaces",
+        action="store_true",
+        help="scan subject guard/helper files when the trusted kernel is a separate checkout",
+    )
     args = ap.parse_args()
 
     if args.root:
@@ -191,7 +212,12 @@ def main() -> int:
 
     denylist_path = Path(args.denylist) if args.denylist else root / "tools" / "repo-guard-denylist.sha256"
     names_exclude_path = Path(args.names_exclude) if args.names_exclude else root / DEFAULT_NAMES_EXCLUDE
-    return run_check(root, denylist_path, names_exclude_path)
+    return run_check(
+        root,
+        denylist_path,
+        names_exclude_path,
+        scan_guard_surfaces=args.scan_guard_surfaces,
+    )
 
 
 if __name__ == "__main__":

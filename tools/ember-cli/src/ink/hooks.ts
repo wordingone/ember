@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // hooks — React hooks for terminal interaction.
 // Covers keyboard input, app context, animation, stdin, focus, title,
 // viewport, text selection, and tab-status queries.
@@ -10,6 +13,7 @@ import {
   TerminalSizeContext,
 } from "./components.ts";
 import { osc } from "./termio.ts";
+import type { SgrMousePress } from "./termio.ts";
 
 // ---------------------------------------------------------------------------
 // KeyboardKey — shape delivered to useInput handlers
@@ -87,6 +91,22 @@ export function _deliverKeyEvent(
   }
 }
 
+type MouseDispatcher = (event: SgrMousePress) => void;
+let _mouseDispatcher: MouseDispatcher | null = null;
+
+/** Installs the currently mounted renderer's pointer dispatcher. @internal */
+export function _setMouseDispatcher(dispatcher: MouseDispatcher): () => void {
+  _mouseDispatcher = dispatcher;
+  return () => {
+    if (_mouseDispatcher === dispatcher) _mouseDispatcher = null;
+  };
+}
+
+/** Routes one decoded mouse press to the currently mounted renderer. @internal */
+export function _deliverMouseEvent(event: SgrMousePress): void {
+  _mouseDispatcher?.(event);
+}
+
 // ---------------------------------------------------------------------------
 // Text-selection module state
 // ---------------------------------------------------------------------------
@@ -130,24 +150,31 @@ export function useInput(
   const isActive = options?.isActive ?? true;
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
+  // This hook call's OWN registry entry. The sync effect below used to reach for
+  // `_inputHandlers[_inputHandlers.length - 1]`, which is this entry only while no later
+  // `useInput` has registered. In the REPL a second, always-active handler registers after the
+  // prompt's, so from that point the prompt's isActive toggle mutated the wrong entry and its own
+  // handler stayed permanently active regardless of pane focus.
+  const entryRef = useRef<InputHandlerEntry | null>(null);
 
   useEffect(() => {
     const entry: InputHandlerEntry = {
       handler: (input, key) => handlerRef.current(input, key),
       isActive,
     };
+    entryRef.current = entry;
     _inputHandlers.push(entry);
     return () => {
       const idx = _inputHandlers.indexOf(entry);
       if (idx >= 0) _inputHandlers.splice(idx, 1);
+      if (entryRef.current === entry) entryRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync isActive without re-registering
+  // Sync isActive without re-registering — on THIS call's entry, whatever its index.
   useEffect(() => {
-    const entry = _inputHandlers[_inputHandlers.length - 1];
-    if (entry) entry.isActive = isActive;
+    if (entryRef.current) entryRef.current.isActive = isActive;
   });
 }
 

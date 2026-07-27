@@ -27,6 +27,7 @@ from checkpoint_artifacts import _default_optimizer_contract, _optimizer_realiza
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
+from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
 
 def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> dict[str, object]:
     architecture = manifest_receipt["architecture"]
@@ -38,6 +39,10 @@ def _counter_receipt(candidate: Path, manifest_receipt: dict[str, object]) -> di
         "model_config_sha256": manifest_receipt["model_config_sha256"],
         "architecture_revision": manifest_receipt["architecture_revision"],
         "counter_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest(),
+        "runtime_authority": {
+            "schema_version": "ember-counter-runtime-authority-v1",
+            "kind": "NONE",
+        },
         "active_expert_ids": manifest_receipt["active_expert_ids"],
         "expert_genesis_sha256": manifest_receipt["expert_genesis_sha256"],
         "expert_parameter_sha256": manifest_receipt["expert_parameter_sha256"],
@@ -52,6 +57,17 @@ def write_checkpoint_artifacts(*args, **kwargs):
     kwargs.pop("test_only_allow_unverified", None)
     kwargs.setdefault("pre_publish_verifier", _counter_receipt)
     return _write_checkpoint_artifacts_public(*args, **kwargs)
+
+
+def _valid_rng_state() -> dict[str, torch.Tensor]:
+    return {
+        "cpu": torch.get_rng_state().clone(),
+        "cuda": (
+            torch.cuda.get_rng_state().clone()
+            if torch.cuda.is_available()
+            else torch.tensor([1, 2, 3], dtype=torch.uint8)
+        ),
+    }
 
 
 
@@ -113,6 +129,94 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertEqual(loaded["data_cursor"]["global_step"], 2)
         self.assertEqual([name for name, _ in load_calls], ["replay-state.pt", "shared.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"])
         self.assertTrue(all(kwargs.get("mmap") is True for _, kwargs in load_calls))
+        for key, tensor in source.state_dict().items():
+            self.assertTrue(torch.equal(tensor, target.state_dict()[key]), key)
+
+    def test_model_only_transition_reads_v5_split_model_without_loading_optimizer_shard(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        source = UnifiedDecoder(config, genesis_seed=21)
+        source._activate_expert("shared")
+        target = UnifiedDecoder(config, genesis_seed=22)
+        source_state = source.state_dict()
+        old_contract = {
+            "name": "paged_8bit_adamw",
+            "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+            "hyperparameters": {"learning_rate": 1e-5, "weight_decay": 0.01, "percentile_clipping": 100, "block_wise": True},
+            "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+        }
+        old_realization = {
+            "implementation": old_contract["implementation"],
+            "implementation_source_sha256": "a" * 64,
+            "state_format": old_contract["state_format"],
+            "optimizer_contract_sha256": hashlib.sha256(json.dumps(old_contract, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        }
+        cursor = {"global_step": 2, "record_index": 2, "tokens_seen": 2048}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            torch.save(
+                {"model": _select_detached_state(source_state, lambda name: ".experts." not in name)},
+                root / "shared-model.pt",
+            )
+            torch.save(
+                {
+                    "optimizer": {"state": {0: {"step": torch.tensor(2), "state1": torch.ones(4)}}, "param_groups": [{"params": [0]}]},
+                    "optimizer_contract": old_contract,
+                    "optimizer_realization": old_realization,
+                },
+                root / "optimizer-state.pt",
+            )
+            torch.save({"rng_state": _valid_rng_state(), "data_cursor": cursor}, root / "replay-state.pt")
+            expert_hashes = {}
+            for name in ("vision", "audio", "reasoning", "tool"):
+                path = root / f"expert-{name}.pt"
+                torch.save(
+                    {"expert": name, "model": _select_detached_state(source_state, lambda key, selected=name: f".experts.{selected}." in key)},
+                    path,
+                )
+                expert_hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            shard_paths = [
+                "shared-model.pt",
+                "optimizer-state.pt",
+                "replay-state.pt",
+                "expert-vision.pt",
+                "expert-audio.pt",
+                "expert-reasoning.pt",
+                "expert-tool.pt",
+            ]
+            shards = [
+                {"path": name, "bytes": (root / name).stat().st_size, "sha256": hashlib.sha256((root / name).read_bytes()).hexdigest()}
+                for name in shard_paths
+            ]
+            manifest = {
+                "schema_version": "ember-sparse-checkpoint-v5",
+                "optimizer_contract": old_contract,
+                "optimizer_realization": old_realization,
+                "expert_checkpoint_sha256": expert_hashes,
+                "expert_genesis_sha256": source.expert_bank_genesis_hashes(),
+                "active_expert_ids": ["shared"],
+                "data_cursor": cursor,
+                "shared_model_shard_sha256": hashlib.sha256((root / "shared-model.pt").read_bytes()).hexdigest(),
+                "optimizer_state_shard_sha256": hashlib.sha256((root / "optimizer-state.pt").read_bytes()).hexdigest(),
+                "shards": shards,
+            }
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+            manifest["checkpoint_manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            real_torch_load = torch.load
+            load_calls = []
+
+            def recorded_load(*args, **kwargs):
+                load_calls.append((Path(args[0]).name, dict(kwargs)))
+                return real_torch_load(*args, **kwargs)
+
+            with patch("checkpoint_artifacts.torch.load", side_effect=recorded_load):
+                loaded = load_checkpoint_model_only_transition(target, root, manifest)
+        self.assertEqual(loaded["data_cursor"]["global_step"], 2)
+        self.assertEqual(
+            [name for name, _ in load_calls],
+            ["replay-state.pt", "shared-model.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"],
+        )
+        self.assertNotIn("optimizer-state.pt", [name for name, _ in load_calls])
         for key, tensor in source.state_dict().items():
             self.assertTrue(torch.equal(tensor, target.state_dict()[key]), key)
 
@@ -321,10 +425,15 @@ class CheckpointArtifactTests(unittest.TestCase):
                 "test_only_allow_unverified": True,
             }
             real_write_json = checkpoint_artifacts._write_json_atomic
-            def fail_manifest(root: Path, filename: str, payload: dict[str, object]) -> Path:
+            def fail_manifest(
+                root: Path,
+                filename: str,
+                payload: dict[str, object],
+                **kwargs: object,
+            ) -> Path:
                 if filename == "checkpoint-manifest.json":
                     raise RuntimeError("manifest write failed")
-                return real_write_json(root, filename, payload)
+                return real_write_json(root, filename, payload, **kwargs)
             with patch("checkpoint_artifacts._write_json_atomic", side_effect=fail_manifest):
                 with self.assertRaisesRegex(RuntimeError, "manifest write failed"):
                     write_checkpoint_artifacts(model, optimizer, target, **arguments)
@@ -332,7 +441,8 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertEqual(list(parent.glob(".*.staging")), [])
             candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir() and path.name.startswith("candidate-")]
             self.assertEqual(len(candidates), 1)
-            self.assertTrue(candidates[0].joinpath("shared.pt").is_file())
+            self.assertTrue(candidates[0].joinpath("shared-model.pt").is_file())
+            self.assertTrue(candidates[0].joinpath("optimizer-state.pt").is_file())
             self.assertTrue(candidates[0].joinpath("replay-state.pt").is_file())
             self.assertTrue(any(path.name.startswith("checkpoint-write-failed-") for path in (parent / ".checkpoint-quarantine").glob("*.json")))
 
@@ -590,10 +700,12 @@ class CheckpointArtifactTests(unittest.TestCase):
             candidates = [path for path in (parent / ".checkpoint-quarantine").iterdir() if path.is_dir()]
             self.assertEqual(len(candidates), 1)
             candidate = candidates[0]
-            self.assertTrue(candidate.joinpath("shared.pt").is_file())
+            self.assertTrue(candidate.joinpath("shared-model.pt").is_file())
+            self.assertTrue(candidate.joinpath("optimizer-state.pt").is_file())
             self.assertTrue(candidate.joinpath("checkpoint-manifest.json").is_file())
             self.assertFalse(candidate.joinpath(".writer-lease.json").exists())
-            shared_sha256 = __import__("hashlib").sha256(candidate.joinpath("shared.pt").read_bytes()).hexdigest()
+            shared_sha256 = __import__("hashlib").sha256(candidate.joinpath("shared-model.pt").read_bytes()).hexdigest()
+            optimizer_sha256 = __import__("hashlib").sha256(candidate.joinpath("optimizer-state.pt").read_bytes()).hexdigest()
             candidate_manifest = __import__("json").loads(candidate.joinpath("checkpoint-manifest.json").read_text(encoding="utf-8"))
             candidate_receipt = {**candidate_manifest, "checkpoint_manifest_sha256": __import__("hashlib").sha256(candidate.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest()}
             restored = UnifiedDecoder(config, genesis_seed=99)
@@ -619,7 +731,8 @@ class CheckpointArtifactTests(unittest.TestCase):
             )
             self.assertTrue(target.is_dir())
             self.assertFalse(candidate.exists())
-            self.assertEqual(__import__("hashlib").sha256(target.joinpath("shared.pt").read_bytes()).hexdigest(), shared_sha256)
+            self.assertEqual(__import__("hashlib").sha256(target.joinpath("shared-model.pt").read_bytes()).hexdigest(), shared_sha256)
+            self.assertEqual(__import__("hashlib").sha256(target.joinpath("optimizer-state.pt").read_bytes()).hexdigest(), optimizer_sha256)
             self.assertEqual(admitted["checkpoint_manifest_sha256"], __import__("hashlib").sha256(target.joinpath("checkpoint-manifest.json").read_bytes()).hexdigest())
     def test_admission_rejects_counter_mapping_that_mutates_shard_after_verifier_returns(self) -> None:
         """The final immutable closure snapshot must follow every Mapping-controlled access."""
@@ -677,14 +790,14 @@ class CheckpointArtifactTests(unittest.TestCase):
         optimizer = torch.optim.AdamW((parameter for parameter in model.parameters() if parameter.requires_grad), lr=1e-4)
         with tempfile.TemporaryDirectory() as directory:
             receipt = write_checkpoint_artifacts(model, optimizer, Path(directory) / "checkpoint-0001", launch_seed=11, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "owned-test-v1", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), test_only_allow_unverified=True)
-            self.assertEqual(receipt["contract_version"], 3)
+            self.assertEqual(receipt["contract_version"], 5)
             self.assertEqual(receipt["architecture_revision"], "ember-sparse-3b-v2")
             restored = UnifiedDecoder(config, genesis_seed=99)
             restore_optimizer = torch.optim.AdamW((parameter for parameter in restored.parameters() if parameter.requires_grad), lr=1e-4)
             load_checkpoint_artifacts(restored, restore_optimizer, Path(directory) / "checkpoint-0001", receipt)
             self.assertEqual(restored.active_expert, "reasoning")
         self.assertEqual(set(receipt["expert_checkpoint_sha256"]), {"vision", "audio", "reasoning", "tool"})
-        self.assertEqual(len(receipt["shards"]), 6)
+        self.assertEqual(len(receipt["shards"]), 7)
         self.assertEqual(receipt["launch_seed"], 11)
         self.assertIn("optimizer_contract", receipt)
         self.assertRegex(receipt["optimizer_realization"]["optimizer_contract_sha256"], r"^[0-9a-f]{64}$")
@@ -723,13 +836,14 @@ class CheckpointArtifactTests(unittest.TestCase):
             receipt = write_checkpoint_artifacts(
                 model, optimizer, root, launch_seed=17,
                 rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))},
-                data_cursor={"shard": "TOKEN-SHARDS-V0:receipt", "record_index": 2, "global_step": 2, "tokens_seen": 2048},
+                data_cursor={"shard": "TOKEN-SHARDS-V0:receipt", "record_index": 2, "global_step": 2, "tokens_seen": 2048, "governor": {"free_gb": 32.0, "governor_source_sha256": "a" * 64}},
                 model_config_sha256="c" * 64, contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(),
                 test_only_allow_unverified=True,
             )
             restored = UnifiedDecoder(config, genesis_seed=18)
             restore_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
-            load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+            restored_state = load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+        self.assertEqual(restored_state["data_cursor"]["governor"], {"free_gb": 32.0, "governor_source_sha256": "a" * 64})
         self.assertEqual(receipt["active_expert_ids"], ["shared"])
         self.assertEqual(restored.active_expert, "shared")
     def test_optimizer_realization_recomputes_runtime_class_source_hyperparameters_and_state_format(self) -> None:
@@ -833,6 +947,1036 @@ class CheckpointArtifactTests(unittest.TestCase):
                 )
             self.assertEqual(outside.read_bytes(), b"external")
             self.assertFalse(target.exists())
+
+    def test_p2b_training_cursor_is_closed_and_disjoint_from_legacy_replay_cursor(self) -> None:
+        selection_cursor = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": "a" * 64, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 2, "next_source_index": 5}
+        cursor = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": selection_cursor, "global_step": 7, "tokens_seen": 42}
+        kwargs = {"launch_seed": 1, "rng_state": {"cpu": torch.tensor([1], dtype=torch.uint8), "cuda": torch.tensor([2], dtype=torch.uint8)}, "data_cursor": cursor, "model_config_sha256": "c" * 64, "contract_sha256": "d" * 64, "expert_genesis_sha256": {name: "e" * 64 for name in ("vision", "audio", "reasoning", "tool")}}
+        checkpoint_artifacts._validate_replay_bindings(**kwargs)
+        for label, forged in (("legacy_mixed", {**cursor, "shard": "legacy", "record_index": 0}), ("missing_selection", {key: value for key, value in cursor.items() if key != "selection_cursor"}), ("negative_step", {**cursor, "global_step": -1}), ("negative_tokens", {**cursor, "tokens_seen": -1})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                checkpoint_artifacts._validate_replay_bindings(**{**kwargs, "data_cursor": forged})
+
+        for label, forged in (("wrong_training_schema", {**cursor, "schema_version": "wrong"}), ("outer_extra", {**cursor, "extra": 1}), ("selection_not_mapping", {**cursor, "selection_cursor": []}), ("wrong_selection_schema", {**cursor, "selection_cursor": {**selection_cursor, "schema_version": "wrong"}}), ("selection_missing", {**cursor, "selection_cursor": {key: value for key, value in selection_cursor.items() if key != "next_source_index"}}), ("selection_extra", {**cursor, "selection_cursor": {**selection_cursor, "extra": 1}}), ("negative_ordinal", {**cursor, "selection_cursor": {**selection_cursor, "selected_ordinal": -1}}), ("negative_source", {**cursor, "selection_cursor": {**selection_cursor, "next_source_index": -1}})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                checkpoint_artifacts._validate_replay_bindings(**{**kwargs, "data_cursor": forged})
+
+        for label, forged in (("step_bool", {**cursor, "global_step": True}), ("tokens_bool", {**cursor, "tokens_seen": True}), ("ordinal_bool", {**cursor, "selection_cursor": {**selection_cursor, "selected_ordinal": True}}), ("source_bool", {**cursor, "selection_cursor": {**selection_cursor, "next_source_index": True}}), ("hash_empty", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": ""}}), ("hash_nonstring", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": 1}}), ("hash_upper", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": "A" * 64}}), ("hash_short", {**cursor, "selection_cursor": {**selection_cursor, "selection_receipt_sha256": "a" * 63}}), ("rule_empty", {**cursor, "selection_cursor": {**selection_cursor, "selection_rule_id": ""}}), ("rule_nonstring", {**cursor, "selection_cursor": {**selection_cursor, "selection_rule_id": 1}})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                checkpoint_artifacts._validate_replay_bindings(**{**kwargs, "data_cursor": forged})
+
+    def test_p2b_checkpoint_progress_binds_episode_end_to_outer_training_cursor(self) -> None:
+        end = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": "a" * 64, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 2, "next_source_index": 5}
+        episode = {"end_selection_cursor": end, "completed_updates": 2, "training_token_delta": 12}
+        parent = {"global_step": 3, "tokens_seen": 18}
+        candidate = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": end, "global_step": 5, "tokens_seen": 30}
+        validate = getattr(checkpoint_artifacts, "_validate_p2b_checkpoint_progress")
+        self.assertEqual(validate(episode, candidate, parent), candidate)
+        for label, forged in (("end_mismatch", {**candidate, "selection_cursor": {**end, "selected_ordinal": 1}}), ("global_regression", {**candidate, "global_step": 2}), ("global_delta", {**candidate, "global_step": 4}), ("token_regression", {**candidate, "tokens_seen": 17}), ("token_delta", {**candidate, "tokens_seen": 29}), ("legacy_mixed", {**candidate, "shard": "legacy"}), ("wrong_schema", {**candidate, "schema_version": "wrong"})):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                validate(episode, forged, parent)
+        for malformed_parent in ({"global_step": -1, "tokens_seen": 0}, {"global_step": 3}, {"global_step": "3", "tokens_seen": 18}):
+            with self.assertRaises(ValueError):
+                validate(episode, candidate, malformed_parent)
+
+        for forged_episode in ({**episode, "completed_updates": 0}, {**episode, "completed_updates": "2"}, {**episode, "training_token_delta": 0}, {**episode, "training_token_delta": "12"}):
+            with self.assertRaises(ValueError):
+                validate(forged_episode, candidate, parent)
+
+        for bad_episode, bad_candidate, bad_parent in (({**episode, "completed_updates": True}, candidate, parent), ({**episode, "training_token_delta": True}, candidate, parent), (episode, {**candidate, "global_step": True}, parent), (episode, {**candidate, "tokens_seen": True}, parent), (episode, candidate, {"global_step": True, "tokens_seen": 18}), (episode, candidate, {"global_step": 3, "tokens_seen": True})):
+            with self.assertRaises(ValueError):
+                validate(bad_episode, bad_candidate, bad_parent)
+
+    def test_specialist_lineage_binds_p2b_episode_to_candidate_and_parent_cursor(self) -> None:
+        genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
+        receipt = {
+            "schema_version": "ember-owned-specialist-stream-selection-receipt-v1",
+            "stream_manifest_sha256": "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427",
+            "stream_build_receipt_sha256": "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+            "corpus_root_sha256": "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab",
+            "family_root_sha256": "e" * 64, "capability": "image", "selection_rule_id": "image_scene_split_train_v1",
+            "selected_record_count": 3, "selected_token_count": 12, "selected_records_sha256": "f" * 64,
+            "selection_commitment_sha256": "0" * 64,
+        }
+        receipt_sha256 = checkpoint_artifacts._canonical_sha256(receipt)
+        start = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": receipt_sha256, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 0, "next_source_index": 0}
+        end = {**start, "selected_ordinal": 2, "next_source_index": 5}
+        episode = {
+            "schema_version": "ember-specialist-stream-episode-v1", "active_expert": "vision", "selection_receipt": receipt,
+            "selection_receipt_sha256": receipt_sha256, "start_selection_cursor": start, "end_selection_cursor": end,
+            "completed_updates": 2, "training_token_delta": 12,
+            "stream_manifest_sha256": receipt["stream_manifest_sha256"], "stream_build_receipt_sha256": receipt["stream_build_receipt_sha256"],
+            "corpus_root_sha256": receipt["corpus_root_sha256"], "family_root_sha256": receipt["family_root_sha256"],
+        }
+        candidate_cursor = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": end, "global_step": 5, "tokens_seen": 30}
+        parent = {"schema_version": "ember-sparse-checkpoint-v3", "expert_checkpoint_sha256": genesis, "expert_genesis_sha256": genesis, "data_cursor": {"shard": "legacy-parent", "record_index": 7, "global_step": 3, "tokens_seen": 18}}
+        lineage = {"parent_manifest": "parent/checkpoint-manifest.json", "root_manifest": "root/checkpoint-manifest.json", "trained_expert_ids": ["vision"], "episode": episode}
+        candidate_parameters = {**genesis, "vision": "1" * 64}
+        with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))):
+            normalized, _, _, _ = checkpoint_artifacts._specialist_lineage(
+                lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters,
+                data_cursor=candidate_cursor,
+            )
+        self.assertEqual(normalized["episode"], episode)
+        root_parent = {"schema_version": "ember-sparse-checkpoint-v3", "expert_checkpoint_sha256": genesis, "expert_genesis_sha256": genesis, "data_cursor": {"shard": "root-parent", "record_index": 0, "global_step": 3, "tokens_seen": 18}}
+        p2b_receipt = {**receipt, "selected_record_count": 4, "selected_token_count": 24}
+        p2b_receipt_sha256 = checkpoint_artifacts._canonical_sha256(p2b_receipt)
+        p2b_start = {"schema_version": SELECTION_CURSOR_SCHEMA_VERSION, "selection_receipt_sha256": p2b_receipt_sha256, "selection_rule_id": "image_scene_split_train_v1", "selected_ordinal": 0, "next_source_index": 0}
+        p2b_end = {**p2b_start, "selected_ordinal": 2, "next_source_index": 5}
+        p2b_parent_episode = {**episode, "selection_receipt": p2b_receipt, "selection_receipt_sha256": p2b_receipt_sha256, "start_selection_cursor": p2b_start, "end_selection_cursor": p2b_end}
+        chained_start = p2b_end
+        chained_end = {**p2b_end, "selected_ordinal": 3, "next_source_index": 6}
+        chained_episode = {**p2b_parent_episode, "start_selection_cursor": chained_start, "end_selection_cursor": chained_end, "completed_updates": 1, "training_token_delta": 12}
+        chained_cursor = {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": chained_end, "global_step": 6, "tokens_seen": 42}
+        chained_lineage = {"parent_manifest": "parent/checkpoint-manifest.json", "root_manifest": "root/checkpoint-manifest.json", "trained_expert_ids": ["vision"], "episode": chained_episode}
+        p2b_parent = {
+            "schema_version": "ember-sparse-checkpoint-v4", "expert_checkpoint_sha256": {**genesis, "vision": "0" * 64},
+            "expert_parameter_sha256": {**genesis, "vision": "0" * 64}, "expert_genesis_sha256": genesis,
+            "lineage": {"parent_checkpoint_sha256": "7" * 64, "root_genesis_checkpoint_sha256": "8" * 64, "trained_expert_ids": ["vision"], "episode": p2b_parent_episode},
+            "data_cursor": {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": p2b_end, "global_step": 5, "tokens_seen": 30},
+        }
+        with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((p2b_parent, "9" * 64), (root_parent, "8" * 64))):
+            normalized, _, _, _ = checkpoint_artifacts._specialist_lineage(
+                chained_lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters,
+                data_cursor=chained_cursor,
+            )
+        self.assertEqual(normalized["episode"], chained_episode)
+        legacy_lineage = {"parent_manifest": "parent/checkpoint-manifest.json", "root_manifest": "root/checkpoint-manifest.json", "trained_expert_ids": ["vision"], "data_verification_receipt": {}, "execution_slice": {}, "scene_split_selection": {}}
+        with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))), self.assertRaisesRegex(ValueError, "P2B training cursor requires P2B specialist lineage"):
+            checkpoint_artifacts._specialist_lineage(legacy_lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters, data_cursor=candidate_cursor)
+        for label, forged_lineage, forged_cursor in (
+            ("mixed_shape", {**lineage, "execution_slice": {}}, candidate_cursor),
+            ("legacy_cursor", lineage, {"shard": "legacy", "record_index": 0, "global_step": 5, "tokens_seen": 30}),
+            ("end_mismatch", lineage, {**candidate_cursor, "selection_cursor": {**end, "selected_ordinal": 1}}),
+            ("global_delta", lineage, {**candidate_cursor, "global_step": 4}),
+            ("token_delta", lineage, {**candidate_cursor, "tokens_seen": 29}),
+            ("forged_nested", lineage, {**candidate_cursor, "selection_cursor": {**end, "selection_receipt_sha256": "1" * 64}}),
+        ):
+            with self.subTest(label=label), patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))), self.assertRaises(ValueError):
+                checkpoint_artifacts._specialist_lineage(forged_lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters, data_cursor=forged_cursor)
+        for label, forged_parameters in (
+            ("active_unchanged", {**genesis}),
+            ("inactive_changed", {**candidate_parameters, "audio": "2" * 64}),
+        ):
+            with self.subTest(label=label), patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))), self.assertRaises(ValueError):
+                checkpoint_artifacts._specialist_lineage(lineage, active_expert="vision", candidate_parameter_sha256=forged_parameters, data_cursor=candidate_cursor)
+
+    def test_published_checkpoint_receipt_reopens_exact_manifest_identity(self) -> None:
+        """A reopening consumer derives the out-of-band identity from frozen bytes."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            manifest_bytes = b'{"schema_version":"ember-sparse-checkpoint-v4","step":17}\n'
+            checkpoint.joinpath("checkpoint-manifest.json").write_bytes(manifest_bytes)
+
+            receipt = checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+        expected = __import__("hashlib").sha256(manifest_bytes).hexdigest()
+        self.assertEqual(receipt["checkpoint_manifest_sha256"], expected)
+        self.assertEqual(receipt["checkpoint"], {"byte_sha256": expected})
+
+    def test_published_checkpoint_receipt_refuses_reparse_malformed_and_invalid_utf8_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            manifest = checkpoint / "checkpoint-manifest.json"
+            manifest.write_bytes(b'{"schema_version":"ember-sparse-checkpoint-v4"}\n')
+            with patch.object(checkpoint_artifacts, "_is_link_or_reparse", return_value=True):
+                with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "symlink or reparse"):
+                    checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+            manifest.write_bytes(b"{not-json\n")
+            with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "not valid published JSON"):
+                checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+            manifest.write_bytes(b"\xff\xfe")
+            with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "not valid published JSON"):
+                checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+    def test_published_checkpoint_receipt_refuses_non_object_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "checkpoint"
+            checkpoint.mkdir()
+            checkpoint.joinpath("checkpoint-manifest.json").write_bytes(b"[]\n")
+            with self.assertRaisesRegex(checkpoint_artifacts.CheckpointIdentityMismatch, "JSON object"):
+                checkpoint_artifacts.published_checkpoint_receipt(checkpoint)
+
+    def test_v5_writer_requires_closed_split_shards_and_round_trips(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=81)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "v5"
+            receipt = write_checkpoint_artifacts(model, optimizer, root, launch_seed=81, rng_state=_valid_rng_state(), data_cursor={"shard": "owned", "record_index": 1, "global_step": 1, "tokens_seen": 2}, model_config_sha256="a" * 64, contract_sha256="b" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes())
+            self.assertEqual(receipt["schema_version"], "ember-sparse-checkpoint-v5")
+            self.assertEqual({entry["path"] for entry in receipt["shards"]}, {"shared-model.pt", "optimizer-state.pt", "replay-state.pt", "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt"})
+            restored = UnifiedDecoder(config, genesis_seed=82)
+            restore_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
+            restored_state = load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+        self.assertEqual(restored_state["data_cursor"]["record_index"], 1)
+
+    def test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap(self) -> None:
+        import inspect
+
+        self.assertIn(
+            "max_transient_scratch_bytes",
+            inspect.signature(_write_checkpoint_artifacts_public).parameters,
+        )
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=83)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(checkpoint_artifacts.torch, "save", wraps=torch.save) as save:
+                with self.assertRaisesRegex(RuntimeError, "tensor-storage lower bound"):
+                    write_checkpoint_artifacts(model, optimizer, Path(directory) / "v5", launch_seed=83, rng_state=_valid_rng_state(), data_cursor={"shard": "owned", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="a" * 64, contract_sha256="b" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), max_transient_scratch_bytes=1)
+            save.assert_not_called()
+
+    def test_v5_storage_projection_binds_post_update_optimizer_and_all_experts(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=183)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        loss = model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean()
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "v5"
+            receipt = write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=183,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest = json.loads(
+                (root / "checkpoint-manifest.json").read_text(encoding="utf-8")
+            )
+
+        projection = receipt["storage_projection"]
+        self.assertEqual(projection, manifest["storage_projection"])
+        self.assertEqual(projection["optimizer_state_after_global_step"], 1)
+        self.assertEqual(
+            projection["optimizer_state_active_expert_ids"], ["vision"]
+        )
+        self.assertGreater(
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"], 0
+        )
+        self.assertGreaterEqual(
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ],
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+        )
+        self.assertGreaterEqual(
+            projection[
+                "all_expert_projected_tensor_storage_lower_bound_bytes"
+            ],
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ],
+        )
+        self.assertTrue(projection["manifest_written_last"])
+        self.assertRegex(projection["projection_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            projection["per_shard_sha256"],
+            {
+                record["path"]: record["sha256"]
+                for record in receipt["shards"]
+            },
+        )
+
+    def test_v5_storage_projection_rejects_empty_post_update_optimizer(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=184)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                ValueError, "post-update optimizer state"
+            ):
+                write_checkpoint_artifacts(
+                    model,
+                    optimizer,
+                    Path(directory) / "v5",
+                    launch_seed=184,
+                    rng_state=_valid_rng_state(),
+                    data_cursor={
+                        "shard": "owned",
+                        "record_index": 1,
+                        "global_step": 1,
+                        "tokens_seen": 3,
+                    },
+                    model_config_sha256="a" * 64,
+                    contract_sha256="b" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    max_transient_scratch_bytes=1024**3,
+                    max_serialized_bytes=1024**3,
+                )
+
+    def test_v5_storage_projection_preserves_shared_semantic_checkpoint(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=190)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="shared",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            receipt = write_checkpoint_artifacts(
+                model,
+                optimizer,
+                Path(directory) / "shared-v5",
+                launch_seed=190,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned-semantic",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+
+        projection = receipt["storage_projection"]
+        self.assertEqual(projection["active_expert"], "shared")
+        self.assertEqual(
+            projection["optimizer_state_active_expert_ids"], ["shared"]
+        )
+        self.assertGreater(
+            projection["optimizer_state_tensor_storage_by_route_bytes"]["shared"],
+            0,
+        )
+        self.assertEqual(
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ],
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+        )
+
+    def test_v5_storage_projection_counts_retained_hardlink_only_in_logical_floor(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=185)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer_payload = {"optimizer": optimizer.state_dict()}
+        optimizer_floor = checkpoint_artifacts._unique_tensor_storage_bytes(
+            optimizer_payload
+        )
+        bounds = {
+            "shared-model.pt": 100,
+            "optimizer-state.pt": optimizer_floor,
+            "replay-state.pt": 100,
+            "expert-vision.pt": 100,
+            "expert-audio.pt": optimizer_floor + 1000,
+            "expert-reasoning.pt": 100,
+            "expert-tool.pt": 100,
+        }
+        modes = {path: "written" for path in bounds}
+        modes["expert-audio.pt"] = "hardlink"
+
+        projection = checkpoint_artifacts._derive_checkpoint_storage_projection(
+            model=model,
+            optimizer=optimizer,
+            optimizer_file_payload=optimizer_payload,
+            shard_storage_lower_bounds=bounds,
+            shard_sha256={path: "a" * 64 for path in bounds},
+            publication_modes=modes,
+            global_step=1,
+            max_transient_scratch_bytes=optimizer_floor + 100,
+            max_serialized_bytes=1024**3,
+        )
+
+        self.assertEqual(
+            projection["retained_shard_paths"], ["expert-audio.pt"]
+        )
+        self.assertEqual(
+            projection["transient_new_write_peak_lower_bound_bytes"],
+            optimizer_floor,
+        )
+        self.assertGreater(
+            projection["all_expert_projected_tensor_storage_lower_bound_bytes"],
+            bounds["expert-audio.pt"],
+        )
+
+    def test_v5_storage_projection_rejects_all_expert_aggregate_over_serialized_gate(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=186)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer_payload = {"optimizer": optimizer.state_dict()}
+        optimizer_floor = checkpoint_artifacts._unique_tensor_storage_bytes(
+            optimizer_payload
+        )
+        bounds = {
+            "shared-model.pt": 100,
+            "optimizer-state.pt": optimizer_floor,
+            "replay-state.pt": 100,
+            **{
+                f"expert-{name}.pt": 100
+                for name in checkpoint_artifacts.EXPERT_NAMES
+            },
+        }
+        per_shard_ceiling = max(bounds.values()) + 1
+        with self.assertRaisesRegex(
+            RuntimeError, "all-expert projected tensor-storage"
+        ):
+            checkpoint_artifacts._derive_checkpoint_storage_projection(
+                model=model,
+                optimizer=optimizer,
+                optimizer_file_payload=optimizer_payload,
+                shard_storage_lower_bounds=bounds,
+                shard_sha256={path: "a" * 64 for path in bounds},
+                publication_modes={path: "written" for path in bounds},
+                global_step=1,
+                max_transient_scratch_bytes=per_shard_ceiling,
+                max_serialized_bytes=per_shard_ceiling,
+            )
+
+    def test_v5_storage_projection_rejects_rehashed_route_tamper(self) -> None:
+        projection = {
+            "schema_version": "ember-checkpoint-storage-projection-v1",
+            "active_expert": "vision",
+            "optimizer_state_after_global_step": 1,
+            "optimizer_state_active_expert_ids": ["vision"],
+            "optimizer_state_tensor_storage_lower_bound_bytes": 10,
+            "optimizer_state_tensor_storage_by_route_bytes": {
+                "shared": 2,
+                "vision": 8,
+                "audio": 0,
+                "reasoning": 0,
+                "tool": 0,
+            },
+            "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes": 34,
+            "per_shard_tensor_storage_lower_bound_bytes": {
+                "shared-model.pt": 10,
+                "optimizer-state.pt": 10,
+                "replay-state.pt": 10,
+                "expert-vision.pt": 10,
+                "expert-audio.pt": 10,
+                "expert-reasoning.pt": 10,
+                "expert-tool.pt": 10,
+            },
+            "per_shard_sha256": {
+                "shared-model.pt": "a" * 64,
+                "optimizer-state.pt": "b" * 64,
+                "replay-state.pt": "c" * 64,
+                "expert-vision.pt": "d" * 64,
+                "expert-audio.pt": "e" * 64,
+                "expert-reasoning.pt": "f" * 64,
+                "expert-tool.pt": "0" * 64,
+            },
+            "transient_new_write_peak_lower_bound_bytes": 10,
+            "retained_shard_paths": [],
+            "all_expert_projected_tensor_storage_lower_bound_bytes": 94,
+            "max_transient_scratch_bytes": 100,
+            "max_serialized_bytes": 100,
+            "manifest_written_last": True,
+        }
+        projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+            projection
+        )
+        projection["optimizer_state_tensor_storage_by_route_bytes"]["audio"] = 1
+        projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+            {
+                key: value
+                for key, value in projection.items()
+                if key != "projection_sha256"
+            }
+        )
+        with self.assertRaisesRegex(
+            ValueError, "optimizer route projection"
+        ):
+            checkpoint_artifacts._validate_checkpoint_storage_projection(
+                projection
+            )
+
+    def test_v5_storage_projection_rejects_rehashed_shard_binding_tamper(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=187)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "v5"
+            write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=187,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = manifest["storage_projection"]
+            projection["per_shard_sha256"]["shared-model.pt"] = "0" * 64
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {
+                    key: value
+                    for key, value in projection.items()
+                    if key != "projection_sha256"
+                }
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError, "shard-byte projection"
+            ):
+                checkpoint_artifacts._checkpoint_candidate_receipt(root)
+
+    def test_v5_admission_rejects_rehashed_forged_storage_lower_bounds(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=188)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            original = parent / "original"
+            write_checkpoint_artifacts(
+                model,
+                optimizer,
+                original,
+                launch_seed=188,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            quarantine = parent / ".checkpoint-quarantine"
+            quarantine.mkdir(exist_ok=True)
+            candidate = quarantine / "candidate-forged-projection"
+            original.rename(candidate)
+            manifest_path = candidate / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = manifest["storage_projection"]
+            projection["per_shard_tensor_storage_lower_bound_bytes"] = {
+                path: 1
+                for path in projection[
+                    "per_shard_tensor_storage_lower_bound_bytes"
+                ]
+            }
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"] = 1
+            projection[
+                "optimizer_state_tensor_storage_by_route_bytes"
+            ] = {
+                "shared": 0,
+                "vision": 1,
+                "audio": 0,
+                "reasoning": 0,
+                "tool": 0,
+            }
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ] = 4
+            projection[
+                "all_expert_projected_tensor_storage_lower_bound_bytes"
+            ] = 10
+            projection["transient_new_write_peak_lower_bound_bytes"] = 1
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {
+                    key: value
+                    for key, value in projection.items()
+                    if key != "projection_sha256"
+                }
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            verifier_called = False
+
+            def verifier(_candidate, _receipt):
+                nonlocal verifier_called
+                verifier_called = True
+                raise AssertionError("forged candidate reached verifier")
+
+            with self.assertRaisesRegex(
+                ValueError, "independent tensor-storage measurement"
+            ):
+                checkpoint_artifacts.admit_quarantined_checkpoint(
+                    candidate,
+                    parent / "published",
+                    verifier=verifier,
+                    max_serialized_bytes=1024**3,
+                )
+            self.assertFalse(verifier_called)
+            self.assertFalse((parent / "published").exists())
+
+    def test_v5_admission_rejects_projection_route_and_step_drift_from_manifest(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=191)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        for drift in ("route", "global_step"):
+            with self.subTest(drift=drift), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "candidate"
+                write_checkpoint_artifacts(
+                    model,
+                    optimizer,
+                    root,
+                    launch_seed=191,
+                    rng_state=_valid_rng_state(),
+                    data_cursor={
+                        "shard": "owned",
+                        "record_index": 1,
+                        "global_step": 1,
+                        "tokens_seen": 3,
+                    },
+                    model_config_sha256="a" * 64,
+                    contract_sha256="b" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    max_transient_scratch_bytes=1024**3,
+                    max_serialized_bytes=1024**3,
+                )
+                manifest_path = root / "checkpoint-manifest.json"
+                manifest = json.loads(
+                    manifest_path.read_text(encoding="utf-8")
+                )
+                projection = manifest["storage_projection"]
+                if drift == "route":
+                    route_bounds = projection[
+                        "optimizer_state_tensor_storage_by_route_bytes"
+                    ]
+                    route_bounds["audio"] = route_bounds["vision"]
+                    route_bounds["vision"] = 0
+                    projection["active_expert"] = "audio"
+                    projection["optimizer_state_active_expert_ids"] = ["audio"]
+                else:
+                    projection["optimizer_state_after_global_step"] = 2
+                projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                    {
+                        key: value
+                        for key, value in projection.items()
+                        if key != "projection_sha256"
+                    }
+                )
+                manifest_path.write_text(
+                    json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(
+                    ValueError, "projection .* manifest"
+                ):
+                    checkpoint_artifacts._checkpoint_candidate_receipt(root)
+
+    def test_v5_admission_rejects_optimizer_and_replay_payload_drift_from_manifest(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=192)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        for drift in ("optimizer", "replay"):
+            with self.subTest(drift=drift), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "candidate"
+                write_checkpoint_artifacts(
+                    model,
+                    optimizer,
+                    root,
+                    launch_seed=192,
+                    rng_state=_valid_rng_state(),
+                    data_cursor={
+                        "shard": "owned",
+                        "record_index": 1,
+                        "global_step": 1,
+                        "tokens_seen": 3,
+                    },
+                    model_config_sha256="a" * 64,
+                    contract_sha256="b" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    max_transient_scratch_bytes=1024**3,
+                    max_serialized_bytes=1024**3,
+                )
+                manifest_path = root / "checkpoint-manifest.json"
+                manifest = json.loads(
+                    manifest_path.read_text(encoding="utf-8")
+                )
+                relative = (
+                    "optimizer-state.pt"
+                    if drift == "optimizer"
+                    else "replay-state.pt"
+                )
+                payload_path = root / relative
+                payload = torch.load(
+                    payload_path,
+                    map_location="cpu",
+                    weights_only=False,
+                )
+                if drift == "optimizer":
+                    payload["optimizer_contract"] = {
+                        **payload["optimizer_contract"],
+                        "implementation": "forged",
+                    }
+                else:
+                    payload["data_cursor"] = {
+                        **payload["data_cursor"],
+                        "tokens_seen": 4,
+                    }
+                torch.save(payload, payload_path)
+                digest = checkpoint_artifacts._sha256(payload_path)
+                record = next(
+                    item for item in manifest["shards"] if item["path"] == relative
+                )
+                record["sha256"] = digest
+                record["bytes"] = payload_path.stat().st_size
+                record["incremental_bytes"] = record["bytes"]
+                if drift == "optimizer":
+                    manifest["optimizer_state_shard_sha256"] = digest
+                projection = manifest["storage_projection"]
+                projection["per_shard_sha256"][relative] = digest
+                projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                    {
+                        key: value
+                        for key, value in projection.items()
+                        if key != "projection_sha256"
+                    }
+                )
+                manifest_path.write_text(
+                    json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(
+                    ValueError, "projection payload does not match manifest"
+                ):
+                    checkpoint_artifacts._checkpoint_candidate_receipt(root)
+
+    def test_v5_admission_rejects_regular_file_declared_as_retained_hardlink(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=189)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "candidate"
+            write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=189,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            forged_path = "expert-vision.pt"
+            record = next(
+                item for item in manifest["shards"] if item["path"] == forged_path
+            )
+            self.assertEqual((root / forged_path).stat().st_nlink, 1)
+            record["publication_mode"] = "hardlink"
+            record["incremental_bytes"] = 0
+            projection = manifest["storage_projection"]
+            projection["retained_shard_paths"] = [forged_path]
+            projection["transient_new_write_peak_lower_bound_bytes"] = max(
+                bound
+                for path, bound in projection[
+                    "per_shard_tensor_storage_lower_bound_bytes"
+                ].items()
+                if path != forged_path
+            )
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {
+                    key: value
+                    for key, value in projection.items()
+                    if key != "projection_sha256"
+                }
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError, "hardlink identity"
+            ):
+                checkpoint_artifacts._checkpoint_candidate_receipt(root)
+
+    def test_v5_copy_fallback_cannot_bypass_transient_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.pt"
+            target = root / "target.pt"
+            source.write_bytes(b"owned-checkpoint-shard")
+            with (
+                patch.object(checkpoint_artifacts.os, "link", side_effect=OSError),
+                patch.object(
+                    checkpoint_artifacts.shutil,
+                    "copyfile",
+                    wraps=checkpoint_artifacts.shutil.copyfile,
+                ) as copyfile,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError, "copy fallback is forbidden"
+                ):
+                    checkpoint_artifacts._link_or_copy_verified(
+                        source,
+                        target,
+                        checkpoint_artifacts._sha256(source),
+                        max_transient_scratch_bytes=1024,
+                    )
+            copyfile.assert_not_called()
+            self.assertFalse(target.exists())
+
+    def test_v5_transient_cap_breach_cleans_temps_and_retains_failure_evidence(self) -> None:
+        import inspect
+
+        self.assertIn(
+            "max_transient_scratch_bytes",
+            inspect.signature(_write_checkpoint_artifacts_public).parameters,
+        )
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=84)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            with self.assertRaisesRegex(RuntimeError, "transient scratch"):
+                write_checkpoint_artifacts(model, optimizer, parent / "v5", launch_seed=84, rng_state=_valid_rng_state(), data_cursor={"shard": "owned", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="a" * 64, contract_sha256="b" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), max_transient_scratch_bytes=1)
+            self.assertEqual(list(parent.rglob("*.tmp")), [])
+            self.assertEqual(list(parent.glob(".*.staging")), [])
+            evidence = list((parent / ".checkpoint-quarantine").glob("checkpoint-write-failed-*.json"))
+            self.assertEqual(len(evidence), 1)
+            self.assertLess(evidence[0].stat().st_size, checkpoint_artifacts._FAILURE_EVIDENCE_LIMIT)
+
+    def test_explicit_v3_shared_fixture_still_loads_model_optimizer_and_cursor(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=85)
+        model._activate_expert("reasoning")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "legacy-v3"
+            root.mkdir()
+            rng_state = _valid_rng_state()
+            data_cursor = {
+                "shard": "legacy",
+                "record_index": 2,
+                "global_step": 2,
+                "tokens_seen": 4,
+            }
+            optimizer_contract = _default_optimizer_contract(optimizer)
+            optimizer_realization = _optimizer_realization(optimizer, optimizer_contract)
+            state = model.state_dict()
+            torch.save(
+                {
+                    "model": _select_detached_state(state, lambda name: ".experts." not in name),
+                    "optimizer": optimizer.state_dict(),
+                    "optimizer_contract": optimizer_contract,
+                    "optimizer_realization": optimizer_realization,
+                },
+                root / "shared.pt",
+            )
+            torch.save({"rng_state": rng_state, "data_cursor": data_cursor}, root / "replay-state.pt")
+            expert_hashes = {}
+            for name in ("vision", "audio", "reasoning", "tool"):
+                path = root / f"expert-{name}.pt"
+                torch.save(
+                    {
+                        "expert": name,
+                        "model": _select_detached_state(
+                            state,
+                            lambda key, selected=name: f".experts.{selected}." in key,
+                        ),
+                    },
+                    path,
+                )
+                expert_hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            roles = {
+                "shared.pt": "shared_model_and_optimizer",
+                "replay-state.pt": "replay_state",
+                **{
+                    f"expert-{name}.pt": f"expert_{name}"
+                    for name in ("vision", "audio", "reasoning", "tool")
+                },
+            }
+            shards = []
+            for name, role in roles.items():
+                path = root / name
+                size = path.stat().st_size
+                shards.append(
+                    {
+                        "path": name,
+                        "role": role,
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                        "bytes": size,
+                        "publication_mode": "written",
+                        "incremental_bytes": size,
+                    }
+                )
+            manifest = {
+                "schema_version": "ember-sparse-checkpoint-v3",
+                "contract_version": 3,
+                "architecture_revision": "ember-sparse-3b-v2",
+                "data_cursor": data_cursor,
+                "model_config_sha256": "a" * 64,
+                "contract_sha256": "b" * 64,
+                "active_expert_ids": ["reasoning"],
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+                "expert_checkpoint_sha256": expert_hashes,
+                "expert_parameter_sha256": model.expert_bank_genesis_hashes(),
+                "shared_optimizer_shard_sha256": hashlib.sha256(
+                    (root / "shared.pt").read_bytes()
+                ).hexdigest(),
+                "optimizer_contract": optimizer_contract,
+                "optimizer_realization": optimizer_realization,
+                "shards": shards,
+            }
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
+                encoding="utf-8",
+            )
+            manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            receipt = {
+                **manifest,
+                "checkpoint_manifest_sha256": manifest_sha256,
+                "checkpoint": {"byte_sha256": manifest_sha256},
+            }
+            restored = UnifiedDecoder(config, genesis_seed=86)
+            restored_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
+            loaded = load_checkpoint_artifacts(restored, restored_optimizer, root, receipt)
+        self.assertEqual(loaded["data_cursor"], data_cursor)
+        for key, tensor in model.state_dict().items():
+            self.assertTrue(torch.equal(tensor, restored.state_dict()[key]), key)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Selftest for docs/research/journal benchmark admission receipts."""
 from __future__ import annotations
 
@@ -8,11 +11,137 @@ from pathlib import Path
 
 import ember_research_benchmark_harness as harness
 
+# A fully-resolved OWNED_CANDIDATE ember_01_identity manifest (cond3 GAP-4 SUBJECT
+# fixture). OWNED_CANDIDATE avoids the OWNED_ADMITTED bundle requirements (receipt
+# bundle/tensor manifest/artifact bundle/checkpoint bytes) while still exercising the
+# REAL validator's require_resolved gate and the checkpoint/evaluation hash-identity
+# invariants unconditionally enforced regardless of disposition.
+_SUBJECT_CHECKPOINT_SHA256 = "9" * 63 + "1"
+_SUBJECT_MANIFEST_PAYLOAD: dict = {
+    "authority": {
+        "goal_id": "EMBER-01",
+        "workstream_id": "EMBER-01C",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    },
+    "schema": "ember-model-experiment-identity-v1",
+    "identity": {
+        "model_id": "ember-candidate-selftest",
+        "experiment_id": "experiment-selftest-001",
+        "run_id": "run-selftest-001",
+        "checkpoint_id": "checkpoint-selftest-001",
+        "disposition": "OWNED_CANDIDATE",
+        "selected_as_owned_ember": False,
+    },
+    "architecture": {"source": "architecture/selftest.py", "sha256": "a" * 64},
+    "checkpoint": {
+        "format": "synthetic-bytes-v1",
+        "byte_sha256": _SUBJECT_CHECKPOINT_SHA256,
+        "tensors": [
+            {"name": "fixture.weight", "shape": [2, 2], "dtype": "float32", "sha256": "b" * 64}
+        ],
+        "ancestry": [{"checkpoint_sha256": "c" * 64, "relationship": "clean_genesis_parent"}],
+        "recovery_state": "CLEAN",
+    },
+    "tokenizer": {"id": "owned-tokenizer-selftest", "sha256": "d" * 64},
+    "data": {
+        "corpus_id": "owned-corpus-selftest",
+        "sha256": "e" * 64,
+        "ordering_sha256": "f" * 64,
+        "curriculum_sha256": "1" * 64,
+        "verifier_sha256": "2" * 64,
+        "clean_genesis": True,
+        "accepted_input": {
+            "input_id": "github-issue-selftest",
+            "authority_id": "ember-02-issue-selftest",
+            "authority_record_sha256": "3" * 64,
+            "authority": "CURRENT_EXECUTABLE",
+            "shard_manifest_sha256": "4" * 64,
+            "caller_sha256": "5" * 64,
+            "gate_sha256": "6" * 64,
+            "validator_sha256": "7" * 64,
+            "forwarding_receipt_sha256": "8" * 64,
+        },
+    },
+    "parameters": {
+        "allocated": 1,
+        "unique": 1,
+        "active": 1,
+        "trainable": 1,
+        "served": 1,
+        "actually_trained": 1,
+        "evidence_receipts": {
+            "allocated": [], "unique": [], "active": [], "trainable": [],
+            "served": [], "actually_trained": [],
+        },
+    },
+    "training": {
+        "steps": 100,
+        "effective_tokens": 1000000,
+        "modality_mixture": {"text": 0.5, "image": 0.25, "audio": 0.25},
+        "optimizer_state_sha256": "9" * 64,
+        "numerics": {"profile": "bf16-activations-fp32-master", "sha256": "a" * 64},
+        "stopping_rule": {
+            "criterion_id": "sufficient-pretraining-v1",
+            "result": "NOT_REACHED",
+            "receipt_sha256": "b" * 64,
+        },
+    },
+    "capabilities": {
+        "native_modalities": {
+            modality: {"state": "UNVERIFIED", "evidence_receipts": []}
+            for modality in ("text", "image", "audio")
+        },
+        "reasoning": {"state": "UNVERIFIED", "evidence_receipts": []},
+        "structured_tool_use": {"state": "UNVERIFIED", "evidence_receipts": []},
+    },
+    "mechanisms": {
+        "experts": [], "router": [], "temporary_adapters": [], "permanent_merges": [],
+        "memory_substrates": [], "world_models": [], "dreaming_updates": [], "deletion_objects": [],
+    },
+    "backend": {
+        "executable_sha256": "c" * 64,
+        "process_identity": {
+            "pid": 1, "start_time_utc": "2026-07-24T00:00:00Z",
+            "executable_sha256": "d" * 64, "command_sha256": "e" * 64, "nonce": "selftest",
+        },
+        "process_receipt_sha256": "f" * 64,
+        "protocol": "selftest-v1",
+        "device": "cpu",
+        "runtime_dependencies": [],
+        "resource_lease_id": "selftest-lease",
+    },
+    "evaluation": {
+        "benchmark_id": "terminal-bench-2.1",
+        "version": "v1",
+        "split": "selftest",
+        "harness_sha256": "1" * 64,
+        "subject_checkpoint_sha256": _SUBJECT_CHECKPOINT_SHA256,
+        "comparator_identity": "selftest-comparator",
+        "comparator_sha256": "2" * 64,
+        "score": {"value": 1.0, "unit": "selftest-score"},
+        "uncertainty": {"value": 0.0, "unit": "selftest-score"},
+        "receipt_sha256": "3" * 64,
+        "counts_toward_owned_completion": False,
+    },
+    "provenance": {
+        "ownership": "OWNED_CLEAN_GENESIS",
+        "exclusion_reasons": [],
+        "learned_signal_sources": ["owned_training_data"],
+        "neural_capability_credit_sources": ["owned_checkpoint"],
+    },
+    "unresolved": [],
+}
+
 
 def _write(path: Path, payload: dict) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
     return path
+
+
+def _subject_manifest(root: Path) -> Path:
+    """cond3 GAP-4: a resolved OWNED_CANDIDATE subject manifest every selftest binds to."""
+    return _write(root / "subject.json", _SUBJECT_MANIFEST_PAYLOAD)
 
 
 def _operator_receipt(root: Path) -> Path:
@@ -63,7 +192,7 @@ def test_admits_manifest_with_external_tasks_and_evaluator() -> None:
             },
         )
 
-        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root))
+        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root), _subject_manifest(root))
 
         assert receipt["verdict"] == "RESEARCH_BENCHMARK_ADMITTED"
         assert receipt["benchmark_id"] == "ScienceAgentBench"
@@ -91,7 +220,7 @@ def test_blocks_when_evaluator_is_missing() -> None:
             },
         )
 
-        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root))
+        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root), _subject_manifest(root))
 
         assert receipt["verdict"] == "RESEARCH_BENCHMARK_BLOCKED"
         assert "evaluator_path.missing" in receipt["errors"]
@@ -132,7 +261,7 @@ def test_admits_d3_gym_as_research_journal_replacement() -> None:
             },
         )
 
-        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root))
+        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root), _subject_manifest(root))
 
         assert receipt["verdict"] == "RESEARCH_BENCHMARK_ADMITTED"
         assert receipt["benchmark_id"] == "D3-Gym"
@@ -162,7 +291,7 @@ def test_blocks_d3_gym_when_docker_daemon_is_not_ready() -> None:
             },
         )
 
-        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root))
+        receipt = harness.build_admission_receipt(manifest, _operator_receipt(root), _subject_manifest(root))
 
         assert receipt["verdict"] == "RESEARCH_BENCHMARK_BLOCKED"
         assert "docker_daemon.not_ready" in receipt["errors"]

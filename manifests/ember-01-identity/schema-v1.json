@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ember:model-experiment-identity:v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "title": "Ember model and experiment identity manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "b4_governed_conditional_requirement": {
+    "decision": "OWNED_ADMITTED (current owned-admission legs) requires training.optimizer_contract; a manifest with any other disposition may omit it. Authority: ember01plan.md SS B4 L1067-1069 (conditional requirement inside v1, decided by a governed decision receipt, in lieu of a hard v2 cutover whose blast radius spans unrelated ember-cli/test fixtures outside this PR's scope). Enforced twice: the if/then below (schema.validation finding) and scripts/ember_01_identity/validate_identity.py's admission.optimizer_contract_missing finding (same disposition==OWNED_ADMITTED gate, house style for OWNED_ADMITTED requirements).",
+    "goal_id": "EMBER-01"
+  },
+  "if": {
+    "type": "object",
+    "properties": {
+      "identity": {
+        "type": "object",
+        "properties": {"disposition": {"const": "OWNED_ADMITTED"}},
+        "required": ["disposition"]
+      }
+    },
+    "required": ["identity"]
+  },
+  "then": {
+    "type": "object",
+    "properties": {
+      "training": {
+        "type": "object",
+        "required": ["optimizer_contract"]
+      }
+    },
+    "required": ["training"]
+  },
+  "required": [
+    "authority",
+    "schema",
+    "identity",
+    "architecture",
+    "checkpoint",
+    "tokenizer",
+    "data",
+    "parameters",
+    "training",
+    "capabilities",
+    "mechanisms",
+    "backend",
+    "evaluation",
+    "provenance",
+    "unresolved"
+  ],
+  "properties": {
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal_id", "workstream_id", "next_executed_outcome"],
+      "properties": {
+        "goal_id": {"type": "string", "minLength": 1},
+        "workstream_id": {"type": "string", "minLength": 1},
+        "next_executed_outcome": {"type": "string", "minLength": 1}
+      }
+    },
+    "schema": {
+      "const": "ember-model-experiment-identity-v1"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_id", "experiment_id", "run_id", "checkpoint_id", "disposition", "selected_as_owned_ember"],
+      "properties": {
+        "model_id": {"type": "string", "minLength": 1},
+        "experiment_id": {"type": "string", "minLength": 1},
+        "run_id": {"type": "string", "minLength": 1},
+        "checkpoint_id": {"type": "string", "minLength": 1},
+        "disposition": {
+          "enum": ["OWNED_CANDIDATE", "OWNED_ADMITTED", "REFERENCE_ONLY", "HISTORICAL_ONLY"]
+        },
+        "selected_as_owned_ember": {"type": "boolean"}
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "sha256"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "byte_sha256", "tensors", "ancestry", "recovery_state"],
+      "properties": {
+        "format": {"type": "string", "minLength": 1},
+        "byte_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "tensors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/tensor"}
+        },
+        "ancestry": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ancestry"}
+        },
+        "recovery_state": {"enum": ["CLEAN", "RESUMED", "RECOVERED"]}
+      }
+    },
+    "tokenizer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sha256"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_id",
+        "sha256",
+        "ordering_sha256",
+        "curriculum_sha256",
+        "verifier_sha256",
+        "clean_genesis",
+        "accepted_input"
+      ],
+      "properties": {
+        "corpus_id": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "ordering_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "curriculum_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "verifier_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "clean_genesis": {"type": "boolean"},
+        "accepted_input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input_id",
+            "authority_id",
+            "authority_record_sha256",
+            "authority",
+            "shard_manifest_sha256",
+            "caller_sha256",
+            "gate_sha256",
+            "validator_sha256",
+            "forwarding_receipt_sha256"
+          ],
+          "properties": {
+            "input_id": {"type": "string", "minLength": 1},
+            "authority_id": {"type": "string", "minLength": 1},
+            "authority_record_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "authority": {
+              "enum": ["CURRENT_EXECUTABLE", "HISTORICAL_REFERENCE", "UNRESOLVED"]
+            },
+            "shard_manifest_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "caller_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "gate_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "validator_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+            "forwarding_receipt_sha256": {"$ref": "#/$defs/sha256OrUnresolved"}
+          }
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allocated", "unique", "active", "trainable", "served", "actually_trained", "evidence_receipts"],
+      "properties": {
+        "allocated": {"type": "integer", "minimum": 0},
+        "unique": {"type": "integer", "minimum": 0},
+        "active": {"type": "integer", "minimum": 0},
+        "trainable": {"type": "integer", "minimum": 0},
+        "served": {"type": "integer", "minimum": 0},
+        "actually_trained": {"type": "integer", "minimum": 0},
+        "evidence_receipts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allocated", "unique", "active", "trainable", "served", "actually_trained"],
+          "properties": {
+            "allocated": {"$ref": "#/$defs/receiptHashList"},
+            "unique": {"$ref": "#/$defs/receiptHashList"},
+            "active": {"$ref": "#/$defs/receiptHashList"},
+            "trainable": {"$ref": "#/$defs/receiptHashList"},
+            "served": {"$ref": "#/$defs/receiptHashList"},
+            "actually_trained": {"$ref": "#/$defs/receiptHashList"}
+          }
+        }
+      }
+    },
+    "training": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "steps",
+        "effective_tokens",
+        "modality_mixture",
+        "optimizer_state_sha256",
+        "numerics",
+        "stopping_rule"
+      ],
+      "properties": {
+        "steps": {"type": "integer", "minimum": 0},
+        "effective_tokens": {"type": "integer", "minimum": 0},
+        "modality_mixture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "image", "audio"],
+          "properties": {
+            "text": {"type": "number", "minimum": 0, "maximum": 1},
+            "image": {"type": "number", "minimum": 0, "maximum": 1},
+            "audio": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "optimizer_state_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "optimizer_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "implementation", "hyperparameters", "state_format",
+            "implementation_source_sha256",
+            "param_group_mapping_convention",
+            "param_name_optimizer_id_mapping_sha256",
+            "realization_receipt_sha256",
+            "trusted_verifier_id"
+          ],
+          "properties": {
+            "implementation": {"type": "string", "minLength": 1},
+            "hyperparameters": {"type": "object", "minProperties": 1},
+            "state_format": {"type": "string", "minLength": 1},
+            "implementation_source_sha256": {"$ref": "#/$defs/sha256"},
+            "param_group_mapping_convention": {"type": "string", "minLength": 1},
+            "param_name_optimizer_id_mapping_sha256": {"$ref": "#/$defs/sha256"},
+            "realization_receipt_sha256": {"$ref": "#/$defs/sha256"},
+            "trusted_verifier_id": {"type": "string", "minLength": 1}
+          }
+        },
+        "numerics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile", "sha256"],
+          "properties": {
+            "profile": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/$defs/sha256OrUnresolved"}
+          }
+        },
+        "stopping_rule": {"$ref": "#/$defs/stoppingRule"}
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["native_modalities", "reasoning", "structured_tool_use"],
+      "properties": {
+        "native_modalities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "image", "audio"],
+          "properties": {
+            "text": {"$ref": "#/$defs/capability"},
+            "image": {"$ref": "#/$defs/capability"},
+            "audio": {"$ref": "#/$defs/capability"}
+          }
+        },
+        "reasoning": {"$ref": "#/$defs/capability"},
+        "structured_tool_use": {"$ref": "#/$defs/capability"}
+      }
+    },
+    "mechanisms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["experts", "router", "temporary_adapters", "permanent_merges", "memory_substrates", "world_models", "dreaming_updates", "deletion_objects"],
+      "properties": {
+        "experts": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "router": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "temporary_adapters": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "permanent_merges": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "memory_substrates": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "world_models": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "dreaming_updates": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}},
+        "deletion_objects": {"type": "array", "items": {"$ref": "#/$defs/mechanismOrUnresolved"}}
+      }
+    },
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executable_sha256",
+        "process_identity",
+        "process_receipt_sha256",
+        "protocol",
+        "device",
+        "runtime_dependencies",
+        "resource_lease_id"
+      ],
+      "properties": {
+        "executable_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "process_identity": {"$ref": "#/$defs/processIdentityOrUnresolved"},
+        "process_receipt_sha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"$ref": "#/$defs/unresolved"}
+          ]
+        },
+        "protocol": {"type": "string", "minLength": 1},
+        "device": {"type": "string", "minLength": 1},
+        "runtime_dependencies": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/runtimeDependency"}
+        },
+        "resource_lease_id": {"$ref": "#/$defs/stringOrUnresolved"}
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark_id",
+        "version",
+        "split",
+        "harness_sha256",
+        "subject_checkpoint_sha256",
+        "comparator_identity",
+        "comparator_sha256",
+        "score",
+        "uncertainty",
+        "receipt_sha256",
+        "counts_toward_owned_completion"
+      ],
+      "properties": {
+        "benchmark_id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "split": {"type": "string", "minLength": 1},
+        "harness_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "subject_checkpoint_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "comparator_identity": {"$ref": "#/$defs/stringOrUnresolved"},
+        "comparator_sha256": {"$ref": "#/$defs/sha256OrUnresolved"},
+        "score": {"$ref": "#/$defs/measurementOrUnresolved"},
+        "uncertainty": {"$ref": "#/$defs/measurementOrUnresolved"},
+        "receipt_sha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"$ref": "#/$defs/unresolved"}
+          ]
+        },
+        "counts_toward_owned_completion": {"type": "boolean"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownership",
+        "exclusion_reasons",
+        "learned_signal_sources",
+        "neural_capability_credit_sources"
+      ],
+      "properties": {
+        "ownership": {
+          "enum": [
+            "OWNED_CLEAN_GENESIS",
+            "REFERENCE_ONLY",
+            "HISTORICAL_UNKNOWN",
+            "EXCLUDED_CONTAMINATED"
+          ]
+        },
+        "exclusion_reasons": {"type": "array", "items": {"type": "string"}},
+        "learned_signal_sources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "owned_training_data",
+              "locally_verified_experience",
+              "borrowed_reference_weights",
+              "borrowed_reference_outputs",
+              "unknown_historical_signal",
+              "weights",
+              "outputs",
+              "teachers",
+              "judges",
+              "filters",
+              "ranks",
+              "curricula",
+              "stopping_decisions",
+              "borrowed_weights",
+              "borrowed_outputs",
+              "teacher",
+              "judge",
+              "filter",
+              "rank",
+              "borrowed_curriculum",
+              "borrowed_stopping_decision",
+              "hidden_external_cognition"
+            ]
+          }
+        },
+        "neural_capability_credit_sources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "owned_checkpoint",
+              "checkpoint_bound_causal_evidence",
+              "reference_checkpoint",
+              "historical_receipt",
+              "borrowed_model",
+              "harness",
+              "human_intervention",
+              "script",
+              "search",
+              "tool",
+              "ui_label",
+              "verifier"
+            ]
+          }
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256OrUnresolved": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha256"},
+        {"$ref": "#/$defs/unresolved"}
+      ]
+    },
+    "unresolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": {"const": "unresolved"},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "valueOrUnresolved": {
+      "anyOf": [
+        {"type": ["string", "number", "integer", "boolean", "array", "object"]},
+        {"$ref": "#/$defs/unresolved"}
+      ]
+    },
+    "stringOrUnresolved": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"$ref": "#/$defs/unresolved"}
+      ]
+    },
+    "measurementOrUnresolved": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "unit"],
+          "properties": {
+            "value": {"type": "number"},
+            "unit": {"type": "string", "minLength": 1}
+          }
+        },
+        {"$ref": "#/$defs/unresolved"}
+      ]
+    },
+    "processIdentityOrUnresolved": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pid", "start_time_utc", "executable_sha256", "command_sha256", "nonce"],
+          "properties": {
+            "pid": {"type": "integer", "minimum": 1},
+            "start_time_utc": {"type": "string", "minLength": 1},
+            "executable_sha256": {"$ref": "#/$defs/sha256"},
+            "command_sha256": {"$ref": "#/$defs/sha256"},
+            "nonce": {"type": "string", "minLength": 1}
+          }
+        },
+        {"$ref": "#/$defs/unresolved"}
+      ]
+    },
+    "runtimeDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "sha256"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "mechanismOrUnresolved": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "sha256", "state", "evidence_receipts"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "state": {
+              "enum": ["ACTIVE", "INACTIVE", "HISTORICAL", "UNVERIFIED"]
+            },
+            "evidence_receipts": {"$ref": "#/$defs/receiptHashList"}
+          }
+        },
+        {"$ref": "#/$defs/unresolved"}
+      ]
+    },
+    "tensor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "shape", "dtype", "sha256"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "shape": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0}
+        },
+        "dtype": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256OrUnresolved"}
+      }
+    },
+    "ancestry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint_sha256", "relationship"],
+      "properties": {
+        "checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "relationship": {"type": "string", "minLength": 1}
+      }
+    },
+    "receiptHashList": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sha256"}
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "evidence_receipts"],
+      "properties": {
+        "state": {
+          "enum": ["UNVERIFIED", "VERIFIED", "REGRESSED", "INAPPLICABLE"]
+        },
+        "evidence_receipts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "stoppingRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_id", "result", "receipt_sha256"],
+      "properties": {
+        "criterion_id": {"type": "string", "minLength": 1},
+        "result": {"enum": ["PASSED", "NOT_REACHED", "FAILED"]},
+        "receipt_sha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"$ref": "#/$defs/unresolved"}
+          ]
+        }
+      }
+    }
+  }
+}

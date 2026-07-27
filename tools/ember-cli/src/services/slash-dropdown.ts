@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/slash-dropdown.ts — pure logic for the slash-command completion dropdown
 // (issue b22 item 1, ledgered since b14 as ember-cli-slash-dropdown). Exemplar: the field's own
 // "/" menu convention (Claude Code, Crush) per field-ux-map §8b/§9 — a filterable list of
@@ -98,19 +102,81 @@ export interface SlashDropdownDisplay {
   selectedIndex: number;
 }
 
-/** Assembles what the dropdown actually renders: the capped visible slice, how many matches are
- * hidden beyond the cap, and a selection index re-clamped into the (possibly truncated) visible
- * range — mirrors computeQueueDisplay's visible+overflowCount shape (prompt-input.ts) for
- * consistency with the codebase's existing "capped list + overflow count" convention. */
+/** Assembles what the dropdown actually renders: a scrolled WINDOW of `matches` that always
+ * contains the (clamped) selection, how many matches fall outside that window, and a selection
+ * index re-based to the window (0 = the window's own first row) for the renderer to highlight —
+ * mirrors computeQueueDisplay's visible+overflowCount shape (prompt-input.ts) for consistency with
+ * the codebase's existing "capped list + overflow count" convention.
+ *
+ * `selectedIndex` is an index into the FULL `matches` list, not the visible window -- this is what
+ * makes hidden entries reachable by keyboard at all (2026-07-25 palette-overflow-render finding:
+ * moveDropdownSelection used to wrap only over the previously-fixed first-N slice, so anything
+ * past the cap was unreachable regardless of how many times Down was pressed). The window is
+ * re-centered on the selection each call (a pure function of selectedIndex, not persisted scroll
+ * state), so wrap-around (moveDropdownSelection wrapping index length-1 -> 0) immediately scrolls
+ * the window back to the top on the very next render.
+ *
+ * `maxVisible` defaults to SLASH_DROPDOWN_MAX_VISIBLE (every existing call site keeps working
+ * unchanged) but a caller with real terminal-geometry knowledge should pass
+ * slashDropdownMaxVisible(terminalRows, matches.length) instead -- see that function's
+ * own comment (2026-07-25 palette-overflow-render finding) for why a fixed 8 alone is not honest
+ * on a short terminal. `visible.length + overflowCount === matches.length` always, by
+ * construction, regardless of what `cap` resolves to -- the shared invariant with the
+ * prompt-region's own regression (visible count + shortfall count == full match count at every
+ * terminal size).
+ *
+ * `maxVisible` (and therefore `cap`) may be 0 -- deliberately no forced floor of 1 (2026-07-25
+ * counterparty finding): on a viewport too tight to show even a single entry honestly, the correct
+ * disposition is zero rendered entries plus an honest full-count "+N more", not one entry painted
+ * over a row that was never budgeted for it. slashDropdownCanRender separately distinguishes
+ * an honest indicator-only panel from a viewport too short even for that indicator; the REPL
+ * uses that structural gate rather than the visible-command count.
+ * When cap resolves to 0, slashDropdownCanRender distinguishes an honest indicator-only
+ * panel from a viewport too short even for that indicator. */
 export function computeSlashDropdownDisplay(
   matches: RegistryCommand[],
   selectedIndex: number,
+  maxVisible: number = SLASH_DROPDOWN_MAX_VISIBLE,
 ): SlashDropdownDisplay {
-  const visible = matches.slice(0, SLASH_DROPDOWN_MAX_VISIBLE);
-  const overflowCount = Math.max(0, matches.length - SLASH_DROPDOWN_MAX_VISIBLE);
+  const cap = Math.max(0, Math.min(SLASH_DROPDOWN_MAX_VISIBLE, maxVisible));
+  const total = matches.length;
+  if (cap === 0) {
+    return { visible: [], overflowCount: total, selectedIndex: 0 };
+  }
+  const absoluteSelected = clampDropdownSelection(selectedIndex, total);
+  const maxWindowStart = Math.max(0, total - cap);
+  const windowStart = Math.min(Math.max(0, absoluteSelected - Math.floor(cap / 2)), maxWindowStart);
+  const visible = matches.slice(windowStart, windowStart + cap);
+  const overflowCount = Math.max(0, total - visible.length);
   return {
     visible,
     overflowCount,
-    selectedIndex: clampDropdownSelection(selectedIndex, visible.length),
+    selectedIndex: absoluteSelected - windowStart,
   };
+}
+
+/** The slash palette collapses prompt/status chrome to one bordered input row, one embedded
+ * compact status row, and the input box's two borders. This four-row total is a render contract,
+ * not a sampled estimate of live transient state. */
+export const DROPDOWN_COMPACT_CHROME_ROWS = 4;
+export const DROPDOWN_BORDER_ROWS = 2;
+
+/** True when the fixed compact region leaves room for the palette border and at least one
+ * content row. That content row may be the honest overflow indicator with zero commands. */
+export function slashDropdownCanRender(terminalRows: number, matchCount: number): boolean {
+  return matchCount > 0
+    && terminalRows - DROPDOWN_COMPACT_CHROME_ROWS - DROPDOWN_BORDER_ROWS >= 1;
+}
+
+export function slashDropdownMaxVisible(terminalRows: number, matchCount: number): number {
+  const contentRows = terminalRows - DROPDOWN_COMPACT_CHROME_ROWS - DROPDOWN_BORDER_ROWS;
+  const capWithoutIndicator = Math.max(
+    0,
+    Math.min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, contentRows),
+  );
+  if (capWithoutIndicator >= matchCount) return capWithoutIndicator;
+  return Math.max(
+    0,
+    Math.min(SLASH_DROPDOWN_MAX_VISIBLE, matchCount, contentRows - 1),
+  );
 }

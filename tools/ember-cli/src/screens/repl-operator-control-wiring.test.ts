@@ -1,0 +1,154 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+// screens/repl-operator-control-wiring.test.ts — RED-first end-to-end proof that a real mouse
+// click on the operator-surface pane's [PAUSE] control drives a real effect on the run, not just
+// a handler firing. Before this wiring, ReplScreen never passed `onControl` to
+// OperatorSurfacePane, so every click called `undefined?.(...)` -- a no-op indistinguishable
+// from a working control by anything short of an effect-level assertion.
+//
+// The chain exercised here is the REAL production click path, start to finish:
+//   raw SGR mouse bytes on stdin -> createSgrMouseDecoder -> hit-test -> Box.onClick
+//   -> OperatorSurfacePane's onControl(action, runId) -> ReplScreen's handleOperatorControl
+//   -> driveOperatorControl -> emitControlCmd -> a real JSONL append.
+// The assertion is on that last file, not on whether a handler ran (per the operator's bar:
+// "did the test apparatus produce the condition it is measuring?" -- driving state directly and
+// observing that same state proves nothing; this drives the click and observes the channel).
+import { describe, expect, test } from "bun:test";
+import { EventEmitter } from "node:events";
+import React from "react";
+import { tmpdir } from "os";
+import { join } from "path";
+import { writeFile, readFile, unlink } from "fs/promises";
+import { mountInk } from "../ink/reconciler.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { TerminalSizeContext } from "../ink/components.ts";
+import { startStdinBridge } from "../ink/stdin-bridge.ts";
+import { resetCommandRegistryForTests } from "../command-registry.ts";
+import { startTelemetryWatch } from "../services/telemetry-watch.ts";
+import { ReplScreen } from "./repl.ts";
+
+class FakeStdin extends EventEmitter {
+  isTTY = true;
+  setRawMode(): void {}
+  resume(): void {}
+  pause(): void {}
+}
+
+async function flushRepl(times: number = 5): Promise<void> {
+  for (let index = 0; index < times; index++) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+function renderedLines(raw: string, columns: number, rows: number): string[] {
+  const frame = buildFrame(columns, rows);
+  parseRenderedIntoFrame(raw, frame, new StylePool());
+  return frame.cells.map((line) => line.map((cell) => cell?.char ?? " ").join(""));
+}
+
+/** Finds the zero-based (col, row) of the first character of `needle` in the rendered frame. */
+function findGlyph(lines: string[], needle: string): { col: number; row: number } | undefined {
+  for (let row = 0; row < lines.length; row++) {
+    const col = lines[row]!.indexOf(needle);
+    if (col >= 0) return { col, row };
+  }
+  return undefined;
+}
+
+/** Builds one SGR left-button-press sequence for a zero-based (col, row) terminal cell. */
+function sgrLeftClick(col: number, row: number): string {
+  return `\x1b[<0;${col + 1};${row + 1}M`;
+}
+
+describe("operator-surface pane control click drives a real effect on the run", () => {
+  test("clicking [PAUSE] via the real mouse-click path appends a real pause command to the control channel", async () => {
+    resetCommandRegistryForTests();
+    const telemetryPath = join(tmpdir(), `test-repl-telemetry-${Date.now()}-${Math.random()}.jsonl`);
+    const controlPath = join(tmpdir(), `test-repl-control-${Date.now()}-${Math.random()}.jsonl`);
+    const runId = "run-wiring-e2e";
+    await writeFile(
+      telemetryPath,
+      `${JSON.stringify({
+        ts: new Date().toISOString(),
+        kind: "train_step",
+        source: "journal",
+        payload: { run_id: runId, step: 1, loss: 1.5 },
+      })}\n`,
+    );
+    const previousTelemetryEnv = process.env["EMBER_TELEMETRY_PATH"];
+    process.env["EMBER_TELEMETRY_PATH"] = telemetryPath;
+
+    const columns = 100;
+    const rows = 30;
+    let raw = "";
+    const config = { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" };
+    const element = React.createElement(
+      TerminalSizeContext.Provider,
+      { value: { columns, rows } },
+      React.createElement(ReplScreen, {
+        config,
+        cwd: process.cwd(),
+        env: {
+          EMBER_DISABLE_TERMINAL_TITLE: "1",
+          EMBER_DISABLE_VIRTUAL_SCROLL: "1",
+          EMBER_FINETUNE_CONTROL_PATH: controlPath,
+        },
+        onExit: () => {},
+      }),
+    );
+    const handle = mountInk(element, {
+      stream: { write(chunk: string) { raw += chunk; } },
+      stdout: { columns, rows },
+    });
+    const stdin = new FakeStdin();
+    const stopBridge = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+
+    try {
+      // Real telemetry poll runs every 500ms (services/telemetry-watch.ts POLL_INTERVAL_MS);
+      // wait for the pane to actually observe the RUNNING event before clicking, rather than a
+      // fixed sleep guessed to be "long enough".
+      // The PAUSE control renders in EVERY status (disabled-but-visible when not RUNNING), so
+      // the loop must wait for RUNNING itself, not merely for the glyph to appear. R2b decorates
+      // the label with its accelerator ("[(P)AUSE]", see operatorControlLabel) plus a two-column
+      // focus-marker slot in front of it -- the click still targets the same Box, just at the
+      // new label text.
+      let lines: string[] = [];
+      let running = false;
+      for (let attempt = 0; attempt < 30 && !running; attempt++) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        await flushRepl();
+        lines = renderedLines(raw, columns, rows);
+        running = lines.some((line) => line.includes("RUNNING"));
+      }
+      expect(running).toBe(true);
+      const pauseAt = findGlyph(lines, "[(P)AUSE]");
+      expect(pauseAt).toBeDefined();
+
+      stdin.emit("data", Buffer.from(sgrLeftClick(pauseAt!.col + 1, pauseAt!.row)));
+      await flushRepl();
+      // The control channel write is async (fs append); give the microtask/IO queue a moment.
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+      const controlRaw = await readFile(controlPath, "utf-8");
+      const controlLines = controlRaw.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+      expect(controlLines).toEqual([{ verb: "pause", runId, ts: expect.any(String) }]);
+    } finally {
+      stopBridge();
+      handle.unmount();
+      if (previousTelemetryEnv === undefined) delete process.env["EMBER_TELEMETRY_PATH"];
+      else process.env["EMBER_TELEMETRY_PATH"] = previousTelemetryEnv;
+      // telemetry-watch's state is a module-level singleton, not scoped to this mount: unmount
+      // only stops OUR interval, it does not reset `_state` back to empty. Without this, the
+      // NEXT test file's ReplScreen reads this test's leftover RUNNING state as its very first
+      // synchronous getState() (before its own startTelemetryWatch effect has fired), which is
+      // exactly the cross-test pollution this caused before the fix: a later, unrelated repl
+      // layout test observed "RUNNING" where it expected a clean "IDLE".
+      startTelemetryWatch().stop();
+      await Promise.all([
+        unlink(telemetryPath).catch(() => {}),
+        unlink(controlPath).catch(() => {}),
+      ]);
+    }
+  }, 15000);
+});

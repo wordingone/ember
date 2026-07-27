@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // message-renderers.test.ts — AC1–AC14.
 import { test, expect, describe } from "bun:test";
 import React from "react";
@@ -23,7 +27,7 @@ import {
   SystemAPIErrorMessage,
   CompactBoundaryMessage,
   CompactionProgressMessage,
-} from "./message-renderers.ts";
+} from "./components/message-renderers.ts";
 import type { Message, AssistantMessage } from "../types/message-types.ts";
 
 function props(el: React.ReactElement): Record<string, unknown> {

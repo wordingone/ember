@@ -36,7 +36,7 @@ import {
   type PromptInputState,
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
-import { Homescreen, type BoardSummary } from "../components/logo-homescreen.ts";
+import { Homescreen, type BoardSummary, type HomescreenProps } from "../components/logo-homescreen.ts";
 import { SlashDropdown }                from "../components/slash-dropdown.ts";
 import {
   shouldShowSlashDropdown,
@@ -45,6 +45,8 @@ import {
   moveDropdownSelection,
   completeSlashSelection,
   computeSlashDropdownDisplay,
+  slashDropdownMaxVisible,
+  slashDropdownCanRender,
 } from "../services/slash-dropdown.ts";
 import { getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
@@ -76,13 +78,22 @@ import {
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
 import { telemetryMemoKey }              from "../services/telemetry-label.ts";
+import { driveOperatorControl, type OperatorControlAction } from "../services/operator-controls.ts";
+import {
+  OPERATOR_CONTROL_ACTIONS,
+  OPERATOR_CONTROL_ACCELERATORS,
+  isOperatorControlEnabled,
+  operatorControlDisabledReason,
+  operatorControlStatus,
+  nextOperatorFocusIndex,
+} from "../components/operator-surface-pane.ts";
 import {
   getActivityFeedState,
   startActivityFeed,
 }                                        from "../services/activity-feed.ts";
 import { advanceActivityTranscript }      from "../services/activity-transcript-window.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
-import { useCircuitBreakerBanner }       from "../services/circuit-breaker-banner-poller.ts";
+import { useCircuitBreakerBanner, useRoundtripAge } from "../services/circuit-breaker-banner-poller.ts";
 import { useOutageBanner }               from "../services/outage-banner-poller.ts";
 import {
   executePromptSuggestion,
@@ -115,6 +126,7 @@ import { buildEmberWorldState } from "../core/ember-world-state.ts";
 import { useBoardTsPoller } from "../services/board-ts-poller.ts";
 import { formatCockpitRestartEvent } from "../core/monitor-render.ts";
 import { useGpuStatePoller, formatGpuStateLine } from "../services/gpu-state-poller.ts";
+import { useHostTelemetryPoller } from "../services/host-telemetry-poller.ts";
 import {
   useActiveRunPoller,
   isActiveRunFresh,
@@ -123,6 +135,7 @@ import {
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
+import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -625,9 +638,57 @@ export function ReplScreen({
   onExit:         _onExit,
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
+  // Hoisted because the homescreen, prompt, and palette below all consume the same conversation
+  // column width through one render path; no component maintains a mirrored width oracle.
+  const paneWidth = operatorSurfaceWidth(terminalCols);
+  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
 
   const useVirtualScroll = shouldUseVirtualScroll(env);
   const writeTitle       = shouldWriteTerminalTitle(env);
+
+  // #924: the operator surface's source-provenance contract (#921) requires
+  // sourceBindingVerified===true before it will render anything but "SOURCE
+  // UNVERIFIED/UNBOUND" -- no producer ever set it. This independently binds
+  // the claimed EMBER_PUBLIC_SOURCE_COMMIT / EMBER_CLI_BINARY_SHA256 env
+  // values to the actual git HEAD + running-binary bytes; fail-closed on any
+  // mismatch or unreadable evidence (verifySourceBinding never throws).
+  const sourceIdentity = useMemo(() => {
+    const publicCommit = env["EMBER_PUBLIC_SOURCE_COMMIT"];
+    const binarySha256  = env["EMBER_CLI_BINARY_SHA256"];
+    const binding = verifySourceBinding({
+      claimedCommit:       publicCommit,
+      claimedBinarySha256: binarySha256,
+      cwd,
+      binaryPath:          process.execPath,
+    });
+    return {
+      publicCommit,
+      binarySha256,
+      sourceBindingVerified: binding.verified,
+    };
+  }, [env, cwd]);
+
+  // The operator-surface pane only renders click/keyboard INTENT ([START][PAUSE][RESUME]
+  // [RESTART]) -- driveOperatorControl is the one production path that turns that intent into a
+  // real effect: an append to the governed finetune control channel a training-side poller
+  // obeys. Before this wiring the pane's onControl prop was never passed here, so every click
+  // fired its handler and changed nothing (the exact defect: a control that appears to work).
+  // EMBER_FINETUNE_CONTROL_PATH lets tests point the channel at a temp file without touching the
+  // real state/ember-finetune-control.jsonl; production takes the default channel path.
+  const operatorControlChannelPath = env["EMBER_FINETUNE_CONTROL_PATH"];
+  const handleOperatorControl = useCallback((action: OperatorControlAction, runId?: string) => {
+    void driveOperatorControl(action, runId, { channelPath: operatorControlChannelPath });
+  }, [operatorControlChannelPath]);
+
+  // R2b: keyboard-reachable operator controls. `paneFocused` is the single discriminator for
+  // both halves of the invariant -- "operator surface focused" and "no text input active" are
+  // the same fact in this app (there is exactly one thing with keyboard focus at a time), so one
+  // boolean suffices rather than two that could drift apart. `focusedControlIndex` is the
+  // traversal position within OPERATOR_CONTROL_ACTIONS while paneFocused is true; it is ignored
+  // (and the pane renders no marker) whenever paneFocused is false.
+  const [paneFocused,          setPaneFocused]          = useState(false);
+  const [focusedControlIndex,  setFocusedControlIndex]  = useState(0);
+  const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
   const [taskPanelVisible, setTaskPanelVisible] = useState(false);
@@ -710,6 +771,12 @@ export function ReplScreen({
   const busyRef                             = useRef(false);
   const [spinnerElapsed, setSpinnerElapsed] = useState(0);
   const spinnerStartRef                     = useRef(0);
+
+  // issue #283: an Enter pressed while busy must PREEMPT once idle, never be
+  // silently dropped -- the "user always preempts" goal-mode contract. Queue
+  // the text here instead of discarding it; the idle-watch effect below
+  // flushes it through submitPrompt the instant busy flips false.
+  const pendingSubmitRef                    = useRef<string | null>(null);
 
   // Live retry-attempt status (issue #197 Leg 3/4) — shown via the status
   // bar's existing effort callout, NEVER as a transcript message: a retry is
@@ -917,6 +984,9 @@ export function ReplScreen({
   // boardTs/events merges above).
   const receiptsRoot = path.join(process.env.EMBER_GOALFORGE_ROOT || cwd, "receipts");
   const gpuState   = useGpuStatePoller();
+  // Host telemetry needs no run in flight — it binds the right panel's six resting curves.
+  // VRAM/GPU route from the gpuState poller above; a second nvidia-smi reader is a defect.
+  const hostTelemetry = useHostTelemetryPoller(gpuState);
   const activeRun  = useActiveRunPoller(receiptsRoot);
   const receiptLanding = useReceiptLandingPoller(receiptsRoot);
   useEffect(() => {
@@ -972,6 +1042,10 @@ export function ReplScreen({
   // model endpoint is healthy (or no guarded client has been wired yet).
   const degradedBanner = useCircuitBreakerBanner();
 
+  // issue #239 final acceptance clause: last-successful-model-roundtrip age,
+  // shown regardless of circuit state — distinguishes a wedge from idle-healthy.
+  const roundtripAge = useRoundtripAge();
+
   // issue #475: planned-outage status banner — {active:false} whenever
   // tools/ember-cli/state/planned-outage.json is absent, expired, or malformed. Explains WHY
   // the model may be unreachable (a planned watchdog-honored maintenance window) so it is
@@ -1016,8 +1090,13 @@ export function ReplScreen({
     });
   }
 
-  // Prompt input hook
-  const [inputState, inputActions] = usePromptInput();
+  // Prompt input hook.
+  //
+  // R2b P1 repair: keyboard authority is EXCLUSIVE, and the only mechanism that makes it exclusive
+  // is `isActive` at registration. The pane owning its own branch is not enough — Ink delivers each
+  // keypress to every active handler and a handler returning does not stop propagation, so while
+  // the pane holds focus this hook must be switched OFF rather than merely out-competed.
+  const [inputState, inputActions] = usePromptInput({ keyboardActive: !paneFocused });
 
   // Latest input-buffer snapshot, readable from the injector's closures below
   // without re-constructing them on every keystroke.
@@ -1041,7 +1120,28 @@ export function ReplScreen({
   const dropdownMatches = dropdownOpen
     ? filterSlashCommands(slashCommands, slashQueryFrom(inputState.text))
     : [];
-  const dropdownDisplay = computeSlashDropdownDisplay(dropdownMatches, dropdownSelectedIndex);
+  // Single source of truth for what <Homescreen> is actually given -- used below both to render
+  // it AND to size the palette against its real (not guessed) row count. Declared here (hoisted
+  // above the JSX return) so both use sites reference the exact same object; the JSX render call
+  // below reuses `homescreenProps` rather than re-literal-ing it, so they cannot drift apart.
+  const homescreenProps: HomescreenProps = {
+    state: {
+      model:   config.model,
+      cwd,
+      version: process.env["EMBER_VERSION"] ?? "0.0.0",
+      dataRoot: dataRoot ?? "",
+    },
+    viewportWidth: mainColumnWidth,
+    boardSummary,
+  };
+  // While slash composition is active, the render below collapses every variable chrome row:
+  // banner, spinner, stash/shimmer/queue/notification rows and status details. The surviving
+  // prompt/status region is structurally four rows, so palette sizing has no mirrored layout math.
+  const dropdownDisplay = computeSlashDropdownDisplay(
+    dropdownMatches,
+    dropdownSelectedIndex,
+    slashDropdownMaxVisible(terminalRows, dropdownMatches.length),
+  );
 
   // Back to the top row whenever the composed query text changes (narrows/widens the match
   // list) -- never fires on a pure Up/Down navigation, since those only touch
@@ -1431,18 +1531,109 @@ export function ReplScreen({
   };
   submitPromptRef.current = submitPrompt;
 
+  // issue #283: flush a queued Enter-while-busy submission the instant busy
+  // flips false -- the queue is cleared BEFORE the async submitPrompt call so
+  // a fresh in-flight turn (started by submitPrompt itself) never re-reads a
+  // stale queued value.
+  useEffect(() => {
+    if (busy) return;
+    const queued = pendingSubmitRef.current;
+    if (queued === null) return;
+    pendingSubmitRef.current = null;
+    void submitPromptRef.current?.(queued, "keyboard");
+  }, [busy]);
+
   // Main keyboard handler
   useInput((input, key) => {
+    // R2b -- ORDER INVARIANT (frozen spec): whether a text input has focus is decided FIRST,
+    // before any accelerator/traversal dispatch is even considered. `paneFocused` IS that
+    // decision (there is exactly one focus target in this app, so "operator surface focused"
+    // and "no text input active" are the same boolean) -- when true this branch owns the
+    // keystroke completely and NEVER falls through to the prompt-typing code below. An
+    // accelerator that also inserted itself into the prompt, or vice versa, would be exactly the
+    // "lenient outcome reachable before the strict check" defect this ordering exists to forbid.
+    if (paneFocused) {
+      const { status, runId } = operatorControlStatus(telemetry);
+      const enabledMask = OPERATOR_CONTROL_ACTIONS.map((action) =>
+        isOperatorControlEnabled(action, status, telemetry),
+      );
+
+      // Escape always returns focus to the prompt, from anywhere in the set.
+      if (key.escape) {
+        setPaneFocused(false);
+        setControlDisabledReason(undefined);
+        return;
+      }
+
+      // Traversal: Tab / RightArrow forward, Shift+Tab / LeftArrow backward. Disabled controls
+      // are skipped (acceptance row 6); running off either end LEAVES the set back to the prompt
+      // (acceptance row 1: "visits all four ... then leaves the set") -- traversal order is
+      // always OPERATOR_CONTROL_ACTIONS' own canonical order, never the wrapped-row visual
+      // grouping, so a narrow pane reflowing controls into multiple rows can never break it
+      // (conjunction row C1).
+      const forward = (key.tab && !key.shift) || key.rightArrow;
+      const backward = (key.tab && key.shift) || key.leftArrow;
+      if (forward || backward) {
+        setControlDisabledReason(undefined);
+        const next = nextOperatorFocusIndex(focusedControlIndex, forward ? 1 : -1, enabledMask);
+        if (next === null) {
+          setPaneFocused(false);
+          return;
+        }
+        setFocusedControlIndex(next);
+        return;
+      }
+
+      // Activation: Enter or Space fires the focused control (rows 2/3 -- identical outcome).
+      if (key.return || input === " ") {
+        const action = OPERATOR_CONTROL_ACTIONS[focusedControlIndex];
+        if (action && enabledMask[focusedControlIndex]) {
+          setControlDisabledReason(undefined);
+          handleOperatorControl(action, runId);
+        } else if (action) {
+          setControlDisabledReason(operatorControlDisabledReason(action));
+        }
+        return;
+      }
+
+      // Accelerators: single-key direct activation while the pane -- not a text input -- has
+      // focus (row 4). Disabled target: no verb, no error, reason surfaced (row 7); focus stays
+      // put either way (row 4's "focus unchanged").
+      const accelAction = input
+        ? OPERATOR_CONTROL_ACTIONS.find(
+            (action) => OPERATOR_CONTROL_ACCELERATORS[action] === input.toLowerCase(),
+          )
+        : undefined;
+      if (accelAction) {
+        const idx = OPERATOR_CONTROL_ACTIONS.indexOf(accelAction);
+        if (enabledMask[idx]) {
+          setControlDisabledReason(undefined);
+          handleOperatorControl(accelAction, runId);
+        } else {
+          setControlDisabledReason(operatorControlDisabledReason(accelAction));
+        }
+        return;
+      }
+
+      // Any other key while the pane is focused is swallowed here -- it must never reach the
+      // prompt-typing code below.
+      return;
+    }
+
     // Slash-command dropdown navigation takes priority over every other binding while it's open
     // (b22 item 1) -- Enter completes the highlighted command into the input instead of falling
     // through to message-submit below.
     if (dropdownOpen && dropdownDisplay.visible.length > 0) {
+      // 2026-07-25 palette-overflow-render finding: wrap over the FULL match list
+      // (dropdownMatches), not the visible-cap slice -- computeSlashDropdownDisplay now scrolls
+      // its window to follow the selection, so an entry beyond the visible cap is reachable by
+      // continuing to press Down instead of being permanently hidden.
       if (key.downArrow) {
-        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, 1));
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownMatches.length, 1));
         return;
       }
       if (key.upArrow) {
-        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownDisplay.visible.length, -1));
+        setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownMatches.length, -1));
         return;
       }
       if (key.return) {
@@ -1458,17 +1649,37 @@ export function ReplScreen({
       if (currentSuggestion && !busyRef.current) {
         inputActions.setText(currentSuggestion);
         setCurrentSuggestion(null);
+        return;
+      }
+      // R2b: with no suggestion to accept, Tab moves keyboard focus onto the operator
+      // controls -- entering at the first ENABLED control (never a disabled one, when at least
+      // one control is enabled) so the visible focus indicator never opens on a dead control.
+      // Guarded on !dropdownOpen so composing a slash command is never interrupted mid-type.
+      if (!dropdownOpen) {
+        const { status } = operatorControlStatus(telemetry);
+        const enabledMask = OPERATOR_CONTROL_ACTIONS.map((action) =>
+          isOperatorControlEnabled(action, status, telemetry),
+        );
+        const entryIndex = nextOperatorFocusIndex(-1, 1, enabledMask);
+        setFocusedControlIndex(entryIndex ?? 0);
+        setPaneFocused(true);
       }
       return;
     }
 
     if (key.return) {
-      if (busyRef.current || !inputState.text.trim()) return;
+      if (!inputState.text.trim()) return;
       const text = inputState.text;
       inputActions.setText("");
       clearInputRefForSubmit(inputStateRef);
       // Clear any pending suggestion when the user submits.
       setCurrentSuggestion(null);
+      if (busyRef.current) {
+        // issue #283: preempt, don't drop -- queue for submission the moment
+        // the current turn goes idle (flushed by the useEffect above).
+        pendingSubmitRef.current = text;
+        return;
+      }
       void submitPrompt(text, "keyboard");
       return;
     }
@@ -1504,29 +1715,21 @@ export function ReplScreen({
   // Render
   // ---------------------------------------------------------------------------
 
-  const paneWidth = operatorSurfaceWidth(terminalCols);
-  const mainColumnWidth = Math.max(20, terminalCols - paneWidth);
-
   return React.createElement(
     Box,
     { flexDirection: "row", width: terminalCols, height: terminalRows, overflow: "hidden" },
     React.createElement(
       Box,
       { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
-      React.createElement(
-        Box,
-        { key: "banner", flexShrink: 0, overflow: "hidden" },
-        React.createElement(Homescreen, {
-          state: {
-            model:   config.model,
-            cwd,
-            version: process.env["EMBER_VERSION"] ?? "0.0.0",
-            dataRoot: dataRoot ?? "",
-          },
-          viewportWidth: mainColumnWidth,
-          boardSummary,
-        }),
-      ),
+      // The palette owns the banner rows while slash composition is active. Outside the
+      // palette, retain #243's shrinkable banner so prompt/status chrome remains visible.
+      dropdownOpen
+        ? null
+        : React.createElement(
+            Box,
+            { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
+            React.createElement(Homescreen, homescreenProps),
+          ),
       React.createElement(
         Box,
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
@@ -1537,14 +1740,14 @@ export function ReplScreen({
         ),
       ),
       dialogOverlay,
-      busy
+      busy && !dropdownOpen
         ? React.createElement(SpinnerAnimationRow, {
             key:         "spinner",
             elapsedMs:   spinnerElapsed,
             startedAtMs: spinnerStartRef.current,
           })
         : null,
-      dropdownOpen && dropdownDisplay.visible.length > 0
+      dropdownOpen && slashDropdownCanRender(terminalRows, dropdownMatches.length)
         ? React.createElement(SlashDropdown, {
             key:           "slash-dropdown",
             commands:      dropdownDisplay.visible,
@@ -1557,34 +1760,40 @@ export function ReplScreen({
         key:            "input",
         state:          inputState,
         isProcessing:   busy,
+        compact:        dropdownOpen,
         showStatusLine: false,
         suggestion:     currentSuggestion ?? undefined,
         width:          mainColumnWidth,
-      }),
-      React.createElement(StatusLine, {
-        key:            "status",
-        permissionMode: permModeState,
-        interrupt:      interruptHandler,
-        taskPanel:      taskPanelState,
-        telemetry,
-        modelMetrics:   modelMetrics ?? undefined,
-        effort:         retryStatus,
-        degraded:       degradedBanner,
-        outage:         outageBanner,
+        statusLine: React.createElement(StatusLine, {
+          permissionMode: permModeState,
+          interrupt:      interruptHandler,
+          taskPanel:      taskPanelState,
+          telemetry,
+          modelMetrics:   modelMetrics ?? undefined,
+          effort:         retryStatus,
+          degraded:       degradedBanner,
+          outage:         outageBanner,
+          roundtripAge,
+          compact:         dropdownOpen,
+          // Legibility bar (2026-07-26): without this the bar row had no way to know it was
+          // about to overflow mainColumnWidth — see status-bar.ts's fitStatusBarLine.
+          width:           mainColumnWidth,
+        }),
       }),
     ),
     React.createElement(OperatorSurfacePane, {
       key: "operator-surface",
       telemetry,
+      host: hostTelemetry,
       activityLines: getActivityFeedState().recentLines,
-      sourceIdentity: {
-        publicCommit: env["EMBER_PUBLIC_SOURCE_COMMIT"],
-        binarySha256: env["EMBER_CLI_BINARY_SHA256"],
-      },
+      sourceIdentity,
       width: paneWidth,
       height: terminalRows,
       terminalColumns: terminalCols,
       terminalRows,
+      onControl: handleOperatorControl,
+      focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
+      disabledActionReason: controlDisabledReason,
     }),
   );
 }

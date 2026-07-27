@@ -220,6 +220,21 @@ def _emit_parent_watchdog_receipt(receipt: dict[str, object]) -> None:
     os.write(2, payload)
 
 
+def _emit_pre_load_validation_receipt(receipt: dict[str, object]) -> None:
+    """Write one structured pre-load identity-validation receipt to stderr.
+
+    cond3 inc2b: emitted the instant checkpoint identity is VALIDATED --
+    the moment the loaded checkpoint-manifest.json bytes have been hashed
+    and the central owned-seat resolver has bound that hash to an admitted
+    claim -- never merely claimed. This is audit-trail evidence distinct
+    from any resolver/admission receipt: it exists even when the resolver
+    output is itself trusted, so the exact instant of validation (not just
+    its outcome) is receipted before any state_dict load touches the model.
+    """
+    payload = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    os.write(2, payload)
+
+
 class _CallableParentProbe:
     def __init__(self, parent_pid: int, checker: Callable[[int], bool]) -> None:
         self.parent_pid = parent_pid
@@ -511,14 +526,66 @@ class LoadedOwnedRuntime:
         run_manifest: Path,
         frozen_split: Path | None,
         trusted_verifier_registry: Path,
+        expected_registry_root_sha256: str,
         device: str,
+        emit_validation_receipt: Callable[[dict[str, object]], None] = _emit_pre_load_validation_receipt,
     ) -> "LoadedOwnedRuntime":
+        """Load the serving runtime's identity-bound checkpoint (cond3 inc2b).
+
+        Identity-binding contract: the served checkpoint's identity claim
+        (its checkpoint_sha256) is DERIVED from `checkpoint-manifest.json`
+        bytes on disk and VALIDATED -- against the central owned-seat
+        resolver's admitted claim, and against the central run manifest's
+        pinned model-config/tokenizer hashes -- before any model bytes are
+        loaded via `load_checkpoint_artifacts`. `checkpoint-manifest.json`
+        is immutable at this point: it is read once, hashed, and every
+        downstream binding (admission, receipt, load) is checked against
+        that one read. If validation fails for any reason -- manifest
+        missing, manifest JSON corrupt, admission checkpoint hash mismatch,
+        model config or tokenizer hash mismatch -- this method raises and
+        the server refuses to load or serve; it never falls back to a
+        guessed or partially-validated identity. On success, a structured
+        pre-load validation receipt is emitted (see
+        `_emit_pre_load_validation_receipt`) recording the exact moment
+        identity was validated, distinct from the resolver's own admission
+        receipt.
+
+        Registry trust-anchor (cond3 harden): the caller-supplied
+        `trusted_verifier_registry` file is hashed and checked against
+        `expected_registry_root_sha256` BEFORE it is trusted at all -- the
+        registry's own inner sha256 pins (see contract.py
+        `_load_trusted_verifiers`) only bind entries against hashes
+        declared inside the same file, which a forged, self-consistent
+        registry would trivially satisfy. Without this outer pin, the
+        registry file itself is the un-anchored trust root.
+        """
         manifest_path = checkpoint / "checkpoint-manifest.json"
         manifest_bytes = manifest_path.read_bytes()
         checkpoint_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
-        manifest = json.loads(manifest_bytes)
+        try:
+            manifest = json.loads(manifest_bytes)
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"checkpoint manifest is not valid JSON: {manifest_path}") from exc
+        if not isinstance(manifest, dict):
+            raise ValueError(f"checkpoint manifest must be a JSON object: {manifest_path}")
         run_manifest_bytes = run_manifest.read_bytes()
         run_manifest_sha256 = hashlib.sha256(run_manifest_bytes).hexdigest()
+        # Registry trust-anchor pin (cond3 harden): _load_trusted_verifiers
+        # (scripts/ember_restart/contract.py) pins the registry's INNER
+        # entries only against sha256 values declared inside that same
+        # registry file -- a self-consistent, attacker-authored registry
+        # would otherwise be trusted as-supplied. Hash the registry FILE
+        # itself and fail closed unless it matches the caller's pinned
+        # expected root hash, before the registry is ever handed to the
+        # central resolver subprocess.
+        registry_bytes = trusted_verifier_registry.read_bytes()
+        registry_root_sha256 = hashlib.sha256(registry_bytes).hexdigest()
+        if registry_root_sha256 != expected_registry_root_sha256:
+            raise ValueError(
+                "trusted verifier registry root hash does not match the pinned "
+                "expected-registry-root-sha256 -- refusing to trust an "
+                "unpinned or substituted registry file"
+            )
         resolver_snapshot = _same_root_snapshot(run_manifest, run_manifest_bytes)
         try:
             admission = resolve_central_owned_admission(
@@ -531,6 +598,15 @@ class LoadedOwnedRuntime:
             resolver_snapshot.unlink(missing_ok=True)
         if sha(run_manifest) != run_manifest_sha256:
             raise ValueError("central run manifest changed during owned-seat resolution")
+        emit_validation_receipt({
+            "schema_version": "ember-owned-pre-load-validation-receipt-v1",
+            "ts": time.time(),
+            "manifest_path": str(manifest_path),
+            "manifest_sha256": checkpoint_sha256,
+            "claimed_checkpoint_sha256": str(admission["checkpoint_sha256"]),
+            "actual_checkpoint_sha256": checkpoint_sha256,
+            "validation_status": "PASS",
+        })
         try:
             central_manifest = json.loads(run_manifest_bytes)
             config_record = central_manifest["architecture"]["model_config"]
@@ -562,13 +638,29 @@ class LoadedOwnedRuntime:
         finally:
             config_snapshot.unlink(missing_ok=True)
         model = UnifiedDecoder(config, device=device, allow_production_allocation=True).eval()
-        from checkpoint_artifacts import load_checkpoint_artifacts
+        from checkpoint_artifacts import load_checkpoint_artifacts, published_checkpoint_receipt
+        checkpoint_receipt = published_checkpoint_receipt(checkpoint)
+        if checkpoint_receipt["checkpoint_manifest_sha256"] != checkpoint_sha256:
+            raise ValueError("checkpoint manifest changed during owned runtime construction")
         load_checkpoint_artifacts(
             model,
             None,
             checkpoint,
-            {**manifest, "checkpoint_manifest_sha256": checkpoint_sha256},
+            checkpoint_receipt,
         )
+        # Post-load identity assert (cond3 inc2b): the architecture ties
+        # lm_head.weight to token_embedding.weight at construction time
+        # (see UnifiedDecoder.__init__). A silent partial/misrouted load
+        # (e.g. a strict=False state_dict load that skips a tied parameter)
+        # would desynchronize this invariant without raising on its own --
+        # catch that here, fail closed, and never serve a checkpoint whose
+        # loaded weights diverge from the architecture's own identity.
+        if not torch.equal(model.lm_head.weight.detach(), model.token_embedding.weight.detach()):
+            raise RuntimeError(
+                "post-load value-equality assertion failed: lm_head weight values "
+                "do not match token embedding weight values (checked by value, not "
+                "storage identity -- a broken tie desynchronizes even the values)"
+            )
         identity = OwnedIdentity(
             checkpoint_sha256=checkpoint_sha256,
             model_config_sha256=model_config_sha256,
@@ -637,11 +729,26 @@ def load_development_shared_runtime(
         if path in records:
             raise ValueError("development checkpoint contains duplicate shard records")
         records[path] = record
-    shared_record = records.get("shared.pt")
+    schema_version = checkpoint_manifest.get("schema_version")
+    if schema_version == "ember-sparse-checkpoint-v5":
+        expected_paths = {
+            "shared-model.pt",
+            "optimizer-state.pt",
+            "replay-state.pt",
+            *(f"expert-{name}.pt" for name in model_module.EXPERT_NAMES),
+        }
+        if set(records) != expected_paths:
+            raise ValueError("development checkpoint closed v5 shard set is invalid")
+        shared_path = "shared-model.pt"
+    elif schema_version in {None, "ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
+        shared_path = "shared.pt"
+    else:
+        raise ValueError("development checkpoint has an unsupported schema version")
+    shared_record = records.get(shared_path)
     shared_sha256 = shared_record.get("sha256") if isinstance(shared_record, Mapping) else None
     if not isinstance(shared_sha256, str):
         raise ValueError("development checkpoint lacks shared shard identity")
-    payload = hash_and_load_torch(torch, checkpoint / "shared.pt", shared_sha256, device=device)
+    payload = hash_and_load_torch(torch, checkpoint / shared_path, shared_sha256, device=device)
     if not isinstance(payload, dict) or not isinstance(payload.get("model"), dict):
         raise ValueError("development shared checkpoint lacks a model state")
     expected = model.state_dict()
@@ -666,6 +773,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-development-manifest-sha256")
     parser.add_argument("--expected-runtime-index-sha256")
     parser.add_argument("--trusted-verifier-registry", type=Path)
+    parser.add_argument("--expected-registry-root-sha256")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--mode", choices=("INTERACTIVE", "FROZEN_EVAL"), required=True)
     parser.add_argument("--parent-pid", type=int, required=True)
@@ -711,7 +819,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if args.trusted_verifier_registry is None:
             raise ValueError("admitted server requires trusted verifier registry")
-        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, device=args.device, frozen_split=frozen_split)
+        if not args.expected_registry_root_sha256:
+            raise ValueError("admitted server requires --expected-registry-root-sha256 to pin the trusted verifier registry file")
+        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, expected_registry_root_sha256=args.expected_registry_root_sha256, device=args.device, frozen_split=frozen_split)
     server = create_loopback_server(runtime, host=args.host, port=args.port, mode=args.mode)
     server.serve_forever()
     return 0

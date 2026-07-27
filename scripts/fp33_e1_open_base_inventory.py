@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_e1_open_base_inventory.py — local open-base model inventory for fp-33.
 
 E1 leg of fp-33 (fp33-e2b-surpass-envelope.md). Inventories all open-source
@@ -10,10 +13,17 @@ models available locally (on-disk) or one-pull away, with:
   (f) HuggingFace model id (if determinable)
 
 Scan roots:
-  - ~/.cache/huggingface/hub/         (WSL2 HF cache)
-  - <local-path>  (Windows HF cache)
-  - <local-path>                    (predecessor CLI project dirs)
-  - <local-path>                         (any other B-drive models)
+  - ~/.cache/huggingface/hub/  (WSL2 HF cache; always scanned, portable default)
+  - any additional roots passed via repeatable --scan-root (Windows HF cache,
+    predecessor CLI project dirs, other model-dump directories, etc.)
+
+gh issue #261: the original invocation baked six machine-local B-drive scan
+roots into SCAN_ROOTS as literal defaults; a public-export scrub collapsed
+all six into the indistinguishable placeholder "<local-path>", and which six
+distinct locations were originally intended is unrecoverable. Rather than
+guess, or silently scan nothing, this script now takes those roots as
+explicit repeatable --scan-root arguments with no baked-in machine-local
+defaults; the caller supplies whatever roots are appropriate on their machine.
 
 Decision: which models are viable as the open base for E2B-surpass comparison.
 Receipt: receipts/fp33-e1-open-base-inventory-<ts>.json
@@ -21,6 +31,7 @@ Run via daemon (train window). --selftest is pure-logic, no disk I/O.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
@@ -42,16 +53,13 @@ _LICENSE_OPEN = {
 }
 _LICENSE_RESTRICTED = {"non-commercial", "research only", "cc-by-nc", "openrail"}
 
-SCAN_ROOTS = [
+# Always-portable default: the WSL2 HF cache lives at the same relative path
+# on any machine. Anything else (Windows HF cache, predecessor CLI project
+# dirs, other B-drive model dumps) is machine-local and must be supplied
+# explicitly via --scan-root (gh issue #261 — no baked-in machine-local
+# defaults).
+DEFAULT_SCAN_ROOTS = [
     Path.home() / ".cache" / "huggingface" / "hub",
-    Path("<local-path>"),
-    # Narrow B-drive roots — full <local-path> rglob is too slow over NTFS/WSL2
-    Path("<local-path>"),
-    Path("<local-path>"),
-    Path("<local-path>"),
-    Path("<local-path>"),
-    Path("<local-path>"),
-    Path("<local-path>"),  # common model dump dir if it exists
 ]
 
 
@@ -187,14 +195,30 @@ def classify_viability(entry: dict) -> str:
     return "VIABLE"
 
 
-def main():
+def _parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--selftest", action="store_true")
+    parser.add_argument(
+        "--scan-root",
+        action="append",
+        default=[],
+        dest="scan_roots",
+        help="additional machine-local root to scan for models (repeatable); "
+             "the WSL2 HF cache is always scanned in addition to these",
+    )
+    return parser.parse_args(argv)
+
+
+def main(scan_roots=None):
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     print("[E1] scanning model directories ...", flush=True)
     t0 = time.perf_counter()
 
+    roots = list(DEFAULT_SCAN_ROOTS) + [Path(r) for r in (scan_roots or [])]
+
     all_models: list[dict] = []
     scan_results = {}
-    for root in SCAN_ROOTS:
+    for root in roots:
         count_before = len(all_models)
         models = _scan_for_models(root)
         # Deduplicate by config_sha256
@@ -269,7 +293,8 @@ def _selftest():
 
 
 if __name__ == "__main__":
-    if "--selftest" in sys.argv:
+    _args = _parse_args()
+    if _args.selftest:
         _selftest()
     else:
-        main()
+        main(scan_roots=_args.scan_roots)
