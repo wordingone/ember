@@ -7,9 +7,29 @@
 Git attributes should normalize text to LF, but this guard catches Windows
 checkout or tooling drift before it reaches public history. Paths explicitly
 marked -text are byte-pinned artifacts and are skipped.
+
+Byte source depends on REPO_GUARD_SCOPE, mirroring the sibling legacy-name
+policy checker under tools/ and tools/repo-guard.sh's own scope handling:
+under REPO_GUARD_SCOPE=staged (what .githooks/pre-commit actually runs
+with), every file's content comes from the git INDEX -- the exact bytes
+about to be committed, not the working tree. Reading working-tree bytes
+unconditionally was a real gap: stage a CRLF file, restore the working tree
+to an LF-only version, and a working-tree read would report clean while the
+commit that lands still carries CRLF (or the inverse: stage a clean fix,
+leave a stale CRLF working-tree copy behind, and the check would wrongly
+fail). The tracked-path LIST itself (`git ls-files`) is already
+index-derived either way, so only the per-file content read needed the
+scope branch.
+
+Staged-scope reads are BATCHED via one `git cat-file --batch` process fed
+every needed blob sha at once (`git ls-files -s` supplies the shas), not one
+`git show :path` subprocess per file -- a per-file subprocess is correct but
+was measured too slow across a repo of this size (one process spawn per
+tracked file). Non-staged scope is unchanged: plain filesystem reads.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,72 +45,125 @@ SKIP_DIRS = {
     "node_modules",
 }
 
+# Mirrors repo-guard.sh's own "${REPO_GUARD_SCOPE:-}" = "staged" test.
+_STAGED = os.environ.get("REPO_GUARD_SCOPE", "") == "staged"
 
-def is_probably_binary(data: bytes, path: Path) -> bool:
-    if path.suffix.lower() in BINARY_EXTS:
+
+def _staged_blob_shas(root: Path) -> dict[str, str]:
+    """path -> index (stage 0) blob sha, via one `git ls-files -s` call for
+    the whole tree -- avoids a subprocess per path."""
+    out = subprocess.run(
+        ["git", "ls-files", "-s"], cwd=root, capture_output=True, text=True, check=True,
+    )
+    shas: dict[str, str] = {}
+    for line in out.stdout.splitlines():
+        meta, _, path = line.partition("\t")
+        parts = meta.split()
+        if len(parts) < 2 or not path:
+            continue
+        shas[path] = parts[1]
+    return shas
+
+
+def _batch_read_blobs(root: Path, path_to_sha: dict[str, str]) -> dict[str, bytes]:
+    """path -> blob bytes, via one `git cat-file --batch` process for every
+    requested sha at once instead of one subprocess per file. Protocol per
+    requested object: "<sha> <type> <size>\\n<content>\\n", or
+    "<sha> missing\\n" if the object cannot be resolved (skipped)."""
+    if not path_to_sha:
+        return {}
+    paths = list(path_to_sha.keys())
+    stdin_data = ("\n".join(path_to_sha[p] for p in paths) + "\n").encode("utf-8")
+    proc = subprocess.run(
+        ["git", "cat-file", "--batch"], cwd=root, input=stdin_data, capture_output=True,
+    )
+    out = proc.stdout
+    result: dict[str, bytes] = {}
+    pos = 0
+    for p in paths:
+        nl = out.find(b"\n", pos)
+        if nl == -1:
+            break
+        header = out[pos:nl].decode("utf-8", errors="replace").split()
+        if len(header) == 3:
+            _sha, _type, size_s = header
+            size = int(size_s)
+            start = nl + 1
+            result[p] = out[start:start + size]
+            pos = start + size + 1  # skip the object's trailing newline
+        else:
+            # "<sha> missing" (or any other unexpected shape) -- one line, no body.
+            pos = nl + 1
+    return result
+
+
+def is_probably_binary(data: bytes, rel: str) -> bool:
+    if Path(rel).suffix.lower() in BINARY_EXTS:
         return True
     return b"\0" in data[:8192]
 
 
-def find_crlf_files(paths: Iterable[Path], root: Path) -> list[str]:
+def find_crlf_files(root: Path, rel_paths: Iterable[str]) -> list[str]:
+    filtered = [rel for rel in rel_paths if not any(part in SKIP_DIRS for part in Path(rel).parts)]
     offenders: list[str] = []
-    for path in paths:
-        if any(part in SKIP_DIRS for part in path.parts):
+    if _STAGED:
+        shas = _staged_blob_shas(root)
+        blobs = _batch_read_blobs(root, {rel: shas[rel] for rel in filtered if rel in shas})
+        for rel in filtered:
+            data = blobs.get(rel)
+            if data is None:
+                continue
+            if is_probably_binary(data, rel):
+                continue
+            if b"\r\n" in data:
+                offenders.append(rel)
+        return offenders
+    for rel in filtered:
+        try:
+            data = (root / rel).read_bytes()
+        except OSError:
             continue
-        if not path.is_file():
-            continue
-        data = path.read_bytes()
-        if is_probably_binary(data, path):
+        if is_probably_binary(data, rel):
             continue
         if b"\r\n" in data:
-            offenders.append(path.relative_to(root).as_posix())
+            offenders.append(rel)
     return offenders
 
 
-def tracked_text_paths(root: Path) -> list[Path]:
-    out = subprocess.check_output(["git", "ls-files"], cwd=root, text=True)
-    names = [line for line in out.splitlines() if line]
+def tracked_text_paths(root: Path) -> list[str]:
+    # -z (NUL-delimited) on BOTH calls, entirely in bytes -- Python's text=True
+    # subprocess mode translates outgoing '\n' to '\r\n' when writing input= on
+    # Windows, which corrupted the path fed to check-attr (git then saw a
+    # trailing \r as part of the path and quoted it: `"name\r": text: ...`,
+    # silently breaking every downstream lookup keyed by the clean name). NUL
+    # separators have no such translation and sidestep the issue entirely.
+    out = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, check=True)
+    names = [n for n in out.stdout.split(b"\0") if n]
     if not names:
         return []
-    # Binary mode (text=False) end to end: subprocess's text=True universal-
-    # newline translation rewrites every "\n" in `input` to os.linesep before
-    # the child ever sees it. On Windows that turns each pathname's stdin
-    # line into "<name>\r\n" -- git-check-attr then reads a filename with a
-    # trailing \r, cannot match it to any real tracked path, and the whole
-    # tracked-text population comes back empty regardless of file content
-    # (issue #247 fix review: this made this check a silent no-op on every
-    # Windows-local run, whatever line endings the tracked files actually
-    # had). Binary I/O with an explicit "\n" join sidesteps the translation.
-    stdin_bytes = ("\n".join(names) + "\n").encode("utf-8")
+    stdin_data = b"\0".join(names) + b"\0"
     proc = subprocess.run(
-        ["git", "check-attr", "--stdin", "text"],
+        ["git", "check-attr", "--stdin", "-z", "text"],
         cwd=root,
-        input=stdin_bytes,
+        input=stdin_data,
         check=True,
         capture_output=True,
     )
-    result: list[Path] = []
-    for line in proc.stdout.decode("utf-8", errors="replace").split("\n"):
-        line = line.rstrip("\r")
-        if not line:
+    fields = proc.stdout.split(b"\0")
+    if fields and fields[-1] == b"":
+        fields = fields[:-1]
+    result: list[str] = []
+    for i in range(0, len(fields) - 2, 3):
+        name_b, _attr_b, value_b = fields[i], fields[i + 1], fields[i + 2]
+        if value_b == b"unset":
             continue
-        parts = line.rsplit(": ", 2)
-        if len(parts) != 3:
-            continue
-        name, _attr, value = parts
-        if value == "unset":
-            continue
-        result.append(root / name)
+        result.append(name_b.decode("utf-8"))
     return result
 
 
 def main(argv: list[str]) -> int:
     root = Path(argv[1]).resolve() if len(argv) > 1 else Path.cwd().resolve()
     paths = tracked_text_paths(root)
-    # Same zero-hit refusal as check_text_encoding.py, and for the same reason:
-    # this check shares that discovery helper, so the \r\n stdin bug silenced
-    # BOTH of them identically -- each printed ok while examining no files. An
-    # empty discovery set is a broken chain, never a clean tree.
     if not paths:
         print(
             "FAIL [line-endings] discovered ZERO tracked text files, which cannot "
@@ -98,7 +171,7 @@ def main(argv: list[str]) -> int:
             "check-attr) is broken, not the tree. Do not read this as a pass."
         )
         return 1
-    offenders = find_crlf_files(paths, root)
+    offenders = find_crlf_files(root, paths)
     if offenders:
         print("FAIL [line-endings] CRLF found in tracked text files:")
         for item in offenders[:50]:
