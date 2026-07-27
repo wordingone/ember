@@ -3,22 +3,15 @@ name: repo-guard
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-# Trigger trust is explicit:
-# - pull_request_target is the separated trusted-kernel gate: workflow and kernel
-#   come from the protected base while the merge ref is hostile data under test.
-# - pull_request is a temporary bootstrap self-check: its workflow and kernel are
-#   head-sourced, matching the pre-transition trust level. It is not the trust gate.
-# - push is a same-tree self-check: workflow, kernel, and subject are the pushed
-#   commit. It preserves all-branch coverage but is not a separated trust gate.
-# Subject-authored bytes are never executed by the separated pull_request_target gate.
-# The temporary bootstrap self-check is removed immediately after this workflow lands.
+# Required server-side ring. Pull-request workflow and kernel bytes come from the
+# protected base, while the merge ref is data under test. Subject-authored guard,
+# helper, or workflow bytes are never executed by this job.
 # SECURITY: guard-subject is hostile data. Never run an action, package script,
 # executable, shell file, Python import, or other code from that root. Every
 # executable byte below must resolve from guard-kernel or the hosted runner.
 
 on:
   push:
-  pull_request:
     branches: [master]
   pull_request_target:
     branches: [master]
@@ -36,28 +29,17 @@ jobs:
         run: git config --global core.symlinks false
 
       - name: Checkout trusted guard kernel
-        if: github.event_name != 'pull_request'
         uses: actions/checkout@v4
         with:
           # Intentionally omit the ref key: pull_request_target resolves the current
           # protected-base tip; push resolves the triggering protected commit.
-          # The hostile merge/push subject is checked out separately below.
-          path: guard-kernel
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Checkout bootstrap candidate kernel
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository }}
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          # The untrusted merge/push subject is checked out separately below.
           path: guard-kernel
           fetch-depth: 0
           persist-credentials: false
 
       - name: Checkout pull-request merge subject
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request_target'
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
@@ -80,7 +62,7 @@ jobs:
           REPO_GUARD_NAMES: ${{ secrets.REPO_GUARD_NAMES }}
           REPO_GUARD_KERNEL_ROOT: ${{ github.workspace }}/guard-kernel
           REPO_GUARD_SUBJECT_ROOT: ${{ github.workspace }}/guard-subject
-          BASE_SHA: ${{ (github.event_name == 'pull_request_target' || github.event_name == 'pull_request') && github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           kernel="${GITHUB_WORKSPACE}/guard-kernel"
           subject="${GITHUB_WORKSPACE}/guard-subject"
@@ -93,7 +75,7 @@ jobs:
           bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"
 
       - name: Validate PR authority binding
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request_target'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
