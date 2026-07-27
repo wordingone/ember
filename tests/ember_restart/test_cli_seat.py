@@ -86,6 +86,27 @@ def _resolve(
     )
 
 
+def test_main_temporarily_accepts_internal_server_call_without_approval(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    observed: list[tuple[Path, Path, Path | None]] = []
+
+    def resolver(manifest: Path, registry: Path, approval: Path | None):
+        observed.append((manifest, registry, approval))
+        return {"valid": False, "seat": None, "errors": ["transition probe"]}
+
+    monkeypatch.setattr(cli_seat, "resolve_owned_seat", resolver)
+    result = cli_seat.main([
+        str(tmp_path / "run.json"),
+        "--trusted-verifier-registry", str(tmp_path / "registry.json"),
+    ])
+    assert result == 1
+    assert observed == [(tmp_path / "run.json", tmp_path / "registry.json", None)]
+    assert json.loads(capsys.readouterr().out)["errors"] == ["transition probe"]
+
+
 def test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_unadmitted_cert(tmp_path: Path):
     """cond3 wiring (state/specs/cond3-seat-bridge-spec.md): the resolver no
     longer trusts the run manifest's own checkpoint/model-config/tokenizer
