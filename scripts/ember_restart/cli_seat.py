@@ -137,6 +137,7 @@ def resolve_owned_seat(
             "server_path": str(server_path),
             "tokenizer_path": str(tokenizer_path),
             "trusted_verifier_registry_path": str(verifier_registry.resolve()),
+            "trusted_verifier_registry_sha256": expected_registry_sha256,
             "trusted_verifier_registry_approval_path": str(verifier_registry_approval.resolve()),
             "trusted_verifier_registry_approval_sha256": approval_sha256,
         },

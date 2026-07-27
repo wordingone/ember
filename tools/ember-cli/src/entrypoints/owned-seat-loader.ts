@@ -393,6 +393,7 @@ const OWNED_LAUNCH_FIELDS = [
   "server_path",
   "tokenizer_path",
   "trusted_verifier_registry_path",
+  "trusted_verifier_registry_sha256",
   "trusted_verifier_registry_approval_path",
   "trusted_verifier_registry_approval_sha256",
 ] as const;
@@ -432,6 +433,7 @@ function parseOwnedLaunch(
     serverPath: requireAbsolutePath("server_path"),
     tokenizerPath: requireAbsolutePath("tokenizer_path"),
     trustedVerifierRegistryPath: requireAbsolutePath("trusted_verifier_registry_path"),
+    trustedVerifierRegistrySha256: typeof payload["trusted_verifier_registry_sha256"] === "string" && /^[0-9a-f]{64}$/.test(payload["trusted_verifier_registry_sha256"]) ? payload["trusted_verifier_registry_sha256"] : (() => { throw new Error("owned seat resolver returned an invalid launch descriptor"); })(),
     trustedVerifierRegistryApprovalPath: requireAbsolutePath("trusted_verifier_registry_approval_path"),
     trustedVerifierRegistryApprovalSha256: typeof payload["trusted_verifier_registry_approval_sha256"] === "string" && /^[0-9a-f]{64}$/.test(payload["trusted_verifier_registry_approval_sha256"]) ? payload["trusted_verifier_registry_approval_sha256"] : (() => { throw new Error("owned seat resolver returned an invalid launch descriptor"); })(),
   };

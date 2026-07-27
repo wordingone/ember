@@ -47,6 +47,7 @@ const MODEL_FORMAT = "pytorch-checkpoint-v3";
 
 const MANIFEST_PATH = "/config/owned/current.json";
 const REGISTRY_PATH = "/config/owned/trusted-verifiers.json";
+const REGISTRY_APPROVAL_PATH = "/config/owned/trusted-verifier-registry-approval.json";
 
 // The launch descriptor the trusted resolver binds to the admitted identity.
 // run_manifest_path / trusted_verifier_registry_path MUST denote the same
@@ -60,6 +61,9 @@ const LAUNCH = {
   server_path: "/repo/tools/ember-restart-3b/serve_owned_openai.py",
   tokenizer_path: "/repo/tokenizer/tokenizer.json",
   trusted_verifier_registry_path: REGISTRY_PATH,
+  trusted_verifier_registry_sha256: "d".repeat(64),
+  trusted_verifier_registry_approval_path: REGISTRY_APPROVAL_PATH,
+  trusted_verifier_registry_approval_sha256: "e".repeat(64),
 } as const;
 
 function admittedResolverPayload(): string {
@@ -89,6 +93,7 @@ function loadAdmittedIdentity() {
       configHome: "/config",
       manifestPath: MANIFEST_PATH,
       verifierRegistryPath: REGISTRY_PATH,
+      verifierRegistryApprovalPath: REGISTRY_APPROVAL_PATH,
     },
     {
       // All bound files "exist" so the resolver verdict itself is the surface
@@ -152,6 +157,9 @@ describe("cond3 owned seat — ember-cli runtime consumer round-trip", () => {
       expect(tail(launch.modelConfigPath)).toBe(tail(resolve(LAUNCH.model_config_path)));
       expect(tail(launch.runManifestPath)).toBe(tail(resolve(MANIFEST_PATH)));
       expect(tail(launch.trustedVerifierRegistryPath)).toBe(tail(resolve(REGISTRY_PATH)));
+      expect(launch.trustedVerifierRegistrySha256).toBe("d".repeat(64));
+      expect(tail(launch.trustedVerifierRegistryApprovalPath)).toBe(tail(resolve(REGISTRY_APPROVAL_PATH)));
+      expect(launch.trustedVerifierRegistryApprovalSha256).toBe("e".repeat(64));
     }
     expect(tail(launch.serverPath)).toBe(tail(resolve(LAUNCH.server_path)));
     expect(tail(launch.tokenizerPath)).toBe(tail(resolve(LAUNCH.tokenizer_path)));

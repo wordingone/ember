@@ -254,6 +254,9 @@ describe("process entry model-seat enforcement", () => {
             serverPath: "C:\\repo\\serve_owned_openai.py",
             tokenizerPath: "C:\\owned\\tokenizer.json",
             trustedVerifierRegistryPath: "C:\\owned\\trusted.json",
+            trustedVerifierRegistrySha256: "d".repeat(64),
+            trustedVerifierRegistryApprovalPath: "C:\\owned\\trusted-approval.json",
+            trustedVerifierRegistryApprovalSha256: "e".repeat(64),
           },
         }),
         handshakeEmberLabFn: async () => { startupOrder.push("handshake"); },
@@ -438,7 +441,7 @@ describe("process entry model-seat enforcement", () => {
         loadOwnedIdentityFn: () => ({
           checkpointSha256: "d".repeat(64), endpointUrl: "http://127.0.0.1:9", identityUrl: "http://127.0.0.1:9/v1/models",
           modelConfigSha256: "b".repeat(64), modelName: "ember-owned:" + "d".repeat(12), serverSourceSha256: "a".repeat(64), tokenizerSha256: "c".repeat(64),
-          launch: { authorityKind: "ADMISSION", checkpointDir: "C:\\owned\\checkpoint", mode: "INTERACTIVE", modelConfigPath: "C:\\owned\\model-config.json", pythonExecutable: "python-owned", runManifestPath: "C:\\owned\\run.json", serverPath: "C:\\repo\\serve_owned_openai.py", tokenizerPath: "C:\\owned\\tokenizer.json", trustedVerifierRegistryPath: "C:\\owned\\trusted.json" },
+          launch: { authorityKind: "ADMISSION", checkpointDir: "C:\\owned\\checkpoint", mode: "INTERACTIVE", modelConfigPath: "C:\\owned\\model-config.json", pythonExecutable: "python-owned", runManifestPath: "C:\\owned\\run.json", serverPath: "C:\\repo\\serve_owned_openai.py", tokenizerPath: "C:\\owned\\tokenizer.json", trustedVerifierRegistryPath: "C:\\owned\\trusted.json", trustedVerifierRegistrySha256: "d".repeat(64), trustedVerifierRegistryApprovalPath: "C:\\owned\\trusted-approval.json", trustedVerifierRegistryApprovalSha256: "e".repeat(64) },
         }),
         handshakeEmberLabFn: async () => { throw new Error("ping unavailable"); },
         ensureOwnedServerFn: async () => { ensureCalls += 1; return { outcome: "spawned", port: 9, handle: { process: { pid: 77 }, port: 9, kill: () => {} } as never }; },
