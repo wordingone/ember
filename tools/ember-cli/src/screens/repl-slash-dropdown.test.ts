@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl-slash-dropdown.test.ts — integration receipt for the slash-command completion
 // dropdown wired into the real ReplScreen (issue b22 item 1, ledgered since b14 as
 // ember-cli-slash-dropdown). Mounts the REAL ReplScreen via mountInk with a capture stream (no
@@ -10,7 +13,7 @@
 // filesystem-free) builtins -- observatory/watch/finetune/model/world-state -- so this test's
 // assertions don't depend on the real cwd's skill/plugin directories.
 
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, afterAll } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
@@ -48,7 +51,14 @@ const config = {
   baseSystemPrompt: "",
 };
 
-mountInk(
+// #ink-teardown-panic: this mount used to run at module top level with no unmount, so its
+// reconciler root stayed alive for the rest of the process -- when another test file (e.g.
+// repl-suggestion-boundary-real-scheduling-error.test.ts) mounted+unmounted its own real
+// reconciler root in the same `bun test` process, the two live roots' teardown interaction
+// tripped a Bun-internal assertion at process exit (crash printed after the run summary, exit
+// code 3). Capturing the handle and unmounting in afterAll closes this root before the process
+// tears down.
+const _handle = mountInk(
   React.createElement(
     TerminalSizeContext.Provider,
     { value: { columns: COLS, rows: ROWS } },
@@ -61,6 +71,10 @@ mountInk(
   ),
   { stream: captureStream as unknown as { write(s: string): void }, stdout: { columns: COLS, rows: ROWS } },
 );
+
+afterAll(() => {
+  _handle.unmount();
+});
 
 // Flushes all pending microtasks (the mount-time getCommands(cwd).then(...) effect, plus any
 // state-update-triggered re-render). A single setImmediate proved insufficient during test

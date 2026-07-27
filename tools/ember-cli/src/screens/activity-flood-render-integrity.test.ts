@@ -87,11 +87,15 @@ function buildScreen(rows: number, messages: SessionMessage[]): React.ReactEleme
 
 function captureFrame(rows: number, messages: SessionMessage[]): { frame: Frame; lines: string[] } {
   let raw = "";
-  mountInk(buildScreen(rows, messages), { stream: { write(s: string) { raw += s; } }, stdout: { columns: COLS, rows } });
+  const handle = mountInk(buildScreen(rows, messages), { stream: { write(s: string) { raw += s; } }, stdout: { columns: COLS, rows } });
   const frame = buildFrame(COLS, rows);
-  parseRenderedIntoFrame(raw, frame, new StylePool());
-  const lines = frame.cells.map((row) => row.map((c) => c?.char ?? " ").join("").replace(/\s+$/, ""));
-  return { frame, lines };
+  try {
+    parseRenderedIntoFrame(raw, frame, new StylePool());
+    const lines = frame.cells.map((row) => row.map((c) => c?.char ?? " ").join("").replace(/\s+$/, ""));
+    return { frame, lines };
+  } finally {
+    handle.unmount();
+  }
 }
 
 function firstNonBlankRow(lines: string[]): number {

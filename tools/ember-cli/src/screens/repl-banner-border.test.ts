@@ -23,10 +23,14 @@ import type { AppState } from "../state/app-state.ts";
 function mountAndFrame(el: React.ReactElement, cols: number, rows: number) {
   let buf = "";
   const stream = { write(s: string) { buf += s; } };
-  mountInk(el, { stream, stdout: { columns: cols, rows } });
-  const frame = buildFrame(cols, rows);
-  parseRenderedIntoFrame(buf, frame, new StylePool());
-  return frame.cells.map((row) => row.map((c) => c?.char ?? " ").join(""));
+  const handle = mountInk(el, { stream, stdout: { columns: cols, rows } });
+  try {
+    const frame = buildFrame(cols, rows);
+    parseRenderedIntoFrame(buf, frame, new StylePool());
+    return frame.cells.map((row) => row.map((c) => c?.char ?? " ").join(""));
+  } finally {
+    handle.unmount();
+  }
 }
 
 function minimalState(): AppState {
