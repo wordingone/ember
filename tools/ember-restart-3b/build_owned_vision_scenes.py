@@ -126,6 +126,16 @@ class SceneDescriptor:
     caption: str
 
 
+@dataclass(frozen=True)
+class VisionReplayPlan:
+    """Lightweight final-order authority without a second full record sequence."""
+
+    record_count: int
+    image_marker: int
+    ordered_source_indices: tuple[int, ...]
+    ordered_content_sha256: tuple[str, ...]
+
+
 def group_and_split_scenes(scenes: Iterable[SceneDescriptor]) -> dict[int, str]:
     """Deduplicate exact structures, then split complete coordinate-blind four-label groups."""
 
@@ -213,6 +223,180 @@ def _shuffle_serialized_records_within_splits(records: list[dict[str, object]]) 
         )
         ordered.extend(record for _identity, record in ranked)
     return ordered
+
+
+def _record_from_source_index(
+    tokenizer: Any, *, source_index: int, scene_split: str, image_marker: int,
+) -> dict[str, object]:
+    """Regenerate one legacy serialized record from its exact source index."""
+
+    patches, coordinates = _scene(source_index)
+    caption = spatial_relation_caption(patches, coordinates)
+    encoded = list(tokenizer.encode(caption).ids)
+    if len(encoded) < 2:
+        raise ValueError("frozen tokenizer cannot encode an owned spatial relation caption")
+    return {
+        "schema_version": "ember-owned-semantic-record-v1",
+        "sample_id": f"owned-vision-spatial-{source_index:08d}",
+        "scene_split": scene_split,
+        "active_expert": "vision",
+        "token_ids": [*[image_marker] * 4, *encoded[:-1]],
+        "target_ids": [*[image_marker] * 3, *encoded],
+        "target_text": caption,
+        "image_patches_u8_base64": [base64.b64encode(patch).decode("ascii") for patch in patches],
+        "image_coordinates": coordinates,
+        "multimodal_spans": [{"start": 0, "length": 4, "modality": "image", "attention_mode": "isolated"}],
+        "capability_evidence": {"image": {
+            "target_sha256": hashlib.sha256(caption.encode("utf-8")).hexdigest(),
+            "scene_sha256": structural_scene_sha256(patches, coordinates),
+            "derivation": "raw_image_spatial_relation_execution",
+        }},
+    }
+
+
+def _replay_split_by_index(*, record_count: int) -> dict[int, str]:
+    """Rebuild the exact counterfactual-group split using only hashes and indices."""
+
+    plan = declared_split_plan(record_count=record_count)
+    group_count = record_count // len(_RELATIONS)
+    structures: set[str] = set()
+    content_groups: set[str] = set()
+    by_permutation: dict[int, list[tuple[str, tuple[int, ...]]]] = {}
+    for variation in range(group_count):
+        group_indices = tuple(variation * len(_RELATIONS) + offset for offset in range(len(_RELATIONS)))
+        content_keys: set[str] = set()
+        captions: set[str] = set()
+        classes: set[int] = set()
+        for source_index in group_indices:
+            patches, coordinates = _scene(source_index)
+            caption = spatial_relation_caption(patches, coordinates)
+            structure = structural_scene_sha256(patches, coordinates)
+            if structure in structures:
+                raise ValueError("duplicate raw structure before split assignment")
+            structures.add(structure)
+            content_keys.add(coordinate_blind_content_sha256(patches))
+            captions.add(caption)
+            classes.add(patch_permutation_class(source_index))
+        if len(content_keys) != 1 or captions != _CAPTIONS:
+            raise ValueError("coordinate-blind counterfactual group must contain each owned relation exactly once")
+        if len(classes) != 1:
+            raise ValueError("counterfactual group has inconsistent patch-permutation class")
+        content_key = content_keys.pop()
+        if content_key in content_groups:
+            raise ValueError("coordinate-blind counterfactual group is duplicated")
+        content_groups.add(content_key)
+        by_permutation.setdefault(classes.pop(), []).append((content_key, group_indices))
+
+    target_groups = dict(plan["group_counts"])
+    assigned_groups = {split: 0 for split in _SPLITS}
+    split_by_index: dict[int, str] = {}
+    remaining: list[tuple[str, tuple[int, ...]]] = []
+    for permutation_class in sorted(by_permutation):
+        members = sorted(by_permutation[permutation_class], key=lambda item: item[0])
+        if len(members) < len(_SPLITS):
+            raise ValueError("preregistered split lacks complete permutation-class support")
+        for split, (_content_key, group_indices) in zip(_SPLITS, members[:len(_SPLITS)]):
+            for source_index in group_indices:
+                split_by_index[source_index] = split
+            assigned_groups[split] += 1
+        remaining.extend(members[len(_SPLITS):])
+    for _content_key, group_indices in sorted(remaining, key=lambda item: item[0]):
+        candidates = [split for split in _SPLITS if assigned_groups[split] < target_groups[split]]
+        if not candidates:
+            raise ValueError("counterfactual group assignment exceeded declared split ratio")
+        split = max(candidates, key=lambda name: (target_groups[name] - assigned_groups[name], -_SPLITS.index(name)))
+        for source_index in group_indices:
+            split_by_index[source_index] = split
+        assigned_groups[split] += 1
+    if assigned_groups != target_groups or len(split_by_index) != record_count:
+        raise ValueError("counterfactual group assignment does not match declared split ratio")
+    return split_by_index
+
+
+def build_replay_plan(tokenizer: Any, *, count: int, image_marker: int) -> VisionReplayPlan:
+    """Build exact final ordering from lightweight hashes, never retained raw records."""
+
+    if not isinstance(image_marker, int) or image_marker < 0:
+        raise ValueError("image marker must be a nonnegative token ID")
+    split_by_index = _replay_split_by_index(record_count=count)
+    by_split: dict[str, list[tuple[str, int]]] = {split: [] for split in _SPLITS}
+    for source_index in range(count):
+        split = split_by_index[source_index]
+        record = _record_from_source_index(
+            tokenizer,
+            source_index=source_index,
+            scene_split=split,
+            image_marker=image_marker,
+        )
+        by_split[split].append((_serialized_order_content_sha256(record), source_index))
+
+    ordered_source_indices: list[int] = []
+    ordered_content_sha256: list[str] = []
+    for split in _SPLITS:
+        members = by_split[split]
+        identities = [identity for identity, _source_index in members]
+        if len(set(identities)) != len(identities):
+            raise ValueError("serialized vision order requires unique record content identities")
+        seed = hashlib.sha256(
+            b"ember-owned-vision-order-v1\0" + split.encode("utf-8") +
+            b"".join(bytes.fromhex(identity) for identity in sorted(identities))
+        ).digest()
+        ranked = sorted(
+            members,
+            key=lambda item: (hashlib.sha256(seed + bytes.fromhex(item[0])).digest(), item[0]),
+        )
+        ordered_content_sha256.extend(identity for identity, _source_index in ranked)
+        ordered_source_indices.extend(source_index for _identity, source_index in ranked)
+    if len(ordered_source_indices) != count or len(set(ordered_source_indices)) != count:
+        raise ValueError("vision replay plan does not cover each source index exactly once")
+    return VisionReplayPlan(
+        record_count=count,
+        image_marker=image_marker,
+        ordered_source_indices=tuple(ordered_source_indices),
+        ordered_content_sha256=tuple(ordered_content_sha256),
+    )
+
+
+def _split_for_serialized_index(*, record_count: int, index: int) -> str:
+    record_counts = declared_split_plan(record_count=record_count)["record_counts"]
+    boundary = 0
+    for split in _SPLITS:
+        boundary += int(record_counts[split])
+        if index < boundary:
+            return split
+    raise ValueError("owned vision serialized index is outside the replay plan")
+
+
+def build_records_range(
+    tokenizer: Any, *, replay_plan: VisionReplayPlan, start_index: int,
+    count: int, image_marker: int,
+) -> list[dict[str, object]]:
+    """Regenerate one exact final-serialization slice under a closed replay plan."""
+
+    if not isinstance(replay_plan, VisionReplayPlan):
+        raise ValueError("owned vision replay plan is missing or malformed")
+    if type(start_index) is not int or start_index < 0:
+        raise ValueError("owned vision range start must be a nonnegative integer")
+    if type(count) is not int or count <= 0 or start_index + count > replay_plan.record_count:
+        raise ValueError("owned vision range count is outside the replay plan")
+    if type(image_marker) is not int or image_marker < 0 or image_marker != replay_plan.image_marker:
+        raise ValueError("owned vision replay marker does not match the replay plan")
+    records: list[dict[str, object]] = []
+    for serialized_index in range(start_index, start_index + count):
+        record = _record_from_source_index(
+            tokenizer,
+            source_index=replay_plan.ordered_source_indices[serialized_index],
+            scene_split=_split_for_serialized_index(
+                record_count=replay_plan.record_count,
+                index=serialized_index,
+            ),
+            image_marker=image_marker,
+        )
+        if _serialized_order_content_sha256(record) != replay_plan.ordered_content_sha256[serialized_index]:
+            raise ValueError("owned vision replay bytes do not match the bound plan")
+        records.append(record)
+    return records
+
 
 def build_records(tokenizer: Any, *, count: int, image_marker: int) -> list[dict[str, object]]:
     """Build balanced raw-spatial scenes whose target is recomputed from patch bytes and coordinates."""

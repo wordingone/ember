@@ -108,8 +108,8 @@ class SpecialistStreamTests(unittest.TestCase):
         receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
         manifest_bytes = manifest_path.read_bytes()
         receipt_bytes = receipt_path.read_bytes()
-        self.assertEqual(hashlib.sha256(manifest_bytes).hexdigest(), "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427")
-        self.assertEqual(hashlib.sha256(receipt_bytes).hexdigest(), "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e")
+        self.assertEqual(hashlib.sha256(manifest_bytes).hexdigest(), "90ae6dd08430ead9f8287028ad20ed115a14d8d9fa3fc6c6c615f05e110fc9d0")
+        self.assertEqual(hashlib.sha256(receipt_bytes).hexdigest(), "748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8")
         manifest = json.loads(manifest_bytes)
         receipt = json.loads(receipt_bytes)
         self.assertEqual(receipt["stream_manifest_sha256"], hashlib.sha256(manifest_bytes).hexdigest())
@@ -724,10 +724,10 @@ class SpecialistStreamTests(unittest.TestCase):
         selection = stream.prepare_execution_selection(
             capability="image", selection_rule_id="image_scene_split_train_v1",
             build_receipt_path=build_receipt_path,
-            expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+            expected_build_receipt_sha256="748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
         )
-        self.assertEqual(selection.receipt["stream_manifest_sha256"], "857835d9722e5d6410f4c6c34c537ad2af12bfb98c4d3eb242b3a2c99e591427")
-        self.assertEqual(selection.receipt["stream_build_receipt_sha256"], "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e")
+        self.assertEqual(selection.receipt["stream_manifest_sha256"], "90ae6dd08430ead9f8287028ad20ed115a14d8d9fa3fc6c6c615f05e110fc9d0")
+        self.assertEqual(selection.receipt["stream_build_receipt_sha256"], "748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8")
         self.assertEqual(selection.receipt["family_root_sha256"], stream.families["image"]["corpus_root_sha256"])
         self.assertEqual(selection.receipt["selection_rule_id"], "image_scene_split_train_v1")
         self.assertGreater(selection.receipt["selected_record_count"], 0)
@@ -760,7 +760,7 @@ class SpecialistStreamTests(unittest.TestCase):
         uninterrupted_tail = [next(uninterrupted)[0]["sample_id"] for _ in range(3)]
         resumed = stream.open_execution_selection(
             receipt=selection.receipt, cursor=cursor, build_receipt_path=build_receipt_path,
-            expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+            expected_build_receipt_sha256="748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
             expected_selection_receipt_sha256=cursor["selection_receipt_sha256"],
         )
         resumed_iterator = resumed.iter_from(cursor)
@@ -771,7 +771,7 @@ class SpecialistStreamTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "selection cursor"):
             stream.open_execution_selection(
                 receipt=selection.receipt, cursor={**cursor, "selection_receipt_sha256": "0" * 64}, build_receipt_path=build_receipt_path,
-                expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                expected_build_receipt_sha256="748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
                 expected_selection_receipt_sha256=cursor["selection_receipt_sha256"],
             )
 
@@ -781,7 +781,7 @@ class SpecialistStreamTests(unittest.TestCase):
             stream.open_execution_selection(
                 receipt=selection.receipt, cursor={**cursor, "schema_version": "ember-specialist-stream-selection-cursor-v1"},
                 build_receipt_path=build_receipt_path,
-                expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                expected_build_receipt_sha256="748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
                 expected_selection_receipt_sha256=cursor["selection_receipt_sha256"],
             )
 
@@ -794,7 +794,7 @@ class SpecialistStreamTests(unittest.TestCase):
                 capability=capability,
                 selection_rule_id="all_records_semantic_pretraining_v1",
                 build_receipt_path=build_receipt_path,
-                expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                expected_build_receipt_sha256="748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
             )
             self.assertEqual(selection.receipt["capability"], capability)
             self.assertEqual(selection.receipt["selection_rule_id"], "all_records_semantic_pretraining_v1")
@@ -807,7 +807,7 @@ class SpecialistStreamTests(unittest.TestCase):
                     capability=capability,
                     selection_rule_id=rule,
                     build_receipt_path=build_receipt_path,
-                    expected_build_receipt_sha256="2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e",
+                    expected_build_receipt_sha256="748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
                 )
 
     def test_build_receipt_rejects_rehashed_internal_semantic_drift(self) -> None:
@@ -827,7 +827,7 @@ class SpecialistStreamTests(unittest.TestCase):
     def test_open_execution_selection_requires_canonical_build_authority_and_closed_cursor(self) -> None:
         manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
         build_receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
-        build_receipt_sha256 = "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e"
+        build_receipt_sha256 = "748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8"
         stream = self._open_bound(manifest_path)
         selection = stream.prepare_execution_selection(
             capability="image", selection_rule_id="image_scene_split_train_v1",
@@ -863,7 +863,7 @@ class SpecialistStreamTests(unittest.TestCase):
         from specialist_stream import ExecutionSelection
         manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
         build_receipt_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
-        build_receipt_sha256 = "2e68402c914e842fe23c6ef69f1f8e957d858f7ad2de4d5467dfc65c949ead1e"
+        build_receipt_sha256 = "748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8"
         stream = self._open_bound(manifest_path)
         selection = stream.prepare_execution_selection(
             capability="image", selection_rule_id="image_scene_split_train_v1",
