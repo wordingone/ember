@@ -21,8 +21,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
+    ".gitattributes",
     "tools/repo-guard.sh",
     "tools/check_line_endings.py",
+    "tools/check_text_encoding.py",
     "tools/check_names_hashed.py",
     "scripts/verify_authority_conservation.py",
     "INVARIANT.md",
@@ -137,6 +139,7 @@ def make_split_kernel(test_word: str) -> Path:
     for relative in (
         "tools/repo-guard.sh",
         "tools/check_line_endings.py",
+        "tools/check_text_encoding.py",
         "tools/check_names_hashed.py",
         "scripts/verify_authority_conservation.py",
     ):
@@ -231,6 +234,96 @@ def test_red_absolute_path_doubled_json_escape():
         assert "docs/note.md:1" in out, out
     finally:
         cleanup(tmp)
+
+# ---------------------------------------------------------------------------
+# RED: text-attributed files must be checked regardless of filename extension.
+# ---------------------------------------------------------------------------
+def test_red_text_attributed_binary_extension_utf16le():
+    tmp = make_fixture("fix/selftest-red-text-attributed-bin")
+    try:
+        with (tmp / ".gitattributes").open("a", encoding="utf-8", newline="\n") as attrs:
+            attrs.write("payload.bin text\n")
+        (tmp / "payload.bin").write_bytes(
+            b"\xff\xfe" + "hidden text\n".encode("utf-16-le")
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "payload.bin" in out, out
+        assert "UTF-16LE BOM" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
+# RED/GREEN matrix required by #247: BOM variants and strict UTF-8 decoding.
+# ---------------------------------------------------------------------------
+def test_red_utf16le_bom():
+    tmp = make_fixture("fix/selftest-red-utf16le")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "note.py").write_bytes(
+            b"\xff\xfe" + "print('hi')\n".encode("utf-16-le")
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "scripts/note.py" in out, out
+        assert "UTF-16LE BOM" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_utf32le_bom():
+    tmp = make_fixture("fix/selftest-red-utf32le")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "note.py").write_bytes(
+            b"\xff\xfe\x00\x00" + "print('hi')\n".encode("utf-32-le")
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "UTF-32LE BOM" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_invalid_single_byte_utf8():
+    tmp = make_fixture("fix/selftest-red-invalid-byte")
+    try:
+        (tmp / "scripts").mkdir(exist_ok=True)
+        (tmp / "scripts" / "note.py").write_bytes(
+            b"# invalid cp1252-shaped byte: \x97\n"
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [encoding]" in out, out
+        assert "invalid UTF-8" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_valid_utf8_non_ascii():
+    tmp = make_fixture("fix/selftest-green-utf8-nonascii")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "docs" / "note.md").write_text(
+            "Ordinary UTF-8: café, über, em dash —.\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected exit 0, got {rc}\n{out}"
+        assert "ok   [encoding]" in out, out
+    finally:
+        cleanup(tmp)
+
 
 # ---------------------------------------------------------------------------
 # GREEN: clean fixture, no denylist needed at all
@@ -560,6 +653,11 @@ ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
     test_red_absolute_path_doubled_json_escape,
+    test_red_text_attributed_binary_extension_utf16le,
+    test_red_utf16le_bom,
+    test_red_utf32le_bom,
+    test_red_invalid_single_byte_utf8,
+    test_green_valid_utf8_non_ascii,
     test_green_clean_fixture,
     test_green_hashed_denylist_no_match,
     test_ci_fail_closed_no_denylist,

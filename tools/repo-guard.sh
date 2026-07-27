@@ -90,6 +90,16 @@ else
   FAIL=1
 fi
 
+# ---- 1c. tracked text must be strict UTF-8, no UTF-16/32 BOM -------------
+# Use trusted kernel bytes against the subject checkout. Git's -I heuristic
+# skips NUL-heavy content, so every Git text-attributed subject blob must pass
+# this explicit byte-level check before the names/path scans below.
+if python "$KERNEL_ROOT/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
+  :
+else
+  FAIL=1
+fi
+
 # ---- 2. no absolute local filesystem paths in tracked text ---------------
 # Matches B:/M, B:\M, C:/Users, C:\Users, C:\Windows\Temp, <local> /mnt/c/ and
 # similar. Separator is one-OR-MORE / or \ (not exactly one): a real path
