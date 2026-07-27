@@ -350,7 +350,6 @@ def resolve_central_owned_admission(
     *,
     run_manifest: Path,
     trusted_verifier_registry: Path,
-    trusted_verifier_registry_approval: Path,
     checkpoint_sha256: str,
     snapshot_manifest: Path | None = None,
     runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
@@ -364,8 +363,6 @@ def resolve_central_owned_admission(
         str(snapshot_manifest if snapshot_manifest is not None else run_manifest),
         "--trusted-verifier-registry",
         str(trusted_verifier_registry),
-        "--trusted-verifier-registry-approval",
-        str(trusted_verifier_registry_approval),
     ]
     try:
         completed = (
@@ -530,8 +527,6 @@ class LoadedOwnedRuntime:
         frozen_split: Path | None,
         trusted_verifier_registry: Path,
         expected_registry_root_sha256: str,
-        trusted_verifier_registry_approval: Path,
-        expected_registry_approval_sha256: str,
         device: str,
         emit_validation_receipt: Callable[[dict[str, object]], None] = _emit_pre_load_validation_receipt,
     ) -> "LoadedOwnedRuntime":
@@ -583,28 +578,6 @@ class LoadedOwnedRuntime:
         # itself and fail closed unless it matches the caller's pinned
         # expected root hash, before the registry is ever handed to the
         # central resolver subprocess.
-        approval_bytes = trusted_verifier_registry_approval.read_bytes()
-        approval_sha256 = hashlib.sha256(approval_bytes).hexdigest()
-        if approval_sha256 != expected_registry_approval_sha256:
-            raise ValueError(
-                "trusted verifier registry approval hash does not match the pinned "
-                "expected-registry-approval-sha256"
-            )
-        try:
-            approval = json.loads(approval_bytes)
-        except (UnicodeError, json.JSONDecodeError) as exc:
-            raise ValueError("trusted verifier registry approval is not valid JSON") from exc
-        if not isinstance(approval, dict) or set(approval) != {
-            "schema_version",
-            "trusted_verifier_registry_sha256",
-        }:
-            raise ValueError("trusted verifier registry approval has invalid schema")
-        if approval.get("schema_version") != "ember-trusted-verifier-registry-approval-v1":
-            raise ValueError("trusted verifier registry approval has invalid schema")
-        if approval.get("trusted_verifier_registry_sha256") != expected_registry_root_sha256:
-            raise ValueError(
-                "trusted verifier registry approval does not authorize the pinned registry root"
-            )
         registry_bytes = trusted_verifier_registry.read_bytes()
         registry_root_sha256 = hashlib.sha256(registry_bytes).hexdigest()
         if registry_root_sha256 != expected_registry_root_sha256:
@@ -614,26 +587,14 @@ class LoadedOwnedRuntime:
                 "unpinned or substituted registry file"
             )
         resolver_snapshot = _same_root_snapshot(run_manifest, run_manifest_bytes)
-        registry_snapshot: Path | None = None
-        approval_snapshot: Path | None = None
         try:
-            registry_snapshot = _same_root_snapshot(trusted_verifier_registry, registry_bytes)
-            approval_snapshot = _same_root_snapshot(
-                trusted_verifier_registry_approval,
-                approval_bytes,
-            )
             admission = resolve_central_owned_admission(
                 run_manifest=run_manifest,
                 snapshot_manifest=resolver_snapshot,
-                trusted_verifier_registry=registry_snapshot,
-                trusted_verifier_registry_approval=approval_snapshot,
+                trusted_verifier_registry=trusted_verifier_registry,
                 checkpoint_sha256=checkpoint_sha256,
             )
         finally:
-            if approval_snapshot is not None:
-                approval_snapshot.unlink(missing_ok=True)
-            if registry_snapshot is not None:
-                registry_snapshot.unlink(missing_ok=True)
             resolver_snapshot.unlink(missing_ok=True)
         if sha(run_manifest) != run_manifest_sha256:
             raise ValueError("central run manifest changed during owned-seat resolution")
@@ -644,8 +605,6 @@ class LoadedOwnedRuntime:
             "manifest_sha256": checkpoint_sha256,
             "claimed_checkpoint_sha256": str(admission["checkpoint_sha256"]),
             "actual_checkpoint_sha256": checkpoint_sha256,
-            "trusted_verifier_registry_sha256": registry_root_sha256,
-            "trusted_verifier_registry_approval_sha256": approval_sha256,
             "validation_status": "PASS",
         })
         try:
@@ -815,8 +774,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-runtime-index-sha256")
     parser.add_argument("--trusted-verifier-registry", type=Path)
     parser.add_argument("--expected-registry-root-sha256")
-    parser.add_argument("--trusted-verifier-registry-approval", type=Path)
-    parser.add_argument("--expected-registry-approval-sha256")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--mode", choices=("INTERACTIVE", "FROZEN_EVAL"), required=True)
     parser.add_argument("--parent-pid", type=int, required=True)
@@ -864,11 +821,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("admitted server requires trusted verifier registry")
         if not args.expected_registry_root_sha256:
             raise ValueError("admitted server requires --expected-registry-root-sha256 to pin the trusted verifier registry file")
-        if args.trusted_verifier_registry_approval is None:
-            raise ValueError("admitted server requires trusted verifier registry approval")
-        if not args.expected_registry_approval_sha256:
-            raise ValueError("admitted server requires --expected-registry-approval-sha256 to pin the approval file")
-        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, expected_registry_root_sha256=args.expected_registry_root_sha256, trusted_verifier_registry_approval=args.trusted_verifier_registry_approval, expected_registry_approval_sha256=args.expected_registry_approval_sha256, device=args.device, frozen_split=frozen_split)
+        runtime = LoadedOwnedRuntime.from_paths(checkpoint=args.checkpoint, tokenizer_path=args.tokenizer, config_path=args.config, run_manifest=args.run_manifest, trusted_verifier_registry=args.trusted_verifier_registry, expected_registry_root_sha256=args.expected_registry_root_sha256, device=args.device, frozen_split=frozen_split)
     server = create_loopback_server(runtime, host=args.host, port=args.port, mode=args.mode)
     server.serve_forever()
     return 0
