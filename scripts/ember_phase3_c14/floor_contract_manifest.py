@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """floor_contract_manifest.py — Phase-3 C14 floor-contract manifest.
 
 Row-by-row manifest keyed to every row in docs/ember-floor-contract.md and
@@ -109,6 +112,9 @@ FORBIDDEN_DISPOSITION_WORDS = frozenset([
     "covered by fp16", "covered_by_fp16",
 ])
 
+NATIVE_ENGINE_ROW_KEY = "floor_contract.ember-native-engine"
+NATIVE_ENGINE_SOURCE = "docs/spec/ember-native-engine-trigger-ladder-v1.md"
+
 
 # ---------------------------------------------------------------------------
 # Helper: build one FloorRow dict
@@ -145,7 +151,7 @@ def _row(
 # build_floor_contract_manifest() in that file stays compatible.
 # ---------------------------------------------------------------------------
 
-def _make_floor_rows(floor_sha: str) -> List["FloorRow"]:
+def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]:
     """Construct all ember-floor-contract.md rows.
 
     Rows are ordered as they appear in the document:
@@ -458,6 +464,35 @@ def _make_floor_rows(floor_sha: str) -> List["FloorRow"]:
                 "no internal re-derivation without external trigger"
             ),
             evidence_path=src,
+        ),
+        _row(
+            key=NATIVE_ENGINE_ROW_KEY,
+            source_file=NATIVE_ENGINE_SOURCE,
+            source_hash=native_engine_sha,
+            disposition=PRESERVED_TRIGGER_GATED,
+            launch_vehicle_impact=(
+                "No big-bang rewrite. T1 parity tax -> R2; "
+                "T2=PARTIALLY_FIRED framework wall on #155 -> R0; "
+                "T3=ON_BLOCKER_PATH resident updates -> R1; "
+                "T4 shipped training capability -> R3."
+            ),
+            trigger=(
+                "T1 parity-tax receipt -> R2; "
+                "T2=PARTIALLY_FIRED directed #155 framework wall -> R0; "
+                "T3=ON_BLOCKER_PATH resident-training wall -> R1; "
+                "T4 shipped local training capability -> R3"
+            ),
+            pilot=(
+                "#155 R0 pilots: width-conditional consumer-GPU FP8 matmul "
+                "and fused Muon Newton-Schulz update, each with a real "
+                "training/inference consumer and independent promotion verdict"
+            ),
+            kill_promote_condition=(
+                "Preserve until T1/T2/T3/T4 evidence fires the named rung; "
+                "promote only the measured rung with parity, resource, custody, "
+                "and consumer receipts; reject silent fallback or self-attestation"
+            ),
+            evidence_path=NATIVE_ENGINE_SOURCE,
         ),
         _row(
             key="floor_contract.MoE",
@@ -815,7 +850,9 @@ _SHA_UNKNOWN = "sha256_not_computed"
 
 # Lazy defaults: these are populated with _SHA_UNKNOWN until build_manifest()
 # is called with a real repo_root.
-FLOOR_CONTRACT_ROWS: List["FloorRow"] = _make_floor_rows(_SHA_UNKNOWN)
+FLOOR_CONTRACT_ROWS: List["FloorRow"] = _make_floor_rows(
+    _SHA_UNKNOWN, _SHA_UNKNOWN
+)
 NC2_COMPONENT_ROWS: List["FloorRow"] = _make_nc2_rows(_SHA_UNKNOWN)
 
 
@@ -848,11 +885,13 @@ def build_manifest(repo_root: Path) -> Dict[str, "FloorRow"]:
     """
     floor_path = repo_root / "docs" / "ember-floor-contract.md"
     nc2_path = repo_root / "nc2-own-technique-contract.md"
+    native_engine_path = repo_root / NATIVE_ENGINE_SOURCE
 
     floor_sha = _sha256_file(floor_path)
     nc2_sha = _sha256_file(nc2_path)
+    native_engine_sha = _sha256_file(native_engine_path)
 
-    floor_rows = _make_floor_rows(floor_sha)
+    floor_rows = _make_floor_rows(floor_sha, native_engine_sha)
     nc2_rows = _make_nc2_rows(nc2_sha)
 
     result: Dict[str, "FloorRow"] = {}
@@ -863,6 +902,42 @@ def build_manifest(repo_root: Path) -> Dict[str, "FloorRow"]:
         result[key] = row
 
     return result
+
+
+def build_native_engine_board_review(
+    manifest: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Return the closed T2/T3 cadence review emitted by every board audit."""
+    errors = validate_manifest(manifest)
+    if errors:
+        raise ValueError(
+            "native-engine floor manifest invalid: " + "; ".join(errors)
+        )
+
+    row = manifest[NATIVE_ENGINE_ROW_KEY]
+    return {
+        "floor_row_key": NATIVE_ENGINE_ROW_KEY,
+        "disposition": PRESERVED_TRIGGER_GATED,
+        "source_file": NATIVE_ENGINE_SOURCE,
+        "source_sha256": row["source_hash"],
+        "issue": 158,
+        "coupled_issue": 155,
+        "reviewed_triggers": [
+            {
+                "trigger_id": "T2",
+                "status": "PARTIALLY_FIRED",
+                "required_rung": "R0",
+            },
+            {
+                "trigger_id": "T3",
+                "status": "ON_BLOCKER_PATH",
+                "required_rung": "R1",
+            },
+        ],
+        "claim_boundary": (
+            "TRIGGER_REVIEW_ONLY_NO_NATIVE_ENGINE_CAPABILITY_CLAIM"
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -957,6 +1032,53 @@ def validate_manifest(manifest: Dict[str, Any]) -> List[str]:
                 f"(does_not_count_guards: quantized-naming-without-neural-comparison); "
                 f"got {trigger_val!r}"
             )
+
+    native = manifest.get(NATIVE_ENGINE_ROW_KEY)
+    if native is None:
+        errors.append(f"Required row {NATIVE_ENGINE_ROW_KEY!r} missing from manifest")
+    else:
+        if native.get("disposition") != PRESERVED_TRIGGER_GATED:
+            errors.append(
+                f"Row {NATIVE_ENGINE_ROW_KEY!r}: must be "
+                f"{PRESERVED_TRIGGER_GATED!r}"
+            )
+        if native.get("source_file") != NATIVE_ENGINE_SOURCE:
+            errors.append(
+                f"Row {NATIVE_ENGINE_ROW_KEY!r}: source_file must be "
+                f"{NATIVE_ENGINE_SOURCE!r}"
+            )
+        trigger = str(native.get("trigger", ""))
+        for required in (
+            "T1",
+            "T2=PARTIALLY_FIRED",
+            "T3=ON_BLOCKER_PATH",
+            "T4",
+        ):
+            if required not in trigger:
+                errors.append(
+                    f"Row {NATIVE_ENGINE_ROW_KEY!r}: trigger missing {required!r}"
+                )
+        combined = " ".join(
+            str(native.get(field, ""))
+            for field in (
+                "launch_vehicle_impact",
+                "trigger",
+                "pilot",
+                "kill_promote_condition",
+                "evidence_path",
+            )
+        )
+        for required in ("R0", "R1", "R2", "R3"):
+            if required not in combined:
+                errors.append(
+                    f"Row {NATIVE_ENGINE_ROW_KEY!r}: missing rung {required!r}"
+                )
+        pilot = str(native.get("pilot", ""))
+        for required in ("#155", "FP8", "Muon"):
+            if required not in pilot:
+                errors.append(
+                    f"Row {NATIVE_ENGINE_ROW_KEY!r}: pilot missing {required!r}"
+                )
 
     return errors
 
