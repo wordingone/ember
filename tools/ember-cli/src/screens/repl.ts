@@ -37,6 +37,7 @@ import {
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
 import { Homescreen, type BoardSummary, type HomescreenProps } from "../components/logo-homescreen.ts";
+import { FIREBALL_TICK_MS } from "../components/fireball.ts";
 import { SlashDropdown }                from "../components/slash-dropdown.ts";
 import {
   shouldShowSlashDropdown,
@@ -796,6 +797,20 @@ export function ReplScreen({
   // boardSummary populates the recent-activity feed; dataRoot shows which tree's data we're reading.
   const [boardSummary, setBoardSummary] = useState<BoardSummary | undefined>(undefined);
   const [dataRoot, setDataRoot] = useState<string | undefined>(undefined);
+  // #46 B9: the production welcome screen owns the idle-fireball clock. Component-only
+  // tick tests cannot prove that the real REPL passes a changing frame into Homescreen.
+  // Pause the clock when animation cannot or must not render; this prevents pointless
+  // whole-screen rerenders in the required reduced-motion/ascii/non-color fallbacks.
+  const [fireballTick, setFireballTick] = useState(0);
+  const fireballAnimationEnabled =
+    messages.length === 0
+    && !busy
+    && process.env["EMBER_REDUCED_MOTION"] !== "1"
+    && process.env["EMBER_ASCII"] !== "1"
+    && process.env["NO_COLOR"] === undefined;
+  useInterval(() => {
+    setFireballTick((tick) => tick + 1);
+  }, fireballAnimationEnabled ? FIREBALL_TICK_MS : null);
 
   // Animate spinner at ANIMATION_LOOP_MS cadence
   useInterval(() => {
@@ -1147,6 +1162,7 @@ export function ReplScreen({
     // safe default and also the shape in which a "wired but never fed" boundary hides.
     viewportHeight: terminalRows,
     boardSummary,
+    fireballTick,
     // The spine block resolves against the SAME registry that drives the slash palette, so a
     // command shown on the first screen is by construction a command the operator can type.
     spineCommands: slashCommands,

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // fireball.ts — the animated, ever-present cognitive-mode indicator ("the fireball").
 // Increment 6 step B (operator regrade 2026-07-03): a signature, on-brand surface, not decoration
 // or a deferrable "surface 6" -- state/specs/ember-fireball-cognitive-mode.md +
@@ -106,6 +109,8 @@ export const FIREBALL_DIMS: Record<FireballSize, { cols: number; rows: number }>
 };
 
 export const FIREBALL_FRAME_COUNT = 3;
+/** Production idle-frame cadence; the REPL owns the timer and passes its tick into Homescreen. */
+export const FIREBALL_TICK_MS = 140;
 /** Reduced-motion / frozen-tick pose (team-lead, 2026-07-03 approval note on candidate B): the
  * centered lean position -- tallest, most symmetric, and (post-pulse) brightest at the belly --
  * "the most balanced silhouette." */
