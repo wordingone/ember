@@ -49,10 +49,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 from scripts.ember_totality import quarantine_sweep
+from scripts.branch_inventory import InventoryError as BranchInventoryError
+from scripts.branch_inventory import check_inventory
+
 DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")
 CONTINUITY_PATH = os.path.join(ROOT, "CONTINUITY.md")
 CURRENT_SUBJECT_PATH = os.path.join(ROOT, "manifests", "ember-current-subject-v1.json")
+BRANCH_INVENTORY_PATH = os.path.join(
+    ROOT, "receipts", "branch-inventory", "branch-inventory-current.json"
+)
 BEGIN_MARKER = "<!-- BOARD-STATUS-BEGIN -->"
 END_MARKER = "<!-- BOARD-STATUS-END -->"
 SUBJECT_BEGIN_MARKER = "<!-- CURRENT-SUBJECT-BEGIN -->"
@@ -415,8 +421,18 @@ def main():
     parser.add_argument("--readme", default=README_PATH)
     parser.add_argument("--continuity", default=CONTINUITY_PATH)
     parser.add_argument("--subject-manifest", default=CURRENT_SUBJECT_PATH)
+    parser.add_argument("--branch-inventory", default=BRANCH_INVENTORY_PATH)
+    parser.add_argument("--branch-inventory-max-age-days", type=int, default=7)
     args = parser.parse_args()
 
+    try:
+        check_inventory(
+            manifest_path=Path(args.branch_inventory),
+            continuity_path=Path(args.continuity),
+            max_age_days=args.branch_inventory_max_age_days,
+        )
+    except BranchInventoryError as exc:
+        raise SystemExit(f"gen_readme_status: branch inventory is invalid: {exc}") from exc
     receipt_path = newest_receipt_path(args.data_root)
     block = render_block(receipt_path)
 
