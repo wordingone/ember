@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import checkpoint_artifacts
+import durable_io
 import run_vertical_slice
 
 
@@ -330,6 +331,197 @@ class RunnerStorageTests(unittest.TestCase):
             (parent / ".checkpoint-custody-deletion-ledger.jsonl").write_bytes(b'{"schema_version":"valid-json-but-no-newline"}')
             with self.assertRaisesRegex((RuntimeError, ValueError), "transaction|ledger|newline|JSON"):
                 run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=Path(receipt_directory) / "missing.json")
+    def test_offline_torn_tail_recovery_archives_binds_and_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+            parent = Path(directory)
+            pointer = ".checkpoint-quarantine/evidence-" + "d" * 64 + ".json"
+            prepared = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": pointer, "bytes": 17, "sha256": "d" * 64, "reason": "offline recovery"},
+                [],
+            )
+            committed = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "COMMITTED", "pointer": pointer, "bytes": 17, "sha256": "d" * 64, "reason": "offline recovery"},
+                [prepared],
+            )
+            third = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "e" * 64 + ".json", "bytes": 5, "sha256": "e" * 64, "reason": "torn frame"},
+                [prepared, committed],
+            )
+            prefix = b"".join((json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8") for row in (prepared, committed))
+            torn_line = json.dumps(third, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            tail = torn_line[: len(torn_line) // 2]
+            original = prefix + tail
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_bytes(original)
+            receipt_path = Path(receipt_directory) / "tail-recovery.json"
+
+            receipt = run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+
+            self.assertEqual(receipt["schema_version"], "ember-custody-ledger-tail-recovery-v1")
+            self.assertEqual(receipt["result"], "COMMITTED")
+            self.assertEqual(receipt["original"], {"sha256": hashlib.sha256(original).hexdigest(), "bytes": len(original)})
+            self.assertEqual(receipt["prefix"]["ledger_sha256"], hashlib.sha256(prefix).hexdigest())
+            self.assertEqual(receipt["prefix"]["ledger_bytes"], len(prefix))
+            self.assertEqual(receipt["prefix"]["frame_count"], 2)
+            self.assertEqual(receipt["tail"], {"sha256": hashlib.sha256(tail).hexdigest(), "bytes": len(tail)})
+            self.assertEqual(receipt["verification"]["before_publication"], receipt["prefix"])
+            self.assertEqual(receipt["verification"]["after_publication"], receipt["prefix"])
+            self.assertEqual(ledger.read_bytes(), prefix)
+            archive = parent / receipt["archive"]
+            self.assertEqual(archive.read_bytes(), original)
+            self.assertEqual(run_vertical_slice._ledger_binding(ledger.read_bytes()), receipt["prefix"])
+            self.assertEqual(
+                run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path),
+                receipt,
+            )
+            self.assertEqual(ledger.read_bytes(), prefix)
+            self.assertEqual(archive.read_bytes(), original)
+
+    def test_offline_torn_tail_recovery_resumes_after_commit_receipt_write_crash(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+            parent = Path(directory)
+            frame = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "a" * 64 + ".json", "bytes": 3, "sha256": "a" * 64, "reason": "crash recovery"},
+                [],
+            )
+            prefix = (json.dumps(frame, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            original = prefix + b'{"torn"'
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_bytes(original)
+            receipt_path = Path(receipt_directory) / "tail-recovery.json"
+
+            with unittest.mock.patch.object(run_vertical_slice, "_atomic_json", side_effect=OSError("receipt commit crash")):
+                with self.assertRaisesRegex(OSError, "receipt commit crash"):
+                    run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+
+            self.assertEqual(ledger.read_bytes(), prefix)
+            self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8"))["result"], "PREPARED")
+            resumed = run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+            self.assertEqual(resumed["result"], "COMMITTED")
+            self.assertEqual(ledger.read_bytes(), prefix)
+
+    def test_offline_torn_tail_recovery_rejects_receipt_and_archive_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+            parent = Path(directory)
+            frame = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "b" * 64 + ".json", "bytes": 4, "sha256": "b" * 64, "reason": "tamper evidence"},
+                [],
+            )
+            prefix = (json.dumps(frame, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_bytes(prefix + b'{"torn"')
+            receipt_path = Path(receipt_directory) / "tail-recovery.json"
+            receipt = run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+            stable_ledger = ledger.read_bytes()
+
+            tampered_receipt = dict(receipt)
+            tampered_receipt["tail"] = {"sha256": "0" * 64, "bytes": receipt["tail"]["bytes"]}
+            receipt_path.write_text(json.dumps(tampered_receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "archive|prefix|tail|binding"):
+                run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+            self.assertEqual(ledger.read_bytes(), stable_ledger)
+
+            receipt_path.write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            archive = parent / receipt["archive"]
+            archive.write_bytes(archive.read_bytes() + b"tamper")
+            with self.assertRaisesRegex(RuntimeError, "archive"):
+                run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+            self.assertEqual(ledger.read_bytes(), stable_ledger)
+
+    def test_offline_torn_tail_recovery_handles_multiple_mid_frame_cuts(self) -> None:
+        for cut_fraction in (1, 2, 3):
+            with self.subTest(cut_fraction=cut_fraction), tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+                parent = Path(directory)
+                first = run_vertical_slice._next_custody_ledger_frame(
+                    {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "c" * 64 + ".json", "bytes": 5, "sha256": "c" * 64, "reason": "frame cut"},
+                    [],
+                )
+                second = run_vertical_slice._next_custody_ledger_frame(
+                    {"event": "COMMITTED", "pointer": first["pointer"], "bytes": 5, "sha256": "c" * 64, "reason": "frame cut"},
+                    [first],
+                )
+                prefix = (json.dumps(first, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+                next_line = json.dumps(second, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                cut = max(1, min(len(next_line) - 1, len(next_line) * cut_fraction // 4))
+                ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+                ledger.write_bytes(prefix + next_line[:cut])
+                receipt = run_vertical_slice.recover_torn_custody_ledger_tail(
+                    parent,
+                    transaction_receipt_path=Path(receipt_directory) / "tail-recovery.json",
+                )
+                self.assertEqual(receipt["prefix"]["frame_count"], 1)
+                self.assertEqual(ledger.read_bytes(), prefix)
+
+    def test_two_offline_torn_tail_recoverers_converge_on_one_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+            parent = Path(directory)
+            frame = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "d" * 64 + ".json", "bytes": 6, "sha256": "d" * 64, "reason": "concurrent recovery"},
+                [],
+            )
+            prefix = (json.dumps(frame, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_bytes(prefix + b'{"torn"')
+            receipt_path = Path(receipt_directory) / "tail-recovery.json"
+            barrier = threading.Barrier(2)
+            outcomes: list[object] = []
+
+            def recover() -> None:
+                barrier.wait()
+                try:
+                    outcomes.append(run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path))
+                except BaseException as error:
+                    outcomes.append(error)
+
+            threads = [threading.Thread(target=recover) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=5)
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+            self.assertTrue(all(isinstance(outcome, dict) for outcome in outcomes), outcomes)
+            self.assertEqual(outcomes[0], outcomes[1])
+            self.assertEqual(outcomes[0]["result"], "COMMITTED")
+            self.assertEqual(ledger.read_bytes(), prefix)
+    def test_offline_torn_tail_recovery_refuses_hash_corruption_in_complete_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as receipt_directory:
+            parent = Path(directory)
+            frame = run_vertical_slice._next_custody_ledger_frame(
+                {"event": "PREPARED", "pointer": ".checkpoint-quarantine/evidence-" + "f" * 64 + ".json", "bytes": 9, "sha256": "f" * 64, "reason": "unaltered"},
+                [],
+            )
+            frame["reason"] = "valid-json bit flip"
+            original = (json.dumps(frame, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8") + b'{"torn"'
+            ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
+            ledger.write_bytes(original)
+            receipt_path = Path(receipt_directory) / "tail-recovery.json"
+
+            with self.assertRaisesRegex(RuntimeError, "frame|chain|hash"):
+                run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+
+            self.assertEqual(ledger.read_bytes(), original)
+            refusal = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(refusal["schema_version"], "ember-custody-ledger-tail-recovery-refusal-v1")
+            self.assertEqual(refusal["result"], "REFUSED")
+            self.assertEqual(refusal["reason"], "PREFIX_INVALID")
+            self.assertEqual(refusal["original"], {"sha256": hashlib.sha256(original).hexdigest(), "bytes": len(original)})
+            self.assertEqual((parent / refusal["archive"]).read_bytes(), original)
+            refusal["candidate_prefix"]["sha256"] = "0" * 64
+            receipt_path.write_text(json.dumps(refusal, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "candidate prefix|tail"):
+                run_vertical_slice.recover_torn_custody_ledger_tail(parent, transaction_receipt_path=receipt_path)
+            self.assertEqual(ledger.read_bytes(), original)
+
+    def test_custody_ledger_uses_shared_durable_replace_and_removes_dead_stale_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target.jsonl"
+            with unittest.mock.patch.object(run_vertical_slice, "atomic_replace_durable") as shared:
+                run_vertical_slice._atomic_bytes(target, b"bound\n")
+            self.assertEqual(shared.call_count, 1)
+            self.assertEqual(shared.call_args.args[1], target)
+        self.assertFalse(hasattr(run_vertical_slice, "_atomic_replace_durable"))
+        self.assertFalse(hasattr(run_vertical_slice, "_windows_atomic_replace"))
+        self.assertFalse(hasattr(run_vertical_slice, "_custody_ledger_lock_is_stale"))
     def test_custody_reconciliation_rejects_valid_json_v3_frame_tamper(self) -> None:
         """Frame hashes must catch a valid-JSON reason mutation after durable write."""
         def frame(*, event: str, sequence: int, previous: str, reason: str) -> dict[str, object]:
@@ -1223,7 +1415,7 @@ class RunnerStorageTests(unittest.TestCase):
             with unittest.mock.patch.object(run_vertical_slice, "_MAX_QUARANTINE_FILES", 1):
                 victim = run_vertical_slice._write_bounded_quarantine_evidence(parent, "victim", {"result": "old"})
                 ledger = parent / ".checkpoint-custody-deletion-ledger.jsonl"
-                real_replace = run_vertical_slice._atomic_replace_durable
+                real_replace = run_vertical_slice.atomic_replace_durable
                 replaced = False
 
                 def crash_after_replace(source: object, target: object) -> None:
@@ -1233,7 +1425,7 @@ class RunnerStorageTests(unittest.TestCase):
                         replaced = True
                         raise OSError("injected crash after atomic ledger replace")
 
-                with unittest.mock.patch.object(run_vertical_slice, "_atomic_replace_durable", crash_after_replace):
+                with unittest.mock.patch.object(run_vertical_slice, "atomic_replace_durable", crash_after_replace):
                     with self.assertRaisesRegex(OSError, "atomic ledger replace"):
                         run_vertical_slice._write_bounded_quarantine_evidence(parent, "replacement", {"result": "new"})
                 self.assertTrue(victim.exists())
@@ -1605,14 +1797,13 @@ class RunnerStorageTests(unittest.TestCase):
         """A write-through failure leaves no target or temporary custody claim behind."""
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "ledger.jsonl"
-            with unittest.mock.patch.object(run_vertical_slice.os, "name", "nt"), \
-                    unittest.mock.patch.object(run_vertical_slice, "_windows_atomic_replace", side_effect=OSError("write-through failure")):
+            with unittest.mock.patch.object(run_vertical_slice, "atomic_replace_durable", side_effect=OSError("write-through failure")):
                 with self.assertRaisesRegex(OSError, "write-through failure"):
                     run_vertical_slice._atomic_bytes(target, b"ledger\\n")
             self.assertFalse(target.exists())
             self.assertEqual(list(Path(directory).glob("*.tmp")), [])
-    def test_windows_atomic_replace_requests_write_through_and_propagates_failure(self) -> None:
-        """Windows ledger replacement requests write-through and refuses an API failure."""
+    def test_shared_windows_atomic_replace_requests_write_through_and_propagates_failure(self) -> None:
+        """The one durable_io authority requests write-through and refuses an API failure."""
         calls: list[tuple[object, object, int]] = []
 
         class Kernel32:
@@ -1620,11 +1811,12 @@ class RunnerStorageTests(unittest.TestCase):
                 calls.append((source, target, flags))
                 return 0
 
-        with unittest.mock.patch.object(run_vertical_slice.ctypes, "WinDLL", return_value=Kernel32()), \
-                unittest.mock.patch.object(run_vertical_slice.ctypes, "get_last_error", return_value=5), \
-                unittest.mock.patch.object(run_vertical_slice.ctypes, "WinError", side_effect=OSError("write-through failed")):
+        with unittest.mock.patch.object(durable_io.os, "name", "nt"), \
+                unittest.mock.patch.object(durable_io.ctypes, "WinDLL", return_value=Kernel32()), \
+                unittest.mock.patch.object(durable_io.ctypes, "get_last_error", return_value=5), \
+                unittest.mock.patch.object(durable_io.ctypes, "WinError", side_effect=OSError("write-through failed")):
             with self.assertRaisesRegex(OSError, "write-through failed"):
-                run_vertical_slice._windows_atomic_replace(Path("source.tmp"), Path("target.json"))
+                durable_io.atomic_replace_durable(Path("source.tmp"), Path("target.json"))
         self.assertEqual(calls[0][2], 0x00000001 | 0x00000008)
     def test_windows_ledger_mutex_name_uses_global_handle_identity_not_path_spelling(self) -> None:
         """One opened-directory identity yields one Global mutex independent of spelling."""

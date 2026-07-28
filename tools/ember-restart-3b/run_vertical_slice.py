@@ -793,21 +793,6 @@ def _custody_deletion_path(parent: Path, pointer: str) -> Path:
     return parent.joinpath(*PurePosixPath(pointer).parts)
 
 
-def _custody_ledger_lock_is_stale(lock_dir: Path, owner: Path) -> bool:
-    """Recover only a dead or unattested writer lock after a bounded grace interval."""
-
-    try:
-        payload = json.loads(owner.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        payload = None
-    if isinstance(payload, dict) and "pid" in payload:
-        return not _pid_is_alive(payload.get("pid"))
-    try:
-        age_seconds = max(0.0, time.time() - lock_dir.stat().st_mtime)
-    except OSError:
-        return False
-    return age_seconds >= _LEDGER_LOCK_OWNER_GRACE_SECONDS
-
 def _windows_custody_ledger_mutex_name_from_identity(identity: tuple[int, int, int]) -> str:
     """Name one machine-wide mutex from immutable directory volume/file identity."""
 
@@ -1108,9 +1093,213 @@ def _recover_parent_scoped_transactions_locked(canonical_parent: Path) -> None:
         elif receipt["result"] not in {"COMMITTED", "ABORTED"}:
             raise RuntimeError("parent-scoped custody transaction is nonterminal")
 
+_TAIL_RECOVERY_SCHEMA = "ember-custody-ledger-tail-recovery-v1"
+_TAIL_RECOVERY_REFUSAL_SCHEMA = "ember-custody-ledger-tail-recovery-refusal-v1"
+
+
+def _raw_byte_binding(payload: bytes) -> dict[str, object]:
+    return {"sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}
+
+
+def _split_torn_custody_ledger(payload: bytes) -> tuple[bytes, bytes]:
+    """Return only the complete newline-framed prefix and its unframed tail."""
+
+    boundary = payload.rfind(b"\n")
+    prefix = payload[: boundary + 1] if boundary >= 0 else b""
+    tail = payload[boundary + 1 :] if boundary >= 0 else payload
+    if not tail:
+        raise RuntimeError("custody deletion ledger has no torn tail to recover")
+    return prefix, tail
+
+
+def _tail_recovery_receipt(path: Path) -> dict[str, object]:
+    receipt, _ = _json_snapshot(path, label="custody ledger tail-recovery receipt")
+    required = {"schema_version", "result", "subject", "archive", "original", "prefix", "tail", "verification"}
+    if set(receipt) != required or receipt.get("schema_version") != _TAIL_RECOVERY_SCHEMA or receipt.get("result") not in {"PREPARED", "COMMITTED"}:
+        raise RuntimeError("custody ledger tail-recovery receipt has invalid shape")
+    if not isinstance(receipt.get("subject"), str) or not receipt["subject"] or not isinstance(receipt.get("archive"), str) or not receipt["archive"]:
+        raise RuntimeError("custody ledger tail-recovery receipt has invalid identity")
+    original = receipt.get("original")
+    tail = receipt.get("tail")
+    prefix = receipt.get("prefix")
+    if not isinstance(original, dict) or set(original) != {"sha256", "bytes"} or not isinstance(tail, dict) or set(tail) != {"sha256", "bytes"}:
+        raise RuntimeError("custody ledger tail-recovery receipt has invalid byte bindings")
+    if not isinstance(prefix, dict) or set(prefix) != {"ledger_sha256", "ledger_bytes", "chain_head_sha256", "frame_count"}:
+        raise RuntimeError("custody ledger tail-recovery receipt has invalid prefix binding")
+    for binding in (original, tail):
+        if not _is_sha256(binding.get("sha256")) or type(binding.get("bytes")) is not int or binding["bytes"] < 0:
+            raise RuntimeError("custody ledger tail-recovery receipt has invalid byte bindings")
+    for key in ("ledger_sha256", "chain_head_sha256"):
+        if not _is_sha256(prefix.get(key)):
+            raise RuntimeError("custody ledger tail-recovery receipt has invalid prefix binding")
+    for key in ("ledger_bytes", "frame_count"):
+        if type(prefix.get(key)) is not int or prefix[key] < 0:
+            raise RuntimeError("custody ledger tail-recovery receipt has invalid prefix binding")
+    verification = receipt.get("verification")
+    if not isinstance(verification, dict) or set(verification) != {"before_publication", "after_publication"} or verification.get("before_publication") != prefix:
+        raise RuntimeError("custody ledger tail-recovery receipt has invalid verification binding")
+    if receipt["result"] == "PREPARED" and verification.get("after_publication") is not None:
+        raise RuntimeError("prepared tail-recovery receipt claims post-publication verification")
+    if receipt["result"] == "COMMITTED" and verification.get("after_publication") != prefix:
+        raise RuntimeError("committed tail-recovery receipt lacks post-publication verification")
+    if original["bytes"] != prefix["ledger_bytes"] + tail["bytes"] or receipt["archive"] != f".checkpoint-custody-ledger-torn-{original['sha256']}.jsonl":
+        raise RuntimeError("custody ledger tail-recovery receipt has inconsistent byte accounting")
+    return receipt
+
+
+def _tail_recovery_refusal(path: Path) -> dict[str, object]:
+    receipt, _ = _json_snapshot(path, label="custody ledger tail-recovery refusal")
+    required = {"schema_version", "result", "reason", "subject", "archive", "original", "candidate_prefix", "tail"}
+    if set(receipt) != required or receipt.get("schema_version") != _TAIL_RECOVERY_REFUSAL_SCHEMA or receipt.get("result") != "REFUSED" or receipt.get("reason") not in {"NO_VALID_PREFIX", "PREFIX_INVALID"}:
+        raise RuntimeError("custody ledger tail-recovery refusal has invalid shape")
+    for name in ("original", "candidate_prefix", "tail"):
+        binding = receipt.get(name)
+        if not isinstance(binding, dict) or set(binding) != {"sha256", "bytes"} or not _is_sha256(binding.get("sha256")) or type(binding.get("bytes")) is not int or binding["bytes"] < 0:
+            raise RuntimeError("custody ledger tail-recovery refusal has invalid byte binding")
+    if not isinstance(receipt.get("subject"), str) or not receipt["subject"] or receipt.get("archive") != f".checkpoint-custody-ledger-torn-{receipt['original']['sha256']}.jsonl":
+        raise RuntimeError("custody ledger tail-recovery refusal has invalid identity")
+    if receipt["original"]["bytes"] != receipt["candidate_prefix"]["bytes"] + receipt["tail"]["bytes"]:
+        raise RuntimeError("custody ledger tail-recovery refusal has inconsistent byte accounting")
+    return receipt
+
+
+def _read_bound_tail_archive(canonical_parent: Path, receipt: Mapping[str, object]) -> bytes:
+    archive = canonical_parent / str(receipt["archive"])
+    try:
+        payload = archive.read_bytes()
+    except OSError as error:
+        raise RuntimeError("custody ledger tail-recovery archive is unavailable") from error
+    if _raw_byte_binding(payload) != receipt["original"]:
+        raise RuntimeError("custody ledger tail-recovery archive changed after preservation")
+    return payload
+
+
+def _persist_torn_ledger_archive(canonical_parent: Path, original: bytes) -> str:
+    digest = hashlib.sha256(original).hexdigest()
+    name = f".checkpoint-custody-ledger-torn-{digest}.jsonl"
+    archive = canonical_parent / name
+    try:
+        atomic_create_durable(archive, original)
+    except FileExistsError:
+        try:
+            if archive.read_bytes() != original:
+                raise RuntimeError("custody ledger tail-recovery archive collision")
+        except OSError as error:
+            raise RuntimeError("custody ledger tail-recovery archive could not be rechecked") from error
+    if archive.read_bytes() != original:
+        raise RuntimeError("custody ledger tail-recovery archive changed after durable creation")
+    return name
+
+
+def _finalize_tail_recovery_locked(canonical_parent: Path, *, receipt_path: Path) -> dict[str, object]:
+    receipt = _tail_recovery_receipt(receipt_path)
+    if receipt["subject"] != _custody_path_subject(canonical_parent):
+        raise RuntimeError("custody ledger tail-recovery receipt subject does not match canonical parent")
+    original = _read_bound_tail_archive(canonical_parent, receipt)
+    prefix_bytes = original[: int(receipt["prefix"]["ledger_bytes"])]
+    tail_bytes = original[int(receipt["prefix"]["ledger_bytes"]) :]
+    if _ledger_binding(prefix_bytes) != receipt["prefix"] or _raw_byte_binding(tail_bytes) != receipt["tail"]:
+        raise RuntimeError("custody ledger tail-recovery archive does not reproduce bound prefix and tail")
+    ledger = canonical_parent / _CUSTODY_LEDGER
+    try:
+        current = ledger.read_bytes()
+    except OSError as error:
+        raise RuntimeError("custody deletion ledger could not be read during recovery") from error
+    if receipt["result"] == "COMMITTED":
+        if _ledger_binding(current) != receipt["prefix"]:
+            raise RuntimeError("committed custody ledger tail recovery no longer matches the published prefix")
+        return receipt
+    if _raw_byte_binding(current) == receipt["original"]:
+        _atomic_bytes(ledger, prefix_bytes)
+    elif _ledger_binding(current) != receipt["prefix"]:
+        raise RuntimeError("custody ledger tail recovery refuses bytes outside its original/prefix transaction")
+    try:
+        published = ledger.read_bytes()
+    except OSError as error:
+        raise RuntimeError("recovered custody ledger could not be replayed") from error
+    after = _ledger_binding(published)
+    if after != receipt["prefix"]:
+        raise RuntimeError("recovered custody ledger failed post-publication replay")
+    committed = {**receipt, "result": "COMMITTED", "verification": {"before_publication": receipt["prefix"], "after_publication": after}}
+    _atomic_json(receipt_path, committed)
+    return _tail_recovery_receipt(receipt_path)
+
+
+def _raise_persisted_tail_refusal(canonical_parent: Path, receipt: Mapping[str, object]) -> None:
+    if receipt["subject"] != _custody_path_subject(canonical_parent):
+        raise RuntimeError("custody ledger tail-recovery refusal subject does not match canonical parent")
+    original = _read_bound_tail_archive(canonical_parent, receipt)
+    candidate_bytes = int(receipt["candidate_prefix"]["bytes"])
+    if _raw_byte_binding(original[:candidate_bytes]) != receipt["candidate_prefix"] or _raw_byte_binding(original[candidate_bytes:]) != receipt["tail"]:
+        raise RuntimeError("custody ledger tail-recovery refusal does not reproduce its candidate prefix and tail")
+    ledger = canonical_parent / _CUSTODY_LEDGER
+    try:
+        current = ledger.read_bytes()
+    except OSError as error:
+        raise RuntimeError("custody deletion ledger could not be read during refused recovery") from error
+    if current != original:
+        raise RuntimeError("refused custody ledger tail recovery no longer matches preserved original")
+    raise RuntimeError(f"custody ledger tail recovery refused: {receipt['reason']}")
+
+
 def recover_torn_custody_ledger_tail(parent: Path, *, transaction_receipt_path: Path) -> dict[str, object]:
-    """Recovery is transaction replay only; syntactically valid torn bytes are never guessed away."""
-    return finalize_custody_ledger_transaction(parent, receipt_path=transaction_receipt_path)
+    """Archive and recover only a verified maximal newline-framed prefix under the writer lock."""
+
+    with _custody_ledger_write_lock(parent) as canonical_parent:
+        receipt_path = transaction_receipt_path.resolve()
+        if receipt_path.is_relative_to(canonical_parent.resolve()):
+            raise RuntimeError("tail-recovery transaction receipt must be outside custody root")
+        if receipt_path.exists():
+            persisted, _ = _json_snapshot(receipt_path, label="custody ledger recovery receipt")
+            schema = persisted.get("schema_version")
+            if schema == _HEAD_RECEIPT_SCHEMA:
+                return _finalize_custody_ledger_transaction_locked(canonical_parent, receipt_path=receipt_path)
+            if schema == _TAIL_RECOVERY_SCHEMA:
+                return _finalize_tail_recovery_locked(canonical_parent, receipt_path=receipt_path)
+            if schema == _TAIL_RECOVERY_REFUSAL_SCHEMA:
+                _raise_persisted_tail_refusal(canonical_parent, _tail_recovery_refusal(receipt_path))
+            raise RuntimeError("custody ledger recovery receipt has an unsupported schema")
+        ledger = canonical_parent / _CUSTODY_LEDGER
+        try:
+            original = ledger.read_bytes()
+        except OSError as error:
+            raise RuntimeError("custody deletion ledger could not be read for offline recovery") from error
+        prefix, tail = _split_torn_custody_ledger(original)
+        archive_name = _persist_torn_ledger_archive(canonical_parent, original)
+        reason: str | None = None
+        try:
+            if not prefix:
+                reason = "NO_VALID_PREFIX"
+                raise RuntimeError("custody deletion ledger has no valid frame prefix")
+            prefix_binding = _ledger_binding(prefix)
+        except RuntimeError as error:
+            reason = reason or "PREFIX_INVALID"
+            refusal = {
+                "schema_version": _TAIL_RECOVERY_REFUSAL_SCHEMA,
+                "result": "REFUSED",
+                "reason": reason,
+                "subject": _custody_path_subject(canonical_parent),
+                "archive": archive_name,
+                "original": _raw_byte_binding(original),
+                "candidate_prefix": _raw_byte_binding(prefix),
+                "tail": _raw_byte_binding(tail),
+            }
+            atomic_create_durable(receipt_path, (json.dumps(refusal, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+            raise RuntimeError(f"custody ledger tail recovery refused: {error}") from error
+        prepared = {
+            "schema_version": _TAIL_RECOVERY_SCHEMA,
+            "result": "PREPARED",
+            "subject": _custody_path_subject(canonical_parent),
+            "archive": archive_name,
+            "original": _raw_byte_binding(original),
+            "prefix": prefix_binding,
+            "tail": _raw_byte_binding(tail),
+            "verification": {"before_publication": prefix_binding, "after_publication": None},
+        }
+        atomic_create_durable(receipt_path, (json.dumps(prepared, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+        return _finalize_tail_recovery_locked(canonical_parent, receipt_path=receipt_path)
+
+
 def migrate_legacy_custody_ledger(parent: Path, *, transaction_receipt_path: Path | None = None) -> dict[str, object]:
     """Explicitly archive and replay a complete legacy ledger as chained v4 frames under one writer lock."""
 
@@ -1355,7 +1544,6 @@ _ORDERED_CUSTODY_LEDGER_SCHEMA = "ember-checkpoint-custody-deletion-v2"
 _LEDGER_THREAD_LOCKS: dict[str, threading.Lock] = {}
 _LEDGER_THREAD_LOCKS_GUARD = threading.Lock()
 _LEDGER_LOCK_WAIT_SECONDS = 30.0
-_LEDGER_LOCK_OWNER_GRACE_SECONDS = 1.0
 _EVIDENCE_FILENAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{64}(?:-g[1-9][0-9]*)?\.json")
 _WINDOWS_RESERVED_STEMS = {"aux", "clock$", "con", "nul", "prn", *(f"com{index}" for index in range(1, 10)), *(f"lpt{index}" for index in range(1, 10))}
 
@@ -1805,21 +1993,6 @@ _COUNTER_COUNT_FIELDS = (
 )
 
 
-def _windows_atomic_replace(source: Path, target: Path) -> None:
-    """Windows MoveFileExW write-through wrapper retained for host-specific regression coverage."""
-    flags = 0x00000001 | 0x00000008
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    if not kernel32.MoveFileExW(str(source), str(target), flags):
-        raise ctypes.WinError(ctypes.get_last_error())
-
-
-def _atomic_replace_durable(source: Path, target: Path) -> None:
-    """Compatibility wrapper around the shared small-file durability primitive."""
-    if os.name == "nt":
-        _windows_atomic_replace(source, target)
-        return
-    atomic_replace_durable(source, target)
-
 def _atomic_bytes(path: Path, payload: bytes) -> None:
     """Publish small custody evidence only after complete bytes are durable."""
 
@@ -1829,7 +2002,7 @@ def _atomic_bytes(path: Path, payload: bytes) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        _atomic_replace_durable(temporary, path)
+        atomic_replace_durable(temporary, path)
     finally:
         if temporary.exists():
             temporary.unlink()

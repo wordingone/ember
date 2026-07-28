@@ -1,0 +1,83 @@
+{
+  "schema_version": "ember-issue-acceptance-replay-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "repository": "wordingone/ember",
+  "issue": 930,
+  "claim_boundary": "checkpoint-custody durability and recovery only; no checkpoint availability, resumability, training, admission, sufficient-pretraining, benchmark, or capability claim",
+  "base_commit": "8d79ce6455e347d51a832f114b93e352a344bb9b",
+  "implementation_commit": "0fd9c330a265a017a3254ee150bf78d25c5d7eee",
+  "replay_environment": {
+    "os_name": "nt",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.10.11",
+    "checkout": "clean detached clone",
+    "head_unchanged": true
+  },
+  "implementation_scope": {
+    "single_durable_replace_authority": "tools/ember-restart-3b/durable_io.py:atomic_replace_durable",
+    "offline_recovery": "maximal complete newline-framed prefix validated by the shared ledger binding and v4 frame-chain verifier",
+    "preservation": "content-addressed original archive plus closed success or refusal receipt",
+    "transaction": "PREPARED receipt, durable prefix publication, post-publication replay, COMMITTED receipt",
+    "stale_helper_disposition": "removed unused _custody_ledger_lock_is_stale helper and grace constant"
+  },
+  "replay": {
+    "source_compile": {
+      "result": "PASS",
+      "files": [
+        "tools/ember-restart-3b/run_vertical_slice.py",
+        "tests/ember_restart_model/test_runner_storage.py"
+      ]
+    },
+    "focused_recovery": {
+      "command": "python -B -m unittest test_runner_storage.RunnerStorageTests.test_offline_torn_tail_recovery_archives_binds_and_is_idempotent test_runner_storage.RunnerStorageTests.test_offline_torn_tail_recovery_resumes_after_commit_receipt_write_crash test_runner_storage.RunnerStorageTests.test_offline_torn_tail_recovery_rejects_receipt_and_archive_tamper test_runner_storage.RunnerStorageTests.test_offline_torn_tail_recovery_handles_multiple_mid_frame_cuts test_runner_storage.RunnerStorageTests.test_two_offline_torn_tail_recoverers_converge_on_one_receipt test_runner_storage.RunnerStorageTests.test_offline_torn_tail_recovery_refuses_hash_corruption_in_complete_prefix test_runner_storage.RunnerStorageTests.test_custody_ledger_uses_shared_durable_replace_and_removes_dead_stale_helper",
+      "passed": 7,
+      "failed": 0,
+      "errors": 0
+    },
+    "checkpoint_artifacts": {
+      "command": "python -B -m unittest discover -s tests/ember_restart_model -p test_checkpoint_artifacts.py",
+      "passed": 59,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 3,
+      "skip_boundary": "three symlink-creation cases unavailable under the current Windows privilege; not counted as passes"
+    },
+    "runner_storage": {
+      "command": "python -B -m unittest discover -s tests/ember_restart_model -p test_runner_storage.py",
+      "passed": 94,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 3,
+      "skip_boundary": "three symlink-creation cases unavailable under the current Windows privilege; not counted as passes"
+    },
+    "native_windows_mutex_and_handle_subset": {
+      "command": "python -B -m unittest -v test_runner_storage.RunnerStorageTests.test_windows_ledger_writer_lock_has_no_ownerless_custody_directory_gap test_runner_storage.RunnerStorageTests.test_windows_ledger_mutex_recovers_an_abandoned_owner_without_lock_artifacts test_runner_storage.RunnerStorageTests.test_windows_mutex_namespace_failure_is_fail_closed test_runner_storage.RunnerStorageTests.test_windows_directory_handle_identity_converges_drive_extended_and_case_aliases test_runner_storage.RunnerStorageTests.test_windows_bound_directory_handle_rejects_swap_and_preserves_ledger_row test_runner_storage.RunnerStorageTests.test_windows_abandoned_mutex_recovers_while_another_process_survives",
+      "passed": 6,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "repository_guard": {
+      "command": "tools/repo-guard.sh --base 8d79ce6455e347d51a832f114b93e352a344bb9b",
+      "result": "PASS"
+    },
+    "diff_check": "PASS",
+    "worktree_clean": true
+  },
+  "acceptance_boundary": {
+    "original_prefix_tail_byte_bindings": true,
+    "archive_recheck": true,
+    "before_after_replay": true,
+    "repeat_idempotence": true,
+    "crash_after_publish_resume": true,
+    "frame_cut_matrix": true,
+    "bit_flip_refusal": true,
+    "receipt_and_archive_tamper_refusal": true,
+    "concurrent_recovery_convergence": true,
+    "native_windows_replay": true,
+    "public_github_guards": "PENDING",
+    "cross_review": "NOT_CROSS_REVIEWED"
+  }
+}
