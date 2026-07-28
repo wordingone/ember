@@ -2,11 +2,17 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { getState, startTelemetryWatch } from "./telemetry-watch.ts";
+import {
+  MAX_PARTIAL_LINE_BYTES,
+  MAX_READ_BYTES_PER_POLL,
+  getDiagnostics,
+  getState,
+  startTelemetryWatch,
+} from "./telemetry-watch.ts";
 
 let scratch: string | undefined;
 
@@ -186,4 +192,181 @@ describe("training telemetry custody", () => {
     } finally {
       handle.stop();
     }
-  });});
+  });
+
+  test("range-reads a growing channel within the per-poll byte ceiling", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-range-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    const event = JSON.stringify({
+      ts: "2026-07-17T05:00:00.000Z",
+      kind: "train_step",
+      source: "journal",
+      payload: { run_id: "bounded", step: 1, loss: 2 },
+    }) + "\n";
+    const filler = " ".repeat(MAX_READ_BYTES_PER_POLL + 1024) + "\n";
+    await writeFile(channel, event + filler, "utf8");
+
+    const handle = startTelemetryWatch({
+      channelPath: channel,
+      now: () => Date.parse("2026-07-17T05:00:01.000Z"),
+      pollIntervalMs: 20,
+    });
+    try {
+      await Bun.sleep(70);
+      const diagnostics = getDiagnostics();
+      expect(diagnostics.maxSingleReadBytes).toBeLessThanOrEqual(MAX_READ_BYTES_PER_POLL);
+      expect(diagnostics.maxPollReadBytes).toBeLessThanOrEqual(MAX_READ_BYTES_PER_POLL);
+      expect(getState().activeRun?.runId).toBe("bounded");
+    } finally {
+      handle.stop();
+    }
+  });
+
+  test("never overlaps slow telemetry polls", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-single-flight-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    await writeFile(channel, JSON.stringify({
+      ts: "2026-07-17T05:00:00.000Z",
+      kind: "train_step",
+      source: "journal",
+      payload: { run_id: "single-flight", step: 1, loss: 2 },
+    }) + "\n", "utf8");
+    let concurrentReads = 0;
+    let maxConcurrentReads = 0;
+
+    const handle = startTelemetryWatch({
+      channelPath: channel,
+      now: () => Date.parse("2026-07-17T05:00:01.000Z"),
+      pollIntervalMs: 5,
+      readRange: async (path, offset, length) => {
+        concurrentReads += 1;
+        maxConcurrentReads = Math.max(maxConcurrentReads, concurrentReads);
+        try {
+          await Bun.sleep(30);
+          const file = await open(path, "r");
+          try {
+            const buffer = Buffer.alloc(length);
+            const { bytesRead } = await file.read(buffer, 0, length, offset);
+            return buffer.subarray(0, bytesRead);
+          } finally {
+            await file.close();
+          }
+        } finally {
+          concurrentReads -= 1;
+        }
+      },
+    });
+    try {
+      await Bun.sleep(55);
+      expect(maxConcurrentReads).toBe(1);
+      expect(getDiagnostics().overlapPollsSkipped).toBeGreaterThan(0);
+    } finally {
+      handle.stop();
+    }
+  });
+
+  test("drops an oversized partial line and resumes at the next newline", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-partial-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    await writeFile(channel, "x".repeat(MAX_PARTIAL_LINE_BYTES + 1), "utf8");
+    const handle = startTelemetryWatch({
+      channelPath: channel,
+      now: () => Date.parse("2026-07-17T05:00:01.000Z"),
+      pollIntervalMs: 20,
+    });
+    try {
+      await Bun.sleep(70);
+      expect(getDiagnostics().partialLineBytes).toBe(0);
+      expect(getDiagnostics().oversizedPartialLinesDropped).toBe(1);
+      await appendFile(channel, "\n" + JSON.stringify({
+        ts: "2026-07-17T05:00:00.000Z",
+        kind: "train_step",
+        source: "journal",
+        payload: { run_id: "after-oversized", step: 2, loss: 1 },
+      }) + "\n", "utf8");
+      await Bun.sleep(55);
+      expect(getState().activeRun?.runId).toBe("after-oversized");
+      expect(getDiagnostics().partialLineBytes).toBe(0);
+    } finally {
+      handle.stop();
+    }
+  });
+  test("appends to a short channel without replaying its existing prefix", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-append-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    const first = {
+      ts: "2026-07-17T05:00:00.000Z",
+      kind: "train_step",
+      source: "journal",
+      payload: { run_id: "first", step: 1, loss: 2 },
+    };
+    const second = {
+      ts: "2026-07-17T05:00:01.000Z",
+      kind: "train_step",
+      source: "journal",
+      payload: { run_id: "second", step: 2, loss: 1 },
+    };
+    await writeFile(channel, JSON.stringify(first) + "\n", "utf8");
+    const handle = startTelemetryWatch({
+      channelPath: channel,
+      now: () => Date.parse("2026-07-17T05:00:02.000Z"),
+      pollIntervalMs: 20,
+    });
+    try {
+      await Bun.sleep(35);
+      await appendFile(channel, JSON.stringify(second) + "\n", "utf8");
+      await Bun.sleep(35);
+      expect(getState().recentEvents.map((event) => event.payload["run_id"])).toEqual([
+        "first",
+        "second",
+      ]);
+    } finally {
+      handle.stop();
+    }
+  });
+
+  test("a replaced watcher cannot publish an obsolete in-flight read", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-generation-"));
+    const oldChannel = join(scratch, "old.jsonl");
+    const newChannel = join(scratch, "new.jsonl");
+    const line = (runId: string) => JSON.stringify({
+      ts: "2026-07-17T05:00:00.000Z",
+      kind: "train_step",
+      source: "journal",
+      payload: { run_id: runId, step: 1, loss: 2 },
+    }) + "\n";
+    await writeFile(oldChannel, line("obsolete"), "utf8");
+    await writeFile(newChannel, line("current"), "utf8");
+
+    const oldHandle = startTelemetryWatch({
+      channelPath: oldChannel,
+      now: () => Date.parse("2026-07-17T05:00:01.000Z"),
+      pollIntervalMs: 5,
+      readRange: async (path, offset, length) => {
+        await Bun.sleep(40);
+        const file = await open(path, "r");
+        try {
+          const buffer = Buffer.alloc(length);
+          const { bytesRead } = await file.read(buffer, 0, length, offset);
+          return buffer.subarray(0, bytesRead);
+        } finally {
+          await file.close();
+        }
+      },
+    });
+    await Bun.sleep(12);
+    const newHandle = startTelemetryWatch({
+      channelPath: newChannel,
+      now: () => Date.parse("2026-07-17T05:00:01.000Z"),
+      pollIntervalMs: 5,
+    });
+    try {
+      await Bun.sleep(70);
+      expect(getState().recentEvents.map((event) => event.payload["run_id"])).toEqual(["current"]);
+      expect(getState().activeRun?.runId).toBe("current");
+    } finally {
+      oldHandle.stop();
+      newHandle.stop();
+    }
+  });
+});
