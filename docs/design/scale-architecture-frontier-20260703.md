@@ -86,3 +86,32 @@ evolving HIS OWN foundation models — sovereign, no cloud/subscription AI in th
    is visibly part of the frontier, not a vacuous row.
 5. Subquadratic/hybrid-attention exploration enters the frontier as a named recon lane (context +
    P1 energy axis), not silently absent.
+
+## 6. Inference-to-training translation and C-SCALE(ii)
+
+The maintained translation system is
+[`docs/inference-to-training-translation-v1.md`](../inference-to-training-translation-v1.md);
+the per-layer frontier and gap table is
+[`docs/sota-stack-floor.md`](../sota-stack-floor.md). These replace the former
+implicit assumption that an inference optimization automatically supplies a
+training-memory or training-throughput benefit.
+
+For C-SCALE(ii), every sparsity or offload lever must now identify:
+
+1. the inference-side saving;
+2. its existing or synthesizable training twin;
+3. whether weights, gradients, activations, and optimizer state remain resident;
+4. the exact Ember config, implementation, or receipt, or `ABSENT`;
+5. a matched experiment and deletion test that could falsify the benefit.
+
+This is also the standing mechanism behind W2 native in-loop adaptation. An
+inference lever does not enter the W2 design merely because it makes serving
+cheaper. The required question is **“what is your training twin?”** If the
+answer is absent—most sharply, low-bit inference whose latent weights and
+optimizer remain high precision—the absence becomes a named research task.
+
+The first C-SCALE(ii) experiment selected from this table remains the R3
+residency-sparse-training comparison: a frozen quantized majority plus an owned
+trainable slice, measured against resident-all-experts sparse routing. This
+document still makes no feasibility, checkpoint, sufficient-pretraining, or
+capability claim until that governed receipt exists.
