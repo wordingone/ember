@@ -116,11 +116,16 @@ import {
   readHeartbeatRow,
   type LivenessHeartbeatWriter,
 } from "../services/liveness-heartbeat.ts";
-import { createGoalContinuationEngine, type GoalContinuationEngine } from "../core/goal-continuation.ts";
+import {
+  createGoalContinuationEngine,
+  type ContinuationEligibilitySignals,
+  type GoalContinuationEngine,
+} from "../core/goal-continuation.ts";
 import { getGoalStore, getGoalReceiptWriter } from "../core/goal-runtime.ts";
 import {
   createGoalContinuationPoke,
   isGoalContinuationFeatureEnabled,
+  startGoalContinuationRearm,
 } from "../core/goal-continuation-wiring.ts";
 import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../commands/goal.ts";
 import { buildEmberWorldState } from "../core/ember-world-state.ts";
@@ -1225,27 +1230,24 @@ export function ReplScreen({
   if (!goalContinuationEngineRef.current) {
     goalContinuationEngineRef.current = createGoalContinuationEngine();
   }
+  const readGoalContinuationEligibility = (): ContinuationEligibilitySignals => ({
+    featureEnabled: isGoalContinuationFeatureEnabled(),
+    // ember-cli's EnterPlanModeTool flips PermissionMode to 'plan' via
+    // ToolUseContext.setAppState, but QueryEngine's AppState setter below is
+    // still a no-op stub (#182). Preserve the disclosed false signal until
+    // that pre-existing state-threading gap is repaired.
+    planMode: false,
+    turnActive: busyRef.current,
+    queuedUserInput:
+      inputStateRef.current.text.length > 0 ||
+      (operatorInjectorRef.current?.queueLength ?? 0) > 0,
+  });
   const pokeGoalContinuationRef = useRef<(() => void) | null>(null);
   if (!pokeGoalContinuationRef.current) {
     pokeGoalContinuationRef.current = createGoalContinuationPoke({
-      engine:   goalContinuationEngineRef.current,
+      engine: goalContinuationEngineRef.current,
       getStore: getGoalStore,
-      getEligibilitySignals: () => ({
-        featureEnabled: isGoalContinuationFeatureEnabled(),
-        // ember-cli's EnterPlanModeTool flips PermissionMode to 'plan' via
-        // ToolUseContext.setAppState (tools/plan-mode-tools.ts) — but
-        // engineCfg.setAppState below (see the QueryEngine construction
-        // further down this file) is still a no-op stub (#182's cwd-only
-        // AppState), so that flip is never threaded back into this
-        // component's reactive state today. Pre-existing gap, not
-        // introduced here; disclosed rather than papered over with a fake
-        // signal — see this PR's body for the follow-up.
-        planMode: false,
-        turnActive: busyRef.current,
-        queuedUserInput:
-          inputStateRef.current.text.length > 0 ||
-          (operatorInjectorRef.current?.queueLength ?? 0) > 0,
-      }),
+      getEligibilitySignals: readGoalContinuationEligibility,
       startTurn: async (prompt: string) => {
         await submitPromptRef.current(prompt, "operator");
       },
@@ -1253,6 +1255,24 @@ export function ReplScreen({
     });
   }
 
+  // Issue #279: event-driven pokes remain primary, while this bounded re-arm
+  // resurrects a continuation skipped by a transient busy/input race even if
+  // no later external event arrives. Cleanup prevents a timer surviving the
+  // mounted REPL session; the same feature kill switch suppresses every tick.
+  useEffect(() => startGoalContinuationRearm({
+    poke: () => pokeGoalContinuationRef.current?.(),
+    shouldPoke: () => {
+      const signals = readGoalContinuationEligibility();
+      return (
+        signals.featureEnabled &&
+        !signals.planMode &&
+        !signals.turnActive &&
+        !signals.queuedUserInput &&
+        getGoalStore().getGoal()?.status === "Active" &&
+        !goalContinuationEngineRef.current?.isInFlight()
+      );
+    },
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
   // Registers the module-level hooks commands/goal.ts's /goal command and the
   // continuation engine call into. Idempotent (safe to call repeatedly) —
   // registered once per mount and torn down on unmount so a stale closure

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/goal-continuation-wiring.ts — wires the goal continuation engine
 // (core/goal-continuation.ts) into a real turn loop (ember issue #211, live
 // acceptance leg b). Pure logic, no React/ink — screens/repl.ts supplies the
@@ -78,6 +81,44 @@ export function createGoalContinuationPoke(deps: GoalContinuationWiringDeps): ()
   return poke;
 }
 
+export interface GoalContinuationRearmScheduler {
+  setInterval(callback: () => void, intervalMs: number): unknown;
+  clearInterval(handle: unknown): void;
+}
+
+export interface GoalContinuationRearmOptions {
+  poke: () => void;
+  intervalMs?: number;
+  featureEnabled?: () => boolean;
+  shouldPoke?: () => boolean;
+  scheduler?: GoalContinuationRearmScheduler;
+}
+
+/**
+ * Low-frequency resurrection layer for a poke skipped by a transient gate.
+ * The event-driven path remains primary; this timer only re-evaluates the same
+ * live eligibility gates and never bypasses the engine semaphore or user
+ * preemption. The returned cleanup owns the interval for one mounted session.
+ */
+export function startGoalContinuationRearm(
+  options: GoalContinuationRearmOptions,
+): () => void {
+  const intervalMs = options.intervalMs ?? 5_000;
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    throw new RangeError("goal continuation re-arm interval must be finite and positive");
+  }
+  const featureEnabled = options.featureEnabled ?? isGoalContinuationFeatureEnabled;
+  const scheduler = options.scheduler ?? {
+    setInterval: (callback: () => void, delayMs: number): unknown =>
+      globalThis.setInterval(callback, delayMs),
+    clearInterval: (handle: unknown): void =>
+      globalThis.clearInterval(handle as ReturnType<typeof globalThis.setInterval>),
+  };
+  const handle = scheduler.setInterval(() => {
+    if (featureEnabled() && (options.shouldPoke?.() ?? true)) options.poke();
+  }, intervalMs);
+  return () => scheduler.clearInterval(handle);
+}
 /**
  * Feature kill-switch for the autonomous continuation loop (spec §3 step 2:
  * "feature on" is its own gate, independent of goal existence/state).
