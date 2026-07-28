@@ -4,6 +4,7 @@
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -174,6 +175,46 @@ def test_stale_inventory_fails_closed(tmp_path):
         )
 
 
+
+def test_master_binding_allows_only_capture_or_introducing_commit(tmp_path, monkeypatch):
+    module = _module()
+    receipt = module.build_receipt(
+        repository="wordingone/ember",
+        master_sha="c" * 40,
+        captured_at="2026-07-28T00:00:00Z",
+        rows=[],
+        ignored_artifacts=[],
+    )
+    manifest = tmp_path / "receipts" / "branch-inventory" / "current.json"
+    manifest.parent.mkdir(parents=True)
+    module._write_json(manifest, receipt)
+    continuity = tmp_path / "CONTINUITY.md"
+    continuity.write_text(module.render_continuity_block(receipt, "receipts/branch-inventory/current.json"), encoding="utf-8")
+
+    def introducing_commit(_repo, *args):
+        target = args[-1]
+        return SimpleNamespace(stdout=("c" * 40 if target.endswith("^1") else "d" * 40) + "\n")
+
+    monkeypatch.setattr(module, "_run_git", introducing_commit)
+    module.check_inventory(
+        manifest_path=manifest,
+        continuity_path=continuity,
+        repo_path=tmp_path,
+        now=datetime(2026, 7, 28, tzinfo=timezone.utc),
+    )
+
+    def later_commit(_repo, *args):
+        target = args[-1]
+        return SimpleNamespace(stdout=("e" * 40 if target.endswith("^1") else "d" * 40) + "\n")
+
+    monkeypatch.setattr(module, "_run_git", later_commit)
+    with pytest.raises(module.InventoryError, match="master binding is stale"):
+        module.check_inventory(
+            manifest_path=manifest,
+            continuity_path=continuity,
+            repo_path=tmp_path,
+            now=datetime(2026, 7, 28, tzinfo=timezone.utc),
+        )
 def test_continuity_refresh_invokes_inventory_gate():
     source = (REPO_ROOT / "scripts" / "gen_readme_status.py").read_text(encoding="utf-8")
     assert "check_inventory(" in source
