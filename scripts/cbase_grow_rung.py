@@ -1,3 +1,7 @@
+# EMBER_ARTIFACT_CLASS=historical_only
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 #!/usr/bin/env python3
 """cbase_grow_rung.py — C-SCALE S1 growth-chain rung runner (issue #29).
 
@@ -113,6 +117,10 @@ Dispatch via the train MCP (WSL2/CUDA), matching cbase_grow_live.py's own
 --live dispatch convention.
 """
 from __future__ import annotations
+
+raise SystemExit(
+    "historical_only: the sub-3B cbase growth-rung consumer and every importer are execution-denied"
+)
 
 import argparse
 import hashlib
