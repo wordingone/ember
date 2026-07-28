@@ -1,94 +1,147 @@
 #!/usr/bin/env python3
-"""Shared VOID-supersession exclusion logic (gh issue #358).
+"""Shared fail-closed VOID-supersession exclusion logic.
 
-Factored out of spend_annex_scan.py (gh issue #353), where it first shipped
-as an inline pre-pass, into a single module BOTH spend_annex_scan.py and
-test_c_neg1.py's own decisive-claim corpus now consume. Before this, the
-scanner excluded a VOID-superseded receipt from its annex row set while the
-probe's own `_decisive_claim_files()` kept counting the exact same receipt as
-undeclared+uncovered -- live instance (PR #350's own body): C(-1) read RED
-1/264, and the 1 was precisely `reference-uiux-ax-observation-20260622T151722Z.json`,
-formally disposed via the #349 VOID receipt, excluded by the scanner, still
-counted by the probe. One set of semantics, one implementation, no drift
-between the two consumers is the point of this module.
+The scanner and C(-1) probe consume this one implementation so their decisive
+receipt corpora cannot drift. A VOID receipt may identify a target by:
 
-Semantics (unchanged from issue #353; this module is now the single source
-of truth for them):
-  - A receipt is excluded from the decisive-claim set iff some OTHER receipt
-    in the same decisive corpus has verdict=="VOID" and a `supersedes` list
-    containing an entry whose (filename, sha256) BOTH match this receipt's
-    own basename and its CURRENT on-disk sha256.
-  - Matched on (basename, sha256), never a directory-qualified path -- this
-    repo's VOID convention records only a bare `filename` per supersedes
-    entry.
-  - A supersedes entry whose sha256 does not match ANY receipt's own
-    on-disk hash excludes nothing. This is a real, live case, not a
-    hypothetical: the pre-existing `cbase-gpu-verify-VOID-*.json` receipts'
-    supersedes entries record the superseded CHECKPOINT's sha256, not
-    either receipt FILE's own hash -- those two never match this module's
-    (basename, sha256) key and so are never excluded (PR #350's body
-    documents this exact case; those receipts still needed sidecar
-    attestations rather than exclusion, which is the correct outcome).
-  - The VOID receipt itself is never excluded by its own supersession list
-    (it is not a key in any supersedes list unless some OTHER VOID receipt
-    also names it).
+* its complete 64-character SHA-256; or
+* an unambiguous hexadecimal SHA-256 prefix of at least 16 characters.
+
+The filename must remain a bare basename. A malformed, short, non-hexadecimal,
+or ambiguous reference excludes nothing. Historical append-only VOID receipts
+therefore remain unchanged while the known 16-character-prefix convention can
+be interpreted without weakening the hash binding.
 """
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+from __future__ import annotations
+
 import os
+import re
+from typing import Any
 
 from _lane14_common import sha256_file
 
 
+_SHA256_REFERENCE_RE = re.compile(r"^[0-9a-fA-F]{16,64}$")
+
+
+def _normalized_sha256_reference(value: Any) -> str | None:
+    """Return a normalized full digest/prefix, or None for unsafe input."""
+    if not isinstance(value, str) or _SHA256_REFERENCE_RE.fullmatch(value) is None:
+        return None
+    return value.lower()
+
+
+def _receipt_records(decisive, root):
+    """Materialize receipt identities once for deterministic resolution."""
+    records = []
+    for path, _data, _raw in decisive:
+        rel = os.path.relpath(path, root).replace("\\", "/")
+        records.append(
+            {
+                "path": path,
+                "rel": rel,
+                "basename": os.path.basename(rel),
+                "sha256": sha256_file(path).lower(),
+            }
+        )
+    return records
+
+
 def compute_superseded_targets(decisive, root):
-    """decisive: list of (path, dict, raw_text) tuples over the FULL
-    decisive-claim corpus (as returned by test_c_neg1._decisive_claim_files()
-    -- both consumers pass that same list in). Returns
-    {(filename, sha256): void_rel} built from every VOID receipt's
-    `supersedes` list found in the corpus."""
+    """Resolve valid VOID entries to unique target receipt identities.
+
+    Returns a mapping keyed by ``(basename, full_sha256)``. Each value records
+    the superseding VOID receipt, the exact digest text it supplied, and whether
+    that text was a full digest or an unambiguous prefix.
+
+    A reference resolves only when exactly one *other* decisive receipt has the
+    named basename and a full on-disk digest beginning with the supplied
+    reference. Ambiguity fails closed, including duplicate same-basename files.
+    """
+    records = _receipt_records(decisive, root)
     superseded_targets = {}
-    for void_path, void_d, _void_raw in decisive:
-        if not isinstance(void_d, dict) or void_d.get("verdict") != "VOID":
+
+    for (void_path, void_data, _void_raw), void_record in zip(decisive, records):
+        if not isinstance(void_data, dict) or void_data.get("verdict") != "VOID":
             continue
-        supersedes = void_d.get("supersedes")
+        supersedes = void_data.get("supersedes")
         if not isinstance(supersedes, list):
             continue
-        void_rel = os.path.relpath(void_path, root).replace("\\", "/")
+
         for entry in supersedes:
             if not isinstance(entry, dict):
                 continue
-            fname, esha = entry.get("filename"), entry.get("sha256")
-            if isinstance(fname, str) and isinstance(esha, str):
-                superseded_targets[(fname, esha)] = void_rel
+            filename = entry.get("filename")
+            digest_ref = _normalized_sha256_reference(entry.get("sha256"))
+            if (
+                not isinstance(filename, str)
+                or not filename
+                or filename != os.path.basename(filename)
+                or digest_ref is None
+            ):
+                continue
+
+            matches = [
+                record
+                for record in records
+                if record["path"] != void_path
+                and record["basename"] == filename
+                and record["sha256"].startswith(digest_ref)
+            ]
+            if len(matches) != 1:
+                continue
+
+            target = matches[0]
+            key = (target["basename"], target["sha256"])
+            superseded_targets.setdefault(
+                key,
+                {
+                    "superseded_by": void_record["rel"],
+                    "matched_sha256": digest_ref,
+                    "sha256_match_kind": (
+                        "full" if len(digest_ref) == 64 else "unambiguous_prefix"
+                    ),
+                },
+            )
+
     return superseded_targets
 
 
 def partition_superseded(decisive, root):
-    """Split `decisive` into (kept, excluded_superseded).
-
-    `kept` preserves original (path, dict, raw) tuple shape and order, minus
-    every VOID-superseded entry. `excluded_superseded` is a list of dicts
-    (path/sha256/superseded_by/reason) -- the disclosed shape
-    spend_annex_scan.py has emitted since issue #353; test_c_neg1.py (issue
-    #358) discloses the identical shape/count in its own reason text so an
-    exclusion that shrinks its undeclared count is never silent."""
+    """Split ``decisive`` into kept and explicitly disclosed exclusions."""
     superseded_targets = compute_superseded_targets(decisive, root)
     kept = []
     excluded = []
-    for path, d, raw in decisive:
+
+    for path, data, raw in decisive:
         rel = os.path.relpath(path, root).replace("\\", "/")
-        receipt_sha = sha256_file(path)
-        key = (os.path.basename(rel), receipt_sha)
-        if key in superseded_targets:
-            excluded.append({
+        receipt_sha = sha256_file(path).lower()
+        match = superseded_targets.get((os.path.basename(rel), receipt_sha))
+        if match is None:
+            kept.append((path, data, raw))
+            continue
+
+        excluded.append(
+            {
                 "path": rel,
                 "sha256": receipt_sha,
-                "superseded_by": superseded_targets[key],
-                "reason": "named in a VOID receipt's supersedes list, matched by "
-                          "(basename, sha256) -- formally disposed, excluded from the "
-                          "decisive-claim set per issue #353/#358's VOID-supersession "
-                          "semantics; never classified, never counted toward "
-                          "unresolvable/uncovered/undeclared. The superseding VOID "
-                          "receipt itself remains IN the decisive-claim set.",
-            })
-            continue
-        kept.append((path, d, raw))
+                "superseded_by": match["superseded_by"],
+                "matched_sha256": match["matched_sha256"],
+                "sha256_match_kind": match["sha256_match_kind"],
+                "reason": (
+                    "named in another VOID receipt's supersedes list and "
+                    "resolved by bare basename plus a full SHA-256 or an "
+                    "unambiguous hexadecimal SHA-256 prefix of at least 16 "
+                    "characters; formally disposed and excluded from the "
+                    "decisive-claim set per issues #353/#358/#427. Malformed "
+                    "or ambiguous references exclude nothing. The superseding "
+                    "VOID receipt itself remains in the decisive-claim set."
+                ),
+            }
+        )
+
     return kept, excluded
