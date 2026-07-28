@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/goal-continuation-wiring.test.ts — wiring-seam tests (ember issue #211,
 // live acceptance leg b groundwork). Proves, at the unit level with the REAL
 // engine + a real in-memory store, the exact property the compiled-binary
@@ -6,7 +9,8 @@
 // the chain stops cleanly once the goal leaves Active.
 
 import { describe, it, expect } from "bun:test";
-import { createGoalContinuationPoke, isGoalContinuationFeatureEnabled } from "./goal-continuation-wiring.ts";
+import * as continuationWiring from "./goal-continuation-wiring.ts";
+const { createGoalContinuationPoke, isGoalContinuationFeatureEnabled } = continuationWiring;
 import { createGoalContinuationEngine } from "./goal-continuation.ts";
 import { createGoalStore, createInMemoryGoalPersistence } from "./goal-store.ts";
 import type { ContinuationEligibilitySignals } from "./goal-continuation.ts";
@@ -139,6 +143,103 @@ describe("createGoalContinuationPoke — self-chaining across multiple autonomou
   });
 });
 
+describe("goal-continuation bounded re-arm (issue #279)", () => {
+  it("recovers after a transient skip without another external poke", async () => {
+    const store = createGoalStore({ persistence: createInMemoryGoalPersistence() });
+    store.createGoal("recover the lost wakeup");
+    let turnActive = true;
+    let fired = 0;
+    let rearmPokes = 0;
+
+    const poke = createGoalContinuationPoke({
+      engine: createGoalContinuationEngine(),
+      getStore: () => store,
+      getEligibilitySignals: () => eligible({ turnActive }),
+      startTurn: async () => {
+        fired += 1;
+        store.updateStatus("Complete");
+      },
+    });
+
+    type Rearm = (options: {
+      poke: () => void;
+      intervalMs?: number;
+      featureEnabled?: () => boolean;
+      shouldPoke?: () => boolean;
+      scheduler?: {
+        setInterval: (callback: () => void, intervalMs: number) => unknown;
+        clearInterval: (handle: unknown) => void;
+      };
+    }) => () => void;
+    const startRearm = (continuationWiring as unknown as {
+      startGoalContinuationRearm: Rearm;
+    }).startGoalContinuationRearm;
+
+    const ticks: Array<() => void> = [];
+    let cleared: unknown = null;
+    const stop = startRearm({
+      poke: () => { rearmPokes += 1; poke(); },
+      shouldPoke: () => !turnActive,
+      intervalMs: 25,
+      scheduler: {
+        setInterval: (callback, intervalMs) => {
+          expect(intervalMs).toBe(25);
+          ticks.push(callback);
+          return "rearm-handle";
+        },
+        clearInterval: (handle) => { cleared = handle; },
+      },
+    });
+
+    poke();
+    await flushChain();
+    expect(fired).toBe(0);
+
+    ticks[0]?.();
+    await flushChain();
+    expect(rearmPokes).toBe(0);
+    expect(fired).toBe(0);
+
+    turnActive = false;
+    ticks[0]?.();
+    await flushChain();
+    expect(rearmPokes).toBe(1);
+    expect(fired).toBe(1);
+    expect(store.getGoal()?.status).toBe("Complete");
+
+    stop();
+    expect(cleared).toBe("rearm-handle");
+  });
+
+  it("the same EMBER_GOAL_CONTINUATION kill switch suppresses re-arm pokes", async () => {
+    const ticks: Array<() => void> = [];
+    let pokes = 0;
+    type Rearm = (options: {
+      poke: () => void;
+      featureEnabled: () => boolean;
+      scheduler: {
+        setInterval: (callback: () => void, intervalMs: number) => unknown;
+        clearInterval: (handle: unknown) => void;
+      };
+    }) => () => void;
+    const startRearm = (continuationWiring as unknown as {
+      startGoalContinuationRearm: Rearm;
+    }).startGoalContinuationRearm;
+    const stop = startRearm({
+      poke: () => { pokes += 1; },
+      featureEnabled: () => false,
+      scheduler: {
+        setInterval: (callback) => { ticks.push(callback); return "disabled"; },
+        clearInterval: () => {},
+      },
+    });
+
+    ticks[0]?.();
+    await flushChain();
+    expect(pokes).toBe(0);
+    stop();
+  });
+});
 describe("createGoalContinuationPoke — receipt-store wiring (spec §7.1)", () => {
   function fakeWriter(): GoalReceiptWriter & { rows: Array<{ event: string; goalId?: string; detail?: Record<string, unknown> }> } {
     const rows: Array<{ event: string; goalId?: string; detail?: Record<string, unknown> }> = [];
