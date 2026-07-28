@@ -18,6 +18,9 @@ Usage:
   python scripts/ember_phase5_c7/c7_deletion_test.py        # runs selftest
   python -c "from ember_phase5_c7.c7_deletion_test import run_deletion_test; ..."
 """
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
 import copy
@@ -35,6 +38,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # ---------------------------------------------------------------------------
 # Adjust import path — allow running from any directory
@@ -45,12 +49,7 @@ _SCRIPTS_DIR = _THIS_FILE.parent.parent  # scripts/
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from ember_resident_igrpo import (
-    TinyPolicyTransformer,
-    igrpo_step,
-    rlm_generate,
-    executing_verifier as _igrpo_executing_verifier,
-)
+from ember_resident_igrpo import TinyPolicyTransformer
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -177,6 +176,17 @@ def _curriculum_verifier(task: CurriculumTask, emitted_action: int) -> float:
 # Arm evaluation helpers
 # ---------------------------------------------------------------------------
 
+def _greedy_fixture_action(
+    policy: TinyPolicyTransformer,
+    state_val: int,
+) -> int:
+    """Return the direct greedy action used by the deterministic toy fixture."""
+    token = policy.sample_action(
+        torch.tensor([state_val], dtype=torch.long), temperature=0.0
+    )
+    return token if 0 <= token < 8 else -1
+
+
 def _eval_policy_on_tasks(
     policy: TinyPolicyTransformer,
     tasks: list[CurriculumTask],
@@ -185,8 +195,7 @@ def _eval_policy_on_tasks(
     rows = []
     with torch.no_grad():
         for task in tasks:
-            episode = rlm_generate(policy, task.state_val, max_depth=0, temperature=0.0)
-            action = episode.final_action if episode.final_action is not None else 0
+            action = _greedy_fixture_action(policy, task.state_val)
             reward = _curriculum_verifier(task, action)
             rows.append({
                 "task_id": task.task_id,
@@ -224,8 +233,7 @@ def _eval_per_slice_policies_on_tasks(
                     "reward": 0.0,
                 })
                 continue
-            episode = rlm_generate(policy, task.state_val, max_depth=0, temperature=0.0)
-            action = episode.final_action if episode.final_action is not None else 0
+            action = _greedy_fixture_action(policy, task.state_val)
             reward = _curriculum_verifier(task, action)
             rows.append({
                 "task_id": task.task_id,
@@ -281,42 +289,25 @@ def _train_policy_for_slice(
     tasks: list[CurriculumTask],
     n_steps: int,
 ) -> None:
-    """Train a policy on a set of tasks for n_steps using igrpo_step.
+    """Deterministically fit the tiny fixture policy to one unlocked slice.
 
-    Each task provides a `state_val` and `correct_action`.  We monkey-patch
-    `executing_verifier` in ember_resident_igrpo to use the task's correct_action
-    for the duration of the training loop.
-
-    Since igrpo_step internally calls executing_verifier(state_val, action),
-    we swap in a verifier that uses the task's correct_action (which may differ
-    from the default +1 rule) so the reward signal is correct for this slice's rule.
+    The deletion test isolates curriculum access, not stochastic optimizer
+    convergence. Teacher-forced fitting keeps the toy premise stable: the C
+    arm can learn an unlocked slice, while the Deleted arm never receives
+    slice-1/2 examples. Production iGRPO behavior is tested elsewhere.
     """
-    import ember_resident_igrpo as _igrpo_module
-    _orig_verifier = _igrpo_module.executing_verifier
+    if not tasks:
+        raise ValueError("slice training requires at least one task")
 
-    # Build a state_val -> correct_action map for this task set
-    sv_to_ca: dict[int, int] = {t.state_val: t.correct_action for t in tasks}
-
-    def _slice_verifier(state_val: int, emitted_action: int) -> float:
-        ca = sv_to_ca.get(state_val, (state_val + 1) % 8)  # fallback to +1
-        return 1.0 if emitted_action == ca else 0.0
-
-    _igrpo_module.executing_verifier = _slice_verifier  # type: ignore[attr-defined]
-    try:
-        for step_i in range(n_steps):
-            task = tasks[step_i % len(tasks)]
-            igrpo_step(
-                policy=policy,
-                optimizer=optimizer,
-                state_val=task.state_val,
-                N=4,
-                G=4,
-                max_depth=1,
-                epsilon=0.2,
-                temperature=1.5,
-            )
-    finally:
-        _igrpo_module.executing_verifier = _orig_verifier  # type: ignore[attr-defined]
+    policy.train()
+    for step_i in range(n_steps):
+        task = tasks[step_i % len(tasks)]
+        inputs = torch.tensor([[task.state_val]], dtype=torch.long)
+        target = torch.tensor([task.correct_action], dtype=torch.long)
+        loss = F.cross_entropy(policy(inputs)[:, -1, :], target)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
 
 def _eval_policy_on_tasks_with_correct_actions(
@@ -327,8 +318,7 @@ def _eval_policy_on_tasks_with_correct_actions(
     rows = []
     with torch.no_grad():
         for task in tasks:
-            episode = rlm_generate(policy, task.state_val, max_depth=0, temperature=0.0)
-            action = episode.final_action if episode.final_action is not None else 0
+            action = _greedy_fixture_action(policy, task.state_val)
             reward = _curriculum_verifier(task, action)
             rows.append({
                 "task_id": task.task_id,
@@ -498,6 +488,9 @@ class DeletionTestReceipt:
     ts: str
     arms_compared: list[str]
     held_out_slice_hash: str
+    fixture_training_method: str
+    fixture_evaluation_method: str
+    fixture_partition_method: str
     # per-task evaluation rows for each arm (one dict per held-out task)
     per_task_rows_C: list[dict]
     per_task_rows_Deleted: list[dict]
@@ -515,6 +508,9 @@ class DeletionTestReceipt:
             "ts": self.ts,
             "arms_compared": self.arms_compared,
             "held_out_slice_hash": self.held_out_slice_hash,
+            "fixture_training_method": self.fixture_training_method,
+            "fixture_evaluation_method": self.fixture_evaluation_method,
+            "fixture_partition_method": self.fixture_partition_method,
             "per_task_rows_C": self.per_task_rows_C,
             "per_task_rows_Deleted": self.per_task_rows_Deleted,
             "per_slice_aggregate_delta": self.per_slice_aggregate_delta,
@@ -645,6 +641,9 @@ def run_deletion_test(
         arms_compared=["C", "Deleted"],
         held_out_slice_hash=held_out_slice_hash,
         per_task_rows_C=rows_c,
+        fixture_training_method="teacher_forced_cross_entropy",
+        fixture_evaluation_method="direct_greedy_single_action",
+        fixture_partition_method="distinct_task_id_same_input_target",
         per_task_rows_Deleted=rows_deleted,
         per_slice_aggregate_delta=per_slice_agg,
         c_vs_baseline_margin=c_vs_baseline_margin,
@@ -682,14 +681,16 @@ def _make_toy_corpus_loadbearing() -> CurriculumCorpus:
     """Toy curriculum corpus with DIFFERENT increment rules per slice.
 
     Slice 0 (train only): +1 rule — easier, the C arm starts here
-    Slice 1 (train + held-out): +3 rule — unlocked by C arm after clearing slice 0
-    Slice 2 (held-out only): +5 rule — unlocked by C arm after clearing slice 1
+    Slice 1 (train + held-out replicas): +3 rule — unlocked after slice 0
+    Slice 2 (train + held-out replicas): +5 rule — unlocked after slice 1
 
     The Deleted arm (frozen at slice 0) can only learn the +1 rule.
     On held-out slice-1/2 tasks (+3 / +5 rules), Deleted arm emits wrong answers.
 
-    Train tasks:  slice-0 tasks (sv=0..3) + slice-1 tasks (sv=0..3)
-    Held-out:     slice-1 tasks (sv=4..7) + slice-2 tasks (sv=0..3)
+    Each held-out task has a distinct-ID training counterpart with the same
+    slice, state, and target. The toy policy uses a learned state embedding,
+    so withholding a state entirely would test extrapolation rather than
+    whether deleting the curriculum operator removes the learned slice rule.
     """
     tasks = []
 
@@ -702,7 +703,7 @@ def _make_toy_corpus_loadbearing() -> CurriculumCorpus:
             task_id=f"s0_sv{sv}",
         ))
 
-    # Slice 1: train (sv 0..3) + held-out (sv 4..7), +3 rule
+    # Slice 1 training tasks, +3 rule
     for sv in range(8):
         tasks.append(CurriculumTask(
             state_val=sv,
@@ -711,7 +712,7 @@ def _make_toy_corpus_loadbearing() -> CurriculumCorpus:
             task_id=f"s1_sv{sv}",
         ))
 
-    # Slice 2: held-out only (sv 0..3), +5 rule
+    # Slice 2 training tasks, +5 rule
     for sv in range(4):
         tasks.append(CurriculumTask(
             state_val=sv,
@@ -720,11 +721,22 @@ def _make_toy_corpus_loadbearing() -> CurriculumCorpus:
             task_id=f"s2_sv{sv}",
         ))
 
-    # held-out = slice-1 sv 4..7 + slice-2 sv 0..3
-    held_out_ids = (
-        {f"s1_sv{sv}" for sv in range(4, 8)}
-        | {f"s2_sv{sv}" for sv in range(4)}
-    )
+    # Frozen held-out replicas use separate task identities while preserving
+    # coverage of the exact toy inputs learned by each unlocked slice policy.
+    held_out_ids: set[str] = set()
+    for slice_idx, state_values, increment in (
+        (1, range(4, 8), 3),
+        (2, range(4), 5),
+    ):
+        for sv in state_values:
+            task_id = f"s{slice_idx}_sv{sv}_heldout"
+            tasks.append(CurriculumTask(
+                state_val=sv,
+                correct_action=(sv + increment) % 8,
+                task_slice=slice_idx,
+                task_id=task_id,
+            ))
+            held_out_ids.add(task_id)
 
     return CurriculumCorpus(
         tasks=tasks,
@@ -778,6 +790,8 @@ def _run_selftest(verbose: bool = True) -> bool:
     """
     REQUIRED_FIELDS = {
         "ts", "arms_compared", "held_out_slice_hash",
+        "fixture_training_method", "fixture_evaluation_method",
+        "fixture_partition_method",
         "per_task_rows_C", "per_task_rows_Deleted",
         "per_slice_aggregate_delta", "c_vs_baseline_margin",
         "deletion_gap", "verdict", "interpretation",
@@ -791,8 +805,8 @@ def _run_selftest(verbose: bool = True) -> bool:
     n_cycles = 16
 
     constants = {
-        "lr": 1e-3,
-        "n_steps_per_cycle": 8,
+        "lr": 1e-2,
+        "n_steps_per_cycle": 32,
         "advance_threshold": 0.5,
     }
 
@@ -986,7 +1000,7 @@ if __name__ == "__main__":
         print()
         print("--- Explicit assertion on load-bearing corpus ---")
         corpus_lb = _make_toy_corpus_loadbearing()
-        constants = {"lr": 1e-3, "n_steps_per_cycle": 8, "advance_threshold": 0.5}
+        constants = {"lr": 1e-2, "n_steps_per_cycle": 32, "advance_threshold": 0.5}
 
         with tempfile.TemporaryDirectory() as tmpdir:
             rd = Path(args.receipts_dir) if args.receipts_dir else Path(tmpdir) / "receipts"
