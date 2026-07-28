@@ -6,6 +6,8 @@ borrowed_lineage=frozen_reference_only
 mechanism_erasure=forbidden
 -->
 
+<!-- state-as-of: 2026-07-28 -->
+
 # Ember
 
 Ember is a clean-genesis sovereign foundation intelligence, a local

@@ -35,15 +35,18 @@ one current D-row or EMBER milestone, but still grants no completion credit.
 
 ## Recovered cited authority
 
-The following files were restored byte-for-byte from their original Git
+The following public documents were restored from their original Git
 objects because issue #35 still cited them while current master omitted them:
 
 - `docs/spec/publishability-adjudication-v1.md` from `f2027c00`;
-- `receipts/acceptance/acting-operator-ruling-20260703.json` from `86a9e8be`;
-- `receipts/acceptance/acting-operator-ruling-2-20260703.json` from
-  `f2027c00`;
 - `docs/audit/class2-unwatched-mandates-recon-20260704.md` from
   `852457d3`.
+
+The two historical acting-operator ruling objects were recovered and verified
+at Git blobs `2f32b35bd9d3fd0b6b84ffc26ce2875fbe3e94ff` and
+`96873b51dfae608c61d30207ee6b78716289c455`. They remain reconstructible
+from Git history but are not republished as current-tree receipts because they
+predate the current authority-binding schema.
 
 Restoration preserves provenance and reversibility. It does not revive the
 legacy M/C denominator as execution authority and does not claim that any
