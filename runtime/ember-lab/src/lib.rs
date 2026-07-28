@@ -3677,9 +3677,7 @@ fn resource_guard_freeze_reason(capacity: &HostCommitCapacity) -> Option<&'stati
     })
 }
 
-fn resource_guard_headroom_freeze_reason(
-    headroom: &HostSurvivalHeadroom,
-) -> Option<&'static str> {
+fn resource_guard_headroom_freeze_reason(headroom: &HostSurvivalHeadroom) -> Option<&'static str> {
     if headroom.physical_available_bytes < RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES {
         Some("physical_available_below_survival_floor")
     } else if headroom.commit_remaining_bytes < RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES {
@@ -3713,7 +3711,11 @@ fn persist_resource_guard_headroom(
     let (outcome, reason, observation) = match sample {
         Ok(headroom) => {
             let reason = resource_guard_headroom_freeze_reason(&headroom);
-            let outcome = if reason.is_some() { "frozen" } else { "healthy" };
+            let outcome = if reason.is_some() {
+                "frozen"
+            } else {
+                "healthy"
+            };
             (
                 outcome,
                 reason.map(str::to_string),
@@ -3795,11 +3797,11 @@ fn probe_host_survival_headroom() -> Result<HostSurvivalHeadroom> {
         .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "Windows resource guard overflowed commit limit bytes".into(),
         })?;
-    let commit_remaining_bytes = commit_limit_bytes.checked_sub(commit_total_bytes).ok_or_else(
-        || EmberLabError::InvalidDispatchManifest {
+    let commit_remaining_bytes = commit_limit_bytes
+        .checked_sub(commit_total_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "Windows resource guard observed commit above its live limit".into(),
-        },
-    )?;
+        })?;
     Ok(HostSurvivalHeadroom {
         physical_available_bytes,
         commit_remaining_bytes,
@@ -3837,8 +3839,9 @@ fn spawn_resource_guard_monitor(
             use windows_sys::Win32::System::Threading::WaitForSingleObject;
 
             loop {
-                let wait =
-                    unsafe { WaitForSingleObject(shutdown.raw(), RESOURCE_GUARD_SAMPLE_INTERVAL_MS) };
+                let wait = unsafe {
+                    WaitForSingleObject(shutdown.raw(), RESOURCE_GUARD_SAMPLE_INTERVAL_MS)
+                };
                 if wait == WAIT_OBJECT_0 {
                     break;
                 }
@@ -5102,16 +5105,14 @@ mod dispatch_binding_snapshot_tests {
         assert_eq!(resource_guard_freeze_reason(&healthy), None);
 
         let mut low_physical = healthy.clone();
-        low_physical.physical_available_bytes =
-            RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES - 1;
+        low_physical.physical_available_bytes = RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES - 1;
         assert_eq!(
             resource_guard_freeze_reason(&low_physical),
             Some("physical_available_below_survival_floor")
         );
 
         let mut low_commit = healthy;
-        low_commit.current_commit_remaining_bytes =
-            RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES - 1;
+        low_commit.current_commit_remaining_bytes = RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES - 1;
         assert_eq!(
             resource_guard_freeze_reason(&low_commit),
             Some("commit_remaining_below_survival_floor")
@@ -5129,10 +5130,7 @@ mod dispatch_binding_snapshot_tests {
 
         let frozen = resource_guard_status_from_connection(&conn).unwrap();
         assert_eq!(frozen["admission_state"], "frozen");
-        assert_eq!(
-            frozen["reason"],
-            "commit_remaining_below_survival_floor"
-        );
+        assert_eq!(frozen["reason"], "commit_remaining_below_survival_floor");
         assert_eq!(frozen["oracle_evidence_required"], true);
 
         persist_resource_guard_sample(&conn, 200, Ok(healthy_host_capacity())).unwrap();

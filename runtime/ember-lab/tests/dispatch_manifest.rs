@@ -712,12 +712,14 @@ fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
         format!("{error:?}").contains("ResourceAdmissionFrozen"),
         "unexpected error: {error:?}"
     );
-    assert_eq!(daemon.job_state("dispatch-resource-guard-frozen").unwrap(), None);
+    assert_eq!(
+        daemon.job_state("dispatch-resource-guard-frozen").unwrap(),
+        None
+    );
     assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
-    let receipt: Value = serde_json::from_slice(
-        &fs::read(root.join("custody").join("preflight.json")).unwrap(),
-    )
-    .unwrap();
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(root.join("custody").join("preflight.json")).unwrap())
+            .unwrap();
     assert_eq!(receipt["result"], "REFUSED_RESOURCE_GUARD_FROZEN");
     assert_eq!(receipt["resource_guard"]["admission_state"], "frozen");
     assert_eq!(receipt["resource_guard"]["oracle_evidence_required"], true);
@@ -750,7 +752,10 @@ fn resource_guard_monitor_samples_for_the_daemon_lifetime() {
         )
         .unwrap();
     assert!(later >= 2, "expected a daemon-lifetime monitor sample");
-    assert_eq!(daemon.resource_guard_status().unwrap()["driver_locked_provider"], "UNAVAILABLE");
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["driver_locked_provider"],
+        "UNAVAILABLE"
+    );
     drop(daemon);
     fs::remove_dir_all(root).unwrap();
 }
