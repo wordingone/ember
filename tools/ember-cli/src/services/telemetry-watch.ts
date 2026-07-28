@@ -13,7 +13,7 @@
 // returned handle.stop() to tear it down cleanly.
 
 import { createHash } from "node:crypto";
-import { readFile, stat } from "fs/promises";
+import { open, stat } from "fs/promises";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -27,6 +27,14 @@ export const POLL_INTERVAL_MS = 500;
 
 /** Maximum number of events to retain in the ring buffer. */
 export const RING_BUFFER_CAP = 200;
+
+/** Hard ceiling for all telemetry bytes read by one poll. */
+export const MAX_READ_BYTES_PER_POLL = 256 * 1024;
+
+/** Hard ceiling for a JSONL line that has not reached a newline yet. */
+export const MAX_PARTIAL_LINE_BYTES = 64 * 1024;
+
+const PREFIX_SAMPLE_BYTES = 4096;
 
 /**
  * How long (ms) with no train_step events before an active run is considered stale
@@ -102,9 +110,35 @@ export interface TelemetryState {
 let _state: TelemetryState = { recentEvents: [] };
 let _byteOffset = 0;
 let _lineBuffer = "";
+let _discardUntilNewline = false;
 let _fileIdentity: string | undefined;
 let _prefixDigest: string | undefined;
+let _lastMtimeMs: number | undefined;
 let _intervalHandle: ReturnType<typeof setInterval> | null = null;
+let _pollInFlight = false;
+let _watchGeneration = 0;
+
+export interface TelemetryDiagnostics {
+  pollAttempts: number;
+  pollsCompleted: number;
+  overlapPollsSkipped: number;
+  channelBytesRead: number;
+  maxSingleReadBytes: number;
+  maxPollReadBytes: number;
+  partialLineBytes: number;
+  oversizedPartialLinesDropped: number;
+}
+
+let _diagnostics: TelemetryDiagnostics = {
+  pollAttempts: 0,
+  pollsCompleted: 0,
+  overlapPollsSkipped: 0,
+  channelBytesRead: 0,
+  maxSingleReadBytes: 0,
+  maxPollReadBytes: 0,
+  partialLineBytes: 0,
+  oversizedPartialLinesDropped: 0,
+};
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -247,7 +281,9 @@ function resetForNewChannelFile(): void {
   _state = { recentEvents: [], channelStatus: "ONLINE" };
   _byteOffset = 0;
   _lineBuffer = "";
+  _discardUntilNewline = false;
   _prefixDigest = undefined;
+  _diagnostics.partialLineBytes = 0;
 }
 
 function fileIdentity(info: { dev: number; ino: number; birthtimeMs: number }): string {
@@ -258,56 +294,162 @@ function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-async function pollOnce(path: string, clock: () => number): Promise<void> {
-  let buf: Buffer;
-  let identity: string;
+export type TelemetryRangeReader = (
+  path: string,
+  offset: number,
+  length: number,
+) => Promise<Buffer>;
+
+async function defaultReadRange(path: string, offset: number, length: number): Promise<Buffer> {
+  if (length <= 0) return Buffer.alloc(0);
+  const file = await open(path, "r");
   try {
-    const info = await stat(path);
-    if (!info.isFile()) throw new Error("telemetry channel is not a regular file");
-    identity = fileIdentity(info);
-    buf = await readFile(path);
-  } catch {
-    markChannelOffline();
-    return;
+    const buffer = Buffer.allocUnsafe(length);
+    const { bytesRead } = await file.read(buffer, 0, length, offset);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await file.close();
+  }
+}
+
+async function measuredRead(
+  reader: TelemetryRangeReader,
+  path: string,
+  offset: number,
+  length: number,
+  generation: number,
+): Promise<Buffer> {
+  const bytes = await reader(path, offset, length);
+  if (bytes.length > length) throw new Error("telemetry reader exceeded requested byte range");
+  if (generation === _watchGeneration) {
+    _diagnostics.channelBytesRead += bytes.length;
+    _diagnostics.maxSingleReadBytes = Math.max(_diagnostics.maxSingleReadBytes, bytes.length);
+  }
+  return bytes;
+}
+
+function consumeNewBytes(newBytes: Buffer, clock: () => number): void {
+  let text = newBytes.toString("utf-8");
+  if (_discardUntilNewline) {
+    const newline = text.indexOf("\n");
+    if (newline < 0) return;
+    text = text.slice(newline + 1);
+    _discardUntilNewline = false;
   }
 
-  const rotated = _fileIdentity !== undefined && identity !== _fileIdentity;
-  const truncated = buf.length < _byteOffset;
-  const rewritten = _byteOffset > 0 && _prefixDigest !== undefined &&
-    buf.length >= _byteOffset && sha256(buf.subarray(0, _byteOffset)) !== _prefixDigest;
-  if (rotated || truncated || rewritten) resetForNewChannelFile();
-  _fileIdentity = identity;
-  _state = { ..._state, channelStatus: "ONLINE" };
-
-  if (buf.length === 0) {
-    _prefixDigest = sha256(buf);
-    checkActiveRunExpiry(clock);
-    return;
-  }
-
-  if (buf.length <= _byteOffset) {
-    _prefixDigest = sha256(buf.subarray(0, _byteOffset));
-    checkActiveRunExpiry(clock);
-    return;
-  }
-
-  const newBytes = buf.slice(_byteOffset);
-  _byteOffset = buf.length;
-
-  const text = _lineBuffer + newBytes.toString("utf-8");
+  text = _lineBuffer + text;
   _lineBuffer = "";
-
   const lines = text.split("\n");
-  // The last element may be a partial line — stash it for the next poll
-  _lineBuffer = lines.pop() ?? "";
+  const partial = lines.pop() ?? "";
 
   for (const line of lines) {
+    if (Buffer.byteLength(line, "utf8") > MAX_PARTIAL_LINE_BYTES) {
+      _diagnostics.oversizedPartialLinesDropped += 1;
+      continue;
+    }
     const trimmed = line.trim();
     if (trimmed) processLine(trimmed, clock);
   }
 
-  _prefixDigest = sha256(buf.subarray(0, _byteOffset));
+  if (Buffer.byteLength(partial, "utf8") > MAX_PARTIAL_LINE_BYTES) {
+    _diagnostics.oversizedPartialLinesDropped += 1;
+    _discardUntilNewline = true;
+  } else {
+    _lineBuffer = partial;
+  }
+  _diagnostics.partialLineBytes = Buffer.byteLength(_lineBuffer, "utf8");
+}
+
+async function pollOnce(
+  path: string,
+  clock: () => number,
+  readRange: TelemetryRangeReader,
+  generation: number,
+): Promise<void> {
+  let info;
+  try {
+    info = await stat(path);
+    if (!info.isFile()) throw new Error("telemetry channel is not a regular file");
+  } catch {
+    if (generation === _watchGeneration) markChannelOffline();
+    return;
+  }
+  if (generation !== _watchGeneration) return;
+
+  const identity = fileIdentity(info);
+  let readBudget = MAX_READ_BYTES_PER_POLL;
+
+  const rotated = _fileIdentity !== undefined && identity !== _fileIdentity;
+  const truncated = info.size < _byteOffset;
+  if (rotated || truncated) resetForNewChannelFile();
+
+  if (
+    !rotated &&
+    !truncated &&
+    _byteOffset > 0 &&
+    _prefixDigest !== undefined &&
+    _lastMtimeMs !== undefined &&
+    info.mtimeMs !== _lastMtimeMs
+  ) {
+    const sampleLength = Math.min(info.size, PREFIX_SAMPLE_BYTES, readBudget);
+    const prefix = await measuredRead(readRange, path, 0, sampleLength, generation);
+    if (generation !== _watchGeneration) return;
+    readBudget -= prefix.length;
+    if (sha256(prefix) !== _prefixDigest) resetForNewChannelFile();
+  }
+
+  _fileIdentity = identity;
+  _lastMtimeMs = info.mtimeMs;
+  _state = { ..._state, channelStatus: "ONLINE" };
+
+  if (info.size === 0) {
+    _prefixDigest = sha256(Buffer.alloc(0));
+    checkActiveRunExpiry(clock);
+    return;
+  }
+
+  if (info.size <= _byteOffset || readBudget <= 0) {
+    checkActiveRunExpiry(clock);
+    return;
+  }
+
+  const startOffset = _byteOffset;
+  const length = Math.min(info.size - startOffset, readBudget);
+  const newBytes = await measuredRead(readRange, path, startOffset, length, generation);
+  if (generation !== _watchGeneration) return;
+  _byteOffset += newBytes.length;
+  if (startOffset === 0) {
+    _prefixDigest = sha256(newBytes.subarray(0, Math.min(newBytes.length, PREFIX_SAMPLE_BYTES)));
+  }
+  consumeNewBytes(newBytes, clock);
   checkActiveRunExpiry(clock);
+}
+
+async function schedulePoll(
+  path: string,
+  clock: () => number,
+  readRange: TelemetryRangeReader,
+  generation: number,
+): Promise<void> {
+  if (_pollInFlight) {
+    if (generation === _watchGeneration) _diagnostics.overlapPollsSkipped += 1;
+    return;
+  }
+  _pollInFlight = true;
+  if (generation === _watchGeneration) _diagnostics.pollAttempts += 1;
+  const bytesBefore = generation === _watchGeneration ? _diagnostics.channelBytesRead : 0;
+  try {
+    await pollOnce(path, clock, readRange, generation);
+    if (generation === _watchGeneration) {
+      _diagnostics.pollsCompleted += 1;
+      _diagnostics.maxPollReadBytes = Math.max(
+        _diagnostics.maxPollReadBytes,
+        _diagnostics.channelBytesRead - bytesBefore,
+      );
+    }
+  } finally {
+    _pollInFlight = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +468,10 @@ export interface TelemetryWatchDeps {
   channelPath?: string;
   /** Override the wall-clock function (default: Date.now). */
   now?: () => number;
+  /** Override the poll interval for bounded tests. */
+  pollIntervalMs?: number;
+  /** Override bounded range reads for slow-I/O tests. */
+  readRange?: TelemetryRangeReader;
 }
 
 /**
@@ -344,29 +490,49 @@ export function startTelemetryWatch(
     clearInterval(_intervalHandle);
     _intervalHandle = null;
   }
+  const generation = ++_watchGeneration;
 
   const path =
     deps?.channelPath ??
     process.env["EMBER_TELEMETRY_PATH"] ??
     DEFAULT_CHANNEL_PATH;
   const clock = deps?.now ?? Date.now.bind(Date);
+  const pollIntervalMs = deps?.pollIntervalMs ?? POLL_INTERVAL_MS;
+  const readRange = deps?.readRange ?? defaultReadRange;
+  if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) {
+    throw new Error("telemetry poll interval must be finite and positive");
+  }
 
   // Reset state for a fresh watch session
   _state = { recentEvents: [], channelStatus: "UNKNOWN" };
   _byteOffset = 0;
   _lineBuffer = "";
+  _discardUntilNewline = false;
   _fileIdentity = undefined;
   _prefixDigest = undefined;
+  _lastMtimeMs = undefined;
+  _diagnostics = {
+    pollAttempts: 0,
+    pollsCompleted: 0,
+    overlapPollsSkipped: 0,
+    channelBytesRead: 0,
+    maxSingleReadBytes: 0,
+    maxPollReadBytes: 0,
+    partialLineBytes: 0,
+    oversizedPartialLinesDropped: 0,
+  };
 
-  _intervalHandle = setInterval(() => {
-    pollOnce(path, clock);
-  }, POLL_INTERVAL_MS);
+  const intervalHandle = setInterval(() => {
+    void schedulePoll(path, clock, readRange, generation);
+  }, pollIntervalMs);
+  _intervalHandle = intervalHandle;
 
   return {
     stop: () => {
-      if (_intervalHandle !== null) {
-        clearInterval(_intervalHandle);
+      clearInterval(intervalHandle);
+      if (_intervalHandle === intervalHandle) {
         _intervalHandle = null;
+        _watchGeneration += 1;
       }
     },
   };
@@ -378,4 +544,9 @@ export function startTelemetryWatch(
  */
 export function getState(): TelemetryState {
   return _state;
+}
+
+/** Returns bounded-I/O diagnostics for operator soak receipts. */
+export function getDiagnostics(): TelemetryDiagnostics {
+  return { ..._diagnostics };
 }
