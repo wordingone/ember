@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Totality status-probe for Ember goal condition C-INV (constitutional invariant).
 
 Condition (from GOAL.md §9, INVARIANT.md binds):
@@ -24,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -131,14 +135,20 @@ def check_goal_pin() -> tuple[bool, str]:
     if not GOAL_FILE.exists():
         return False, "GOAL.md missing"
 
-    goal_text = GOAL_FILE.read_text()
+    goal_text = GOAL_FILE.read_text(encoding="utf-8")
+    pins = re.findall(
+        r'(?im)^\s*(?:"invariant_sha256"|invariant_sha256)\s*:\s*'
+        r'"?([0-9a-f]{64})"?\s*,?\s*$',
+        goal_text,
+    )
 
-    # Check for the pin line in §9
-    if "invariant_sha256:" not in goal_text:
+    if not pins:
         return False, "GOAL.md missing invariant_sha256 pin"
 
-    # Check that the pin value matches
-    if INVARIANT_SHA256 not in goal_text:
+    if len(pins) != 1:
+        return False, f"GOAL.md must contain exactly one invariant_sha256 pin, found {len(pins)}"
+
+    if pins[0].lower() != INVARIANT_SHA256:
         return False, f"GOAL.md pin does not match canonical hash"
 
     return True, "GOAL.md pin present and correct"
