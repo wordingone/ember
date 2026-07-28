@@ -27,6 +27,7 @@ const SIMULATED_PEAK_COMMIT_BYTES: u64 = 1 * GIB;
 fn host_capacity(available_maximum_commit_bytes: u64) -> HostCommitCapacity {
     HostCommitCapacity {
         physical_ram_bytes: 64 * GIB,
+        physical_available_bytes: 32 * GIB,
         pagefile_maximum_bytes: 32 * GIB,
         pagefile_configuration_source:
             r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
@@ -34,6 +35,7 @@ fn host_capacity(available_maximum_commit_bytes: u64) -> HostCommitCapacity {
         pagefile_configuration_sha256: "a".repeat(64),
         commit_total_bytes: 96 * GIB - available_maximum_commit_bytes,
         current_commit_limit_bytes: 80 * GIB,
+        current_commit_remaining_bytes: 16 * GIB,
         maximum_commit_capacity_bytes: 96 * GIB,
         available_maximum_commit_bytes,
     }
@@ -456,11 +458,13 @@ fn dispatch_manifest_refuses_physical_pagefile_and_commit_drift() {
                 || {
                     Ok(HostCommitCapacity {
                         physical_ram_bytes: physical,
+                        physical_available_bytes: 32 * GIB,
                         pagefile_maximum_bytes: pagefile_maximum,
                         pagefile_configuration_source: r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles".to_string(),
                         pagefile_configuration_sha256: "b".repeat(64),
                         commit_total_bytes: commit_total,
                         current_commit_limit_bytes: 80 * GIB,
+                        current_commit_remaining_bytes: (80 * GIB).saturating_sub(commit_total),
                         maximum_commit_capacity_bytes: maximum,
                         available_maximum_commit_bytes: observed_available,
                     })
@@ -673,6 +677,82 @@ fn dispatch_manifest_requires_a_closed_workload_profile_before_spawn() {
         assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
         assert!(!root.join("custody").join("preflight.json").exists());
     }
+}
+
+#[test]
+fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
+    let root = sandbox("resource-guard-frozen");
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = write_manifest(&root, "dispatch-resource-guard-frozen", 10_000);
+    let daemon = Daemon::open(&db).unwrap();
+    Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='physical_available_below_survival_floor',observed_at_ms=9999,oracle_evidence_required=1,observation_json=?1 WHERE singleton=1",
+            [json!({
+                "schema_version": "ember-lab-resource-guard-observation-v1",
+                "result": "SURVIVAL_FLOOR_BREACH",
+                "physical_available_bytes": 1,
+                "commit_remaining_bytes": 2,
+                "driver_locked_provider": "UNAVAILABLE"
+            }).to_string()],
+        )
+        .unwrap();
+
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    assert!(
+        format!("{error:?}").contains("ResourceAdmissionFrozen"),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(daemon.job_state("dispatch-resource-guard-frozen").unwrap(), None);
+    assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(root.join("custody").join("preflight.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_RESOURCE_GUARD_FROZEN");
+    assert_eq!(receipt["resource_guard"]["admission_state"], "frozen");
+    assert_eq!(receipt["resource_guard"]["oracle_evidence_required"], true);
+    drop(daemon);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn resource_guard_monitor_samples_for_the_daemon_lifetime() {
+    let root = sandbox("resource-guard-monitor-lifetime");
+    let db_path = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db_path).unwrap();
+    let initial = Connection::open(&db_path)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM resource_guard_observations",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    assert_eq!(initial, 1);
+
+    thread::sleep(Duration::from_millis(2_300));
+    let later = Connection::open(&db_path)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM resource_guard_observations",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    assert!(later >= 2, "expected a daemon-lifetime monitor sample");
+    assert_eq!(daemon.resource_guard_status().unwrap()["driver_locked_provider"], "UNAVAILABLE");
+    drop(daemon);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

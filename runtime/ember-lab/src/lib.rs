@@ -160,6 +160,10 @@ pub enum EmberLabError {
         simulated_peak_commit_bytes: u64,
         receipt_path: PathBuf,
     },
+    ResourceAdmissionFrozen {
+        reason: String,
+        receipt_path: PathBuf,
+    },
     Poisoned,
 }
 
@@ -202,11 +206,13 @@ pub enum JobState {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostCommitCapacity {
     pub physical_ram_bytes: u64,
+    pub physical_available_bytes: u64,
     pub pagefile_maximum_bytes: u64,
     pub pagefile_configuration_source: String,
     pub pagefile_configuration_sha256: String,
     pub commit_total_bytes: u64,
     pub current_commit_limit_bytes: u64,
+    pub current_commit_remaining_bytes: u64,
     pub maximum_commit_capacity_bytes: u64,
     pub available_maximum_commit_bytes: u64,
 }
@@ -385,6 +391,10 @@ pub struct DispatchManifest {
 }
 
 const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+const RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const RESOURCE_GUARD_OBSERVATION_LIMIT: i64 = 1024;
+const RESOURCE_GUARD_SAMPLE_INTERVAL_MS: u32 = 2_000;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -527,13 +537,16 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS planned_outages(outage_id INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, starts_at_ms INTEGER NOT NULL, ends_at_ms INTEGER NOT NULL, reason TEXT NOT NULL, created_at_ms INTEGER NOT NULL, cancelled_at_ms INTEGER);
             CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);")?;
+            CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+            INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
         migrate_schema(&conn, &log_dir)?;
         conn.execute(
             "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
             [now_ms().to_string()],
         )?;
-        Ok(Self {
+        let daemon = Self {
             _state_writer_lock: state_writer_lock,
             log_dir,
             db: Arc::new(Mutex::new(conn)),
@@ -545,7 +558,21 @@ impl Daemon {
             monitor_shutdown,
             #[cfg(windows)]
             monitor_ownership: Arc::new(RwLock::new(true)),
-        })
+        };
+        #[cfg(windows)]
+        {
+            persist_resource_guard_headroom(
+                &*daemon.conn()?,
+                now_ms(),
+                probe_host_survival_headroom(),
+            )?;
+            spawn_resource_guard_monitor(
+                Arc::downgrade(&daemon.db),
+                duplicate_owned_handle(daemon.monitor_shutdown.raw())?,
+                Arc::downgrade(&daemon.monitor_ownership),
+            )?;
+        }
+        Ok(daemon)
     }
 
     fn conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
@@ -562,6 +589,20 @@ impl Daemon {
             [],
             |row| row.get(0),
         )?)
+    }
+
+    pub fn resource_guard_status(&self) -> Result<Value> {
+        let conn = self.conn()?;
+        resource_guard_status_from_connection(&conn)
+    }
+
+    fn frozen_resource_guard(&self) -> Result<Option<Value>> {
+        let status = self.resource_guard_status()?;
+        if status.get("admission_state") == Some(&Value::String("frozen".into())) {
+            Ok(Some(status))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn bind_identity(&self, job_id: &str, path: &Path, expected: &str) -> Result<()> {
@@ -1393,11 +1434,13 @@ impl Daemon {
                     "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
                     "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
                     "physical_ram_bytes": host_commit.physical_ram_bytes,
+                    "physical_available_bytes": host_commit.physical_available_bytes,
                     "pagefile_maximum_bytes": host_commit.pagefile_maximum_bytes,
                     "pagefile_configuration_source": host_commit.pagefile_configuration_source,
                     "pagefile_configuration_sha256": host_commit.pagefile_configuration_sha256,
                     "commit_total_bytes": host_commit.commit_total_bytes,
                     "current_commit_limit_bytes": host_commit.current_commit_limit_bytes,
+                    "current_commit_remaining_bytes": host_commit.current_commit_remaining_bytes,
                     "maximum_commit_capacity_bytes": host_commit.maximum_commit_capacity_bytes,
                     "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
                     "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
@@ -1544,11 +1587,13 @@ impl Daemon {
                 "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
                 "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
                 "physical_ram_bytes": host_commit.physical_ram_bytes,
+                "physical_available_bytes": host_commit.physical_available_bytes,
                 "pagefile_maximum_bytes": host_commit.pagefile_maximum_bytes,
                 "pagefile_configuration_source": host_commit.pagefile_configuration_source,
                 "pagefile_configuration_sha256": host_commit.pagefile_configuration_sha256,
                 "commit_total_bytes": host_commit.commit_total_bytes,
                 "current_commit_limit_bytes": host_commit.current_commit_limit_bytes,
+                "current_commit_remaining_bytes": host_commit.current_commit_remaining_bytes,
                 "maximum_commit_capacity_bytes": host_commit.maximum_commit_capacity_bytes,
                 "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
                 "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
@@ -1567,6 +1612,27 @@ impl Daemon {
             &receipt_bytes,
         )? {
             return Ok(existing);
+        }
+        if let Some(resource_guard) = self.frozen_resource_guard()? {
+            let reason = resource_guard
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("resource_guard_frozen")
+                .to_string();
+            let refusal = json!({
+                "schema_version": "ember-lab-dispatch-preflight-v1",
+                "result": "REFUSED_RESOURCE_GUARD_FROZEN",
+                "job_id": &manifest.job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
+                "resource_guard": resource_guard,
+            });
+            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            return Err(EmberLabError::ResourceAdmissionFrozen {
+                reason,
+                receipt_path,
+            });
         }
         let job_id = manifest.job_id.clone();
         let resource_lease = manifest.resource_lease.clone();
@@ -3269,6 +3335,7 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
         return Err(std::io::Error::last_os_error().into());
     }
     let page_size = info.PageSize as u64;
+    let physical_available_bytes = (info.PhysicalAvailable as u64).checked_mul(page_size);
     let pages_to_bytes = |pages: usize, label: &str| {
         (pages as u64)
             .checked_mul(page_size)
@@ -3280,6 +3347,10 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
     let commit_total_bytes = pages_to_bytes(info.CommitTotal, "committed bytes")?;
     let current_commit_limit_bytes =
         pages_to_bytes(info.CommitLimit, "current commit limit bytes")?;
+    let physical_available_bytes =
+        physical_available_bytes.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "Windows host commit probe overflowed physical available bytes".into(),
+        })?;
     let (pagefile_maximum_bytes, pagefile_configuration_sha256) =
         configured_pagefile_maximum_bytes()?;
     let maximum_commit_capacity_bytes = physical_ram_bytes
@@ -3297,8 +3368,14 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
             detail: "live committed bytes exceed configured maximum commit capacity".into(),
         });
     }
+    let current_commit_remaining_bytes = current_commit_limit_bytes
+        .checked_sub(commit_total_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "live committed bytes exceed current Windows commit limit".into(),
+        })?;
     Ok(HostCommitCapacity {
         physical_ram_bytes,
+        physical_available_bytes,
         pagefile_maximum_bytes,
         pagefile_configuration_source:
             r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
@@ -3306,6 +3383,7 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
         pagefile_configuration_sha256,
         commit_total_bytes,
         current_commit_limit_bytes,
+        current_commit_remaining_bytes,
         maximum_commit_capacity_bytes,
         available_maximum_commit_bytes: maximum_commit_capacity_bytes - commit_total_bytes,
     })
@@ -3529,11 +3607,210 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         "UPDATE jobs SET outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events) WHERE outage_event_cutoff_seq IS NULL AND state IN ('stopped','exited','failed')",
         [],
     )?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
+         CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+         INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
+    )?;
     conn.execute(
-        "UPDATE metadata SET value='3' WHERE key='schema_version'",
+        "UPDATE metadata SET value='4' WHERE key='schema_version'",
         [],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+fn create_resource_guard_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
+         CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+         INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
+    )?;
+    Ok(())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HostSurvivalHeadroom {
+    physical_available_bytes: u64,
+    commit_remaining_bytes: u64,
+}
+
+fn resource_guard_status_from_connection(conn: &Connection) -> Result<Value> {
+    let (state, reason, observed_at_ms, oracle_required, observation_json): (
+        String,
+        Option<String>,
+        i64,
+        i64,
+        String,
+    ) = conn.query_row(
+        "SELECT admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json FROM resource_guard_state WHERE singleton=1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+    )?;
+    let observation: Value = serde_json::from_str(&observation_json).map_err(|error| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: format!("resource guard observation is invalid: {error}"),
+        }
+    })?;
+    Ok(json!({
+        "schema_version": "ember-lab-resource-guard-state-v1",
+        "admission_state": state,
+        "reason": reason,
+        "observed_at_ms": observed_at_ms,
+        "oracle_evidence_required": oracle_required == 1,
+        "driver_locked_provider": "UNAVAILABLE",
+        "observation": observation,
+        "diagnostic_oracle": {
+            "name": "RAMMap",
+            "role": "diagnostic_only",
+            "state": if oracle_required == 1 { "REQUIRED_UNAVAILABLE" } else { "NOT_REQUIRED" },
+        },
+        "sampling_interval_ms": RESOURCE_GUARD_SAMPLE_INTERVAL_MS,
+    }))
+}
+
+#[cfg(test)]
+fn resource_guard_freeze_reason(capacity: &HostCommitCapacity) -> Option<&'static str> {
+    resource_guard_headroom_freeze_reason(&HostSurvivalHeadroom {
+        physical_available_bytes: capacity.physical_available_bytes,
+        commit_remaining_bytes: capacity.current_commit_remaining_bytes,
+    })
+}
+
+fn resource_guard_headroom_freeze_reason(
+    headroom: &HostSurvivalHeadroom,
+) -> Option<&'static str> {
+    if headroom.physical_available_bytes < RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES {
+        Some("physical_available_below_survival_floor")
+    } else if headroom.commit_remaining_bytes < RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES {
+        Some("commit_remaining_below_survival_floor")
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+fn persist_resource_guard_sample(
+    conn: &Connection,
+    observed_at_ms: i64,
+    sample: Result<HostCommitCapacity>,
+) -> Result<()> {
+    persist_resource_guard_headroom(
+        conn,
+        observed_at_ms,
+        sample.map(|capacity| HostSurvivalHeadroom {
+            physical_available_bytes: capacity.physical_available_bytes,
+            commit_remaining_bytes: capacity.current_commit_remaining_bytes,
+        }),
+    )
+}
+
+fn persist_resource_guard_headroom(
+    conn: &Connection,
+    observed_at_ms: i64,
+    sample: Result<HostSurvivalHeadroom>,
+) -> Result<()> {
+    let (outcome, reason, observation) = match sample {
+        Ok(headroom) => {
+            let reason = resource_guard_headroom_freeze_reason(&headroom);
+            let outcome = if reason.is_some() { "frozen" } else { "healthy" };
+            (
+                outcome,
+                reason.map(str::to_string),
+                json!({
+                    "schema_version": "ember-lab-resource-guard-observation-v1",
+                    "result": if reason.is_some() { "SURVIVAL_FLOOR_BREACH" } else { "HEALTHY" },
+                    "observed_at_ms": observed_at_ms,
+                    "monitor_tier": "cheap_host_counters",
+                    "driver_locked_provider": "UNAVAILABLE",
+                    "physical_available_bytes": headroom.physical_available_bytes,
+                    "commit_remaining_bytes": headroom.commit_remaining_bytes,
+                    "minimum_physical_available_bytes": RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES,
+                    "minimum_commit_remaining_bytes": RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES,
+                }),
+            )
+        }
+        Err(error) => (
+            "probe_failed",
+            Some("resource_guard_probe_failed".into()),
+            json!({
+                "schema_version": "ember-lab-resource-guard-observation-v1",
+                "result": "PROBE_FAILED",
+                "observed_at_ms": observed_at_ms,
+                "monitor_tier": "cheap_host_counters",
+                "driver_locked_provider": "UNAVAILABLE",
+                "error": format!("{error:?}"),
+                "minimum_physical_available_bytes": RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES,
+                "minimum_commit_remaining_bytes": RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES,
+            }),
+        ),
+    };
+    let observation_json = serde_json::to_string(&observation)?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(?1,?2,?3)",
+        params![observed_at_ms, outcome, observation_json],
+    )?;
+    tx.execute(
+        "DELETE FROM resource_guard_observations WHERE seq <= COALESCE((SELECT MAX(seq) FROM resource_guard_observations),0)-?1",
+        [RESOURCE_GUARD_OBSERVATION_LIMIT],
+    )?;
+    if let Some(reason) = reason {
+        tx.execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason=?1,observed_at_ms=?2,oracle_evidence_required=1,observation_json=?3 WHERE singleton=1 AND admission_state='open'",
+            params![reason, observed_at_ms, observation_json],
+        )?;
+    } else {
+        tx.execute(
+            "UPDATE resource_guard_state SET observed_at_ms=?1,observation_json=?2 WHERE singleton=1 AND admission_state='open'",
+            params![observed_at_ms, observation_json],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn probe_host_survival_headroom() -> Result<HostSurvivalHeadroom> {
+    use windows_sys::Win32::System::ProcessStatus::{GetPerformanceInfo, PERFORMANCE_INFORMATION};
+
+    let mut info: PERFORMANCE_INFORMATION = unsafe { std::mem::zeroed() };
+    info.cb = std::mem::size_of::<PERFORMANCE_INFORMATION>() as u32;
+    if unsafe { GetPerformanceInfo(&mut info, info.cb) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let page_size = info.PageSize as u64;
+    let physical_available_bytes = (info.PhysicalAvailable as u64)
+        .checked_mul(page_size)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "Windows resource guard overflowed physical available bytes".into(),
+        })?;
+    let commit_total_bytes = (info.CommitTotal as u64)
+        .checked_mul(page_size)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "Windows resource guard overflowed current commit bytes".into(),
+        })?;
+    let commit_limit_bytes = (info.CommitLimit as u64)
+        .checked_mul(page_size)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "Windows resource guard overflowed commit limit bytes".into(),
+        })?;
+    let commit_remaining_bytes = commit_limit_bytes.checked_sub(commit_total_bytes).ok_or_else(
+        || EmberLabError::InvalidDispatchManifest {
+            detail: "Windows resource guard observed commit above its live limit".into(),
+        },
+    )?;
+    Ok(HostSurvivalHeadroom {
+        physical_available_bytes,
+        commit_remaining_bytes,
+    })
+}
+
+#[cfg(not(windows))]
+fn probe_host_survival_headroom() -> Result<HostSurvivalHeadroom> {
+    Err(EmberLabError::InvalidDispatchManifest {
+        detail: "native resource guard probing is currently Windows-only".into(),
+    })
 }
 
 #[cfg(windows)]
@@ -3545,6 +3822,49 @@ fn create_monitor_shutdown() -> Result<OwnedHandle> {
         return Err(std::io::Error::last_os_error().into());
     }
     Ok(OwnedHandle(handle))
+}
+
+#[cfg(windows)]
+fn spawn_resource_guard_monitor(
+    db: Weak<Mutex<Connection>>,
+    shutdown: OwnedHandle,
+    ownership: Weak<RwLock<bool>>,
+) -> Result<()> {
+    std::thread::Builder::new()
+        .name("ember-lab-resource-guard".into())
+        .spawn(move || {
+            use windows_sys::Win32::Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT};
+            use windows_sys::Win32::System::Threading::WaitForSingleObject;
+
+            loop {
+                let wait =
+                    unsafe { WaitForSingleObject(shutdown.raw(), RESOURCE_GUARD_SAMPLE_INTERVAL_MS) };
+                if wait == WAIT_OBJECT_0 {
+                    break;
+                }
+                if wait != WAIT_TIMEOUT {
+                    break;
+                }
+                let Some(ownership) = ownership.upgrade() else {
+                    break;
+                };
+                if ownership.read().map(|alive| !*alive).unwrap_or(true) {
+                    break;
+                }
+                let Some(db) = db.upgrade() else {
+                    break;
+                };
+                let Ok(conn) = db.lock() else {
+                    break;
+                };
+                let _ = persist_resource_guard_headroom(
+                    &conn,
+                    now_ms(),
+                    probe_host_survival_headroom(),
+                );
+            }
+        })?;
+    Ok(())
 }
 
 fn state_writer_lock_path(path: &Path) -> PathBuf {
@@ -4759,5 +5079,101 @@ mod dispatch_binding_snapshot_tests {
         ] {
             assert!(pagefile_maximum_bytes_from_entries(&invalid).is_err());
         }
+    }
+
+    fn healthy_host_capacity() -> HostCommitCapacity {
+        HostCommitCapacity {
+            physical_ram_bytes: 64 * 1024 * 1024 * 1024,
+            physical_available_bytes: 32 * 1024 * 1024 * 1024,
+            pagefile_maximum_bytes: 64 * 1024 * 1024 * 1024,
+            pagefile_configuration_source: "test".into(),
+            pagefile_configuration_sha256: "a".repeat(64),
+            commit_total_bytes: 32 * 1024 * 1024 * 1024,
+            current_commit_limit_bytes: 96 * 1024 * 1024 * 1024,
+            current_commit_remaining_bytes: 64 * 1024 * 1024 * 1024,
+            maximum_commit_capacity_bytes: 128 * 1024 * 1024 * 1024,
+            available_maximum_commit_bytes: 96 * 1024 * 1024 * 1024,
+        }
+    }
+
+    #[test]
+    fn survival_floor_evaluation_uses_live_physical_and_commit_headroom() {
+        let healthy = healthy_host_capacity();
+        assert_eq!(resource_guard_freeze_reason(&healthy), None);
+
+        let mut low_physical = healthy.clone();
+        low_physical.physical_available_bytes =
+            RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES - 1;
+        assert_eq!(
+            resource_guard_freeze_reason(&low_physical),
+            Some("physical_available_below_survival_floor")
+        );
+
+        let mut low_commit = healthy;
+        low_commit.current_commit_remaining_bytes =
+            RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES - 1;
+        assert_eq!(
+            resource_guard_freeze_reason(&low_commit),
+            Some("commit_remaining_below_survival_floor")
+        );
+    }
+
+    #[test]
+    fn a_resource_guard_freeze_is_sticky_across_later_healthy_samples() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_resource_guard_tables(&conn).unwrap();
+
+        let mut low = healthy_host_capacity();
+        low.current_commit_remaining_bytes = RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES - 1;
+        persist_resource_guard_sample(&conn, 100, Ok(low)).unwrap();
+
+        let frozen = resource_guard_status_from_connection(&conn).unwrap();
+        assert_eq!(frozen["admission_state"], "frozen");
+        assert_eq!(
+            frozen["reason"],
+            "commit_remaining_below_survival_floor"
+        );
+        assert_eq!(frozen["oracle_evidence_required"], true);
+
+        persist_resource_guard_sample(&conn, 200, Ok(healthy_host_capacity())).unwrap();
+        let still_frozen = resource_guard_status_from_connection(&conn).unwrap();
+        assert_eq!(still_frozen["admission_state"], "frozen");
+        assert_eq!(
+            still_frozen["reason"],
+            "commit_remaining_below_survival_floor"
+        );
+        let observations: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM resource_guard_observations",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(observations, 2);
+    }
+
+    #[test]
+    fn a_failed_survival_probe_sticky_freezes_future_admissions() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_resource_guard_tables(&conn).unwrap();
+        persist_resource_guard_headroom(
+            &conn,
+            300,
+            Err(EmberLabError::InvalidDispatchManifest {
+                detail: "probe unavailable".into(),
+            }),
+        )
+        .unwrap();
+
+        let frozen = resource_guard_status_from_connection(&conn).unwrap();
+        assert_eq!(frozen["admission_state"], "frozen");
+        assert_eq!(frozen["reason"], "resource_guard_probe_failed");
+        assert_eq!(frozen["oracle_evidence_required"], true);
+        assert_eq!(frozen["diagnostic_oracle"]["name"], "RAMMap");
+        assert_eq!(frozen["diagnostic_oracle"]["state"], "REQUIRED_UNAVAILABLE");
+        assert!(frozen["observation"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("probe unavailable"));
     }
 }
