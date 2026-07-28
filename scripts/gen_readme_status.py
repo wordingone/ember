@@ -429,6 +429,7 @@ def main():
         check_inventory(
             manifest_path=Path(args.branch_inventory),
             continuity_path=Path(args.continuity),
+            repo_path=Path(ROOT),
             max_age_days=args.branch_inventory_max_age_days,
         )
     except BranchInventoryError as exc:
