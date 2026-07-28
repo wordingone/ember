@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Totality status-probe for Ember goal condition C-BASE.
 
 Condition (authoritative text, <<external>>/state/<spec> line 95):
@@ -67,6 +70,9 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lane14_common import redact_root  # noqa: E402
+from c_base_verification_hardening import (  # noqa: E402
+    verification_receipt_disposition as _verification_receipt_disposition,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _env_root = os.environ.get("EMBER_TOTALITY_ROOT")
@@ -358,6 +364,9 @@ def main() -> int:
         obj = _read_json(rp)
         if obj is None:
             continue
+        verification_disposition = _verification_receipt_disposition(obj)
+        if verification_disposition in {"REJECTED", "NON_VERDICT"}:
+            continue
         text = _flatten_text(obj)
 
         # Must read as an owned from-scratch pretrain receipt.
@@ -408,6 +417,9 @@ def main() -> int:
 
         obj = _read_json(rp)
         if obj is None:
+            continue
+        verification_disposition = _verification_receipt_disposition(obj)
+        if verification_disposition in {"REJECTED", "NON_VERDICT"}:
             continue
 
         # HARDENED [audit 2026-07-10T20:38:26Z]: the candidate's OWN
