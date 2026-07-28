@@ -105,6 +105,7 @@ import re
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 # Add repo root to path for invariant imports (needed for scripts.lib)
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -113,6 +114,7 @@ sys.path.insert(0, REPO_ROOT)
 from scripts.lib.invariant import stamp, INVARIANT_SHA256
 from scripts.ember_totality import receipt_chain_verify
 from scripts.ember_totality import quarantine_sweep
+from scripts.ember_phase3_c14 import floor_contract_manifest
 
 try:  # pragma: no cover - best-effort console hardening, never fatal
     sys.stdout.reconfigure(encoding="utf-8")
@@ -1373,6 +1375,11 @@ def main():
         "invariant_checksum": invariant_checksum,
         "prev_totality_receipt_sha256": prev_totality_receipt_sha256,
         "constitutional_invariant": constitutional_invariant,
+        "native_engine_trigger_review": (
+            floor_contract_manifest.build_native_engine_board_review(
+                floor_contract_manifest.build_manifest(Path(REPO_ROOT))
+            )
+        ),
     }
 
     # Stamp the receipt with the constitutional invariant hash (fail-closed if mismatch)
