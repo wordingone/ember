@@ -114,6 +114,7 @@ sys.path.insert(0, REPO_ROOT)
 from scripts.lib.invariant import stamp, INVARIANT_SHA256
 from scripts.ember_totality import receipt_chain_verify
 from scripts.ember_totality import quarantine_sweep
+from scripts.ember_totality import tree_provenance
 from scripts.ember_phase3_c14 import floor_contract_manifest
 
 try:  # pragma: no cover - best-effort console hardening, never fatal
@@ -1080,6 +1081,15 @@ def main():
             "standing exact-suffix quarantine sweep; repeatable"
         ),
     )
+    ap.add_argument(
+        '--allow-stale-tree',
+        action='store_true',
+        help=(
+            'permit a stale or tracked-dirty run tree for historical archaeology '
+            'only; the receipt is visibly non-current and cannot authorize a '
+            'current board claim'
+        ),
+    )
     args = ap.parse_args()
     if args.ts:
         print(f"NOTE: positional ts argument {args.ts!r} is DEPRECATED and "
@@ -1088,6 +1098,13 @@ def main():
               f"(see module docstring / PROBE-HARDEN cure).",
               file=sys.stderr)
     effective_root = os.path.abspath(args.root) if args.root else REPO_ROOT
+
+    # Refuse stale or tracked-dirty execution before registry reads, probes,
+    # output-directory creation, or any claim-bearing receipt work.
+    run_tree_state = tree_provenance.inspect_and_enforce(
+        REPO_ROOT,
+        allow_stale_tree=args.allow_stale_tree,
+    )
 
     # --- Registry sync (self-enforcing close condition) -----------------------
     registry_ids = registry_sync_check()
@@ -1307,6 +1324,7 @@ def main():
         # named file's bytes on disk as-is, hex digest, no salt/transform.
         "sha_convention": "bytes on disk as-is",
         "root": normalize_path_for_receipt(effective_root),
+        "run_tree_provenance": run_tree_state,
         "registry_spec": os.path.relpath(CONDITIONS_SPEC_PATH, REPO_ROOT),
         "registry_sync": {
             "runner_ids": len(ORDER),
@@ -1414,6 +1432,14 @@ def main():
     # Print the board.
     print("=" * 72)
     print(f"EMBER TOTALITY BOARD  ts={ts}  root={effective_root}")
+    print(
+        "TREE PROVENANCE  "
+        f"status={run_tree_state['provenance_status']}  "
+        f"run_tree_sha={run_tree_state['run_tree_sha']}  "
+        f"remote_master_sha={run_tree_state['remote_master_sha']}  "
+        f"tree_is_stale={str(run_tree_state['tree_is_stale']).lower()}  "
+        f"tracked_dirty={len(run_tree_state['tree_dirty'])}"
+    )
     print("=" * 72)
     width = max((len(r["condition"]) for r in rows), default=4)
     for r in rows:
