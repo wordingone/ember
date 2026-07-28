@@ -344,7 +344,15 @@ describe("owned server supervisor", () => {
     if (!launch) throw new Error("missing launch");
     const command = buildOwnedServerCommand(owned, "cuda");
     const payload = {
-      schema_version: "ember-lab-dispatch-manifest-v2",
+      schema_version: "ember-lab-dispatch-manifest-v3",
+      workload_profile: {
+        profile_id: "owned_serving",
+        pinned_host_producers: [
+          { kind: "model_server", maximum_bytes: 1 },
+          { kind: "telemetry_buffer", maximum_bytes: 1 },
+        ],
+        requires_ui_responsiveness: false,
+      },
       job_id: "owned-interactive",
       source_commit: "e".repeat(40),
       not_before_ms: 1,
@@ -363,8 +371,8 @@ describe("owned server supervisor", () => {
       storage_reserves: [{ root, minimum_free_bytes: 1 }],
       minimum_free_vram_bytes: 1,
       required_available_maximum_commit_bytes: 2,
-      maximum_job_memory_bytes: 1,
-      simulated_peak_commit_bytes: 1,
+      maximum_job_memory_bytes: 2,
+      simulated_peak_commit_bytes: 2,
       preflight_receipt: join(root, "preflight.json"),
     };
     const manifestBytes = Buffer.from(JSON.stringify(payload));
@@ -489,7 +497,15 @@ describe("owned server supervisor", () => {
     const launch = owned.launch;
     if (!launch) throw new Error("missing launch");
     const manifest = {
-      schema_version: "ember-lab-dispatch-manifest-v2",
+      schema_version: "ember-lab-dispatch-manifest-v3",
+      workload_profile: {
+        profile_id: "owned_serving",
+        pinned_host_producers: [
+          { kind: "model_server", maximum_bytes: 1 },
+          { kind: "telemetry_buffer", maximum_bytes: 1 },
+        ],
+        requires_ui_responsiveness: false,
+      },
       job_id: "owned-interactive",
       source_commit: "e".repeat(40),
       not_before_ms: 1,
@@ -508,8 +524,8 @@ describe("owned server supervisor", () => {
       storage_reserves: [{ root: "C:\\owned", minimum_free_bytes: 1 }],
       minimum_free_vram_bytes: 1,
       required_available_maximum_commit_bytes: 2,
-      maximum_job_memory_bytes: 1,
-      simulated_peak_commit_bytes: 1,
+      maximum_job_memory_bytes: 2,
+      simulated_peak_commit_bytes: 2,
       preflight_receipt: "C:\\owned\\custody\\preflight.json",
     };
     expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
@@ -523,6 +539,13 @@ describe("owned server supervisor", () => {
     expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
       .toThrow("model config binding path is not unique");
     manifest.bindings.pop();
+    manifest.workload_profile.pinned_host_producers[0].kind = "receipt_verifier";
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
+      .toThrow("pinned-host producer set is invalid");
+    manifest.workload_profile.pinned_host_producers[0].kind = "model_server";
+    delete (manifest.workload_profile as Record<string, unknown>)["requires_ui_responsiveness"];
+    expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40))).toThrow("fields are not closed");
+    manifest.workload_profile.requires_ui_responsiveness = false;
     Object.assign(manifest, { unexpected: true });
     expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
       .toThrow("fields are not closed");
