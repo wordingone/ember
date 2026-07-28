@@ -114,6 +114,16 @@ else
   FAIL=1
 fi
 
+# ---- 1d. redaction tokens must never become executable formatting syntax --
+# Frozen receipts/prose may truthfully mention placeholders. The trusted
+# checker rejects only the runtime-crashing boundary: a redacted token used as
+# a percent-format or str.format operand (issue #502).
+if python "$KERNEL_ROOT/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
+  :
+else
+  FAIL=1
+fi
+
 # ---- 2. no absolute local filesystem paths in tracked text ---------------
 # Matches drive-rooted private directories, temporary Windows locations, local
 # mount roots, and similar forms. Separator is one-OR-MORE slash characters
