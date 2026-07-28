@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """C-MANIFEST -- completeness manifest enumerates EVERY planned piece -- status probe (TDD).
 
 Authoritative condition (<<external>>/state/<spec>, §4.3 C-MANIFEST):
@@ -37,6 +40,8 @@ from __future__ import annotations
 
 import os
 import re
+import sys
+from pathlib import Path
 
 # --- locate the external state root + goal file regardless of path convention -----
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -226,6 +231,18 @@ def main() -> int:
     if nc_root is None:
         print(f"RED <external-state> root not found at any known path (tried {_NC_ROOTS})")
         return 0
+
+    matrix_path = os.path.join(nc_root, "docs", "ember-authority-matrix.md")
+    if os.path.isfile(matrix_path):
+        scripts_path = os.path.join(nc_root, "scripts")
+        if scripts_path not in sys.path:
+            sys.path.insert(0, scripts_path)
+        try:
+            from authority_supersession_gate import validate_current_authority_crosswalk
+            validate_current_authority_crosswalk(Path(nc_root))
+        except Exception as exc:
+            print(f"RED authority supersession crosswalk invalid: {exc}")
+            return 0
 
     manifest_path = os.path.join(nc_root, "docs", "ember-completeness.md")
     if not os.path.exists(manifest_path):

@@ -1272,6 +1272,23 @@ def check_mechanism_registry(root: Path, errors: list[dict[str, Any]]) -> None:
             )
 
 
+def check_authority_supersession_crosswalk(
+    root: Path, errors: list[dict[str, Any]]
+) -> None:
+    try:
+        from authority_supersession_gate import (
+            AuthoritySupersessionGateError,
+            validate_current_authority_crosswalk,
+        )
+        result = validate_current_authority_crosswalk(root, require_current_authority=False)
+        if result is not None and result.get("status") not in {"PASS", "PASS_WITH_CUSTODY_GAPS"}:
+            raise AuthoritySupersessionGateError(
+                f"unexpected crosswalk status: {result.get('status')!r}"
+            )
+    except Exception as exc:
+        errors.append(finding(4, "authority.supersession_crosswalk_invalid", str(exc)))
+
+
 def parse_markdown_table(text: str, expected_columns: int) -> list[list[str]]:
     rows: list[list[str]] = []
     for raw in text.splitlines():
@@ -1932,6 +1949,7 @@ def verify(
     check_historical_executables(root, errors)
     check_lower_precedence_authority(root, errors)
     check_mechanism_registry(root, errors)
+    check_authority_supersession_crosswalk(root, errors)
     check_state(root, errors)
     check_execution_boundary(root, policy, errors)
     check_changed_artifact_bindings(
