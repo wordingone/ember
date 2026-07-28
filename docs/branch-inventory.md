@@ -42,12 +42,16 @@ force push, merge, branch deletion, or worktree retirement.
 
 `scripts/gen_readme_status.py` verifies the receipt, its generated
 `CONTINUITY.md` table, and the seven-day freshness bound before any continuity
-refresh. A missing, tampered, or stale inventory therefore stops the refresh.
+refresh. The check binds the receipt to the live master or the first parent of the
+single introducing commit, so the next master advance makes it stale. A missing,
+tampered, or stale inventory therefore stops the refresh.
 
 Standalone verification:
 
 ```powershell
 python -B scripts/branch_inventory.py check `
+  --repo . `
+  --master refs/remotes/origin/master `
   --manifest receipts/branch-inventory/branch-inventory-current.json `
   --continuity CONTINUITY.md `
   --max-age-days 7

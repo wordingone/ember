@@ -603,6 +603,8 @@ def check_inventory(
     *,
     manifest_path: Path,
     continuity_path: Path,
+    repo_path: Path | None = None,
+    master_ref: str = "refs/remotes/origin/master",
     now: datetime | None = None,
     max_age_days: int = 7,
 ) -> dict[str, Any]:
@@ -617,6 +619,12 @@ def check_inventory(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise InventoryError(f"inventory inputs are unreadable: {exc}") from exc
     receipt = verify_receipt(payload)
+    if repo_path is not None:
+        live_master = _run_git(repo_path, "rev-parse", "--verify", f"{master_ref}^{{commit}}").stdout.strip()
+        if live_master != receipt["master_sha"]:
+            introducing_parent = _run_git(repo_path, "rev-parse", "--verify", f"{live_master}^1").stdout.strip()
+            if introducing_parent != receipt["master_sha"]:
+                raise InventoryError("branch inventory master binding is stale")
     captured = _parse_timestamp(receipt["captured_at"])
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
@@ -659,6 +667,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     capture.add_argument("--artifact", action="append", default=[])
     capture.add_argument("--captured-at")
     check = subparsers.add_parser("check")
+    check.add_argument("--repo", type=Path, required=True)
+    check.add_argument("--master", default="refs/remotes/origin/master")
     check.add_argument("--manifest", type=Path, required=True)
     check.add_argument("--continuity", type=Path, required=True)
     check.add_argument("--max-age-days", type=int, default=7)
@@ -694,6 +704,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             receipt = check_inventory(
                 manifest_path=args.manifest,
                 continuity_path=args.continuity,
+                repo_path=args.repo,
+                master_ref=args.master,
                 max_age_days=args.max_age_days,
             )
             print(json.dumps({"status": "PASS", "candidate_count": receipt["candidate_count"], "receipt_sha256": receipt["receipt_sha256"]}, sort_keys=True))
