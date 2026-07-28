@@ -1612,6 +1612,42 @@ def workstream_path_allowed(
     return False
 
 
+def verified_derived_receipt_index_paths(
+    root: Path,
+    changed_paths: set[str],
+    errors: list[dict[str, Any]],
+) -> set[str]:
+    """Authorize only byte-exact deterministic claims-index outputs."""
+    derived_paths = {"receipts/INDEX.jsonl", "receipts/CLAIMS.md"}
+    if not changed_paths & derived_paths:
+        return set()
+    try:
+        import importlib.util
+        builder_path = root / "scripts" / "build_claims_index.py"
+        spec = importlib.util.spec_from_file_location(
+            "ember_authority_claims_index_builder", builder_path
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"cannot load {builder_path}")
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        rows, _stats = builder.build_index(root / "receipts")
+        expected = {
+            "receipts/INDEX.jsonl": builder.render_index_jsonl(rows),
+            "receipts/CLAIMS.md": builder.render_claims_md(rows),
+        }
+        for relative, expected_text in expected.items():
+            actual_text = (root / relative).read_text(
+                encoding="utf-8", errors="strict"
+            )
+            if actual_text != expected_text:
+                raise ValueError(f"{relative} is not deterministic derived output")
+        return derived_paths
+    except Exception as exc:
+        errors.append(finding(4, "artifact.derived_index_invalid", str(exc)))
+        return set()
+
+
 def check_changed_artifact_bindings(
     root: Path,
     policy: dict[str, Any] | None,
@@ -1652,8 +1688,16 @@ def check_changed_artifact_bindings(
     next_outcome = str(policy.get("next_executed_outcome", ""))
     allowed_workstreams = tuple(policy.get("active_workstream_ids") or ())
     scopes = policy.get("workstream_path_scopes") or {}
-    for rel in sorted(set(result.stdout.splitlines())):
+    changed_paths = {
+        rel.replace("\\", "/") for rel in result.stdout.splitlines()
+    }
+    verified_derived_paths = verified_derived_receipt_index_paths(
+        root, changed_paths, errors
+    )
+    for rel in sorted(changed_paths):
         normalized = rel.replace("\\", "/")
+        if normalized in verified_derived_paths:
+            continue
         suffix = Path(normalized).suffix.lower()
         control_path = normalized.startswith(
             (
