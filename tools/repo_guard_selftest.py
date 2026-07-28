@@ -358,6 +358,52 @@ def test_green_clean_fixture():
 
 
 # ---------------------------------------------------------------------------
+# RED/GREEN: an invalid pre-existing branch must not prompt an unsafe rename.
+# ---------------------------------------------------------------------------
+def test_red_invalid_branch_names_safe_recovery():
+    tmp = make_fixture("legacy-preexisting-branch")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "docs" / "note.md").write_text(
+            "Ordinary prose only.\n", encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(
+            tmp,
+            extra_env={"GITHUB_EVENT_NAME": "pull_request", "GITHUB_HEAD_REF": "legacy-preexisting-branch"},
+        )
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [branch]" in out, out
+        assert "never rename a branch that has an open pull request" in out, out
+        assert "detach HEAD and push to the existing ref" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_invalid_branch_is_advisory_for_exact_open_pr_head():
+    branch = "legacy-preexisting-branch"
+    tmp = make_fixture(branch)
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "docs" / "note.md").write_text(
+            "Ordinary prose only.\n", encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(
+            tmp,
+            extra_env={"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "pull_request", "GITHUB_HEAD_REF": branch, "REPO_GUARD_NAMES": "selftestnomatch"},
+        )
+        assert "FAIL [branch]" not in out, out
+        assert "ok   [branch]" in out, out
+        assert "pre-existing open-PR head; naming is advisory only" in out, out
+        assert "never rename the live ref" in out, out
+        # The minimal fixture can still fail a separate authority leg; this
+        # test adjudicates only the branch-name boundary.
+        assert rc in (0, 1), rc
+    finally:
+        cleanup(tmp)
+
+# ---------------------------------------------------------------------------
 # GREEN (hashed mode, positive path): denylist present, no matching tokens
 # ---------------------------------------------------------------------------
 def test_green_hashed_denylist_no_match():
@@ -1060,6 +1106,8 @@ ALL_TESTS = [
     test_red_invalid_single_byte_utf8,
     test_green_valid_utf8_non_ascii,
     test_green_clean_fixture,
+    test_red_invalid_branch_names_safe_recovery,
+    test_green_invalid_branch_is_advisory_for_exact_open_pr_head,
     test_green_hashed_denylist_no_match,
     test_ci_fail_closed_no_denylist,
     test_ci_fail_closed_empty_hashed_denylist,
