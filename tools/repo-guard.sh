@@ -382,7 +382,13 @@ BR="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 case "$BR" in
   master|HEAD) ok "branch" "$BR" ;;
   feat/*|fix/*|exp/*|chore/*|docs/*) ok "branch" "$BR" ;;
-  *) fail "branch" "branch '$BR' must match <type>/<slug> where type in feat|fix|exp|chore|docs" ;;
+  *)
+    if [ "${GITHUB_ACTIONS:-}" = "true" ] && [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_HEAD_REF:-}" ] && [ "$GITHUB_HEAD_REF" = "$BR" ]; then
+      ok "branch" "$BR is a pre-existing open-PR head; naming is advisory only—never rename the live ref"
+    else
+      fail "branch" "branch '$BR' must match <type>/<slug> where type in feat|fix|exp|chore|docs; never rename a branch that has an open pull request—detach HEAD and push to the existing ref"
+    fi
+    ;;
 esac
 
 # ---- 8. range checks: goal edits and evidence edits never co-commit ------
