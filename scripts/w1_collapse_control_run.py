@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 """w1_collapse_control_run.py -- W1 token-collapse control-run producer (#71).
 
 Builds the width-matched from-scratch baseline runner specified by the FROZEN
