@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 """Unit tests for shard grouping fix (issue #184).
 
 Execution-binding tests for the worker-group distribution logic:
@@ -9,6 +13,7 @@ Execution-binding tests for the worker-group distribution logic:
 
 The fix ensures grouping produces EXACTLY min(n_workers, len(shard_paths))
 balanced groups, preventing silent extra workers (issue #184 root cause).
+Issue #331 additionally requires each group to be physically contiguous.
 """
 from __future__ import annotations
 
@@ -19,15 +24,17 @@ def distribute_shards(n_shards: int, n_workers: int) -> list[list[int]]:
     """Mimic the fixed grouping logic from build_decontam_batch_mp.py.
 
     Distributes shards into EXACTLY min(n_workers, len(shard_paths)) balanced
-    groups using modulo distribution to fold remainders into existing groups.
+    contiguous groups so worker-local joins are true corpus boundaries.
     """
     shard_paths = list(range(n_shards))  # Placeholder shard identifiers
     n_groups = min(n_workers, n_shards)
-    worker_shards = [[] for _ in range(n_groups)]
-    for shard_idx, shard_name in enumerate(shard_paths):
-        group_idx = shard_idx % n_groups
-        worker_shards[group_idx].append(shard_name)
-    worker_shards = [g for g in worker_shards if g]
+    base_size, remainder = divmod(n_shards, n_groups)
+    worker_shards = []
+    start = 0
+    for group_index in range(n_groups):
+        size = base_size + (1 if group_index < remainder else 0)
+        worker_shards.append(shard_paths[start:start + size])
+        start += size
     return worker_shards
 
 
@@ -45,8 +52,9 @@ def test_26_shards_4_workers():
             assert s not in all_shards, f"Duplicate shard {s}"
             all_shards.add(s)
     assert len(all_shards) == 26, f"Expected 26 unique shards, got {len(all_shards)}"
+    assert all(group == list(range(group[0], group[-1] + 1))
+               for group in groups)
     print("[PASS] 26/4: 4 groups, sizes={}".format(sizes))
-    return True
 
 
 def test_3_shards_4_workers():
@@ -57,7 +65,6 @@ def test_3_shards_4_workers():
     expected_sizes = sorted([1, 1, 1], reverse=True)
     assert sizes == expected_sizes, f"Expected sizes {expected_sizes}, got {sizes}"
     print("[PASS] 3/4: 3 groups, sizes={}".format(sizes))
-    return True
 
 
 def test_24_shards_4_workers():
@@ -68,7 +75,6 @@ def test_24_shards_4_workers():
     expected_sizes = sorted([6, 6, 6, 6], reverse=True)
     assert sizes == expected_sizes, f"Expected sizes {expected_sizes}, got {sizes}"
     print("[PASS] 24/4: 4 groups, sizes={}".format(sizes))
-    return True
 
 
 def test_1_shard_4_workers():
@@ -77,7 +83,6 @@ def test_1_shard_4_workers():
     assert len(groups) == 1, f"Expected 1 group, got {len(groups)}"
     assert len(groups[0]) == 1, f"Expected group of size 1, got {len(groups[0])}"
     print("[PASS] 1/4: 1 group, sizes={}".format([len(g) for g in groups]))
-    return True
 
 
 if __name__ == "__main__":
