@@ -1528,7 +1528,7 @@ def classify_contamination_self_matches(
         is_self = False
         if gstart is not None:
             gend = gstart + window
-            is_self = any(gstart < c_end and gend > c_start
+            is_self = any(gstart >= c_start and gend <= c_end
                           for c_start, c_end in candidate_ranges)
         if is_self:
             self_matches_excluded += 1
