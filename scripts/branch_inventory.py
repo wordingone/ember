@@ -27,6 +27,7 @@ DISPOSITIONS = {"LAND", "RETIRE", "PARK"}
 DEFAULT_REASON = "Non-ancestor content has not been independently accepted into public master."
 DEFAULT_REVISIT = "Review exact files against current master; land only through a provenance-quoted PR or prove supersession."
 SELECTION = "every refs/heads tip and detached registered worktree tip not ancestor of master_sha"
+MAX_INTRODUCTION_COMMITS = 3
 CLAIM_LIMITS = [
     "PARK is the fail-closed default; LAND requires an explicit per-file override.",
     "This inventory grants no branch deletion, merge, issue closure, model, training, or capability authority.",
@@ -603,6 +604,8 @@ def check_inventory(
     *,
     manifest_path: Path,
     continuity_path: Path,
+    repo_path: Path | None = None,
+    master_ref: str = "refs/remotes/origin/master",
     now: datetime | None = None,
     max_age_days: int = 7,
 ) -> dict[str, Any]:
@@ -617,6 +620,21 @@ def check_inventory(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise InventoryError(f"inventory inputs are unreadable: {exc}") from exc
     receipt = verify_receipt(payload)
+    if repo_path is not None:
+        live_master = _run_git(repo_path, "rev-parse", "--verify", f"{master_ref}^{{commit}}").stdout.strip()
+        if live_master != receipt["master_sha"]:
+            merge_base = _run_git(repo_path, "merge-base", receipt["master_sha"], live_master).stdout.strip()
+            if merge_base != receipt["master_sha"]:
+                raise InventoryError("branch inventory master binding is stale")
+            distance_text = _run_git(
+                repo_path, "rev-list", "--count", f"{receipt['master_sha']}..{live_master}"
+            ).stdout.strip()
+            try:
+                distance = int(distance_text)
+            except ValueError as exc:
+                raise InventoryError("branch inventory master distance is invalid") from exc
+            if distance < 1 or distance > MAX_INTRODUCTION_COMMITS:
+                raise InventoryError("branch inventory master binding is stale")
     captured = _parse_timestamp(receipt["captured_at"])
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
@@ -659,6 +677,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     capture.add_argument("--artifact", action="append", default=[])
     capture.add_argument("--captured-at")
     check = subparsers.add_parser("check")
+    check.add_argument("--repo", type=Path, required=True)
+    check.add_argument("--master", default="refs/remotes/origin/master")
     check.add_argument("--manifest", type=Path, required=True)
     check.add_argument("--continuity", type=Path, required=True)
     check.add_argument("--max-age-days", type=int, default=7)
@@ -694,6 +714,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             receipt = check_inventory(
                 manifest_path=args.manifest,
                 continuity_path=args.continuity,
+                repo_path=args.repo,
+                master_ref=args.master,
                 max_age_days=args.max_age_days,
             )
             print(json.dumps({"status": "PASS", "candidate_count": receipt["candidate_count"], "receipt_sha256": receipt["receipt_sha256"]}, sort_keys=True))
