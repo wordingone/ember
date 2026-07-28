@@ -326,6 +326,40 @@ pub struct DispatchStorageReserve {
     pub minimum_free_bytes: u64,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchWorkloadProfileId {
+    GovernedVertical,
+    OwnedServing,
+    EvidenceVerifier,
+    Cockpit,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchPinnedHostProducerKind {
+    TrainingDataLoader,
+    CheckpointWriter,
+    ModelServer,
+    ReceiptVerifier,
+    TelemetryBuffer,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchPinnedHostProducer {
+    pub kind: DispatchPinnedHostProducerKind,
+    pub maximum_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchWorkloadProfile {
+    pub profile_id: DispatchWorkloadProfileId,
+    pub pinned_host_producers: Vec<DispatchPinnedHostProducer>,
+    pub requires_ui_responsiveness: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DispatchManifest {
@@ -337,6 +371,7 @@ pub struct DispatchManifest {
     pub resource_lease: String,
     pub program: DispatchFileHash,
     pub args: Vec<String>,
+    pub workload_profile: DispatchWorkloadProfile,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
     pub bindings: Vec<DispatchFileBinding>,
@@ -1147,7 +1182,7 @@ impl Daemon {
         &self,
         manifest: &DispatchManifest,
     ) -> Result<()> {
-        if manifest.schema_version != "ember-lab-dispatch-manifest-v2"
+        if manifest.schema_version != "ember-lab-dispatch-manifest-v3"
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
@@ -1165,9 +1200,15 @@ impl Daemon {
             || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "dispatch manifest requires the closed v2 schema, identities, window, bindings, and reserves".into(),
+                detail: "dispatch manifest requires the closed v3 schema, workload profile, identities, window, bindings, and reserves".into(),
             });
         }
+        validate_dispatch_workload_profile(
+            &manifest.workload_profile,
+            &manifest.args,
+            manifest.maximum_job_memory_bytes,
+            manifest.simulated_peak_commit_bytes,
+        )?;
         let custody_root = fs::canonicalize(&manifest.custody_root).map_err(|error| {
             EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch custody root is unavailable: {error}"),
@@ -1273,7 +1314,7 @@ impl Daemon {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
-        if manifest.schema_version != "ember-lab-dispatch-manifest-v2"
+        if manifest.schema_version != "ember-lab-dispatch-manifest-v3"
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
@@ -1291,9 +1332,15 @@ impl Daemon {
             || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "dispatch manifest requires the closed v2 schema, identities, window, bindings, and reserves".into(),
+                detail: "dispatch manifest requires the closed v3 schema, workload profile, identities, window, bindings, and reserves".into(),
             });
         }
+        validate_dispatch_workload_profile(
+            &manifest.workload_profile,
+            &manifest.args,
+            manifest.maximum_job_memory_bytes,
+            manifest.simulated_peak_commit_bytes,
+        )?;
         if observed_at_ms < manifest.not_before_ms {
             return Err(EmberLabError::DispatchTooEarly {
                 not_before_ms: manifest.not_before_ms,
@@ -1480,6 +1527,7 @@ impl Daemon {
             "not_before_ms": manifest.not_before_ms,
             "expires_at_ms": manifest.expires_at_ms,
             "dispatch_manifest_sha256": manifest_sha256,
+            "workload_profile": &manifest.workload_profile,
             "program": {"path": &program, "sha256": &manifest.program.sha256},
             "bindings": verified_bindings.iter().map(|(path, sha256, kind)| json!({"kind":kind,"path":path,"sha256":sha256})).collect::<Vec<_>>(),
             "args_sha256": args_sha256,
@@ -2859,6 +2907,81 @@ fn is_sha256(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn validate_dispatch_workload_profile(
+    profile: &DispatchWorkloadProfile,
+    args: &[String],
+    maximum_job_memory_bytes: u64,
+    simulated_peak_commit_bytes: u64,
+) -> Result<()> {
+    if profile.pinned_host_producers.is_empty() {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "dispatch workload profile has no pinned-host producer budget".into(),
+        });
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut total = 0u64;
+    for producer in &profile.pinned_host_producers {
+        if producer.maximum_bytes == 0 || !seen.insert(producer.kind) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "dispatch workload producer budgets must be positive and unique".into(),
+            });
+        }
+        total = total.checked_add(producer.maximum_bytes).ok_or_else(|| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "dispatch workload producer budgets overflow bytes".into(),
+            }
+        })?;
+    }
+    if total != simulated_peak_commit_bytes || total > maximum_job_memory_bytes {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "dispatch workload producer budgets must exactly cover the simulated peak within the Job Object ceiling".into(),
+        });
+    }
+    let expected = match profile.profile_id {
+        DispatchWorkloadProfileId::GovernedVertical => [
+            DispatchPinnedHostProducerKind::TrainingDataLoader,
+            DispatchPinnedHostProducerKind::CheckpointWriter,
+            DispatchPinnedHostProducerKind::TelemetryBuffer,
+        ]
+        .into_iter()
+        .collect(),
+        DispatchWorkloadProfileId::OwnedServing => [
+            DispatchPinnedHostProducerKind::ModelServer,
+            DispatchPinnedHostProducerKind::TelemetryBuffer,
+        ]
+        .into_iter()
+        .collect(),
+        DispatchWorkloadProfileId::EvidenceVerifier => [
+            DispatchPinnedHostProducerKind::ReceiptVerifier,
+        ]
+        .into_iter()
+        .collect(),
+        DispatchWorkloadProfileId::Cockpit => [
+            DispatchPinnedHostProducerKind::TelemetryBuffer,
+        ]
+        .into_iter()
+        .collect(),
+    };
+    if seen != expected {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "dispatch workload profile declares unsupported or incomplete pinned-host producers".into(),
+        });
+    }
+    let expects_ui = profile.profile_id == DispatchWorkloadProfileId::Cockpit;
+    if profile.requires_ui_responsiveness != expects_ui {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "dispatch workload profile UI-responsiveness declaration is inconsistent".into(),
+        });
+    }
+    let governed_vertical = args.iter().any(|arg| arg == "governed-vertical");
+    if governed_vertical != (profile.profile_id == DispatchWorkloadProfileId::GovernedVertical) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "dispatch workload profile does not match the governed-vertical argv".into(),
+        });
+    }
+    Ok(())
 }
 
 fn verify_dispatch_file(path: &Path, sha256: &str) -> Result<PathBuf> {

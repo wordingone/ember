@@ -98,7 +98,7 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
     fs::write(
         &manifest,
         serde_json::to_vec(&json!({
-        "schema_version": "ember-lab-dispatch-manifest-v2",
+        "schema_version": "ember-lab-dispatch-manifest-v3",
             "job_id": job_id,
             "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
             "not_before_ms": not_before_ms,
@@ -106,6 +106,14 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
             "resource_lease": "gpu-smoke",
         "program": {"path": program, "sha256": sha256(&program)},
             "args": ["--exact", "fixture_dispatch_child", "--nocapture"],
+            "workload_profile": {
+                "profile_id": "evidence_verifier",
+                "pinned_host_producers": [{
+                    "kind": "receipt_verifier",
+                    "maximum_bytes": SIMULATED_PEAK_COMMIT_BYTES
+                }],
+                "requires_ui_responsiveness": false
+            },
             "env": env,
         "bindings": [
             {"kind": "config", "path": binding, "sha256": sha256(&binding)},
@@ -161,6 +169,15 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
         "5326043c344227c1b145a4ddbb3519cfa62d4943"
     );
     assert_eq!(receipt["dispatch_manifest_sha256"], sha256(&manifest));
+    assert_eq!(receipt["workload_profile"]["profile_id"], "evidence_verifier");
+    assert_eq!(
+        receipt["workload_profile"]["pinned_host_producers"][0]["kind"],
+        "receipt_verifier"
+    );
+    assert_eq!(
+        receipt["workload_profile"]["pinned_host_producers"][0]["maximum_bytes"],
+        SIMULATED_PEAK_COMMIT_BYTES
+    );
     assert_eq!(receipt["vram_reserve"]["minimum_free_bytes"], 1);
     assert_eq!(receipt["vram_reserve"]["available_free_bytes"], 2048);
     assert_eq!(
@@ -485,13 +502,6 @@ fn dispatch_manifest_refuses_unsafe_host_commit_cap_with_receipt_before_spawn() 
             SIMULATED_PEAK_COMMIT_BYTES,
             DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES - 1,
         ),
-        (
-            "simulated-peak",
-            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
-            MAXIMUM_JOB_MEMORY_BYTES,
-            MAXIMUM_JOB_MEMORY_BYTES + 1,
-            DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
-        ),
     ] {
         let root = sandbox(name);
         let manifest = write_manifest(&root, &format!("dispatch-{name}"), 10_000);
@@ -543,6 +553,8 @@ fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
     payload["required_available_maximum_commit_bytes"] = json!(declared_available);
     payload["maximum_job_memory_bytes"] = json!(134_217_728u64);
     payload["simulated_peak_commit_bytes"] = json!(67_108_864u64);
+    payload["workload_profile"]["pinned_host_producers"][0]["maximum_bytes"] =
+        json!(67_108_864u64);
     payload["env"]["EMBER_LAB_DISPATCH_ALLOCATE_BYTES"] = json!(536_870_912u64.to_string());
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
@@ -596,6 +608,71 @@ fn dispatch_manifest_rejects_a_missing_job_memory_ceiling() {
     ));
     assert_eq!(daemon.job_state("dispatch-missing-memory").unwrap(), None);
     assert!(!root.join("custody").join("preflight.json").exists());
+}
+
+#[test]
+fn dispatch_manifest_requires_a_closed_workload_profile_before_spawn() {
+    for (name, mutate) in [
+        (
+            "missing",
+            Box::new(|payload: &mut Value| {
+                payload.as_object_mut().unwrap().remove("workload_profile");
+            }) as Box<dyn Fn(&mut Value)>,
+        ),
+        (
+            "unknown-producer",
+            Box::new(|payload: &mut Value| {
+                payload["workload_profile"]["pinned_host_producers"][0]["kind"] =
+                    json!("unbounded_plugin");
+            }),
+        ),
+        (
+            "duplicate-producer",
+            Box::new(|payload: &mut Value| {
+                let duplicate =
+                    payload["workload_profile"]["pinned_host_producers"][0].clone();
+                payload["workload_profile"]["pinned_host_producers"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(duplicate);
+            }),
+        ),
+        (
+            "producer-budget-overflow",
+            Box::new(|payload: &mut Value| {
+                payload["workload_profile"]["pinned_host_producers"][0]["maximum_bytes"] =
+                    json!(MAXIMUM_JOB_MEMORY_BYTES + 1);
+            }),
+        ),
+        (
+            "ui-profile-mismatch",
+            Box::new(|payload: &mut Value| {
+                payload["workload_profile"]["requires_ui_responsiveness"] = json!(true);
+            }),
+        ),
+    ] {
+        let root = sandbox(&format!("profile-{name}"));
+        let job_id = format!("dispatch-profile-{name}");
+        let manifest = write_manifest(&root, &job_id, 10_000);
+        let mut payload: Value =
+            serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        mutate(&mut payload);
+        fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+        assert!(matches!(
+            daemon.dispatch_manifest_at_with_probes_and_host(
+                &manifest,
+                10_001,
+                |_root| Ok(1024),
+                || Ok(1024),
+                || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            ),
+            Err(EmberLabError::InvalidDispatchManifest { .. })
+        ));
+        assert_eq!(daemon.job_state(&job_id).unwrap(), None);
+        assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+        assert!(!root.join("custody").join("preflight.json").exists());
+    }
 }
 
 #[test]

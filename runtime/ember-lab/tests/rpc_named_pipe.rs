@@ -157,7 +157,15 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
     fs::write(
         &manifest,
         serde_json::to_vec(&json!({
-            "schema_version": "ember-lab-dispatch-manifest-v2",
+            "schema_version": "ember-lab-dispatch-manifest-v3",
+            "workload_profile": {
+                "profile_id": "evidence_verifier",
+                "pinned_host_producers": [{
+                    "kind": "receipt_verifier",
+                    "maximum_bytes": 536_870_912u64
+                }],
+                "requires_ui_responsiveness": false
+            },
             "job_id": job_id,
             "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
             "not_before_ms": now - 1_000,

@@ -276,7 +276,7 @@ export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, valu
   const manifest = manifestObject(value, "dispatch manifest");
   const fields = [
     "schema_version", "job_id", "source_commit", "not_before_ms", "expires_at_ms",
-    "resource_lease", "program", "args", "env", "bindings", "custody_root",
+    "resource_lease", "program", "args", "workload_profile", "env", "bindings", "custody_root",
     "storage_reserves", "minimum_free_vram_bytes", "required_available_maximum_commit_bytes",
     "maximum_job_memory_bytes", "simulated_peak_commit_bytes", "preflight_receipt",
   ].sort();
@@ -284,7 +284,35 @@ export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, valu
   if (actualFields.length !== fields.length || actualFields.some((field, index) => field !== fields[index])) {
     throw new Error("dispatch manifest fields are not closed");
   }
-  if (manifest["schema_version"] !== "ember-lab-dispatch-manifest-v2") throw new Error("dispatch manifest schema is not ember-lab-dispatch-manifest-v2");
+  if (manifest["schema_version"] !== "ember-lab-dispatch-manifest-v3") throw new Error("dispatch manifest schema is not ember-lab-dispatch-manifest-v3");
+  const profile = manifestObject(manifest["workload_profile"], "dispatch manifest workload profile");
+  const profileFields = ["profile_id", "pinned_host_producers", "requires_ui_responsiveness"].sort();
+  const actualProfileFields = Object.keys(profile).sort();
+  if (actualProfileFields.length !== profileFields.length || actualProfileFields.some((field, index) => field !== profileFields[index])) {
+    throw new Error("dispatch workload profile fields are not closed");
+  }
+  if (profile["profile_id"] !== "owned_serving" || profile["requires_ui_responsiveness"] !== false) {
+    throw new Error("owned server dispatch requires the owned_serving workload profile");
+  }
+  const producers = profile["pinned_host_producers"];
+  if (!Array.isArray(producers) || producers.length !== 2) throw new Error("owned server pinned-host producers are incomplete");
+  const seen = new Set<string>();
+  let producerBytes = 0;
+  for (const raw of producers) {
+    const producer = manifestObject(raw, "dispatch workload producer");
+    const keys = Object.keys(producer).sort();
+    if (keys.length !== 2 || keys[0] !== "kind" || keys[1] !== "maximum_bytes") throw new Error("dispatch workload producer fields are not closed");
+    if ((producer["kind"] !== "model_server" && producer["kind"] !== "telemetry_buffer") || seen.has(producer["kind"] as string)) {
+      throw new Error("owned server pinned-host producer set is invalid");
+    }
+    if (!Number.isSafeInteger(producer["maximum_bytes"]) || (producer["maximum_bytes"] as number) <= 0) throw new Error("owned server pinned-host producer budget is invalid");
+    seen.add(producer["kind"] as string);
+    producerBytes += producer["maximum_bytes"] as number;
+  }
+  if (!Number.isSafeInteger(manifest["maximum_job_memory_bytes"]) || !Number.isSafeInteger(manifest["simulated_peak_commit_bytes"]) ||
+      producerBytes !== manifest["simulated_peak_commit_bytes"] || producerBytes > (manifest["maximum_job_memory_bytes"] as number)) {
+    throw new Error("owned server pinned-host budgets do not match the enforced Job Object ceiling");
+  }
   if (!/^[0-9a-f]{40}$/.test(expectedSourceCommit) || manifest["source_commit"] !== expectedSourceCommit) throw new Error("dispatch manifest source commit does not match the installed Ember CLI");
   const launch = identity.launch;
   if (!launch) throw new Error("owned identity lacks an interactive launch descriptor");
