@@ -1474,6 +1474,222 @@ fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
     reopened.stop_job("pre-resume-failure").unwrap();
 }
 
+#[cfg(windows)]
+#[test]
+fn protective_owned_stop_requests_checkpoint_then_stops_only_after_durable_decision() {
+    let root = sandbox("protective-owned-stop");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("protected-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("protected-resource", "protected-job")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "protected-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "protected-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state
+             SET admission_state='frozen',
+                 reason='physical_available_below_survival_floor',
+                 observed_at_ms=1234,
+                 oracle_evidence_required=1,
+                 observation_json='{\"result\":\"SURVIVAL_FLOOR_BREACH\"}'
+             WHERE singleton=1",
+            [],
+        )
+        .unwrap();
+
+    let artifact = daemon
+        .protective_owned_stop("protected-job", Duration::from_millis(25))
+        .unwrap();
+
+    assert!(!process_is_alive(started.pid));
+    assert_eq!(
+        daemon.job_state("protected-job").unwrap(),
+        Some(JobState::Stopped)
+    );
+    assert_eq!(daemon.lease_owner("protected-resource").unwrap(), None);
+    assert_eq!(sha256(&artifact.path), artifact.sha256);
+    let receipt: Value = serde_json::from_slice(&fs::read(&artifact.path).unwrap()).unwrap();
+    assert_eq!(
+        receipt["schema_version"],
+        "ember-lab-protective-owned-stop-v1"
+    );
+    assert_eq!(receipt["result"], "PROTECTIVE_OWNED_STOP_AUTHORIZED");
+    assert_eq!(receipt["reason"], "host_protection_not_causation");
+    assert_eq!(receipt["job_id"], "protected-job");
+    assert_eq!(receipt["lease"]["resource"], "protected-resource");
+    assert_eq!(receipt["lease"]["owner_job_id"], "protected-job");
+    assert_eq!(receipt["process"]["pid"], started.pid);
+    assert_eq!(receipt["process"]["identity_verified"], true);
+    assert_eq!(receipt["process"]["job_object_membership_verified"], true);
+    assert_eq!(receipt["checkpoint_request"]["result"], "GRACE_EXPIRED");
+    assert_eq!(receipt["checkpoint_request"]["grace_ms"], 25);
+    assert_eq!(
+        receipt["termination"]["decision_receipt_persisted_before_termination"],
+        true
+    );
+    let request_name = receipt["checkpoint_request"]["request_artifact"]
+        .as_str()
+        .unwrap();
+    let request_path = artifact.path.parent().unwrap().join(request_name);
+    assert!(request_path.is_file());
+    assert_eq!(
+        sha256(&request_path),
+        receipt["checkpoint_request"]["request_sha256"]
+    );
+    assert!(daemon
+        .job_event_kinds("protected-job")
+        .unwrap()
+        .iter()
+        .any(|kind| kind == "protective_owned_stop_completed"));
+}
+
+#[cfg(windows)]
+#[test]
+fn daemon_lifetime_guard_automatically_protects_an_owned_job_after_sticky_freeze() {
+    let root = sandbox("protective-owned-stop-monitor");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("monitor-protected-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("monitor-protected-resource", "monitor-protected-job")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "monitor-protected-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "monitor-protected-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state
+             SET admission_state='frozen',
+                 reason='commit_remaining_below_survival_floor',
+                 observed_at_ms=1234,
+                 oracle_evidence_required=1,
+                 observation_json='{\"result\":\"SURVIVAL_FLOOR_BREACH\"}'
+             WHERE singleton=1",
+            [],
+        )
+        .unwrap();
+
+    for _ in 0..100 {
+        if daemon.job_state("monitor-protected-job").unwrap() == Some(JobState::Stopped) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    let automatic_state = daemon.job_state("monitor-protected-job").unwrap();
+    let automatic_lease_owner = daemon.lease_owner("monitor-protected-resource").unwrap();
+    let automatic_events = daemon.job_event_kinds("monitor-protected-job").unwrap();
+    if process_is_alive(started.pid) {
+        daemon.stop_job("monitor-protected-job").unwrap();
+    }
+    assert_eq!(
+        automatic_state,
+        Some(JobState::Stopped),
+        "daemon-lifetime guard did not execute ProtectiveOwnedStop"
+    );
+    assert_eq!(automatic_lease_owner, None);
+    assert!(automatic_events
+        .iter()
+        .any(|kind| kind == "protective_owned_stop_completed"));
+    let receipt_count = fs::read_dir(root.join("ember-lab.sqlite3.logs"))
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("protective-owned-stop-")
+        })
+        .count();
+    assert_eq!(receipt_count, 1);
+}
+
+#[cfg(windows)]
+#[test]
+fn protective_owned_stop_refuses_identity_conflict_without_killing_process() {
+    let root = sandbox("protective-owned-stop-identity");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("protected-identity", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("protected-resource", "protected-identity")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "protected-identity",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "protected-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch(
+            "UPDATE resource_guard_state
+             SET admission_state='frozen',
+                 reason='commit_remaining_below_survival_floor',
+                 observed_at_ms=1234,
+                 oracle_evidence_required=1,
+                 observation_json='{\"result\":\"SURVIVAL_FLOOR_BREACH\"}';
+             UPDATE jobs SET process_start_token='foreign-token'
+             WHERE job_id='protected-identity';",
+        )
+        .unwrap();
+
+    let result = daemon.protective_owned_stop("protected-identity", Duration::from_millis(25));
+
+    assert!(matches!(
+        result,
+        Err(EmberLabError::ProcessControlUncertain { .. })
+    ));
+    assert!(process_is_alive(started.pid));
+    assert_eq!(
+        daemon.job_state("protected-identity").unwrap(),
+        Some(JobState::Running)
+    );
+    assert_eq!(
+        daemon.lease_owner("protected-resource").unwrap().as_deref(),
+        Some("protected-identity")
+    );
+    daemon.stop_job("protected-identity").unwrap();
+}
+
 #[test]
 fn pre_log_schema_migrates_without_reinterpreting_existing_job_identity() {
     let root = sandbox("schema-migration");

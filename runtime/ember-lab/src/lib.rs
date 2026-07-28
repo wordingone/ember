@@ -16,7 +16,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 #[cfg(windows)]
 use std::sync::{RwLock, Weak};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod rpc;
 pub mod scratch;
@@ -395,6 +395,10 @@ const RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const RESOURCE_GUARD_OBSERVATION_LIMIT: i64 = 1024;
 const RESOURCE_GUARD_SAMPLE_INTERVAL_MS: u32 = 2_000;
+const PROTECTIVE_CHECKPOINT_REQUEST_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT_REQUEST_PATH";
+const PROTECTIVE_CHECKPOINT_RESPONSE_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT_RESPONSE_PATH";
+const PROTECTIVE_CHECKPOINT_MAX_GRACE_MS: u64 = 30_000;
+const PROTECTIVE_CHECKPOINT_MONITOR_TOTAL_GRACE_MS: u64 = 5_000;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -495,6 +499,341 @@ pub struct Daemon {
     monitor_ownership: Arc<RwLock<bool>>,
 }
 
+#[cfg(windows)]
+#[derive(Clone)]
+struct ProtectiveStopContext {
+    db: Arc<Mutex<Connection>>,
+    live: Arc<Mutex<HashMap<String, RetainedProcess>>>,
+    log_dir: PathBuf,
+}
+
+#[cfg(windows)]
+impl ProtectiveStopContext {
+    fn conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
+        self.db.lock().map_err(|_| EmberLabError::Poisoned)
+    }
+
+    fn frozen_resource_guard(&self) -> Result<Option<Value>> {
+        let conn = self.conn()?;
+        let status = resource_guard_status_from_connection(&conn)?;
+        if status.get("admission_state") == Some(&Value::String("frozen".into())) {
+            Ok(Some(status))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn job_process_row(&self, job_id: &str) -> Result<JobProcessRow> {
+        let conn = self.conn()?;
+        job_process_row_from_connection(&conn, job_id)
+    }
+
+    fn finalize_stopped(&self, job_id: &str, row: &JobProcessRow, seal_logs: bool) -> Result<()> {
+
+        let mut conn = self.conn()?;
+        finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs)
+    }
+
+    #[cfg(windows)]
+    fn protective_owned_stop(
+        &self,
+        job_id: &str,
+        checkpoint_grace: Duration,
+    ) -> Result<ReceiptArtifact> {
+        let grace_ms = u64::try_from(checkpoint_grace.as_millis()).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "protective checkpoint grace does not fit u64 milliseconds".into(),
+            }
+        })?;
+        if grace_ms == 0 || grace_ms > PROTECTIVE_CHECKPOINT_MAX_GRACE_MS {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: format!(
+                    "protective checkpoint grace must be within 1..={PROTECTIVE_CHECKPOINT_MAX_GRACE_MS} ms"
+                ),
+            });
+        }
+        let resource_guard =
+            self.frozen_resource_guard()?
+                .ok_or_else(|| EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: "protective owned stop requires a frozen resource guard".into(),
+                })?;
+        let row = self.job_process_row(job_id)?;
+        if row.state != JobState::Running {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "protective owned stop requires a running job".into(),
+            });
+        }
+        let lease_matches: bool = self.conn()?.query_row(
+            "SELECT EXISTS(
+                 SELECT 1 FROM leases
+                 WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3
+             )",
+            params![&row.resource, job_id, row.lease_epoch],
+            |record| record.get(0),
+        )?;
+        if !lease_matches {
+            return Err(EmberLabError::LeaseNotOwned {
+                resource: row.resource,
+                job_id: job_id.into(),
+            });
+        }
+        match open_live_status(&row) {
+            LiveStatus::Verified(_) => {}
+            LiveStatus::Dead => {
+                return Err(EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                })
+            }
+            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
+                return Err(EmberLabError::ProcessControlUncertain {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                    detail,
+                })
+            }
+        }
+
+        let protective_key = hash_bytes(job_id.as_bytes());
+        let checkpoint_request_path = self.log_dir.join(format!(
+            "{protective_key}.protective-checkpoint-request.json"
+        ));
+        let checkpoint_response_path = self.log_dir.join(format!(
+            "{protective_key}.protective-checkpoint-response.json"
+        ));
+        let requested_at_ms = now_ms();
+        let request = json!({
+            "schema_version": "ember-lab-protective-checkpoint-request-v1",
+            "job_id": job_id,
+            "lease": {
+                "resource": &row.resource,
+                "owner_job_id": job_id,
+                "lease_epoch": row.lease_epoch,
+            },
+            "process": {
+                "pid": row.pid,
+                "start_token": &row.start_token,
+                "executable_identity_sha256": hash_bytes(row.executable.as_bytes()),
+                "job_object_name": &row.job_object_name,
+            },
+            "requested_at_ms": requested_at_ms,
+            "grace_ms": grace_ms,
+            "reason": "host_protection_not_causation",
+            "response_artifact": checkpoint_response_path.file_name().unwrap().to_string_lossy(),
+        });
+        let request_bytes = serde_json::to_vec_pretty(&request)?;
+        let request_sha256 = hash_bytes(&request_bytes);
+        atomic_replace(&checkpoint_request_path, &request_bytes)?;
+
+        let deadline = Instant::now() + checkpoint_grace;
+        let mut checkpoint_result = "GRACE_EXPIRED";
+        let mut response_sha256 = None;
+        while Instant::now() < deadline {
+            if checkpoint_response_path.is_file() {
+                let response_bytes = fs::read(&checkpoint_response_path)?;
+                let response: Value = serde_json::from_slice(&response_bytes)?;
+                let valid = response
+                    == json!({
+                        "schema_version": "ember-lab-protective-checkpoint-response-v1",
+                        "job_id": job_id,
+                        "request_sha256": request_sha256,
+                        "result": "CHECKPOINT_COMPLETED",
+                    });
+                if valid {
+                    checkpoint_result = "CHECKPOINT_COMPLETED";
+                    response_sha256 = Some(hash_bytes(&response_bytes));
+                    break;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        let live = match open_live_status(&row) {
+            LiveStatus::Verified(live) => live,
+            LiveStatus::Dead => {
+                return Err(EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                })
+            }
+            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
+                return Err(EmberLabError::ProcessControlUncertain {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                    detail,
+                })
+            }
+        };
+
+        {
+            let mut conn = self.conn()?;
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let changed = tx.execute(
+                "UPDATE jobs SET state='stopping',updated_at_ms=?2
+                 WHERE job_id=?1 AND state='running' AND lease_epoch=?3
+                   AND EXISTS(
+                     SELECT 1 FROM leases l
+                     WHERE l.resource=jobs.resource
+                       AND l.owner_job_id=jobs.job_id
+                       AND l.lease_epoch=jobs.lease_epoch
+                   )",
+                params![job_id, now_ms(), row.lease_epoch],
+            )?;
+            if changed != 1 {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: "protective owned stop lost its state or lease fence".into(),
+                });
+            }
+            tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+                 VALUES(?1,?2,'protective_owned_stop_authorizing',?3)",
+                params![
+                    job_id,
+                    now_ms(),
+                    json!({
+                        "pid": row.pid,
+                        "lease_epoch": row.lease_epoch,
+                        "checkpoint_request_sha256": request_sha256,
+                        "checkpoint_result": checkpoint_result,
+                    })
+                    .to_string()
+                ],
+            )?;
+            tx.commit()?;
+        }
+
+        let decision = json!({
+            "schema_version": "ember-lab-protective-owned-stop-v1",
+            "result": "PROTECTIVE_OWNED_STOP_AUTHORIZED",
+            "reason": "host_protection_not_causation",
+            "job_id": job_id,
+            "observed_at_ms": now_ms(),
+            "resource_guard": resource_guard,
+            "lease": {
+                "resource": &row.resource,
+                "owner_job_id": job_id,
+                "lease_epoch": row.lease_epoch,
+                "verified": true,
+            },
+            "process": {
+                "pid": row.pid,
+                "start_token": &row.start_token,
+                "executable_identity_sha256": hash_bytes(row.executable.as_bytes()),
+                "job_object_name": &row.job_object_name,
+                "identity_verified": true,
+                "job_object_membership_verified": true,
+            },
+            "checkpoint_request": {
+                "request_artifact": checkpoint_request_path.file_name().unwrap().to_string_lossy(),
+                "request_sha256": request_sha256,
+                "response_artifact": response_sha256.as_ref().map(|_| checkpoint_response_path.file_name().unwrap().to_string_lossy()),
+                "response_sha256": response_sha256,
+                "result": checkpoint_result,
+                "grace_ms": grace_ms,
+            },
+            "termination": {
+                "scope": "exact_identity_verified_ember_lab_owned_job_object",
+                "foreign_process_control": false,
+                "decision_receipt_persisted_before_termination": true,
+            },
+            "scientific_capability_evidence": false,
+        });
+        let decision_bytes = serde_json::to_vec_pretty(&decision)?;
+        let decision_sha256 = hash_bytes(&decision_bytes);
+        let decision_path = self
+            .log_dir
+            .join(format!("protective-owned-stop-{decision_sha256}.json"));
+        let artifact = (|| -> Result<ReceiptArtifact> {
+            if decision_path.exists() {
+                if fs::read(&decision_path)? != decision_bytes {
+                    return Err(EmberLabError::ReceiptHashCollision {
+                        path: decision_path.clone(),
+                    });
+                }
+                return Ok(ReceiptArtifact {
+                    path: decision_path.clone(),
+                    sha256: decision_sha256.clone(),
+                });
+            }
+            match atomic_create(&decision_path, &decision_bytes) {
+                Ok(()) => Ok(ReceiptArtifact {
+                    path: decision_path.clone(),
+                    sha256: decision_sha256.clone(),
+                }),
+                Err(EmberLabError::ReceiptAlreadyExists { .. })
+                    if fs::read(&decision_path)? == decision_bytes =>
+                {
+                    Ok(ReceiptArtifact {
+                        path: decision_path.clone(),
+                        sha256: decision_sha256.clone(),
+                    })
+                }
+                Err(EmberLabError::ReceiptAlreadyExists { .. }) => {
+                    Err(EmberLabError::ReceiptHashCollision {
+                        path: decision_path.clone(),
+                    })
+                }
+                Err(error) => Err(error),
+            }
+        })();
+        let artifact = match artifact {
+            Ok(artifact) => artifact,
+            Err(error) => {
+                let _ = self.conn()?.execute(
+                    "UPDATE jobs SET state='running',updated_at_ms=?2
+                     WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3
+                       AND EXISTS(
+                         SELECT 1 FROM leases l
+                         WHERE l.resource=jobs.resource
+                           AND l.owner_job_id=jobs.job_id
+                           AND l.lease_epoch=jobs.lease_epoch
+                       )",
+                    params![job_id, now_ms(), row.lease_epoch],
+                );
+                return Err(error);
+            }
+        };
+
+        self.live
+            .lock()
+            .map_err(|_| EmberLabError::Poisoned)?
+            .remove(job_id);
+        if let Err(error) = terminate_live(&live) {
+            self.live
+                .lock()
+                .map_err(|_| EmberLabError::Poisoned)?
+                .insert(
+                    job_id.into(),
+                    RetainedProcess {
+                        live,
+                        monitored: false,
+                    },
+                );
+            return Err(error);
+        }
+        self.finalize_stopped(job_id, &row, true)?;
+        self.conn()?.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+             VALUES(?1,?2,'protective_owned_stop_completed',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({
+                    "decision_receipt": artifact.path.file_name().unwrap().to_string_lossy(),
+                    "decision_receipt_sha256": &artifact.sha256,
+                })
+                .to_string()
+            ],
+        )?;
+        Ok(artifact)
+    }
+}
+
 impl Drop for Daemon {
     fn drop(&mut self) {
         #[cfg(windows)]
@@ -568,6 +907,8 @@ impl Daemon {
             )?;
             spawn_resource_guard_monitor(
                 Arc::downgrade(&daemon.db),
+                Arc::downgrade(&daemon.live),
+                daemon.log_dir.clone(),
                 duplicate_owned_handle(daemon.monitor_shutdown.raw())?,
                 Arc::downgrade(&daemon.monitor_ownership),
             )?;
@@ -1821,8 +2162,23 @@ impl Daemon {
         tx.commit()?;
         Ok(())
     }
-    pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
+    pub fn start_job(&self, mut spec: JobSpec) -> Result<JobHandle> {
         self.verify_identity(&spec.job_id)?;
+        let protective_key = hash_bytes(spec.job_id.as_bytes());
+        let checkpoint_request_path = self.log_dir.join(format!(
+            "{protective_key}.protective-checkpoint-request.json"
+        ));
+        let checkpoint_response_path = self.log_dir.join(format!(
+            "{protective_key}.protective-checkpoint-response.json"
+        ));
+        spec.env.insert(
+            PROTECTIVE_CHECKPOINT_REQUEST_ENV.into(),
+            checkpoint_request_path.to_string_lossy().into_owned(),
+        );
+        spec.env.insert(
+            PROTECTIVE_CHECKPOINT_RESPONSE_ENV.into(),
+            checkpoint_response_path.to_string_lossy().into_owned(),
+        );
         let argv_json = serde_json::to_string(&spec.args)?;
         let env_json = serde_json::to_string(&spec.env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
@@ -2194,6 +2550,20 @@ impl Daemon {
         #[cfg(not(windows))]
         terminate_process(row.pid)?;
         self.finalize_stopped(job_id, &row, true)
+    }
+
+    #[cfg(windows)]
+    pub fn protective_owned_stop(
+        &self,
+        job_id: &str,
+        checkpoint_grace: Duration,
+    ) -> Result<ReceiptArtifact> {
+        ProtectiveStopContext {
+            db: Arc::clone(&self.db),
+            live: Arc::clone(&self.live),
+            log_dir: self.log_dir.clone(),
+        }
+        .protective_owned_stop(job_id, checkpoint_grace)
     }
 
     fn receipt_bytes(&self, job_id: &str) -> Result<Vec<u8>> {
@@ -2674,43 +3044,7 @@ impl Daemon {
 
     fn finalize_stopped(&self, job_id: &str, row: &JobProcessRow, seal_logs: bool) -> Result<()> {
         let mut conn = self.conn()?;
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let (stdout_sha256, stderr_sha256) = if seal_logs {
-            let (stdout, stderr) = seal_log_hashes(&tx, job_id)?;
-            (Some(stdout), Some(stderr))
-        } else {
-            (None, None)
-        };
-        let changed = tx.execute(
-            "UPDATE jobs SET state='stopped',stdout_log_sha256=?4,stderr_log_sha256=?5,outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3",
-            params![job_id, now_ms(), row.lease_epoch, stdout_sha256, stderr_sha256],
-        )?;
-        if changed != 1 {
-            return Err(EmberLabError::InvalidTransition {
-                job_id: job_id.into(),
-                detail: "stop finalization lost its state or lease epoch fence".into(),
-            });
-        }
-        let released = tx.execute(
-            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
-            params![row.resource, job_id, row.lease_epoch],
-        )?;
-        if released != 1 {
-            return Err(EmberLabError::InvalidTransition {
-                job_id: job_id.into(),
-                detail: "stop finalization lost its lease epoch".into(),
-            });
-        }
-        tx.execute(
-            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stopped',?3)",
-            params![
-                job_id,
-                now_ms(),
-                json!({"pid":row.pid,"lease_epoch":row.lease_epoch}).to_string()
-            ],
-        )?;
-        tx.commit()?;
-        Ok(())
+        finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs)
     }
 
     fn reclaim_starting_job(&self, job_id: &str, row: &JobProcessRow, kind: &str) -> Result<()> {
@@ -2861,51 +3195,99 @@ impl Daemon {
     }
 
     fn job_process_row(&self, job_id: &str) -> Result<JobProcessRow> {
-        self.conn()?
-            .query_row(
-                "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle FROM jobs WHERE job_id=?1",
-                [job_id],
-                |row| {
-                    let state: String = row.get(4)?;
-                    Ok((
-                        row.get::<_, u32>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
-                        state,
-                        row.get::<_, String>(5)?,
-                        row.get::<_, u32>(6)?,
-                        row.get::<_, i64>(7)?,
-                        row.get::<_, String>(8)?,
-                        row.get::<_, String>(9)?,
-                        row.get::<_, i64>(10)?,
-                        row.get::<_, i64>(11)?,
-                    ))
-                },
-            )
-            .optional()?
-            .ok_or_else(|| EmberLabError::JobNotFound {
-                job_id: job_id.into(),
-            })
-            .and_then(|row| {
-                Ok(JobProcessRow {
-                    pid: row.0,
-                    start_token: row.1,
-                    executable: row.2,
-                    resource: row.3,
-                    state: JobState::parse(&row.4)?,
-                    job_object_name: row.5,
-                    main_thread_id: row.6,
-                    lease_epoch: row.7,
-                    stdout_log_path: PathBuf::from(row.8),
-                    stderr_log_path: PathBuf::from(row.9),
-                    stdout_child_handle: row.10,
-                    stderr_child_handle: row.11,
-                })
-            })
+        let conn = self.conn()?;
+        job_process_row_from_connection(&conn, job_id)
     }
 }
 
+fn finalize_stopped_in_connection(
+    conn: &mut Connection,
+    job_id: &str,
+    row: &JobProcessRow,
+    seal_logs: bool,
+) -> Result<()> {
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let (stdout_sha256, stderr_sha256) = if seal_logs {
+        let (stdout, stderr) = seal_log_hashes(&tx, job_id)?;
+        (Some(stdout), Some(stderr))
+    } else {
+        (None, None)
+    };
+    let changed = tx.execute(
+        "UPDATE jobs SET state='stopped',stdout_log_sha256=?4,stderr_log_sha256=?5,outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3",
+        params![job_id, now_ms(), row.lease_epoch, stdout_sha256, stderr_sha256],
+    )?;
+    if changed != 1 {
+        return Err(EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "stop finalization lost its state or lease epoch fence".into(),
+        });
+    }
+    let released = tx.execute(
+        "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+        params![row.resource, job_id, row.lease_epoch],
+    )?;
+    if released != 1 {
+        return Err(EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "stop finalization lost its lease epoch".into(),
+        });
+    }
+    tx.execute(
+        "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stopped',?3)",
+        params![
+            job_id,
+            now_ms(),
+            json!({"pid":row.pid,"lease_epoch":row.lease_epoch}).to_string()
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<JobProcessRow> {
+    conn.query_row(
+        "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle FROM jobs WHERE job_id=?1",
+        [job_id],
+        |row| {
+            let state: String = row.get(4)?;
+            Ok((
+                row.get::<_, u32>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                state,
+                row.get::<_, String>(5)?,
+                row.get::<_, u32>(6)?,
+                row.get::<_, i64>(7)?,
+                row.get::<_, String>(8)?,
+                row.get::<_, String>(9)?,
+                row.get::<_, i64>(10)?,
+                row.get::<_, i64>(11)?,
+            ))
+        },
+    )
+    .optional()?
+    .ok_or_else(|| EmberLabError::JobNotFound {
+        job_id: job_id.into(),
+    })
+    .and_then(|row| {
+        Ok(JobProcessRow {
+            pid: row.0,
+            start_token: row.1,
+            executable: row.2,
+            resource: row.3,
+            state: JobState::parse(&row.4)?,
+            job_object_name: row.5,
+            main_thread_id: row.6,
+            lease_epoch: row.7,
+            stdout_log_path: PathBuf::from(row.8),
+            stderr_log_path: PathBuf::from(row.9),
+            stdout_child_handle: row.10,
+            stderr_child_handle: row.11,
+        })
+    })
+}
 struct JobProcessRow {
     pid: u32,
     start_token: String,
@@ -3827,8 +4209,52 @@ fn create_monitor_shutdown() -> Result<OwnedHandle> {
 }
 
 #[cfg(windows)]
+fn protective_checkpoint_monitor_grace_ms(job_count: usize) -> u64 {
+    let divisor = u64::try_from(job_count).unwrap_or(u64::MAX).max(1);
+    (PROTECTIVE_CHECKPOINT_MONITOR_TOTAL_GRACE_MS / divisor).max(1)
+}
+#[cfg(windows)]
+fn running_job_ids_for_protective_stop(conn: &Connection) -> Result<Vec<String>> {
+    let status = resource_guard_status_from_connection(conn)?;
+    if status.get("admission_state") != Some(&Value::String("frozen".into())) {
+        return Ok(Vec::new());
+    }
+    let mut statement =
+        conn.prepare("SELECT job_id FROM jobs WHERE state='running' ORDER BY job_id")?;
+    let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(EmberLabError::from)
+}
+
+#[cfg(windows)]
+fn record_protective_owned_stop_failure(
+    db: &Arc<Mutex<Connection>>,
+    job_id: &str,
+    error: &EmberLabError,
+) {
+    let Ok(conn) = db.lock() else {
+        return;
+    };
+    let _ = conn.execute(
+        "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+         VALUES(?1,?2,'protective_owned_stop_failed',?3)",
+        params![
+            job_id,
+            now_ms(),
+            json!({
+                "error": error.to_string(),
+                "foreign_process_control": false,
+            })
+            .to_string()
+        ],
+    );
+}
+
+#[cfg(windows)]
 fn spawn_resource_guard_monitor(
     db: Weak<Mutex<Connection>>,
+    live: Weak<Mutex<HashMap<String, RetainedProcess>>>,
+    log_dir: PathBuf,
     shutdown: OwnedHandle,
     ownership: Weak<RwLock<bool>>,
 ) -> Result<()> {
@@ -3857,19 +4283,47 @@ fn spawn_resource_guard_monitor(
                 let Some(db) = db.upgrade() else {
                     break;
                 };
-                let Ok(conn) = db.lock() else {
+                let job_ids = {
+                    let Ok(conn) = db.lock() else {
+                        break;
+                    };
+                    if persist_resource_guard_headroom(
+                        &conn,
+                        now_ms(),
+                        probe_host_survival_headroom(),
+                    )
+                    .is_err()
+                    {
+                        Vec::new()
+                    } else {
+                        running_job_ids_for_protective_stop(&conn).unwrap_or_default()
+                    }
+                };
+                if job_ids.is_empty() {
+                    continue;
+                }
+                let Some(live) = live.upgrade() else {
                     break;
                 };
-                let _ = persist_resource_guard_headroom(
-                    &conn,
-                    now_ms(),
-                    probe_host_survival_headroom(),
-                );
+                let context = ProtectiveStopContext {
+                    db: Arc::clone(&db),
+                    live,
+                    log_dir: log_dir.clone(),
+                };
+                let grace_ms = protective_checkpoint_monitor_grace_ms(job_ids.len());
+
+                for job_id in job_ids {
+                    if let Err(error) = context.protective_owned_stop(
+                        &job_id,
+                        Duration::from_millis(grace_ms),
+                    ) {
+                        record_protective_owned_stop_failure(&db, &job_id, &error);
+                    }
+                }
             }
         })?;
     Ok(())
 }
-
 fn state_writer_lock_path(path: &Path) -> PathBuf {
     let mut name = path
         .file_name()
@@ -5173,5 +5627,13 @@ mod dispatch_binding_snapshot_tests {
             .as_str()
             .unwrap()
             .contains("probe unavailable"));
+    }
+    #[cfg(windows)]
+    #[test]
+    fn protective_checkpoint_grace_has_one_daemon_wide_finite_budget() {
+        assert_eq!(protective_checkpoint_monitor_grace_ms(0), 5_000);
+        assert_eq!(protective_checkpoint_monitor_grace_ms(1), 5_000);
+        assert_eq!(protective_checkpoint_monitor_grace_ms(2), 2_500);
+        assert_eq!(protective_checkpoint_monitor_grace_ms(10_000), 1);
     }
 }
