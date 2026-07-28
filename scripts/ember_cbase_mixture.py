@@ -1,3 +1,7 @@
+# EMBER_ARTIFACT_CLASS=historical_only
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 #!/usr/bin/env python3
 """ember_cbase_mixture.py — C-BASE pretrain mixture assembler.
 
@@ -66,6 +70,10 @@ Receipt fields reported:
 """
 
 from __future__ import annotations
+
+raise SystemExit(
+    "historical_only: the sub-3B cbase mixture assembler and every importer are execution-denied"
+)
 
 import argparse
 import hashlib
