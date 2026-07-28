@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 """build_decontam_batch_mp.py -- W2 preregistration sec.4 decontamination (parallelized).
 
 Identical to build_decontam_batch.py in algorithm, semantics, and receipt contract.
@@ -354,6 +358,25 @@ def _extract_needle_hashes(candidate_rows: list[list[int]], window: int,
     return needle_hash_to_windows, set(needle_hash_to_windows.keys())
 
 
+def _contiguous_worker_shards(
+        shard_paths: list[str], n_workers: int) -> list[list[str]]:
+    """Split ordered shards into balanced contiguous worker ranges.
+
+    Contiguity makes every within-worker join a true physical corpus boundary.
+    The predecessor worker receives its successor's first shard separately as
+    boundary-only context, covering group seams without scanning that shard
+    twice."""
+    n_groups = min(n_workers, len(shard_paths))
+    base_size, remainder = divmod(len(shard_paths), n_groups)
+    groups = []
+    start = 0
+    for group_index in range(n_groups):
+        size = base_size + (1 if group_index < remainder else 0)
+        groups.append(shard_paths[start:start + size])
+        start += size
+    return groups
+
+
 def _worker_scan_shards(args: tuple) -> dict:
     """Worker: scan a subset of shards, stream matches to file, return counts only.
 
@@ -367,7 +390,7 @@ def _worker_scan_shards(args: tuple) -> dict:
     what the existing dump_dir streaming already does."""
     (shard_dir, shard_names, needle_hash_to_windows, needle_hash_set,
      window, roll_base, worker_id, progress_file, chunk_tokens, dump_dir,
-     window_to_rows) = args
+     window_to_rows, successor_name) = args
 
     mod = 1 << 64
     confirmed_matches_count = 0
@@ -597,6 +620,35 @@ def _worker_scan_shards(args: tuple) -> dict:
         # marking a shard boundary regardless of the intra-shard cadence above.
         _write_heartbeat(idx, name, total_windows_hashed, force=True)
 
+    # Scan the one true physical boundary between this contiguous group and
+    # its successor. The successor shard is boundary-only context: its full
+    # intra-shard windows are owned by the next worker and are not duplicated.
+    if successor_name is not None and prev_tail is not None and needle_hash_set:
+        successor_path = os.path.join(shard_dir, successor_name)
+        successor = np.memmap(successor_path, dtype="<u2", mode="r")
+        if successor.shape[0] >= (window - 1):
+            join = np.concatenate([prev_tail, successor[:window - 1]])
+            join_n, join_hit_offsets = _scan_for_hits(join, chunk_tokens)
+            total_windows_hashed += join_n
+            for i in join_hit_offsets:
+                candidate = tuple(int(x) for x in join[i:i + window])
+                hh = _needle_hash_local(candidate)
+                if hh in needle_hash_to_windows and candidate in needle_hash_to_windows[hh]:
+                    match_record = {
+                        "boundary": f"{prev_name}|{successor_name}",
+                        "offset_in_join": i,
+                        "window": list(candidate),
+                    }
+                    if worker_dump_fh:
+                        worker_dump_fh.write(json.dumps(match_record) + "\n")
+                    confirmed_matches_count += 1
+                    if window_to_rows is not None:
+                        boundary_key = f"JOIN:{prev_name}|{successor_name}"
+                        for row_idx in window_to_rows.get(candidate, ()):
+                            counts = row_shard_counts.setdefault(row_idx, {})
+                            counts[boundary_key] = counts.get(boundary_key, 0) + 1
+        del successor
+
     # Close the dump file
     if worker_dump_fh:
         worker_dump_fh.close()
@@ -687,15 +739,9 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
                     fh.write(json.dumps(match) + "\n")
         return result
 
-    # Distribute shards into EXACTLY min(n_workers, len(shard_paths)) balanced groups.
-    # Fold remainder shards into existing groups to avoid silent extra workers.
-    n_groups = min(n_workers, len(shard_paths))
-    worker_shards = [[] for _ in range(n_groups)]
-    for shard_idx, shard_name in enumerate(shard_paths):
-        group_idx = shard_idx % n_groups
-        worker_shards[group_idx].append(shard_name)
-    # Filter out empty groups (shouldn't happen, but safe)
-    worker_shards = [g for g in worker_shards if g]
+    # Contiguous groups preserve physical adjacency; round-robin groups join
+    # fake neighbors and omit true physical shard boundaries (issue #331).
+    worker_shards = _contiguous_worker_shards(shard_paths, n_workers)
 
     # Create dump directory for workers to stream matches (per-run subdirectory --
     # a shared fixed name collides across concurrent/successive runs on Windows,
@@ -708,10 +754,13 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
     # Dispatch workers with dump_dir parameter
     worker_args = []
     for worker_id, shard_names in enumerate(worker_shards):
+        successor_name = (
+            worker_shards[worker_id + 1][0]
+            if worker_id + 1 < len(worker_shards) else None)
         worker_args.append((
             shard_dir, shard_names, needle_hash_to_windows, needle_hash_set,
             window, roll_base, worker_id, progress_file, chunk_tokens, tmp_match_dir,
-            window_to_rows
+            window_to_rows, successor_name
         ))
 
     with Pool(processes=len(worker_shards)) as pool:
@@ -787,6 +836,10 @@ def contamination_recheck_mp(eval_rows: list[list[int]], shard_dir: str, *,
         "verdict": "CLEAN" if not all_matches else "CONTAMINATED",
         "wall_s": wall_s,
         "n_workers": len(worker_shards),
+        "true_shard_boundaries_scanned": max(0, len(shard_paths) - 1),
+        "boundary_window_convention": (
+            "all true physical shard boundaries included exactly once; "
+            "worker-group seams are scanned by the predecessor worker"),
     }
     if track_shard_histogram:
         per_row_matches = {i: sum(per_row_shard_distribution.get(i, {}).values())
