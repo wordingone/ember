@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Deterministic documentation freshness checker for ember.
 
@@ -12,13 +15,11 @@ Exit: 0 = clean, 1 = defects found
 Mode: --fix-report outputs defect markdown; normal mode outputs table
 """
 
+import importlib.util
 import re
 import sys
-import json
-import subprocess
 from pathlib import Path
-from datetime import datetime, timedelta
-from collections import defaultdict
+from datetime import datetime
 
 class DocsFreshnessChecker:
     def __init__(self, repo_root=None):
@@ -98,27 +99,40 @@ class DocsFreshnessChecker:
             })
             return
 
-        # Try to regenerate and compare
+        # Build the expected bytes in memory. Freshness validation must never
+        # rewrite the evidence it is validating.
         try:
-            result = subprocess.run(
-                [sys.executable, str(self.repo / "scripts" / "build_claims_index.py")],
-                cwd=str(self.repo),
-                capture_output=True,
-                timeout=30
+            builder_path = self.repo / "scripts" / "build_claims_index.py"
+            spec = importlib.util.spec_from_file_location(
+                "ember_claims_index_builder",
+                builder_path,
             )
-
-            if result.returncode != 0:
-                self.warnings.append({
-                    'file': 'receipts/',
-                    'class': 'claims_index_rebuild_failed',
-                    'description': f"build_claims_index.py exited {result.returncode}"
+            if spec is None or spec.loader is None:
+                raise RuntimeError(f"cannot load {builder_path}")
+            builder = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(builder)
+            rows, _stats = builder.build_index(self.repo / "receipts")
+            expected_index = builder.render_index_jsonl(rows)
+            expected_claims = builder.render_claims_md(rows)
+            actual_index = index_path.read_text(encoding="utf-8", errors="strict")
+            actual_claims = claims_path.read_text(encoding="utf-8", errors="strict")
+            if actual_index != expected_index:
+                self.defects.append({
+                    'file': 'receipts/INDEX.jsonl',
+                    'defect_class': 'stale_claims_index',
+                    'description': 'INDEX.jsonl differs from deterministic in-memory regeneration'
                 })
-
+            if actual_claims != expected_claims:
+                self.defects.append({
+                    'file': 'receipts/CLAIMS.md',
+                    'defect_class': 'stale_claims_index',
+                    'description': 'CLAIMS.md differs from deterministic in-memory regeneration'
+                })
         except Exception as e:
-            self.warnings.append({
+            self.defects.append({
                 'file': 'receipts/',
-                'class': 'claims_index_check_failed',
-                'description': f"Could not verify: {e}"
+                'defect_class': 'claims_index_check_failed',
+                'description': f"Could not verify deterministically: {e}"
             })
 
     def check_readme_state_marker(self):

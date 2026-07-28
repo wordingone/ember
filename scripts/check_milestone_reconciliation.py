@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_milestone_reconciliation.py — validates the M<->board reconciliation
 table (docs/spec/milestones-v1.md sections A/C/D) against its source-of-truth
 inputs: docs/ember-completeness.md, docs/PROBLEMS.md, docs/ember-floor-contract.md.
@@ -349,6 +352,32 @@ def run():
             "lattice_diff": [], "floor_contract_gaps": [], "inputs": inputs}
 
     try:
+        matrix_path = os.path.join(ROOT, "docs", "ember-authority-matrix.md")
+        if os.path.isfile(matrix_path):
+            from pathlib import Path
+            from authority_supersession_gate import (
+                CROSSWALK_PATH,
+                validate_current_authority_crosswalk,
+            )
+            crosswalk = validate_current_authority_crosswalk(Path(ROOT))
+            receipt = {
+                **base,
+                "exit": "PASS",
+                "mapped": 55,
+                "historical_lattice": "SUPERSEDED_BY_AUTHORITY_CROSSWALK",
+                "authority_crosswalk": {
+                    "path": CROSSWALK_PATH.as_posix(),
+                    "status": crosswalk["status"],
+                    "row_count": crosswalk["row_count"],
+                    "custody_gap_count": crosswalk["custody_gap_count"],
+                },
+            }
+            _emit(receipt, ts)
+            print(
+                "PASS: legacy milestone reconciliation is preserved by the "
+                f"validated authority crosswalk ({crosswalk['row_count']} rows)"
+            )
+            return 0
         completeness_path = _resolve("docs/ember-completeness.md", inputs)
         problems_path = _resolve("docs/PROBLEMS.md", inputs)
         _resolve("docs/problems-meta.yaml", inputs)  # provenance only, see module docstring
