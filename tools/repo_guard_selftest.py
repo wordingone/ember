@@ -37,6 +37,7 @@ GUARD_SUPPORT_FILES = [
     "tools/repo-guard.sh",
     "tools/check_line_endings.py",
     "tools/check_text_encoding.py",
+    "tools/check_executable_redaction_placeholders.py",
     "tools/check_names_hashed.py",
     _LEGACY_CHECKER_REL,
     _LEGACY_POLICY_REL,
@@ -154,6 +155,7 @@ def make_split_kernel(test_word: str) -> Path:
         "tools/repo-guard.sh",
         "tools/check_line_endings.py",
         "tools/check_text_encoding.py",
+        "tools/check_executable_redaction_placeholders.py",
         "tools/check_names_hashed.py",
         "scripts/verify_authority_conservation.py",
     ):
