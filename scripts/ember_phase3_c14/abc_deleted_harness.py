@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """abc_deleted_harness.py — Phase-3 A/B/C/Deleted four-arm contract runner.
 
 Delegates to run_rig() / GatePredicates / check_guards from ember_c14_contract_rig.py
@@ -528,16 +531,16 @@ def _print_gate_result(gate_result: GateResult) -> None:
 # ---------------------------------------------------------------------------
 
 def _run_cpu_selftest(verbose: bool = True) -> tuple[bool, list, list]:
-    """CPU selftest proving the C14 core property on toy models.
+    """CPU selftest proving real updates and fail-closed C14 toy gating.
 
     Tests:
       T1  : state_dict CHANGES after one iGRPO step (adapter weight-change check)
       T2  : run_phase3_contract(toy_cpu=True) completes without exception
-      T3  : predicates_passed is True on the toy run
+      T3  : the frozen seed-99 toy screen remains an honest negative
       T4  : weights_changed is True (guard a1) on the toy run
       T5  : per_task_rows contains rows for all four arms
       T6  : arm_scores keys present for A, B, C, Deleted
-      T7  : assert_gate_predicates does NOT raise on a passing toy run
+      T7  : assert_gate_predicates rejects that negative with gate (1a)
       T8  : GateResult fields type-check (arm_scores=dict, per_task_rows=list, etc.)
       T9  : neural_delta_hash_pre != neural_delta_hash_post in GateResult
       T10 : Deleted arm pass_rate <= C arm pass_rate on train (deletion degrades)
@@ -613,11 +616,11 @@ def _run_cpu_selftest(verbose: bool = True) -> tuple[bool, list, list]:
     # -----------------------------------------------------------------------
     # T2: run_phase3_contract(toy_cpu=True) completes without exception
     #
-    # Seed selection: seed=99, n_train_steps=32 is the validated combination
-    # that produces all_pass=True (both gate predicates AND guards) on the stub
-    # corpus. Other seeds may hit degenerate reward cases or borderline predicate
-    # (4) outcomes, which are expected stochastic failures of the tiny-scale rig,
-    # not bugs in the harness.
+    # Frozen negative screen: seed=99, n_train_steps=32 was once described as a
+    # passing fixture. Independent replay disproved that claim: the optimizer
+    # engages, but C does not beat A on train. Keep the exact fixture as a
+    # regression proving that the strict deletion-causal gate refuses the failed
+    # realization instead of weakening the predicate or selecting a lucky seed.
     # -----------------------------------------------------------------------
     name = "T2_run_phase3_contract_completes"
     gate_result: Optional[GateResult] = None
@@ -631,15 +634,15 @@ def _run_cpu_selftest(verbose: bool = True) -> tuple[bool, list, list]:
             print(f"  ERROR {name}: {exc}")
 
     # -----------------------------------------------------------------------
-    # T3: predicates_passed is True on the toy run
-    #     (gate predicates + all guards)
+    # T3: the frozen negative screen must not claim that all predicates passed.
     # -----------------------------------------------------------------------
-    name = "T3_predicates_passed_true"
+    name = "T3_negative_screen_rejected"
     if gate_result is not None:
         _check(
             name,
-            gate_result.predicates_passed,
-            "predicates_passed=False — one or more gate predicates / guards failed."
+            not gate_result.predicates_passed,
+            "predicates_passed=True — the known-negative seed-99 realization "
+            "was incorrectly accepted."
         )
     else:
         failed.append(name)
@@ -699,17 +702,25 @@ def _run_cpu_selftest(verbose: bool = True) -> tuple[bool, list, list]:
             print(f"  SKIP  {name}  (T2 failed, no gate_result)")
 
     # -----------------------------------------------------------------------
-    # T7: assert_gate_predicates does NOT raise on a passing toy run
+    # T7: the strict gate must reject the frozen negative for the documented
+    #     C-vs-A train predicate. This is a fail-closed regression, not a relaxed
+    #     acceptance threshold.
     # -----------------------------------------------------------------------
-    name = "T7_assert_gate_predicates_no_raise"
+    name = "T7_assert_gate_predicates_rejects_negative"
     if gate_result is not None and gate_result.rig_result is not None:
         try:
             assert_gate_predicates(gate_result.rig_result)
-            _check(name, True)
+            _check(
+                name,
+                False,
+                "assert_gate_predicates accepted the known-negative fixture.",
+            )
         except AssertionError as exc:
-            failed.append(name)
-            if verbose:
-                print(f"  FAIL  {name}  AssertionError: {exc}")
+            _check(
+                name,
+                str(exc).startswith("GATE FAIL (1a): C does not beat A on train."),
+                f"unexpected rejection: {exc}",
+            )
         except Exception as exc:
             failed.append(name)
             if verbose:
