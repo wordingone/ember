@@ -100,6 +100,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Keep status output reproducible on default Windows CP1252 consoles.
 if hasattr(sys.stdout, "reconfigure"):
@@ -113,6 +114,9 @@ CANDIDATE_ROOTS = [
     p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT)
     if p
 ]
+sys.path.insert(0, REPO_ROOT)
+from scripts.redact_local_paths import normalize_json_paths
+
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
 
@@ -579,8 +583,9 @@ def _write_sidecar(root, receipt_obj):
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sidecar_path = os.path.join(sidecar_dir, f"custody-{ts}.json")
 
+    normalized, _ = normalize_json_paths(receipt_obj, Path(root))
     with open(sidecar_path, "w", encoding="utf-8") as fh:
-        json.dump(receipt_obj, fh, indent=2)
+        json.dump(normalized, fh, indent=2)
         fh.flush()
         os.fsync(fh.fileno())
 

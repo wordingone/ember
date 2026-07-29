@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c_custody_pattern_citation_test.py -- Tests for citation-extraction pattern
 classification (issue #410).
 
@@ -36,7 +39,11 @@ def _run_custody_probe(repo_root: Path) -> tuple[str, int]:
         capture_output=True,
         text=True,
         timeout=60,
-        env={**os.environ, "EMBER_TOTALITY_ROOT": str(repo_root)},
+        env={
+            **os.environ,
+            "EMBER_TOTALITY_ROOT": str(repo_root),
+            "PYTHONPATH": str(REPO_ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""),
+        },
     )
     return result.stdout.strip(), result.returncode
 

@@ -113,6 +113,7 @@ REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, REPO_ROOT)
 from scripts.lib.invariant import stamp, INVARIANT_SHA256
 from scripts.ember_totality import receipt_chain_verify
+from scripts.redact_local_paths import normalize_json_paths
 from scripts.ember_totality import quarantine_sweep
 from scripts.ember_totality import tree_provenance
 from scripts.ember_phase3_c14 import floor_contract_manifest
@@ -1417,6 +1418,10 @@ def main():
         receipt = sanitize_receipt_paths(
             receipt, os.path.abspath(args.artifact_root), placeholder="<ARTIFACT-ROOT>"
         )
+
+    # Issue #525: normalize any residual drive-rooted path from a probe or
+    # nested reason at the writer boundary before the receipt reaches disk.
+    receipt, _ = normalize_json_paths(receipt, Path(REPO_ROOT))
 
     receipt_path = os.path.join(RECEIPTS_DIR, f"ember-totality-{ts}.json")
     with open(receipt_path, "w", encoding="utf-8") as fh:
