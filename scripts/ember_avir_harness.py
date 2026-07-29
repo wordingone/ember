@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_avir_harness.py — clean-room [REDACTED]-cli test harness for Ember C14.
 
 Drives the REAL [REDACTED].exe via its HTTP debug server.  Does NOT reimplement [REDACTED].exe
@@ -73,6 +76,7 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Callable
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -1522,24 +1526,29 @@ def _run_selftest() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         proj_dir = Path(tmpdir) / ".[REDACTED]" / "projects" / "testkey"
         proj_dir.mkdir(parents=True)
-        (proj_dir / "session-abc.jsonl").touch()
-        (proj_dir / "session-xyz.jsonl").touch()
-        # make session-xyz appear newer via mtime
-        os.utime(proj_dir / "session-xyz.jsonl",
-                 (time.time(), time.time()))
-
-        cwd_fake = tmpdir.replace("\\", "/").replace(":", "").lstrip("/")
-        # Without session_id → mtime fallback picks newest (xyz)
-        # We can't test the home-relative path easily, so test the Path logic directly.
-        found_abc = _find_session_jsonl.__wrapped__ if hasattr(
-            _find_session_jsonl, "__wrapped__") else None  # not wrapped — test directly
-        # Test that passing session_id pins to the right file regardless of mtime.
         result_abc = proj_dir / "session-abc.jsonl"
         result_xyz = proj_dir / "session-xyz.jsonl"
-        _check("T15/find_session_jsonl/session_id pinning (file exists)", result_abc.exists())
-        # Verify that the mtime of xyz > abc (precondition for the defect to be observable)
-        _check("T15/find_session_jsonl/xyz mtime >= abc mtime",
-               result_xyz.stat().st_mtime >= result_abc.stat().st_mtime)
+        result_abc.touch()
+        result_xyz.touch()
+        # Establish an explicit two-second ordering. Relying on adjacent
+        # touch()/time.time() calls is not portable across filesystem clocks.
+        base_ns = time.time_ns()
+        os.utime(result_abc, ns=(base_ns - 2_000_000_000,) * 2)
+        os.utime(result_xyz, ns=(base_ns,) * 2)
+
+        with patch.object(Path, "home", return_value=Path(tmpdir)):
+            pinned = _find_session_jsonl("testkey", session_id="session-abc")
+            fallback = _find_session_jsonl("testkey")
+        _check(
+            "T15/find_session_jsonl/session_id pinning",
+            pinned == result_abc,
+            f"expected {result_abc.name}, got {getattr(pinned, 'name', None)}",
+        )
+        _check(
+            "T15/find_session_jsonl/mtime fallback",
+            fallback == result_xyz,
+            f"expected {result_xyz.name}, got {getattr(fallback, 'name', None)}",
+        )
         # Verify _jsonl_byte_offset returns a non-negative integer
         offset = _jsonl_byte_offset(result_abc)
         _check("T15/_jsonl_byte_offset returns int >= 0", isinstance(offset, int) and offset >= 0)

@@ -1,0 +1,182 @@
+{
+  "claim_boundary": {
+    "borrowed_model_credit_claim": false,
+    "current_cpu_only_selftests_replayed": true,
+    "current_session_selection_test_repaired": true,
+    "external_executable_invoked": false,
+    "external_subscription_or_api_used": false,
+    "historical_external_executable_behavior_replayed": false,
+    "historical_private_stage_source_revalidated": false,
+    "historical_six_file_landing_revalidated": true,
+    "issue_210_land210i_tracking_subset_revalidated": true,
+    "issue_210_whole_closure_revalidated": false,
+    "issue_700_completion_claim": false,
+    "model_capability_claim": false,
+    "owned_model_credit_claim": false,
+    "tier_3_private_archive_revalidated": false,
+    "training_claim": false
+  },
+  "current_cpu_replay": {
+    "all_pass": true,
+    "command_count": 4,
+    "commands": [
+      {
+        "argv": [
+          "python",
+          "-B",
+          "scripts/ember_avir_cli_launch_entry.py",
+          "--help"
+        ],
+        "status": "PASS",
+        "stdout_sha256": "d7de64829726b640d244e34204a88068f11e30a7650c95c180ead6bfe924927d"
+      },
+      {
+        "argv": [
+          "python",
+          "-B",
+          "scripts/ember_avir_observe.py",
+          "--help"
+        ],
+        "status": "PASS",
+        "stdout_sha256": "b5f20293d854790d9f8e12e391f12b121f4ca1600b6e8a6b8cc7dd0cee344a74"
+      },
+      {
+        "argv": [
+          "python",
+          "-B",
+          "scripts/ember_avir_harness.py",
+          "--selftest"
+        ],
+        "status": "PASS",
+        "stdout_sha256": "38cc9e78485e4bea435e89e9f941e9f0341b34773fc766a05ef4f8cb4da9fb9e"
+      },
+      {
+        "argv": [
+          "python",
+          "-B",
+          "scripts/ember_avir_tasks.py",
+          "--test"
+        ],
+        "status": "PASS",
+        "stdout_sha256": "8db868b4013cd05f6a29f62a2728d766e6773266638f9304818a08aa97737a4b"
+      }
+    ],
+    "compile_count": 4,
+    "external_executable_invoked": false,
+    "gpu_used": false,
+    "harness_selftest": "38/38 PASS",
+    "tasks_heldout": 20,
+    "tasks_total": 44,
+    "tasks_train": 24
+  },
+  "drain_issue": 700,
+  "goal_id": "EMBER-02",
+  "historical_receipt_sha256": "43a5d4ac4749975187ae697a2161e066da82bcd229e7d244a4ab46c7f01fa553",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": "ember#210",
+  "mode": "PUBLIC_GIT_AND_CPU_ONLY_SELFTEST_REVALIDATION",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "paid_api_surface_used": false,
+  "producer": {
+    "path": "scripts/land210i_public_revalidation.py",
+    "sha256": "c77f732a5aec5ad7166d402fca3c9123c19ab404de2e6710e9f48fc906a00cd1"
+  },
+  "public_evidence": {
+    "harness_entry_pr": "https://github.com/wordingone/ember/pull/771",
+    "tracking_issue": "https://github.com/wordingone/ember/issues/210"
+  },
+  "public_lineage_revalidation": {
+    "current_repaired_files": 1,
+    "current_rows": [
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "historical_landed_sha256": "22f650f9a9ee94f82304be25a9ece404335bcfb535a1660052d3b9dac536cce3",
+        "path": "data/ember_avir_tasks/heldout.jsonl",
+        "sha256": "22f650f9a9ee94f82304be25a9ece404335bcfb535a1660052d3b9dac536cce3"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "historical_landed_sha256": "3267ee4176a0acfc63690e16442728d1cb61564743b62a3440a3f8ea9b6eb9f2",
+        "path": "data/ember_avir_tasks/train.jsonl",
+        "sha256": "3267ee4176a0acfc63690e16442728d1cb61564743b62a3440a3f8ea9b6eb9f2"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "historical_landed_sha256": "4f2875485b043d3d80f623752cd8d45c7cae14a9a0b43b4f590bf0e3049373a6",
+        "path": "scripts/ember_avir_cli_launch_entry.py",
+        "sha256": "4f2875485b043d3d80f623752cd8d45c7cae14a9a0b43b4f590bf0e3049373a6"
+      },
+      {
+        "disposition": "CURRENT_REPAIRED",
+        "historical_landed_sha256": "60c31d12bd12754164c1a10e53705910754bbcd35adeb93f04054ce3add1bbd1",
+        "path": "scripts/ember_avir_harness.py",
+        "sha256": "838e4f67c338b70c8dc430563076c74b328a384f59448a19a5c1ad7cf99e01dd"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "historical_landed_sha256": "10c63a41e9a4f5469cdf37dbf9a96f9e4434bfb0489a7db36c34dfb90de1ad7f",
+        "path": "scripts/ember_avir_observe.py",
+        "sha256": "10c63a41e9a4f5469cdf37dbf9a96f9e4434bfb0489a7db36c34dfb90de1ad7f"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "historical_landed_sha256": "d880467d72f7d4611700f9c27640b4f6605d630cb48a7f8dc7c2f89c48ce7459",
+        "path": "scripts/ember_avir_tasks.py",
+        "sha256": "d880467d72f7d4611700f9c27640b4f6605d630cb48a7f8dc7c2f89c48ce7459"
+      }
+    ],
+    "current_rows_sha256": "4862f32965dcf12645747c54142a62698b8e5a08be9649db54702d9495d60a4a",
+    "current_unchanged_landing_files": 5,
+    "historical_candidate_count": 6,
+    "historical_companion_count": 2,
+    "historical_modified_from_stage_count": 2,
+    "historical_script_count": 4,
+    "landing_commit": "93b5b7260ddca9c0fa8344e93924d4ab16190895",
+    "subject_commit": "090d92b72e131df65048e62553c253b694f13d00",
+    "subject_landing_blob_matches": 6,
+    "subject_landing_rows": [
+      {
+        "blob_oid": "fb1c2e3c8c700658f2bf858b357c4e95c7d149bd",
+        "modified_from_stage": true,
+        "path": "data/ember_avir_tasks/heldout.jsonl",
+        "sha256": "22f650f9a9ee94f82304be25a9ece404335bcfb535a1660052d3b9dac536cce3"
+      },
+      {
+        "blob_oid": "eb19d739a3f9adca10618f48f462d1cb4f819da3",
+        "modified_from_stage": false,
+        "path": "data/ember_avir_tasks/train.jsonl",
+        "sha256": "3267ee4176a0acfc63690e16442728d1cb61564743b62a3440a3f8ea9b6eb9f2"
+      },
+      {
+        "blob_oid": "f71f1dd5b708d18a4e0a11d7274a046e2ffb45e4",
+        "modified_from_stage": false,
+        "path": "scripts/ember_avir_cli_launch_entry.py",
+        "sha256": "4f2875485b043d3d80f623752cd8d45c7cae14a9a0b43b4f590bf0e3049373a6"
+      },
+      {
+        "blob_oid": "d0769600d04fcb7d5f85440f4bec64393a966da7",
+        "modified_from_stage": false,
+        "path": "scripts/ember_avir_harness.py",
+        "sha256": "60c31d12bd12754164c1a10e53705910754bbcd35adeb93f04054ce3add1bbd1"
+      },
+      {
+        "blob_oid": "0037395fadda918621b55b21833e048426f3fb82",
+        "modified_from_stage": true,
+        "path": "scripts/ember_avir_observe.py",
+        "sha256": "10c63a41e9a4f5469cdf37dbf9a96f9e4434bfb0489a7db36c34dfb90de1ad7f"
+      },
+      {
+        "blob_oid": "76d4bfa5646672d5de52ec36869f31fd33c150dd",
+        "modified_from_stage": false,
+        "path": "scripts/ember_avir_tasks.py",
+        "sha256": "d880467d72f7d4611700f9c27640b4f6605d630cb48a7f8dc7c2f89c48ce7459"
+      }
+    ]
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "supersedes": "receipts/ember-c-scale/land210i-harness-entry-receipt.json",
+  "ticket": "LAND210I-HARNESS-ENTRY",
+  "ts": "2026-07-29T13:27:00Z",
+  "verdict": "HISTORICAL_6_FILE_LANDING_VERIFIED_CURRENT_CPU_SELFTESTS_PASS_SESSION_SELECTION_REGRESSION_REPAIRED",
+  "workstream_id": "EMBER-02A"
+}
