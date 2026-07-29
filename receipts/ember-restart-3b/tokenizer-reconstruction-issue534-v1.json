@@ -54,9 +54,9 @@
   "source_byte_count": 2230673,
   "source_sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
   "status": "RECONSTRUCTED",
-  "verifier_sha256": "47b1dd3efc47f73a35a81fc349ee3854cd35a67ba0ce0fe4a22cddd7534d3b5d",
+  "verifier_sha256": "9e63e88051750d7186fc1e13eb6fb51ff4e5cda9e980aa5e360ec30999951d21",
   "vocab_entry_count": 32000,
   "vocab_replacement_ids": [1772, 8372, 9435, 11653, 13101, 14368, 19241, 23012, 27308, 31597],
-  "workstream_id": "EMBER-02A",
+  "workstream_id": "EMBER-02B",
   "write_performed": true
 }

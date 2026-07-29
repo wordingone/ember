@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02A
+# workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail-closed reconstruction tests for the serving tokenizer."""
 
@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = ROOT / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+RESTART_TOOLS = ROOT / "tools" / "ember-restart-3b"
+if str(RESTART_TOOLS) not in sys.path:
+    sys.path.insert(0, str(RESTART_TOOLS))
 
 from tokenizer.reconstruct_frozen_tokenizer import (
     ReconstructionError,
