@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="816" height="496" viewBox="0 0 816 496">
+<rect width="100%" height="100%" fill="#0d1117"/>
+<g font-family="Cascadia Mono,Consolas,monospace" font-size="13" xml:space="preserve">
+<text x="8" y="16" fill="#e6edf3">╭─ ember ────────────────────────────────────────────────╮┌─ LIVE RUN / ACTIVITY/EVENT FEED ───────┐</text>
+<text x="8" y="32" fill="#e6edf3">│    ▀       ember  v0.0.0                               ││ IDLE                                   │</text>
+<text x="8" y="48" fill="#e6edf3">│   ▀▀▀      inference + training, on this machine       ││   [(S)TART]   [(P)AUSE]   [RES(U)ME]   │</text>
+<text x="8" y="64" fill="#e6edf3">│  ▀▀▀▀▀     OFFLINE - no model · Local                  ││   [RES(T)ART]                          │</text>
+<text x="8" y="80" fill="#e6edf3">│   ▀▀▀      …\kai\.tmp-ember-issue507                   ││ SOURCE UNVERIFIED/UNBOUND              │</text>
+<text x="8" y="96" fill="#e6edf3">│    ▀       Data: …\kai\.tmp-ember-issue507             ││ HOST TELEMETRY                         │</text>
+<text x="8" y="112" fill="#e6edf3">│Spine — what Ember can be driven to do                  ││ host memory GiB     ⠈⡠                 │</text>
+<text x="8" y="128" fill="#e6edf3">│──────────────────────────────────────                  ││                                        │</text>
+<text x="8" y="144" fill="#e6edf3">│BOUND   /custody  custody + identity manifest           ││                     ⡀                  │</text>
+<text x="8" y="160" fill="#e6edf3">│BOUND   /model manifest inspect  data + tokenizer linea…││ host RAM GiB        ⠁                  │</text>
+<text x="8" y="176" fill="#e6edf3">│BOUND   /model checkpoint  checkpoint save / load       ││                     ⢀⡀                 │</text>
+<text x="8" y="192" fill="#e6edf3">╰────────────────────────────────────────────────────────╯│                      ⢀                 │</text>
+<text x="8" y="208" fill="#e6edf3">                                                          │ host VRAM GiB       ·▄················ │</text>
+<text x="8" y="224" fill="#e6edf3">                                                          │ host CPU %          ⠈                  │</text>
+<text x="8" y="240" fill="#e6edf3">                                                          │                                        │</text>
+<text x="8" y="256" fill="#e6edf3">                                                          │                      ⡠                 │</text>
+<text x="8" y="272" fill="#e6edf3">                                                          │ host GPU %          ·▄················ │</text>
+<text x="8" y="288" fill="#e6edf3">                                                          │ host disk %          ⡈                 │</text>
+<text x="8" y="304" fill="#e6edf3">                                                          │                     ⡐                  │</text>
+<text x="8" y="320" fill="#e6edf3">✻ Receipt landed (10:09pm)                                │ TRAINING/LOSS                          │</text>
+<text x="8" y="336" fill="#e6edf3">└ receipt landed [watchdog]                               │ loss                SOURCE UNBOUND     │</text>
+<text x="8" y="352" fill="#e6edf3">  checkpoint-identity-changed-during-watchdog-launch-packe│ RESOURCE EFFICIENCY                    │</text>
+<text x="8" y="368" fill="#e6edf3">  t-verification.json — REJECTED                          │ tokens/s            SOURCE UNBOUND     │</text>
+<text x="8" y="384" fill="#e6edf3">  …ts\watchdog\checkpoint-identity-changed-during-watchdog│ learning rate       SOURCE UNBOUND     │</text>
+<text x="8" y="400" fill="#e6edf3">  -launch-packet-verification.json                        │ energy joules       SOURCE UNBOUND     │</text>
+<text x="8" y="416" fill="#e6edf3">╭────────────────────────────────────────────────────────╮│ step/time INSUFFICIENT REAL HISTORY    │</text>
+<text x="8" y="432" fill="#e6edf3">│ ❯                                                      ││ checkpoint INSUFFICIENT REAL HISTORY   │</text>
+<text x="8" y="448" fill="#e6edf3">│ ○ observe · ⏵⏵ bypass permissions on · no roundtrip    ││ ACTIVITY/EVENT FEED                    │</text>
+<text x="8" y="464" fill="#e6edf3">│                                        yet             ││ just now · [receipt] receipt landed [… │</text>
+<text x="8" y="480" fill="#e6edf3">╰────────────────────────────────────────────────────────╯└────────────────────────────────────────┘</text>
+</g>
+</svg>

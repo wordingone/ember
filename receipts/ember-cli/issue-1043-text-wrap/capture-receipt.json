@@ -1,0 +1,49 @@
+{
+  "schema_version": "ember-cli-text-wrap-capture-v1",
+  "issue": 1043,
+  "implementation_commit": "c3a3885f2e88e51c6feb7d48b0ebdb72212b7770",
+  "binary": {
+    "name": "ember.exe",
+    "sha256": "3afda7b0f3aee555f29d464ecf04c6206ba364f87a02bb160d5498331955096e"
+  },
+  "transport": "windows-conpty/node-pty",
+  "source_event": {
+    "class": "watchdog",
+    "filename": "checkpoint-identity-changed-during-watchdog-launch-packet-verification.json",
+    "verdict": "REJECTED"
+  },
+  "frames": [
+    {
+      "columns": 60,
+      "rows": 20,
+      "label": "narrow-60x20",
+      "text_file": "narrow-60x20.frame.txt",
+      "text_sha256": "55b13342bc169cdb4e735060b714004acc7ec6f01e0bd769b93f7e9205cef1a2",
+      "svg_file": "narrow-60x20.frame.svg",
+      "svg_sha256": "d5b89e9046a1fcad3e37b7dc766e47f12ebbffca4188742111b6ff6bdd241a81",
+      "expected_tokens_present": true
+    },
+    {
+      "columns": 80,
+      "rows": 24,
+      "label": "narrow-80x24",
+      "text_file": "narrow-80x24.frame.txt",
+      "text_sha256": "79ab245b0b48dfc58cef68e04ac5c82b544b58a096e2e052947ee5ead158da97",
+      "svg_file": "narrow-80x24.frame.svg",
+      "svg_sha256": "265a12d30cca06ad61f016df5012a33951d804595a9f25ce4959b9738971ad91",
+      "expected_tokens_present": true
+    },
+    {
+      "columns": 100,
+      "rows": 30,
+      "label": "half-screen-100x30",
+      "text_file": "half-screen-100x30.frame.txt",
+      "text_sha256": "eccb7e2314b21f47fe916d04046355a0ec753898ea0cbc4814c76e573575a821",
+      "svg_file": "half-screen-100x30.frame.svg",
+      "svg_sha256": "276848668a07971ab5c995c6e90e976c7b1d5d28c98d349bfccea1c9babba339",
+      "expected_tokens_present": true
+    }
+  ],
+  "verdict": "PASS",
+  "claim_boundary": "compiled text wrapping and one-row truncation only"
+}

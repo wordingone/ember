@@ -1,0 +1,24 @@
+╭─ ember ─────────────────────────────────────╮┌─LIVE RUN / ACTIVITY/EVENT FEED┐
+│    ▀       ember  v0.0.0                    ││ IDLE                          │
+│   ▀▀▀      inference + training, on this    ││   [(S)TART]   [(P)AUSE]       │
+│            machine                          ││   [RES(U)ME]   [RES(T)ART]    │
+│  ▀▀▀▀▀     OFFLINE - no model · Local       ││ SOURCE UNVERIFIED/UNBOUND     │
+│   ▀▀▀      …\kai\.tmp-ember-issue507        ││ HOST TELEMETRY                │
+│    ▀       Data: …\kai\.tmp-ember-issue507  ││ host memory GiB     ⠈⠔        │
+│Spine — what Ember can be driven to do       ││                     ⡀         │
+│──────────────────────────────────────       ││ host RAM GiB        █▄▃▁····· │
+╰─────────────────────────────────────────────╯│ host VRAM GiB       ·▄······· │
+                                               │ host CPU %          ·█▁▁····· │
+                                               │ host GPU %          ·▄······· │
+                                               │ host disk %         ▁▃▅█····· │
+                                               │ TRAINING/LOSS                 │
+✻ Receipt landed (10:09pm)                     │ loss                SOURCE U… │
+└ receipt landed [watchdog]                    │ RESOURCE EFFICIENCY           │
+  checkpoint-identity-changed-during-watchdog-l│ tokens/s            SOURCE U… │
+  aunch-packet-verification.json — REJECTED    │ learning rate       SOURCE U… │
+  …nt-identity-changed-during-watchdog-launch-p│ energy joules       SOURCE U… │
+  acket-verification.json                      │ step/time INSUFFICIENT REAL … │
+╭─────────────────────────────────────────────╮│ checkpoint INSUFFICIENT REAL… │
+│ ❯                                           ││ ACTIVITY/EVENT FEED           │
+│ ○ observe · ⏵⏵ bypass permissions on        ││ just now · [receipt] receipt… │
+╰─────────────────────────────────────────────╯└───────────────────────────────┘

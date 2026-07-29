@@ -1,0 +1,30 @@
+╭─ ember ────────────────────────────────────────────────╮┌─ LIVE RUN / ACTIVITY/EVENT FEED ───────┐
+│    ▀       ember  v0.0.0                               ││ IDLE                                   │
+│   ▀▀▀      inference + training, on this machine       ││   [(S)TART]   [(P)AUSE]   [RES(U)ME]   │
+│  ▀▀▀▀▀     OFFLINE - no model · Local                  ││   [RES(T)ART]                          │
+│   ▀▀▀      …\kai\.tmp-ember-issue507                   ││ SOURCE UNVERIFIED/UNBOUND              │
+│    ▀       Data: …\kai\.tmp-ember-issue507             ││ HOST TELEMETRY                         │
+│Spine — what Ember can be driven to do                  ││ host memory GiB     ⠈⡠                 │
+│──────────────────────────────────────                  ││                                        │
+│BOUND   /custody  custody + identity manifest           ││                     ⡀                  │
+│BOUND   /model manifest inspect  data + tokenizer linea…││ host RAM GiB        ⠁                  │
+│BOUND   /model checkpoint  checkpoint save / load       ││                     ⢀⡀                 │
+╰────────────────────────────────────────────────────────╯│                      ⢀                 │
+                                                          │ host VRAM GiB       ·▄················ │
+                                                          │ host CPU %          ⠈                  │
+                                                          │                                        │
+                                                          │                      ⡠                 │
+                                                          │ host GPU %          ·▄················ │
+                                                          │ host disk %          ⡈                 │
+                                                          │                     ⡐                  │
+✻ Receipt landed (10:09pm)                                │ TRAINING/LOSS                          │
+└ receipt landed [watchdog]                               │ loss                SOURCE UNBOUND     │
+  checkpoint-identity-changed-during-watchdog-launch-packe│ RESOURCE EFFICIENCY                    │
+  t-verification.json — REJECTED                          │ tokens/s            SOURCE UNBOUND     │
+  …ts\watchdog\checkpoint-identity-changed-during-watchdog│ learning rate       SOURCE UNBOUND     │
+  -launch-packet-verification.json                        │ energy joules       SOURCE UNBOUND     │
+╭────────────────────────────────────────────────────────╮│ step/time INSUFFICIENT REAL HISTORY    │
+│ ❯                                                      ││ checkpoint INSUFFICIENT REAL HISTORY   │
+│ ○ observe · ⏵⏵ bypass permissions on · no roundtrip    ││ ACTIVITY/EVENT FEED                    │
+│                                        yet             ││ just now · [receipt] receipt landed [… │
+╰────────────────────────────────────────────────────────╯└────────────────────────────────────────┘
