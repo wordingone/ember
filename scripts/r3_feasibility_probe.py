@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """R3 feasibility probe (issue #47) -- co-residence of a frozen 4-bit
 ~27B-class base + trainable LoRA-class slice, ONE train step + ONE
 inference pass, single process, on the 4090.
 
 Phase A (CPU prep, THIS harness's --dry-run mode): exercises every assert
-and every leg's control flow against a TINY already-cached CPU substitute
-model (Qwen2.5-0.5B-Instruct, Llama-style module naming -- the same
-target_modules list applies unchanged to the real ~27B-class candidates
-named in the phase-A report). No CUDA calls, no bitsandbytes 4-bit path
+and every leg's control flow against a tiny, repo-defined, random-init
+Llama-style model. It reads no external checkpoint and grants no borrowed
+model credit; the target_modules list applies unchanged to the real
+~27B-class candidates named in the phase-A report. No CUDA calls, no
+bitsandbytes 4-bit path
 (that op requires a real GPU and is out of scope for phase A by the
 issue's own text: "NO CUDA calls in phase A"). Proves the harness's control
 flow, assert scaffolding, and receipt-writing are correct BEFORE any GPU
@@ -75,14 +79,13 @@ import governor  # noqa: E402  (env_limits/preflight/device_capability -- never 
 REAL_RECEIPT_DIR = REPO / "receipts" / "r3-feasibility"
 DRYRUN_RECEIPT_DIR = REPO / "scratch" / "r3-feasibility-dryrun"
 
-# Llama-style module naming shared by all named phase-A candidates (Qwen2.5,
-# Mistral-Small-24B, Yi-1.5, Gemma-2) AND by the dry-run substitute
-# (Qwen2.5-0.5B-Instruct) -- one target list, unchanged between dry-run and
-# the real GPU leg.
+# Llama-style module naming shared by the real phase-B candidate family and
+# by the owned random-init dry-run substrate -- one target list, unchanged
+# between dry-run and the real GPU leg.
 LORA_TARGET_MODULES = [
     "q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj",
 ]
-DRYRUN_SUBSTITUTE_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"  # already HF-cached locally
+OWNED_SYNTHETIC_DRYRUN_ID = "ember-owned-synthetic-random-init-v1"
 
 TARGET_TRAINABLE_MIN = 100_000_000
 TARGET_TRAINABLE_MAX = 300_000_000
@@ -109,6 +112,40 @@ LORA_RANK_DEFAULT = 24
 LORA_RANK_SWEEP_CANDIDATES = [24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12]
 
 
+def owned_synthetic_dryrun_config() -> dict:
+    """Return the closed, deterministic architecture for the CPU dry run."""
+    return {
+        "vocab_size": 256,
+        "hidden_size": 64,
+        "intermediate_size": 128,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "num_key_value_heads": 2,
+        "max_position_embeddings": 128,
+        "bos_token_id": 1,
+        "eos_token_id": 2,
+        "pad_token_id": 0,
+        "tie_word_embeddings": False,
+    }
+
+
+def build_owned_synthetic_dryrun_model():
+    """Construct a clean random-init substrate without loading a checkpoint."""
+    from transformers import LlamaConfig, LlamaForCausalLM
+
+    config_values = owned_synthetic_dryrun_config()
+    config = LlamaConfig(**config_values)
+    model = LlamaForCausalLM(config)
+    provenance = {
+        "source_kind": "OWNED_RANDOM_INIT",
+        "architecture": "LlamaForCausalLM",
+        "config": config_values,
+        "external_checkpoint": None,
+        "external_model_id": None,
+    }
+    return model, provenance
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="R3 feasibility probe (issue #47)")
     p.add_argument(
@@ -117,7 +154,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--dry-run", action="store_true",
-        help="Exercise every assert/leg against a tiny CPU substitute model; no CUDA calls",
+        help="Exercise every assert/leg against an owned random-init CPU model; no CUDA calls",
     )
     p.add_argument("--lora-rank", type=int, default=LORA_RANK_DEFAULT)
     p.add_argument("--seed", type=int, default=20260704)
@@ -1460,24 +1497,24 @@ def main() -> None:
         log(f"commit-margin preflight ({len(shard_paths)} shard(s), "
             f"{commit_preflight.get('expected_mapped_gib', 'n/a')}GiB): {commit_preflight}")
 
-    # --- Leg 1: base model, 4-bit frozen (real) / tiny fp32 substitute (dry-run) ---
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
+    # --- Leg 1: base model, 4-bit frozen (real) / owned random-init model (dry-run) ---
     if args.dry_run:
-        model_id = DRYRUN_SUBSTITUTE_MODEL
-        log(f"loading DRY-RUN substitute (fp32, CPU, no 4-bit quant): {model_id}")
+        model_id = OWNED_SYNTHETIC_DRYRUN_ID
+        log(f"constructing OWNED dry-run model (random-init fp32 CPU): {model_id}")
         t0 = time.time()
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        base_model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.float32)
+        base_model, base_source = build_owned_synthetic_dryrun_model()
         base_model.to("cpu")
         load_s = time.time() - t0
         quant_config_used = None
-        load_path = None  # not applicable -- dry-run never touches a real checkpoint dir
+        load_path = "owned_random_init"
         detected_prequant_config = None
         governed_fit = None
         rank_degradation = None  # Issue #87 round 5.4: the launch gate never runs under dry-run (no CUDA)
     else:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
         model_id = args.model
+        base_source = None
         # Issue #87: governed-fit placement, derived ONCE, shared by both load
         # paths below (device_map={"":0} OOM'd -- the two deliberately-
         # unquantized bf16 modules, embed_tokens/lm_head, overflow the GPU
@@ -1797,7 +1834,7 @@ def main() -> None:
     if args.dry_run:
         log(
             f"trainable-param target range check ({TARGET_TRAINABLE_MIN}-{TARGET_TRAINABLE_MAX}) "
-            f"SKIPPED (dry-run substrate is a tiny 0.5B model, not the real ~27B-class base) -- "
+            f"SKIPPED (dry-run substrate is a tiny owned random-init model, not the real ~27B-class base) -- "
             f"got {n_trainable}, only meaningful under phase B"
         )
     else:
@@ -1899,6 +1936,7 @@ def main() -> None:
         "issue": "wordingone/ember#47",
         "mode": "dry_run" if args.dry_run else "real",
         "model_id": model_id,
+        "model_source": base_source,
         "quant_config": quant_config_used,
         "lora_rank": args.lora_rank,
         # Issue #87 round 5.4: None on every run where the requested rank was
