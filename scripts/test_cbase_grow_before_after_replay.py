@@ -63,6 +63,10 @@ class BeforeAfterReplayTests(unittest.TestCase):
         self.assertEqual(receipt["ticket"], "C-GROW-BEFORE-AFTER-PROBE")
         self.assertEqual(receipt["goal_id"], "EMBER-02")
         self.assertTrue(receipt["verdict_unchanged"])
+        self.assertEqual(
+            receipt["sha_convention"],
+            "bytes on disk as-is (binary read, no normalization)",
+        )
         self.assertEqual(receipt["baseline"]["head_sha"], "1" * 40)
         self.assertEqual(receipt["candidate"]["head_sha"], "4" * 40)
 

@@ -132,6 +132,7 @@ def build_receipt(
         "workstream_id": WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
         "mode": "CLEAN_IMMUTABLE_SNAPSHOT_REPLAY",
+        "sha_convention": "bytes on disk as-is (binary read, no normalization)",
         "supersedes": historical_receipt.relative_to(candidate_root).as_posix(),
         "baseline": baseline,
         "candidate": candidate,
