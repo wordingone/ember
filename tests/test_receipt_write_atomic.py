@@ -70,3 +70,53 @@ def test_serializer_failure_never_exposes_partial_canonical_receipt(
     assert destination.read_bytes() == original
     assert not Path(str(destination) + ".INVALID.quarantine").exists()
     assert not list(tmp_path.glob(".receipt.json.*.tmp"))
+
+
+def test_publication_failure_retains_valid_candidate_for_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "receipt.json"
+    original = json.dumps({"ticket": "OLD"}, indent=2).encode("utf-8")
+    destination.write_bytes(original)
+    real_replace = receipt_write.os.replace
+
+    def fail_canonical_publish(source, target):
+        if Path(target) == destination:
+            raise PermissionError("injected canonical publication failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(receipt_write.os, "replace", fail_canonical_publish)
+
+    with pytest.raises(PermissionError, match="PUBLISH_FAILED"):
+        receipt_write.checked_write(str(destination), VALID)
+
+    assert destination.read_bytes() == original
+    retained = Path(str(destination) + ".PUBLISH_FAILED.quarantine")
+    assert retained.read_bytes() == json.dumps(VALID, indent=2).encode("utf-8")
+    assert not list(tmp_path.glob(".receipt.json.*.tmp"))
+
+
+def test_quarantine_failure_retains_invalid_staging_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "receipt.json"
+    original = json.dumps(VALID, indent=2).encode("utf-8")
+    destination.write_bytes(original)
+    invalid = {"ts": "20260728T000001Z", "n_rows": 3}
+    quarantine = Path(str(destination) + ".INVALID.quarantine")
+    real_replace = receipt_write.os.replace
+
+    def fail_quarantine_publish(source, target):
+        if Path(target) == quarantine:
+            raise PermissionError("injected quarantine publication failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(receipt_write.os, "replace", fail_quarantine_publish)
+
+    with pytest.raises(PermissionError, match="staging retained"):
+        receipt_write.checked_write(str(destination), invalid)
+
+    assert destination.read_bytes() == original
+    staging = list(tmp_path.glob(".receipt.json.*.tmp"))
+    assert len(staging) == 1
+    assert json.loads(staging[0].read_text(encoding="utf-8")) == invalid

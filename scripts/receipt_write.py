@@ -5,6 +5,8 @@ flushes and fsyncs them, validates the candidate, then atomically publishes
 with same-directory os.replace. Any violation QUARANTINES only the staged
 candidate at <path>.INVALID.quarantine. Existing canonical bytes remain
 unchanged, and partial serialization is never visible at the canonical path.
+If publication itself fails, complete candidate bytes are retained at a
+recovery path instead of being destroyed.
 
 ember #702 (2026-07-11): the prior delete-on-finding behavior destroyed the
 ONLY copy of two separate full-compute runs' results on the same morning — a
@@ -52,8 +54,9 @@ def checked_write(path: str, obj: dict) -> None:
 
     Schema-invalid bytes move from staging to <path>.INVALID.quarantine.
     Existing canonical bytes remain unchanged. Serialization or publication
-    failures remove their private staging file and also leave the canonical
-    path unchanged.
+    failures leave the canonical path unchanged. Partial serialization is
+    removed; complete candidates that cannot be published or quarantined are
+    retained at an explicit recovery path.
     """
     path = os.path.abspath(os.fspath(path))
     parent = os.path.dirname(path) or os.curdir
@@ -70,7 +73,15 @@ def checked_write(path: str, obj: dict) -> None:
         findings = receipt_check.validate_receipt(obj)
         if findings:
             quarantine_path = path + ".INVALID.quarantine"
-            os.replace(staging_path, quarantine_path)
+            try:
+                os.replace(staging_path, quarantine_path)
+            except OSError as exc:
+                retained_path = staging_path
+                staging_path = ""
+                raise type(exc)(
+                    f"{exc}\n  INVALID candidate staging retained: "
+                    f"{retained_path}"
+                ) from exc
             staging_path = ""
             raise ValueError(
                 f"checked_write: {len(findings)} schema finding(s) in {path}:\n"
@@ -78,7 +89,24 @@ def checked_write(path: str, obj: dict) -> None:
                 + "\n  QUARANTINED (bytes preserved, never deleted): "
                 + quarantine_path
             )
-        os.replace(staging_path, path)
+        try:
+            os.replace(staging_path, path)
+        except OSError as publish_exc:
+            recovery_path = path + ".PUBLISH_FAILED.quarantine"
+            try:
+                os.replace(staging_path, recovery_path)
+            except OSError as recovery_exc:
+                retained_path = staging_path
+                staging_path = ""
+                raise type(recovery_exc)(
+                    f"{recovery_exc}\n  PUBLISH_FAILED candidate staging "
+                    f"retained: {retained_path}"
+                ) from recovery_exc
+            staging_path = ""
+            raise type(publish_exc)(
+                f"{publish_exc}\n  PUBLISH_FAILED candidate preserved: "
+                f"{recovery_path}"
+            ) from publish_exc
         staging_path = ""
     finally:
         if staging_path:
