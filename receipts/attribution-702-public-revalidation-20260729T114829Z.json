@@ -1,0 +1,59 @@
+{
+  "adjudication": {
+    "coordinator_split_adjudication_comment": "https://github.com/wordingone/ember/issues/702#issuecomment-4947469112",
+    "current_open_disposition_comment": "https://github.com/wordingone/ember/issues/702#issuecomment-5013454316",
+    "independent_falsification_comment": "https://github.com/wordingone/ember/issues/702#issuecomment-4947441605"
+  },
+  "claim_boundary": {
+    "branch_a_ns5_routing_claim": false,
+    "contract_grade_attribution_claim": false,
+    "current_interval_tenancy_proof_recovered": false,
+    "exact_executing_source_identity_recovered": false,
+    "historical_combined_inner_arithmetic_revalidated": true,
+    "issue_702_completion_claim": false,
+    "live_2p2b_experiment_replayed": false,
+    "major_reduction_claim": false,
+    "matched_cure_ab_claim": false,
+    "model_capability_claim": false,
+    "ns5_specific_span_present": false,
+    "per_optimizer_inner_spans_present": false,
+    "training_claim": false
+  },
+  "goal_id": "EMBER-02",
+  "historical_receipt_sha256": "b0ee011a7afd121e218514ed982beb61ca6d1d7b405ec525deea91232f61edad",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": 700,
+  "mode": "PUBLIC_HISTORICAL_ARITHMETIC_REVALIDATION",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "paid_api_surface_used": false,
+  "producer": {
+    "path": "scripts/attribution_702_public_revalidation.py",
+    "sha256": "64a4b39f5d27183595516bc018af4a89723cba75cf640ec574412f7c4701f8c2"
+  },
+  "public_arithmetic_revalidation": {
+    "all_checks_passed": true,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "combined_inner_ci95": [
+      0.91644,
+      0.91773
+    ],
+    "combined_inner_mean": 0.917066,
+    "factor1_predicate_arithmetic_revalidated": true,
+    "optimizer_inner_span_scope": "combined Muon and AdamW self._inner.step work plus any file-backed traffic inside those calls; no NS5-specific split",
+    "recorded_source_identity_present": false,
+    "sample_count": 24,
+    "stage_ci95": [
+      0.006489,
+      0.006606
+    ],
+    "stage_mean": 0.00655
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "source_issue": 702,
+  "supersedes": "receipts/attribution-702-20260711T135717Z-redacted-edition.json",
+  "ticket": "EMBER-702-ATTRIBUTION",
+  "ts": "2026-07-29T11:48:35Z",
+  "verdict": "COMBINED_INNER_ARITHMETIC_REVALIDATED_CONTRACT_GRADE_BLOCKED",
+  "workstream_id": "EMBER-02A"
+}
