@@ -30,8 +30,13 @@ import {
 } from "../services/checkpoint-load.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
-import { saveCheckpoint, type CheckpointSaveDeps } from "../services/checkpoint-save.ts";
-import { appendFile, mkdir as fsMkdir, copyFile as fsCopyFile, rename as fsRename, rm as fsRm } from "fs/promises";
+import {
+  saveCheckpoint,
+  saveCheckpointBundle,
+  type CheckpointSaveDeps,
+  type ModernCheckpointSaveDeps,
+} from "../services/checkpoint-save.ts";
+import { appendFile, mkdir as fsMkdir, copyFile as fsCopyFile, lstat as fsLstat, rename as fsRename, rm as fsRm } from "fs/promises";
 import { existsSync } from "fs";
 import { spawnSync } from "child_process";
 import { randomBytes } from "crypto";
@@ -322,6 +327,8 @@ interface ModelCommandDeps {
   checkpointSaveDeps?: CheckpointSaveDeps;
   /** Injectable filesystem verifier for `/model checkpoint load`. */
   verifyCheckpointBundle?: (checkpointDir: string) => Promise<VerifiedCheckpointBundle>;
+  /** Injectable governed sparse-bundle snapshot dependencies. */
+  modernCheckpointSaveDeps?: ModernCheckpointSaveDeps;
 }
 
 /**
@@ -366,6 +373,62 @@ function _defaultManifestPath(cwd: string): string {
 // ---------------------------------------------------------------------------
 // /model checkpoint save (pairs with the checkpoint-LOAD wiring above)
 // ---------------------------------------------------------------------------
+
+async function _assertSafeCheckpointDestination(targetDir: string): Promise<void> {
+  const requested = resolve(targetDir);
+  const parentDir = dirname(requested);
+  if (parentDir === requested) {
+    throw new Error("checkpoint save refused: destination must name a child directory");
+  }
+
+  // Inspect every existing component before creating any checkpoint bytes.
+  // Realpath string equality is not a reparse-point test on Windows.
+  let current = parentDir;
+  for (;;) {
+    const stat = await fsLstat(current);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      throw new Error(
+        "checkpoint save refused: destination ancestry contains an alias or reparse surface",
+      );
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  try {
+    await fsLstat(requested);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  throw new Error("checkpoint save refused: destination already exists");
+}
+
+function _realModernCheckpointSaveDeps(
+  verifyBundle: (checkpointDir: string) => Promise<VerifiedCheckpointBundle>,
+): ModernCheckpointSaveDeps {
+  return {
+    verifyBundle,
+    assertSafeDestination: _assertSafeCheckpointDestination,
+    mkdirStaging: (path) => fsMkdir(path),
+    copyFile: (src, dest) => fsCopyFile(src, dest),
+    // Ember's supported operator host is Windows. Rename of a directory on
+    // Windows is atomic and refuses an existing destination. The explicit
+    // preflight above improves the error, while this final primitive closes
+    // the late-collision race without replacement.
+    publishNoReplace: async (from, to) => {
+      if (process.platform !== "win32") {
+        throw new Error(
+          "checkpoint save refused: atomic no-replace publication is unavailable on this host",
+        );
+      }
+      await fsRename(from, to);
+    },
+    rmStaging: (path) => fsRm(path, { recursive: true, force: true }),
+    stagingPath: _defaultStagingPath,
+  };
+}
 
 /** Unique staging dir sibling to the target -- never collides across concurrent saves. */
 function _defaultStagingPath(targetDir: string): string {
@@ -420,12 +483,14 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
   const doEnsureOwnedServer = deps.ensureOwnedServer ?? _defaultEnsureOwnedServer;
   const doVerifyOwnedEndpointIdentity = deps.verifyOwnedEndpointIdentity ?? verifyOwnedEndpointIdentity;
   const doRegisterManagedModel = deps.registerManagedModel ?? registerManagedModel;
-  const doCheckpointSaveDeps = deps.checkpointSaveDeps ?? _realCheckpointSaveDeps(doResolveModelIdentity);
   const doVerifyCheckpointBundle = deps.verifyCheckpointBundle ?? verifyCheckpointBundle;
+  const doCheckpointSaveDeps = deps.checkpointSaveDeps ?? _realCheckpointSaveDeps(doResolveModelIdentity);
+  const doModernCheckpointSaveDeps =
+    deps.modernCheckpointSaveDeps ?? _realModernCheckpointSaveDeps(doVerifyCheckpointBundle);
 
   return {
     name: "model",
-    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save. Inspect data/tokenizer lineage; legacy checkpoint save is not checkpoint-load compatible. Owned serving path: a validated owned identity takes the default owned seat, a borrowed model serves only as an explicitly requested reference seat, and with no owned identity the launch refuses unless you explicitly ask for model-free offline observation.",
+    description: "Control the local owned model: status|load|unload|manifest inspect|checkpoint load|checkpoint save|checkpoint save-legacy. Inspect data/tokenizer lineage; checkpoint save snapshots the selected governed sparse bundle, while save-legacy is explicitly not checkpoint-load compatible. Owned serving path: a validated owned identity takes the default owned seat, a borrowed model serves only as an explicitly requested reference seat, and with no owned identity the launch refuses unless you explicitly ask for model-free offline observation.",
     isEnabled(): boolean {
       return true;
     },
@@ -638,22 +703,33 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
             };
           }
 
-          const sourceManifestPath = sourceDir ? join(sourceDir, "manifest.json") : manifestPath;
-          const sourceCheckpointPath = sourceDir
-            ? join(sourceDir, "checkpoint")
-            : join(dirname(manifestPath), "checkpoint");
+          const ownedIdentity = doLoadOwnedIdentity(ctx.cwd);
+          if (ownedIdentity === null || ownedIdentity.launch === undefined) {
+            return {
+              type: "message" as const,
+              message:
+                "error: failed to save checkpoint: no durable selected owned checkpoint is available",
+              exitCode: 1,
+            };
+          }
+          const sourceCheckpointDir = sourceDir
+            ? resolve(ctx.cwd, sourceDir)
+            : ownedIdentity.launch.checkpointDir;
           const resolvedTargetDir = resolve(ctx.cwd, targetDir);
 
           try {
-            const result = await saveCheckpoint(
-              sourceManifestPath,
-              sourceCheckpointPath,
+            const result = await saveCheckpointBundle(
+              sourceCheckpointDir,
               resolvedTargetDir,
-              doCheckpointSaveDeps,
+              ownedIdentity.checkpointSha256,
+              doModernCheckpointSaveDeps,
             );
             return {
               type: "message" as const,
-              message: `legacy checkpoint snapshot saved (not /model checkpoint load compatible): ${result.byte_sha256} (${result.disposition}) -> ${result.targetDir}`,
+              message:
+                `modern governed sparse checkpoint saved: ${result.manifestSha256} ` +
+                `(${result.schemaVersion}, ${result.artifactCount} artifacts) -> ${result.targetDir}; ` +
+                "ownership/admission unchanged",
             };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -665,9 +741,53 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
           }
         }
 
+        if (action === "save-legacy") {
+          const positionals: string[] = [];
+          let sourceDir: string | undefined;
+          for (let i = 1; i < rest.length; i++) {
+            if (rest[i] === "--source") {
+              sourceDir = rest[i + 1];
+              i++;
+            } else if (rest[i] !== undefined && rest[i] !== "") {
+              positionals.push(rest[i] as string);
+            }
+          }
+          const targetDir = positionals[0];
+          if (!targetDir) {
+            return {
+              type: "message" as const,
+              message: `usage: /model checkpoint save-legacy <target-dir> [--source <dir>]`,
+              exitCode: 1,
+            };
+          }
+          const sourceManifestPath = sourceDir ? join(sourceDir, "manifest.json") : manifestPath;
+          const sourceCheckpointPath = sourceDir
+            ? join(sourceDir, "checkpoint")
+            : join(dirname(manifestPath), "checkpoint");
+          try {
+            const result = await saveCheckpoint(
+              sourceManifestPath,
+              sourceCheckpointPath,
+              resolve(ctx.cwd, targetDir),
+              doCheckpointSaveDeps,
+            );
+            return {
+              type: "message" as const,
+              message: `legacy checkpoint snapshot saved (not /model checkpoint load compatible): ${result.byte_sha256} (${result.disposition}) -> ${result.targetDir}`,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              type: "message" as const,
+              message: `error: failed to save legacy checkpoint: ${msg}`,
+              exitCode: 1,
+            };
+          }
+        }
+
         return {
           type: "message" as const,
-          message: `usage: /model checkpoint load <checkpoint-dir> | /model checkpoint save <target-dir> [--source <dir>]`,
+          message: `usage: /model checkpoint load <checkpoint-dir> | /model checkpoint save <target-dir> [--source <dir>] | /model checkpoint save-legacy <target-dir> [--source <dir>]`,
         };
       }
 
