@@ -1818,13 +1818,38 @@ def check_changed_artifact_bindings(
         except Exception as exc:
             errors.append(finding(4, "artifact.binding_unreadable", f"{normalized}: {exc}"))
             continue
-        binding_valid = validate_artifact_binding(
-            text,
-            suffix,
-            active_goal,
-            next_outcome,
-            allowed_workstreams,
-        )
+        if normalized == ".github/labels.yml":
+            try:
+                sidecar_text = read_text(root / ".github" / "labels.authority.json")
+                sidecar = json.loads(sidecar_text)
+                expected_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                binding_valid = bool(
+                    isinstance(sidecar, dict)
+                    and sidecar.get("schema_version")
+                    == "ember-content-addressed-authority-binding/v1"
+                    and sidecar.get("artifact_path") == normalized
+                    and sidecar.get("artifact_sha256") == expected_digest
+                    and validate_artifact_binding(
+                        sidecar_text,
+                        ".json",
+                        active_goal,
+                        next_outcome,
+                        allowed_workstreams,
+                    )
+                )
+                workstreams = artifact_workstream_ids(sidecar_text, ".json")
+            except Exception:
+                binding_valid = False
+                workstreams = set()
+        else:
+            binding_valid = validate_artifact_binding(
+                text,
+                suffix,
+                active_goal,
+                next_outcome,
+                allowed_workstreams,
+            )
+            workstreams = artifact_workstream_ids(text, suffix)
         if not binding_valid:
             errors.append(
                 finding(
@@ -1834,7 +1859,6 @@ def check_changed_artifact_bindings(
                 )
             )
             continue
-        workstreams = artifact_workstream_ids(text, suffix)
         if len(workstreams) != 1:
             errors.append(
                 finding(

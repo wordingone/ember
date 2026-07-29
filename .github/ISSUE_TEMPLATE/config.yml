@@ -1,0 +1,11 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/wordingone/ember/security/advisories/new
+    about: Privately report a security vulnerability. Do not disclose secrets publicly.
+  - name: Ember documentation
+    url: https://github.com/wordingone/ember/tree/master/docs
+    about: Read the current implementation-bound documentation before filing.

@@ -1,0 +1,17 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "errors": [],
+  "receipt_sha256": "b5a8ac9e746fddd64824dd51c9254276627847bd9cca2572467a9c3aab9a6c12",
+  "repository": "wordingone/ember",
+  "schema_version": "ember-label-live-verification/v1",
+  "sha_convention": "sha256 fields use lowercase hexadecimal SHA-256 over canonical UTF-8 JSON (sort_keys=True,separators=(',',':'),ensure_ascii=False); receipt_sha256 excludes its own field",
+  "snapshot_sha256": "31def13e152d3ce73f28b94cf47b177750d98be90eab5ed4bd7cff043d637213",
+  "status": "PASS",
+  "ticket": "EMBER-GITHUB-LABEL-VERIFICATION",
+  "ts": "2026-07-29T18:11:45.2412821Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}
