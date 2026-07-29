@@ -1,0 +1,26 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "probe": "c_invariant",
+  "condition": "C-INV",
+  "timestamp": "2026-07-29T08:31:12.084714Z",
+  "status": "RED",
+  "reason": "Stamped receipts: 36/222 post-genesis receipt(s) missing/mismatched invariant_sha256 stamp and not errata-covered (of 1043 receipts scanned under receipts/; stamped=81, errata_covered=101, superseded=4, uncovered_pre_cutoff=0, uncovered_post_cutoff=36); first offenders: [\"receipts/580rerun-20260710-cache-tensor-commitment.json (ts='2026-07-10T17:32:00.000000+00:00', invariant_sha256=None)\", \"receipts/attribution-702-20260711T135717Z-redacted-edition.json (ts='20260711T135717Z', invariant_sha256=None)\", \"receipts/cbase-grow-rung/c-grow-before-after-probe-20260710T172700Z.json (ts='2026-07-10T17:27:00Z', invariant_sha256=None)\"]",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "invariant_file_hash": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "stamp_coverage": {
+    "post_genesis_scanned": 222,
+    "stamped": 81,
+    "errata_covered": 101,
+    "superseded": 4,
+    "uncovered_pre_cutoff": 0,
+    "uncovered_post_cutoff": 36,
+    "errata_rows_skipped": 0,
+    "supersession_rows_skipped": 0
+  },
+  "invariant_breach": true,
+  "complete": false
+}
