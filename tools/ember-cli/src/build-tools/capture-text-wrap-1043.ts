@@ -190,19 +190,24 @@ async function main(): Promise<void> {
       }
       const textPath = join(outDir, `${geometry.label}.frame.txt`);
       const svgPath = join(outDir, `${geometry.label}.frame.svg`);
-      writeFileSync(textPath, `${lines.join("\n")}\n`, "utf8");
-      writeFileSync(svgPath, frameSvg(lines, geometry.columns, geometry.rows), "utf8");
+      const text = `${lines.join("\n")}\n`;
+      const svg = frameSvg(lines, geometry.columns, geometry.rows);
+      writeFileSync(textPath, text, "utf8");
+      writeFileSync(svgPath, svg, "utf8");
       frameReceipts.push({
         ...geometry,
-        text_file: basename(textPath),
+        text,
         text_sha256: sha256File(textPath),
-        svg_file: basename(svgPath),
+        svg,
         svg_sha256: sha256File(svgPath),
         expected_tokens_present: true,
       });
     }
     const receipt = {
       schema_version: "ember-cli-text-wrap-capture-v1",
+      goal_id: "EMBER-02",
+      workstream_id: "EMBER-02A",
+      next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
       issue: 1043,
       implementation_commit: implementationCommit,
       binary: {

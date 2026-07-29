@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+//
 // components — React component library for terminal UIs.
 // Provides Box, Text, RawAnsi, Newline, Spacer, Button, Link, AlternateScreen,
 // App, ScrollBox, context providers, ErrorOverview, NoSelect.
