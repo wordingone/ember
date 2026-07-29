@@ -228,7 +228,7 @@ export function ActivityTranscriptBlock({
     Box,
     { key: "body", flexDirection: "row" },
     React.createElement(Text, { key: "arrow", dimColor: true }, "└ "),
-    React.createElement(Text, { key: "text" }, line.text),
+    React.createElement(Text, { key: "text", wrap: "wrap" }, line.text),
   );
 
   const pathRow = line.path

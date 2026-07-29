@@ -311,6 +311,13 @@ export interface Patch {
 // ---------------------------------------------------------------------------
 
 export type RenderNodeKind = "box" | "text" | "raw-ansi" | "root";
+export type TextWrapMode =
+  | "wrap"
+  | "end"
+  | "truncate"
+  | "truncate-end"
+  | "truncate-middle"
+  | "truncate-start";
 
 export interface RenderNode {
   kind: RenderNodeKind;
@@ -318,6 +325,10 @@ export interface RenderNode {
   layout: LayoutNode;
   /** For text nodes: the text content. */
   text?: string;
+  /** Per-node text overflow policy. Text defaults to word wrapping. */
+  textWrap?: TextWrapMode;
+  /** Frame-local transformed text. Source text remains immutable in `text`. */
+  renderedText?: string;
   /** For text nodes: applied style. */
   style?: Style;
   /** Raw ANSI string for raw-ansi nodes. */
@@ -355,6 +366,155 @@ function charWidth(ch: string): number {
       (cp >= 0x1f300 && cp <= 0x1f9ff))
     return 2;
   return 1;
+}
+
+function textWidth(value: string): number {
+  let width = 0;
+  for (const ch of value) width += charWidth(ch);
+  return width;
+}
+
+function takeCells(value: string, maxWidth: number, fromEnd = false): string {
+  if (maxWidth <= 0) return "";
+  const chars = [...value];
+  const selected: string[] = [];
+  let width = 0;
+  const iterable = fromEnd ? chars.reverse() : chars;
+  for (const ch of iterable) {
+    const next = charWidth(ch);
+    if (width + next > maxWidth) break;
+    selected.push(ch);
+    width += next;
+  }
+  return fromEnd ? selected.reverse().join("") : selected.join("");
+}
+
+function truncateText(value: string, width: number, mode: TextWrapMode): string {
+  if (textWidth(value) <= width) return value;
+  if (width <= 0) return "";
+  if (width === 1) return "…";
+  const contentWidth = width - 1;
+  if (mode === "truncate-start") return `…${takeCells(value, contentWidth, true)}`;
+  if (mode === "truncate-middle") {
+    const leftWidth = Math.ceil(contentWidth / 2);
+    const rightWidth = Math.floor(contentWidth / 2);
+    return `${takeCells(value, leftWidth)}…${takeCells(value, rightWidth, true)}`;
+  }
+  return `${takeCells(value, contentWidth)}…`;
+}
+
+function wrapLogicalLine(value: string, width: number): string[] {
+  if (value.length === 0) return [""];
+  const remaining = [...value];
+  const lines: string[] = [];
+  while (remaining.length > 0) {
+    let used = 0;
+    let end = 0;
+    let lastWhitespace = -1;
+    while (end < remaining.length) {
+      const next = charWidth(remaining[end]!);
+      if (used + next > width) break;
+      used += next;
+      if (/\s/u.test(remaining[end]!)) lastWhitespace = end;
+      end++;
+    }
+    if (end === remaining.length) {
+      lines.push(remaining.join("").trimEnd());
+      break;
+    }
+    if (end === 0) {
+      // A double-width glyph in a one-cell region cannot be represented faithfully.
+      // Keep it as the next row's sole payload rather than looping or dropping it.
+      end = 1;
+    } else if (lastWhitespace > 0 && (used < width || !/\s/u.test(remaining[end]!))) {
+      end = lastWhitespace;
+    }
+    lines.push(remaining.splice(0, end).join("").trimEnd());
+    while (remaining.length > 0 && /\s/u.test(remaining[0]!)) remaining.shift();
+  }
+  return lines;
+}
+
+/** Applies the Text contract to source text without changing the source bytes. */
+export function formatTextForWidth(
+  value: string,
+  width: number,
+  mode: TextWrapMode = "wrap",
+): string {
+  const safeWidth = Math.max(1, Math.floor(width));
+  if (mode !== "wrap") {
+    return truncateText(value.split("\n")[0] ?? "", safeWidth, mode);
+  }
+  return value
+    .split("\n")
+    .flatMap((line) => wrapLogicalLine(line, safeWidth))
+    .join("\n");
+}
+
+function intrinsicTextDimensions(value: string): { width: number; height: number } {
+  const lines = value.split("\n");
+  return {
+    width: Math.max(1, ...lines.map(textWidth)),
+    height: Math.max(1, lines.length),
+  };
+}
+
+function resetTextLayout(node: RenderNode): void {
+  if (node.kind === "text" && node.text !== undefined) {
+    const intrinsic = intrinsicTextDimensions(node.text);
+    node.renderedText = undefined;
+    node.layout.width = intrinsic.width;
+    node.layout.height = intrinsic.height;
+  }
+  for (const child of node.children) resetTextLayout(child);
+}
+
+function fitTextLayout(node: RenderNode, parentContentWidth: number): boolean {
+  let changed = false;
+  if (node.kind === "text" && node.text !== undefined) {
+    const intrinsic = intrinsicTextDimensions(node.text);
+    const computed = node.layout.computedWidth > 0 ? node.layout.computedWidth : intrinsic.width;
+    const available = Math.max(1, Math.min(intrinsic.width, computed, parentContentWidth));
+    const formatted = formatTextForWidth(node.text, available, node.textWrap ?? "wrap");
+    const fitted = intrinsicTextDimensions(formatted);
+    node.renderedText = formatted;
+    if (node.layout.width !== available || node.layout.height !== fitted.height) changed = true;
+    node.layout.width = available;
+    node.layout.height = fitted.height;
+  }
+
+  const borderLeft = node.layout.borderLeft || node.layout.border;
+  const borderRight = node.layout.borderRight || node.layout.border;
+  const paddingLeft = node.layout.paddingLeft || node.layout.padding;
+  const paddingRight = node.layout.paddingRight || node.layout.padding;
+  const ownContentWidth = Math.max(
+    1,
+    node.layout.computedWidth - borderLeft - borderRight - paddingLeft - paddingRight,
+  );
+  const contentOriginX = borderLeft + paddingLeft;
+  for (const child of node.children) {
+    // A later child in a row (or a child with a left margin) starts partway
+    // across the parent's content box. Giving every child the full parent
+    // width formats text beyond the parent's right clip and silently drops
+    // those cells. Fit against the cells actually remaining from its laid-out
+    // origin so wrapped text and painted text share one boundary.
+    const childOffset = Math.max(0, child.layout.computedLeft - contentOriginX);
+    const childAvailableWidth = Math.max(1, ownContentWidth - childOffset);
+    changed = fitTextLayout(child, childAvailableWidth) || changed;
+  }
+  return changed;
+}
+
+function calculateLayoutWithText(rootNode: RenderNode, width: number, height: number): void {
+  resetTextLayout(rootNode);
+  rootNode.layout.calculateLayout(width, height, "ltr");
+  // One pass establishes container constraints; the next makes wrapped row counts part
+  // of flex layout. A third pass handles a parent whose new height changes a descendant.
+  for (let pass = 0; pass < 3; pass++) {
+    const changed = fitTextLayout(rootNode, width);
+    if (!changed) break;
+    rootNode.layout.calculateLayout(width, height, "ltr");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -562,7 +722,7 @@ export function renderNodeToOutput(
     // col and resume painting on the next row.
     let col = lx;
     let row = ly;
-    for (const ch of node.text) {
+    for (const ch of node.renderedText ?? node.text) {
       if (ch === "\n") {
         row++;
         col = lx;
@@ -814,7 +974,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const clipRect: ClipRect = { x: 0, y: 0, width: w, height: h };
 
       // Run layout
-      rootNode.layout.calculateLayout(w, h, "ltr");
+      calculateLayoutWithText(rootNode, w, h);
 
       // #343: one fresh tracker per render() pass -- the real terminal is back to default at
       // the START of every render (guaranteed by #325's own unconditional trailing reset below),

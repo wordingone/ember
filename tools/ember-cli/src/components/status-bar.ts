@@ -550,7 +550,7 @@ export function StatusLine({
       ? React.createElement(TaskListV2, { key: "tasks", tasks: taskPanel.tasks })
       : null,
     telemetryLabel != null
-      ? React.createElement(Text, { key: "telemetry", color: "cyan", dimColor: true }, telemetryLabel)
+      ? React.createElement(Text, { key: "telemetry", color: "cyan", dimColor: true, wrap: "truncate-end" }, telemetryLabel)
       : null,
     React.createElement(
       Box,
@@ -562,11 +562,11 @@ export function StatusLine({
       // happens at pathologically narrow widths — every normal width keeps the original
       // mode/sep/text coloring.
       coreOverflowed
-        ? React.createElement(Text, { key: "core", dimColor: true }, fitted.core)
+        ? React.createElement(Text, { key: "core", dimColor: true, wrap: "truncate-end" }, fitted.core)
         : React.createElement(React.Fragment, { key: "core" },
-            React.createElement(Text, { key: "mode", dimColor: true }, modeIndicator),
-            React.createElement(Text, { key: "sep", dimColor: true }, SEGMENT_SEPARATOR),
-            React.createElement(Text, { key: "text" }, text),
+            React.createElement(Text, { key: "mode", dimColor: true, wrap: "truncate-end" }, modeIndicator),
+            React.createElement(Text, { key: "sep", dimColor: true, wrap: "truncate-end" }, SEGMENT_SEPARATOR),
+            React.createElement(Text, { key: "text", wrap: "truncate-end" }, text),
           ),
       // Live model metrics meter — absent when no server is connected, OR dropped first under
       // width pressure so the core identity text above always survives.
