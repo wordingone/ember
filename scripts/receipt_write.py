@@ -1,11 +1,12 @@
 """receipt_write.py — fail-closed receipt writer (eng #107).
 
-Wraps the standardized json.dump call from the #103 byte-stability pass with
-an immediate schema-floor check via receipt_check.validate_receipt.  Any
-violation QUARANTINES the file (renamed to <path>.INVALID.quarantine, bytes
-preserved byte-for-byte) and raises an exception — the ORIGINAL path is left
-absent (an invalid receipt is never left where a reader would treat it as
-valid), but the computed data is never destroyed.
+Stages the standardized json.dump bytes from the #103 byte-stability pass,
+flushes and fsyncs them, validates the candidate, then atomically publishes
+with same-directory os.replace. Any violation QUARANTINES only the staged
+candidate at <path>.INVALID.quarantine. Existing canonical bytes remain
+unchanged, and partial serialization is never visible at the canonical path.
+If publication itself fails, complete candidate bytes are retained at a
+recovery path instead of being destroyed.
 
 ember #702 (2026-07-11): the prior delete-on-finding behavior destroyed the
 ONLY copy of two separate full-compute runs' results on the same morning — a
@@ -17,9 +18,9 @@ defect — is what actually destroyed the results. Quarantine, never delete.
 
 Public API:
     checked_write(path, obj)
-        Write obj to path as JSON (utf-8, LF, indent=2).  On a schema
-        finding: rename the written file to <path>.INVALID.quarantine and
-        raise, with the quarantine path named in the exception message.
+        Stage obj as JSON (utf-8, LF, indent=2), validate it, and atomically
+        publish it. On a schema finding, quarantine the staged bytes and
+        preserve any existing canonical receipt.
 
 CLI:
     --selftest    Coverage: valid receipt writes byte-identically to a
@@ -27,9 +28,13 @@ CLI:
                   ORIGINAL path absent, and quarantines the bytes.
                   Prints RECEIPT_WRITE_SELFTEST_PASS on success.
 """
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import argparse
 import json
 import os
+import tempfile
 import sys
 from pathlib import Path
 
@@ -39,46 +44,76 @@ import receipt_check  # noqa: E402
 
 
 def checked_write(path: str, obj: dict) -> None:
-    """Write obj to path as a receipt JSON, then validate fail-closed.
+    """Stage and validate receipt bytes, then publish them atomically.
 
-    Uses the SAME json.dump args standardised by the #103 byte-stability pass:
-        open(path, "w", encoding="utf-8", newline="\\n")
-        json.dump(obj, f, indent=2)
+    The staging file is created in the destination directory, flushed and
+    fsynced, then schema-validated before one same-volume os.replace publishes
+    it. A partial serialization or invalid candidate is therefore never
+    observable at the canonical path and cannot overwrite a last-known-good
+    receipt.
 
-    On any schema finding: QUARANTINE the file -- rename it to
-    <path>.INVALID.quarantine (bytes preserved byte-for-byte, os.replace is
-    an atomic same-volume rename, never a copy+delete) -- then re-raise the
-    same exception type with the quarantine path appended to its message.
-    The caller's ORIGINAL path is left absent (an invalid receipt is never
-    left where a reader would treat it as valid), but nothing is destroyed.
-    If the write itself never completed (`written` is False) or the
-    quarantine rename fails (OSError), the original exception propagates
-    unmodified -- there is nothing to quarantine in either case.
+    Schema-invalid bytes move from staging to <path>.INVALID.quarantine.
+    Existing canonical bytes remain unchanged. Serialization or publication
+    failures leave the canonical path unchanged. Partial serialization is
+    removed; complete candidates that cannot be published or quarantined are
+    retained at an explicit recovery path.
     """
-    path = str(path)
-    written = False
+    path = os.path.abspath(os.fspath(path))
+    parent = os.path.dirname(path) or os.curdir
+    fd, staging_path = tempfile.mkstemp(
+        dir=parent,
+        prefix=f".{os.path.basename(path)}.",
+        suffix=".tmp",
+    )
     try:
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            written = True
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
         findings = receipt_check.validate_receipt(obj)
         if findings:
+            quarantine_path = path + ".INVALID.quarantine"
+            try:
+                os.replace(staging_path, quarantine_path)
+            except OSError as exc:
+                retained_path = staging_path
+                staging_path = ""
+                raise type(exc)(
+                    f"{exc}\n  INVALID candidate staging retained: "
+                    f"{retained_path}"
+                ) from exc
+            staging_path = ""
             raise ValueError(
                 f"checked_write: {len(findings)} schema finding(s) in {path}:\n"
                 + "\n".join(f"  {fn}" for fn in findings)
+                + "\n  QUARANTINED (bytes preserved, never deleted): "
+                + quarantine_path
             )
-    except Exception as exc:
-        if written:
-            quarantine_path = path + ".INVALID.quarantine"
+        try:
+            os.replace(staging_path, path)
+        except OSError as publish_exc:
+            recovery_path = path + ".PUBLISH_FAILED.quarantine"
             try:
-                os.replace(path, quarantine_path)
-            except OSError:
-                raise
-            raise type(exc)(
-                f"{exc}\n  QUARANTINED (bytes preserved, never deleted): "
-                f"{quarantine_path}"
-            ) from exc
-        raise
+                os.replace(staging_path, recovery_path)
+            except OSError as recovery_exc:
+                retained_path = staging_path
+                staging_path = ""
+                raise type(recovery_exc)(
+                    f"{recovery_exc}\n  PUBLISH_FAILED candidate staging "
+                    f"retained: {retained_path}"
+                ) from recovery_exc
+            staging_path = ""
+            raise type(publish_exc)(
+                f"{publish_exc}\n  PUBLISH_FAILED candidate preserved: "
+                f"{recovery_path}"
+            ) from publish_exc
+        staging_path = ""
+    finally:
+        if staging_path:
+            try:
+                os.unlink(staging_path)
+            except FileNotFoundError:
+                pass
 
 
 # ---------------------------------------------------------------------------
