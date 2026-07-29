@@ -1,0 +1,133 @@
+{
+  "claim_boundary": {
+    "all_26_historical_landing_hashes_revalidated": false,
+    "all_34_candidates_tracked_at_subject": true,
+    "gpu_experiment_replayed": false,
+    "historical_argparse_findings_replayed": false,
+    "historical_exclusion_count_corrected": true,
+    "historical_landing_bytes_directly_revalidated": 24,
+    "historical_paid_api_surface_usage_revalidated": false,
+    "historical_runtime_checks_replayed": false,
+    "issue_210_land210g_tracking_subset_revalidated": true,
+    "issue_210_whole_closure_revalidated": false,
+    "issue_700_completion_claim": false,
+    "model_capability_claim": false,
+    "preexisting_runtime_defects_cured": false,
+    "tier_3_private_archive_revalidated": false,
+    "training_claim": false
+  },
+  "drain_issue": 700,
+  "goal_id": "EMBER-02",
+  "historical_receipt_sha256": "ca77488917d85467f021c4d939e8a061aa0880ffa9ed99b10de5496cd6ccb703",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": "ember#210",
+  "mode": "PUBLIC_GIT_LINEAGE_REVALIDATION",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "paid_api_surface_used": false,
+  "producer": {
+    "path": "scripts/land210g_public_revalidation.py",
+    "sha256": "5114dea5b2c6983ab7c3c87c0237075a2469b81fbfa18090fa83e830ae0acf83"
+  },
+  "public_evidence": {
+    "e2b_pair_pr": "https://github.com/wordingone/ember/pull/780",
+    "experiment_runners_pr": "https://github.com/wordingone/ember/pull/766",
+    "family_3_stragglers_pr": "https://github.com/wordingone/ember/pull/777",
+    "tier_2_landing_ladder": "https://github.com/wordingone/ember/issues/210#issuecomment-4944319195",
+    "tracking_hazard_closure": "https://github.com/wordingone/ember/issues/210#issuecomment-5030468387",
+    "triage_ruling": "https://github.com/wordingone/ember/issues/210#issuecomment-4890625466"
+  },
+  "public_lineage_revalidation": {
+    "all_subject_candidate_rows_sha256": "07d491c9b82b20bc33e845d49eef1bef8355fd321a7f8ad8b7699cd76089b8de",
+    "direct_landing_blob_matches": 24,
+    "historical_candidate_count": 34,
+    "historical_exclusion_count": 8,
+    "historical_landed_file_count": 26,
+    "historical_landing_hash_gaps": [
+      {
+        "landing_blob_oid": "2a5595f71e55cc012b7a3c54487e10782a56ec44",
+        "path": "scripts/conv_c03_muon_ns3_live.py",
+        "reason": "the subject path has a later Git object; this pass does not reassert the unavailable historical blob bytes",
+        "recorded_landing_sha256": "4f948c2bc3c35fd33fb15294cc6fde94adee11baf99c7fc28947f6129ad3b34d"
+      },
+      {
+        "landing_blob_oid": "23692cb8e0e23ea2ec74e3205d6ca2645cdaf662",
+        "path": "scripts/ember_cbase_mixture.py",
+        "reason": "the subject path has a later Git object; this pass does not reassert the unavailable historical blob bytes",
+        "recorded_landing_sha256": "a503fc7f51bd3d5c6c452093fc9d7990f5ced1257631481b26a1646e40080057"
+      }
+    ],
+    "historical_landing_hashes_not_rehashed": 2,
+    "historically_excluded_paths_now_tracked": [
+      {
+        "path": "scripts/r3_feasibility_probe.py",
+        "sha256": "bf820105546b549c49cd37030827bfae0ac3d6a35d4186aa4df44e23c1e1427e"
+      },
+      {
+        "path": "scripts/ember_cbase_launch.py",
+        "sha256": "63e209a00aeab971a26c4cd21681529d8f37bf84207abe7806e99e896b487181"
+      },
+      {
+        "path": "scripts/ember_cbase_s6_acceptance.py",
+        "sha256": "faae5f2b84cb59f3bff4a5834339141bb50827cbea707018323344681e1c34e3"
+      },
+      {
+        "path": "scripts/ember_cbase_avir_augment.py",
+        "sha256": "2e8f3241383c3756ec72384a81be48b5b991e98f65ff48cff5312f0e55b2aba8"
+      },
+      {
+        "path": "scripts/test_ember_cbase_launch.py",
+        "sha256": "dfe827750ef7fbf072ce3676a66d6768a72408ddd6d05e789f5896946deb5e58"
+      },
+      {
+        "path": "scripts/test_ember_cbase_s6_acceptance.py",
+        "sha256": "674df8fb8a0585e06d22af6514852e7ad85906084e56e0b19729167d02146e6f"
+      },
+      {
+        "path": "scripts/test_ember_cbase_avir_augment.py",
+        "sha256": "24dee4ba50f18f64600115fdf465bbd907319b7e6d74fbfc812274c52253a84b"
+      },
+      {
+        "path": "scripts/ember_e2b_surpass_run.py",
+        "sha256": "055821d5fd2a07251b1f1c75d24721b123826922dd23e29ed971715e4eea6d5b"
+      }
+    ],
+    "landing_commit": "617f071e36b2af20efccd9af4a574ea488ed3088",
+    "lineage_commits": {
+      "authority_lock_pr_807_head": "4f758db0ec11b5089698d80215a1145d48ef7537",
+      "e2b_pair_pr_780": "560f93c3ceb9a86e67f663f9f8bfc5c8389ccaa7",
+      "experiment_runners_pr_766": "617f071e36b2af20efccd9af4a574ea488ed3088",
+      "family_3_stragglers_pr_777": "70aefaa0a92fdebd376c068133749cc87760d074",
+      "mixture_retirement_pr_1132": "7ea8b38b3ea727495e392884ee53c49a3697113e",
+      "spend_field_repair_pr_775": "0bfa3a46a3dcf7c1693a6c92025442386b2c21d6"
+    },
+    "recorded_verdict": "LAND210G_EXPERIMENT_RUNNERS_26_LANDED_7_EXCLUDED",
+    "recorded_verdict_exclusion_count_incorrect": true,
+    "subject_commit": "e8ca7191fd5ac29594868894ced6e5b5efafa9f8",
+    "subject_original_bytes_unchanged": 24,
+    "subject_tracked_candidate_count": 34,
+    "traceable_later_changes": [
+      {
+        "disposition": "later authority-and-totality lock",
+        "landing_sha256": "4f948c2bc3c35fd33fb15294cc6fde94adee11baf99c7fc28947f6129ad3b34d",
+        "last_change_commit": "4f758db0ec11b5089698d80215a1145d48ef7537",
+        "path": "scripts/conv_c03_muon_ns3_live.py",
+        "public_pr": "https://github.com/wordingone/ember/pull/807",
+        "subject_sha256": "d45f8ac529a3d4febf3ae7253093e4d357dcc6708f032b1d6fd6f7fc2c324204"
+      },
+      {
+        "disposition": "later historical assembler retirement",
+        "landing_sha256": "a503fc7f51bd3d5c6c452093fc9d7990f5ced1257631481b26a1646e40080057",
+        "last_change_commit": "7ea8b38b3ea727495e392884ee53c49a3697113e",
+        "path": "scripts/ember_cbase_mixture.py",
+        "public_pr": "https://github.com/wordingone/ember/pull/1132",
+        "subject_sha256": "2b74e18b585d50c4b092a21c3bbeb18694bcabd37b1d20a580dd3742221fda36"
+      }
+    ]
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "supersedes": "receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
+  "ticket": "LAND210G-EXPERIMENT-RUNNERS",
+  "ts": "2026-07-29T12:26:03Z",
+  "verdict": "HISTORICAL_24_BYTES_DIRECTLY_VERIFIED_8_EXCLUSIONS_CORRECTED_ALL_34_TRACKED",
+  "workstream_id": "EMBER-02A"
+}
