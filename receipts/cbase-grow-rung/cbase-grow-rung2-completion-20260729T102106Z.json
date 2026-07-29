@@ -1,0 +1,51 @@
+{
+  "candidate_audit": {
+    "candidate_rows_sha256": "edbcb4f21e5ba61079354a744a0713d6094aa301a6c8dccb250adcd7ba795fef",
+    "n_candidate_files": 90,
+    "n_satisfying_full_chk": 2,
+    "satisfying_full_chk": [
+      "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
+      "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260710T172500Z.json"
+    ]
+  },
+  "claim_boundary": {
+    "c_grow_current_probe_green": true,
+    "historical_private_path_claims_reasserted": false,
+    "model_capability_claim": false,
+    "rung2_extension_completion_claim": false,
+    "training_claim": false
+  },
+  "goal_id": "EMBER-02",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": 700,
+  "mode": "READ_ONLY_REEXECUTION",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "paid_api_surface_used": false,
+  "probe": {
+    "command": "python -B scripts/ember_totality/test_c_grow.py",
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "GREEN C-GROW: measured function-preserving growth receipt present in receipts\\cbase-grow-rung\\cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured_by_instrumented_execution: sha256-verified checkpoints + FLOP totals independently recomputed and matched); no invalid-token present",
+    "verdict": "GREEN"
+  },
+  "scope": "Current-tree re-execution of the C-GROW candidate audit and probe. This receipt binds exact source bytes and supersedes the historical completion receipt for invariant-stamp accounting.",
+  "script": "scripts/cbase_grow_rung2_completion_audit.py",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "source_issue": 626,
+  "source_paths": {
+    "historical_receipt": "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260710T172500Z.json",
+    "probe": "scripts/ember_totality/test_c_grow.py",
+    "producer": "scripts/cbase_grow_rung2_completion_audit.py",
+    "satisfying_receipt": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json"
+  },
+  "source_sha256": {
+    "historical_receipt": "c0c2b9a7a47347d3b50c7437e8566d1bfb490a5a4995a7f2ac7dcf00dae4cf82",
+    "probe": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
+    "producer": "ff8ee9e0dabac96ff89d23e6007134860e504db068413aaaa4fc434589f0c433",
+    "satisfying_receipt": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8"
+  },
+  "supersedes": "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260710T172500Z.json",
+  "ticket": "CBASE-GROW-RUNG2-COMPLETION",
+  "ts": "2026-07-29T10:21:22Z",
+  "workstream_id": "EMBER-02A"
+}
