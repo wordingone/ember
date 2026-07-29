@@ -136,8 +136,10 @@ def validate_public_lineage(
     root: Path, subject_commit: str, historical_digests: dict[str, str]
 ) -> list[dict[str, str]]:
     head = _git(root, "rev-parse", "HEAD").decode("ascii").strip()
-    if head != subject_commit or subject_commit != EXPECTED_SUBJECT_COMMIT:
+    if subject_commit != EXPECTED_SUBJECT_COMMIT:
         raise ValueError("subject commit is not the reviewed public base")
+    if not is_ancestor(root, subject_commit, head):
+        raise ValueError("reviewed public base is not an ancestor of HEAD")
     if not is_ancestor(root, LANDING_COMMIT, subject_commit):
         raise ValueError("historical landing is not an ancestor of subject")
     rows = []
