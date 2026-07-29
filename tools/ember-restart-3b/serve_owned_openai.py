@@ -28,6 +28,10 @@ from model import RestartDecoderConfig, UnifiedDecoder
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
+from tokenizer.reconstruct_frozen_tokenizer import (  # noqa: E402
+    ensure_serving_tokenizer,
+)
+
 from ember_restart_eval_raw_forward import (  # noqa: E402
     canonicalize_tied_embedding_state,
     construct_runtime_model,
@@ -37,6 +41,15 @@ from ember_restart_eval_raw_forward import (  # noqa: E402
     tied_embeddings_from_contract,
     validate_state_map,
 )
+
+_TRACKED_TOKENIZER_SOURCE = ROOT / "tokenizer" / "tokenizer.json"
+_TOKENIZER_FREEZE_RECEIPT = (
+    ROOT / "receipts" / "tokenizer-freeze-20260611T154111Z.json"
+)
+_TOKENIZER_FREEZE_RECEIPT_SHA256 = (
+    "2e96e70fe7463b272c00ea49e61e001402319a398a447debb9afe283586ac1c4"
+)
+_SERVING_TOKENIZER = ROOT / "models" / "cbase-serving" / "tokenizer.json"
 RuntimeMode = Literal["INTERACTIVE", "FROZEN_EVAL"]
 _MAX_REQUEST_TOKENS = 8096
 _MAX_RUNTIME_GENERATION_TOKENS = 1024
@@ -806,7 +819,7 @@ def load_development_shared_runtime(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--tokenizer", type=Path, required=True)
+    parser.add_argument("--tokenizer", type=Path, default=_SERVING_TOKENIZER)
     parser.add_argument("--config", type=Path, required=True)
     authority = parser.add_mutually_exclusive_group(required=True)
     authority.add_argument("--run-manifest", type=Path)
@@ -828,6 +841,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.development_manifest is not None and (args.expected_development_manifest_sha256 is None or args.expected_runtime_index_sha256 is None):
         raise ValueError("development server requires exact manifest and runtime-index hashes")
     start_parent_watchdog(args.parent_pid)
+    args.tokenizer = ensure_serving_tokenizer(
+        output=args.tokenizer,
+        source=_TRACKED_TOKENIZER_SOURCE,
+        freeze_receipt=_TOKENIZER_FREEZE_RECEIPT,
+        receipt_output=args.tokenizer.parent / "tokenizer-reconstruction-receipt.json",
+        expected_freeze_receipt_sha256=_TOKENIZER_FREEZE_RECEIPT_SHA256,
+    )
     if args.development_manifest is not None:
         development = resolve_development_identity(
             args.development_manifest,
