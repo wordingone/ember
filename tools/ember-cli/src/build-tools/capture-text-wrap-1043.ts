@@ -127,6 +127,7 @@ async function main(): Promise<void> {
   }
   mkdirSync(outDir, { recursive: true });
   const repoRoot = resolve(import.meta.dir, "../../../..");
+  const captureSourceRoot = resolve(process.env.EMBER_CAPTURE_SOURCE_ROOT ?? repoRoot);
   const home = mkdtempSync(join(tmpdir(), "ember-text-wrap-1043-"));
   const receiptsDir = join(home, "receipts");
   const watchdogDir = join(receiptsDir, "watchdog");
@@ -147,12 +148,12 @@ async function main(): Promise<void> {
       name: "xterm-256color",
       cols: initial.columns,
       rows: initial.rows,
-      cwd: repoRoot,
+      cwd: captureSourceRoot,
       env: {
         ...process.env,
         EMBER_HOME: home,
-        EMBER_REPO_ROOT: repoRoot,
-        EMBER_SOURCE_ROOT: repoRoot,
+        EMBER_REPO_ROOT: captureSourceRoot,
+        EMBER_SOURCE_ROOT: captureSourceRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         EMBER_CLI_HEADLESS_CAPTURE: "1",
