@@ -129,6 +129,7 @@ class GateResult:
     neural_delta_hash_post: str
     weights_changed: bool
     rig_result: Optional[RigResult] = None
+    engagement_receipts: list[dict] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +156,7 @@ class Phase3ArmConfig:
     rank: int = 4
     N: int = 4
     M: int = 4
+    min_unique_completions: int = 1
     n_train_steps: int = 32
     lr: float = 1e-3
     deletion_tolerance: float = 0.15
@@ -196,8 +198,8 @@ def _build_toy_train_fn(N: int = 4, M: int = 4) -> Callable:
         **kwargs,
     ) -> dict:
         # Override N and G with phase-3 values; forward everything else.
-        kwargs.setdefault("N", N)
-        kwargs.setdefault("G", M)
+        kwargs["N"] = N
+        kwargs["G"] = M
         kwargs.setdefault("max_depth", 1)
         kwargs.setdefault("epsilon", 0.2)
         kwargs.setdefault("temperature", 1.5)
@@ -435,6 +437,10 @@ def run_phase3_contract(config: Phase3ArmConfig) -> GateResult:
         lr=config.lr,
         deletion_tolerance=config.deletion_tolerance,
         stub=stub_flag,
+        requested_n=config.N,
+        requested_g=config.M,
+        min_unique_completions=config.min_unique_completions,
+        require_engagement_receipt=True,
     )
 
     # Extract neural delta hashes from GuardResult
@@ -476,6 +482,7 @@ def run_phase3_contract(config: Phase3ArmConfig) -> GateResult:
         neural_delta_hash_post=post_hash,
         weights_changed=weights_changed,
         rig_result=rig_result,
+        engagement_receipts=rig_result.engagement_receipts,
     )
 
 
