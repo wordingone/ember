@@ -47,7 +47,7 @@ function validReceipt(): LifecycleReceipt {
       const command = action === "terminate" ? "stop" : action;
       const outcome =
         action === "train" ? "PREFLIGHT_ONLY"
-          : action === "reload" ? "REFUSED"
+          : action === "reload" ? "PASS"
             : action === "continue" ? "MISSING"
               : "PASS";
       const effectKind =
@@ -55,6 +55,7 @@ function validReceipt(): LifecycleReceipt {
           : action === "train" ? "preflight-only"
             : action === "observe" ? "observable-product-effect"
               : action === "save" ? "durable-artifact-publication"
+                : action === "reload" ? "observable-product-effect"
                 : durable ? "durable-control-append"
                   : "observable-refusal";
       const deltaSha = String(index + 31).padStart(64, "0");
@@ -69,9 +70,9 @@ function validReceipt(): LifecycleReceipt {
         outcome,
         output_excerpt:
           action === "save"
-            ? "legacy checkpoint snapshot saved (not /model checkpoint load compatible)"
+            ? `modern governed sparse checkpoint saved: ${"a".repeat(64)}`
             : action === "reload"
-              ? "error: failed to load checkpoint"
+              ? `checkpoint loaded; checkpoint selected: ${"a".repeat(64)}`
               : action === "continue"
                 ? "Unknown command: /continue"
                 : action === "train"
@@ -139,15 +140,34 @@ describe("validateLifecycleReceipt", () => {
     });
   });
 
-  test("accepts truthful product-level red outcomes from a correct instrument", () => {
+  test("refuses a successful modern save whose emitted bundle does not reload", () => {
     const receipt = validReceipt();
     const save = receipt.actions.find((row) => row.action === "save")!;
-    save.output_excerpt =
-      "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
+    save.output_excerpt = `modern governed sparse checkpoint saved: ${"a".repeat(64)}`;
     const reload = receipt.actions.find((row) => row.action === "reload")!;
     reload.outcome = "REFUSED";
     reload.effect_kind = "observable-refusal";
     reload.output_excerpt = "error: failed to load checkpoint";
+    reload.repair_item = "EMBER-CLI-SAVE-RELOAD-COMPATIBILITY";
+
+    expect(() => validateLifecycleReceipt(receipt, expected))
+      .toThrow(/successful checkpoint save did not reload/i);
+  });
+
+  test("accepts a truthful paired save/reload refusal when no selected identity exists", () => {
+    const receipt = validReceipt();
+    const save = receipt.actions.find((row) => row.action === "save")!;
+    save.outcome = "REFUSED";
+    save.effect_kind = "observable-refusal";
+    save.output_excerpt =
+      "error: failed to save checkpoint: no durable selected owned checkpoint is available";
+    save.repair_item = "EMBER-CLI-SAVE-RELOAD-COMPATIBILITY";
+    save.state_evidence = null;
+    const reload = receipt.actions.find((row) => row.action === "reload")!;
+    reload.outcome = "REFUSED";
+    reload.effect_kind = "observable-refusal";
+    reload.output_excerpt =
+      "error: failed to load checkpoint: checkpoint directory is missing or unreadable";
     reload.repair_item = "EMBER-CLI-SAVE-RELOAD-COMPATIBILITY";
     const continued = receipt.actions.find((row) => row.action === "continue")!;
     continued.outcome = "MISSING";
@@ -444,10 +464,10 @@ describe("compiled lifecycle action completion", () => {
     expect(continued).not.toContain("failed to load checkpoint");
 
     const saved = driver.actionLocalDelta!(
-      "/model checkpoint save C:\\tmp\\saved\r\nlegacy checkpoint snapshot saved (not /model checkpoint load compatible)\r\n",
+      `/model checkpoint save C:\\tmp\\saved\r\nmodern governed sparse checkpoint saved: ${"a".repeat(64)}\r\n`,
       "/model checkpoint save C:\\tmp\\saved",
     );
-    expect(saved).toContain("not /model checkpoint load compatible");
+    expect(saved).toContain("modern governed sparse checkpoint saved");
   });
 
   test("derives an action-local visible delta without unchanged viewport history", async () => {
@@ -463,7 +483,7 @@ describe("compiled lifecycle action completion", () => {
     )).toBe("new row");
   });
 
-  test("classifies the rendered action and retains the exact save incompatibility", async () => {
+  test("classifies the rendered action and retains the exact modern save result", async () => {
     const driver = await import("./lifecycle-smoke-driver.ts");
     expect(driver.classifyActionFrame).toBeFunction();
     expect(driver.actionOutputExcerpt).toBeFunction();
@@ -488,8 +508,8 @@ describe("compiled lifecycle action completion", () => {
       "stop run=smoke-run",
     )).toBe("PASS");
 
-    const quote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
-    expect(driver.actionOutputExcerpt!("save", "legacy checkpoint snapshot saved", `${quote}${"x".repeat(3000)}`))
+    const quote = `modern governed sparse checkpoint saved: ${"a".repeat(64)}`;
+    expect(driver.actionOutputExcerpt!("save", "modern governed sparse checkpoint saved", `${quote}${"x".repeat(3000)}`))
       .toBe(quote);
     expect(driver.actionOutputExcerpt!(
       "continue",
@@ -542,7 +562,7 @@ describe("compiled lifecycle action completion", () => {
     )).toBe(false);
     expect(driver.saveActionCompletionObserved!(
       "prompt cleared",
-      "legacy checkpoint snapshot saved (not /model checkpoint load compatible)",
+      `modern governed sparse checkpoint saved: ${"a".repeat(64)}`,
     )).toBe(true);
     expect(driver.saveActionCompletionObserved!(
       "prompt cleared",

@@ -20,7 +20,128 @@
 // model-seat machinery already owns).
 
 import type { ResolvedModelIdentity } from "../commands/model.ts";
+import type { VerifiedCheckpointBundle } from "./checkpoint-load.ts";
 import { join } from "path";
+
+const SHA256_RE = /^[0-9a-f]{64}$/;
+
+export interface ModernCheckpointSaveResult {
+  manifestSha256: string;
+  schemaVersion: string;
+  artifactCount: number;
+  targetDir: string;
+}
+
+export interface ModernCheckpointSaveDeps {
+  verifyBundle: (checkpointDir: string) => Promise<VerifiedCheckpointBundle>;
+  assertSafeDestination: (targetDir: string) => Promise<void>;
+  mkdirStaging: (path: string) => Promise<void>;
+  copyFile: (src: string, dest: string) => Promise<void>;
+  publishNoReplace: (from: string, to: string) => Promise<void>;
+  rmStaging: (path: string) => Promise<void>;
+  stagingPath: (targetDir: string) => string;
+}
+
+function bundleProjection(bundle: VerifiedCheckpointBundle): string {
+  return JSON.stringify({
+    manifestSha256: bundle.manifestSha256,
+    schemaVersion: bundle.schemaVersion,
+    artifacts: [...bundle.artifacts]
+      .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256 }))
+      .sort((left, right) => left.path.localeCompare(right.path)),
+  });
+}
+
+function requireSameBundle(
+  expected: VerifiedCheckpointBundle,
+  actual: VerifiedCheckpointBundle,
+  label: string,
+): void {
+  if (bundleProjection(actual) !== bundleProjection(expected)) {
+    throw new Error(
+      `checkpoint save refused: ${label} no longer matches the selected governed bundle`,
+    );
+  }
+}
+
+/**
+ * Snapshot one already-governed sparse checkpoint bundle without changing its
+ * format or authority. The unchanged production verifier defines the source,
+ * staged, and published bundle contract.
+ *
+ * The durable selected checkpoint digest is mandatory. A self-consistent but
+ * different bundle is structurally valid yet ineligible for this save path.
+ * Saving never admits a checkpoint or grants ownership.
+ */
+export async function saveCheckpointBundle(
+  sourceDir: string,
+  targetDir: string,
+  selectedManifestSha256: string,
+  deps: ModernCheckpointSaveDeps,
+): Promise<ModernCheckpointSaveResult> {
+  if (!SHA256_RE.test(selectedManifestSha256)) {
+    throw new Error(
+      "checkpoint save refused: selected checkpoint digest is missing or invalid",
+    );
+  }
+
+  const selected = await deps.verifyBundle(sourceDir);
+  if (selected.manifestSha256 !== selectedManifestSha256) {
+    throw new Error(
+      "checkpoint save refused: source does not match the selected checkpoint digest",
+    );
+  }
+  await deps.assertSafeDestination(targetDir);
+
+  const stagingDir = deps.stagingPath(targetDir);
+  let stagingCreated = false;
+  try {
+    await deps.mkdirStaging(stagingDir);
+    stagingCreated = true;
+
+    // Closed named artifact set comes only from the production verifier.
+    // The manifest is deliberately copied last.
+    for (const artifact of [...selected.artifacts].sort((left, right) =>
+      left.path.localeCompare(right.path)
+    )) {
+      await deps.copyFile(
+        join(selected.checkpointDir, artifact.path),
+        join(stagingDir, artifact.path),
+      );
+    }
+    await deps.copyFile(selected.manifestPath, join(stagingDir, "checkpoint-manifest.json"));
+
+    const staged = await deps.verifyBundle(stagingDir);
+    requireSameBundle(selected, staged, "staged bundle");
+
+    // Re-read the source after every copied byte. This closes source swaps
+    // between initial verification and publication.
+    const sourceAfterCopy = await deps.verifyBundle(selected.checkpointDir);
+    requireSameBundle(selected, sourceAfterCopy, "source bundle");
+
+    await deps.publishNoReplace(stagingDir, targetDir);
+    stagingCreated = false;
+
+    const published = await deps.verifyBundle(targetDir);
+    requireSameBundle(selected, published, "published bundle");
+
+    return {
+      manifestSha256: published.manifestSha256,
+      schemaVersion: published.schemaVersion,
+      artifactCount: published.artifacts.length,
+      targetDir: published.checkpointDir,
+    };
+  } catch (error) {
+    if (stagingCreated) {
+      try {
+        await deps.rmStaging(stagingDir);
+      } catch {
+        // Preserve the original failure. No target publication occurred.
+      }
+    }
+    throw error;
+  }
+}
 
 export interface CheckpointSaveResult {
   byte_sha256: string;

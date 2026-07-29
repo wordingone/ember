@@ -426,6 +426,7 @@ export function validateLifecycleReceipt(
         pause: "durable-control-append",
         resume: "durable-control-append",
         save: "durable-artifact-publication",
+        reload: "observable-product-effect",
         terminate: "durable-control-append",
       };
       if (row.effect_kind !== expectedEffect[row.action] || row.repair_item !== null) {
@@ -452,11 +453,13 @@ export function validateLifecycleReceipt(
 
   const save = receipt.actions.find((row) => row.action === "save")!;
   const reload = receipt.actions.find((row) => row.action === "reload")!;
-  if (
-    reload.outcome !== "PASS" &&
-    !save.output_excerpt.includes("not /model checkpoint load compatible")
-  ) {
-    throw new Error("save/reload incompatibility quote is missing");
+  if (save.outcome === "PASS" && reload.outcome !== "PASS") {
+    throw new Error("successful checkpoint save did not reload");
+  }
+  if (save.outcome !== "PASS" && reload.outcome === "PASS") {
+    throw new Error(
+      "checkpoint reload cannot pass when the preceding save did not publish",
+    );
   }
   const continued = receipt.actions.find((row) => row.action === "continue")!;
   if (

@@ -17,6 +17,9 @@ import type { OwnedModelIdentity } from "../entrypoints/model-seat.ts";
 import type { EnsureOwnedServerResult } from "../entrypoints/owned-server-supervisor.ts";
 // cond3 procreg: import the REAL verifier (never reimplement) so the new
 // status-report binding is exercised against its actual comparison logic,
+import { createHash } from "crypto";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 // with only the network fetch stubbed.
 import { verifyOwnedEndpointIdentity as realVerifyOwnedEndpointIdentity } from "../entrypoints/owned-seat-loader.ts";
 import { join } from "path";
@@ -578,36 +581,94 @@ describe("model command", () => {
   });
 
   // =========================================================================
-  // /model checkpoint save -- CLI routing/wiring only. The atomic-copy/
-  // fail-closed CORE is covered against a fixture in
-  // services/checkpoint-save.test.ts; these tests only prove the subcommand
-  // parses args and wires them into saveCheckpoint correctly.
+  // /model checkpoint save -- governed sparse snapshot routing. The byte and
+  // atomicity contract is covered by services/checkpoint-save.test.ts.
   // =========================================================================
   describe("/model checkpoint save", () => {
-    it("resolves source from the currently-loaded manifestPath convention by default", async () => {
-      const cmd = createModelCommand({
-        manifestPath: FIXTURE_MANIFEST,
-        checkpointSaveDeps: {
-          resolveIdentity: async (manifestPath) => {
-            expect(manifestPath).toBe(FIXTURE_MANIFEST);
-            return fakeIdentity;
-          },
-          mkdir: async () => {},
-          copyFile: async () => {},
-          rename: async () => {},
-          rmStaging: async () => {},
-          stagingPath: (target) => `${target}.tmp`,
+    function modernDeps(verifiedDirs: string[] = []) {
+      return {
+        verifyBundle: async (checkpointDir: string) => {
+          verifiedDirs.push(checkpointDir);
+          return {
+            checkpointDir,
+            manifestPath: join(checkpointDir, "checkpoint-manifest.json"),
+            manifestSha256: fakeOwnedIdentity.checkpointSha256,
+            schemaVersion: "ember-sparse-checkpoint-v5",
+            artifacts: [],
+          };
         },
+        assertSafeDestination: async () => {},
+        mkdirStaging: async () => {},
+        copyFile: async () => {},
+        publishNoReplace: async () => {},
+        rmStaging: async () => {},
+        stagingPath: (target: string) => `${target}.tmp`,
+      };
+    }
+
+    it("defaults to the durable selected owned checkpoint and preserves its digest", async () => {
+      const verifiedDirs: string[] = [];
+      const cmd = createModelCommand({
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        modernCheckpointSaveDeps: modernDeps(verifiedDirs),
       });
 
       const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
 
       expect(result?.exitCode).toBeUndefined();
-      expect(result?.message).toContain(fakeIdentity.byte_sha256);
+      expect(result?.message).toContain(fakeOwnedIdentity.checkpointSha256);
+      expect(result?.message).toContain("modern governed sparse checkpoint saved");
+      expect(result?.message).toContain("ownership/admission unchanged");
       expect(result?.message).toContain("target-dir");
+      expect(verifiedDirs[0]).toBe(fakeOwnedIdentity.launch!.checkpointDir);
     });
 
-    it("honors --source to override the default currently-loaded manifest", async () => {
+    it("honors --source as a bundle directory but still requires the selected digest", async () => {
+      const verifiedDirs: string[] = [];
+      const cmd = createModelCommand({
+        loadOwnedIdentity: () => fakeOwnedIdentity,
+        modernCheckpointSaveDeps: modernDeps(verifiedDirs),
+      });
+
+      await cmd.execute("checkpoint save target --source selected-copy", mockCtx);
+
+      expect(verifiedDirs[0]).toEndWith(`${join(mockCtx.cwd, "selected-copy").replace(/^\\/, "")}`);
+    });
+
+    it("fails closed before filesystem work when the durable selection pin is absent", async () => {
+      let verifyCalled = false;
+      const cmd = createModelCommand({
+        loadOwnedIdentity: () => null,
+        modernCheckpointSaveDeps: {
+          ...modernDeps(),
+          verifyBundle: async () => {
+            verifyCalled = true;
+            throw new Error("must not verify without a selected checkpoint");
+          },
+        },
+      });
+
+      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("no durable selected owned checkpoint");
+      expect(verifyCalled).toBe(false);
+    });
+
+    it("usage line when target-dir is missing", async () => {
+      const cmd = createModelCommand();
+      const result = await cmd.execute("checkpoint save", mockCtx);
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("usage:");
+    });
+
+    it("usage line for an unknown checkpoint action", async () => {
+      const cmd = createModelCommand();
+      const result = await cmd.execute("checkpoint frobnicate", mockCtx);
+      expect(result?.message).toContain("usage:");
+    });
+
+    it("retains the old two-file snapshot only under save-legacy with an explicit warning", async () => {
       let resolvedManifest: string | undefined;
       const cmd = createModelCommand({
         manifestPath: FIXTURE_MANIFEST,
@@ -624,45 +685,86 @@ describe("model command", () => {
         },
       });
 
-      await cmd.execute("checkpoint save /tmp/target-dir --source /tmp/reference-checkpoint", mockCtx);
+      const result = await cmd.execute(
+        "checkpoint save-legacy /tmp/target-dir --source /tmp/reference-checkpoint",
+        mockCtx,
+      );
 
       expect(resolvedManifest).toBe(join("/tmp/reference-checkpoint", "manifest.json"));
+      expect(result?.message).toContain("legacy checkpoint snapshot saved");
+      expect(result?.message).toContain("not /model checkpoint load compatible");
     });
 
-    it("fails closed (non-zero exit) when identity does not validate, and never writes", async () => {
-      let mkdirCalled = false;
-      const cmd = createModelCommand({
-        manifestPath: FIXTURE_MANIFEST,
-        checkpointSaveDeps: {
-          resolveIdentity: async () => null,
-          mkdir: async () => {
-            mkdirCalled = true;
+    it("production round-trip: saved governed bytes pass /model checkpoint load and reach only the pinned owned supervisor", async () => {
+      const root = mkdtempSync(join(tmpdir(), "ember-model-save-load-roundtrip-"));
+      try {
+        const source = join(root, "source");
+        const target = join(root, "target");
+        mkdirSync(source);
+        const payloads = new Map<string, Buffer>([
+          ["shared-model.pt", Buffer.from("shared-model")],
+          ["optimizer-state.pt", Buffer.from("optimizer-state")],
+          ["replay-state.pt", Buffer.from("replay-state")],
+          ["expert-vision.pt", Buffer.from("vision")],
+          ["expert-audio.pt", Buffer.from("audio")],
+          ["expert-reasoning.pt", Buffer.from("reasoning")],
+          ["expert-tool.pt", Buffer.from("tool")],
+        ]);
+        const digest = (bytes: Uint8Array) =>
+          createHash("sha256").update(bytes).digest("hex");
+        const shards = [...payloads].map(([path, bytes]) => ({
+          path,
+          bytes: bytes.length,
+          sha256: digest(bytes),
+        }));
+        for (const [path, bytes] of payloads) {
+          writeFileSync(join(source, path), bytes);
+        }
+        const manifestBytes = Buffer.from(
+          `${JSON.stringify({
+            schema_version: "ember-sparse-checkpoint-v5",
+            shards,
+          })}\n`,
+          "utf8",
+        );
+        writeFileSync(join(source, "checkpoint-manifest.json"), manifestBytes);
+        const selectedDigest = digest(manifestBytes);
+        const selectedIdentity = {
+          ...fakeOwnedIdentity,
+          checkpointSha256: selectedDigest,
+          launch: {
+            ...fakeOwnedIdentity.launch,
+            checkpointDir: source,
           },
-          copyFile: async () => {},
-          rename: async () => {},
-          rmStaging: async () => {},
-          stagingPath: (target) => `${target}.tmp`,
-        },
-      });
+        } as unknown as OwnedModelIdentity;
+        let supervisorCheckpointDir: string | undefined;
+        const cmd = createModelCommand({
+          loadOwnedIdentity: () => selectedIdentity,
+          ensureOwnedServer: async (identity) => {
+            supervisorCheckpointDir = identity.launch?.checkpointDir;
+            return spawnedResult(1056);
+          },
+          loadModel: async () => "model loaded (pid 1056)",
+          registerManagedModel: () => {},
+        });
 
-      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+        const saved = await cmd.execute(
+          `checkpoint save ${target} --source ${source}`,
+          { ...mockCtx, cwd: root },
+        );
+        expect(saved?.exitCode).toBeUndefined();
+        expect(saved?.message).toContain(selectedDigest);
 
-      expect(result?.exitCode).toBe(1);
-      expect(result?.message).toContain("error");
-      expect(mkdirCalled).toBe(false);
-    });
-
-    it("usage line when target-dir is missing", async () => {
-      const cmd = createModelCommand();
-      const result = await cmd.execute("checkpoint save", mockCtx);
-      expect(result?.exitCode).toBe(1);
-      expect(result?.message).toContain("usage:");
-    });
-
-    it("usage line for an unknown checkpoint action", async () => {
-      const cmd = createModelCommand();
-      const result = await cmd.execute("checkpoint frobnicate", mockCtx);
-      expect(result?.message).toContain("usage:");
+        const loaded = await cmd.execute(
+          `checkpoint load ${target}`,
+          { ...mockCtx, cwd: root },
+        );
+        expect(loaded?.exitCode).toBeUndefined();
+        expect(loaded?.message).toContain(`checkpoint selected: ${selectedDigest}`);
+        expect(supervisorCheckpointDir).toBe(target);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
     });
   });
 
