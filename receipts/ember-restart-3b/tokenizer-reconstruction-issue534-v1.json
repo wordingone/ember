@@ -1,0 +1,62 @@
+{
+  "base_size": 245,
+  "combination_index": 2,
+  "dry_run": false,
+  "duplicate_groups": [
+    [
+      11653,
+      19241
+    ],
+    [
+      13101,
+      14368,
+      23012
+    ]
+  ],
+  "freeze_receipt_sha256": "2e96e70fe7463b272c00ea49e61e001402319a398a447debb9afe283586ac1c4",
+  "goal_id": "EMBER-02",
+  "gap_ids": [
+    11653,
+    13101,
+    14368
+  ],
+  "inconsistency_ids": [
+    1772,
+    3460,
+    4120,
+    8372,
+    9435,
+    9636,
+    11653,
+    12666,
+    12776,
+    13101,
+    14005,
+    14368,
+    17467,
+    17812,
+    19241,
+    19302,
+    22632,
+    22777,
+    23012,
+    27308,
+    31597
+  ],
+  "merge_count": 31755,
+  "merge_replacement_ids": [3460, 4120, 9636, 12666, 12776, 14005, 17467, 17812, 19302, 22632, 22777],
+  "oracle_combination_count": 8,
+  "oracle_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+  "output_byte_count": 2230531,
+  "output_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-tokenizer-reconstruction-v1",
+  "source_byte_count": 2230673,
+  "source_sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
+  "status": "RECONSTRUCTED",
+  "verifier_sha256": "9e63e88051750d7186fc1e13eb6fb51ff4e5cda9e980aa5e360ec30999951d21",
+  "vocab_entry_count": 32000,
+  "vocab_replacement_ids": [1772, 8372, 9435, 11653, 13101, 14368, 19241, 23012, 27308, 31597],
+  "workstream_id": "EMBER-02B",
+  "write_performed": true
+}

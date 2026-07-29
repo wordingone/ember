@@ -64,6 +64,12 @@ class _Runtime:
 
 class OwnedOpenAiServerTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.serving_preflight_patcher = patch(
+            "serve_owned_openai.ensure_serving_tokenizer",
+            side_effect=lambda **kwargs: Path(kwargs["output"]),
+        )
+        self.serving_preflight = self.serving_preflight_patcher.start()
+        self.addCleanup(self.serving_preflight_patcher.stop)
         self.runtime = _Runtime()
         self.server = create_loopback_server(self.runtime, host="127.0.0.1", port=0, mode="FROZEN_EVAL")
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -344,7 +350,6 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         ):
             result = serve_main([
                 "--checkpoint", "checkpoint",
-                "--tokenizer", "tokenizer.json",
                 "--config", "config.json",
                 "--run-manifest", "run.json",
                 "--trusted-verifier-registry", "registry.json",
@@ -359,6 +364,21 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(events[0], ("parent", os.getpid()))
         self.assertEqual(events[1][0], "load")
+        self.serving_preflight.assert_called_once()
+        self.assertEqual(
+            self.serving_preflight.call_args.kwargs["output"],
+            ROOT / "models" / "cbase-serving" / "tokenizer.json",
+        )
+        self.assertEqual(
+            self.serving_preflight.call_args.kwargs[
+                "expected_freeze_receipt_sha256"
+            ],
+            "2e96e70fe7463b272c00ea49e61e001402319a398a447debb9afe283586ac1c4",
+        )
+        self.assertEqual(
+            load.call_args.kwargs["tokenizer_path"],
+            ROOT / "models" / "cbase-serving" / "tokenizer.json",
+        )
         self.assertEqual(load.call_args.kwargs["config_path"], Path("config.json"))
         self.assertEqual(load.call_args.kwargs["expected_registry_root_sha256"], "d" * 64)
         self.assertEqual(load.call_args.kwargs["trusted_verifier_registry_approval"], Path("approval.json"))
