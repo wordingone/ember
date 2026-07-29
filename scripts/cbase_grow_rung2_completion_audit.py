@@ -19,8 +19,10 @@ this table matches test_c_grow.py's real verdict exactly (same regex
 objects, imported directly -- zero duplication, zero probe edits; this
 script only READS scripts/ember_totality/test_c_grow.py as a module).
 
-Read-only: never writes to receipts/, never touches the probe file.
-Usage: wsl python3 scripts/cbase_grow_rung2_completion_audit.py
+Default invocation is read-only and never touches the probe file. The two explicit
+--write-*-receipt modes exclusively publish a stamped successor under
+receipts/cbase-grow-rung after the real probe and source checks pass.
+Usage: python -B scripts/cbase_grow_rung2_completion_audit.py
 """
 from __future__ import annotations
 
@@ -48,6 +50,10 @@ NEXT_EXECUTED_OUTCOME = (
 HISTORICAL_RECEIPT = (
     REPO / "receipts" / "cbase-grow-rung"
     / "cbase-grow-rung2-completion-20260710T172500Z.json"
+)
+HISTORICAL_CANDIDATE_AUDIT = (
+    REPO / "receipts" / "cbase-grow-rung"
+    / "c-grow-candidate-audit-20260710T172304Z.json"
 )
 SATISFYING_RECEIPT = (
     REPO / "receipts" / "cbase-grow-rung"
@@ -225,6 +231,27 @@ def build_completion_receipt(
     }
     return stamp(receipt, str(REPO))
 
+def build_candidate_audit_receipt(
+    *,
+    timestamp: str | None = None,
+    sources: dict[str, Path] | None = None,
+) -> dict:
+    """Re-execute the current candidate census under its historical ticket."""
+    if sources is None:
+        sources = dict(DEFAULT_SOURCES)
+        sources["historical_receipt"] = HISTORICAL_CANDIDATE_AUDIT
+    receipt = build_completion_receipt(timestamp=timestamp, sources=sources)
+    receipt["ticket"] = "C-GROW-CANDIDATE-AUDIT"
+    receipt["mode"] = "CURRENT_CANDIDATE_AUDIT_REEXECUTION"
+    receipt["scope"] = (
+        "Current-tree enumeration of every C-GROW candidate using the checked-in "
+        "probe's own predicates. Exact source bytes, the real GREEN probe result, "
+        "candidate counts, satisfying paths, and a deterministic row digest are "
+        "bound without republishing the historical full row table."
+    )
+    receipt["claim_boundary"]["candidate_population_reexecuted"] = True
+    receipt["claim_boundary"]["historical_candidate_rows_reasserted"] = False
+    return receipt
 
 def publish_receipt(receipt: dict, target: Path) -> None:
     """Publish one LF-only receipt without replacing an existing path."""
@@ -244,8 +271,29 @@ def main() -> int:
         type=Path,
         help="write one stamped current-tree successor under receipts/cbase-grow-rung",
     )
+    parser.add_argument(
+        "--write-candidate-audit-receipt",
+        type=Path,
+        help="write one compact stamped C-GROW candidate-audit successor",
+    )
     args = parser.parse_args()
 
+    if args.write_candidate_audit_receipt is not None:
+        target = args.write_candidate_audit_receipt.resolve()
+        allowed_parent = (REPO / "receipts" / "cbase-grow-rung").resolve()
+        if target.parent != allowed_parent:
+            raise ValueError(
+                "--write-candidate-audit-receipt must target receipts/cbase-grow-rung"
+            )
+        receipt = build_candidate_audit_receipt()
+        publish_receipt(receipt, target)
+        print(json.dumps({
+            "status": "PASS",
+            "receipt": target.relative_to(REPO).as_posix(),
+            "ticket": receipt["ticket"],
+            "probe": receipt["probe"]["verdict"],
+        }, sort_keys=True))
+        return 0
     if args.write_completion_receipt is not None:
         target = args.write_completion_receipt.resolve()
         allowed_parent = (REPO / "receipts" / "cbase-grow-rung").resolve()
