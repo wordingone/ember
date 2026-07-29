@@ -799,28 +799,68 @@ function Get-RepoHeadSha {
     if ($WhatIfMode) { return "mock-sha-12345abc" }
     try {
         $sha = & git -C $RepoPath rev-parse HEAD 2>$null
-        return if ($LASTEXITCODE -eq 0) { $sha } else { $null }
+        if ($LASTEXITCODE -eq 0) { return [string]$sha }
+        return $null
     } catch {
         return $null
     }
 }
 
-function Test-RepoClean {
+function Get-RepoResidue {
     <#
     .SYNOPSIS
-    Tests if the repo has no tracked modifications and no untracked files that would
-    collide with incoming changes from public/master. Returns $true if safe to pull,
-    $false if dirty or has collisions. -WhatIf mode returns based on $InjectedDirtyState.
+    Returns a closed probe result for tracked modifications and untracked paths that
+    collide with paths changed by public/master. Non-colliding untracked files are
+    preserved and do not prevent a fast-forward.
     #>
     param([Parameter(Mandatory)][string]$RepoPath, [bool]$WhatIfMode = $false, [bool]$InjectedDirtyState = $false)
-    if ($WhatIfMode) { return -not $InjectedDirtyState }
-    try {
-        $status = & git -C $RepoPath status --porcelain 2>$null
-        if ($LASTEXITCODE -ne 0) { return $false }
-        return [string]::IsNullOrWhiteSpace($status)
-    } catch {
-        return $false
+    if ($WhatIfMode) {
+        $files = if ($InjectedDirtyState) { @('injected-residue') } else { @() }
+        return [PSCustomObject]@{ ProbeOk = $true; Files = $files }
     }
+    try {
+        $tracked = @(& git -C $RepoPath status --porcelain --untracked-files=no 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            return [PSCustomObject]@{ ProbeOk = $false; Files = @('tracked-status-probe-failed') }
+        }
+        $incoming = @(& git -C $RepoPath diff --name-only HEAD..public/master 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            return [PSCustomObject]@{ ProbeOk = $false; Files = @('incoming-path-probe-failed') }
+        }
+        $untracked = @(& git -C $RepoPath ls-files --others --exclude-standard 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            return [PSCustomObject]@{ ProbeOk = $false; Files = @('untracked-path-probe-failed') }
+        }
+
+        $files = @(
+            $tracked | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object {
+                if ($_.Length -gt 3) { $_.Substring(3) } else { $_ }
+            }
+            foreach ($candidate in $untracked) {
+                if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+                foreach ($changed in $incoming) {
+                    if ([string]::IsNullOrWhiteSpace($changed)) { continue }
+                    if (
+                        $candidate -eq $changed -or
+                        $candidate.StartsWith("$changed/") -or
+                        $changed.StartsWith("$candidate/")
+                    ) {
+                        $candidate
+                        break
+                    }
+                }
+            }
+        ) | Sort-Object -Unique
+        return [PSCustomObject]@{ ProbeOk = $true; Files = @($files) }
+    } catch {
+        return [PSCustomObject]@{ ProbeOk = $false; Files = @('residue-probe-exception') }
+    }
+}
+
+function Test-RepoClean {
+    param([Parameter(Mandatory)][string]$RepoPath, [bool]$WhatIfMode = $false, [bool]$InjectedDirtyState = $false)
+    $residue = Get-RepoResidue -RepoPath $RepoPath -WhatIfMode $WhatIfMode -InjectedDirtyState $InjectedDirtyState
+    return $residue.ProbeOk -and @($residue.Files).Count -eq 0
 }
 
 function Get-CommitsBehind {
@@ -835,7 +875,8 @@ function Get-CommitsBehind {
         & git -C $RepoPath fetch public 2>$null | Out-Null
         if ($LASTEXITCODE -ne 0) { return -1 }
         $count = & git -C $RepoPath rev-list --count HEAD..public/master 2>$null
-        return if ($LASTEXITCODE -eq 0) { [int]$count } else { -1 }
+        if ($LASTEXITCODE -eq 0) { return [int]$count }
+        return -1
     } catch {
         return -1
     }
@@ -844,13 +885,13 @@ function Get-CommitsBehind {
 function Invoke-GitPullFfOnly {
     <#
     .SYNOPSIS
-    Runs git pull --ff-only in the repo, returning $true if successful, $false otherwise.
-    -WhatIf mode is a no-op (returns success).
+    Fast-forwards the checked-out branch to the exact already-fetched public/master
+    ref, returning $true if successful. -WhatIf mode is a no-op.
     #>
     param([Parameter(Mandatory)][string]$RepoPath, [bool]$WhatIfMode = $false)
     if ($WhatIfMode) { return $true }
     try {
-        $output = & git -C $RepoPath pull --ff-only 2>&1
+        $output = & git -C $RepoPath merge --ff-only public/master 2>&1
         return $LASTEXITCODE -eq 0
     } catch {
         return $false
@@ -882,12 +923,20 @@ function Invoke-FreshnessWatchdogTick {
 
     # Fetch and check status
     $behind = if ($InjectedCommitsBehind -ge 0) { $InjectedCommitsBehind } else { Get-CommitsBehind -RepoPath $RepoPath -WhatIfMode $WhatIfMode }
-    if ($behind -le 0) {
+    if ($behind -lt 0) {
+        Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+            ts = $Now.ToString('o'); source = 'watchdog'
+            path = $RepoPath; line = 'FRESHNESS PROBE FAILED: public/master fetch or comparison failed'
+        }
+        return [PSCustomObject]@{ Action = 'probe-failed'; Detail = 'public/master fetch or comparison failed' }
+    }
+    if ($behind -eq 0) {
         return [PSCustomObject]@{ Action = 'current'; Detail = "tree is current" }
     }
 
     $headSha = Get-RepoHeadSha -RepoPath $RepoPath -WhatIfMode $WhatIfMode
-    $clean = if ($InjectedDirtyState -or -not $WhatIfMode) { Test-RepoClean -RepoPath $RepoPath -WhatIfMode $WhatIfMode -InjectedDirtyState $InjectedDirtyState } else { $true }
+    $residue = Get-RepoResidue -RepoPath $RepoPath -WhatIfMode $WhatIfMode -InjectedDirtyState $InjectedDirtyState
+    $clean = $residue.ProbeOk -and @($residue.Files).Count -eq 0
 
     if ($clean) {
         $pulled = Invoke-GitPullFfOnly -RepoPath $RepoPath -WhatIfMode $WhatIfMode
@@ -906,9 +955,8 @@ function Invoke-FreshnessWatchdogTick {
             return [PSCustomObject]@{ Action = 'pull-failed'; Detail = "git pull exited non-zero" }
         }
     } else {
-        # Dirty or collisions: enumerate the problematic files
-        $status = & git -C $RepoPath status --porcelain 2>$null
-        $files = @($status -split "`n" | Where-Object { $_ } | ForEach-Object { $_.Substring(3) })
+        # Dirty, colliding, or uninspectable: preserve everything and disclose residue.
+        $files = @($residue.Files)
         $fileList = $files -join '; '
         Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
             ts = $Now.ToString('o'); source = 'watchdog'

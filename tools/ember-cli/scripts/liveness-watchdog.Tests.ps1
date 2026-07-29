@@ -717,6 +717,149 @@ Describe 'Freshness leg (issue #545): auto-pull main tree from public/master' {
         $result = Invoke-GitPullFfOnly -RepoPath $repoPath -WhatIfMode $true
         $result | Should Be $true
     }
+
+    It 'real clean repo advances from public/master even when origin/master is stale' {
+        $seed = Join-Path $scratch 'seed'
+        $origin = Join-Path $scratch 'origin.git'
+        $public = Join-Path $scratch 'public.git'
+        $producer = Join-Path $scratch 'producer'
+        $main = Join-Path $scratch 'main'
+
+        & git init $seed | Out-Null
+        & git -C $seed config user.email 'watchdog-test@ember.local'
+        & git -C $seed config user.name 'Ember Watchdog Test'
+        'base' | Set-Content -Path (Join-Path $seed 'base.txt') -Encoding utf8
+        & git -C $seed add base.txt
+        & git -C $seed commit -m 'base' | Out-Null
+        & git -C $seed branch -M master
+        & git clone --bare $seed $origin | Out-Null
+        & git clone --bare $seed $public | Out-Null
+        & git clone $public $producer | Out-Null
+        & git -C $producer config user.email 'watchdog-test@ember.local'
+        & git -C $producer config user.name 'Ember Watchdog Test'
+        'public advance' | Set-Content -Path (Join-Path $producer 'advance.txt') -Encoding utf8
+        & git -C $producer add advance.txt
+        & git -C $producer commit -m 'public advance' | Out-Null
+        & git -C $producer push origin master | Out-Null
+        $expected = (& git -C $producer rev-parse HEAD).Trim()
+
+        & git clone $origin $main | Out-Null
+        & git -C $main remote add public $public
+
+        $result = Invoke-FreshnessWatchdogTick -Now ([datetime]::UtcNow) `
+            -State (Get-DefaultWatchdogState) -RepoPath $main `
+            -MarkerPath $markerPath -ActivityLedgerPath $ledgerPath
+
+        $result.Action | Should Be 'advanced'
+        (& git -C $main rev-parse HEAD).Trim() | Should Be $expected
+        (Get-Content -Path (Join-Path $main 'advance.txt') -Raw).Trim() | Should Be 'public advance'
+    }
+
+    It 'non-colliding untracked files do not prevent a public/master fast-forward' {
+        $seed = Join-Path $scratch 'seed-untracked'
+        $public = Join-Path $scratch 'public-untracked.git'
+        $producer = Join-Path $scratch 'producer-untracked'
+        $main = Join-Path $scratch 'main-untracked'
+
+        & git init $seed | Out-Null
+        & git -C $seed config user.email 'watchdog-test@ember.local'
+        & git -C $seed config user.name 'Ember Watchdog Test'
+        'base' | Set-Content -Path (Join-Path $seed 'base.txt') -Encoding utf8
+        & git -C $seed add base.txt
+        & git -C $seed commit -m 'base' | Out-Null
+        & git -C $seed branch -M master
+        & git clone --bare $seed $public | Out-Null
+        & git clone $public $producer | Out-Null
+        & git -C $producer config user.email 'watchdog-test@ember.local'
+        & git -C $producer config user.name 'Ember Watchdog Test'
+        'public advance' | Set-Content -Path (Join-Path $producer 'advance.txt') -Encoding utf8
+        & git -C $producer add advance.txt
+        & git -C $producer commit -m 'public advance' | Out-Null
+        & git -C $producer push origin master | Out-Null
+        $expected = (& git -C $producer rev-parse HEAD).Trim()
+
+        & git clone $public $main | Out-Null
+        & git -C $main remote rename origin public
+        & git -C $main reset --hard HEAD~1 | Out-Null
+        $baseHead = (& git -C $main rev-parse HEAD).Trim()
+        'operator collision' | Set-Content -Path (Join-Path $main 'advance.txt') -Encoding utf8
+
+        $collision = Invoke-FreshnessWatchdogTick -Now ([datetime]::UtcNow) `
+            -State (Get-DefaultWatchdogState) -RepoPath $main `
+            -MarkerPath $markerPath -ActivityLedgerPath $ledgerPath
+
+        $collision.Action | Should Be 'residue'
+        (& git -C $main rev-parse HEAD).Trim() | Should Be $baseHead
+        (Get-Content -Path (Join-Path $main 'advance.txt') -Raw).Trim() | Should Be 'operator collision'
+        (Get-Content -Path $ledgerPath -Raw) | Should Match 'advance.txt'
+        Remove-Item -Path (Join-Path $main 'advance.txt') -Force
+        Remove-Item -Path $ledgerPath -Force
+        'local note' | Set-Content -Path (Join-Path $main 'operator-note.txt') -Encoding utf8
+
+        $result = Invoke-FreshnessWatchdogTick -Now ([datetime]::UtcNow) `
+            -State (Get-DefaultWatchdogState) -RepoPath $main `
+            -MarkerPath $markerPath -ActivityLedgerPath $ledgerPath
+
+        $result.Action | Should Be 'advanced'
+        (& git -C $main rev-parse HEAD).Trim() | Should Be $expected
+        (Get-Content -Path (Join-Path $main 'operator-note.txt') -Raw).Trim() | Should Be 'local note'
+    }
+
+    It 'real dirty tracked file is preserved and disclosed instead of fast-forwarded' {
+        $seed = Join-Path $scratch 'seed-dirty'
+        $public = Join-Path $scratch 'public-dirty.git'
+        $producer = Join-Path $scratch 'producer-dirty'
+        $main = Join-Path $scratch 'main-dirty'
+
+        & git init $seed | Out-Null
+        & git -C $seed config user.email 'watchdog-test@ember.local'
+        & git -C $seed config user.name 'Ember Watchdog Test'
+        'base' | Set-Content -Path (Join-Path $seed 'base.txt') -Encoding utf8
+        & git -C $seed add base.txt
+        & git -C $seed commit -m 'base' | Out-Null
+        & git -C $seed branch -M master
+        & git clone --bare $seed $public | Out-Null
+        & git clone $public $main | Out-Null
+        & git -C $main remote rename origin public
+        $originalHead = (& git -C $main rev-parse HEAD).Trim()
+
+        & git clone $public $producer | Out-Null
+        & git -C $producer config user.email 'watchdog-test@ember.local'
+        & git -C $producer config user.name 'Ember Watchdog Test'
+        'public advance' | Set-Content -Path (Join-Path $producer 'advance.txt') -Encoding utf8
+        & git -C $producer add advance.txt
+        & git -C $producer commit -m 'public advance' | Out-Null
+        & git -C $producer push origin master | Out-Null
+
+        'operator edit' | Set-Content -Path (Join-Path $main 'base.txt') -Encoding utf8
+        $result = Invoke-FreshnessWatchdogTick -Now ([datetime]::UtcNow) `
+            -State (Get-DefaultWatchdogState) -RepoPath $main `
+            -MarkerPath $markerPath -ActivityLedgerPath $ledgerPath
+
+        $result.Action | Should Be 'residue'
+        (& git -C $main rev-parse HEAD).Trim() | Should Be $originalHead
+        (Get-Content -Path (Join-Path $main 'base.txt') -Raw).Trim() | Should Be 'operator edit'
+        $event = Get-Content -Path $ledgerPath | ConvertFrom-Json
+        $event.line | Should Match 'RESIDUE'
+        $event.line | Should Match 'base.txt'
+    }
+
+    It 'missing public remote is a loud probe failure, never a current result' {
+        $repo = Join-Path $scratch 'missing-public'
+        & git init $repo | Out-Null
+        & git -C $repo config user.email 'watchdog-test@ember.local'
+        & git -C $repo config user.name 'Ember Watchdog Test'
+        'base' | Set-Content -Path (Join-Path $repo 'base.txt') -Encoding utf8
+        & git -C $repo add base.txt
+        & git -C $repo commit -m 'base' | Out-Null
+
+        $result = Invoke-FreshnessWatchdogTick -Now ([datetime]::UtcNow) `
+            -State (Get-DefaultWatchdogState) -RepoPath $repo `
+            -MarkerPath $markerPath -ActivityLedgerPath $ledgerPath
+
+        $result.Action | Should Be 'probe-failed'
+        (Get-Content -Path $ledgerPath -Raw) | Should Match 'FRESHNESS PROBE FAILED'
+    }
 }
 
 Describe 'Marker-expiry enforcement leg (issue #464 receipt fix)' {
