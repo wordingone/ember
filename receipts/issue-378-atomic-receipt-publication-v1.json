@@ -1,0 +1,67 @@
+{
+  "schema_version": "ember-issue-acceptance-replay-v1",
+  "ticket": "EMBER-ISSUE-378-ATOMIC-RECEIPT-PUBLICATION",
+  "ts": "20260728T235900Z",
+  "sha_convention": "sha256 of file bytes on disk as-is",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "repository": "wordingone/ember",
+  "issue": 378,
+  "base_commit": "1b78d347a564ede9585ef0fe1cbe102f8179f119",
+  "implementation_commit": "970fe5970bca281c0b210bd8f8a757eb3db81be9",
+  "claim_boundary": "atomic checked receipt publication and last-known-good preservation only; no historical receipt restoration, total custody-green, training, checkpoint, benchmark, admission, sufficient-pretraining, or capability claim",
+  "implementation_scope": {
+    "writer": "scripts/receipt_write.py",
+    "writer_sha256": "d2150b2c8ea774064a9a4aa278f89294f5fa6046650ee2193a00157646760b1b",
+    "regression_tests": "tests/test_receipt_write_atomic.py",
+    "regression_tests_sha256": "68ff420087b240ef218b03d0c017e6097bec3c1bea96cc68f55d0454d65d69ce",
+    "staging": "private same-directory tempfile",
+    "publication": "flush, fsync, schema validation, then one same-volume os.replace",
+    "invalid_candidate": "move staged candidate to .INVALID.quarantine without replacing canonical bytes",
+    "serialization_failure": "remove private staging file without replacing canonical bytes"
+  },
+  "replay": {
+    "atomic_writer_regressions": {
+      "command": "python -B -m pytest -q tests/test_receipt_write_atomic.py",
+      "passed": 3,
+      "failed": 0
+    },
+    "legacy_writer_selftest": {
+      "command": "python -B scripts/receipt_write.py --selftest",
+      "result": "RECEIPT_WRITE_SELFTEST_PASS"
+    },
+    "focused_custody_tests": {
+      "command": "python -B -m pytest -q scripts/ember_totality/c_custody_sidecar_agewindow_test.py scripts/ember_totality/c_custody_dictkey_citations_test.py scripts/ember_totality/c_custody_pattern_citation_test.py scripts/ember_totality/c_custody_twin_resolution_test.py scripts/ember_totality/c_custody_extraction_cures_test.py",
+      "passed": 29,
+      "failed": 0
+    },
+    "comprehensive_receipt_custody_test": {
+      "command": "python -B -m pytest -q scripts/ember_totality/c_comprehensive_receipts_custody_test.py",
+      "passed": 1,
+      "failed": 0
+    },
+    "source_compile": "PASS",
+    "diff_check": "PASS",
+    "repository_guard": {
+      "command": "tools/repo-guard.sh --base 1b78d347a564ede9585ef0fe1cbe102f8179f119",
+      "result": "PASS"
+    }
+  },
+  "disclosed_preexisting_state": {
+    "c_custody_probe": "RED",
+    "cited_missing": 36,
+    "untracked": 0,
+    "unparseable": 0,
+    "introduced_by_this_change": false
+  },
+  "acceptance_boundary": {
+    "valid_candidate_atomic_replace": true,
+    "invalid_candidate_preserves_canonical": true,
+    "invalid_candidate_quarantined": true,
+    "serializer_failure_preserves_canonical": true,
+    "private_staging_cleanup": true,
+    "public_github_guards": "PENDING",
+    "cross_review": "NOT_CROSS_REVIEWED"
+  }
+}
