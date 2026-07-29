@@ -1,0 +1,36 @@
+{
+  "ticket": "EMBER-700",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "receipt_class": "IND-3",
+  "leg": "interrupted_resume",
+  "producer": "ind3_operate_producer.py",
+  "interrupted_pid": 32296,
+  "interrupted_launcher_pid": 38676,
+  "interrupt_method": "Windows TerminateProcess on exact producer-owned worker PID and live launcher PID (hard, ungraceful; no stop marker)",
+  "interrupt_command_exit_code": 0,
+  "terminated_pids": [
+    32296,
+    38676
+  ],
+  "verified_dead_via": "Windows OpenProcess + GetExitCodeProcess for worker and launcher PIDs",
+  "interrupted_pid_verified_dead": true,
+  "interrupted_launcher_pid_verified_dead": true,
+  "resumed_pid": 8476,
+  "resumed_ready_heartbeat": {
+    "pid": 8476,
+    "ts": "2026-07-29T09:44:48.164Z",
+    "status": "ready"
+  },
+  "resumed_verified_alive": true,
+  "final_cleanup": {
+    "cleaned_pid": 8476,
+    "exit_code": 0,
+    "post_stop_survivors": []
+  },
+  "doc_pointer": "docs/operator/operate.md",
+  "ts": "20260729T094448Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
+}

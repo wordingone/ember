@@ -1,0 +1,28 @@
+{
+  "ticket": "EMBER-700",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "receipt_class": "IND-3",
+  "leg": "teardown",
+  "producer": "ind3_operate_producer.py",
+  "torn_down_pid": 46212,
+  "stop_method": "graceful marker-file stop (stopmarker written, worker calls handle.stop() and exits 0)",
+  "exit_code": 0,
+  "final_heartbeat": {
+    "pid": 46212,
+    "ts": "2026-07-29T09:44:47.711Z",
+    "status": "stopped"
+  },
+  "post_stop_process_table": {
+    "checked_pid": 46212,
+    "method": "Windows OpenProcess + GetExitCodeProcess (PROCESS_QUERY_LIMITED_INFORMATION)",
+    "survivors": [],
+    "orphaned_gpu_state": false,
+    "note": "no GPU or model server is touched anywhere in this leg; orphaned_gpu_state is trivially false"
+  },
+  "doc_pointer": "docs/operator/operate.md",
+  "ts": "20260729T094447Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
+}
