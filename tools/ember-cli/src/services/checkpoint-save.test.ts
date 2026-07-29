@@ -10,11 +10,18 @@
 // injection seam commands/model.test.ts already uses for `resolveModelIdentity`.
 
 import { describe, it, expect } from "bun:test";
+import { createHash } from "crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { copyFile, mkdir, rename, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { saveCheckpoint, type CheckpointSaveDeps } from "./checkpoint-save.ts";
+import {
+  saveCheckpoint,
+  saveCheckpointBundle,
+  type CheckpointSaveDeps,
+  type ModernCheckpointSaveDeps,
+} from "./checkpoint-save.ts";
+import { verifyCheckpointBundle } from "./checkpoint-load.ts";
 import type { ResolvedModelIdentity } from "../commands/model.ts";
 
 const VALID_IDENTITY: ResolvedModelIdentity = {
@@ -44,6 +51,223 @@ function realFsDeps(resolveIdentity: CheckpointSaveDeps["resolveIdentity"]): Che
     stagingPath: (targetDir) => `${targetDir}.tmp-test`,
   };
 }
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function writeSparseBundle(root: string): string {
+  mkdirSync(root);
+  const payloads = new Map<string, Buffer>([
+    ["shared-model.pt", Buffer.from("shared-model")],
+    ["optimizer-state.pt", Buffer.from("optimizer-state")],
+    ["replay-state.pt", Buffer.from("replay-state")],
+    ["expert-vision.pt", Buffer.from("vision")],
+    ["expert-audio.pt", Buffer.from("audio")],
+    ["expert-reasoning.pt", Buffer.from("reasoning")],
+    ["expert-tool.pt", Buffer.from("tool")],
+  ]);
+  const shards = [...payloads].map(([path, bytes]) => ({
+    path,
+    bytes: bytes.length,
+    sha256: sha256(bytes),
+  }));
+  for (const [path, bytes] of payloads) {
+    writeFileSync(join(root, path), bytes);
+  }
+  const manifestBytes = Buffer.from(
+    `${JSON.stringify({ schema_version: "ember-sparse-checkpoint-v5", shards })}\n`,
+    "utf8",
+  );
+  writeFileSync(join(root, "checkpoint-manifest.json"), manifestBytes);
+  return sha256(manifestBytes);
+}
+
+function realModernDeps(
+  overrides: Partial<ModernCheckpointSaveDeps> = {},
+): ModernCheckpointSaveDeps {
+  return {
+    verifyBundle: verifyCheckpointBundle,
+    assertSafeDestination: async () => {},
+    mkdirStaging: (path) => mkdir(path),
+    copyFile: (src, dest) => copyFile(src, dest),
+    publishNoReplace: (from, to) => rename(from, to),
+    rmStaging: (path) => rm(path, { recursive: true, force: true }),
+    stagingPath: (targetDir) => `${targetDir}.tmp-modern-test`,
+    ...overrides,
+  };
+}
+
+describe("saveCheckpointBundle (modern governed sparse bundle)", () => {
+  it("round-trips a v5 bundle through the unchanged production verifier and writes the manifest last", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-positive-"));
+    try {
+      const source = join(root, "source");
+      const expectedManifestSha256 = writeSparseBundle(source);
+      const target = join(root, "target");
+      const copied: string[] = [];
+      const deps = realModernDeps({
+        copyFile: async (src, dest) => {
+          copied.push(src.split(/[\\/]/).at(-1) ?? "");
+          await copyFile(src, dest);
+        },
+      });
+
+      const result = await saveCheckpointBundle(
+        source,
+        target,
+        expectedManifestSha256,
+        deps,
+      );
+      const verified = await verifyCheckpointBundle(target);
+
+      expect(result.manifestSha256).toBe(expectedManifestSha256);
+      expect(result.schemaVersion).toBe("ember-sparse-checkpoint-v5");
+      expect(result.artifactCount).toBe(7);
+      expect(verified.manifestSha256).toBe(expectedManifestSha256);
+      expect(copied.at(-1)).toBe("checkpoint-manifest.json");
+      expect(existsSync(`${target}.tmp-modern-test`)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a structurally valid but non-selected checkpoint before writing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-pin-"));
+    try {
+      const source = join(root, "source");
+      writeSparseBundle(source);
+      const target = join(root, "target");
+      let mkdirCalled = false;
+      const deps = realModernDeps({
+        mkdirStaging: async () => {
+          mkdirCalled = true;
+        },
+      });
+
+      await expect(
+        saveCheckpointBundle(source, target, "f".repeat(64), deps),
+      ).rejects.toThrow(/selected checkpoint digest/i);
+      expect(mkdirCalled).toBe(false);
+      expect(existsSync(target)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses hostile shard substitution under an unchanged manifest before publication", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-tamper-"));
+    try {
+      const source = join(root, "source");
+      const expectedManifestSha256 = writeSparseBundle(source);
+      const target = join(root, "target");
+      let copyCalls = 0;
+      let publishCalled = false;
+      const deps = realModernDeps({
+        copyFile: async (src, dest) => {
+          copyCalls++;
+          await copyFile(src, dest);
+          if (copyCalls === 1) {
+            writeFileSync(join(source, "expert-tool.pt"), "hostile-substitution");
+          }
+        },
+        publishNoReplace: async () => {
+          publishCalled = true;
+        },
+      });
+
+      await expect(
+        saveCheckpointBundle(source, target, expectedManifestSha256, deps),
+      ).rejects.toThrow(/tampered|sha-256|changed|match/i);
+      expect(publishCalled).toBe(false);
+      expect(existsSync(target)).toBe(false);
+      expect(existsSync(`${target}.tmp-modern-test`)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses extra bundle entries through the unchanged verifier before any write", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-extra-"));
+    try {
+      const source = join(root, "source");
+      const expectedManifestSha256 = writeSparseBundle(source);
+      writeFileSync(join(source, "unlisted.pt"), "not in manifest");
+      let mkdirCalled = false;
+
+      await expect(
+        saveCheckpointBundle(
+          source,
+          join(root, "target"),
+          expectedManifestSha256,
+          realModernDeps({
+            mkdirStaging: async () => {
+              mkdirCalled = true;
+            },
+          }),
+        ),
+      ).rejects.toThrow(/unexpected checkpoint bundle entry/i);
+      expect(mkdirCalled).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves a colliding destination and removes staged bytes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-collision-"));
+    try {
+      const source = join(root, "source");
+      const expectedManifestSha256 = writeSparseBundle(source);
+      const target = join(root, "target");
+      mkdirSync(target);
+      writeFileSync(join(target, "sentinel"), "pre-existing");
+
+      await expect(
+        saveCheckpointBundle(
+          source,
+          target,
+          expectedManifestSha256,
+          realModernDeps({
+            publishNoReplace: async () => {
+              throw new Error("destination collision");
+            },
+          }),
+        ),
+      ).rejects.toThrow(/destination collision/i);
+      expect(readFileSync(join(target, "sentinel"), "utf8")).toBe("pre-existing");
+      expect(existsSync(`${target}.tmp-modern-test`)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails before staging when destination ancestry is unsafe", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ckpt-save-modern-reparse-"));
+    try {
+      const source = join(root, "source");
+      const expectedManifestSha256 = writeSparseBundle(source);
+      let mkdirCalled = false;
+      await expect(
+        saveCheckpointBundle(
+          source,
+          join(root, "unsafe-parent", "target"),
+          expectedManifestSha256,
+          realModernDeps({
+            assertSafeDestination: async () => {
+              throw new Error("destination ancestry contains a reparse surface");
+            },
+            mkdirStaging: async () => {
+              mkdirCalled = true;
+            },
+          }),
+        ),
+      ).rejects.toThrow(/reparse surface/i);
+      expect(mkdirCalled).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("saveCheckpoint (core)", () => {
   it("positive: a valid source checkpoint snapshots -- manifest validates, returns the envelope sha, target holds checkpoint + manifest", async () => {

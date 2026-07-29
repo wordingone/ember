@@ -238,7 +238,7 @@ export function classifyActionFrame(
     observe: /watching state[\\/]ember-telemetry/i,
     pause: /pause run=smoke-run/i,
     resume: /resume run=smoke-run/i,
-    save: /legacy checkpoint snapshot saved \(not \/model checkpoint load compatible\)/i,
+    save: /modern governed sparse checkpoint saved: [0-9a-f]{64}/i,
     terminate: /stop run=smoke-run/i,
     reload: /checkpoint loaded/i,
     continue: /continu(?:e|ed|ing)/i,
@@ -250,7 +250,7 @@ export function classifyActionFrame(
 export function saveActionCompletionObserved(frame: string, delta: string): boolean {
   const observed = `${frame}\n${delta}`;
   return (
-    observed.includes("legacy checkpoint snapshot saved (not /model checkpoint load compatible)") ||
+    /modern governed sparse checkpoint saved: [0-9a-f]{64}/i.test(observed) ||
     /error: failed to save checkpoint/i.test(observed)
   );
 }
@@ -260,15 +260,17 @@ export function actionOutputExcerpt(
   _frame: string,
   delta: string,
 ): string {
-  const saveQuote = "legacy checkpoint snapshot saved (not /model checkpoint load compatible)";
-  if (action === "save" && delta.includes(saveQuote)) return saveQuote;
+  const modernSave = delta.match(
+    /modern governed sparse checkpoint saved: [0-9a-f]{64}/i,
+  )?.[0];
+  if (action === "save" && modernSave) return modernSave;
   const lines = delta.split("\n");
   const patterns: Record<Exclude<LifecycleAction, "launch">, RegExp> = {
     train: /launch-packet/i,
     observe: /watching state\/ember-telemetry/i,
     pause: /pause run=/i,
     resume: /resume run=/i,
-    save: /legacy checkpoint snapshot saved/i,
+    save: /modern governed sparse checkpoint saved|error: failed to save checkpoint/i,
     terminate: /stop run=/i,
     reload: /error: failed to load checkpoint/i,
     continue: /unknown command|not registered/i,
