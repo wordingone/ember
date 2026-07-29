@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // message-renderers.ts — conversation message rendering layer.
 // Turns the session's JSONL stream into terminal output for every message type.
 
@@ -371,65 +375,10 @@ export function UserCommandMessage({ command }: { command: string }): React.Reac
   return React.createElement(Text, { dimColor: true }, `/ ${command}`);
 }
 
-// ---------------------------------------------------------------------------
-// UserTeammateMessage (AC11)
-// ---------------------------------------------------------------------------
-
-export interface TeammateProtocol {
-  type: "task_assignment" | "plan_approval_request" | "plan_approval_response" |
-        "shutdown_request" | "shutdown_rejected" | string;
-  summary?: string;
-  [key: string]: unknown;
-}
-
-export interface UserTeammateMessageProps {
-  teammateName:  string;
-  teammateColor: string;
-  content:       string;
-  isExpanded?:   boolean;
-}
-
-export function parseTeammateContent(content: string): TeammateProtocol | null {
-  try {
-    const parsed = JSON.parse(content) as unknown;
-    if (typeof parsed === "object" && parsed !== null && "type" in parsed) {
-      return parsed as TeammateProtocol;
-    }
-  } catch {
-    // not structured JSON
-  }
-  return null;
-}
-
-export function UserTeammateMessage(props: UserTeammateMessageProps): React.ReactElement {
-  const { teammateName, teammateColor, content, isExpanded = false } = props;
-  const protocol = parseTeammateContent(content);
-
-  // AC11: header shows teammate name in their color
-  const header = React.createElement(Box, { flexDirection: "row" },
-    React.createElement(Text, { color: teammateColor, bold: true }, teammateName),
-    protocol?.type
-      ? React.createElement(Text, { dimColor: true }, ` · ${protocol.type}`)
-      : null,
-  );
-
-  if (protocol?.type === "task_assignment") {
-    // AC11: collapsible summary; chevron (›) expands to full content
-    const summary = protocol.summary ?? "(no summary)";
-    return React.createElement(Box, { flexDirection: "column" },
-      header,
-      React.createElement(Box, { flexDirection: "row" },
-        React.createElement(Text, { dimColor: true }, isExpanded ? "‹ " : "› "),
-        React.createElement(Text, null, isExpanded ? content : summary),
-      ),
-    );
-  }
-
-  return React.createElement(Box, { flexDirection: "column" },
-    header,
-    React.createElement(Text, null, isExpanded ? content : (protocol?.summary ?? content)),
-  );
-}
+// Issue #530: the former AC11 teammate/task-assignment renderer had no producer,
+// SessionMessage variant, or renderMsgDispatch consumer anywhere in the live
+// application. Keep it removed until a real protocol event and dispatch path
+// exist; component-only tests must not stand in for reachable behavior.
 
 // ---------------------------------------------------------------------------
 // AttachmentMessage (AC12)
