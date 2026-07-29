@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c_custody_sidecar_agewindow_test.py -- Tests for sidecar + age-window classification (issue #401).
 
 Verifies:
@@ -39,7 +42,11 @@ def _run_custody_probe(repo_root: Path) -> tuple[str, int]:
         capture_output=True,
         text=True,
         timeout=60,
-        env={**os.environ, "EMBER_TOTALITY_ROOT": str(repo_root)},
+        env={
+            **os.environ,
+            "EMBER_TOTALITY_ROOT": str(repo_root),
+            "PYTHONPATH": str(REPO_ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""),
+        },
     )
     return result.stdout.strip(), result.returncode
 
