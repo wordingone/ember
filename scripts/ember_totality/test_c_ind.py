@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_ind.py -- STATUS PROBE for Ember goal condition C-IND.
 
 Condition (authoritative, GOAL.md §1 item 6 / §4.0 amendment 10;
@@ -257,32 +260,56 @@ def _check_ind2(root: Path):
 
 def _validate_ind3(entries, root: Path):
     legs: dict[str, tuple[Path, dict]] = {}
-    orphan_hits = []
+    failures: list[str] = []
     for p, obj in entries:
         leg = obj.get("leg")
-        if leg == "teardown":
+        rel = _rel(p, root)
+        if leg == "launch":
+            if obj.get("verified_alive") is not True:
+                failures.append(f"{rel}: verified_alive is not true")
+                continue
+            heartbeat = obj.get("heartbeat_ready")
+            if not isinstance(heartbeat, dict) or heartbeat.get("status") != "ready":
+                failures.append(f"{rel}: heartbeat_ready is not ready")
+                continue
+            legs.setdefault("launch", (p, obj))
+        elif leg == "teardown":
             pst = obj.get("post_stop_process_table")
-            if pst is None:
-                orphan_hits.append(f"{_rel(p, root)}: post_stop_process_table ABSENT")
+            if not isinstance(pst, dict):
+                failures.append(f"{rel}: post_stop_process_table absent or malformed")
                 continue
-            survivors = pst.get("survivors") if isinstance(pst, dict) else pst
-            orphaned_gpu = pst.get("orphaned_gpu_state", False) if isinstance(pst, dict) else False
-            if survivors is None:
-                orphan_hits.append(f"{_rel(p, root)}: post_stop_process_table has no 'survivors' field")
+            survivors = pst.get("survivors")
+            if survivors is None or survivors or pst.get("orphaned_gpu_state", False):
+                failures.append(f"{rel}: post_stop_process_table shows unknown/surviving process or orphaned GPU state")
                 continue
-            if survivors or orphaned_gpu:
-                orphan_hits.append(f"{_rel(p, root)}: post_stop_process_table shows survivors/orphaned GPU state")
+            heartbeat = obj.get("final_heartbeat")
+            if obj.get("exit_code") != 0 or not isinstance(heartbeat, dict) or heartbeat.get("status") != "stopped":
+                failures.append(f"{rel}: teardown exit_code/final_heartbeat is not clean")
                 continue
             legs.setdefault("teardown", (p, obj))
-        elif leg in ("launch", "interrupted_resume"):
-            legs.setdefault(leg, (p, obj))
-    if orphan_hits:
-        return False, {"invalid_teardown_orphan"}, "; ".join(orphan_hits)
-    missing = [l for l in ("launch", "teardown", "interrupted_resume") if l not in legs]
+        elif leg == "interrupted_resume":
+            cleanup = obj.get("final_cleanup")
+            heartbeat = obj.get("resumed_ready_heartbeat")
+            checks = {
+                "interrupt_command_exit_code": obj.get("interrupt_command_exit_code") == 0,
+                "interrupted_pid_verified_dead": obj.get("interrupted_pid_verified_dead") is True,
+                "interrupted_launcher_pid_verified_dead": obj.get("interrupted_launcher_pid_verified_dead") is True,
+                "resumed_verified_alive": obj.get("resumed_verified_alive") is True,
+                "resumed_ready_heartbeat": isinstance(heartbeat, dict) and heartbeat.get("status") == "ready",
+                "final_cleanup": isinstance(cleanup, dict) and cleanup.get("exit_code") == 0,
+                "post_stop_survivors": isinstance(cleanup, dict) and cleanup.get("post_stop_survivors") == [],
+            }
+            failed = [name for name, passed in checks.items() if not passed]
+            if failed:
+                failures.append(f"{rel}: invalid {', '.join(failed)}")
+                continue
+            legs.setdefault("interrupted_resume", (p, obj))
+    if failures:
+        return False, {"invalid_operate_evidence"}, "; ".join(failures)
+    missing = [leg for leg in ("launch", "teardown", "interrupted_resume") if leg not in legs]
     if missing:
         return False, set(), f"IND-3 missing leg(s): {', '.join(missing)}"
-    return True, set(), "IND-3 launch + clean teardown + interrupted-resume all present"
-
+    return True, set(), "IND-3 launch + clean teardown + interrupted-resume all executed and independently verified"
 
 # --- IND-4 CUSTOMIZE + EXPERIMENT ---------------------------------------------
 
