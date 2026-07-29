@@ -1,0 +1,134 @@
+{
+  "claim_boundary": {
+    "borrowed_model_credit_claim": false,
+    "current_owned_synthetic_cpu_training_and_inference_replayed": true,
+    "external_checkpoint_loaded": false,
+    "gpu_used": false,
+    "historical_seven_file_landing_revalidated": true,
+    "issue_210_whole_closure_claim": false,
+    "issue_47_completion_claim": false,
+    "issue_700_completion_claim": false,
+    "real_27b_feasibility_claim": false
+  },
+  "current_source_revalidation": {
+    "compiled_files": 7,
+    "repaired_files": 1,
+    "rows": [
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "path": "scripts/ember_cbase_avir_augment.py",
+        "sha256": "2e8f3241383c3756ec72384a81be48b5b991e98f65ff48cff5312f0e55b2aba8"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "path": "scripts/ember_cbase_launch.py",
+        "sha256": "63e209a00aeab971a26c4cd21681529d8f37bf84207abe7806e99e896b487181"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "path": "scripts/ember_cbase_s6_acceptance.py",
+        "sha256": "faae5f2b84cb59f3bff4a5834339141bb50827cbea707018323344681e1c34e3"
+      },
+      {
+        "disposition": "CURRENT_REPAIRED_OWNED_RANDOM_INIT",
+        "path": "scripts/r3_feasibility_probe.py",
+        "sha256": "86e50154acca419a91cc0c0c8d18d2d2773e2518362ac5a5b7abad1554d7cb1e"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "path": "scripts/test_ember_cbase_avir_augment.py",
+        "sha256": "24dee4ba50f18f64600115fdf465bbd907319b7e6d74fbfc812274c52253a84b"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "path": "scripts/test_ember_cbase_launch.py",
+        "sha256": "dfe827750ef7fbf072ce3676a66d6768a72408ddd6d05e789f5896946deb5e58"
+      },
+      {
+        "disposition": "UNCHANGED_FROM_LANDING",
+        "path": "scripts/test_ember_cbase_s6_acceptance.py",
+        "sha256": "674df8fb8a0585e06d22af6514852e7ad85906084e56e0b19729167d02146e6f"
+      }
+    ],
+    "unchanged_files": 6
+  },
+  "generated_at": "2026-07-29T13:50:05Z",
+  "goal_id": "EMBER-02",
+  "historical_receipt_sha256": "5ad3f57207f8e3016d8cbabc0a50612db511e92447124c7c88d68851852241bc",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "owned_synthetic_cpu_replay": {
+    "all_assertions_passed": true,
+    "generated_tokens": 64,
+    "model_source": {
+      "architecture": "LlamaForCausalLM",
+      "config": {
+        "bos_token_id": 1,
+        "eos_token_id": 2,
+        "hidden_size": 64,
+        "intermediate_size": 128,
+        "max_position_embeddings": 128,
+        "num_attention_heads": 4,
+        "num_hidden_layers": 2,
+        "num_key_value_heads": 2,
+        "pad_token_id": 0,
+        "tie_word_embeddings": false,
+        "vocab_size": 256
+      },
+      "external_checkpoint": null,
+      "external_model_id": null,
+      "source_kind": "OWNED_RANDOM_INIT"
+    },
+    "sha256": "ce739f29c98557ac04e0198f6f939ec4445939037babdf1b9501a7f0a0ed0e4d",
+    "training_grad_norm": 0.8500446547621436
+  },
+  "public_lineage": {
+    "candidate_count": 7,
+    "landing_commit": "70aefaa0a92fdebd376c068133749cc87760d074",
+    "rows": [
+      {
+        "current_sha256": "2e8f3241383c3756ec72384a81be48b5b991e98f65ff48cff5312f0e55b2aba8",
+        "landing_sha256": "2e8f3241383c3756ec72384a81be48b5b991e98f65ff48cff5312f0e55b2aba8",
+        "path": "scripts/ember_cbase_avir_augment.py"
+      },
+      {
+        "current_sha256": "63e209a00aeab971a26c4cd21681529d8f37bf84207abe7806e99e896b487181",
+        "landing_sha256": "63e209a00aeab971a26c4cd21681529d8f37bf84207abe7806e99e896b487181",
+        "path": "scripts/ember_cbase_launch.py"
+      },
+      {
+        "current_sha256": "faae5f2b84cb59f3bff4a5834339141bb50827cbea707018323344681e1c34e3",
+        "landing_sha256": "faae5f2b84cb59f3bff4a5834339141bb50827cbea707018323344681e1c34e3",
+        "path": "scripts/ember_cbase_s6_acceptance.py"
+      },
+      {
+        "current_sha256": "86e50154acca419a91cc0c0c8d18d2d2773e2518362ac5a5b7abad1554d7cb1e",
+        "landing_sha256": "bf820105546b549c49cd37030827bfae0ac3d6a35d4186aa4df44e23c1e1427e",
+        "path": "scripts/r3_feasibility_probe.py"
+      },
+      {
+        "current_sha256": "24dee4ba50f18f64600115fdf465bbd907319b7e6d74fbfc812274c52253a84b",
+        "landing_sha256": "24dee4ba50f18f64600115fdf465bbd907319b7e6d74fbfc812274c52253a84b",
+        "path": "scripts/test_ember_cbase_avir_augment.py"
+      },
+      {
+        "current_sha256": "dfe827750ef7fbf072ce3676a66d6768a72408ddd6d05e789f5896946deb5e58",
+        "landing_sha256": "dfe827750ef7fbf072ce3676a66d6768a72408ddd6d05e789f5896946deb5e58",
+        "path": "scripts/test_ember_cbase_launch.py"
+      },
+      {
+        "current_sha256": "674df8fb8a0585e06d22af6514852e7ad85906084e56e0b19729167d02146e6f",
+        "landing_sha256": "674df8fb8a0585e06d22af6514852e7ad85906084e56e0b19729167d02146e6f",
+        "path": "scripts/test_ember_cbase_s6_acceptance.py"
+      }
+    ]
+  },
+  "replay_command": "CUDA_VISIBLE_DEVICES='' python -B scripts/r3_feasibility_probe.py --dry-run --max-new-tokens 64",
+  "schema_version": "ember-land210j-public-revalidation/v1",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "subject_commit": "33027681a36ed351478e13ab05418b0698a00e15",
+  "ticket": "LAND210J-FAMILY3-STRAGGLERS",
+  "ts": "2026-07-29T13:50:05Z",
+  "verdict": "LAND210J_LINEAGE_REVALIDATED_AND_R3_DRYRUN_REPAIRED_TO_OWNED_RANDOM_INIT_CPU_PROOF",
+  "workstream_id": "EMBER-02A"
+}
