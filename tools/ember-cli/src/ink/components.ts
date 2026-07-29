@@ -282,7 +282,7 @@ export interface TextProps {
 }
 
 export function Text({ children, color, backgroundColor, bold, italic, underline,
-                       strikethrough, inverse, dimColor }: TextProps): React.ReactElement {
+                       strikethrough, inverse, dimColor, wrap = "wrap" }: TextProps): React.ReactElement {
   const colorStyle = resolveColor(color);
   const bgStyle    = resolveBgColor(backgroundColor);
   const style: Style = {
@@ -299,6 +299,7 @@ export function Text({ children, color, backgroundColor, bold, italic, underline
   return React.createElement("span", {
     "data-text": true,
     "data-style": JSON.stringify(style),
+    "data-text-wrap": wrap,
     style: {
       fontWeight:     bold      ? "bold"      : undefined,
       fontStyle:      italic    ? "italic"    : undefined,

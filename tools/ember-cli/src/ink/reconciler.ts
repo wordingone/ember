@@ -13,6 +13,7 @@ import {
   type RenderNode,
   type RenderNodeKind,
   type Renderer,
+  type TextWrapMode,
 } from "./rendering-pipeline.ts";
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
@@ -177,6 +178,11 @@ function extractInitialText(props: Props): string | undefined {
     return "\n".repeat(count);
   }
   return undefined;
+}
+
+function extractTextWrap(props: Props): TextWrapMode | undefined {
+  const value = props["data-text-wrap"];
+  return typeof value === "string" ? value as TextWrapMode : undefined;
 }
 
 /** Extracts border intent from a Box's data-attrs onto the render node, and
@@ -451,7 +457,7 @@ const hostConfig: any = {
     const kind  = inferKind(type, props);
     const style = extractStyle(props);
     const text  = extractInitialText(props);
-    const node  = makeNode(kind, { style, text });
+    const node  = makeNode(kind, { style, text, textWrap: extractTextWrap(props) });
     node.onClick = typeof props["onClick"] === "function"
       ? props["onClick"] as (event: TerminalEvent) => void
       : undefined;
@@ -520,6 +526,8 @@ const hostConfig: any = {
       : undefined;
     const newStyle = extractStyle(nextProps);
     if (newStyle !== undefined) instance.style = newStyle;
+    const newTextWrap = extractTextWrap(nextProps);
+    if (newTextWrap !== undefined) instance.textWrap = newTextWrap;
     const newText = extractInitialText(nextProps);
     if (newText !== undefined) instance.text = newText;
     if (instance.kind === "raw-ansi") {

@@ -964,13 +964,13 @@ export function OperatorSurfacePane({
       overflow: "hidden",
       paddingX: 1,
     },
-    React.createElement(Text, { key: "status", color: statusColor, bold: true }, snapshot.status),
+    React.createElement(Text, { key: "status", color: statusColor, bold: true, wrap: "truncate-end" }, snapshot.status),
     controlsElement,
-    ...disabledReasonLines.map((line) => React.createElement(Text, { key: `disabled-reason-${line}`, color: "yellow" }, line)),
-    ...compactMetrics.map((metric) => React.createElement(Text, { key: metric }, metric)),
-    React.createElement(Text, { key: "source", dimColor: true }, sourceLineText),
+    ...disabledReasonLines.map((line) => React.createElement(Text, { key: `disabled-reason-${line}`, color: "yellow", wrap: "truncate-end" }, line)),
+    ...compactMetrics.map((metric) => React.createElement(Text, { key: metric, wrap: "truncate-end" }, metric)),
+    React.createElement(Text, { key: "source", dimColor: true, wrap: "truncate-end" }, sourceLineText),
     ...visibleGraphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
-    React.createElement(Text, { key: "stream-title", color: "magenta", bold: true }, "ACTIVITY/EVENT FEED"),
+    React.createElement(Text, { key: "stream-title", color: "magenta", bold: true, wrap: "truncate-end" }, "ACTIVITY/EVENT FEED"),
     ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
   );
 
