@@ -316,6 +316,50 @@ describe("buildProductionCallModel — proactive prefill overflow guard (issue #
   });
 });
 
+describe("buildProductionCallModel — issue #267 external endpoint policy reaches the wire", () => {
+  const origFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+    delete process.env["EMBER_SAMPLING_PARAMS"];
+  });
+
+  it("normalizes a terminal /v1 and transmits max_tokens plus configured sampling", async () => {
+    let capturedUrl = "";
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = mock(async (url, init) => {
+      capturedUrl = String(url);
+      capturedBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return {
+        ok: true,
+        body: { getReader: () => makeSingleChunkReader() },
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+    process.env["EMBER_SAMPLING_PARAMS"] = JSON.stringify({
+      temperature: 0.55,
+      top_p: 0.9,
+      seed: 123,
+    });
+
+    const callModel = buildProductionCallModel({
+      serverUrl: "https://external.example/custom/v1/",
+      nCtx: 8192,
+    });
+    await callModel({
+      messages: [{ role: "user" as const, content: "hello" }],
+      systemPrompt: "test",
+      tools: [],
+      model: "external-model",
+      maxTokens: 777,
+    });
+
+    expect(capturedUrl).toBe("https://external.example/custom/v1/chat/completions");
+    expect(capturedBody["max_tokens"]).toBe(777);
+    expect(capturedBody["temperature"]).toBe(0.55);
+    expect(capturedBody["top_p"]).toBe(0.9);
+    expect(capturedBody["seed"]).toBe(123);
+  });
+});
+
 // PR948 round-8 (P2): modelSupportsStructuredOutputs (model-config.ts) existed
 // but was never actually consumed anywhere in the real request construction
 // path -- buildProductionCallModel set `response_format` unconditionally the

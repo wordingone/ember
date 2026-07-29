@@ -29,6 +29,7 @@ import { ensureOwnedServer } from "./owned-server-supervisor.ts";
 import { handshakeConfiguredEmberLab } from "../services/ember-lab-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
+import { normalizeModelServerUrl } from "../services/api-openai-adapter.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
 import type { ModelCapabilityDeclaration } from "../model-config.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
@@ -467,10 +468,11 @@ export async function writeDebugPid(cwd: string, pid: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function detectNCtx(serverUrl: string): Promise<number> {
+  const normalizedServerUrl = normalizeModelServerUrl(serverUrl);
   try {
     const ctrl  = new AbortController();
     setTimeout(() => ctrl.abort(), 10_000);
-    const res = await fetch(`${serverUrl}/props`, { signal: ctrl.signal });
+    const res = await fetch(`${normalizedServerUrl}/props`, { signal: ctrl.signal });
     if (res.ok) {
       // llama-server /props nests the per-slot context under
       // default_generation_settings.n_ctx; the top-level read returns undefined
@@ -487,7 +489,7 @@ export async function detectNCtx(serverUrl: string): Promise<number> {
   try {
     const ctrl2 = new AbortController();
     setTimeout(() => ctrl2.abort(), 10_000);
-    const res2 = await fetch(`${serverUrl}/v1/models`, { signal: ctrl2.signal });
+    const res2 = await fetch(`${normalizedServerUrl}/v1/models`, { signal: ctrl2.signal });
     if (res2.ok) {
       const data2 = await res2.json() as { data?: Array<{ context_length?: number }> };
       const ctxLen = data2.data?.[0]?.context_length;

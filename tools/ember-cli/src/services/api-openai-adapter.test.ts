@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/api-openai-adapter.test.ts — token-usage plumbing fix (the D2 "token counts > 0"
 // receipt requirement, autonomy-relinquishment ladder R0). No test file existed for this module
 // before this change; scope here is the usage-capture addition plus a routing-safety check that
@@ -5,7 +8,14 @@
 // content/tool-call routing.
 
 import { describe, it, expect } from "bun:test";
-import { createSseParserContext, processSseLine } from "./api-openai-adapter.ts";
+import {
+  buildOpenAIRequest,
+  createSseParserContext,
+  normalizeModelServerUrl,
+  processSseLine,
+} from "./api-openai-adapter.ts";
+
+const USER_MESSAGE = [{ role: "user" as const, content: "hello" }];
 
 function sseLine(obj: unknown): string {
   return `data: ${JSON.stringify(obj)}`;
@@ -79,5 +89,37 @@ describe("processSseLine — content/tool-call routing unaffected by the usage-c
     const tc = ctx.toolCallsByIndex.get(0);
     expect(tc?.name).toBe("foo");
     expect(tc?.arguments).toBe('{"a":1}');
+  });
+});
+
+describe("issue #267 external OpenAI-compatible request policy", () => {
+  it("preserves validated per-model sampling fields in the transmitted request shape", () => {
+    const req = buildOpenAIRequest({
+      model: "external-model",
+      messages: USER_MESSAGE,
+      maxTokens: 321,
+      samplingParams: {
+        temperature: 0.63,
+        top_p: 0.92,
+        top_k: 24,
+        seed: 88,
+      },
+    });
+    expect(req.max_tokens).toBe(321);
+    expect(req.temperature).toBe(0.63);
+    expect(req.top_p).toBe(0.92);
+    expect(req.top_k).toBe(24);
+    expect(req.seed).toBe(88);
+  });
+
+  it("normalizes only a terminal /v1 segment and trailing slashes", () => {
+    expect(normalizeModelServerUrl(" https://host.example/v1/ ")).toBe("https://host.example");
+    expect(normalizeModelServerUrl("https://host.example/prefix/v1")).toBe("https://host.example/prefix");
+    expect(normalizeModelServerUrl("https://host.example/prefix")).toBe("https://host.example/prefix");
+    expect(normalizeModelServerUrl("https://host.example/api/v10")).toBe("https://host.example/api/v10");
+  });
+
+  it("rejects an empty model server URL", () => {
+    expect(() => normalizeModelServerUrl(" /v1/ ")).toThrow();
   });
 });

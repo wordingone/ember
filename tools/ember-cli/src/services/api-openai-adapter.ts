@@ -8,6 +8,10 @@
 import { appendFile, mkdir } from "fs/promises";
 import { join } from "path";
 import type { EmberMessage, EmberContentBlock } from "../types/message-types.ts";
+import {
+  SAMPLING_PARAM_KEYS,
+  type SamplingParams,
+} from "./api-model-facing.ts";
 export type { EmberMessage, EmberContentBlock } from "../types/message-types.ts";
 
 // ---------------------------------------------------------------------------
@@ -299,6 +303,23 @@ export class ModelHttpError extends Error {
 }
 
 /**
+ * Canonical base for OpenAI-compatible model-server calls.
+ *
+ * Users commonly configure either `https://host` or `https://host/v1`.
+ * Internally Ember appends the endpoint-specific `/v1/...` path, so retaining
+ * a terminal `/v1` would produce `/v1/v1/...`. Non-terminal path prefixes are
+ * preserved.
+ */
+export function normalizeModelServerUrl(serverUrl: string): string {
+  let normalized = serverUrl.trim().replace(/\/+$/, "");
+  normalized = normalized.replace(/\/v1$/i, "");
+  if (!normalized || normalized === "/") {
+    throw new Error("EMBER_MODEL_URL must contain a non-empty server base URL");
+  }
+  return normalized;
+}
+
+/**
  * AC4: Fetches n_ctx from the server's /props endpoint (or returns override value).
  */
 export async function fetchNCtx(serverUrl: string): Promise<number> {
@@ -311,7 +332,8 @@ export async function fetchNCtx(serverUrl: string): Promise<number> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), NCTX_PROBE_TIMEOUT_MS);
   try {
-    const res = await fetch(`${serverUrl}/props`, { signal: ctrl.signal });
+    const normalizedServerUrl = normalizeModelServerUrl(serverUrl);
+    const res = await fetch(`${normalizedServerUrl}/props`, { signal: ctrl.signal });
     if (!res.ok) throw new Error(`/props returned HTTP ${res.status}`);
     const data = await res.json() as { n_ctx?: number; default_generation_settings?: { n_ctx?: number } };
     return data.default_generation_settings?.n_ctx ?? data.n_ctx ?? 4096;
@@ -611,6 +633,7 @@ export function buildOpenAIRequest(opts: {
   tools?: EmberTool[];
   toolChoice?: EmberToolChoice;
   maxTokens: number;
+  samplingParams?: SamplingParams;
 }): OpenAIRequest {
   const req: OpenAIRequest = {
     model: opts.model,
@@ -618,6 +641,13 @@ export function buildOpenAIRequest(opts: {
     stream: true,
     max_tokens: opts.maxTokens,
   };
+
+  if (opts.samplingParams) {
+    for (const key of SAMPLING_PARAM_KEYS) {
+      const value = opts.samplingParams[key];
+      if (value !== undefined) req[key] = value;
+    }
+  }
 
   if (opts.tools && opts.tools.length > 0) {
     req.tools = opts.tools.map(convertToolDefinition);
