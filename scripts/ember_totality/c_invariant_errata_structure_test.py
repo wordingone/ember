@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c_invariant_errata_structure_test.py -- regression for
 test_c_invariant.py's check_errata_structure() repoint (gh issue #625, frozen
 spec point 3: repoint from the never-created INVARIANT-ERRATA.md to the REAL
@@ -11,12 +14,13 @@ file proves what point 3 actually changed: (a) the probe now reads the real
 file at all, (b) row schema is enforced, (c) a post-cutoff discovered_ts row
 is rejected.
 
-Four branches, each via a disposable tempdir (monkeypatching
+Five branches, four via a disposable tempdir (monkeypatching
 test_c_invariant.ERRATA_FILE for the duration, restored after):
   1. file absent               -> GREEN (honest-absent)
   2. file present, empty       -> GREEN (honest-empty)
   3. row missing a required field -> RED (schema violation)
   4. row's discovered_ts is AFTER the hard cutoff -> RED (cutoff violation)
+  5. the tracked annex exactly covers every current pre-cutoff violation
 
 Run: python c_invariant_errata_structure_test.py
 """
@@ -30,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import test_c_invariant as m  # noqa: E402
+import receipt_errata_scan as scanner  # noqa: E402
 
 VALID_ROW = {
     "defect": "missing-invariant-stamp",
@@ -111,11 +116,35 @@ def test_post_cutoff_discovered_ts_is_red() -> None:
 
 def test_real_repo_errata_file_is_clean() -> None:
     """Sanity: the probe's default ERRATA_FILE (the real, live
-    docs/receipt-errata.jsonl, 97 rows landed by PR #623) passes structurally
+    docs/receipt-errata.jsonl, 101 append-only historical rows) passes structurally
     -- proves the repoint didn't retroactively invalidate the existing annex."""
     ok, reason = m.check_errata_structure()
     assert ok is True, f"the real, landed docs/receipt-errata.jsonl must pass structurally, got {reason!r}"
     print(f"ok   real repo docs/receipt-errata.jsonl -> GREEN ({reason})")
+
+
+def test_real_repo_annex_covers_complete_pre_cutoff_scan() -> None:
+    """Every currently tracked pre-cutoff violation must be represented.
+
+    This catches the exact #612 tail defect where receipts landed after the
+    original mechanical population but carried pre-hardening timestamps.
+    Future post-cutoff violations remain deliberately outside the annex and
+    continue to RED through check_stamped_receipts().
+    """
+    cutoff_epoch = m._parse_receipt_ts(scanner.HARDENING_CUTOFF_TS)
+    expected_rows, _ = scanner.build_rows(scanner.scan_violations(), cutoff_epoch)
+    expected = {row["receipt_path"] for row in expected_rows}
+    actual = {
+        json.loads(line)["receipt_path"]
+        for line in m.ERRATA_FILE.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    assert actual == expected, (
+        "tracked historical annex differs from the complete mechanical "
+        f"pre-cutoff scan: missing={sorted(expected - actual)!r}, "
+        f"extra={sorted(actual - expected)!r}"
+    )
+    print(f"ok   tracked annex covers complete pre-cutoff scan ({len(actual)} rows)")
 
 
 def main() -> int:
@@ -124,6 +153,7 @@ def main() -> int:
     test_missing_field_is_red()
     test_post_cutoff_discovered_ts_is_red()
     test_real_repo_errata_file_is_clean()
+    test_real_repo_annex_covers_complete_pre_cutoff_scan()
     print("PASS c_invariant_errata_structure_test")
     return 0
 
