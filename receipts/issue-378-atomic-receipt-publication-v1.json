@@ -9,22 +9,24 @@
   "repository": "wordingone/ember",
   "issue": 378,
   "base_commit": "1b78d347a564ede9585ef0fe1cbe102f8179f119",
-  "implementation_commit": "98708abce10304e4016681164e673de8f5363541",
+  "implementation_commit": "7b587c2c91327522e32b940ae2d1310dda8386d2",
   "claim_boundary": "atomic checked receipt publication and last-known-good preservation only; no historical receipt restoration, total custody-green, training, checkpoint, benchmark, admission, sufficient-pretraining, or capability claim",
   "implementation_scope": {
     "writer": "scripts/receipt_write.py",
-    "writer_sha256": "1c633b798ff89bb2317b3d416f4059a092951f0e7ee3d8e0f462e629a303f786",
+    "writer_sha256": "860c04b934e21a1cca3e86e403b229333d7af99baf46ee9da05fa091a2848848",
     "regression_tests": "tests/test_receipt_write_atomic.py",
-    "regression_tests_sha256": "05f71fb731ff5ff98dd541b0c28072171db007ca0dff8fd4d3a2ef6f906bf7a3",
+    "regression_tests_sha256": "f18f3920278d55512280c0e2e142196ec81f847f74d8030b2a730e14b232cfb9",
     "staging": "private same-directory tempfile",
     "publication": "flush, fsync, schema validation, then one same-volume os.replace",
     "invalid_candidate": "move staged candidate to .INVALID.quarantine without replacing canonical bytes",
-    "serialization_failure": "remove private staging file without replacing canonical bytes"
+    "serialization_failure": "remove partial private staging file without replacing canonical bytes",
+    "publication_failure": "preserve complete valid candidate at .PUBLISH_FAILED.quarantine",
+    "quarantine_failure": "preserve complete invalid candidate at its private staging path"
   },
   "replay": {
     "atomic_writer_regressions": {
       "command": "python -B -m pytest -q tests/test_receipt_write_atomic.py",
-      "passed": 3,
+      "passed": 5,
       "failed": 0
     },
     "legacy_writer_selftest": {
@@ -60,7 +62,9 @@
     "invalid_candidate_preserves_canonical": true,
     "invalid_candidate_quarantined": true,
     "serializer_failure_preserves_canonical": true,
-    "private_staging_cleanup": true,
+    "publication_failure_preserves_candidate": true,
+    "quarantine_failure_preserves_candidate": true,
+    "partial_private_staging_cleanup": true,
     "public_github_guards": "PENDING",
     "cross_review": "NOT_CROSS_REVIEWED"
   }
