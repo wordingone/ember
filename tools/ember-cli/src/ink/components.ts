@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+//
 // components — React component library for terminal UIs.
 // Provides Box, Text, RawAnsi, Newline, Spacer, Button, Link, AlternateScreen,
 // App, ScrollBox, context providers, ErrorOverview, NoSelect.
@@ -282,7 +286,7 @@ export interface TextProps {
 }
 
 export function Text({ children, color, backgroundColor, bold, italic, underline,
-                       strikethrough, inverse, dimColor }: TextProps): React.ReactElement {
+                       strikethrough, inverse, dimColor, wrap = "wrap" }: TextProps): React.ReactElement {
   const colorStyle = resolveColor(color);
   const bgStyle    = resolveBgColor(backgroundColor);
   const style: Style = {
@@ -299,6 +303,7 @@ export function Text({ children, color, backgroundColor, bold, italic, underline
   return React.createElement("span", {
     "data-text": true,
     "data-style": JSON.stringify(style),
+    "data-text-wrap": wrap,
     style: {
       fontWeight:     bold      ? "bold"      : undefined,
       fontStyle:      italic    ? "italic"    : undefined,
