@@ -14,7 +14,7 @@
     "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
     "evidence_sha256": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8",
     "exit_code": 0,
-    "head_sha": "bf92e17d30dc55474721fc18e70a7d986bb01fa8",
+    "head_sha": "012dd1c1ff4d1660f666c6cfa269e9f322870ce2",
     "probe_sha256": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
     "stderr": "",
     "stdout": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured_by_instrumented_execution: sha256-verified checkpoints + FLOP totals independently recomputed and matched); no invalid-token present"
@@ -36,12 +36,13 @@
   "paid_api_surface_used": false,
   "producer": {
     "path": "scripts/cbase_grow_before_after_replay.py",
-    "sha256": "e9375c512d3c46a5d79d0652ef0c2d9920a960747b858fd6fb74511772f475e3"
+    "sha256": "87bcbff08e6d1c6f521306a3b42853c5d3479788fe2491f99ba5ae4e0c0c5bf4"
   },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
   "source_issue": 626,
   "supersedes": "receipts/cbase-grow-rung/c-grow-before-after-probe-20260710T172700Z.json",
   "ticket": "C-GROW-BEFORE-AFTER-PROBE",
-  "ts": "2026-07-29T11:05:14Z",
+  "ts": "2026-07-29T11:10:34Z",
   "verdict_unchanged": true,
   "workstream_id": "EMBER-02A"
 }
