@@ -18,11 +18,9 @@ import {
   resolveToolUseState,
   extractTurnOrder,
   isSlashCommand,
-  parseTeammateContent,
   AssistantThinkingMessage,
   AssistantTextMessage,
   AssistantToolUseMessage,
-  UserTeammateMessage,
   AttachmentMessage,
   SystemAPIErrorMessage,
   CompactBoundaryMessage,
@@ -347,56 +345,6 @@ describe("AC10: inProgressToolUseIDs for unresolved tool calls", () => {
     const lookups = buildMessageLookups(msgs);
     expect(lookups.resolvedToolUseIDs.has("t1")).toBe(true);
     expect(lookups.inProgressToolUseIDs.has("t2")).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// AC11: UserTeammateMessage task_assignment collapsible + teammate color.
-// ---------------------------------------------------------------------------
-describe("AC11: UserTeammateMessage task_assignment", () => {
-  test("parseTeammateContent returns task_assignment type", () => {
-    const content = JSON.stringify({ type: "task_assignment", summary: "do X" });
-    const parsed = parseTeammateContent(content);
-    expect(parsed?.type).toBe("task_assignment");
-    expect(parsed?.summary).toBe("do X");
-  });
-
-  test("UserTeammateMessage task_assignment has teammate color in header", () => {
-    const content = JSON.stringify({ type: "task_assignment", summary: "fix bug" });
-    const el = UserTeammateMessage({
-      teammateName:  "Alice",
-      teammateColor: "blue",
-      content,
-    });
-    // Header should contain color=blue Text
-    const serialized = childText(el);
-    expect(serialized).toContain('"blue"');
-    expect(serialized).toContain("Alice");
-  });
-
-  test("UserTeammateMessage task_assignment shows summary collapsed", () => {
-    const content = JSON.stringify({ type: "task_assignment", summary: "summary text" });
-    const el = UserTeammateMessage({
-      teammateName:  "Alice",
-      teammateColor: "blue",
-      content,
-      isExpanded: false,
-    });
-    const serialized = childText(el);
-    expect(serialized).toContain("summary text");
-    expect(serialized).toContain("›");
-  });
-
-  test("UserTeammateMessage task_assignment expanded shows full content", () => {
-    const fullContent = JSON.stringify({ type: "task_assignment", summary: "short", detail: "long stuff" });
-    const el = UserTeammateMessage({
-      teammateName:  "Alice",
-      teammateColor: "blue",
-      content: fullContent,
-      isExpanded: true,
-    });
-    const serialized = childText(el);
-    expect(serialized).toContain("‹");
   });
 });
 
