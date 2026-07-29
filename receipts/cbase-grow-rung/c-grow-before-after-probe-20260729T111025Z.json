@@ -1,0 +1,48 @@
+{
+  "baseline": {
+    "clean": true,
+    "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
+    "evidence_sha256": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8",
+    "exit_code": 0,
+    "head_sha": "8f28341f0059bcc5f0da8e533daf20ca82af7004",
+    "probe_sha256": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
+    "stderr": "",
+    "stdout": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured_by_instrumented_execution: sha256-verified checkpoints + FLOP totals independently recomputed and matched); no invalid-token present"
+  },
+  "candidate": {
+    "clean": true,
+    "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
+    "evidence_sha256": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8",
+    "exit_code": 0,
+    "head_sha": "012dd1c1ff4d1660f666c6cfa269e9f322870ce2",
+    "probe_sha256": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
+    "stderr": "",
+    "stdout": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured_by_instrumented_execution: sha256-verified checkpoints + FLOP totals independently recomputed and matched); no invalid-token present"
+  },
+  "cited_evidence_path_unchanged": true,
+  "claim_boundary": {
+    "current_probe_replayed_across_distinct_commits": true,
+    "historical_worktree_prose_reasserted": false,
+    "model_capability_claim": false,
+    "rung2_extension_completion_claim": false,
+    "training_claim": false
+  },
+  "goal_id": "EMBER-02",
+  "historical_receipt_sha256": "3bf8ed8490ce2309571338b18a71b48f78417097cf8968cd1b4100f34b0e7ba8",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": 700,
+  "mode": "CLEAN_IMMUTABLE_SNAPSHOT_REPLAY",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "paid_api_surface_used": false,
+  "producer": {
+    "path": "scripts/cbase_grow_before_after_replay.py",
+    "sha256": "87bcbff08e6d1c6f521306a3b42853c5d3479788fe2491f99ba5ae4e0c0c5bf4"
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "source_issue": 626,
+  "supersedes": "receipts/cbase-grow-rung/c-grow-before-after-probe-20260710T172700Z.json",
+  "ticket": "C-GROW-BEFORE-AFTER-PROBE",
+  "ts": "2026-07-29T11:10:34Z",
+  "verdict_unchanged": true,
+  "workstream_id": "EMBER-02A"
+}
