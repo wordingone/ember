@@ -1,0 +1,131 @@
+{
+  "claim_boundary": {
+    "all_five_landing_git_objects_unchanged_at_subject": true,
+    "current_historical_execution_denial_revalidated": true,
+    "current_tokenizer_load_replayed": true,
+    "five_historical_landing_hashes_revalidated": true,
+    "historical_default_path_host_equivalence_revalidated": false,
+    "historical_full_pipeline_replayed": false,
+    "historical_import_closure_paths_present": true,
+    "historical_stage_source_revalidated": false,
+    "historical_test_counts_reasserted": false,
+    "historical_tokenizer_failure_replayed": false,
+    "issue_210_land210h_tracking_subset_revalidated": true,
+    "issue_210_whole_closure_revalidated": false,
+    "issue_700_completion_claim": false,
+    "model_capability_claim": false,
+    "preexisting_tokenizer_defect_currently_present": false,
+    "tier_3_private_archive_revalidated": false,
+    "training_claim": false
+  },
+  "drain_issue": 700,
+  "goal_id": "EMBER-02",
+  "historical_receipt_sha256": "ab64850305d700af2ba86301bd5249d8a5fbc274ab881598095c773bd5473689",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": "ember#210",
+  "mode": "PUBLIC_GIT_AND_CURRENT_TOKENIZER_REVALIDATION",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "paid_api_surface_used": false,
+  "producer": {
+    "path": "scripts/land210h_public_revalidation.py",
+    "sha256": "030fb3b968f22d0ac5858356ca1ae3930545d041254bc436a3e080d6fb9d103e"
+  },
+  "public_evidence": {
+    "ops_tools_pr": "https://github.com/wordingone/ember/pull/773",
+    "tier_2_landing_ladder": "https://github.com/wordingone/ember/issues/210#issuecomment-4944319195",
+    "tracking_hazard_closure": "https://github.com/wordingone/ember/issues/210#issuecomment-5030468387",
+    "triage_ruling": "https://github.com/wordingone/ember/issues/210#issuecomment-4890625466"
+  },
+  "public_lineage_revalidation": {
+    "current_tokenizer": {
+      "blob_oid": "57d245157f145c3159704903b3896692011abd15",
+      "last_change_commit": "df272db32a106f774a1b30185e142f8e0de3ed2a",
+      "load_pass": true,
+      "path": "tokenizer/tokenizer.json",
+      "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+      "tokenizers_version": "0.22.2",
+      "vocab_size": 32000
+    },
+    "direct_landing_blob_matches": 5,
+    "historical_byte_identical_to_stage_count": 4,
+    "historical_candidate_count": 5,
+    "historical_modified_from_stage_count": 1,
+    "historical_pipeline_execution_policy": {
+      "artifact_class": "historical_only",
+      "denied": true,
+      "path": "scripts/timeshare_pretrain.py",
+      "reason": "historical_only: the sub-3B cbase trainer and every importer are execution-denied",
+      "sha256": "c0eb88275cd0a85adc249fd67ff83a95f91c39e9e1677529b430cc20d2e626e8"
+    },
+    "import_closure_path_count": 4,
+    "import_closure_rows": [
+      {
+        "landing_blob_oid": "76d4bfa5646672d5de52ec36869f31fd33c150dd",
+        "path": "scripts/ember_avir_tasks.py",
+        "subject_blob_oid": "76d4bfa5646672d5de52ec36869f31fd33c150dd"
+      },
+      {
+        "landing_blob_oid": "d0769600d04fcb7d5f85440f4bec64393a966da7",
+        "path": "scripts/ember_avir_harness.py",
+        "subject_blob_oid": "d0769600d04fcb7d5f85440f4bec64393a966da7"
+      },
+      {
+        "landing_blob_oid": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
+        "path": "scripts/governor.py",
+        "subject_blob_oid": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db"
+      },
+      {
+        "landing_blob_oid": "032ffd966b5ee7ce907f10fb9b5e535895a42c4e",
+        "path": "scripts/timeshare_pretrain.py",
+        "subject_blob_oid": "ea367b382b975afd7afecbe86b6efa1148bd76ad"
+      }
+    ],
+    "import_closure_rows_sha256": "3967be85b0e68717024e1c6d3d04094972ad2117ef3cf1b1e5b23bcb4d699a3c",
+    "landing_commit": "ea39d6944155575145c6d17dbe87e8f0f8db153e",
+    "landing_rows": [
+      {
+        "blob_oid": "2445d0c742b03247d06d02a7855898c2bc400f7a",
+        "modified_from_stage": true,
+        "path": "scripts/convert_nf4_prequant.py",
+        "sha256": "a6f2e6ae3fcf7d5d9d1406e03c784268f429f4577617518acc3adf01db4dc3c2"
+      },
+      {
+        "blob_oid": "158ca6c9c5990120aac42a7b25bdee671da7de2d",
+        "modified_from_stage": false,
+        "path": "scripts/ember_cbase_avir_data.py",
+        "sha256": "bee056d7ac96b6f5308d31af0da3dd4f79154086fcd5c19cc8f4a037847d9345"
+      },
+      {
+        "blob_oid": "b788aedba84f040c56b5dc70ebc7aa9477ff305f",
+        "modified_from_stage": false,
+        "path": "scripts/ember_cbase_avir_data_v2.py",
+        "sha256": "8d68850500e95bc90af5a69108a69b285ef5264ca77710c7325799fa001ff252"
+      },
+      {
+        "blob_oid": "5359e580e53a011bd666ad39a0a8b0d4eefb41b8",
+        "modified_from_stage": false,
+        "path": "scripts/test_ember_cbase_avir_data.py",
+        "sha256": "766ef9a0c7d1f0893cb7be54778d1215f3cee569c8ba8cea304cdc4f9dfcf443"
+      },
+      {
+        "blob_oid": "8e47a3c56f85b568116353910f1d284a2b24930d",
+        "modified_from_stage": false,
+        "path": "scripts/test_ember_cbase_avir_data_v2.py",
+        "sha256": "af5dffbe6afa49fc9d52b8620e047a23b8bfc0aa05cac87461560286d786ee88"
+      }
+    ],
+    "landing_rows_sha256": "9b67847f31cfcf643fbca3297d78621b7a9820001b5c81cc33337c9c0b46acc0",
+    "lineage_commits": {
+      "ops_tools_pr_773_merge": "ea39d6944155575145c6d17dbe87e8f0f8db153e",
+      "tokenizer_repair": "df272db32a106f774a1b30185e142f8e0de3ed2a"
+    },
+    "subject_commit": "801cd32723734697eab58e19b7a22aef7b28f0a8",
+    "subject_original_bytes_unchanged": 5
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "supersedes": "receipts/ember-c-scale/land210h-ops-tools-receipt.json",
+  "ticket": "LAND210H-OPS-TOOLS",
+  "ts": "2026-07-29T12:51:12Z",
+  "verdict": "HISTORICAL_5_LANDING_BYTES_VERIFIED_CURRENT_TOKENIZER_LOADS_HISTORICAL_PIPELINE_EXECUTION_DENIED",
+  "workstream_id": "EMBER-02A"
+}
