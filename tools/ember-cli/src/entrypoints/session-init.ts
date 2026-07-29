@@ -15,7 +15,10 @@ import {
 } from "../query/query-loop-support.ts";
 import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
-import { assembleModelRequest } from "../services/api-model-facing.ts";
+import {
+  assembleModelRequest,
+  extractSamplingParams,
+} from "../services/api-model-facing.ts";
 import {
   buildOpenAIRequest,
   createSseParserContext,
@@ -25,6 +28,7 @@ import {
   PREFILL_OVERFLOW_FRACTION,
   CHARS_PER_TOKEN_ESTIMATE,
   ModelHttpError,
+  normalizeModelServerUrl,
 } from "../services/api-openai-adapter.ts";
 import { createMicrocompact } from "../services/compaction.ts";
 import { wrapModelClientWithCircuitBreaker } from "../services/model-circuit-breaker-client.ts";
@@ -187,7 +191,7 @@ export interface ProductionCallModelOpts {
 export function buildProductionCallModel(
   opts: ProductionCallModelOpts,
 ): (params: CallModelParams) => Promise<ModelResponse> {
-  const serverUrl  = opts.serverUrl;
+  const serverUrl  = normalizeModelServerUrl(opts.serverUrl);
   const timeoutMs  = opts.timeoutMs ?? 30 * 60 * 1000;
   const nCtx       = opts.nCtx ?? 4096;
 
@@ -217,7 +221,8 @@ export function buildProductionCallModel(
       model:     assembled["model"]     as string,
       messages:  assembled["messages"]  as any[],   // interop: Record<string,unknown>→EmberMessage[]
       tools:     (assembled["tools"]    as any[] | undefined) ?? undefined,
-      maxTokens: assembled["max_tokens"] as number,
+      maxTokens:      assembled["max_tokens"] as number,
+      samplingParams: extractSamplingParams(assembled),
     });
 
     // issue #157 Leg 2 (backstop): query-engine.ts's tool-result truncation

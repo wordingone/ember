@@ -286,6 +286,22 @@ describe("process-entry — detectNCtx reads nested default_generation_settings.
     expect(await detectNCtx("http://x")).toBe(16384);
   });
 
+  it("issue #267: normalizes a terminal /v1 before both context probes", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.endsWith("/props")) return new Response(null, { status: 500 });
+      if (url.endsWith("/v1/models")) return new Response(
+        JSON.stringify({ data: [{ context_length: 12288 }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    expect(await detectNCtx("http://x/v1/")).toBe(12288);
+    expect(urls).toEqual(["http://x/props", "http://x/v1/models"]);
+  });
+
   it("returns 4096 when every probe fails", async () => {
     stubFetch({ "/props": "fail", "/v1/models": "fail" });
     expect(await detectNCtx("http://x")).toBe(4096);

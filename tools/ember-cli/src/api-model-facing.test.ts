@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for api-model-facing surface (ACs from spec).
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -46,6 +49,74 @@ describe("T=0 sampling params", () => {
     expect(req["temperature"]).toBeUndefined();
     expect(req["top_k"]).toBeUndefined();
     expect(req["seed"]).toBeUndefined();
+  });
+
+  test("issue #267: configured per-model sampling reaches ordinary request assembly", () => {
+    process.env["EMBER_SAMPLING_PARAMS"] = JSON.stringify({
+      temperature: 0.7,
+      top_p: 0.91,
+      top_k: 40,
+      seed: 17,
+    });
+    try {
+      const req = assembleModelRequest({
+        isToolUseTurn: false,
+        model: "external-openai-compatible",
+        messages: [],
+        maxTokens: 4096,
+        thinkingMode: "disabled",
+      });
+      expect(req["temperature"]).toBe(0.7);
+      expect(req["top_p"]).toBe(0.91);
+      expect(req["top_k"]).toBe(40);
+      expect(req["seed"]).toBe(17);
+    } finally {
+      delete process.env["EMBER_SAMPLING_PARAMS"];
+    }
+  });
+
+  test("issue #267: deterministic tool-turn policy overrides colliding configured sampling", () => {
+    process.env["EMBER_SAMPLING_PARAMS"] = JSON.stringify({
+      temperature: 0.8,
+      top_p: 0.95,
+      top_k: 40,
+      seed: 999,
+    });
+    try {
+      const req = assembleModelRequest({
+        isToolUseTurn: true,
+        model: "external-openai-compatible",
+        messages: [],
+        maxTokens: 4096,
+        thinkingMode: "disabled",
+      });
+      expect(req["temperature"]).toBe(0);
+      expect(req["top_p"]).toBe(0.95);
+      expect(req["top_k"]).toBe(1);
+      expect(req["seed"]).toBe(42);
+    } finally {
+      delete process.env["EMBER_SAMPLING_PARAMS"];
+    }
+  });
+
+  test("issue #267: malformed or unknown configured sampling fails closed", () => {
+    for (const raw of [
+      "{not-json",
+      "[]",
+      JSON.stringify({ temperature: Number.NaN }),
+      JSON.stringify({ arbitrary_body_injection: 1 }),
+      JSON.stringify({ top_k: 1.5 }),
+    ]) {
+      process.env["EMBER_SAMPLING_PARAMS"] = raw;
+      expect(() => assembleModelRequest({
+        isToolUseTurn: false,
+        model: "external-openai-compatible",
+        messages: [],
+        maxTokens: 4096,
+        thinkingMode: "disabled",
+      })).toThrow();
+    }
+    delete process.env["EMBER_SAMPLING_PARAMS"];
   });
 });
 

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // API model-facing surface — assembles the exact request the model sees each turn.
 // W2-B: local-only mode. No remote-API version/beta header injection here;
 // betaHeaders is advisory metadata only — for a local llama-server it will be empty
@@ -16,6 +19,80 @@ export const T0_SAMPLING_PARAMS = {
   top_k: 1,
   seed: 42,
 } as const;
+
+/** Sampling fields accepted from a model's `samplingParams` configuration. */
+export const SAMPLING_PARAM_KEYS = [
+  "temperature",
+  "top_p",
+  "top_k",
+  "min_p",
+  "typical_p",
+  "seed",
+  "repeat_penalty",
+  "frequency_penalty",
+  "presence_penalty",
+] as const;
+
+export type SamplingParamKey = typeof SAMPLING_PARAM_KEYS[number];
+export type SamplingParams = Partial<Record<SamplingParamKey, number>>;
+
+const SAMPLING_PARAM_KEY_SET = new Set<string>(SAMPLING_PARAM_KEYS);
+const INTEGER_SAMPLING_PARAMS = new Set<SamplingParamKey>(["top_k", "seed"]);
+
+function validateSamplingParam(key: SamplingParamKey, value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`EMBER_SAMPLING_PARAMS.${key} must be a finite number`);
+  }
+  if (INTEGER_SAMPLING_PARAMS.has(key) && !Number.isInteger(value)) {
+    throw new Error(`EMBER_SAMPLING_PARAMS.${key} must be an integer`);
+  }
+  return value;
+}
+
+/**
+ * Parse the per-model sampling policy installed by process-entry.ts.
+ *
+ * This is deliberately closed: a models.json entry cannot smuggle arbitrary
+ * request-body fields through `samplingParams`, and malformed policy never
+ * silently falls back to server defaults.
+ */
+export function getConfiguredSamplingParams(
+  raw: string | undefined = process.env["EMBER_SAMPLING_PARAMS"],
+): SamplingParams {
+  if (raw === undefined) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("EMBER_SAMPLING_PARAMS must be valid JSON");
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("EMBER_SAMPLING_PARAMS must be a JSON object");
+  }
+
+  const result: SamplingParams = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!SAMPLING_PARAM_KEY_SET.has(key)) {
+      throw new Error(`EMBER_SAMPLING_PARAMS contains unsupported field: ${key}`);
+    }
+    const samplingKey = key as SamplingParamKey;
+    result[samplingKey] = validateSamplingParam(samplingKey, value);
+  }
+  return result;
+}
+
+/** Extract and revalidate sampling fields from a fully assembled request. */
+export function extractSamplingParams(
+  request: Readonly<Record<string, unknown>>,
+): SamplingParams {
+  const result: SamplingParams = {};
+  for (const key of SAMPLING_PARAM_KEYS) {
+    if (request[key] !== undefined) {
+      result[key] = validateSamplingParam(key, request[key]);
+    }
+  }
+  return result;
+}
 
 /**
  * Minimum uncached token count that constitutes a "significant cache miss."
@@ -289,6 +366,7 @@ export function assembleModelRequest(opts: ModelRequestOptions): Record<string, 
   const thinkingCfg = buildThinkingConfig(resolvedMode);
   const betaHeaders = mergeBetaHeaders(opts.modelBetas ?? [], opts.requestBetas ?? []);
   const convertedTools = opts.tools ? convertToolsToApiSchemas(opts.tools) : undefined;
+  const configuredSampling = getConfiguredSamplingParams();
 
   const body: Record<string, unknown> = {
     model: opts.model,
@@ -297,6 +375,7 @@ export function assembleModelRequest(opts: ModelRequestOptions): Record<string, 
     ...(opts.system ? { system: opts.system } : {}),
     ...(convertedTools && convertedTools.length > 0 ? { tools: convertedTools } : {}),
     ...(thinkingCfg.type !== "disabled" ? { thinking: thinkingCfg } : {}),
+    ...configuredSampling,
     ...(opts.isToolUseTurn ? T0_SAMPLING_PARAMS : {}),
   };
 
