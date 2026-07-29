@@ -1,0 +1,73 @@
+{
+  "claim_boundary": {
+    "exact_private_tensor_bytes_replayed": false,
+    "historical_tensor_identity_claim_reasserted": false,
+    "issue_580_completion_claim": false,
+    "model_capability_claim": false,
+    "private_tensor_hashes_recomputed": false,
+    "public_commitment_structure_and_current_source_revalidated": true,
+    "training_claim": false
+  },
+  "current_source_validation": {
+    "authoritative_resolver_call_count": 1,
+    "dynamic_historical_trainer_test_replay_reason": "the current public tree intentionally execution-denies the historical sub-3B trainer and every importer",
+    "dynamic_historical_trainer_test_replayed": false,
+    "executable_global_index_lookup_count": 0,
+    "missing_buffer_fail_closed_guard_count": 1,
+    "public_test_sources": [
+      {
+        "path": "scripts/test_580_b1m_resolver_fix.py",
+        "sha256": "6a2dc93685f8fabe5a6af5c07872eb27ed3c6ad5d94e63c716dba08147cb2720"
+      },
+      {
+        "path": "scripts/test_580_optimizer_id_helper.py",
+        "sha256": "32f9f3b2a3ec88df61738465b79e7ddedd267ccf788313ca9c1b68168c1e2f87"
+      }
+    ],
+    "source": {
+      "path": "scripts/cbase_grow_rung2_event.py",
+      "sha256": "ad3b48ea251203cf1c52de9c21b3d832ed4d57fc51bc554b50bf5e376aec704f"
+    }
+  },
+  "goal_id": "EMBER-02",
+  "historical_receipt_sha256": "7ed75123ae2f3720f0cc273d5b8771e1c2bcd4efae303ddea1e8807fb273c4db",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": 700,
+  "mode": "PUBLIC_COMMITMENT_CURRENT_TREE_REVALIDATION",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "paid_api_surface_used": false,
+  "producer": {
+    "path": "scripts/cache_tensor_commitment_revalidation.py",
+    "sha256": "bfbd4db4e75555686a7349bc1818d226b56087f1db01972e538a68882eadc30b"
+  },
+  "public_commitment_validation": {
+    "all_checks_passed": true,
+    "current_source_resolver_binding": "PASS",
+    "pre_momentum_public_scalar_match": true,
+    "sibling_receipt_count": 2,
+    "tensor_count": 4,
+    "tensor_names": [
+      "grad_post_gate",
+      "grad_pre_gate",
+      "pre_momentum",
+      "theta_gate_pre"
+    ]
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "siblings": [
+    {
+      "path": "receipts/cbase-grow-rung2-event-580rerun-20260710-b1m.json",
+      "sha256": "4ce5ab6657495edca938533dd996037cda9fd5acdd5cd1b1fb8c502b7c0b09c3"
+    },
+    {
+      "path": "receipts/cbase-grow-rung2-event-580rerun-20260710-b3.json",
+      "sha256": "68cf2d58069a4381a1ef238ff6294ad203601fc8050a50bba10421c16c081f61"
+    }
+  ],
+  "source_issue": 580,
+  "supersedes": "receipts/580rerun-20260710-cache-tensor-commitment.json",
+  "ticket": "580RERUN-CACHE-TENSOR-COMMITMENT",
+  "ts": "2026-07-29T11:28:54Z",
+  "verdict": "PUBLIC_COMMITMENT_REVALIDATED_PRIVATE_BYTES_UNAVAILABLE",
+  "workstream_id": "EMBER-02A"
+}
