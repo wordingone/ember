@@ -875,6 +875,8 @@ def _c_ind_write_shared_fixture(root):
         "receipt_class": "IND-3", "leg": "launch",
         "doc_pointer": "docs/operator/operate-launch.md",
         "documented_command": "ember-cli --start (fixture)",
+        "heartbeat_ready": {"status": "ready"},
+        "verified_alive": True,
         "governed_vram_fraction_respected": True,
         "generator": "fixture-harness",  # [ISSUE #97 cure 6]
     })
@@ -882,12 +884,20 @@ def _c_ind_write_shared_fixture(root):
         "receipt_class": "IND-3", "leg": "teardown",
         "doc_pointer": "docs/operator/operate-teardown.md",
         "documented_command": "ember-cli --stop (fixture)",
+        "exit_code": 0,
+        "final_heartbeat": {"status": "stopped"},
         "post_stop_process_table": {"survivors": [], "orphaned_gpu_state": False},
         "generator": "fixture-harness",  # [ISSUE #97 cure 6]
     })
     write_json(os.path.join(ind_dir, "ind3-resume-20990101T000000Z.json"), {
         "receipt_class": "IND-3", "leg": "interrupted_resume",
         "doc_pointer": "docs/operator/operate-resume.md",
+        "interrupt_command_exit_code": 0,
+        "interrupted_pid_verified_dead": True,
+        "interrupted_launcher_pid_verified_dead": True,
+        "resumed_ready_heartbeat": {"status": "ready"},
+        "resumed_verified_alive": True,
+        "final_cleanup": {"exit_code": 0, "post_stop_survivors": []},
         "resumable_state": True, "corrupt": False,
         "generator": "fixture-harness",  # [ISSUE #97 cure 6]
     })

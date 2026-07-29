@@ -1,0 +1,25 @@
+{
+  "ticket": "EMBER-700",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "receipt_class": "IND-3",
+  "leg": "launch",
+  "producer": "ind3_operate_producer.py",
+  "worker_script": "scratch/ind3-operate-worker/telemetry-watch-worker.ts",
+  "underlying_service": "tools/ember-cli/src/services/telemetry-watch.ts (startTelemetryWatch, unmodified -- the real /watch mechanism)",
+  "launch_command": "bun run scratch/ind3-operate-worker/telemetry-watch-worker.ts scratch/ind3-operate-runtime/channel-a-launch.jsonl scratch/ind3-operate-runtime/heartbeat-a-launch.json scratch/ind3-operate-runtime/stopmarker-a-launch.json",
+  "pid": 46212,
+  "launcher_process_pid_note": "the `bun run` invocation's own subprocess handle reports a DIFFERENT pid than the one the worker script itself observes via process.pid and writes to its heartbeat -- bun run launches a wrapper distinct from the runtime that executes the script. `pid` here, and every process-table check in this producer, uses the heartbeat-reported (real, executing) pid.",
+  "heartbeat_ready": {
+    "pid": 46212,
+    "ts": "2026-07-29T09:44:47.442Z",
+    "status": "ready"
+  },
+  "verified_alive_via": "Windows OpenProcess + GetExitCodeProcess (PROCESS_QUERY_LIMITED_INFORMATION)",
+  "verified_alive": true,
+  "doc_pointer": "docs/operator/operate.md",
+  "ts": "20260729T094447Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)"
+}

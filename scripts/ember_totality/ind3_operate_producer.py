@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ind3_operate_producer.py -- C-IND, IND-3 OPERATE producer (DG-W2g board
 pass, refs C-IND legs).
 
@@ -15,7 +18,7 @@ process (rather than calling it as an in-process function) is what makes it
 genuinely launchable / tearable-down / interruptible, which an in-process
 call is not.
 
-Lifecycle exercised (all via subprocess + independent `tasklist` process-
+Lifecycle exercised (all via subprocess + independent Windows kernel process-
 table checks -- never trusting the Python subprocess handle alone):
 
   1. launch            -- start instance A, wait for its ready heartbeat,
@@ -24,7 +27,7 @@ table checks -- never trusting the Python subprocess handle alone):
                            stop-marker file the worker polls for -- this
                            repo's existing planned-outage.json marker
                            convention, applied here), wait for exit,
-                           independently verify (tasklist) NO process with
+                           independently verify (OpenProcess/GetExitCodeProcess) NO process with
                            that PID survives. orphaned_gpu_state is
                            trivially false -- this whole leg never touches a
                            GPU.
@@ -40,7 +43,7 @@ table checks -- never trusting the Python subprocess handle alone):
                            final_cleanup) so this producer leaves nothing
                            running.
 
-Platform note: process verification here uses Windows `tasklist` (this
+Platform note: process verification here uses Windows kernel process handles (this
 producer was executed on the operator's Windows machine). test_c_ind.py
 itself performs no re-execution -- it only inspects the already-written
 receipt JSON -- so this platform dependency affects producer re-runs only,
@@ -50,7 +53,9 @@ Run:  PYTHONIOENCODING=utf-8 python ind3_operate_producer.py
 """
 from __future__ import annotations
 
+import ctypes
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -87,18 +92,73 @@ def _now_ts() -> str:
     return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
 
-def _tasklist_rows(pid: int) -> list[str]:
-    """Independent OS-level process-table check via `tasklist`, never trusting
-    the Python subprocess handle alone. Returns the raw CSV rows matching pid
-    (empty list = no such process is running)."""
-    proc = subprocess.run(
-        ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
-        capture_output=True, text=True, timeout=15,
-    )
-    lines = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
-    return [ln for ln in lines if f'"{pid}"' in ln or f",{pid}," in ln.replace('"', "")]
+def _pid_is_alive(pid: int) -> bool:
+    """Query the Windows kernel for PID liveness without trusting the child
+    handle or a best-effort command whose failure could be mistaken for death.
 
+    ERROR_INVALID_PARAMETER is Windows' absent-PID result. Every other probe
+    failure is terminal: access denied or an unreadable exit code is unknown
+    evidence, never evidence that a process is dead.
+    """
+    if os.name != "nt":
+        raise RuntimeError("IND-3 process verification requires Windows")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    open_process.restype = ctypes.c_void_p
+    get_exit_code = kernel32.GetExitCodeProcess
+    get_exit_code.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    get_exit_code.restype = ctypes.c_int
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [ctypes.c_void_p]
+    close_handle.restype = ctypes.c_int
 
+    handle = open_process(0x1000, 0, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        error = ctypes.get_last_error()
+        if error == 87:  # ERROR_INVALID_PARAMETER: no process owns this PID.
+            return False
+        raise OSError(error, f"OpenProcess failed for pid {pid}")
+    try:
+        exit_code = ctypes.c_uint32()
+        if not get_exit_code(handle, ctypes.byref(exit_code)):
+            error = ctypes.get_last_error()
+            raise OSError(error, f"GetExitCodeProcess failed for pid {pid}")
+        return exit_code.value == 259  # STILL_ACTIVE
+    finally:
+        close_handle(handle)
+
+def _terminate_pid(pid: int, timeout_ms: int = 5000) -> None:
+    """Hard-stop one exact PID through an owned Windows process handle."""
+    if os.name != "nt":
+        raise RuntimeError("IND-3 process termination requires Windows")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    open_process.restype = ctypes.c_void_p
+    terminate_process = kernel32.TerminateProcess
+    terminate_process.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    terminate_process.restype = ctypes.c_int
+    wait_for_single_object = kernel32.WaitForSingleObject
+    wait_for_single_object.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    wait_for_single_object.restype = ctypes.c_uint32
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [ctypes.c_void_p]
+    close_handle.restype = ctypes.c_int
+
+    handle = open_process(0x00100001, 0, pid)  # SYNCHRONIZE | PROCESS_TERMINATE
+    if not handle:
+        error = ctypes.get_last_error()
+        raise OSError(error, f"OpenProcess terminate access failed for pid {pid}")
+    try:
+        if not terminate_process(handle, 137):
+            error = ctypes.get_last_error()
+            raise OSError(error, f"TerminateProcess failed for pid {pid}")
+        wait_result = wait_for_single_object(handle, timeout_ms)
+        if wait_result != 0:  # WAIT_OBJECT_0
+            raise TimeoutError(f"pid {pid} did not terminate; wait_result={wait_result}")
+    finally:
+        close_handle(handle)
 def _wait_heartbeat_status(path: Path, want_status: str, timeout: float = 15.0) -> dict:
     deadline = time.time() + timeout
     last: dict | None = None
@@ -119,6 +179,8 @@ def _launch_worker(tag: str) -> tuple[subprocess.Popen, Path, Path, Path]:
     channel = RUNTIME_DIR / f"channel-{tag}.jsonl"
     heartbeat = RUNTIME_DIR / f"heartbeat-{tag}.json"
     stopmarker = RUNTIME_DIR / f"stopmarker-{tag}.json"
+    for stale in (channel, heartbeat, stopmarker):
+        stale.unlink(missing_ok=True)
     proc = subprocess.Popen(
         [BUN, "run", str(WORKER), str(channel), str(heartbeat), str(stopmarker)],
         cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -127,30 +189,31 @@ def _launch_worker(tag: str) -> tuple[subprocess.Popen, Path, Path, Path]:
 
 
 def _graceful_stop(proc: subprocess.Popen, pid: int, heartbeat: Path, stopmarker: Path, timeout: float = 15.0) -> dict:
-    """Signals graceful stop, then waits on BOTH the real worker pid (the
-    authoritative check -- `bun run` spawns a launcher whose own Popen pid is
-    NOT the same OS process as the one that actually runs the script and
-    reports its own `process.pid` in the heartbeat; confirmed by direct
-    observation: the two pids differ every run) and the Python-tracked Popen
-    handle (best-effort reap only, never the source of truth)."""
+    """Signal graceful stop and independently prove the worker PID exited."""
     stopmarker.write_text("{}", encoding="utf-8")
     deadline = time.time() + timeout
-    while time.time() < deadline and _tasklist_rows(pid):
+    while time.time() < deadline and _pid_is_alive(pid):
         time.sleep(0.2)
     try:
         proc.wait(timeout=2)
     except subprocess.TimeoutExpired:
-        pass  # the launcher wrapper process is not the authoritative signal; see above
+        pass
+    if _pid_is_alive(pid):
+        raise TimeoutError(f"worker pid {pid} survived graceful-stop deadline")
     hb = json.loads(heartbeat.read_text(encoding="utf-8"))
     return {"exit_code": proc.returncode, "final_heartbeat": hb}
-
 
 def build_launch_receipt() -> tuple[dict, subprocess.Popen, int, Path, Path, Path]:
     proc, channel, heartbeat, stopmarker = _launch_worker("a-launch")
     hb = _wait_heartbeat_status(heartbeat, "ready")
     pid = hb["pid"]
-    alive_rows = _tasklist_rows(pid)
+    if not _pid_is_alive(pid):
+        raise RuntimeError(f"ready heartbeat pid {pid} is not alive")
     receipt = {
+        "ticket": "EMBER-700",
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02A",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         "receipt_class": "IND-3",
         "leg": "launch",
         "producer": "ind3_operate_producer.py",
@@ -166,18 +229,21 @@ def build_launch_receipt() -> tuple[dict, subprocess.Popen, int, Path, Path, Pat
             "check in this producer, uses the heartbeat-reported (real, executing) pid."
         ),
         "heartbeat_ready": hb,
-        "verified_alive_via": "tasklist /FI \"PID eq <pid>\" /FO CSV /NH",
-        "verified_alive": bool(alive_rows),
+        "verified_alive_via": "Windows OpenProcess + GetExitCodeProcess (PROCESS_QUERY_LIMITED_INFORMATION)",
+        "verified_alive": True,
         "doc_pointer": "docs/operator/operate.md",
         "ts": _now_ts(),
     }
     return receipt, proc, pid, channel, heartbeat, stopmarker
 
-
 def build_teardown_receipt(proc: subprocess.Popen, pid: int, heartbeat: Path, stopmarker: Path) -> dict:
     result = _graceful_stop(proc, pid, heartbeat, stopmarker)
-    post_rows = _tasklist_rows(pid)
+    post_alive = _pid_is_alive(pid)
     receipt = {
+        "ticket": "EMBER-700",
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02A",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         "receipt_class": "IND-3",
         "leg": "teardown",
         "producer": "ind3_operate_producer.py",
@@ -187,113 +253,116 @@ def build_teardown_receipt(proc: subprocess.Popen, pid: int, heartbeat: Path, st
         "final_heartbeat": result["final_heartbeat"],
         "post_stop_process_table": {
             "checked_pid": pid,
-            "method": "tasklist /FI \"PID eq <pid>\" /FO CSV /NH",
-            "survivors": [],
+            "method": "Windows OpenProcess + GetExitCodeProcess (PROCESS_QUERY_LIMITED_INFORMATION)",
+            "survivors": ([{"pid": pid, "state": "STILL_ACTIVE"}] if post_alive else []),
             "orphaned_gpu_state": False,
             "note": "no GPU or model server is touched anywhere in this leg; orphaned_gpu_state is trivially false",
         },
         "doc_pointer": "docs/operator/operate.md",
         "ts": _now_ts(),
     }
-    if post_rows:
-        # Honest failure shape -- never silently claim a clean teardown.
-        receipt["post_stop_process_table"]["survivors"] = post_rows
     return receipt
 
-
 def build_interrupted_resume_receipt() -> dict:
-    # Instance B: launch, then kill it UNGRACEFULLY (no marker file).
-    proc_b, channel_b, heartbeat_b, stopmarker_b = _launch_worker("b-interrupt")
+    proc_b, _channel_b, heartbeat_b, _stopmarker_b = _launch_worker("b-interrupt")
     hb_b = _wait_heartbeat_status(heartbeat_b, "ready")
-    pid_b = hb_b["pid"]  # the real worker pid, as reported by the worker itself
+    pid_b = hb_b["pid"]
+    if not _pid_is_alive(pid_b):
+        raise RuntimeError(f"interruption target pid {pid_b} is not alive")
 
-    # Tree-kill the LAUNCHER pid (proc_b.pid), not just the worker's own pid.
-    # First attempt used only the worker pid and left the `bun run` launcher
-    # process itself running as an orphan (confirmed by direct observation:
-    # tasklist still showed a bun.exe whose cmdline matched this instance
-    # after the worker pid was gone) -- an ungraceful kill must take down the
-    # whole process tree, matching what an operator closing a terminal
-    # window / Ctrl+C'ing a process GROUP actually does.
-    kill_proc = subprocess.run(
-        ["taskkill", "/F", "/T", "/PID", str(proc_b.pid)],
-        capture_output=True, text=True, timeout=15,
-    )
+    # This producer owns both exact PIDs. A kernel TerminateProcess call models
+    # an ungraceful crash without depending on taskkill, whose access-denied
+    # output was previously misread as successful evidence.
+    terminated_pids: list[int] = []
+    _terminate_pid(pid_b)
+    terminated_pids.append(pid_b)
+    if _pid_is_alive(proc_b.pid):
+        _terminate_pid(proc_b.pid)
+        terminated_pids.append(proc_b.pid)
     try:
         proc_b.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        pass
-    time.sleep(0.5)
-    dead_rows_b = _tasklist_rows(pid_b)
-    dead_rows_launcher_b = _tasklist_rows(proc_b.pid)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("owned launcher handle did not observe hard stop") from exc
+    worker_b_alive = _pid_is_alive(pid_b)
+    launcher_b_alive = _pid_is_alive(proc_b.pid)
+    if worker_b_alive or launcher_b_alive:
+        raise RuntimeError(
+            "hard interruption was not proved: "
+            f"worker_alive={worker_b_alive}, launcher_alive={launcher_b_alive}"
+        )
 
-    # Resume: launch instance C fresh and confirm it reaches ready.
-    proc_c, channel_c, heartbeat_c, stopmarker_c = _launch_worker("c-resume")
+    proc_c, _channel_c, heartbeat_c, stopmarker_c = _launch_worker("c-resume")
     hb_c = _wait_heartbeat_status(heartbeat_c, "ready")
     pid_c = hb_c["pid"]
-    alive_rows_c = _tasklist_rows(pid_c)
+    if not _pid_is_alive(pid_c):
+        raise RuntimeError(f"resumed ready heartbeat pid {pid_c} is not alive")
 
-    # Clean up instance C so this producer leaves nothing running.
     cleanup = _graceful_stop(proc_c, pid_c, heartbeat_c, stopmarker_c)
-    post_rows_c = _tasklist_rows(pid_c)
+    post_alive_c = _pid_is_alive(pid_c)
 
-    receipt = {
+    return {
+        "ticket": "EMBER-700",
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02A",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         "receipt_class": "IND-3",
         "leg": "interrupted_resume",
         "producer": "ind3_operate_producer.py",
         "interrupted_pid": pid_b,
         "interrupted_launcher_pid": proc_b.pid,
-        "interrupt_method": "taskkill /F /T /PID <launcher pid> (hard, ungraceful tree-kill -- no stop-marker file, simulating an unplanned crash of the whole process group)",
-        "interrupt_command_exit_code": kill_proc.returncode,
-        "verified_dead_via": "tasklist /FI \"PID eq <pid>\" /FO CSV /NH, checked for both the worker pid and the launcher pid",
-        "interrupted_pid_verified_dead": not dead_rows_b,
-        "interrupted_launcher_pid_verified_dead": not dead_rows_launcher_b,
+        "interrupt_method": "Windows TerminateProcess on exact producer-owned worker PID and live launcher PID (hard, ungraceful; no stop marker)",
+        "interrupt_command_exit_code": 0,
+        "terminated_pids": terminated_pids,
+        "verified_dead_via": "Windows OpenProcess + GetExitCodeProcess for worker and launcher PIDs",
+        "interrupted_pid_verified_dead": True,
+        "interrupted_launcher_pid_verified_dead": True,
         "resumed_pid": pid_c,
         "resumed_ready_heartbeat": hb_c,
-        "resumed_verified_alive": bool(alive_rows_c),
+        "resumed_verified_alive": True,
         "final_cleanup": {
             "cleaned_pid": pid_c,
             "exit_code": cleanup["exit_code"],
-            "post_stop_survivors": post_rows_c,
+            "post_stop_survivors": ([{"pid": pid_c, "state": "STILL_ACTIVE"}] if post_alive_c else []),
         },
         "doc_pointer": "docs/operator/operate.md",
         "ts": _now_ts(),
     }
-    return receipt
 
+def _write_receipt_json(output: Path, receipt: dict) -> None:
+    with output.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(receipt, handle, indent=2)
+        handle.write("\n")
 
 def main() -> int:
-    # gh #625 point 1, fail-closed: verify BEFORE any process is launched or
-    # any receipt is written -- verify() raises (FileNotFoundError/ValueError)
-    # if INVARIANT.md is missing or doesn't hash correctly, which must abort
-    # this whole producer, never emit a partial unstamped set.
+    # Verify authority before any process is launched or receipt is written.
     _verify_invariant(str(REPO_ROOT))
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     RECEIPTS_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    launch_receipt, proc_a, pid_a, channel_a, heartbeat_a, stopmarker_a = build_launch_receipt()
-    _stamp_invariant(launch_receipt, repo_root=str(REPO_ROOT))
-    launch_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
-    launch_out = RECEIPTS_OUT_DIR / f"ind3-launch-{launch_receipt['ts']}.json"
-    launch_out.write_text(json.dumps(launch_receipt, indent=2), encoding="utf-8")
-    print(f"launch: wrote {_relpath(launch_out)} (pid={launch_receipt['pid']}, verified_alive={launch_receipt['verified_alive']})")
-
+    # Complete the entire lifecycle before publishing any receipt. A failed
+    # interruption/resume must not leave a partial set that looks authoritative.
+    launch_receipt, proc_a, pid_a, _channel_a, heartbeat_a, stopmarker_a = build_launch_receipt()
     teardown_receipt = build_teardown_receipt(proc_a, pid_a, heartbeat_a, stopmarker_a)
-    _stamp_invariant(teardown_receipt, repo_root=str(REPO_ROOT))
-    teardown_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
-    teardown_out = RECEIPTS_OUT_DIR / f"ind3-teardown-{teardown_receipt['ts']}.json"
-    teardown_out.write_text(json.dumps(teardown_receipt, indent=2), encoding="utf-8")
-    print(f"teardown: wrote {_relpath(teardown_out)} (survivors={teardown_receipt['post_stop_process_table']['survivors']})")
-
     interrupted_receipt = build_interrupted_resume_receipt()
-    _stamp_invariant(interrupted_receipt, repo_root=str(REPO_ROOT))
-    interrupted_receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
-    interrupted_out = RECEIPTS_OUT_DIR / f"ind3-interrupted-resume-{interrupted_receipt['ts']}.json"
-    interrupted_out.write_text(json.dumps(interrupted_receipt, indent=2), encoding="utf-8")
+    receipts = [launch_receipt, teardown_receipt, interrupted_receipt]
+    for receipt in receipts:
+        _stamp_invariant(receipt, repo_root=str(REPO_ROOT))
+        receipt["sha_convention"] = INVARIANT_SHA_CONVENTION
+
+    outputs = [
+        RECEIPTS_OUT_DIR / f"ind3-launch-{launch_receipt['ts']}.json",
+        RECEIPTS_OUT_DIR / f"ind3-teardown-{teardown_receipt['ts']}.json",
+        RECEIPTS_OUT_DIR / f"ind3-interrupted-resume-{interrupted_receipt['ts']}.json",
+    ]
+    for output, receipt in zip(outputs, receipts):
+        _write_receipt_json(output, receipt)
+
+    print(f"launch: wrote {_relpath(outputs[0])} (pid={launch_receipt['pid']}, verified_alive=True)")
+    print(f"teardown: wrote {_relpath(outputs[1])} (survivors=[])")
     print(
-        f"interrupted_resume: wrote {_relpath(interrupted_out)} "
-        f"(interrupted_pid_verified_dead={interrupted_receipt['interrupted_pid_verified_dead']}, "
-        f"resumed_verified_alive={interrupted_receipt['resumed_verified_alive']})"
+        f"interrupted_resume: wrote {_relpath(outputs[2])} "
+        f"(interrupted_pid_verified_dead=True, resumed_verified_alive=True)"
     )
     return 0
 
