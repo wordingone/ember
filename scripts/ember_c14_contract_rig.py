@@ -44,6 +44,9 @@ Run (stub end-to-end):
   python ember_c14_contract_rig.py --test    # TDD test suite only
 """
 from __future__ import annotations
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import argparse
 import copy
@@ -77,6 +80,128 @@ from ember_resident_igrpo import (
     _encode_state,
     ACTION_FINAL,
 )
+
+_ENGAGEMENT_SCHEMA_VERSION = "ember-igrpo-engagement-step-v1"
+_ENGAGEMENT_FIELDS = {
+    "schema_version",
+    "requested_n",
+    "requested_g",
+    "realized_stage1_drafts",
+    "attempted",
+    "emitted",
+    "valid",
+    "scored",
+    "unique_completions",
+    "reward_vector_length",
+    "advantage_vector_length",
+    "group_ids",
+    "normalization_denominator",
+    "estimator_name",
+    "drop_reasons",
+}
+
+
+def _validate_engagement_receipt(
+    step_result: Any,
+    *,
+    requested_n: int,
+    requested_g: int,
+    min_unique_completions: int,
+) -> dict[str, Any]:
+    """Validate one realized iGRPO step against the caller's frozen counts."""
+    if type(requested_n) is not int or requested_n <= 0:
+        raise ValueError("requested_n must be a positive integer")
+    if type(requested_g) is not int or requested_g <= 0:
+        raise ValueError("requested_g must be a positive integer")
+    if (
+        type(min_unique_completions) is not int
+        or min_unique_completions <= 0
+        or min_unique_completions > requested_g
+    ):
+        raise ValueError("min_unique_completions must be in [1, requested_g]")
+    if not isinstance(step_result, dict):
+        raise ValueError("training result must be an object containing engagement")
+    row = step_result.get("engagement")
+    if not isinstance(row, dict):
+        raise ValueError("training result engagement must be an object")
+    unknown = set(row) - _ENGAGEMENT_FIELDS
+    missing = _ENGAGEMENT_FIELDS - set(row)
+    if unknown:
+        raise ValueError(f"engagement has unknown fields: {sorted(unknown)}")
+    if missing:
+        raise ValueError(f"engagement is missing fields: {sorted(missing)}")
+    if row["schema_version"] != _ENGAGEMENT_SCHEMA_VERSION:
+        raise ValueError("engagement schema_version is invalid")
+    expected_counts = {
+        "requested_n": requested_n,
+        "requested_g": requested_g,
+        "realized_stage1_drafts": requested_n,
+        "attempted": requested_g,
+        "emitted": requested_g,
+        "scored": requested_g,
+        "reward_vector_length": requested_g,
+        "advantage_vector_length": requested_g,
+        "normalization_denominator": requested_g,
+    }
+    for field_name, expected in expected_counts.items():
+        value = row[field_name]
+        if type(value) is not int or value != expected:
+            raise ValueError(
+                f"engagement {field_name} must equal {expected}; got {value!r}"
+            )
+    valid = row["valid"]
+    if type(valid) is not int or valid < 0 or valid > requested_g:
+        raise ValueError(
+            "engagement valid must be an integer in "
+            f"[0, {requested_g}]; got {valid!r}"
+        )
+    unique = row["unique_completions"]
+    if (
+        type(unique) is not int
+        or unique < min_unique_completions
+        or unique > requested_g
+    ):
+        raise ValueError(
+            "engagement unique_completions must satisfy the frozen floor "
+            f"{min_unique_completions} <= unique <= {requested_g}; got {unique!r}"
+        )
+    group_ids = row["group_ids"]
+    expected_group_ids = [f"stage2:{index}" for index in range(requested_g)]
+    if group_ids != expected_group_ids:
+        raise ValueError("engagement group_ids must be the canonical stage2 sequence")
+    if row["estimator_name"] != "population_std_group_relative":
+        raise ValueError("engagement estimator_name is invalid")
+    drop_reasons = row["drop_reasons"]
+    if not isinstance(drop_reasons, list) or any(
+        not isinstance(item, str) or not item for item in drop_reasons
+    ):
+        raise ValueError("engagement drop_reasons must be a list of nonempty strings")
+    seen_drop_indices: set[int] = set()
+    allowed_drop_codes = {
+        "no_emitted_tokens",
+        "no_final_action",
+        "fallback_fired",
+    }
+    for item in drop_reasons:
+        parts = item.split(":")
+        if len(parts) != 3 or parts[0] != "stage2" or not parts[1].isdigit():
+            raise ValueError("engagement drop_reasons contain a malformed reason")
+        drop_index = int(parts[1])
+        if (
+            str(drop_index) != parts[1]
+            or drop_index < 0
+            or drop_index >= requested_g
+            or drop_index in seen_drop_indices
+            or parts[2] not in allowed_drop_codes
+        ):
+            raise ValueError("engagement drop_reasons contain an invalid reason")
+        seen_drop_indices.add(drop_index)
+    if len(drop_reasons) != requested_g - valid:
+        raise ValueError(
+            "engagement drop_reasons must account for every invalid completion; "
+            f"expected {requested_g - valid}, got {len(drop_reasons)}"
+        )
+    return copy.deepcopy(row)
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +598,11 @@ def _stub_eval_arm_C_and_deleted(
     eval_checkpoint_callback: Optional[Callable[[int, Any], None]] = None,
     eval_checkpoint_interval: Optional[int] = None,
     corpus_v3_resample_fn: Optional[Callable[[Task, int], Task]] = None,
+    requested_n: int = 4,
+    requested_g: int = 4,
+    min_unique_completions: int = 1,
+    require_engagement_receipt: bool = False,
+    engagement_receipt_sink: Optional[list[dict[str, Any]]] = None,
 ) -> tuple[ArmResult, ArmResult, ArmResult, ArmResult, str, str, str]:
     """Run C arm (train + eval) and Deleted arm (revert + eval).
 
@@ -572,17 +702,28 @@ def _stub_eval_arm_C_and_deleted(
         extra_kwargs = (
             {"exemplars": presented_task.exemplars} if presented_task.exemplars is not None else {}
         )
-        train_resident_fn(
+        step_result = train_resident_fn(
             policy=core,
             optimizer=optimizer,
             state_val=task.state_val,
-            N=4,
-            G=4,
+            N=requested_n,
+            G=requested_g,
             max_depth=1,
             epsilon=0.2,
             temperature=1.5,
             **extra_kwargs,
         )
+        if require_engagement_receipt or (
+            isinstance(step_result, dict) and "engagement" in step_result
+        ):
+            receipt = _validate_engagement_receipt(
+                step_result,
+                requested_n=requested_n,
+                requested_g=requested_g,
+                min_unique_completions=min_unique_completions,
+            )
+            if engagement_receipt_sink is not None:
+                engagement_receipt_sink.append(receipt)
         # CHECKPOINT-EVAL HOOK: see this function's docstring. No-op unless
         # BOTH a callback and a truthy interval were supplied by the caller.
         if eval_checkpoint_callback is not None and eval_checkpoint_interval:
@@ -949,6 +1090,10 @@ def _run_scrambled_arm(
     n_train_steps: int = 16,
     lr: float = 1e-3,
     seed_offset: int = 9999,
+    requested_n: int = 4,
+    requested_g: int = 4,
+    min_unique_completions: int = 1,
+    require_engagement_receipt: bool = False,
 ) -> ArmResult:
     """Run a C_scrambled arm: same train_resident_fn but with ZEROED rewards.
 
@@ -1003,16 +1148,25 @@ def _run_scrambled_arm(
 
         for step_idx in range(n_train_steps):
             task = train_tasks[step_idx % len(train_tasks)]
-            train_resident_fn(
+            step_result = train_resident_fn(
                 policy=core,
                 optimizer=optimizer,
                 state_val=task.state_val,
-                N=4,
-                G=4,
+                N=requested_n,
+                G=requested_g,
                 max_depth=1,
                 epsilon=0.2,
                 temperature=1.5,
             )
+            if require_engagement_receipt or (
+                isinstance(step_result, dict) and "engagement" in step_result
+            ):
+                _validate_engagement_receipt(
+                    step_result,
+                    requested_n=requested_n,
+                    requested_g=requested_g,
+                    min_unique_completions=min_unique_completions,
+                )
 
         random.setstate(rng_state)
     finally:
@@ -1034,6 +1188,10 @@ def check_guards(
     a_train_result: Optional["ArmResult"] = None,
     n_train_steps: int = 16,
     lr: float = 1e-3,
+    requested_n: int = 4,
+    requested_g: int = 4,
+    min_unique_completions: int = 1,
+    require_engagement_receipt: bool = False,
 ) -> GuardResult:
     """Run all does-NOT-count guards.  Fail-closed: any failure blocks clearance.
 
@@ -1114,16 +1272,25 @@ def check_guards(
             )
             for step_i in range(min(n_train_steps, 4)):
                 task = corpus.train[step_i % len(corpus.train)]
-                _wrapped_g(
+                step_result = _wrapped_g(
                     policy=probe_core_g,
                     optimizer=probe_opt_g,
                     state_val=task.state_val,
-                    N=4,
-                    G=4,
+                    N=requested_n,
+                    G=requested_g,
                     max_depth=1,
                     epsilon=0.2,
                     temperature=1.5,
                 )
+                if require_engagement_receipt or (
+                    isinstance(step_result, dict) and "engagement" in step_result
+                ):
+                    _validate_engagement_receipt(
+                        step_result,
+                        requested_n=requested_n,
+                        requested_g=requested_g,
+                        min_unique_completions=min_unique_completions,
+                    )
             # Guard passes iff at least one step had core grad non-None
             guard_g = any(had for had in grad_log_g)
         except Exception:
@@ -1160,6 +1327,10 @@ def check_guards(
                 train_resident_fn=train_resident_fn,
                 n_train_steps=n_train_steps,
                 lr=lr,
+                requested_n=requested_n,
+                requested_g=requested_g,
+                min_unique_completions=min_unique_completions,
+                require_engagement_receipt=require_engagement_receipt,
             )
             c_scrambled_train_rate = c_scrambled_result.pass_rate
 
@@ -1214,6 +1385,7 @@ class RigResult:
     gate: GatePredicates
     guards: GuardResult
     stub_run: bool   # True = STUB instantiation; False = REAL
+    engagement_receipts: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def clearance(self) -> bool:
@@ -1233,6 +1405,10 @@ def run_rig(
     eval_checkpoint_callback: Optional[Callable[[int, Any], None]] = None,
     eval_checkpoint_interval: Optional[int] = None,
     corpus_v3_resample_fn: Optional[Callable[[Task, int], Task]] = None,
+    requested_n: int = 4,
+    requested_g: int = 4,
+    min_unique_completions: int = 1,
+    require_engagement_receipt: bool = False,
 ) -> RigResult:
     """Run the full A/B/C/Deleted apparatus.
 
@@ -1276,6 +1452,7 @@ def run_rig(
 
     # DEFECT-3 FIX: Arms C and Deleted — thread train_resident_fn through
     # DEFECT-2 FIX: receive the independently-computed deleted_hash (7th return value)
+    engagement_receipts: list[dict[str, Any]] = []
     (c_train, c_heldout,
      deleted_train, deleted_heldout,
      pre_c_hash, post_c_hash,
@@ -1290,6 +1467,11 @@ def run_rig(
         eval_checkpoint_callback=eval_checkpoint_callback,
         eval_checkpoint_interval=eval_checkpoint_interval,
         corpus_v3_resample_fn=corpus_v3_resample_fn,
+        requested_n=requested_n,
+        requested_g=requested_g,
+        min_unique_completions=min_unique_completions,
+        require_engagement_receipt=require_engagement_receipt,
+        engagement_receipt_sink=engagement_receipts,
     )
 
     # DEFECT-2 FIX: deleted_hash is NOW the independently-computed hash of the
@@ -1323,6 +1505,10 @@ def run_rig(
         a_train_result=a_train,
         n_train_steps=n_train_steps,
         lr=lr,
+        requested_n=requested_n,
+        requested_g=requested_g,
+        min_unique_completions=min_unique_completions,
+        require_engagement_receipt=require_engagement_receipt,
     )
 
     return RigResult(
@@ -1337,6 +1523,7 @@ def run_rig(
         gate=gate,
         guards=guards,
         stub_run=stub,
+        engagement_receipts=engagement_receipts,
     )
 
 
