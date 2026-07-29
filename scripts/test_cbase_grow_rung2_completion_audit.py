@@ -104,6 +104,28 @@ class CompletionReceiptTests(unittest.TestCase):
             )
         self.assertEqual(old["ticket"], new["ticket"])
 
+    def test_candidate_audit_successor_is_current_compact_and_source_bound(self) -> None:
+
+        completed = mock.Mock(returncode=0, stdout="GREEN C-GROW: exact\n", stderr="")
+        with mock.patch.object(audit.subprocess, "run", return_value=completed):
+            receipt = audit.build_candidate_audit_receipt(
+                timestamp="2026-07-29T10:40:00Z",
+            )
+
+        self.assertEqual(receipt["ticket"], "C-GROW-CANDIDATE-AUDIT")
+        self.assertEqual(receipt["probe"]["verdict"], "GREEN")
+        self.assertEqual(receipt["goal_id"], "EMBER-02")
+        self.assertEqual(receipt["workstream_id"], "EMBER-02A")
+        self.assertEqual(len(receipt["candidate_audit"]["candidate_rows_sha256"]), 64)
+        self.assertNotIn("rows", receipt["candidate_audit"])
+        self.assertEqual(
+            receipt["supersedes"],
+            "receipts/cbase-grow-rung/c-grow-candidate-audit-20260710T172304Z.json",
+        )
+        self.assertEqual(
+            set(receipt["source_sha256"]),
+            {"producer", "probe", "historical_receipt", "satisfying_receipt"},
+        )
 
 if __name__ == "__main__":
     unittest.main()
