@@ -26,6 +26,9 @@ CLI:
                   ORIGINAL path absent, and quarantines the bytes.
                   Prints RECEIPT_WRITE_SELFTEST_PASS on success.
 """
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import argparse
 import json
 import os
