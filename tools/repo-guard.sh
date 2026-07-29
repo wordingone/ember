@@ -408,6 +408,39 @@ if [ "${1:-}" = "--range" ] && [ -n "${2:-}" ]; then
 elif [ "${1:-}" = "--base" ] && [ -n "${2:-}" ]; then
   RANGE="$(git merge-base "$2" HEAD)..HEAD"
 fi
+# ---- 8b. every changed receipt must pass the fail-closed schema floor -----
+# Historical debt remains visible to `receipt_check.py --all`, but it cannot
+# justify landing another malformed or unstamped receipt. NUL-delimited Git
+# paths preserve spaces and other valid filename bytes without shell splitting.
+CHANGED_RECEIPT_SCOPE=0
+CHANGED_RECEIPT_OUT=""
+CHANGED_RECEIPT_RC=0
+if [ ! -f "$KERNEL_ROOT/scripts/check_changed_receipts.py" ]; then
+  fail "changed-receipts" "trusted scripts/check_changed_receipts.py is missing"
+elif [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  CHANGED_RECEIPT_SCOPE=1
+  CHANGED_RECEIPT_OUT="$(
+    git diff --cached --name-only --diff-filter=ACMR -z -- receipts |
+      python "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+  )"
+  CHANGED_RECEIPT_RC=$?
+elif [ -n "$RANGE" ]; then
+  CHANGED_RECEIPT_SCOPE=1
+  CHANGED_RECEIPT_OUT="$(
+    git diff --name-only --diff-filter=ACMR -z "$RANGE" -- receipts |
+      python "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+  )"
+  CHANGED_RECEIPT_RC=$?
+fi
+if [ "$CHANGED_RECEIPT_SCOPE" -eq 1 ]; then
+  if [ "$CHANGED_RECEIPT_RC" -eq 0 ]; then
+    ok "changed-receipts" "$CHANGED_RECEIPT_OUT"
+  else
+    fail "changed-receipts" "changed receipt validation failed"
+    printf '%s\n' "$CHANGED_RECEIPT_OUT" | sed 's/^/      /' | head -30
+  fi
+fi
+
 if [ -n "$RANGE" ]; then
   BAD=""
   for c in $(git rev-list "$RANGE" 2>/dev/null); do
