@@ -1,0 +1,44 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: pr-auto-merge-enrollment
+
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-auto-merge-enrollment-${{ github.event.pull_request.number || 'sweep' }}
+  cancel-in-progress: false
+
+jobs:
+  enroll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted default-branch automation only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: master
+          path: trusted-kernel
+          persist-credentials: false
+      - name: Enroll only deliberately authorized bounded PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${EVENT_PR:-}" ]; then
+            args+=(--pr "${EVENT_PR}")
+          fi
+          python "${GITHUB_WORKSPACE}/trusted-kernel/scripts/github/auto_merge.py" \
+            --repository "${GITHUB_REPOSITORY}" "${args[@]}"

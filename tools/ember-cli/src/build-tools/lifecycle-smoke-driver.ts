@@ -230,6 +230,18 @@ export function classifyActionFrame(
   if (
     action === "train" &&
     lower.includes("launch-packet") &&
+    (
+      lower.includes("not all present") ||
+      lower.includes("missing/invalid prerequisites") ||
+      lower.includes("no offer minted") ||
+      lower.includes("training is blocked")
+    )
+  ) {
+    return "REFUSED";
+  }
+  if (
+    action === "train" &&
+    lower.includes("launch-packet") &&
     lower.includes("does not launch training")
   ) {
     return "PREFLIGHT_ONLY";

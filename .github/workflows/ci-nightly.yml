@@ -1,0 +1,39 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: ci-nightly
+
+on:
+  schedule:
+    - cron: "31 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: ci-nightly
+  cancel-in-progress: true
+
+jobs:
+  extended-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0"
+      - name: Extended CPU-safe suites
+        run: |
+          python -B -m pytest -q scripts/tests -x
+          python -B -m pytest -q tests -x --ignore=tests/ember_restart_model/test_checkpoint_artifacts.py
+      - name: Explain scheduled boundary
+        if: always()
+        run: echo "Nightly failure is an actionable diagnostic, not a claim that recent work is worthless."

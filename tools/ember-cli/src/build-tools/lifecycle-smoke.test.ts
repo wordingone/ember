@@ -371,19 +371,14 @@ describe("inspectLifecycleSurface", () => {
 
 describe("compiled lifecycle driver host", () => {
   test("loads under Node and reaches its own closed argument boundary", () => {
-    const located = spawnSync("where.exe", ["node"], {
+    const located = spawnSync("node", ["--version"], {
       encoding: "utf8",
       windowsHide: true,
     });
     expect(located.status).toBe(0);
-    const nodeExecutable = located.stdout
-      .split(/\r?\n/)
-      .find((line) => line.trim().toLowerCase().endsWith("node.exe"))
-      ?.trim();
-    expect(nodeExecutable).toBeTruthy();
     const driver = join(import.meta.dir, "lifecycle-smoke-driver.ts");
     const result = spawnSync(
-      nodeExecutable!,
+      "node",
       ["--experimental-strip-types", driver],
       { cwd: join(import.meta.dir, ".."), encoding: "utf8", windowsHide: true },
     );
@@ -403,8 +398,8 @@ describe("compiled lifecycle driver host", () => {
     const inputs = driver.actionInputs!("C:\\temp\\ember-smoke", repoRoot);
 
     expect(inputs.save).not.toContain(repoRoot);
-    expect(inputs.save).toContain(
-      "--source tools\\ember-cli\\src\\commands\\__fixtures__\\model-identity",
+    expect(inputs.save).toMatch(
+      /--source tools[\\/]ember-cli[\\/]src[\\/]commands[\\/]__fixtures__[\\/]model-identity/,
     );
   });
 });
@@ -503,6 +498,10 @@ describe("compiled lifecycle action completion", () => {
         "This command does NOT launch training.",
       ].join("\n"),
     )).toBe("PREFLIGHT_ONLY");
+    expect(driver.classifyActionFrame!(
+      "train",
+      "launch-packet: all preflights GREEN, but the launch-authority artifacts are not all present",
+    )).toBe("REFUSED");
     expect(driver.classifyActionFrame!(
       "terminate",
       "stop run=smoke-run",
@@ -715,19 +714,19 @@ describe("compiled lifecycle visible frame", () => {
 describe("compiled lifecycle workflow authority", () => {
   test("checks out the immutable event head and installs the identity-validator runtime", () => {
     const workflow = readFileSync(
-      join(import.meta.dir, "..", "..", "..", "..", ".github", "workflows", "ember-cli-lifecycle-smoke.yml"),
+      join(import.meta.dir, "..", "..", "..", "..", ".github", "workflows", "cli-windows-lifecycle-e2e.yml"),
       "utf8",
     );
 
     expect(workflow).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
-    expect(workflow).toContain("uses: actions/setup-python@v5");
+    expect(workflow).toContain("uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065");
     expect(workflow).toContain("python-version: \"3.12\"");
-    expect(workflow).toContain("Install pinned identity-validator dependencies");
+    expect(workflow).toContain("Install pinned validator dependencies");
     expect(workflow).toContain(
       'python -m pip install "cryptography==49.0.0" "jsonschema==4.26.0"',
     );
     expect(workflow).toContain(
-      "name: ember-cli-lifecycle-smoke-${{ github.event.pull_request.head.sha || github.sha }}",
+      "name: ember-cli-lifecycle-smoke-${{ github.sha }}",
     );
   });
 });

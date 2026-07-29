@@ -1,0 +1,32 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "body_mutation_count": 0,
+  "branch_count": 66,
+  "claim_boundary": "GitHub work-system structure and metadata only; no issue acceptance, closure, roadmap, model, training, benchmark, research, capability, or release claim",
+  "label_count_after": 97,
+  "label_count_before": 31,
+  "label_verification_sha256": "31def13e152d3ce73f28b94cf47b177750d98be90eab5ed4bd7cff043d637213",
+  "master_sha": "8c350dfc3987234467c89ddd1e3f06134e9ab2c6",
+  "native_edge_count": 123,
+  "native_edges_added": 1,
+  "native_edges_already_present": 122,
+  "native_relationship_apply_receipt_sha256": "186e97ebbc7bd978ef60f274fa5dcc308ab9f561f865188a21c72e2f86cacb57",
+  "open_issue_count": 155,
+  "open_issue_review_plan_sha256": "8ae2f6b1201c572a7541be77d14f202a2654fa3618f3b1c479ec5b95293441af",
+  "open_pull_request_count": 0,
+  "post_metadata_snapshot_sha256": "92afc43824de239e562b3e4bb135d4fa77fb733f7a8edc493a78545bf0c10afa",
+  "pre_migration_snapshot_sha256": "de52e5dad679ac166a310c9628bd358829c53f2e9ef27aa61ff27c1a527f068d",
+  "receipt_sha256": "b74c77e47eec54c4bce55e85546074185d421efc664ac50581a015b4bad42b65",
+  "repository": "wordingone/ember",
+  "schema_version": "ember-github-work-system-migration-summary/v1",
+  "sha_convention": "sha256 fields use lowercase hexadecimal SHA-256 over canonical UTF-8 JSON (sort_keys=True,separators=(',',':'),ensure_ascii=False); receipt_sha256 excludes its own field",
+  "ticket": "EMBER-GITHUB-WORK-SYSTEM-MIGRATION-SUMMARY",
+  "ts": "2026-07-29T18:11:45.2412821Z",
+  "workflow_count_before": 11,
+  "workflow_count_target": 20,
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}

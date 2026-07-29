@@ -1,0 +1,18 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "body_mutation_count": 0,
+  "plan_sha256": "8ae2f6b1201c572a7541be77d14f202a2654fa3618f3b1c479ec5b95293441af",
+  "receipt_sha256": "c752a73e36ab1f709767c836bc5723352c5736c1022b287e37d977421cc34686",
+  "repository": "wordingone/ember",
+  "schema_version": "ember-open-work-review-apply/v1",
+  "sha_convention": "sha256 fields use lowercase hexadecimal SHA-256 over canonical UTF-8 JSON (sort_keys=True,separators=(',',':'),ensure_ascii=False); receipt_sha256 excludes its own field",
+  "status": "APPLIED",
+  "ticket": "EMBER-GITHUB-OPEN-WORK-APPLY",
+  "ts": "2026-07-29T18:11:45.2412821Z",
+  "updated_issue_count": 155,
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}

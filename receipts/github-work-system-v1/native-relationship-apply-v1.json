@@ -1,0 +1,19 @@
+{
+  "added_count": 1,
+  "already_present_count": 122,
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "edge_count": 123,
+  "plan_sha256": "05b8b736c8e6745e623f0d729e0739906d29a9ed4cf3659354af2e4269bc91fc",
+  "receipt_sha256": "186e97ebbc7bd978ef60f274fa5dcc308ab9f561f865188a21c72e2f86cacb57",
+  "repository": "wordingone/ember",
+  "schema_version": "ember-native-relationship-apply/v1",
+  "sha_convention": "sha256 fields use lowercase hexadecimal SHA-256 over canonical UTF-8 JSON (sort_keys=True,separators=(',',':'),ensure_ascii=False); receipt_sha256 excludes its own field",
+  "status": "VERIFIED",
+  "ticket": "EMBER-GITHUB-NATIVE-RELATIONSHIP-APPLY",
+  "ts": "2026-07-29T18:11:45.2412821Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}

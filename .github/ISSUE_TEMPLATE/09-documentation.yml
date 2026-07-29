@@ -1,0 +1,169 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "Documentation"
+description: "Open a structured Ember documentation issue."
+title: "[Documentation] "
+labels:
+  - "kind:documentation"
+  - "state:triage"
+body:
+  - type: markdown
+    attributes:
+      value: "<!-- ember-template: issue/documentation@v1 -->\\nDo not include secrets, private model or corpus bytes, copyrighted data, or sensitive host paths."
+  - type: input
+    id: outcome
+    attributes:
+      label: "Short outcome or question"
+      description: "State the independently meaningful result."
+    validations:
+      required: true
+  - type: textarea
+    id: current_state
+    attributes:
+      label: "Current state"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: desired_state
+    attributes:
+      label: "Desired state"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Exact scope"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: "Explicit out-of-scope boundary"
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: "Primary affected area"
+      options:
+        - "area:model"
+        - "area:tokenizer"
+        - "area:data"
+        - "area:training"
+        - "area:optimization"
+        - "area:evaluation"
+        - "area:checkpoint"
+        - "area:provenance"
+        - "area:inference"
+        - "area:agent"
+        - "area:tools"
+        - "area:ember-lab"
+        - "area:runtime"
+        - "area:cli"
+        - "area:cockpit"
+        - "area:installation"
+        - "area:packaging"
+        - "area:ci"
+        - "area:release"
+        - "area:docs"
+        - "area:security"
+        - "area:governance"
+    validations:
+      required: true
+  - type: dropdown
+    id: affected_milestone
+    attributes:
+      label: "Primary affected milestone"
+      options:
+        - "EMBER-00"
+        - "EMBER-01"
+        - "EMBER-02"
+        - "EMBER-03"
+        - "EMBER-04"
+        - "EMBER-05"
+        - "EMBER-06"
+        - "EMBER-07"
+        - "EMBER-08"
+        - "EMBER-09"
+        - "EMBER-10"
+        - "EMBER-11"
+        - "No primary milestone assigned yet"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: "Dependencies"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: intended_reader
+    attributes:
+      label: "Intended reader"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: implementation_source_of_truth
+    attributes:
+      label: "Implementation source of truth"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: missing_or_incorrect_material
+    attributes:
+      label: "Missing or incorrect material"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "Acceptance criteria"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: commands_or_examples_to_execute
+    attributes:
+      label: "Commands or examples to execute"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: invalidation_or_supersession_relationship
+    attributes:
+      label: "Invalidation or supersession relationship"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: evidence_required
+    attributes:
+      label: "Evidence required"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: claim_boundary
+    attributes:
+      label: "Claim boundary"
+      description: "State what this work and evidence do not authorize."
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: terminal_disposition
+    attributes:
+      label: "Terminal disposition condition"
+      description: "State exactly when this issue may close, park, or be superseded."
+      render: text
+    validations:
+      required: true
