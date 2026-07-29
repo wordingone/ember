@@ -1,0 +1,602 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+{
+  "schema_version": "ember-label-migrations/v1",
+  "repository": "wordingone/ember",
+  "captured_at": "2026-07-29",
+  "rules": [
+    {
+      "source_label": "bug",
+      "disposition": "RENAME",
+      "destination": "kind:defect",
+      "rationale": "Canonical namespaced defect kind.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "documentation",
+      "disposition": "RENAME",
+      "destination": "kind:documentation",
+      "rationale": "Canonical namespaced documentation kind.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "duplicate",
+      "disposition": "RENAME",
+      "destination": "resolution:duplicate",
+      "rationale": "Canonical namespaced documented resolution.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "enhancement",
+      "disposition": "DELETE_IF_UNUSED",
+      "destination": null,
+      "rationale": "Unused default label has no canonical active contract.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "good first issue",
+      "disposition": "DELETE_IF_UNUSED",
+      "destination": null,
+      "rationale": "Unused default label has no canonical active contract.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "help wanted",
+      "disposition": "DELETE_IF_UNUSED",
+      "destination": null,
+      "rationale": "Unused default label has no canonical active contract.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "invalid",
+      "disposition": "DELETE_IF_UNUSED",
+      "destination": null,
+      "rationale": "Unused default label has no canonical active contract.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "question",
+      "disposition": "DELETE_IF_UNUSED",
+      "destination": null,
+      "rationale": "Unused default label has no canonical active contract.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "wontfix",
+      "disposition": "DELETE_IF_UNUSED",
+      "destination": null,
+      "rationale": "Unused default label has no canonical active contract.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "independent-audit-lane",
+      "disposition": "RENAME",
+      "destination": "needs:review",
+      "rationale": "Open audit-lane issues require an explicit review/evidence condition.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 5,
+        "pull_requests": 0,
+        "total": 5
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "corpus",
+      "disposition": "RENAME",
+      "destination": "area:data",
+      "rationale": "Corpus work belongs to the canonical data subsystem.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 12,
+        "pull_requests": 0,
+        "total": 12
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "auto-merge-ok",
+      "disposition": "RENAME",
+      "destination": "merge:auto-approved",
+      "rationale": "Preserve deliberate existing auto-merge authority under the canonical namespace.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 18,
+        "total": 18
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "affects:EMBER-00",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-00",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 11,
+        "pull_requests": 0,
+        "total": 11
+      },
+      "expected_usage_count_after": {
+        "issues": 11,
+        "pull_requests": 0,
+        "total": 11
+      }
+    },
+    {
+      "source_label": "affects:EMBER-01",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-01",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 54,
+        "pull_requests": 1,
+        "total": 55
+      },
+      "expected_usage_count_after": {
+        "issues": 54,
+        "pull_requests": 1,
+        "total": 55
+      }
+    },
+    {
+      "source_label": "affects:EMBER-02",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-02",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 68,
+        "pull_requests": 3,
+        "total": 71
+      },
+      "expected_usage_count_after": {
+        "issues": 68,
+        "pull_requests": 3,
+        "total": 71
+      }
+    },
+    {
+      "source_label": "affects:EMBER-03",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-03",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 57,
+        "pull_requests": 0,
+        "total": 57
+      },
+      "expected_usage_count_after": {
+        "issues": 57,
+        "pull_requests": 0,
+        "total": 57
+      }
+    },
+    {
+      "source_label": "affects:EMBER-04",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-04",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      },
+      "expected_usage_count_after": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      }
+    },
+    {
+      "source_label": "affects:EMBER-05",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-05",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 46,
+        "pull_requests": 0,
+        "total": 46
+      },
+      "expected_usage_count_after": {
+        "issues": 46,
+        "pull_requests": 0,
+        "total": 46
+      }
+    },
+    {
+      "source_label": "affects:EMBER-06",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-06",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 8,
+        "pull_requests": 0,
+        "total": 8
+      },
+      "expected_usage_count_after": {
+        "issues": 8,
+        "pull_requests": 0,
+        "total": 8
+      }
+    },
+    {
+      "source_label": "affects:EMBER-07",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-07",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      },
+      "expected_usage_count_after": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      }
+    },
+    {
+      "source_label": "affects:EMBER-08",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-08",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      },
+      "expected_usage_count_after": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      }
+    },
+    {
+      "source_label": "affects:EMBER-09",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-09",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 5,
+        "pull_requests": 0,
+        "total": 5
+      },
+      "expected_usage_count_after": {
+        "issues": 5,
+        "pull_requests": 0,
+        "total": 5
+      }
+    },
+    {
+      "source_label": "affects:EMBER-10",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-10",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      },
+      "expected_usage_count_after": {
+        "issues": 3,
+        "pull_requests": 0,
+        "total": 3
+      }
+    },
+    {
+      "source_label": "affects:EMBER-11",
+      "disposition": "KEEP",
+      "destination": "affects:EMBER-11",
+      "rationale": "Canonical milestone-impact facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 5,
+        "pull_requests": 0,
+        "total": 5
+      },
+      "expected_usage_count_after": {
+        "issues": 5,
+        "pull_requests": 0,
+        "total": 5
+      }
+    },
+    {
+      "source_label": "roadmap:cross-cutting",
+      "disposition": "RENAME",
+      "destination": "scope:cross-cutting",
+      "rationale": "Canonical scope facet.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 31,
+        "pull_requests": 0,
+        "total": 31
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "roadmap:evidence-pending",
+      "disposition": "RENAME",
+      "destination": "needs:evidence",
+      "rationale": "Canonical missing-evidence condition.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "roadmap:historical",
+      "disposition": "DEPRECATE_AFTER_MIGRATION",
+      "destination": null,
+      "rationale": "Historical is not a work kind or lifecycle state; classify from full item evidence.",
+      "applicability": "both",
+      "deterministic": false,
+      "human_or_operator_judgment_required": true,
+      "usage_count_before": {
+        "issues": 8,
+        "pull_requests": 2,
+        "total": 10
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "roadmap:parent",
+      "disposition": "RENAME",
+      "destination": "kind:initiative",
+      "rationale": "Canonical roadmap parents are initiative issues.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 12,
+        "pull_requests": 0,
+        "total": 12
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "roadmap:subissue",
+      "disposition": "REPLACE_WITH_NATIVE_RELATIONSHIP",
+      "destination": null,
+      "rationale": "Use GitHub native sub-issue relationship after clause-preserving verification.",
+      "applicability": "both",
+      "deterministic": false,
+      "human_or_operator_judgment_required": true,
+      "usage_count_before": {
+        "issues": 175,
+        "pull_requests": 0,
+        "total": 175
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "roadmap:tracked",
+      "disposition": "DEPRECATE_AFTER_MIGRATION",
+      "destination": null,
+      "rationale": "Primary milestone and native relationships carry tracking state.",
+      "applicability": "both",
+      "deterministic": false,
+      "human_or_operator_judgment_required": true,
+      "usage_count_before": {
+        "issues": 214,
+        "pull_requests": 0,
+        "total": 214
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    },
+    {
+      "source_label": "NOT_CROSS_REVIEWED",
+      "disposition": "RENAME",
+      "destination": {
+        "issue": "needs:review",
+        "pull_request": "review:self-only"
+      },
+      "rationale": "Preserve review debt on issues and self-only exact-head review state on PRs.",
+      "applicability": "both",
+      "deterministic": true,
+      "human_or_operator_judgment_required": false,
+      "usage_count_before": {
+        "issues": 31,
+        "pull_requests": 43,
+        "total": 74
+      },
+      "expected_usage_count_after": {
+        "issues": 0,
+        "pull_requests": 0,
+        "total": 0
+      }
+    }
+  ]
+}

@@ -5193,6 +5193,14 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
     })
 }
 
+#[cfg(not(windows))]
+fn terminate_job_object_by_name(_name: &str) -> Result<()> {
+    Err(EmberLabError::Io(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "Windows Job Object termination is unavailable on this host",
+    )))
+}
+
 #[cfg(windows)]
 fn terminate_job_object_by_name(name: &str) -> Result<()> {
     use windows_sys::Win32::System::JobObjects::{OpenJobObjectW, TerminateJobObject};

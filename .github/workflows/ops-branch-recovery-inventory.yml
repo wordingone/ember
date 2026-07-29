@@ -1,0 +1,38 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "OPS: branch recovery inventory"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+
+# Finite campaign: github-work-system-v1 branch custody inventory.
+# Owner: Ember repository maintainer.
+# Completion: every branch has reachability/reconstruction evidence and disposition.
+# Retirement: remove after the campaign receipt is merged; no automatic deletion.
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Capture live branch evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -B scripts/github/snapshot.py --without-comments --output repository-snapshot.json
+          python -B scripts/github/branch_hygiene.py --snapshot repository-snapshot.json --output branch-recovery-inventory.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: branch-recovery-inventory-${{ github.run_id }}
+          path: branch-recovery-inventory.json
+          retention-days: 90

@@ -1,0 +1,36 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "OPS: issue disposition baseline"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+
+# Finite campaign: github-work-system-v1 issue baseline.
+# Owner: Ember repository maintainer.
+# Completion: one content-addressed full snapshot and reviewed classification plan.
+# Retirement: remove after the migration receipt is merged and post-state is verified.
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Capture full issue evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/github/snapshot.py --output issue-disposition-baseline.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: issue-disposition-baseline-${{ github.run_id }}
+          path: issue-disposition-baseline.json
+          retention-days: 90

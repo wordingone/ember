@@ -1,0 +1,19 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "body_mutation_count": 0,
+  "closed_item_change_count": 73,
+  "plan_sha256": "ae67e0cc245648e4fcf2f2e7d204585fa01dc2468b6ab2aaa402e89e97b960c9",
+  "receipt_sha256": "bf15028d1078a392b04ab8ce05db43b84692368551ed3c9f52bf3f5e9f4df4a2",
+  "repository": "wordingone/ember",
+  "retired_definition_count": 13,
+  "schema_version": "ember-deprecated-label-retirement-receipt/v1",
+  "sha_convention": "sha256 fields use lowercase hexadecimal SHA-256 over canonical UTF-8 JSON (sort_keys=True,separators=(',',':'),ensure_ascii=False); receipt_sha256 excludes its own field",
+  "status": "APPLIED",
+  "ticket": "EMBER-GITHUB-DEPRECATED-LABEL-RETIREMENT",
+  "ts": "2026-07-29T18:11:45.2412821Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}
