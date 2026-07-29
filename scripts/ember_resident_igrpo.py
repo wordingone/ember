@@ -25,6 +25,9 @@ Run:
   python ember_resident_igrpo.py --test    # full unit-test suite (all assertions)
 """
 from __future__ import annotations
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import argparse
 import hashlib
@@ -1523,6 +1526,20 @@ def igrpo_step(
     loss.backward()
     optimizer.step()
 
+    completion_keys = {
+        (tuple(episode.sampled_tokens), episode.final_action, episode.fallback_fired)
+        for episode in s2.refinements
+        if episode.sampled_tokens
+    }
+    drop_reasons: list[str] = []
+    for index, episode in enumerate(s2.refinements):
+        if not episode.sampled_tokens:
+            drop_reasons.append(f"stage2:{index}:no_emitted_tokens")
+        elif episode.final_action is None:
+            drop_reasons.append(f"stage2:{index}:no_final_action")
+        elif episode.fallback_fired:
+            drop_reasons.append(f"stage2:{index}:fallback_fired")
+
     return {
         "state_val": state_val,
         "stage1_rewards": s1.rewards,
@@ -1532,6 +1549,30 @@ def igrpo_step(
         "stage2_advantages": s2.advantages,
         "loss": float(loss.item()),
         "resample_fired": s2.resample_fired,
+        "engagement": {
+            "schema_version": "ember-igrpo-engagement-step-v1",
+            "requested_n": N,
+            "requested_g": G,
+            "realized_stage1_drafts": len(s1.drafts),
+            "attempted": len(s2.refinements),
+            "emitted": sum(bool(episode.sampled_tokens) for episode in s2.refinements),
+            "valid": sum(
+                bool(episode.sampled_tokens)
+                and episode.final_action is not None
+                and not episode.fallback_fired
+                for episode in s2.refinements
+            ),
+            "scored": len(s2.rewards),
+            "unique_completions": len(completion_keys),
+            "reward_vector_length": len(s2.rewards),
+            "advantage_vector_length": len(s2.advantages),
+            "group_ids": [f"stage2:{index}" for index in range(len(s2.refinements))],
+            "normalization_denominator": min(
+                len(s2.refinements), len(s2.advantages)
+            ),
+            "estimator_name": "population_std_group_relative",
+            "drop_reasons": drop_reasons,
+        },
     }
 
 
