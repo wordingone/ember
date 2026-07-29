@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import tempfile
 import sys
 import types
 import unittest
@@ -18,10 +19,6 @@ REVALIDATOR = ROOT / "scripts" / "land210j_public_revalidation.py"
 HISTORICAL = (
     ROOT / "receipts" / "ember-c-scale"
     / "land210j-family3-stragglers-receipt.json"
-)
-DRYRUN = (
-    ROOT / "scratch" / "r3-feasibility-dryrun"
-    / "r3-feasibility-dryrun-20260729T135005Z.json"
 )
 SUBJECT = "33027681a36ed351478e13ab05418b0698a00e15"
 
@@ -40,6 +37,38 @@ def load_revalidator():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def valid_dryrun_receipt() -> dict:
+    return {
+        "ticket": "R3-FEASIBILITY-PROBE",
+        "mode": "dry_run",
+        "model_id": "ember-owned-synthetic-random-init-v1",
+        "model_source": {
+            "source_kind": "OWNED_RANDOM_INIT",
+            "architecture": "LlamaForCausalLM",
+            "config": {"vocab_size": 256},
+            "external_checkpoint": None,
+            "external_model_id": None,
+        },
+        "all_assertions_passed": True,
+        "paid_api_surface_used": False,
+        "leg1_base_loaded_4bit_frozen": False,
+        "leg3_training_step": {
+            "grad_norm": 0.5,
+            "grad_norm_nonzero_assert_passed": True,
+        },
+        "leg4_inference_pass": {
+            "n_new_tokens": 64,
+            "min_tokens_assert_passed": True,
+        },
+    }
+
+
+def write_receipt(directory: str, receipt: dict) -> Path:
+    path = Path(directory) / "dryrun.json"
+    path.write_text(json.dumps(receipt), encoding="utf-8", newline="\n")
+    return path
 
 
 class Land210jOwnedDryRunTests(unittest.TestCase):
@@ -95,13 +124,15 @@ class Land210jOwnedDryRunTests(unittest.TestCase):
 
     def test_exact_public_lineage_and_owned_cpu_receipt(self) -> None:
         revalidator = load_revalidator()
-        receipt = revalidator.build_receipt(
-            ROOT,
-            HISTORICAL,
-            DRYRUN,
-            subject_commit=SUBJECT,
-            timestamp="2026-07-29T13:51:00Z",
-        )
+        with tempfile.TemporaryDirectory() as directory:
+            dryrun = write_receipt(directory, valid_dryrun_receipt())
+            receipt = revalidator.build_receipt(
+                ROOT,
+                HISTORICAL,
+                dryrun,
+                subject_commit=SUBJECT,
+                timestamp="2026-07-29T13:51:00Z",
+            )
         self.assertEqual(receipt["public_lineage"]["candidate_count"], 7)
         current = receipt["current_source_revalidation"]
         self.assertEqual(current["compiled_files"], 7)
@@ -120,19 +151,19 @@ class Land210jOwnedDryRunTests(unittest.TestCase):
 
     def test_revalidator_rejects_external_model_and_false_step(self) -> None:
         revalidator = load_revalidator()
-        receipt = revalidator.load_json(DRYRUN)
+        receipt = valid_dryrun_receipt()
 
         foreign = json.loads(json.dumps(receipt))
         foreign["model_source"]["external_model_id"] = "foreign/model"
         with self.assertRaisesRegex(ValueError, "external model id"):
             with patch.object(revalidator, "load_json", return_value=foreign):
-                revalidator.validate_dryrun_receipt(DRYRUN)
+                revalidator.validate_dryrun_receipt(PROBE)
 
         vacuous = json.loads(json.dumps(receipt))
         vacuous["leg3_training_step"]["grad_norm_nonzero_assert_passed"] = False
         with self.assertRaisesRegex(ValueError, "training proof"):
             with patch.object(revalidator, "load_json", return_value=vacuous):
-                revalidator.validate_dryrun_receipt(DRYRUN)
+                revalidator.validate_dryrun_receipt(PROBE)
 
     def test_revalidator_rejects_bad_subject_and_current_source_drift(self) -> None:
         revalidator = load_revalidator()
