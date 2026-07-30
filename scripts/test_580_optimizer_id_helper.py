@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """CPU tests for issue #580 (PR A): the authoritative bidirectional
 name<->id optimizer-state mapping helper (timeshare_pretrain.
 build_optimizer_id_maps / split_param_groups_from_state_dict) and its two
@@ -56,11 +59,21 @@ import gc
 import json
 import os
 import sys
+import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # scripts/ -> repo root
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 
-import timeshare_pretrain as ts  # noqa: E402  (light; no torch at module level)
+try:
+    import timeshare_pretrain as ts  # noqa: E402
+except SystemExit as exc:
+    # Current policy deliberately denies execution/import of the historical
+    # sub-3B cbase trainer. Preserve that denial and report the data-dependent
+    # ACs as unavailable; never let an import refusal become a false PASS.
+    ts = None
+    _TIMESHARE_UNAVAILABLE = str(exc)
+else:
+    _TIMESHARE_UNAVAILABLE = None
 
 SEED_CKPT_RELATIVE = os.path.join(
     "models", "cbase-grow-rung", "rung1-20260703T155447Z", "stabilize", "checkpoints", "step-00000766")
@@ -70,6 +83,14 @@ N_MUON_EXPECTED = 140
 
 _MODEL_CACHE: dict = {}
 _OPT_CACHE: dict = {}
+
+
+def _require_timeshare_available():
+    if ts is None:
+        raise unittest.SkipTest(
+            "historical trainer import is execution-denied by current policy: "
+            f"{_TIMESHARE_UNAVAILABLE}"
+        )
 
 
 def _seed_ckpt_dir():
@@ -93,6 +114,7 @@ def _get_model_state_and_maps():
     return (model_state, id_maps_model). Never touches disk -- the model is
     built fresh from configs/v0-pretrain-config.json, so this never depends
     on the gitignored real-checkpoint tree being present."""
+    _require_timeshare_available()
     if "result" in _MODEL_CACHE:
         return _MODEL_CACHE["result"]
     with open(os.path.join(REPO_ROOT, "configs", "v0-pretrain-config.json"), encoding="utf-8") as f:
@@ -160,10 +182,10 @@ def test_ac1_ff_momentum_shape_match():
     shape-matching buffer, against the real rung-2 seed checkpoint."""
     opt_state = _get_seed_opt_state()
     if opt_state is None:
-        print("[ac1-ff-shape] SKIP: real seed checkpoint not present on this box "
-              f"(gitignored models/ tree; looked under {SEED_CKPT_RELATIVE!r}, "
-              f"set EMBER_MODELS_ROOT to override)")
-        return True
+        raise unittest.SkipTest(
+            "real seed checkpoint not present on this box "
+            f"(gitignored models/ tree; looked under {SEED_CKPT_RELATIVE!r}, "
+            "set EMBER_MODELS_ROOT to override)")
 
     from p5_ratio_audit.run_p5_audit import resolve_gate_momentum_buffer
 
@@ -194,10 +216,10 @@ def test_ac2_zero_missing_against_real_seed_checkpoint():
     a real gap)."""
     opt_state = _get_seed_opt_state()
     if opt_state is None:
-        print("[ac2] SKIP: real seed checkpoint not present on this box "
-              f"(gitignored models/ tree; looked under {SEED_CKPT_RELATIVE!r}, "
-              f"set EMBER_MODELS_ROOT to override)")
-        return True
+        raise unittest.SkipTest(
+            "real seed checkpoint not present on this box "
+            f"(gitignored models/ tree; looked under {SEED_CKPT_RELATIVE!r}, "
+            "set EMBER_MODELS_ROOT to override)")
 
     from p5_ratio_audit.run_p5_audit import enumerate_missing_optimizer_state_ids
 
@@ -218,11 +240,15 @@ if __name__ == "__main__":
         test_ac2_zero_missing_against_real_seed_checkpoint,
     ]
     failures = []
+    skips = []
     for t in tests:
         try:
             ok = t()
             if not ok:
                 failures.append(t.__name__)
+        except unittest.SkipTest as e:
+            print(f"[{t.__name__}] SKIP: {e}")
+            skips.append(t.__name__)
         except Exception as e:
             print(f"[{t.__name__}] ERROR: {e}")
             import traceback
@@ -232,5 +258,8 @@ if __name__ == "__main__":
     if failures:
         print(f"\nISSUE_580_OPTIMIZER_ID_HELPER_TEST_FAIL: {failures}")
         sys.exit(1)
+    if skips:
+        print(f"\nISSUE_580_OPTIMIZER_ID_HELPER_TEST_INCOMPLETE: skipped={skips}")
+        sys.exit(2)
     print("\nISSUE_580_OPTIMIZER_ID_HELPER_TEST_PASS")
     sys.exit(0)
