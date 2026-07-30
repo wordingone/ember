@@ -90,8 +90,6 @@ export interface RunStatusState {
   phase: string;
   modelChat: string;
   restoreNotBefore?: string;
-  lastCompletedStep?: number;
-  failureClass?: string;
   lastTs: string;
 }
 
@@ -225,20 +223,12 @@ function processLine(line: string, clock: () => number): void {
     const energyStatus = payload["energy_status"] === "MEASURED" || payload["energy_status"] === "UNAVAILABLE"
       ? payload["energy_status"] : undefined;
     const measuredEnergy = energyStatus === "MEASURED" && gpuUuid && gpuWatts !== undefined && boardEnergyJoulesTotal !== undefined;
-    const terminalStatus = _state.runStatus;
-    const terminalTimestamp = terminalStatus ? Date.parse(terminalStatus.lastTs) : NaN;
-    const terminalBlocksProgress = terminalStatus?.runId === runId
-      && (terminalStatus.phase === "FAILED" || terminalStatus.phase === "COMPLETE")
-      && Number.isFinite(terminalTimestamp)
-      && terminalTimestamp >= eventTimestamp;
-    if (!terminalBlocksProgress) {
-      _state.activeRun = {
-        runId, step, totalSteps, loss, stepMs, tokensPerSecond, learningRate,
-        ...(measuredEnergy ? { gpuUuid, gpuWatts, boardEnergyJoulesTotal, energyStatus: "MEASURED" as const }
-          : energyStatus === "UNAVAILABLE" ? { energyStatus: "UNAVAILABLE" as const } : {}),
-        lastTs: ts,
-      };
-    }
+    _state.activeRun = {
+      runId, step, totalSteps, loss, stepMs, tokensPerSecond, learningRate,
+      ...(measuredEnergy ? { gpuUuid, gpuWatts, boardEnergyJoulesTotal, energyStatus: "MEASURED" as const }
+        : energyStatus === "UNAVAILABLE" ? { energyStatus: "UNAVAILABLE" as const } : {}),
+      lastTs: ts,
+    };
     const free = typeof payload["free_gib"] === "number" ? payload["free_gib"] : undefined;
     const total = typeof payload["total_gib"] === "number" ? payload["total_gib"] : undefined;
     const vram = validVram(free, total);
@@ -269,39 +259,8 @@ function processLine(line: string, clock: () => number): void {
     const restoreNotBefore = typeof payload["restore_not_before"] === "string"
       ? payload["restore_not_before"]
       : undefined;
-    const rawLastCompletedStep = payload["last_completed_step"];
-    const lastCompletedStep = typeof rawLastCompletedStep === "number"
-      && Number.isInteger(rawLastCompletedStep) && rawLastCompletedStep >= 0
-      ? rawLastCompletedStep
-      : undefined;
-    const rawFailureClass = payload["failure_class"];
-    const failureClass = typeof rawFailureClass === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(rawFailureClass)
-      ? rawFailureClass
-      : undefined;
-    const allowedPhase = ["ALLOCATING", "TRAINING", "PAUSED", "OFFLINE", "COMPLETE", "FAILED"].includes(phase);
-    const failedShapeValid = phase !== "FAILED" || (lastCompletedStep !== undefined && failureClass !== undefined);
-    const currentTimestamp = _state.runStatus ? Date.parse(_state.runStatus.lastTs) : NaN;
-    const currentTerminal = _state.runStatus?.phase === "FAILED" || _state.runStatus?.phase === "COMPLETE";
-    const incomingTerminal = phase === "FAILED" || phase === "COMPLETE";
-    const advancesStatus = !_state.runStatus
-      || eventTimestamp > currentTimestamp
-      || (eventTimestamp === currentTimestamp && incomingTerminal && !currentTerminal);
-    if (runId && allowedPhase && modelChat && failedShapeValid && advancesStatus) {
-      _state.runStatus = {
-        runId,
-        phase,
-        modelChat,
-        restoreNotBefore,
-        ...(lastCompletedStep !== undefined ? { lastCompletedStep } : {}),
-        ...(failureClass !== undefined ? { failureClass } : {}),
-        lastTs: ts,
-      };
-      if (incomingTerminal && _state.activeRun?.runId === runId) {
-        const activeTimestamp = Date.parse(_state.activeRun.lastTs);
-        if (Number.isFinite(activeTimestamp) && eventTimestamp >= activeTimestamp) {
-          _state.activeRun = undefined;
-        }
-      }
+    if (runId && phase && modelChat) {
+      _state.runStatus = { runId, phase, modelChat, restoreNotBefore, lastTs: ts };
     }
   }
 }
