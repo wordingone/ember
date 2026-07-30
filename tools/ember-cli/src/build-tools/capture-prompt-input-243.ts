@@ -22,7 +22,7 @@ import {
 import { Terminal } from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import { headlessCaptureEnv } from "../services/headless-capture.ts";
-import { buildCommitBanner } from "./build-cockpit.ts";
+import { cockpitCompileArgs, cockpitWindowsMetadataArgs } from "./build-cockpit.ts";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -278,6 +278,7 @@ export function buildCaptureReceipt(input: CaptureReceiptInput): Record<string, 
         "<owned-temp>/ember.exe",
         "--banner",
         "<derived-from-source-commit>",
+        ...cockpitWindowsMetadataArgs(),
       ],
     },
     transport: "windows-conpty/node-pty",
@@ -326,13 +327,7 @@ export function rebuildBinaryFromSource(
     const result = Bun.spawnSync(
       [
         process.execPath,
-        "build",
-        "./entrypoints/main.ts",
-        "--compile",
-        "--outfile",
-        rebuiltBinary,
-        "--banner",
-        buildCommitBanner(sourceCommit),
+        ...cockpitCompileArgs(sourceCommit, rebuiltBinary),
       ],
       { cwd: sourceRoot, stdout: "pipe", stderr: "pipe" },
     );

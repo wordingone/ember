@@ -24,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
 import { isHeadlessCapture, HEADLESS_CAPTURE_ENV } from "./headless-capture.ts";
+import type { TelemetryDiagnostics } from "./telemetry-watch.ts";
 
 // Re-exported so this module's existing importers and tests keep one import site. The
 // predicate itself lives in headless-capture.ts because the heartbeat is only ONE of the
@@ -36,6 +37,7 @@ export interface LivenessHeartbeatRow {
   ts:      string; // ISO8601Z -- when this heartbeat was written
   pid:     number;
   version: string; // build SHA or package version, whatever the caller has at hand
+  telemetry?: TelemetryDiagnostics;
 }
 
 export interface LivenessHeartbeatWriterOptions {
@@ -49,6 +51,9 @@ export interface LivenessHeartbeatWriterOptions {
    *  guessing -- callers that have a real value (EMBER_VERSION env, package.json version)
    *  should always pass it explicitly. */
   version?: string;
+  /** Bounded telemetry diagnostics included in each heartbeat for external soak evidence.
+   *  Provider failures or invalid values omit the snapshot; heartbeat writes remain fail-open. */
+  telemetryDiagnostics?: () => TelemetryDiagnostics;
 }
 
 export interface LivenessHeartbeatWriter {
@@ -60,6 +65,35 @@ export interface LivenessHeartbeatWriter {
   /** Overwrites the heartbeat file with a fresh {ts, pid, version} row. Never throws.
    *  A true no-op on an inert writer (filePath === null). */
   write: (nowMs?: number) => void;
+}
+
+const TELEMETRY_DIAGNOSTIC_KEYS = [
+  "pollAttempts",
+  "pollsCompleted",
+  "overlapPollsSkipped",
+  "channelBytesRead",
+  "maxSingleReadBytes",
+  "maxPollReadBytes",
+  "partialLineBytes",
+  "oversizedPartialLinesDropped",
+] as const satisfies readonly (keyof TelemetryDiagnostics)[];
+
+function telemetrySnapshot(
+  provider: (() => TelemetryDiagnostics) | undefined,
+): TelemetryDiagnostics | undefined {
+  if (!provider) return undefined;
+  try {
+    const source = provider();
+    const snapshot = {} as TelemetryDiagnostics;
+    for (const key of TELEMETRY_DIAGNOSTIC_KEYS) {
+      const value = source[key];
+      if (!Number.isSafeInteger(value) || value < 0) return undefined;
+      snapshot[key] = value;
+    }
+    return snapshot;
+  } catch {
+    return undefined;
+  }
 }
 
 /** #413: tools/ember-cli/state/ is gitignored repo-wide -- the root .gitignore's bare `state/`
@@ -132,7 +166,11 @@ export function createLivenessHeartbeatWriter(
   return {
     filePath,
     write(nowMs = Date.now()) {
-      const row: LivenessHeartbeatRow = { ts: new Date(nowMs).toISOString(), pid, version };
+      const telemetry = telemetrySnapshot(options.telemetryDiagnostics);
+      const row: LivenessHeartbeatRow = {
+        ts: new Date(nowMs).toISOString(), pid, version,
+        ...(telemetry ? { telemetry } : {}),
+      };
       try {
         fs.writeFileSync(filePath, JSON.stringify(row), "utf8");
       } catch (err) {

@@ -154,6 +154,14 @@ describe("buildCaptureReceipt", () => {
         "<owned-temp>/ember.exe",
         "--banner",
         "<derived-from-source-commit>",
+        "--windows-title",
+        "Ember",
+        "--windows-publisher",
+        "wordingone",
+        "--windows-version",
+        "0.1.0.0",
+        "--windows-description",
+        "Ember local AI laboratory",
       ],
     });
     const stages = receipt["stages"] as Array<Record<string, unknown>>;
