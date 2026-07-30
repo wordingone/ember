@@ -719,7 +719,7 @@ describe("compiled lifecycle workflow authority", () => {
     );
 
     expect(workflow).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
-    expect(workflow).toContain("uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065");
+    expect(workflow).toContain("uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97");
     expect(workflow).toContain("python-version: \"3.12\"");
     expect(workflow).toContain("Install pinned validator dependencies");
     expect(workflow).toContain(
