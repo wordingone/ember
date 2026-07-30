@@ -206,6 +206,90 @@ jobs:
             errors,
         )
 
+    def test_codeql_write_exception_rejects_environment_injection(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        path = Path(temp.name) / "security-codeql.yml"
+        path.write_text(
+            """
+name: security-codeql
+on: pull_request
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0
+        env:
+          NODE_OPTIONS: --require ./attacker.js
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@3b0bd1d116c0bde30213346b22d4f634d96a2fb0
+""",
+            encoding="utf-8",
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("pull_request workflow source cannot hold write authority" in e for e in errors),
+            errors,
+        )
+
+    def test_codeql_write_exception_rejects_workflow_environment_injection(
+        self,
+    ) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        path = Path(temp.name) / "security-codeql.yml"
+        path.write_text(
+            """
+name: security-codeql
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "47 10 * * 2"
+env:
+  NODE_OPTIONS: --require ./attacker.js
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@3b0bd1d116c0bde30213346b22d4f634d96a2fb0
+""",
+            encoding="utf-8",
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("pull_request workflow source cannot hold write authority" in e for e in errors),
+            errors,
+        )
+
     def test_dependabot_or_fork_token_reduction_is_not_a_safety_proof(self) -> None:
         path = self._write(
             """

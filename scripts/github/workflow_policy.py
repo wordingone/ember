@@ -132,12 +132,43 @@ def _job_executes_pr_controlled_workflow_code(steps: list[Any]) -> bool:
 
 def _is_trusted_codeql_pr_write_job(
     path: Path,
+    workflow: dict[str, Any],
+    job_name: str,
     permissions: Any,
+    job: dict[str, Any],
     steps: list[Any],
 ) -> bool:
     if path.name != "security-codeql.yml":
         return False
+    if set(workflow) != {"name", "on", "permissions", "jobs"}:
+        return False
+    if workflow["name"] != "security-codeql":
+        return False
+    if workflow["on"] != {
+        "push": {"branches": ["master"]},
+        "pull_request": {"branches": ["master"]},
+        "schedule": [{"cron": "47 10 * * 2"}],
+    }:
+        return False
+    if set(workflow["jobs"]) != {"codeql"} or job_name != "codeql":
+        return False
     if permissions != {"contents": "read", "security-events": "write"}:
+        return False
+    if set(job) != {"runs-on", "timeout-minutes", "strategy", "steps"}:
+        return False
+    if job["runs-on"] != "ubuntu-latest" or job["timeout-minutes"] != 45:
+        return False
+    if job["strategy"] != {
+        "fail-fast": False,
+        "matrix": {"language": ["python", "javascript-typescript"]},
+    }:
+        return False
+    expected_steps = (
+        {"uses": TRUSTED_CODEQL_PR_ACTIONS[0], "with": {"persist-credentials": False}},
+        {"uses": TRUSTED_CODEQL_PR_ACTIONS[1], "with": {"languages": "${{ matrix.language }}"}},
+        {"uses": TRUSTED_CODEQL_PR_ACTIONS[2]},
+    )
+    if tuple(steps) != expected_steps:
         return False
     actions = tuple(
         str(step.get("uses", ""))
@@ -192,7 +223,7 @@ def validate_workflow(path: Path) -> list[str]:
             job_privileged
             and "pull_request" in event_names
             and not _is_trusted_codeql_pr_write_job(
-                path, effective_permissions, steps
+                path, workflow, str(job_name), effective_permissions, job, steps
             )
         ):
             errors.append(
