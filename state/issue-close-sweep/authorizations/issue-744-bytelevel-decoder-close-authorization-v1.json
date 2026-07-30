@@ -1,0 +1,13 @@
+{
+  "authorization_sha256": "6a6d1b98e7a473caf18bee083947722fd4ddc05a8875031c0605f03f25e765df",
+  "citation": "https://github.com/wordingone/ember/pull/1204#issuecomment-5130330376",
+  "close_issue_numbers": [
+    744
+  ],
+  "packet_path": "receipts/oldest-issue-disposition/approved/issue-744-bytelevel-decoder-close-v1.json",
+  "packet_sha256": "23c460d3c67247ccd729fa413cd76eb7315eddbd5b67f57e4207e2ff1664e6de",
+  "repository": "wordingone/ember",
+  "review_provenance": "SELF_ONLY",
+  "reviewer": "self-review-authority",
+  "schema_version": "ember-issue-close-sweep-authorization-v1"
+}
