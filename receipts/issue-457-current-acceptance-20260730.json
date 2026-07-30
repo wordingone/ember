@@ -1,0 +1,49 @@
+{
+  "acceptance": {
+    "commit_and_physical_numbers_bound": true,
+    "file_backed_optimizer_state": true,
+    "first_step_has_no_large_private_commit_delta": true,
+    "rung2_instrumented_probe_completed": true
+  },
+  "claim_boundary": "This receipt proves only the current file-backed optimizer surfaces, a bounded CPU first-step private-commit measurement, and the immutable historical 2.2B twenty-step receipt binding. It makes no new GPU, training, checkpoint, model, benchmark, capability, or milestone claim.",
+  "first_step_private_commit": {
+    "after_bytes": 1657778176,
+    "before_bytes": 1648717824,
+    "charged_delta_bytes": 9060352,
+    "delta_bytes": 9060352,
+    "file_backed_surfaces": [
+      "probe_weight.exp_avg.f32",
+      "probe_weight.exp_avg_sq.f32",
+      "probe_weight.grad.f32",
+      "probe_weight.shadow.f32"
+    ],
+    "limit_bytes": 67108864,
+    "parameter_count": 65536,
+    "tensor_side": 256,
+    "verdict": "PASS"
+  },
+  "goal_id": "EMBER-02",
+  "historical_rung2_measurement": {
+    "commit_available_gib": 23.572,
+    "free_physical_gib_not_the_gate": 32.752,
+    "optimizer_steps": 20,
+    "param_count": 2228265984,
+    "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260709T092042Z.json",
+    "sha256": "0de233a1d8f2780a79c4ba69f33b517d47734605738a4b1461c22c60d84e7a54",
+    "verdict": "MEASURED_PASS"
+  },
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "issue": "wordingone/ember#457",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "platform": "win32",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+  "source": {
+    "acceptance_probe_sha256": "81bab55cde0ac5ab12a8dda51420241c7686b45760c3e2fd709afb2ebbf80ac6",
+    "cpu_offload_adamw_sha256": "aba53b54e30a2da075fced76c11625221af5b0c0dac90ffdc137974dc19784f6",
+    "governor_sha256": "6df17c2946ccdb8ab09b132f6cfc57b7828258f145987c252d48bf4e156c5d06"
+  },
+  "ticket": "ISSUE-457-CURRENT-ACCEPTANCE",
+  "ts": "2026-07-30T20:11:53.577211+00:00",
+  "verdict": "ISSUE_457_ACCEPTANCE_PASS",
+  "workstream_id": "EMBER-02A"
+}
