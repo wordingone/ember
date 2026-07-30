@@ -11,8 +11,9 @@ import hashlib
 import json
 import re
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 
 class PacketError(RuntimeError):
@@ -21,9 +22,7 @@ class PacketError(RuntimeError):
 
 _SHA1 = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-_TIMESTAMP = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$"
-)
+_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
 _AUTHORITY = {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",
@@ -429,21 +428,15 @@ def build_capture(
             issue_number=number,
         )
         if comments_pre != comments_post:
-            raise PacketError(
-                f"comment population drift for issue {number}"
-            )
+            raise PacketError(f"comment population drift for issue {number}")
         if len(comments_pre) != population_row["comment_count"]:
             raise PacketError(
                 f"comment count mismatch for issue {number}: "
                 f"API={population_row['comment_count']} "
                 f"captured={len(comments_pre)}"
             )
-        source_evidence[comments_pre_path.name] = _file_sha256(
-            comments_pre_path
-        )
-        source_evidence[comments_post_path.name] = _file_sha256(
-            comments_post_path
-        )
+        source_evidence[comments_pre_path.name] = _file_sha256(comments_pre_path)
+        source_evidence[comments_post_path.name] = _file_sha256(comments_post_path)
         pagination["comments"].append(
             {
                 "issue_number": number,
@@ -480,9 +473,7 @@ def build_capture(
             [[row["number"], row["created_at"]] for row in issues]
         ),
     }
-    capture["capture_sha256"] = canonical_sha256(
-        _capture_projection(capture)
-    )
+    capture["capture_sha256"] = canonical_sha256(_capture_projection(capture))
     validate_capture(capture, expected_master=master)
     return capture
 
@@ -641,9 +632,7 @@ def validate_capture(
     )
     issues = [
         _validate_capture_issue(item, index=index)
-        for index, item in enumerate(
-            _list(capture["issues"], field="capture.issues")
-        )
+        for index, item in enumerate(_list(capture["issues"], field="capture.issues"))
     ]
     if len(issues) != 20:
         raise PacketError("capture must contain exactly twenty issues")
@@ -707,9 +696,7 @@ def _validate_source_inventory(
         )
         normalized.append(row)
     if Counter(actual) != Counter(_source_units(issue)):
-        raise PacketError(
-            f"{field} source clause coverage is incomplete or duplicate"
-        )
+        raise PacketError(f"{field} source clause coverage is incomplete or duplicate")
     return normalized
 
 
@@ -770,21 +757,31 @@ def _validate_authority_review(value: Any, *, field: str) -> Mapping[str, Any] |
     row = _mapping(value, field=field)
     _strict_keys(
         row,
-        {"reviewer", "verdict", "citation", "reviewed_commit_sha"},
+        {
+            "reviewer",
+            "review_provenance",
+            "verdict",
+            "citation",
+            "reviewed_commit_sha",
+        },
         field=field,
     )
-    if row["reviewer"] != "delegated-authority" or row["verdict"] != "PASS":
-        raise PacketError(f"{field} must record delegated authority review PASS")
+    allowed_review = (
+        row["reviewer"] == "delegated-authority"
+        and row["review_provenance"] == "INDEPENDENT_DELEGATED"
+    ) or (
+        row["reviewer"] == "self-review-authority"
+        and row["review_provenance"] == "SELF_ONLY"
+    )
+    if not allowed_review or row["verdict"] != "PASS":
+        raise PacketError(f"{field} must record an allowed authority review PASS")
     _text(row["citation"], field=f"{field}.citation")
     _sha1(row["reviewed_commit_sha"], field=f"{field}.reviewed_commit_sha")
     return row
 
 
 def _receipt_projection(receipt: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        key: receipt[key]
-        for key in sorted(_RECEIPT_KEYS - {"receipt_sha256"})
-    }
+    return {key: receipt[key] for key in sorted(_RECEIPT_KEYS - {"receipt_sha256"})}
 
 
 def _validate_receipt(
@@ -809,10 +806,7 @@ def _validate_receipt(
         issue=issue,
         field=f"{field}.source_clause_inventory",
     )
-    source_units = {
-        (row["citation"], row["source_sha256"])
-        for row in inventory
-    }
+    source_units = {(row["citation"], row["source_sha256"]) for row in inventory}
     unbound = _validate_unbound(
         receipt["unbound_clause"],
         source_units=source_units,
@@ -845,19 +839,15 @@ def _validate_receipt(
         if not close_evidence:
             raise PacketError(f"{field} CLOSE requires production evidence")
         if authority_review is None:
-            raise PacketError(f"{field} CLOSE requires delegated authority review")
+            raise PacketError(f"{field} CLOSE requires authority review")
     elif disposition == "PARTIAL":
         if unbound is None or action is None:
-            raise PacketError(
-                f"{field} PARTIAL requires an unbound clause and action"
-            )
+            raise PacketError(f"{field} PARTIAL requires an unbound clause and action")
         if close_evidence or authority_review is not None:
             raise PacketError(f"{field} PARTIAL cannot claim close evidence")
     elif disposition == "SUPERSEDED":
         if replacement is None:
-            raise PacketError(
-                f"{field} SUPERSEDED requires replacement citation"
-            )
+            raise PacketError(f"{field} SUPERSEDED requires replacement citation")
         if close_evidence or authority_review is not None:
             raise PacketError(f"{field} SUPERSEDED cannot claim close evidence")
     elif disposition == "NEGATIVE-KEEP":
@@ -866,9 +856,7 @@ def _validate_receipt(
                 f"{field} NEGATIVE-KEEP requires retained lesson and action"
             )
         if close_evidence or authority_review is not None:
-            raise PacketError(
-                f"{field} NEGATIVE-KEEP cannot claim close evidence"
-            )
+            raise PacketError(f"{field} NEGATIVE-KEEP cannot claim close evidence")
 
     expected_hash = canonical_sha256(_receipt_projection(receipt))
     if receipt["receipt_sha256"] != expected_hash:
@@ -925,9 +913,7 @@ def build_packet(
             "issue_url": issue["url"],
             "capture_issue_sha256": canonical_sha256(issue),
         }
-        receipt["receipt_sha256"] = canonical_sha256(
-            _receipt_projection(receipt)
-        )
+        receipt["receipt_sha256"] = canonical_sha256(_receipt_projection(receipt))
         receipts.append(
             _validate_receipt(
                 receipt,
@@ -946,8 +932,7 @@ def build_packet(
         "selection_sha256": capture["selection_sha256"],
         "receipts": receipts,
         "disposition_counts": {
-            name: counts.get(name, 0)
-            for name in sorted(_DISPOSITIONS)
+            name: counts.get(name, 0) for name in sorted(_DISPOSITIONS)
         },
         "deletion_or_issue_mutation_authority": "NOT_GRANTED",
         "public_issue_mutation_performed": False,
@@ -967,8 +952,7 @@ def validate_packet(
     if packet["authority"] != _AUTHORITY:
         raise PacketError("packet authority binding is invalid")
     if (
-        packet["schema_version"]
-        != "ember-oldest-issue-disposition-packet-v1"
+        packet["schema_version"] != "ember-oldest-issue-disposition-packet-v1"
         or packet["repository"] != "wordingone/ember"
     ):
         raise PacketError("packet identity is invalid")
@@ -997,12 +981,9 @@ def validate_packet(
     expected_numbers = [issue["number"] for issue in capture["issues"]]
     if numbers != expected_numbers:
         raise PacketError("packet receipt order or issue binding mismatch")
-    expected_counts = Counter(
-        receipt["disposition"] for receipt in receipts
-    )
+    expected_counts = Counter(receipt["disposition"] for receipt in receipts)
     if packet["disposition_counts"] != {
-        name: expected_counts.get(name, 0)
-        for name in sorted(_DISPOSITIONS)
+        name: expected_counts.get(name, 0) for name in sorted(_DISPOSITIONS)
     }:
         raise PacketError("packet disposition counts mismatch")
     if (

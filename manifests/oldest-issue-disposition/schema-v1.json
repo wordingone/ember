@@ -80,16 +80,47 @@
     },
     "authorityReview": {
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "review_provenance": {
+              "const": "INDEPENDENT_DELEGATED"
+            },
+            "reviewer": {
+              "const": "delegated-authority"
+            }
+          }
+        },
+        {
+          "properties": {
+            "review_provenance": {
+              "const": "SELF_ONLY"
+            },
+            "reviewer": {
+              "const": "self-review-authority"
+            }
+          }
+        }
+      ],
       "properties": {
         "citation": {
           "minLength": 1,
           "type": "string"
         },
+        "review_provenance": {
+          "enum": [
+            "INDEPENDENT_DELEGATED",
+            "SELF_ONLY"
+          ]
+        },
         "reviewed_commit_sha": {
           "$ref": "#/$defs/sha1"
         },
         "reviewer": {
-          "const": "delegated-authority"
+          "enum": [
+            "delegated-authority",
+            "self-review-authority"
+          ]
         },
         "verdict": {
           "const": "PASS"
@@ -97,6 +128,7 @@
       },
       "required": [
         "reviewer",
+        "review_provenance",
         "verdict",
         "citation",
         "reviewed_commit_sha"

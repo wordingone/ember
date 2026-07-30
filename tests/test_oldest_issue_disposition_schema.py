@@ -11,20 +11,17 @@ from pathlib import Path
 
 import jsonschema
 
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.oldest_issue_disposition import validate_packet  # noqa: E402
-from scripts.verify_oldest_issue_disposition_packet import (  # noqa: E402
+from scripts.oldest_issue_disposition import validate_packet
+from scripts.verify_oldest_issue_disposition_packet import (
     verify_replay,
 )
 
 CAPTURED_MASTER = "e8a89a39cee293d793543e025a0d03fee0181e6d"
 
-SCHEMA = (
-    ROOT / "manifests" / "oldest-issue-disposition" / "schema-v1.json"
-)
+SCHEMA = ROOT / "manifests" / "oldest-issue-disposition" / "schema-v1.json"
 PACKET = (
     ROOT
     / "receipts"
@@ -70,3 +67,41 @@ def test_runtime_validator_requires_an_independent_master_pin() -> None:
     except TypeError:
         return
     raise AssertionError("validate_packet accepted an omitted master pin")
+
+
+def test_authority_review_schema_accepts_honest_provenance_pairs_only() -> None:
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8", errors="strict"))
+    schema["$defs"]["authorityReview"]
+    independent = {
+        "reviewer": "delegated-authority",
+        "review_provenance": "INDEPENDENT_DELEGATED",
+        "verdict": "PASS",
+        "citation": "mailbox:999",
+        "reviewed_commit_sha": "a" * 40,
+    }
+    solo = {
+        "reviewer": "self-review-authority",
+        "review_provenance": "SELF_ONLY",
+        "verdict": "PASS",
+        "citation": "https://github.com/wordingone/ember/pull/1200",
+        "reviewed_commit_sha": "b" * 40,
+    }
+
+    # Validate through the full schema so local SHA references resolve normally.
+    wrapper = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": schema["$defs"],
+        "$ref": "#/$defs/authorityReview",
+    }
+    jsonschema.validate(independent, wrapper, cls=jsonschema.Draft202012Validator)
+    jsonschema.validate(solo, wrapper, cls=jsonschema.Draft202012Validator)
+    mismatched = dict(solo, review_provenance="INDEPENDENT_DELEGATED")
+    try:
+        jsonschema.validate(
+            mismatched,
+            wrapper,
+            cls=jsonschema.Draft202012Validator,
+        )
+    except jsonschema.ValidationError:
+        return
+    raise AssertionError("authority review schema accepted mismatched provenance")

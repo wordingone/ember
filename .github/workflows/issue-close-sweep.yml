@@ -1,0 +1,110 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "OPS: trusted issue close sweep"
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorization_path:
+        description: "Checked-in content-addressed close authorization"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue-close-sweep
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    permissions:
+      contents: read
+      issues: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require exact trusted master
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/master"
+          api_master=$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)
+          test "${api_master}" = "${GITHUB_SHA}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Validate checked-in authorization and live sources
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_PATH: ${{ inputs.authorization_path }}
+        run: |
+          set -euo pipefail
+          [[ "${AUTHORIZATION_PATH}" =~ ^state/issue-close-sweep/authorizations/[A-Za-z0-9._-]+\.json$ ]]
+          test -f "${AUTHORIZATION_PATH}"
+          packet=$(jq -er .packet_path "${AUTHORIZATION_PATH}")
+          [[ "${packet}" =~ ^receipts/oldest-issue-disposition/approved/[A-Za-z0-9._-]+\.json$ ]]
+          packet_master=$(jq -er .master_sha "${packet}")
+          [[ "${packet_master}" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "${packet_master}" "${GITHUB_SHA}"
+          python -B scripts/issue_close_sweep.py validate \
+            --repository "${GITHUB_REPOSITORY}" \
+            --packet "${packet}" \
+            --authorization "${AUTHORIZATION_PATH}" \
+            --expected-master-sha "${GITHUB_SHA}" \
+            --packet-master-is-ancestor \
+            --output "${RUNNER_TEMP}/issue-close-plan.json"
+
+  apply:
+    needs: validate
+    permissions:
+      contents: read
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require unchanged trusted master
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/master"
+          api_master=$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)
+          test "${api_master}" = "${GITHUB_SHA}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Revalidate and apply exact closure set
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTHORIZATION_PATH: ${{ inputs.authorization_path }}
+        run: |
+          set -euo pipefail
+          [[ "${AUTHORIZATION_PATH}" =~ ^state/issue-close-sweep/authorizations/[A-Za-z0-9._-]+\.json$ ]]
+          packet=$(jq -er .packet_path "${AUTHORIZATION_PATH}")
+          [[ "${packet}" =~ ^receipts/oldest-issue-disposition/approved/[A-Za-z0-9._-]+\.json$ ]]
+          packet_master=$(jq -er .master_sha "${packet}")
+          [[ "${packet_master}" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "${packet_master}" "${GITHUB_SHA}"
+          python -B scripts/issue_close_sweep.py apply \
+            --repository "${GITHUB_REPOSITORY}" \
+            --packet "${packet}" \
+            --authorization "${AUTHORIZATION_PATH}" \
+            --expected-master-sha "${GITHUB_SHA}" \
+            --packet-master-is-ancestor \
+            --output "${RUNNER_TEMP}/issue-close-execution.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: issue-close-sweep-${{ github.run_id }}-${{ github.sha }}
+          path: ${{ runner.temp }}/issue-close-execution.json
+          if-no-files-found: error
+          retention-days: 90
