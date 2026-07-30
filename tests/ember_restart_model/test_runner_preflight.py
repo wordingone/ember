@@ -109,6 +109,106 @@ class RunnerPreflightTests(unittest.TestCase):
                     payload={"run_id": "vision-v4", "checkpoint_path": "C:/secret"},
                 )
 
+    def test_training_telemetry_separates_a_killed_writer_partial_before_terminal_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            channel = Path(directory) / "ember-telemetry.jsonl"
+            channel.write_bytes(b'{"ts":"truncated"')
+
+            run_vertical_slice.append_training_telemetry(
+                channel,
+                kind="run_status",
+                payload={
+                    "run_id": "vision-v4",
+                    "phase": "FAILED",
+                    "model_chat": "OFFLINE",
+                    "last_completed_step": 7,
+                    "failure_class": "TRAINER_ERROR",
+                },
+            )
+
+            lines = channel.read_bytes().splitlines()
+            self.assertEqual(lines[0], b'{"ts":"truncated"')
+            terminal = json.loads(lines[1])
+            self.assertEqual(terminal["payload"]["phase"], "FAILED")
+            self.assertEqual(terminal["payload"]["last_completed_step"], 7)
+
+    def test_specialist_failure_emits_path_free_failed_status_with_last_completed_step(self) -> None:
+        records = [
+            {"active_expert": "vision", "scene_split": "train", "token_ids": [1], "row_id": "train"},
+            {"active_expert": "vision", "scene_split": "validation", "token_ids": [2], "row_id": "validation"},
+            {"active_expert": "vision", "scene_split": "test", "token_ids": [3], "row_id": "test"},
+        ]
+        verification = {
+            "result": "VERIFIED",
+            "capability": "image",
+            "records_artifact_sha256": "a" * 64,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            channel = Path(directory) / "ember-telemetry.jsonl"
+            channel.write_text(json.dumps({
+                "ts": "2026-07-17T05:00:00",
+                "kind": "train_step",
+                "source": "ember-restart-3b",
+                "payload": {"run_id": "vision-v4", "step": 99},
+            }) + "\n", encoding="utf-8")
+
+            def fail_after_progress(**_kwargs: object) -> dict[str, object]:
+                run_vertical_slice.append_training_telemetry(
+                    channel,
+                    kind="train_step",
+                    payload={"run_id": "vision-v4", "step": 7, "loss": 4.0},
+                )
+                raise RuntimeError("trainer failed at C:/private/checkpoint")
+
+            with patch.object(
+                run_vertical_slice,
+                "load_verified_specialist_records",
+                return_value=(records, verification, b"{}"),
+            ), patch.object(
+                run_vertical_slice,
+                "specialist_lineage_request",
+                side_effect=lambda **kwargs: {
+                    "parent_manifest": "parent",
+                    "root_manifest": "root",
+                    "execution_slice": kwargs["execution_slice"],
+                    "scene_split_selection": kwargs["scene_split_selection"],
+                },
+            ), patch.object(run_vertical_slice, "run", side_effect=fail_after_progress):
+                with self.assertRaisesRegex(RuntimeError, "private/checkpoint"):
+                    run_vertical_slice.run_specialist(
+                        seed=84,
+                        artifact_root=Path("B:/ember-artifacts"),
+                        data_manifest=Path("data/vision.json"),
+                        tokenizer_path=Path("tokenizer.json"),
+                        capability="image",
+                        resume_checkpoint=Path("B:/parent"),
+                        parent_manifest=Path("B:/parent/checkpoint-manifest.json"),
+                        root_manifest=Path("B:/root/checkpoint-manifest.json"),
+                        checkpoint_interval=8_192,
+                        write_budget_bytes=120 * 1024**3,
+                        start_record=0,
+                        max_records=1,
+                        telemetry_path=channel,
+                        telemetry_run_id="vision-v4",
+                        model_chat_restore_not_before="2026-07-18T11:00:00-07:00",
+                    )
+
+            events = [
+                json.loads(line)
+                for line in channel.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(events[-1]["kind"], "run_status")
+            self.assertEqual(events[-1]["payload"], {
+                "failure_class": "TRAINER_ERROR",
+                "last_completed_step": 7,
+                "model_chat": "OFFLINE",
+                "phase": "FAILED",
+                "restore_not_before": "2026-07-18T11:00:00-07:00",
+                "run_id": "vision-v4",
+            })
+            self.assertNotIn("private", json.dumps(events[-1]))
+
     def test_specialist_loader_ignores_ambient_pythonpath_and_prioritizes_canonical_verifier(self) -> None:
         """The independent verifier must never import ambient generator/tokenizer modules."""
         from build_specialist_bundle import emit_bundle

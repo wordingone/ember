@@ -357,8 +357,68 @@ def append_training_telemetry(path: Path, *, kind: str, payload: dict[str, objec
     if len(encoded) > 4096:
         raise ValueError("training telemetry event exceeds the bounded channel contract")
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("ab") as handle:
+    with path.open("a+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() > 0:
+            handle.seek(-1, os.SEEK_END)
+            if handle.read(1) != b"\n":
+                handle.seek(0, os.SEEK_END)
+                handle.write(b"\n")
         handle.write(encoded)
+
+
+def _latest_completed_training_step(path: Path, *, run_id: str) -> int:
+    """Recover the latest valid trainer-owned step without trusting partial or future rows."""
+
+    if not path.is_file():
+        return 0
+    now = datetime.now(timezone.utc).timestamp()
+    latest: tuple[float, int] | None = None
+    try:
+        with path.open("rb") as handle:
+            for raw_line in handle:
+                if len(raw_line) > 4096:
+                    continue
+                try:
+                    event = json.loads(raw_line.decode("utf-8"))
+                except (UnicodeError, json.JSONDecodeError):
+                    continue
+                if not isinstance(event, dict) or event.get("kind") != "train_step" or event.get("source") != "ember-restart-3b":
+                    continue
+                payload = event.get("payload")
+                timestamp = event.get("ts")
+                if (
+                    not isinstance(payload, dict)
+                    or payload.get("run_id") != run_id
+                    or not isinstance(timestamp, str)
+                    or not timestamp.endswith("Z")
+                ):
+                    continue
+                step = payload.get("step")
+                try:
+                    event_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+                except ValueError:
+                    continue
+                if type(step) is not int or step < 0 or event_time > now:
+                    continue
+                candidate = (event_time, step)
+                if latest is None or candidate > latest:
+                    latest = candidate
+    except OSError:
+        return 0
+    return 0 if latest is None else latest[1]
+
+
+def _training_failure_class(error: Exception) -> str:
+    if isinstance(error, MemoryError):
+        return "RESOURCE_EXHAUSTED"
+    if isinstance(error, TimeoutError):
+        return "TIMEOUT"
+    if isinstance(error, OSError):
+        return "IO_ERROR"
+    if isinstance(error, ValueError):
+        return "CONTRACT_ERROR"
+    return "TRAINER_ERROR"
 
 
 def specialist_resume_cursor(cursor: dict[str, object], *, data_shard_id: str) -> dict[str, object]:
@@ -2797,21 +2857,35 @@ def run_specialist(
         parent_manifest=parent_manifest, root_manifest=root_manifest, execution_slice=execution_slice,
         scene_split_selection=scene_split_selection,
     )
-    return run(
-        seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
-        resume_realization_registry=resume_realization_registry,
-        resume_optimizer_transition_registry=resume_optimizer_transition_registry,
-        resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
-        records_override=selected_records, scene_split_records=records,
-        full_records_artifact_bytes=full_records_artifact_bytes if capability == "image" else None,
-        specialist_verification=verification, specialist_lineage=lineage,
-        checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
-        c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
-        relocation_custody_root=relocation_custody_root,
-        telemetry_path=telemetry_path,
-        telemetry_run_id=telemetry_run_id,
-        model_chat_restore_not_before=model_chat_restore_not_before,
-    )
+    try:
+        return run(
+            seed=seed, artifact_root=artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt,
+            resume_realization_registry=resume_realization_registry,
+            resume_optimizer_transition_registry=resume_optimizer_transition_registry,
+            resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
+            records_override=selected_records, scene_split_records=records,
+            full_records_artifact_bytes=full_records_artifact_bytes if capability == "image" else None,
+            specialist_verification=verification, specialist_lineage=lineage,
+            checkpoint_interval=checkpoint_interval, write_budget_bytes=write_budget_bytes,
+            c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
+            relocation_custody_root=relocation_custody_root,
+            telemetry_path=telemetry_path,
+            telemetry_run_id=telemetry_run_id,
+            model_chat_restore_not_before=model_chat_restore_not_before,
+        )
+    except Exception as error:
+        if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
+            append_training_telemetry(telemetry_path, kind="run_status", payload={
+                "run_id": telemetry_run_id,
+                "phase": "FAILED",
+                "model_chat": "OFFLINE",
+                "restore_not_before": model_chat_restore_not_before,
+                "last_completed_step": _latest_completed_training_step(telemetry_path, run_id=telemetry_run_id),
+                "failure_class": _training_failure_class(error),
+            })
+        raise
+
+
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
     expected_receipt_sha256: str, expected_tokenizer_sha256: str, expected_architecture_sha256: str,
