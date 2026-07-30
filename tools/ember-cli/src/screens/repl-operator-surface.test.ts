@@ -96,24 +96,14 @@ describe("repl operator surface layout", () => {
       }
       const lines = renderedLines(raw, columns, rows);
       expect(lines.length).toBe(rows);
-      // Legibility bar (2026-07-26): "RESOURCE EFFICIENC" (a silent hard-cut, no marker) was the
-      // exact pre-fix defect shape at this narrow width -- a heading truncated mid-word with
-      // nothing to tell an operator it wasn't a genuinely different, shorter label. The pane now
-      // bounds every line against its real inner width (boundedSurfaceLine) and always appends a
-      // visible "…" marker when it must shorten a line, so at 40 columns the heading now reads
-      // "RESOURCE EFFICI…" instead. (D2 scope addition, 2026-07-26: the pane's own inner-width
-      // budget under-counted its border by 2 columns on top of padding -- fixed in
-      // operator-surface-pane.ts's innerWidth, effectiveWidth-4 not effectiveWidth-2 -- so the
-      // marker now lands 2 columns earlier than before, matching the pane's true content budget.)
-      for (const heading of columns <= 40
-        ? ["TRAINING/LOSS", "RESOURCE EFFICI…"]
-        : ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
-        expect(lines.some((line) => line.includes(heading))).toBe(true);
-      }
+      // #894: the old unbounded TRAINING/LOSS + RESOURCE EFFICIENCY stream has been replaced by
+      // independently bounded chart cards. At every supported size at least one card title and
+      // one complete horizontal card boundary must survive the actual Repl resize path.
+      expect(lines.some((line) => /\+\s*(HOST|LOSS|TOKENS|LEARNING|ENERGY|GPU)/u.test(line))).toBe(true);
+      expect(lines.some((line) => /\+-{3,}\+/u.test(line))).toBe(true);
+      expect(lines.some((line) => line.includes("TRAINING/LOSS"))).toBe(false);
       if (columns <= 40) {
-        // The old silent-clip fragment must never reappear un-marked.
-        expect(lines.some((line) => line.includes("RESOURCE EFFICIENC") && !line.includes("RESOURCE EFFICI…"))).toBe(false);
-        // Nor may content ever reach the pane's own right border column (D2 structural fix).
+        // Content may never overwrite the pane's own right border column.
         const paneRows = lines.filter((line) => line.includes("│"));
         for (const line of paneRows) {
           const rightBorder = line.lastIndexOf("│");

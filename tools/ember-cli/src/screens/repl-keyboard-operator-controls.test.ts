@@ -322,9 +322,9 @@ describe("repl keyboard operator controls (R2b)", () => {
   }, 15000);
 
   // -----------------------------------------------------------------------
-  // Row 4 -- each accelerator key, pane focused, reaches the stream; focus is unchanged.
+  // Row 4 -- each legacy shortcut key, pane focused, reaches the stream; focus is unchanged.
   // -----------------------------------------------------------------------
-  test("row4: an accelerator reaches the stream for its OWN control without moving focus off the currently-focused one", async () => {
+  test("row4: a plain letter never dispatches a control or moves focus", async () => {
     const t1 = new Date(Date.now() - 2000).toISOString();
     const t2 = new Date(Date.now() - 1000).toISOString(); // after t1 -- run_status is the newer, live signal
     const m = await mountForKeyboard([trainEvent(RUN_ID, t1), runStatusEvent(RUN_ID, t2, "PAUSED")]);
@@ -341,33 +341,33 @@ describe("repl keyboard operator controls (R2b)", () => {
       send(m.stdin, KEY.TAB); // entry lands on the first enabled control in canonical order: PAUSE
       await flushRepl();
       let lines = renderedLines(m.getRaw(), m.columns, m.rows);
-      expect(lines.some((l) => l.includes("▸ [(P)AUSE]"))).toBe(true); // focus marker on PAUSE
+      expect(lines.some((l) => l.includes("▸ [PAUSE]"))).toBe(true); // focus marker on PAUSE
 
-      send(m.stdin, "u"); // RESUME's accelerator -- focus is still on PAUSE
+      send(m.stdin, "u"); // RESUME's legacy shortcut -- focus is still on PAUSE
       await flushRepl();
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlLines = await readControlLines(m.controlPath);
-      expect(controlLines).toEqual([{ verb: "resume", runId: RUN_ID, ts: expect.any(String) }]);
+      expect(controlLines).toEqual([]);
 
       lines = renderedLines(m.getRaw(), m.columns, m.rows);
-      expect(lines.some((l) => l.includes("▸ [(P)AUSE]"))).toBe(true); // still on PAUSE
-      expect(lines.some((l) => l.includes("▸ [RES(U)ME]"))).toBe(false); // never moved to RESUME
+      expect(lines.some((l) => l.includes("▸ [PAUSE]"))).toBe(true); // still on PAUSE
+      expect(lines.some((l) => l.includes("▸ [RESUME]"))).toBe(false); // never moved to RESUME
     } finally {
       await teardown(m, previous);
     }
   }, 15000);
 
   // -----------------------------------------------------------------------
-  // Row 5 -- an accelerator while a text input has focus just types the character.
+  // Row 5 -- an legacy shortcut while a text input has focus just types the character.
   // -----------------------------------------------------------------------
-  test("row5: an accelerator typed while the prompt (not the pane) has focus is inserted as text, no verb emitted", async () => {
+  test("row5: a plain letter typed while the prompt has focus is inserted as text, no verb emitted", async () => {
     const m = await mountForKeyboard([]);
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
     try {
       await flushRepl();
       // Never Tab into the pane -- the prompt has focus by default.
-      send(m.stdin, "p"); // PAUSE's accelerator, typed as an ordinary character instead
+      send(m.stdin, "p"); // PAUSE's legacy shortcut, typed as an ordinary character instead
       await flushRepl();
 
       const lines = renderedLines(m.getRaw(), m.columns, m.rows);
@@ -395,14 +395,14 @@ describe("repl keyboard operator controls (R2b)", () => {
 
       send(m.stdin, KEY.TAB); // entry lands on PAUSE (index 1) -- the only enabled control
       await flushRepl();
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(P)AUSE]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [PAUSE]"))).toBe(true);
 
       // Backward from PAUSE: START (index 0) is disabled and must be SKIPPED -- there is nothing
       // else below it, so traversal leaves the set rather than landing on the disabled control.
       send(m.stdin, KEY.LEFT);
       await flushRepl();
       const lines = renderedLines(m.getRaw(), m.columns, m.rows);
-      expect(lines.some((l) => l.includes("▸ [(S)TART]"))).toBe(false); // never focused START
+      expect(lines.some((l) => l.includes("▸ [START]"))).toBe(false); // never focused START
       expect(lines.some((l) => l.includes("▸"))).toBe(false); // no marker anywhere -- left the set
     } finally {
       await teardown(m, previous);
@@ -410,9 +410,9 @@ describe("repl keyboard operator controls (R2b)", () => {
   }, 15000);
 
   // -----------------------------------------------------------------------
-  // Row 7 -- accelerator for a disabled control: no verb, no error, reason surfaced.
+  // Row 7 -- legacy shortcut for a disabled control: no verb, no error, reason surfaced.
   // -----------------------------------------------------------------------
-  test("row7: an accelerator for a disabled control emits nothing and surfaces the reason", async () => {
+  test("row7: a plain letter cannot activate a disabled control or surface a false control error", async () => {
     const now = new Date().toISOString();
     const m = await mountForKeyboard([trainEvent(RUN_ID, now)]); // status RUNNING: START is disabled
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
@@ -422,7 +422,7 @@ describe("repl keyboard operator controls (R2b)", () => {
 
       send(m.stdin, KEY.TAB);
       await flushRepl();
-      send(m.stdin, "s"); // START's accelerator -- disabled while RUNNING
+      send(m.stdin, "s"); // START's legacy shortcut -- disabled while RUNNING
       await flushRepl();
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
@@ -430,7 +430,7 @@ describe("repl keyboard operator controls (R2b)", () => {
       expect(controlLines).toEqual([]); // no verb
 
       const lines = renderedLines(m.getRaw(), m.columns, m.rows);
-      expect(lines.some((l) => l.includes(operatorControlDisabledReason("START")))).toBe(true); // reason surfaced
+      expect(lines.some((l) => l.includes(operatorControlDisabledReason("START")))).toBe(false); // letter is not a control shortcut
     } finally {
       await teardown(m, previous);
     }
@@ -480,7 +480,7 @@ describe("repl keyboard operator controls (R2b)", () => {
 
       send(m.stdin, KEY.TAB); // entry lands on RESTART, the only enabled control while OFFLINE
       await flushRepl();
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [RES(T)ART]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [RESTART]"))).toBe(true);
 
       send(m.stdin, KEY.ENTER);
       await flushRepl();
@@ -497,14 +497,14 @@ describe("repl keyboard operator controls (R2b)", () => {
   }, 15000);
 
   // -----------------------------------------------------------------------
-  // C3 -- disabled control AND accelerator AND text input focused: the input wins.
+  // C3 -- disabled control AND legacy shortcut AND text input focused: the input wins.
   // -----------------------------------------------------------------------
-  test("C3: a disabled control's accelerator, typed while the prompt has focus, types the character and shows no reason banner", async () => {
+  test("C3: a plain letter typed while the prompt has focus remains text and shows no control banner", async () => {
     const m = await mountForKeyboard([]); // no run at all -- RESTART is disabled
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
     try {
       await flushRepl();
-      send(m.stdin, "t"); // RESTART's accelerator, but the prompt (not the pane) has focus
+      send(m.stdin, "t"); // RESTART's legacy shortcut, but the prompt (not the pane) has focus
       await flushRepl();
 
       const lines = renderedLines(m.getRaw(), m.columns, m.rows);
@@ -521,9 +521,9 @@ describe("repl keyboard operator controls (R2b)", () => {
   }, 15000);
 
   // -----------------------------------------------------------------------
-  // C4 -- rapid repeat of one accelerator: one verb per keypress, no coalescing.
+  // C4 -- rapid repeat of one legacy shortcut: one verb per keypress, no coalescing.
   // -----------------------------------------------------------------------
-  test("C4: three rapid presses of the same accelerator emit three separate commands", async () => {
+  test("C4: three rapid plain letters emit no lifecycle commands", async () => {
     const now = new Date().toISOString();
     const m = await mountForKeyboard([trainEvent(RUN_ID, now)]);
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
@@ -540,8 +540,8 @@ describe("repl keyboard operator controls (R2b)", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlLines = await readControlLines(m.controlPath);
-      expect(controlLines).toHaveLength(3);
-      expect(controlLines.every((line) => line["verb"] === "pause" && line["runId"] === RUN_ID)).toBe(true);
+      expect(controlLines).toHaveLength(0);
+      expect(controlLines).toEqual([]);
     } finally {
       await teardown(m, previous);
     }
@@ -550,7 +550,7 @@ describe("repl keyboard operator controls (R2b)", () => {
   // -----------------------------------------------------------------------
   // S1 -- disabled-state check bypassed when no run exists at all: no crash, everything inert.
   // -----------------------------------------------------------------------
-  test("S1: with no run at all, traversal and a disabled accelerator both stay inert without crashing", async () => {
+  test("S1: with no run at all, traversal and a plain letter stay inert without crashing", async () => {
     const m = await mountForKeyboard([]); // fully empty telemetry -- only START is enabled (IDLE)
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
     try {
@@ -558,7 +558,7 @@ describe("repl keyboard operator controls (R2b)", () => {
 
       send(m.stdin, KEY.TAB); // entry -- lands on START (only enabled control)
       await flushRepl();
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(S)TART]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [START]"))).toBe(true);
 
       // Forward from START: PAUSE, RESUME, RESTART are all disabled -- skip clean off the end
       // rather than throwing or landing on a dead control.
@@ -566,7 +566,7 @@ describe("repl keyboard operator controls (R2b)", () => {
       await flushRepl();
       expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸"))).toBe(false);
 
-      // Re-enter and try a disabled accelerator directly.
+      // Re-enter and try a disabled legacy shortcut directly.
       send(m.stdin, KEY.TAB);
       await flushRepl();
       send(m.stdin, "u"); // RESUME -- disabled, no paused run
@@ -575,7 +575,7 @@ describe("repl keyboard operator controls (R2b)", () => {
 
       const controlLines = await readControlLines(m.controlPath);
       expect(controlLines).toEqual([]); // never crashed, never emitted
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes(operatorControlDisabledReason("RESUME")))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes(operatorControlDisabledReason("RESUME")))).toBe(false);
     } finally {
       await teardown(m, previous);
     }
@@ -583,9 +583,9 @@ describe("repl keyboard operator controls (R2b)", () => {
 
   // -----------------------------------------------------------------------
   // S2 -- focus containment bypassed when the pane is not mounted (via ReplScreen's keyboard
-  // wiring): accelerators emit nothing, because nothing exists to dispatch them.
+  // wiring): legacy shortcuts emit nothing, because nothing exists to dispatch them.
   // -----------------------------------------------------------------------
-  test("S2: mounting the pane WITHOUT ReplScreen means accelerator keys reach no keyboard handler at all", async () => {
+  test("S2: mounting the pane without ReplScreen creates no lifecycle keyboard dispatch", async () => {
     resetCommandRegistryForTests();
     const calls: Array<{ action: string; runId?: string }> = [];
     let raw = "";
@@ -636,19 +636,19 @@ describe("repl keyboard operator controls (R2b)", () => {
     const m = await mountForKeyboard([runStatusEvent(RUN_ID, now, "PAUSED")]);
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
     try {
-      const ready = await waitFor(() => renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("[RES(U)ME]") || l.includes("(U)ME")));
+      const ready = await waitFor(() => renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("[RESUME]") || l.includes("(U)ME")));
       expect(ready).toBe(true);
 
       send(m.stdin, KEY.TAB); // entry lands on START (IDLE, since no train_step -> no resolved runId)
       await flushRepl();
-      send(m.stdin, "u"); // RESUME's accelerator, reachable via row4's focus-independent dispatch
+      send(m.stdin, "u"); // RESUME's legacy shortcut, reachable via row4's focus-independent dispatch
       await flushRepl();
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlLines = await readControlLines(m.controlPath);
       expect(controlLines).toEqual([]); // driveOperatorControl's validateControlCmd rejects a
       // runId-less resume BEFORE any emit -- the fail-closed floor holds even when the pane's own
-      // enablement check let the accelerator through.
+      // enablement check let the legacy shortcut through.
     } finally {
       await teardown(m, previous);
     }
@@ -676,17 +676,17 @@ describe("repl keyboard operator controls (R2b)", () => {
 
       send(m.stdin, KEY.TAB); // entry -- lands on PAUSE
       await flushRepl();
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(P)AUSE]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [PAUSE]"))).toBe(true);
 
       send(m.stdin, KEY.RIGHT); // forward -- lands on RESUME
       await flushRepl();
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [RES(U)ME]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [RESUME]"))).toBe(true);
 
       send(m.stdin, KEY.SHIFT_TAB); // backward -- must return to PAUSE
       await flushRepl();
       const lines = renderedLines(m.getRaw(), m.columns, m.rows);
-      expect(lines.some((l) => l.includes("▸ [(P)AUSE]"))).toBe(true);
-      expect(lines.some((l) => l.includes("▸ [RES(U)ME]"))).toBe(false);
+      expect(lines.some((l) => l.includes("▸ [PAUSE]"))).toBe(true);
+      expect(lines.some((l) => l.includes("▸ [RESUME]"))).toBe(false);
 
       const controlLines = await readControlLines(m.controlPath);
       expect(controlLines).toEqual([]); // traversal alone never emits a verb
@@ -697,12 +697,12 @@ describe("repl keyboard operator controls (R2b)", () => {
     // PROMPT HALF -- see mountPromptHookOnly's doc comment for why this drops one level: with
     // keyboardActive pinned false (the value ReplScreen computes while paneFocused), the SAME
     // Shift+Tab byte sequence, through the real hook and the real dispatcher, must leave
-    // state.permissionMode at its initial "bypass".
+    // state.permissionMode at its initial sandboxed "regular" mode.
     const inactive = await mountPromptHookOnly(false);
     try {
       send(inactive.stdin, KEY.SHIFT_TAB);
       await flushRepl();
-      expect(renderedLines(inactive.getRaw(), 40, 5).some((l) => l.includes("PERM:bypass"))).toBe(true);
+      expect(renderedLines(inactive.getRaw(), 40, 5).some((l) => l.includes("PERM:regular"))).toBe(true);
     } finally {
       inactive.stopBridge();
       inactive.unmount();
@@ -715,7 +715,7 @@ describe("repl keyboard operator controls (R2b)", () => {
     try {
       send(active.stdin, KEY.SHIFT_TAB);
       await flushRepl();
-      expect(renderedLines(active.getRaw(), 40, 5).some((l) => l.includes("PERM:regular"))).toBe(true);
+      expect(renderedLines(active.getRaw(), 40, 5).some((l) => l.includes("PERM:bypass"))).toBe(true);
     } finally {
       active.stopBridge();
       active.unmount();
@@ -723,12 +723,12 @@ describe("repl keyboard operator controls (R2b)", () => {
   }, 15000);
 
   // -----------------------------------------------------------------------
-  // DD2 -- Alt+P: accelerator matching ignores modifiers (`input.toLowerCase() === "p"`), so the
-  // pane's PAUSE accelerator fires on Alt+P exactly as it does on plain "p", while the prompt's
+  // DD2 -- Alt+P: legacy shortcut matching ignores modifiers (`input.toLowerCase() === "p"`), so the
+  // pane's PAUSE legacy shortcut fires on Alt+P exactly as it does on plain "p", while the prompt's
   // `key.alt && input === "p"` branch also matches the same keystroke and would (pre-fix) open
   // the model picker.
   // -----------------------------------------------------------------------
-  test("DD2: Alt+P fires the pane's PAUSE accelerator and never reaches the prompt's model picker", async () => {
+  test("DD2: Alt+P never dispatches PAUSE and the prompt model picker remains focus-gated", async () => {
     // PANE HALF -- full ReplScreen, real \x1bp bytes (node readline: meta:true, name:"p").
     const now = new Date().toISOString();
     const m = await mountForKeyboard([trainEvent(RUN_ID, now)]); // status RUNNING -- only PAUSE enabled
@@ -744,7 +744,7 @@ describe("repl keyboard operator controls (R2b)", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlLines = await readControlLines(m.controlPath);
-      expect(controlLines).toEqual([{ verb: "pause", runId: RUN_ID, ts: expect.any(String) }]);
+      expect(controlLines).toEqual([]);
     } finally {
       await teardown(m, previous);
     }
@@ -778,25 +778,25 @@ describe("repl keyboard operator controls (R2b)", () => {
   }, 15000);
 
   // -----------------------------------------------------------------------
-  // DD3 -- Ctrl+S: accelerator matching ignores modifiers, so Ctrl+S reaches the pane's START
-  // accelerator exactly as plain "s" does, while the prompt's `key.ctrl && input === "s"` branch
+  // DD3 -- Ctrl+S: legacy shortcut matching ignores modifiers, so Ctrl+S reaches the pane's START
+  // legacy shortcut exactly as plain "s" does, while the prompt's `key.ctrl && input === "s"` branch
   // also matches and would (pre-fix) stash the prompt's text.
   // -----------------------------------------------------------------------
-  test("DD3: Ctrl+S fires the pane's START accelerator and never stashes the prompt", async () => {
+  test("DD3: Ctrl+S never dispatches START and prompt stashing remains focus-gated", async () => {
     const m = await mountForKeyboard([]); // no run at all -- only START is enabled (IDLE)
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
     try {
       await flushRepl();
       send(m.stdin, KEY.TAB); // entry -- lands on START, the only enabled control
       await flushRepl();
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(S)TART]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [START]"))).toBe(true);
 
       send(m.stdin, KEY.CTRL_S); // real \x13 bytes (node readline: ctrl:true, name:"s")
       await flushRepl();
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlLines = await readControlLines(m.controlPath);
-      expect(controlLines).toEqual([{ verb: "start", ts: expect.any(String) }]);
+      expect(controlLines).toEqual([]);
 
       const lines = renderedLines(m.getRaw(), m.columns, m.rows);
       expect(lines.some((l) => l.includes("Input stashed"))).toBe(false); // prompt never stashed
@@ -827,7 +827,7 @@ describe("repl keyboard operator controls (R2b)", () => {
 
       send(m.stdin, KEY.TAB); // entry -- lands on START; the stash notice must survive this
       await flushRepl();
-      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [(S)TART]"))).toBe(true);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("▸ [START]"))).toBe(true);
       expect(renderedLines(m.getRaw(), m.columns, m.rows).some((l) => l.includes("Input stashed"))).toBe(true);
 
       // A bare Escape byte cannot be driven through the real stdin-bridge pipeline here: the SGR

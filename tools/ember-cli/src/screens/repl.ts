@@ -83,7 +83,6 @@ import { telemetryMemoKey }              from "../services/telemetry-label.ts";
 import { driveOperatorControl, type OperatorControlAction } from "../services/operator-controls.ts";
 import {
   OPERATOR_CONTROL_ACTIONS,
-  OPERATOR_CONTROL_ACCELERATORS,
   isOperatorControlEnabled,
   operatorControlDisabledReason,
   operatorControlStatus,
@@ -1672,25 +1671,6 @@ export function ReplScreen({
           handleOperatorControl(action, runId);
         } else if (action) {
           setControlDisabledReason(operatorControlDisabledReason(action));
-        }
-        return;
-      }
-
-      // Accelerators: single-key direct activation while the pane -- not a text input -- has
-      // focus (row 4). Disabled target: no verb, no error, reason surfaced (row 7); focus stays
-      // put either way (row 4's "focus unchanged").
-      const accelAction = input
-        ? OPERATOR_CONTROL_ACTIONS.find(
-            (action) => OPERATOR_CONTROL_ACCELERATORS[action] === input.toLowerCase(),
-          )
-        : undefined;
-      if (accelAction) {
-        const idx = OPERATOR_CONTROL_ACTIONS.indexOf(accelAction);
-        if (enabledMask[idx]) {
-          setControlDisabledReason(undefined);
-          handleOperatorControl(accelAction, runId);
-        } else {
-          setControlDisabledReason(operatorControlDisabledReason(accelAction));
         }
         return;
       }

@@ -112,6 +112,11 @@ function eventRunId(event: TelemetryEvent): string | undefined {
   return typeof runId === "string" && runId.length > 0 ? runId : undefined;
 }
 
+function telemetryRunStatusId(telemetry: TelemetryState): string | undefined {
+  const runId = telemetry.runStatus?.runId;
+  return typeof runId === "string" && runId.trim().length > 0 ? runId : undefined;
+}
+
 function eventTime(event: TelemetryEvent): number {
   const time = Date.parse(event.ts);
   return Number.isFinite(time) ? time : NaN;
@@ -165,6 +170,246 @@ function selectedRunEvidence(telemetry: TelemetryState, nowMs: number): Selected
 
 const PLOT_GLYPHS = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
 
+export const OPERATOR_GRAPH_CARD_MIN_HEIGHT = 3;
+export const OPERATOR_GRAPH_CARD_MAX_HEIGHT = 5;
+
+export type OperatorGraphCardId = HostMetricId | "loss" | "tokens" | "learning-rate" | "energy" | "gpu-watts";
+
+const OPERATOR_GRAPH_CARD_COLORS: Record<OperatorGraphCardId, string> = {
+  memory: "cyan",
+  ram: "blue",
+  vram: "magenta",
+  cpu: "green",
+  gpu: "red",
+  disk: "yellow",
+  loss: "yellow",
+  tokens: "cyan",
+  "learning-rate": "blue",
+  energy: "magenta",
+  "gpu-watts": "red",
+};
+
+export function operatorGraphCardColor(id: OperatorGraphCardId): string {
+  return OPERATOR_GRAPH_CARD_COLORS[id];
+}
+
+export interface OperatorGraphCardLayout {
+  cardHeight: number;
+  visibleCardCount: number;
+  hiddenCardCount: number;
+}
+
+/** Responsive vertical allocation with a hard legibility cap. A huge terminal can no longer turn
+ *  one trace into dozens of rows; a tight terminal keeps whole cards and reports the hidden tail. */
+export const OPERATOR_GRAPH_CARD_MIN_WIDTH = 32;
+
+export function operatorGraphGridColumns(width: number): 1 | 2 {
+  const available = Math.max(0, Math.floor(width));
+  return available >= (OPERATOR_GRAPH_CARD_MIN_WIDTH * 2) + 1 ? 2 : 1;
+}
+
+export function operatorGraphCardLayout(
+  cardCount: number,
+  rowBudget: number,
+  columns: number = 1,
+): OperatorGraphCardLayout {
+  const count = Math.max(0, Math.floor(cardCount));
+  const budget = Math.max(0, Math.floor(rowBudget));
+  const columnCount = Math.max(1, Math.floor(columns));
+  if (count === 0 || budget < OPERATOR_GRAPH_CARD_MIN_HEIGHT) {
+    return { cardHeight: OPERATOR_GRAPH_CARD_MIN_HEIGHT, visibleCardCount: 0, hiddenCardCount: count };
+  }
+  const gridRows = Math.ceil(count / columnCount);
+  const allFitHeight = Math.floor(budget / gridRows);
+  if (allFitHeight >= OPERATOR_GRAPH_CARD_MIN_HEIGHT) {
+    return {
+      cardHeight: Math.min(OPERATOR_GRAPH_CARD_MAX_HEIGHT, allFitHeight),
+      visibleCardCount: count,
+      hiddenCardCount: 0,
+    };
+  }
+  const visibleGridRows = Math.max(0, Math.floor((budget - 1) / OPERATOR_GRAPH_CARD_MIN_HEIGHT));
+  const visible = Math.max(0, Math.min(count, visibleGridRows * columnCount));
+  return {
+    cardHeight: OPERATOR_GRAPH_CARD_MIN_HEIGHT,
+    visibleCardCount: visible,
+    hiddenCardCount: count - visible,
+  };
+}
+
+function exactCell(text: string, width: number): string {
+  const target = Math.max(0, Math.floor(width));
+  if (text.length > target) return target <= 1 ? text.slice(0, target) : `${text.slice(0, target - 1)}~`;
+  return text.padEnd(target, " ");
+}
+
+/** Fixed-boundary chart card. Every returned line is exactly `width` cells and the sample window
+ *  is bounded to the drawable width before charting, preventing an ever-growing render cost. */
+export function renderOperatorGraphCard(
+  title: string,
+  values: Array<number | null> | undefined,
+  unit: string,
+  width: number,
+  height: number,
+  unavailableReason?: string,
+): string[] {
+  const cardWidth = Math.max(8, Math.floor(width));
+  const cardHeight = Math.max(OPERATOR_GRAPH_CARD_MIN_HEIGHT, Math.min(OPERATOR_GRAPH_CARD_MAX_HEIGHT, Math.floor(height)));
+  const innerWidth = cardWidth - 2;
+  const heading = exactCell(` ${title} `, innerWidth).replace(/ +$/u, (spaces) => "-".repeat(spaces.length));
+  const lines = [`+${heading}+`];
+  const finiteValues = (values ?? []).filter((value): value is number => value !== null && Number.isFinite(value));
+  const interiorRows = cardHeight - 2;
+  if (values === undefined) {
+    lines.push(`|${exactCell(" SOURCE UNBOUND", innerWidth)}|`);
+    while (lines.length < cardHeight - 1) lines.push(`|${" ".repeat(innerWidth)}|`);
+  } else if (finiteValues.length === 0) {
+    lines.push(`|${exactCell(` ${unavailableReason ?? "AWAITING FIRST SAMPLE"}`, innerWidth)}|`);
+    while (lines.length < cardHeight - 1) lines.push(`|${" ".repeat(innerWidth)}|`);
+  } else {
+    const latest = finiteValues[finiteValues.length - 1]!;
+    const min = Math.min(...finiteValues);
+    const max = Math.max(...finiteValues);
+    const stats = `${latest.toFixed(2)} ${unit} | min ${min.toFixed(2)} max ${max.toFixed(2)}`;
+    if (interiorRows === 1) {
+      const sparkWidth = Math.max(1, innerWidth - stats.length - 3);
+      const bounded = values.slice(-sparkWidth);
+      lines.push(`|${exactCell(` ${stats} ${sparklineRow(bounded, sparkWidth)}`, innerWidth)}|`);
+    } else {
+      lines.push(`|${exactCell(` ${stats}`, innerWidth)}|`);
+      const plotRows = interiorRows - 1;
+      const bounded = values.slice(-Math.max(2, innerWidth * 2));
+      const chart = renderChart(bounded, { width: innerWidth, height: plotRows });
+      for (const row of chart.rows) lines.push(`|${exactCell(row, innerWidth)}|`);
+    }
+  }
+  lines.push(`+${"-".repeat(innerWidth)}+`);
+  return lines.slice(0, cardHeight);
+}
+
+export interface OperatorGraphCardSpec {
+  id: OperatorGraphCardId;
+  title: string;
+  values: Array<number | null> | undefined;
+  unit: string;
+  unavailableReason?: string;
+}
+
+export interface OperatorGraphCardRowSegment {
+  text: string;
+  color: string;
+}
+
+export interface OperatorGraphCardRenderRow {
+  segments: OperatorGraphCardRowSegment[];
+}
+
+export function renderOperatorGraphCardRows(
+  cards: OperatorGraphCardSpec[],
+  width: number,
+  rowBudget: number,
+): { layout: OperatorGraphCardLayout; rows: OperatorGraphCardRenderRow[] } {
+  const totalWidth = Math.max(8, Math.floor(width));
+  const columns = operatorGraphGridColumns(totalWidth);
+  const layout = operatorGraphCardLayout(cards.length, rowBudget, columns);
+  const gapWidth = columns - 1;
+  const usableWidth = totalWidth - gapWidth;
+  const baseWidth = Math.floor(usableWidth / columns);
+  const remainder = usableWidth % columns;
+  const columnWidths = Array.from({ length: columns }, (_, index) => baseWidth + (index < remainder ? 1 : 0));
+  const rows: OperatorGraphCardRenderRow[] = [];
+
+  for (let start = 0; start < layout.visibleCardCount; start += columns) {
+    const group = cards.slice(start, Math.min(start + columns, layout.visibleCardCount));
+    const rendered = columnWidths.map((columnWidth, columnIndex) => {
+      const card = group[columnIndex];
+      return card
+        ? {
+            color: operatorGraphCardColor(card.id),
+            lines: renderOperatorGraphCard(
+              card.title,
+              card.values,
+              card.unit,
+              columnWidth,
+              layout.cardHeight,
+              card.unavailableReason,
+            ),
+          }
+        : { color: "gray", lines: Array.from({ length: layout.cardHeight }, () => " ".repeat(columnWidth)) };
+    });
+    for (let lineIndex = 0; lineIndex < layout.cardHeight; lineIndex += 1) {
+      const segments: OperatorGraphCardRowSegment[] = [];
+      rendered.forEach((card, columnIndex) => {
+        if (columnIndex > 0) segments.push({ text: " ", color: "gray" });
+        segments.push({ text: card.lines[lineIndex]!, color: card.color });
+      });
+      rows.push({ segments });
+    }
+  }
+
+  if (layout.hiddenCardCount > 0 && rows.length < Math.max(0, Math.floor(rowBudget))) {
+    rows.push({
+      segments: [{
+        text: exactCell(`… ${layout.hiddenCardCount} more charts`, totalWidth),
+        color: "yellow",
+      }],
+    });
+  }
+  return { layout, rows };
+}
+
+function cardValues(
+  points: OperatorSeriesPoint[],
+  runBound: boolean,
+  read: (point: OperatorSeriesPoint) => number | undefined,
+): Array<number | null> | undefined {
+  if (!runBound) return undefined;
+  return points.map((point) => {
+    const value = read(point);
+    return finiteNumber(value) ? value : null;
+  });
+}
+
+/** Adapts the already validated/provenance-selected snapshot into presentation-only cards. */
+export function buildOperatorGraphCardSpecs(
+  snapshot: OperatorSurfaceSnapshot,
+  host: HostTelemetrySnapshot | undefined,
+): OperatorGraphCardSpec[] {
+  const runBound = snapshot.graphs.runId !== undefined;
+  const missingReason = snapshot.status === "RUNNING"
+    ? "AWAITING FIRST SAMPLE"
+    : snapshot.status === "STALE"
+      ? "STALE/HISTORICAL"
+      : snapshot.status === "OFFLINE"
+        ? "OFFLINE/HISTORICAL"
+        : "SOURCE UNBOUND";
+  const training: OperatorGraphCardSpec[] = [
+    { id: "loss", title: "LOSS", values: cardValues(snapshot.graphs.points, runBound, (point) => point.loss), unit: "", unavailableReason: missingReason },
+    { id: "tokens", title: "TOKENS/S", values: cardValues(snapshot.graphs.points, runBound, (point) => point.tokensPerSecond), unit: "tok/s", unavailableReason: missingReason },
+    { id: "learning-rate", title: "LEARNING RATE", values: cardValues(snapshot.graphs.points, runBound, (point) => point.learningRate), unit: "", unavailableReason: missingReason },
+    { id: "energy", title: "ENERGY", values: cardValues(snapshot.graphs.points, runBound, (point) => point.boardEnergyJoulesTotal), unit: "J", unavailableReason: missingReason },
+  ];
+  if (host === undefined) {
+    training.splice(1, 0,
+      { id: "gpu", title: "GPU", values: cardValues(snapshot.graphs.points, runBound, (point) => point.gpuUtilizationPct), unit: "%", unavailableReason: missingReason },
+      { id: "vram", title: "VRAM", values: cardValues(snapshot.graphs.points, runBound, (point) => point.vramUsedGib), unit: "GiB", unavailableReason: missingReason },
+      { id: "gpu-watts", title: "GPU POWER", values: cardValues(snapshot.graphs.points, runBound, (point) => point.gpuWatts), unit: "W", unavailableReason: missingReason },
+    );
+  }
+  const hostCards: OperatorGraphCardSpec[] = host === undefined
+    ? []
+    : HOST_METRIC_IDS.map((id) => {
+        const series = host[id];
+        return {
+          id,
+          title: HOST_METRIC_LABELS[id].toUpperCase(),
+          values: series?.values,
+          unit: series?.unit ?? "",
+          unavailableReason: series?.unavailableReason,
+        };
+      });
+  return snapshot.graphs.points.length === 0 ? [...hostCards, ...training] : [...training, ...hostCards];
+}
 function formatTimeLabel(ts: string): string {
   const parsed = new Date(ts);
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(11, 19) : "??:??:??";
@@ -475,25 +720,11 @@ export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
  *  divergence here would make "focus visits all four controls in visual order" a lie. */
 export const OPERATOR_CONTROL_ACTIONS = ["START", "PAUSE", "RESUME", "RESTART"] as const;
 
-/** Single-key accelerator per control (lowercase). Shown decorated in the control's own label
- *  via operatorControlLabel so the mnemonic is always visible, never a hidden binding. */
-export const OPERATOR_CONTROL_ACCELERATORS: Record<OperatorControlAction, string> = {
-  START: "s",
-  PAUSE: "p",
-  RESUME: "u",
-  RESTART: "t",
-};
-
-/** Decorates the accelerator letter inside the action name itself, e.g. "[(S)TART]",
- *  "[RES(U)ME]" — derived generically from OPERATOR_CONTROL_ACCELERATORS rather than a
- *  hand-maintained label table, so the two can never drift apart. */
+/** Plain, button-shaped label. Direct letter accelerators were removed after the operator made
+ * the interaction contract explicit: these are mouse controls with ordinary Tab/arrow plus
+ * Enter/Space accessibility, not mnemonic command advertisements. */
 export function operatorControlLabel(action: OperatorControlAction): string {
-  const accel = OPERATOR_CONTROL_ACCELERATORS[action].toUpperCase();
-  const index = action.indexOf(accel);
-  const decorated = index < 0
-    ? `${action}(${accel})`
-    : `${action.slice(0, index)}(${accel})${action.slice(index + 1)}`;
-  return `[${decorated}]`;
+  return `[${action}]`;
 }
 
 const OPERATOR_CONTROL_DISABLED_REASONS: Record<OperatorControlAction, string> = {
@@ -553,7 +784,11 @@ export function operatorControlStatus(
   nowMs: number = Date.now(),
 ): { status: OperatorRunStatus; runId?: string } {
   const graphs = buildOperatorSurfaceGraphs(telemetry, 80, nowMs);
-  return { status: getOperatorRunStatus(telemetry, nowMs, graphs.runId), runId: graphs.runId };
+  const pausedRunId = telemetry.runStatus?.phase === "PAUSED" ? telemetryRunStatusId(telemetry) : undefined;
+  return {
+    status: getOperatorRunStatus(telemetry, nowMs, graphs.runId),
+    runId: pausedRunId ?? graphs.runId,
+  };
 }
 
 function sharedWindow<T extends { step: number }>(samples: T[], maxPoints: number, checkpointSteps: Set<number> = new Set()): T[] {
@@ -825,30 +1060,7 @@ export function OperatorSurfacePane({
     pathMaxLen: adaptivePathMaxLen,
   });
   const statusColor = snapshot.status === "RUNNING" ? "green" : snapshot.status === "OFFLINE" ? "red" : "yellow";
-  const plotColumns = Math.max(8, effectiveWidth - 24);
-  // Section order is height-contention policy: RESTING (no run points), the host curves ARE the
-  // panel's content and lead; LIVE, the training sections lead and host follows, so a
-  // height-constrained live viewport keeps its training headings (the pre-existing contract)
-  // while the host curves remain present in the row stream for any viewport tall enough.
-  // No host prop at all = the producer is not wired into this mount (legacy/test mounts); the
-  // legacy families already render that state. A WIRED host with a missing/empty series is the
-  // per-series bound/unbound decision inside hostMetricLine — that is where the order invariant
-  // lives, and it is never skipped when the producer exists.
-  const hostBlocks = input.host === undefined ? [] : hostTelemetryBlocks(input.host, plotColumns);
-  const trainingBlocks = compactSharedGraphBlocks(snapshot, plotColumns, input.host !== undefined);
-  // Section order is the height-contention policy (above); block order is what both the
-  // end-trim and the R1d surplus-distribution below walk in, so "first ones in section order"
-  // (the frozen remainder-placement rule) means exactly this array's order.
-  const orderedGraphBlocks: GraphBlock[] = snapshot.graphs.points.length === 0
-    ? [...hostBlocks, ...trainingBlocks]
-    : [...trainingBlocks, ...hostBlocks];
-  const growableBlockIndices = orderedGraphBlocks
-    .map((block, index) => (block.growable ? index : -1))
-    .filter((index) => index >= 0);
-  // Every block at its floor (rows=1) is EXACTLY today's flat line list, one line per block —
-  // the count the fixed-chrome budget below compares against, and the byte-identical output
-  // acceptance row #4 requires when there is no surplus to distribute.
-  const baselineBlockCount = orderedGraphBlocks.length;
+  const graphCards = buildOperatorGraphCardSpecs(snapshot, input.host);
   const compactMetrics = snapshot.metrics.length > 0
     ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, innerWidth)]
     : [];
@@ -858,6 +1070,9 @@ export function OperatorSurfacePane({
   const CONTROL_ACTIONS = OPERATOR_CONTROL_ACTIONS;
   const controlEnabled = (action: (typeof CONTROL_ACTIONS)[number]): boolean =>
     isOperatorControlEnabled(action, snapshot.status, input.telemetry);
+  const selectedControlRunId = input.telemetry.runStatus?.phase === "PAUSED"
+    ? telemetryRunStatusId(input.telemetry) ?? snapshot.graphs.runId
+    : snapshot.graphs.runId;
   const renderControl = (action: (typeof CONTROL_ACTIONS)[number]): React.ReactElement => {
     const enabled = controlEnabled(action);
     const focused = focusedControlIndex === CONTROL_ACTIONS.indexOf(action);
@@ -867,7 +1082,7 @@ export function OperatorSurfacePane({
         key: `control-${action}`,
         flexShrink: 0,
         paddingRight: 1,
-        onClick: enabled ? () => onControl?.(action, snapshot.graphs.runId) : undefined,
+        onClick: enabled ? () => onControl?.(action, selectedControlRunId) : undefined,
       },
       React.createElement(
         Text,
@@ -898,57 +1113,17 @@ export function OperatorSurfacePane({
         ),
       );
 
-  // Height budget (cure 2026-07-26): the pane used to emit every graph row and let the layout
-  // engine clip against the pane height — under height pressure that engine collapses ARBITRARY
-  // MIDDLE rows (the RESOURCE EFFICIENCY heading and the host VRAM curve were both observed
-  // vanishing from the middle while rows above and below rendered). Arbitrary loss is the
-  // defect; deterministic loss is not. So: count the fixed chrome rows EXACTLY as the body below
-  // constructs them — 2 border rows + status + control rows + metrics + source + stream title +
-  // agent lines (each a single non-wrapping Text row, every string already bounded to
-  // innerWidth) — and trim the graph stream from the END to the remaining budget, stating the
-  // drop on the last row. Trimming from the end keeps the precedence the section ordering
-  // already encodes: leading training headings and curves survive, the host tail yields. When
-  // the budget does not bind (graphLines fits), the stream passes through UNTOUCHED — zero
-  // behaviour change for any mount with room, which is exactly what a chrome-row miscount would
-  // break (the first attempt at this budget overcounted and truncated roomy mounts).
+  // Reserve exact rows for borders, status, controls, provenance, and activity. The remaining
+  // budget belongs exclusively to whole bounded chart cards; hidden cards are disclosed rather
+  // than relying on Ink to collapse arbitrary middle rows.
   const disabledReasonLines = disabledActionReason
     ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
     : [];
   const fixedChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length + compactMetrics.length + 1 + 1 + compactAgentLines.length;
   const graphRowBudget = effectiveHeight - fixedChromeRows;
-  // R1d: the pane used to stop here once end-trim didn't bind — a fitting or roomy mount passed
-  // the flat one-row-per-chart stream through UNTOUCHED, which is exactly the under-subscribed
-  // half this spec fills. The over-subscribed branch (graphRowBudget < baseline) is UNCHANGED:
-  // trim from the end, state the drop, same as before. Only when there is genuine surplus
-  // (graphRowBudget > baseline) does distribution run, and only across growable blocks; zero
-  // growable blocks or zero/negative surplus falls through to the same untouched pass-through
-  // the exact-fit case always had (skip-path S1/S6).
-  const rawGraphLines: string[] = baselineBlockCount > graphRowBudget
-    ? (() => {
-        const baseline = orderedGraphBlocks.flatMap((block) => block.render(1));
-        return graphRowBudget >= 1
-          ? [
-              ...baseline.slice(0, graphRowBudget - 1),
-              `… ${baseline.length - (graphRowBudget - 1)} more rows`,
-            ]
-          : [];
-      })()
-    : (() => {
-        const surplus = graphRowBudget - baselineBlockCount;
-        if (surplus <= 0 || growableBlockIndices.length === 0) {
-          return orderedGraphBlocks.flatMap((block) => block.render(1));
-        }
-        // Even growth across bound charts; the remainder goes to the FIRST ones in section
-        // order (conjunction C2: deterministic across two renders of the same size).
-        const perChart = Math.floor(surplus / growableBlockIndices.length);
-        const remainder = surplus % growableBlockIndices.length;
-        const rowsForBlock = new Map<number, number>();
-        growableBlockIndices.forEach((blockIndex, orderIndex) => {
-          rowsForBlock.set(blockIndex, 1 + perChart + (orderIndex < remainder ? 1 : 0));
-        });
-        return orderedGraphBlocks.flatMap((block, index) => block.render(rowsForBlock.get(index) ?? 1));
-      })();
-  const visibleGraphLines = rawGraphLines.map((line) => boundedSurfaceLine(line, innerWidth));
+  // Card height responds only within the tested three-to-five-row legibility range. Constrained
+  // panes retain deterministic leading cards and one explicit hidden-card count.
+  const graphRender = renderOperatorGraphCardRows(graphCards, innerWidth, graphRowBudget);
 
   const body = React.createElement(
     Box,
@@ -969,7 +1144,21 @@ export function OperatorSurfacePane({
     ...disabledReasonLines.map((line) => React.createElement(Text, { key: `disabled-reason-${line}`, color: "yellow", wrap: "truncate-end" }, line)),
     ...compactMetrics.map((metric) => React.createElement(Text, { key: metric, wrap: "truncate-end" }, metric)),
     React.createElement(Text, { key: "source", dimColor: true, wrap: "truncate-end" }, sourceLineText),
-    ...visibleGraphLines.map((line, index) => React.createElement(Text, { key: `graph-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
+    ...graphRender.rows.map((row, index) => row.segments.length === 1
+      ? React.createElement(Text, {
+          key: `graph-${index}`,
+          color: row.segments[0]!.color,
+          wrap: "truncate-end",
+        }, row.segments[0]!.text)
+      : React.createElement(
+          Box,
+          { key: `graph-${index}`, flexDirection: "row", flexShrink: 0, width: innerWidth },
+          ...row.segments.map((segment, segmentIndex) => React.createElement(
+            Text,
+            { key: `graph-${index}-${segmentIndex}`, color: segment.color, wrap: "truncate-end" },
+            segment.text,
+          )),
+        )),
     React.createElement(Text, { key: "stream-title", color: "magenta", bold: true, wrap: "truncate-end" }, "ACTIVITY/EVENT FEED"),
     ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
   );

@@ -894,6 +894,26 @@ export function buildFrame(width: number, height: number): Frame {
   return { cells, width, height };
 }
 
+/**
+ * Returns a blank frame for the requested geometry. A matching frame is cleared in place so the
+ * renderer can alternate two screen buffers instead of allocating width*height cell objects on
+ * every clock/telemetry repaint.
+ */
+export function prepareFrame(reusable: Frame | null, width: number, height: number): Frame {
+  if (!reusable || reusable.width !== width || reusable.height !== height) {
+    return buildFrame(width, height);
+  }
+  for (const row of reusable.cells) {
+    for (const cell of row) {
+      cell.char = " ";
+      cell.width = 1;
+      cell.styleRef = 0;
+      cell.hyperlinkId = null;
+    }
+  }
+  return reusable;
+}
+
 /** Write text into a Frame at the given position. */
 export function writeToFrame(
   frame: Frame, text: string, row: number, col: number, styleRef: StyleRef,
@@ -947,7 +967,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   const hyperlinkPool = new HyperlinkPool();
 
   let prevFrame: Frame | null = null;
-  let currentFrame: Frame | null = null;
+  let spareFrame: Frame | null = null;
   let firstFrameFlushed = false;
   // issue #286: the diff in diffFrames() only ever iterates curr's own width/height, so on a
   // resize to SMALLER dimensions, cells the previous (larger) frame held outside the new bounds
@@ -983,16 +1003,15 @@ export function createRenderer(options: RendererOptions): Renderer {
       const rendered = output.flush();
 
       // Build current frame from rendered output by re-parsing
-      const frame = buildFrame(w, h);
+      const frame = prepareFrame(spareFrame, w, h);
 
       // Simple parse: extract cursorPosition + text sequences from rendered output
       parseRenderedIntoFrame(rendered, frame, stylePool);
 
-      currentFrame = frame;
-
       // Diff -- force a full repaint (nothing carried from prevFrame) on any geometry change,
       // so a shrink never leaves stale off-frame content unaddressed.
-      const patch = diffFrames(geometryChanged ? null : prevFrame, currentFrame);
+      const previousFrame = prevFrame;
+      const patch = diffFrames(geometryChanged ? null : previousFrame, frame);
       const runs  = optimizePatch(patch);
 
       // Write minimal output -- clear-screen first on a geometry change so any terminal-side
@@ -1027,47 +1046,20 @@ export function createRenderer(options: RendererOptions): Renderer {
         }
       }
 
-      // M9-DIAG-LIVE: capture per-paint diagnostic for live root-cause
-      try {
-        const _diagIsFirst = !prevFrame;
-        const _diagRow28 = "\x1b[29;1H";
-        const _diagRow29 = "\x1b[30;1H";
-        const _diagR28i = buf.indexOf(_diagRow28);
-        const _diagR29i = buf.indexOf(_diagRow29);
-        const _diagEntry = JSON.stringify({
-          ts: Date.now(),
-          paint: _diagIsFirst ? "first" : "subsequent",
-          h, w,
-          buf_len: buf.length,
-          has_row28: _diagR28i >= 0,
-          has_row29: _diagR29i >= 0,
-          row28_ctx: _diagR28i >= 0 ? buf.slice(_diagR28i, Math.min(_diagR28i + 60, buf.length)) : null,
-          row29_ctx: _diagR29i >= 0 ? buf.slice(_diagR29i, Math.min(_diagR29i + 60, buf.length)) : null,
-          live_stdout_rows: process.stdout.rows ?? null,
-          live_stdout_cols: process.stdout.columns ?? null,
-        });
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const _diagPath = (require("path") as typeof import("path")).join(
-          (require("os") as typeof import("os")).tmpdir(),
-          "ember-m9-diag.jsonl",
-        );
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        (require("fs") as typeof import("fs")).appendFileSync(
-          _diagPath,
-          _diagEntry + "\n",
-        );
-      } catch { /* M9-DIAG-LIVE silent */ }
-
-      prevFrame = currentFrame;
+      prevFrame = frame;
+      spareFrame = previousFrame?.width === w && previousFrame.height === h
+        ? previousFrame
+        : null;
     },
 
     unmount(): void {
       prevFrame = null;
-      currentFrame = null;
+      spareFrame = null;
     },
 
     clear(): void {
       prevFrame = null;
+      spareFrame = null;
     },
   };
 }
