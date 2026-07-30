@@ -1,0 +1,25 @@
+{
+    "schema_version":  "ember-liveness-watchdog-memory-v1",
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02A",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "classes":  {
+                    "cockpit":  {
+                                    "soft_bytes":  2147483648,
+                                    "hard_bytes":  4294967296,
+                                    "consecutive_hard_polls":  3,
+                                    "process_names":  [
+                                                          "ember"
+                                                      ]
+                                },
+                    "brain_server":  {
+                                         "soft_bytes":  13421772800,
+                                         "hard_bytes":  15032385536,
+                                         "consecutive_hard_polls":  3,
+                                         "process_names":  [
+                                                               "ember-lab",
+                                                               "brain-server"
+                                                           ]
+                                     }
+                }
+}

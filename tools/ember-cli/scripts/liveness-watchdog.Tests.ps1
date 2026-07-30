@@ -119,6 +119,147 @@ Describe 'Get-PlannedOutageMarker + Test-MarkerCoversTarget (frozen contract, is
     }
 }
 
+Describe 'Watchdog memory-class configuration (issue #756)' {
+    It 'loads the checked-in cockpit and brain-server thresholds from a closed schema' {
+        $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+        $path = Join-Path $root 'tools\ember-cli\specs\liveness-watchdog-memory-v1.json'
+        $config = Get-WatchdogMemoryConfig -Path $path
+        $config.classes.cockpit.soft_bytes | Should Be 2147483648
+        $config.classes.cockpit.hard_bytes | Should Be 4294967296
+        $config.classes.brain_server.soft_bytes | Should Be 13421772800
+        @($config.classes.brain_server.process_names | Where-Object { $_ -eq 'ember-lab' }).Count | Should Be 1
+    }
+
+    It 'rejects unknown config fields instead of silently changing the authority surface' {
+        $scratch = New-Scratch
+        try {
+            $path = Join-Path $scratch 'bad-memory-config.json'
+            '{"schema_version":"ember-liveness-watchdog-memory-v1","classes":{},"extra":true}' | Set-Content -Path $path -Encoding utf8
+            { Get-WatchdogMemoryConfig -Path $path } | Should Throw
+        } finally {
+            Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+Describe 'Cockpit commit-footprint governor (issue #756)' {
+    BeforeEach {
+        $script:scratch = New-Scratch
+        $script:heartbeatPath = Join-Path $scratch 'cockpit-heartbeat.json'
+        $script:markerPath = Join-Path $scratch 'planned-outage.json'
+        $script:restartLogPath = Join-Path $scratch 'restart-log.jsonl'
+        $script:launcherPath = Join-Path $scratch 'launch-cockpit-instrumented.bat'
+        'rem stub launcher' | Set-Content -Path $launcherPath -Encoding ascii
+        $script:state = Get-DefaultWatchdogState
+        $script:launcherCalls = 0
+        Mock Start-CockpitLauncher { $script:launcherCalls++; return [PSCustomObject]@{ Pid = 42424; Started = $true } }
+    }
+    AfterEach {
+        Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'fresh heartbeat below the configured memory threshold does not restart' {
+        $now = [datetime]::Parse('2026-07-08T12:00:05Z').ToUniversalTime()
+        $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }
+        ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+        $memoryConfig = [PSCustomObject]@{
+            schema_version = 'ember-liveness-watchdog-memory-v1'
+            classes = [PSCustomObject]@{
+                cockpit = [PSCustomObject]@{ soft_bytes = 2147483648; hard_bytes = 4294967296; consecutive_hard_polls = 3 }
+            }
+        }
+        Mock Get-SupervisedProcessCommitFootprints {
+            @([PSCustomObject]@{ Pid = 1234; Class = 'cockpit'; CommitBytes = 1073741824; UptimeSec = 600 })
+        }
+
+        $result = Invoke-CockpitWatchdogTick -Now $now -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath `
+            -MemoryConfig $memoryConfig
+
+        $result.Action | Should Be 'none'
+        $launcherCalls | Should Be 0
+        $state.cockpit.consecutiveHardMemoryPolls | Should Be 0
+    }
+
+    It 'configured soft-memory breach writes operator-visible receipts without restart' {
+        $now = [datetime]::Parse('2026-07-08T12:00:05Z').ToUniversalTime()
+        $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }
+        ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+        $activityPath = Join-Path $scratch 'activity-ledger.jsonl'
+        $memoryConfig = [PSCustomObject]@{
+            schema_version = 'ember-liveness-watchdog-memory-v1'
+            classes = [PSCustomObject]@{
+                cockpit = [PSCustomObject]@{ soft_bytes = 2147483648; hard_bytes = 4294967296; consecutive_hard_polls = 3 }
+            }
+        }
+        Mock Get-SupervisedProcessCommitFootprints {
+            @([PSCustomObject]@{ Pid = 1234; Class = 'cockpit'; CommitBytes = 3221225472; UptimeSec = 600 })
+        }
+
+        $result = Invoke-CockpitWatchdogTick -Now $now -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath `
+            -ActivityLedgerPath $activityPath -MemoryConfig $memoryConfig
+
+        $result.Action | Should Be 'memory-soft-breach'
+        $launcherCalls | Should Be 0
+        $receipt = (Get-Content -Path $restartLogPath -Raw) | ConvertFrom-Json
+        $receipt.event | Should Be 'memory-soft-breach'
+        $receipt.commit_gb | Should Be 3
+        $receipt.threshold | Should Be 2
+        $receipt.action | Should Be 'observe'
+        (Test-Path $activityPath) | Should Be $true
+    }
+    It 'three configured hard-memory polls write receipt before clean restart' {
+        $base = [datetime]::Parse('2026-07-08T12:00:05Z').ToUniversalTime()
+        $row = @{ ts = '2026-07-08T12:00:00Z'; pid = 1234; version = 'abc' }
+        ($row | ConvertTo-Json) | Set-Content -Path $heartbeatPath -Encoding utf8
+        $script:activityPath = Join-Path $scratch 'activity-ledger.jsonl'
+        $script:memoryOrder = @()
+        $memoryConfig = [PSCustomObject]@{
+            schema_version = 'ember-liveness-watchdog-memory-v1'
+            classes = [PSCustomObject]@{
+                cockpit = [PSCustomObject]@{ soft_bytes = 2147483648; hard_bytes = 4294967296; consecutive_hard_polls = 3 }
+            }
+        }
+        Mock Get-SupervisedProcessCommitFootprints {
+            @([PSCustomObject]@{ Pid = 1234; Class = 'cockpit'; CommitBytes = 5368709120; UptimeSec = 600 })
+        }
+        Mock Write-RestartLogRow {
+            param($Path, $Row)
+            if ($Row.event -eq 'memory-hard-breach') { $script:memoryOrder += 'receipt' }
+            ($Row | ConvertTo-Json -Compress) | Add-Content -Path $Path -Encoding utf8
+        }
+        Mock Stop-Process { $script:memoryOrder += 'stop' }
+        Mock Start-CockpitLauncher {
+            $script:launcherCalls++
+            $script:memoryOrder += 'launch'
+            [PSCustomObject]@{ Pid = 42424; Started = $true }
+        }
+
+        0..1 | ForEach-Object {
+            $r = Invoke-CockpitWatchdogTick -Now $base.AddSeconds($_ * 15) -State $state `
+                -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+                -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath `
+                -ActivityLedgerPath $activityPath -MemoryConfig $memoryConfig
+            $r.Action | Should Be 'memory-hard-pending'
+        }
+        $r = Invoke-CockpitWatchdogTick -Now $base.AddSeconds(30) -State $state `
+            -HeartbeatPath $heartbeatPath -MarkerPath $markerPath -StaleThresholdSec 90 `
+            -LauncherBatPath $launcherPath -RestartLogPath $restartLogPath `
+            -ActivityLedgerPath $activityPath -MemoryConfig $memoryConfig
+
+        $r.Action | Should Be 'memory-restart'
+        ($memoryOrder -join ',') | Should Be 'receipt,stop,launch'
+        $rows = @(Get-Content -Path $restartLogPath | ForEach-Object { $_ | ConvertFrom-Json })
+        $receipt = @($rows | Where-Object { $_.event -eq 'memory-hard-breach' })[0]
+        $receipt.pid | Should Be 1234
+        $receipt.commit_gb | Should Be 5
+        $receipt.threshold | Should Be 4
+        $receipt.action | Should Be 'restart'
+        (Test-Path $activityPath) | Should Be $true
+    }
+}
 Describe 'Invoke-CockpitWatchdogTick' {
     BeforeEach {
         $script:scratch = New-Scratch
