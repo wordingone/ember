@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_ceff_closure_confirmation.py — C-EFF CLOSURE confirmation runner +
 RESOLVED-receipt assembler (issue #24, terminal rung).
 
@@ -615,7 +618,7 @@ def run_confirmation_live(projected_tok_s: float) -> dict:
     requested_run = {
         "source": "ember_ceff_closure_confirmation--live",
         "total_steps": total_steps,
-        "params": gate_mod.V0_CERTIFIED_PARAMS,
+        "params": gate_mod.V0_REALIZED_PARAMS,
         "batch": BATCH,
         "seq": seq,
     }
@@ -665,6 +668,7 @@ def run_confirmation_dry(projected_tok_s: float) -> dict:
     inside the ±10% band, proving the assembler/self-check/probe pipeline
     end-to-end without GPU. Never evidence for the real probe (written only
     to scratch/, self-declares dry_run/synthetic)."""
+    import v0_pretrain_launch_gate as gate_mod
     synthetic_tok_s = round(projected_tok_s * 0.97, 2)   # ~3% under projection, inside band
     return {
         "status": "OK",
@@ -678,7 +682,7 @@ def run_confirmation_dry(projected_tok_s: float) -> dict:
         "g_budget": {"status": "SYNTHETIC", "detail": "no live g_budget call in --dry-run"},
         "requested_run": {"source": "ember_ceff_closure_confirmation--dry-run",
                           "total_steps": CONFIRM_WARMUP + CONFIRM_TIMED,
-                          "params": 368354304, "batch": BATCH, "seq": 1024},
+                          "params": gate_mod.V0_REALIZED_PARAMS, "batch": BATCH, "seq": 1024},
         "recipe": {
             "source": "SYNTHETIC -- no torch, no GPU, no timeshare_pretrain import",
             "batch": BATCH, "seq": 1024, "ce_chunk_tokens": CE_CHUNK_TOKENS,

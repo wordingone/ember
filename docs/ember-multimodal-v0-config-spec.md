@@ -46,6 +46,11 @@ satisfies 1+4 only; **2 and 3 are the build**.
   that is a **re-measure flag for #414-class**, not a drop (only the maintainer abandons a
   directed component). v0 fallback rule preserved (MTP selftest fail → CE-only,
   RECEIPTED, re-enters at v0.1).
+
+> **Mechanism/accounting erratum:** the historical v0 implementation is two
+> independent hidden-to-vocabulary auxiliary heads, not DeepSeek sequential
+> MTP and not a speculative drafter. The declared split is 368,354,304 base +
+> 65,536,000 auxiliary = 433,890,304 realized. Quality remains unscreened (#722).
 - **attention:** GQA + FlashAttention + QK-norm. **schedule:** WSD (warmup 0.01 /
   stable 0.85 / decay-to 0.10).
 - **governor:** VRAM_FRACTION 0.80 / MARGIN_GIB 1.5 / pacer 0.05s; margin-violation

@@ -1,5 +1,13 @@
 # NC2 Recipe-Stack — PINNED (#28)
 
+> **2026-07-30 mechanism-identity correction:** every post-hoc drafter
+> statement in this historical recipe describes a separate future mechanism
+> candidate. It does not identify or receive credit from the two independent
+> auxiliary vocabulary-projection heads implemented by historical v0. Those
+> heads are neither DeepSeek sequential MTP nor a speculative drafter. The
+> authoritative current disposition is
+> `docs/mtp-parameter-accounting-and-mechanism-identity-v1.md`.
+
 **Status:** PINNED (supersedes the 2026-06-10 draft in the lead's state dir)
 **Scope:** Component pinning for the NC2-own pretrain loop at ~0.5–1B params /
 ~20B tokens, RTX 4090 single-GPU.

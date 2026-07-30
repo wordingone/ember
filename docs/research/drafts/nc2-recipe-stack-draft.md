@@ -2,6 +2,13 @@
 
 # NC2 Recipe-Stack Pins — ember's owned-core technical stack (#28)
 
+> **Historical-draft correction (2026-07-30):** post-hoc drafter below is
+> a distinct future mechanism candidate, not the identity of historical v0's
+> two independent auxiliary vocabulary-projection heads. The implemented
+> heads are neither DeepSeek sequential MTP nor a speculative drafter and
+> receive no drafter or quality credit. See
+> `docs/mtp-parameter-accounting-and-mechanism-identity-v1.md`.
+
 **Status:** DRAFT  
 **Scope:** Component pinning for the NC2-own pretrain loop at ~0.5–1B params / 20B tokens, RTX 4090 single-GPU feasibility.  
 **Gate:** Each row must cite receipt source (verified URLs from surveys, or local smoke-scale runs). Unverifiable claims marked UNVERIFIED.  

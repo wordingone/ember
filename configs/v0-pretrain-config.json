@@ -2,8 +2,9 @@
   "authority": {
     "artifact_class": "historical_only",
     "execution_authority": "denied",
-    "goal_id": "EMBER-00",
-    "next_executed_outcome": "EMBER-01 clean 3B custody and identity spine"
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
   },
   "ticket": "V0-PRETRAIN-CONFIG",
   "version": 3,
@@ -24,7 +25,11 @@
     "tied_embeddings": true,
     "grad_checkpointing": false,
     "grad_ckpt_disabled_by": "PR #298: NONE arm 1.213x vs full-ckpt; margin_assert_receipt: receipts/selective-recompute-ab-20260612T063250Z.json",
-    "params_estimate": 368354304
+    "parameter_accounting": {
+      "base_excluding_mtp": 368354304,
+      "mtp_aux": 65536000,
+      "realized": 433890304
+    }
   },
 
   "precision": {
@@ -48,6 +53,13 @@
       "enabled": true,
       "n_heads": 2,
       "weight": 0.3,
+      "mechanism_identity": {
+        "implementation": "independent_vocab_projection_heads",
+        "shared_hidden_state": true,
+        "sequential_state_transition": false,
+        "deepseek_sequential_mtp_equivalent": false,
+        "speculative_decode_drafter": false
+      },
       "component_contract": "#5 MTP — denser signal per token at a <=7.4B-token budget",
       "fallback": "if the MTP-head implementation fails its selftest, v0 launches CE-only and the deviation is RECEIPTED + the component re-enters at v0.1 — never silently dropped"
     }
