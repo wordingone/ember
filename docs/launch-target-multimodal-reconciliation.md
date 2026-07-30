@@ -71,8 +71,9 @@ fail-before-continue) apply identically to the multimodal run.
 
 The only pretrain config in the committed repo is `configs/v0-pretrain-config.json`
 = **ember-v0, text-only**: hidden 1024 / 20 layers / vocab 32000 / seq 1024 /
-next-token CE + 2 MTP aux heads / 368M params (the "0.37B" all fp-44/fp-41 work
-measured). No vision encoder, patch-embed, image-token, or modality-fusion file
+next-token CE + 2 independent MTP auxiliary heads / 368,354,304 base parameters
+excluding MTP + 65,536,000 MTP parameters = 433,890,304 declared realized parameters.
+This is not DeepSeek sequential MTP or a speculative drafter. No vision encoder, patch-embed, image-token, or modality-fusion file
 exists (grep + glob, 2026-06-14). The **one** piece of multimodal groundwork is the
 tokenizer's **reserved multimodal band** (v0 config line 70 — design intent, no
 model behind it). So the goalpost moved from "launch v0-text (nearly ready —

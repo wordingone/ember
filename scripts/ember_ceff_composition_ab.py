@@ -730,7 +730,7 @@ def _run_bench_live() -> dict:
     requested_run = {
         "source": "ember_ceff_composition_ab--live",
         "total_steps": total_steps,
-        "params": gate_mod.V0_CERTIFIED_PARAMS,
+        "params": gate_mod.V0_REALIZED_PARAMS,
         "batch": BATCH,
         "seq": seq,
     }

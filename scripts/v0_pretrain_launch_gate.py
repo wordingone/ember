@@ -1,5 +1,5 @@
 """v0_pretrain_launch_gate.py — fail-closed dispatch gate for the owned-core
-v0 pretrain (NC2-own, c03 shape: 0.368B QAT, seq 1024, w1-governed 4090).
+v0 pretrain (historical c03: 0.4339B realized / 0.3684B base excluding MTP).
 
 This shim embeds docs/research/v0-launch-gate.md as named, receipt-checkable
 assertions. The v0 trainer (#167 — scripts/timeshare_pretrain.py extended
@@ -81,12 +81,15 @@ MICRO_FIT_FRACTION = 0.005   # 0.5% of the certified full-ladder FLOPs budget.
                              # ladder: a 120-step/batch16/seq1024 grow probe
                              # on the certified c03 shape lands at ~18% of
                              # this ceiling -- comfortably inside, not at it.
-V0_CERTIFIED_PARAMS = 368354304   # c03 measured param count (fp19-bench) --
-                                  # the SAME pin v0_config_check.py binds
-                                  # G-config to (model.params_estimate in the
-                                  # frozen v0 config).
+with open(CONFIG, encoding="utf-8") as _config_file:
+    _V0_CONFIG = json.load(_config_file)
+(
+    V0_BASE_EXCLUDING_MTP_PARAMS,
+    V0_MTP_AUX_PARAMS,
+    V0_REALIZED_PARAMS,
+) = v0_config_check.parameter_accounting(_V0_CONFIG)
 MICRO_FIT_CEILING_FLOPS = (MICRO_FIT_FRACTION * SHATTER_BUDGET_B
-                          * 6.0 * V0_CERTIFIED_PARAMS)
+                          * 6.0 * V0_REALIZED_PARAMS)
 
 
 # ---- helpers -------------------------------------------------------------
@@ -780,7 +783,7 @@ def _selftest():
     # wildly-expired calendar with no SHATTER proof -- G-budget is now truthful
     # about what THIS launch costs, not the full ladder.
     _micro_rr = {"source": "selftest-micro", "total_steps": 120,
-                 "params": 368354304, "batch": 16, "seq": 1024}
+                 "params": V0_REALIZED_PARAMS, "batch": 16, "seq": 1024}
     st_rr, dt_rr = g_budget(date(2999, 1, 1), shatter_fit=(False, "no-proof"),
                             requested_run=_micro_rr)
     assert st_rr == "GREEN" and "FIT" in dt_rr, (st_rr, dt_rr)
@@ -789,7 +792,7 @@ def _selftest():
     # a sub-floor date with no SHATTER proof (same status+detail as if no
     # requested_run had been passed at all).
     _huge_rr = {"source": "selftest-huge", "total_steps": 10**9,
-                "params": 368354304, "batch": 16, "seq": 1024}
+                "params": V0_REALIZED_PARAMS, "batch": 16, "seq": 1024}
     _baseline = g_budget(date(2026, 6, 20), shatter_fit=(False, "no-proof"))
     st_huge, dt_huge = g_budget(date(2026, 6, 20), shatter_fit=(False, "no-proof"),
                                 requested_run=_huge_rr)

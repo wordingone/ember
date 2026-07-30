@@ -1013,7 +1013,7 @@ def cmd_live(args: argparse.Namespace) -> int:
     requested_run = {
         "source": "ember-c-e2b-paired-run--live",
         "total_steps": total_steps,
-        "params": gate_mod.V0_CERTIFIED_PARAMS,
+        "params": gate_mod.V0_REALIZED_PARAMS,
         "batch": 1,
         "seq": 1024,
     }

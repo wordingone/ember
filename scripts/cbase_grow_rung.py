@@ -894,7 +894,7 @@ def selftest() -> None:
     # 4. Micro-fit ceiling cross-check against v0_pretrain_launch_gate's own constant
     #    (imported lazily, HERE ONLY — this module is torch-free at top level).
     import v0_pretrain_launch_gate as gate_mod
-    assert abs(gate_mod.MICRO_FIT_CEILING_FLOPS - 2.4311384064e+16) < 1e6, gate_mod.MICRO_FIT_CEILING_FLOPS
+    assert abs(gate_mod.MICRO_FIT_CEILING_FLOPS - 2.8636760064e+16) < 1e6, gate_mod.MICRO_FIT_CEILING_FLOPS
     cost_rung1 = 6.0 * RUNG_EXPECTED_PARAMS_GROWN[1] * 16 * 1024 * steps_rung1
     assert cost_rung1 <= gate_mod.MICRO_FIT_CEILING_FLOPS, (cost_rung1, gate_mod.MICRO_FIT_CEILING_FLOPS)
     well_formed, fit_ok, _detail = gate_mod._requested_run_compute_fit({
