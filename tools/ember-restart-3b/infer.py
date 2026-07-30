@@ -23,6 +23,7 @@ from model import RestartDecoderConfig, UnifiedDecoder
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from ember_restart.prediction_contract import CLAIM_STATUS, SCHEMA_VERSION, validate_predictions  # noqa: E402
+from frozen_tokenizer_decoder import attach_frozen_bytelevel_decoder  # noqa: E402
 
 
 def sha(path: Path) -> str:
@@ -82,6 +83,9 @@ def load_frozen_tokenizer(path: Path, *, expected_sha256: str, snapshot_bytes: b
         eos_token_id = next(iter(eos_ids))
         from tokenizers import Tokenizer
         tokenizer = Tokenizer.from_str(raw.decode("utf-8"))
+        pre_tokenizer = payload.get("pre_tokenizer")
+        if isinstance(pre_tokenizer, Mapping) and pre_tokenizer.get("type") == "ByteLevel":
+            attach_frozen_bytelevel_decoder(tokenizer, raw)
     except (KeyError, TypeError, UnicodeError, json.JSONDecodeError, ValueError) as error:
         raise ValueError("frozen tokenizer bytes lack a valid special EOS declaration") from error
     except Exception as error:
