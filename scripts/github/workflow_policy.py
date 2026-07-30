@@ -90,7 +90,11 @@ def _checkout_uses_pr_subject(step: dict[str, Any]) -> bool:
     trusted_refs = {"master", "refs/heads/master"}
     if ref in trusted_refs:
         return repository not in trusted_repositories
-    if "pull_request.base.sha" in ref or "github.event.repository.default_branch" in ref:
+    trusted_ref_expressions = {
+        "${{ github.event.pull_request.base.sha }}",
+        "${{ github.event.repository.default_branch }}",
+    }
+    if ref in trusted_ref_expressions:
         return repository not in trusted_repositories
     return True
 
@@ -100,6 +104,17 @@ def _job_executes_checked_out_repository_code(steps: list[Any]) -> bool:
         isinstance(step, dict) and _checkout_uses_pr_subject(step) for step in steps
     ):
         return False
+    return any(
+        isinstance(step, dict)
+        and (
+            bool(str(step.get("run", "")).strip())
+            or str(step.get("uses", "")).startswith("./")
+        )
+        for step in steps
+    )
+
+
+def _job_executes_pr_controlled_workflow_code(steps: list[Any]) -> bool:
     return any(
         isinstance(step, dict)
         and (
@@ -138,6 +153,14 @@ def validate_workflow(path: Path) -> list[str]:
         job_privileged = bool(PR_EVENTS & event_names) and _permission_writes(
             _effective_permissions(workflow, job)
         )
+        if (
+            job_privileged
+            and "pull_request" in event_names
+            and _job_executes_pr_controlled_workflow_code(steps)
+        ):
+            errors.append(
+                f"{context}: pull_request workflow source cannot hold write authority"
+            )
         if job_privileged and _job_executes_checked_out_repository_code(steps):
             errors.append(
                 f"{context}: write-capable PR job executes pull-request code"

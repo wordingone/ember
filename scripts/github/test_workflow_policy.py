@@ -126,6 +126,36 @@ jobs:
             errors,
         )
 
+    def test_pull_request_write_job_cannot_run_inline_code_with_trusted_checkout(
+        self,
+    ) -> None:
+        path = self._write(
+            """
+name: pull-request-controls-workflow-source
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  apply:
+    permissions:
+      contents: read
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: wordingone/ember
+          ref: master
+      - run: echo attacker-controlled-workflow-source
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("pull_request workflow source cannot hold write authority" in e for e in errors),
+            errors,
+        )
+
     def test_dependabot_or_fork_token_reduction_is_not_a_safety_proof(self) -> None:
         path = self._write(
             """
