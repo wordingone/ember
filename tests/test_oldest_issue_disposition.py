@@ -164,7 +164,9 @@ class OldestIssueDispositionTests(unittest.TestCase):
         )
         validate_capture(capture, expected_master=MASTER)
 
-    def test_capture_advances_after_content_bound_cursor_and_allows_final_batch(self) -> None:
+    def test_capture_advances_after_content_bound_cursor_and_allows_final_batch(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _raw_capture(root, include_all_comments=True)
@@ -208,6 +210,7 @@ class OldestIssueDispositionTests(unittest.TestCase):
                     after_created_at="2027-01-01T00:00:00Z",
                     after_issue_number=999,
                 )
+
     def test_capture_rejects_full_final_page_as_incomplete_pagination(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -249,6 +252,42 @@ class OldestIssueDispositionTests(unittest.TestCase):
                     master_sha=MASTER,
                     captured_at="2026-07-25T00:00:00Z",
                 )
+
+    def test_capture_preserves_stable_comment_count_contradiction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _raw_capture(root)
+            for name in ("issues_pre.json", "issues_post.json"):
+                pages = json.loads((root / name).read_text(encoding="utf-8"))
+                pages[0][0]["comments"] = 2
+                _write_json(root / name, pages)
+
+            capture = build_capture(
+                root,
+                master_sha=MASTER,
+                captured_at="2026-07-25T00:00:00Z",
+            )
+
+        issue = capture["issues"][0]
+        self.assertEqual(issue["comment_count"], 2)
+        self.assertEqual(len(issue["comments"]), 1)
+        self.assertEqual(
+            issue["comment_count_contradiction"],
+            {
+                "code": "REST_METADATA_COMMENT_COUNT_MISMATCH",
+                "metadata_count": 2,
+                "endpoint_count": 1,
+            },
+        )
+        validate_capture(capture, expected_master=MASTER)
+
+        missing = copy.deepcopy(capture)
+        del missing["issues"][0]["comment_count_contradiction"]
+        missing["capture_sha256"] = canonical_sha256(
+            {key: value for key, value in missing.items() if key != "capture_sha256"}
+        )
+        with self.assertRaisesRegex(PacketError, "comment_count"):
+            validate_capture(missing, expected_master=MASTER)
 
     def test_packet_requires_complete_source_clause_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
