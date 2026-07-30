@@ -20,6 +20,7 @@ from typing import Any, Callable, Mapping
 
 import torch
 
+from checkpoint_scratch import ScratchCappedWriter as _ScratchCappedWriter
 from durable_io import atomic_replace_durable
 from model import EXPERT_NAMES, UnifiedDecoder
 from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_p2b_stream_episode, validate_realization_receipt
@@ -384,25 +385,6 @@ def _record(
         "publication_mode": publication_mode,
         "incremental_bytes": 0 if publication_mode == "hardlink" else logical_bytes,
     }
-
-
-class _ScratchCappedWriter:
-    """Reject a temporary shard before a write would cross its byte cap."""
-
-    def __init__(self, handle: Any, max_bytes: int) -> None:
-        self._handle = handle
-        self._max_bytes = max_bytes
-
-    def write(self, payload: bytes | bytearray | memoryview) -> int:
-        projected_end = self._handle.tell() + len(payload)
-        if projected_end > self._max_bytes:
-            raise RuntimeError(
-                f"checkpoint transient scratch exceeds {self._max_bytes} bytes"
-            )
-        return self._handle.write(payload)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._handle, name)
 
 
 def _write_atomic(
