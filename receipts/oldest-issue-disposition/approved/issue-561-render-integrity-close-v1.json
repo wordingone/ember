@@ -1,0 +1,2474 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "capture": {
+    "authority": {
+      "goal_id": "EMBER-02",
+      "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+      "workstream_id": "EMBER-02A"
+    },
+    "capture_sha256": "9015728ca35274427204b2fe8520ddb50dd6568dd63e690b95c5501c2fd144c6",
+    "captured_at": "2026-07-30T17:55:49Z",
+    "cursor": {
+      "after_created_at": "2026-07-09T13:32:22Z",
+      "after_issue_number": 558
+    },
+    "excluded_pull_request_population": 0,
+    "issues": [
+      {
+        "author": "wordingone",
+        "body_sha256": "3701c3d101adc2a13aaaf82e103eb98e3bc673f574d16d33a04b11ab9f4878bb",
+        "comment_count": 3,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "1623ee0011dc1dff54d5c7096f7157a217eb770f83530a058429a42c1a13bd1b",
+            "created_at": "2026-07-09T15:38:37Z",
+            "id": 4926894008,
+            "updated_at": "2026-07-09T15:38:37Z",
+            "url": "https://github.com/wordingone/ember/issues/561#issuecomment-4926894008"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "f58c92d31b3888dc893b09c66594bd279da6dbc577f2a40264fedeb59a0d8d21",
+            "created_at": "2026-07-18T18:28:17Z",
+            "id": 5012422771,
+            "updated_at": "2026-07-18T18:28:17Z",
+            "url": "https://github.com/wordingone/ember/issues/561#issuecomment-5012422771"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "716275220f7593345cb842e9f8c013a670f5b1cb944adb2f23d77f0e719ff268",
+            "created_at": "2026-07-19T01:18:30Z",
+            "id": 5013650324,
+            "updated_at": "2026-07-19T01:18:30Z",
+            "url": "https://github.com/wordingone/ember/issues/561#issuecomment-5013650324"
+          }
+        ],
+        "created_at": "2026-07-09T13:54:59Z",
+        "labels": [
+          "affects:EMBER-01",
+          "affects:EMBER-03",
+          "area:agent",
+          "area:cockpit",
+          "area:runtime",
+          "kind:defect",
+          "priority:p1",
+          "scope:cross-cutting",
+          "severity:s2",
+          "state:review"
+        ],
+        "number": 561,
+        "source_stability": {
+          "comments_post_sha256": "0fdb7ed43ee5d258159653bae05e5235a5d87f0835d8d92f1341e4401d2b366c",
+          "comments_pre_sha256": "0fdb7ed43ee5d258159653bae05e5235a5d87f0835d8d92f1341e4401d2b366c",
+          "post_sha256": "fc53afaaba2a81fad5f1666bdf6fa17eed53b734fa074a59e479f67cb8a985aa",
+          "pre_sha256": "fc53afaaba2a81fad5f1666bdf6fa17eed53b734fa074a59e479f67cb8a985aa"
+        },
+        "state": "open",
+        "title": "ember-cli render integrity: locked banner/input regions + edge-triggered event feed (operator-reported flood + layout break)",
+        "updated_at": "2026-07-30T17:44:52Z",
+        "url": "https://github.com/wordingone/ember/issues/561"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "9ae5ac4823a5ec6e1dee6a89cb7515e655bc9ee0540f0e3155f78ba8f428fe83",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "777ef044a7665dba2d3111c334db2572c3df6157487365b19a88df2ec8ea3cb4",
+            "created_at": "2026-07-09T14:23:00Z",
+            "id": 4926044283,
+            "updated_at": "2026-07-09T14:23:00Z",
+            "url": "https://github.com/wordingone/ember/issues/562#issuecomment-4926044283"
+          }
+        ],
+        "created_at": "2026-07-09T14:01:38Z",
+        "labels": [
+          "affects:EMBER-03",
+          "area:cli",
+          "area:cockpit",
+          "area:runtime",
+          "kind:engineering",
+          "priority:p1",
+          "state:blocked"
+        ],
+        "number": 562,
+        "source_stability": {
+          "comments_post_sha256": "ac971d89f031465704bca210ba2e6d4e36226c6ab954a1c74d9039bb46039cf9",
+          "comments_pre_sha256": "ac971d89f031465704bca210ba2e6d4e36226c6ab954a1c74d9039bb46039cf9",
+          "post_sha256": "98de41faddd26322d09228f16d4c6795ae6e53be3adfe50a542a341bf541cf84",
+          "pre_sha256": "98de41faddd26322d09228f16d4c6795ae6e53be3adfe50a542a341bf541cf84"
+        },
+        "state": "open",
+        "title": "The body owns its liveness: absorb watchdog functions into ember-cli, retire the external daemon to an OS-native restart rule",
+        "updated_at": "2026-07-30T02:50:18Z",
+        "url": "https://github.com/wordingone/ember/issues/562"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "23375c39301300257139e5798492fc1ea78a6236a320d4c5a563ef573158409d",
+        "comment_count": 0,
+        "comments": [],
+        "created_at": "2026-07-09T14:33:28Z",
+        "labels": [
+          "affects:EMBER-03",
+          "area:agent",
+          "area:cli",
+          "area:cockpit",
+          "kind:feature",
+          "priority:p0",
+          "state:ready"
+        ],
+        "number": 565,
+        "source_stability": {
+          "comments_post_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "comments_pre_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "post_sha256": "72d3600447b5773649fee79db1a6cd3637fb862bda8ff45c41050d0cb17125bf",
+          "pre_sha256": "72d3600447b5773649fee79db1a6cd3637fb862bda8ff45c41050d0cb17125bf"
+        },
+        "state": "open",
+        "title": "ember-cli is a conversational agent surface: the resident-colleague bar (operator reframe, P-C)",
+        "updated_at": "2026-07-30T02:50:19Z",
+        "url": "https://github.com/wordingone/ember/issues/565"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "8b028045ed3101cdb556b1f0b6164a8fb2b9a4843b77ecb8ef87f45b51f2a887",
+        "comment_count": 0,
+        "comments": [],
+        "created_at": "2026-07-09T14:46:08Z",
+        "labels": [
+          "affects:EMBER-01",
+          "affects:EMBER-03",
+          "area:ci",
+          "area:docs",
+          "area:governance",
+          "kind:maintenance",
+          "needs:review",
+          "scope:cross-cutting",
+          "state:triage"
+        ],
+        "number": 567,
+        "source_stability": {
+          "comments_post_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "comments_pre_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "post_sha256": "a6a955fd47b186c47de0d510cd3935b1f22b2cc51905e103453ac584f4942c16",
+          "pre_sha256": "a6a955fd47b186c47de0d510cd3935b1f22b2cc51905e103453ac584f4942c16"
+        },
+        "state": "open",
+        "title": "Spec lattice: full-tree audit receipt (196 docs), the ember-cli coverage gap, and the spec-consumer wiring rule",
+        "updated_at": "2026-07-30T02:50:20Z",
+        "url": "https://github.com/wordingone/ember/issues/567"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "d0aa12af12581d7a57769ec76ec5859e6ed4bc69cf550b221d7e8ca194790980",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "7fe1b8b804f4f48d4c3f58d95d908b88ee9c34cf03075653b4c9f71f2fa4e3c1",
+            "created_at": "2026-07-09T17:26:26Z",
+            "id": 4927816977,
+            "updated_at": "2026-07-09T17:26:26Z",
+            "url": "https://github.com/wordingone/ember/issues/576#issuecomment-4927816977"
+          }
+        ],
+        "created_at": "2026-07-09T16:57:27Z",
+        "labels": [
+          "affects:EMBER-03",
+          "area:agent",
+          "area:cockpit",
+          "area:runtime",
+          "kind:defect",
+          "priority:p1",
+          "severity:s2",
+          "state:ready"
+        ],
+        "number": 576,
+        "source_stability": {
+          "comments_post_sha256": "757b7b1834d7da48a677b0173bfc153ec8b2e971e04d5a5654890b153109d627",
+          "comments_pre_sha256": "757b7b1834d7da48a677b0173bfc153ec8b2e971e04d5a5654890b153109d627",
+          "post_sha256": "b42623fdd103c4356099b4fccbe37753c4f5f27a4294166e629072d1c5f7a931",
+          "pre_sha256": "b42623fdd103c4356099b4fccbe37753c4f5f27a4294166e629072d1c5f7a931"
+        },
+        "state": "open",
+        "title": "watchdog tail-poll mega-burst on cockpit relaunch (~2^16 identical lines from one kill-receipt row)",
+        "updated_at": "2026-07-30T02:50:21Z",
+        "url": "https://github.com/wordingone/ember/issues/576"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "4007ec125117a5e94fa8b6d13a1373592143a400e6a2e02af5dc19abcc56af79",
+        "comment_count": 3,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "826f464bd9c178ffaba413a3dd0d1a8450b056e3e325a409ebedecd3b1c28c55",
+            "created_at": "2026-07-09T17:54:54Z",
+            "id": 4928038121,
+            "updated_at": "2026-07-09T17:54:54Z",
+            "url": "https://github.com/wordingone/ember/issues/577#issuecomment-4928038121"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "1d77bf7e13e23c57d895deaff7cad5ba2c2847d27e25091a9f2d6900057d7415",
+            "created_at": "2026-07-09T17:57:58Z",
+            "id": 4928061344,
+            "updated_at": "2026-07-09T17:57:58Z",
+            "url": "https://github.com/wordingone/ember/issues/577#issuecomment-4928061344"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "5151af80e7b5b933c6fdd23d5e301ab664f37d7215dc7a047550e7c9a40006eb",
+            "created_at": "2026-07-09T18:15:12Z",
+            "id": 4928194689,
+            "updated_at": "2026-07-09T18:15:12Z",
+            "url": "https://github.com/wordingone/ember/issues/577#issuecomment-4928194689"
+          }
+        ],
+        "created_at": "2026-07-09T17:14:31Z",
+        "labels": [
+          "affects:EMBER-05",
+          "area:checkpoint",
+          "area:optimization",
+          "area:provenance",
+          "kind:defect",
+          "priority:p1",
+          "severity:s1",
+          "state:ready"
+        ],
+        "number": 577,
+        "source_stability": {
+          "comments_post_sha256": "b5140b84af00df393736e29b288c8df5bf0ef14c798d5bc2d179cdd66f148f07",
+          "comments_pre_sha256": "b5140b84af00df393736e29b288c8df5bf0ef14c798d5bc2d179cdd66f148f07",
+          "post_sha256": "fa4ea375aed0c69a54348ff08f62b8477ff646a246e8315f1f29cb6208f3a96f",
+          "pre_sha256": "fa4ea375aed0c69a54348ff08f62b8477ff646a246e8315f1f29cb6208f3a96f"
+        },
+        "state": "open",
+        "title": "grow boundary: saved optimizer bundle carries pre-grow shapes - load policy must satisfy the momentum-provenance register constraint",
+        "updated_at": "2026-07-30T02:50:22Z",
+        "url": "https://github.com/wordingone/ember/issues/577"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "320d311a2a088fc1bc71122830ba32f104f2ecda34274984851a897022e12680",
+        "comment_count": 11,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "af114f3fc2fb7b4eee8257ad3ed5240fa4cc8be2f4ad3cac67ffe63c5ee25619",
+            "created_at": "2026-07-09T19:15:51Z",
+            "id": 4928687874,
+            "updated_at": "2026-07-09T19:15:51Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4928687874"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "1dde93f2eab63a2f1804de7e7e1d4a6748ed80cb31e636a9b864057941f29a9e",
+            "created_at": "2026-07-10T16:01:18Z",
+            "id": 4937168407,
+            "updated_at": "2026-07-10T16:01:18Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937168407"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "f25cbd2e71d57dd06490a4b8299fc5ace7482f814ea53cb7b82aa958129a34ff",
+            "created_at": "2026-07-10T16:16:13Z",
+            "id": 4937291091,
+            "updated_at": "2026-07-10T16:16:13Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937291091"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "0d83598c7fc3e6cc43381be7ac0998b0fcfd53ac396630d3588b6f4127ac1556",
+            "created_at": "2026-07-10T16:31:32Z",
+            "id": 4937416672,
+            "updated_at": "2026-07-10T16:31:32Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937416672"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "9f52deae552181c8e20e4e835a8767eedb46a3b89e0551976f08efee62a110ee",
+            "created_at": "2026-07-10T16:45:10Z",
+            "id": 4937528909,
+            "updated_at": "2026-07-10T16:45:10Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937528909"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "3d438ebe7520410cd2aba922bfe982df702b8e002c099b58ecafe70d49522f0e",
+            "created_at": "2026-07-10T16:49:34Z",
+            "id": 4937562201,
+            "updated_at": "2026-07-10T16:49:34Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937562201"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "610bfa940ce67eee9bb469d2a5d78a6334e9e568641478af8c5fe2a19330d0a2",
+            "created_at": "2026-07-10T16:50:45Z",
+            "id": 4937571110,
+            "updated_at": "2026-07-10T16:50:45Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937571110"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "b5a8e254f578b43e40e0acbe1336f0bea726e41c11f6dc471b38a4372a424201",
+            "created_at": "2026-07-10T17:06:13Z",
+            "id": 4937692508,
+            "updated_at": "2026-07-10T17:06:13Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937692508"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "ce40076776199a2842bf434d5441e242b637ddc6e4d175a6724a441d364fe3c2",
+            "created_at": "2026-07-10T17:42:12Z",
+            "id": 4937980487,
+            "updated_at": "2026-07-10T17:42:12Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-4937980487"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "61b5f442ad0e78ffd7edb1e8438f1f1fb0b3eefaf32ab4e065cf006e260b6937",
+            "created_at": "2026-07-18T18:28:04Z",
+            "id": 5012422079,
+            "updated_at": "2026-07-18T18:28:04Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-5012422079"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "47a121d0c2881e505746af53b29381afe5c35754c9e3273546a270a8f519234e",
+            "created_at": "2026-07-19T02:43:26Z",
+            "id": 5013868012,
+            "updated_at": "2026-07-19T02:43:26Z",
+            "url": "https://github.com/wordingone/ember/issues/580#issuecomment-5013868012"
+          }
+        ],
+        "created_at": "2026-07-09T18:15:13Z",
+        "labels": [
+          "affects:EMBER-01",
+          "affects:EMBER-02",
+          "area:checkpoint",
+          "area:optimization",
+          "area:provenance",
+          "kind:defect",
+          "priority:p1",
+          "scope:cross-cutting",
+          "severity:s1",
+          "state:ready"
+        ],
+        "number": 580,
+        "source_stability": {
+          "comments_post_sha256": "9b81a5c0dd7f7a5afb0ba274be3672c936341051a4adce643fd3f5fc93dae65b",
+          "comments_pre_sha256": "9b81a5c0dd7f7a5afb0ba274be3672c936341051a4adce643fd3f5fc93dae65b",
+          "post_sha256": "fa4af99eb506964216e10ce915471dc8ca23fbc3e80a1feb49693562a613b828",
+          "pre_sha256": "fa4af99eb506964216e10ce915471dc8ca23fbc3e80a1feb49693562a613b828"
+        },
+        "state": "open",
+        "title": "optimizer-state param-id conflation: global model-state ordering used as muon-local slot keys (3 sites, shared-module fix + retro-audit)",
+        "updated_at": "2026-07-30T02:50:24Z",
+        "url": "https://github.com/wordingone/ember/issues/580"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "52fed8365b8f45486dd85bd308816814614db69a0fbeaa0eeaa256324568151f",
+        "comment_count": 0,
+        "comments": [],
+        "created_at": "2026-07-09T18:38:11Z",
+        "labels": [
+          "affects:EMBER-05",
+          "area:cockpit",
+          "area:docs",
+          "area:provenance",
+          "kind:engineering",
+          "needs:review",
+          "state:triage"
+        ],
+        "number": 582,
+        "source_stability": {
+          "comments_post_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "comments_pre_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "post_sha256": "141d1f8ea900ec3ade8a5ddc5e81b59ef66eb1208b812efdf862ff89c3c226bc",
+          "pre_sha256": "141d1f8ea900ec3ade8a5ddc5e81b59ef66eb1208b812efdf862ff89c3c226bc"
+        },
+        "state": "open",
+        "title": "C8 governed-run pre-launch obligations: freeze-hash, MDE, F3 instrument list, F2 generator, run-ledger (executable tracker)",
+        "updated_at": "2026-07-30T02:50:26Z",
+        "url": "https://github.com/wordingone/ember/issues/582"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "e0340ba6e41bf6fd2dad84f7ae79c42d2243ceb1576816520937f4216fe8bcb5",
+        "comment_count": 9,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "964f82ea86b0dcb963c8051e78f3c78a6fce3f91af41022cfdc361c681104138",
+            "created_at": "2026-07-09T21:09:03Z",
+            "id": 4929556771,
+            "updated_at": "2026-07-09T21:09:03Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4929556771"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "0c55b91151b77b9e0b9f6ef77c63917ea1accf4c502540b012019bd4d1393608",
+            "created_at": "2026-07-09T21:15:59Z",
+            "id": 4929605132,
+            "updated_at": "2026-07-09T21:15:59Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4929605132"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "e8719e622a48f311a55cbaf16d7b2cdaf3ce17cdca5881fd089843342785eab0",
+            "created_at": "2026-07-10T01:19:59Z",
+            "id": 4931087645,
+            "updated_at": "2026-07-10T01:19:59Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4931087645"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "23eb75104c8cd26a651f6ac63cc4700e2b94d89c580e81875fa6a4618956f728",
+            "created_at": "2026-07-10T01:24:24Z",
+            "id": 4931112873,
+            "updated_at": "2026-07-10T01:24:24Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4931112873"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "896ca95ece2554d89c02927b5e39b9275462b85b5be95bca1385ccadba1575b8",
+            "created_at": "2026-07-10T01:30:30Z",
+            "id": 4931141583,
+            "updated_at": "2026-07-10T01:30:30Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4931141583"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "44d450b914a8a83014dab9770dfb44de115da8e8a46ea55acef90dde16e34252",
+            "created_at": "2026-07-10T01:31:54Z",
+            "id": 4931147752,
+            "updated_at": "2026-07-10T01:31:54Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4931147752"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "aa0dec81bbb62be88af52700d6f6ea50784384aa09f74d16b34055fa8e18fbf7",
+            "created_at": "2026-07-10T02:05:10Z",
+            "id": 4931301214,
+            "updated_at": "2026-07-10T02:05:10Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4931301214"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "a3bcda0ac3274aece8c3e9838c5b32f9ece872590bf8908bd2d55d6bf33e4e14",
+            "created_at": "2026-07-10T04:08:04Z",
+            "id": 4931892222,
+            "updated_at": "2026-07-10T04:08:04Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4931892222"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "38caf5aacb30de2f3ac068fbb41c5ae9035c8fbfaa86034c856fbe77a8957257",
+            "created_at": "2026-07-10T05:50:36Z",
+            "id": 4932400059,
+            "updated_at": "2026-07-10T05:50:36Z",
+            "url": "https://github.com/wordingone/ember/issues/585#issuecomment-4932400059"
+          }
+        ],
+        "created_at": "2026-07-09T19:15:13Z",
+        "labels": [
+          "affects:EMBER-05",
+          "area:cockpit",
+          "area:evaluation",
+          "area:provenance",
+          "kind:experiment",
+          "needs:review",
+          "state:triage"
+        ],
+        "number": 585,
+        "source_stability": {
+          "comments_post_sha256": "6979ef9f031d5d448541b6d67fd0c189ed8610653bfe5fe26dbd2f0367e9fc6f",
+          "comments_pre_sha256": "6979ef9f031d5d448541b6d67fd0c189ed8610653bfe5fe26dbd2f0367e9fc6f",
+          "post_sha256": "18756cebc96c2cede5284913a1c8ada16067ada785e4c6f40b6bb1fdeb861e15",
+          "pre_sha256": "18756cebc96c2cede5284913a1c8ada16067ada785e4c6f40b6bb1fdeb861e15"
+        },
+        "state": "open",
+        "title": "c8: seed-variance runner + 5-seed post-freeze variance receipts at cheap rung (feeds #582 O2 MDE)",
+        "updated_at": "2026-07-30T02:50:27Z",
+        "url": "https://github.com/wordingone/ember/issues/585"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "7b6d5a02ccc67ce7e319748e7b2197049fdf57596eb66568a27af7512aa2b32a",
+        "comment_count": 0,
+        "comments": [],
+        "created_at": "2026-07-09T19:15:25Z",
+        "labels": [
+          "affects:EMBER-01",
+          "area:cockpit",
+          "area:provenance",
+          "area:runtime",
+          "kind:maintenance",
+          "needs:review",
+          "state:triage"
+        ],
+        "number": 586,
+        "source_stability": {
+          "comments_post_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "comments_pre_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "post_sha256": "5d769059bd8cb19e6a1465912f462f004caeb38e3d37ee41e382813567730d30",
+          "pre_sha256": "5d769059bd8cb19e6a1465912f462f004caeb38e3d37ee41e382813567730d30"
+        },
+        "state": "open",
+        "title": "c(-1) annex round-4: 12 decisive receipts uncovered (board 20260709T184357Z)",
+        "updated_at": "2026-07-30T02:50:28Z",
+        "url": "https://github.com/wordingone/ember/issues/586"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "6cf49e0f1567a72f53dcd11aeb30cccae7bf76f8dd747c44aa5a717e68905031",
+        "comment_count": 13,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "508535d7f233175f7e07966380a19146b470020488296369cf78a941b8afb4b0",
+            "created_at": "2026-07-09T21:08:28Z",
+            "id": 4929552408,
+            "updated_at": "2026-07-09T21:08:28Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4929552408"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "58c1a3e1ffa3c1e05b0cc493ffabbadc819185018dcb925de25fa3c7d6112a2d",
+            "created_at": "2026-07-09T21:14:56Z",
+            "id": 4929597927,
+            "updated_at": "2026-07-09T21:14:56Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4929597927"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "be0488b2d3cbd2963d5c34b67706a72848831b2a899d1e0c7468ef2e0f62ee17",
+            "created_at": "2026-07-09T21:15:40Z",
+            "id": 4929603167,
+            "updated_at": "2026-07-09T21:15:40Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4929603167"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "88a5a45a55a2d03716cf9e789b793dc50be1187f0b7285427dc27fc580764a66",
+            "created_at": "2026-07-09T21:18:06Z",
+            "id": 4929620565,
+            "updated_at": "2026-07-09T21:18:06Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4929620565"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "12339ef9a56f4724867b02e4acdc7ece6c069347b9130d220d05daf13398f0a6",
+            "created_at": "2026-07-09T21:48:49Z",
+            "id": 4929857301,
+            "updated_at": "2026-07-09T21:48:49Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4929857301"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "3e37546f40280615648bb6387352c5bfa90a4cf1980a749952bb36a89f864893",
+            "created_at": "2026-07-09T23:10:07Z",
+            "id": 4930354482,
+            "updated_at": "2026-07-09T23:10:07Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4930354482"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "d9208530c814f37b0cf2488ba8919b54e9b5bc3a60d716fec7056734ca8300cc",
+            "created_at": "2026-07-10T00:03:13Z",
+            "id": 4930657178,
+            "updated_at": "2026-07-10T00:03:13Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4930657178"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "309735054db2d4b346c71b3dd38e9f52a3b4ff5ae8e917ab6d4e8944b403a15c",
+            "created_at": "2026-07-10T00:53:59Z",
+            "id": 4930954650,
+            "updated_at": "2026-07-10T00:53:59Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4930954650"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "2b37c06a26534b5166309006ca296134b9af275edfc9a3be0f88ce7c94ae60aa",
+            "created_at": "2026-07-10T15:58:39Z",
+            "id": 4937144037,
+            "updated_at": "2026-07-10T15:58:39Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4937144037"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "e97dd75acbb32ab04d02e8dee1f7c9e3bfa05352c0c6e29bc2ea9df6229d876c",
+            "created_at": "2026-07-10T17:32:04Z",
+            "id": 4937903278,
+            "updated_at": "2026-07-10T17:32:04Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4937903278"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "6d18810c8570fa209a4c82f9a9bae779079348a2f735727bf4dc26c2bf8181e5",
+            "created_at": "2026-07-10T18:08:38Z",
+            "id": 4938194525,
+            "updated_at": "2026-07-10T18:08:38Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4938194525"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "09cb461dcf139ef86561ec67628e63a5b261fd1ed36682b100a73c04cd41b1f4",
+            "created_at": "2026-07-10T18:37:09Z",
+            "id": 4938410153,
+            "updated_at": "2026-07-10T18:37:09Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-4938410153"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "6d5017b159b553a6319841b602aca1aeeedc7619d6293a6a5334af820e668ebf",
+            "created_at": "2026-07-28T02:08:31Z",
+            "id": 5099100402,
+            "updated_at": "2026-07-28T02:08:31Z",
+            "url": "https://github.com/wordingone/ember/issues/591#issuecomment-5099100402"
+          }
+        ],
+        "created_at": "2026-07-09T20:57:51Z",
+        "labels": [
+          "affects:EMBER-03",
+          "area:governance",
+          "area:runtime",
+          "area:training",
+          "kind:initiative",
+          "priority:p1",
+          "state:blocked"
+        ],
+        "number": 591,
+        "source_stability": {
+          "comments_post_sha256": "3aa1ce9b0c198eec7a16d62c47117ed20aee6fa3326f5446c73c2d7422b6a2ac",
+          "comments_pre_sha256": "3aa1ce9b0c198eec7a16d62c47117ed20aee6fa3326f5446c73c2d7422b6a2ac",
+          "post_sha256": "997b2fd51b7f8a0a03162457e3c91a0cc5c1bb70ec6f5ef70b6f8190c370db8e",
+          "pre_sha256": "997b2fd51b7f8a0a03162457e3c91a0cc5c1bb70ec6f5ef70b6f8190c370db8e"
+        },
+        "state": "open",
+        "title": "gpu-window execution queue: ordered prereg-gated dispatch for every GPU leg",
+        "updated_at": "2026-07-30T02:50:29Z",
+        "url": "https://github.com/wordingone/ember/issues/591"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "346ae763f959213424fd4d25c12d20b4723eb284674c60560851d353e3628840",
+        "comment_count": 2,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "7b86e8ee047af6a67bc56cff0206c911598b2e958e5de6a3154c18ca54c3e0c7",
+            "created_at": "2026-07-09T23:19:27Z",
+            "id": 4930417098,
+            "updated_at": "2026-07-09T23:19:27Z",
+            "url": "https://github.com/wordingone/ember/issues/593#issuecomment-4930417098"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "604337eb6fc462cf829028b6b30587166d1e1cbb1ea9398d3c99a3b147106ba4",
+            "created_at": "2026-07-09T23:38:20Z",
+            "id": 4930531475,
+            "updated_at": "2026-07-09T23:38:20Z",
+            "url": "https://github.com/wordingone/ember/issues/593#issuecomment-4930531475"
+          }
+        ],
+        "created_at": "2026-07-09T21:08:15Z",
+        "labels": [
+          "affects:EMBER-02",
+          "area:data",
+          "area:evaluation",
+          "area:provenance",
+          "kind:experiment",
+          "priority:p1",
+          "state:blocked"
+        ],
+        "number": 593,
+        "source_stability": {
+          "comments_post_sha256": "6e9eadd3e87f820f02f92ec54bf4d85060e62c25de9e071070050b3d03609bb2",
+          "comments_pre_sha256": "6e9eadd3e87f820f02f92ec54bf4d85060e62c25de9e071070050b3d03609bb2",
+          "post_sha256": "e2e6155052a7096356312d5c8e85697cd778c05d8a47446b0eaf1923fbbf3a5f",
+          "pre_sha256": "e2e6155052a7096356312d5c8e85697cd778c05d8a47446b0eaf1923fbbf3a5f"
+        },
+        "state": "open",
+        "title": "a1 eval-freeze execution: declare eval_freeze_hash, quarantine pre-freeze receipts, first-ever predicate scan",
+        "updated_at": "2026-07-30T02:50:30Z",
+        "url": "https://github.com/wordingone/ember/issues/593"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "2b77942d39d6de31ad8302bb94de1df71beb2fef1b116053e5ae96f404941f60",
+        "comment_count": 5,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "4210e51937f62109825caa337c3764bc548a621ef7e02e2a0ff688ec5e233bd6",
+            "created_at": "2026-07-09T23:04:10Z",
+            "id": 4930322578,
+            "updated_at": "2026-07-09T23:04:10Z",
+            "url": "https://github.com/wordingone/ember/issues/594#issuecomment-4930322578"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "e054a9f50854af3d58d65b29d50e510885077d661f8f1bfcd9443ab99278e0b3",
+            "created_at": "2026-07-09T23:21:34Z",
+            "id": 4930432622,
+            "updated_at": "2026-07-09T23:21:34Z",
+            "url": "https://github.com/wordingone/ember/issues/594#issuecomment-4930432622"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "efd57f638cd0579b639668a39fe744870dd9af1ecfcd4e9823b5a90c660b63c3",
+            "created_at": "2026-07-09T23:25:53Z",
+            "id": 4930464570,
+            "updated_at": "2026-07-09T23:25:53Z",
+            "url": "https://github.com/wordingone/ember/issues/594#issuecomment-4930464570"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "87ead04d0301136ccee6256e8acecb7473bda3f61c1a2e50a118370e2ab6f540",
+            "created_at": "2026-07-10T01:34:45Z",
+            "id": 4931161305,
+            "updated_at": "2026-07-10T01:34:45Z",
+            "url": "https://github.com/wordingone/ember/issues/594#issuecomment-4931161305"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "8764f3322fef62af05046f4a48d9da367211e2ad86e26ac369630d7eeec0246c",
+            "created_at": "2026-07-10T03:55:54Z",
+            "id": 4931836378,
+            "updated_at": "2026-07-10T03:55:54Z",
+            "url": "https://github.com/wordingone/ember/issues/594#issuecomment-4931836378"
+          }
+        ],
+        "created_at": "2026-07-09T21:48:28Z",
+        "labels": [
+          "affects:EMBER-02",
+          "area:optimization",
+          "area:runtime",
+          "area:training",
+          "kind:engineering",
+          "priority:p1",
+          "state:ready"
+        ],
+        "number": 594,
+        "source_stability": {
+          "comments_post_sha256": "4e89450a80d36d0a055536e982a18b587119cdf59330e179fe0297794b8b09eb",
+          "comments_pre_sha256": "4e89450a80d36d0a055536e982a18b587119cdf59330e179fe0297794b8b09eb",
+          "post_sha256": "77bcb9719a42e77ba41c8ce3267a5af2db27e5adb540cf185ca67739e8ed98b1",
+          "pre_sha256": "77bcb9719a42e77ba41c8ce3267a5af2db27e5adb540cf185ca67739e8ed98b1"
+        },
+        "state": "open",
+        "title": "stab480 v9 respec: optimizer hot-loop pace defect (k3 fire) - NS-on-GPU streaming, in-process commit read, grad-memmap persistence",
+        "updated_at": "2026-07-30T02:50:31Z",
+        "url": "https://github.com/wordingone/ember/issues/594"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "4d60a850f5ff71fbfc8d5203146c4cc8dc75b4fcc8893f0ba29c695c953c6a43",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "969df08506748a8a3e2021a350f79171fccd27b2d502a1644b18723c92e760a0",
+            "created_at": "2026-07-19T14:37:16Z",
+            "id": 5016117751,
+            "updated_at": "2026-07-19T14:37:16Z",
+            "url": "https://github.com/wordingone/ember/issues/611#issuecomment-5016117751"
+          }
+        ],
+        "created_at": "2026-07-10T00:18:09Z",
+        "labels": [
+          "affects:EMBER-03",
+          "area:cli",
+          "area:provenance",
+          "area:runtime",
+          "kind:defect",
+          "needs:review",
+          "state:triage"
+        ],
+        "number": 611,
+        "source_stability": {
+          "comments_post_sha256": "5e099be0533349270f9ffa57b839474aeb315c044fa47ed37490c4df34abb684",
+          "comments_pre_sha256": "5e099be0533349270f9ffa57b839474aeb315c044fa47ed37490c4df34abb684",
+          "post_sha256": "9589335eb5974897b1dff38bfd181ec9b2598018fb157412d833f29ab2424d43",
+          "pre_sha256": "9589335eb5974897b1dff38bfd181ec9b2598018fb157412d833f29ab2424d43"
+        },
+        "state": "open",
+        "title": "Serving contract: watchdog restore target must be named (refs #464)",
+        "updated_at": "2026-07-30T02:50:33Z",
+        "url": "https://github.com/wordingone/ember/issues/611"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "ee09ad3747578dc100dfa1ada2f274d2b7e02a92122a38cd445855faaa103606",
+        "comment_count": 4,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "89a8c02e026464deb8bc6613b1a22bc1c9c2da371a3537453fc2d404afeec8be",
+            "created_at": "2026-07-10T14:59:36Z",
+            "id": 4936627594,
+            "updated_at": "2026-07-10T14:59:36Z",
+            "url": "https://github.com/wordingone/ember/issues/627#issuecomment-4936627594"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "c96502457d4333a67de91a821be01c386e6290721b8877df0bce029e9fa9ff34",
+            "created_at": "2026-07-10T15:03:30Z",
+            "id": 4936662156,
+            "updated_at": "2026-07-10T15:03:30Z",
+            "url": "https://github.com/wordingone/ember/issues/627#issuecomment-4936662156"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "53543f2a69c775b50e98619ab874354b36ce349df3090aa5dbfbc8d659c63d17",
+            "created_at": "2026-07-10T17:35:21Z",
+            "id": 4937930237,
+            "updated_at": "2026-07-10T17:35:21Z",
+            "url": "https://github.com/wordingone/ember/issues/627#issuecomment-4937930237"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "c0f83a1a5ac142631c8b4f8ccfee633ee79449b083334f012e79e32b3f2c0d3d",
+            "created_at": "2026-07-10T17:43:23Z",
+            "id": 4937988963,
+            "updated_at": "2026-07-10T17:43:23Z",
+            "url": "https://github.com/wordingone/ember/issues/627#issuecomment-4937988963"
+          }
+        ],
+        "created_at": "2026-07-10T03:55:53Z",
+        "labels": [
+          "affects:EMBER-02",
+          "area:optimization",
+          "area:runtime",
+          "area:training",
+          "kind:engineering",
+          "priority:p1",
+          "state:blocked"
+        ],
+        "number": 627,
+        "source_stability": {
+          "comments_post_sha256": "0d98be9052bfa410db6067837e6274f0e7ae3039b812441237ed1619552f2aeb",
+          "comments_pre_sha256": "0d98be9052bfa410db6067837e6274f0e7ae3039b812441237ed1619552f2aeb",
+          "post_sha256": "f620b84c2801cbbb97b5cdc698baed26deb42fc118454e0ee34ac6982e71f570",
+          "pre_sha256": "f620b84c2801cbbb97b5cdc698baed26deb42fc118454e0ee34ac6982e71f570"
+        },
+        "state": "open",
+        "title": "stabilize v9 cure: R2 in-process governor + R3 shadow-grad persistence + R4 pace gate + counters + AC2 pace-smoke (refs #480 #594)",
+        "updated_at": "2026-07-30T02:50:34Z",
+        "url": "https://github.com/wordingone/ember/issues/627"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "1f1dd136b19dcea2e18835173154ae8ccafc4182e0f7d4b1f6f6113aed67be64",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "3cce2a7e17f7b6b3077d9ed834ba1ddd22a618ce37d5a458f162cb69cde91422",
+            "created_at": "2026-07-10T05:28:13Z",
+            "id": 4932285122,
+            "updated_at": "2026-07-10T05:28:13Z",
+            "url": "https://github.com/wordingone/ember/issues/630#issuecomment-4932285122"
+          }
+        ],
+        "created_at": "2026-07-10T04:00:28Z",
+        "labels": [
+          "affects:EMBER-01",
+          "affects:EMBER-05",
+          "area:evaluation",
+          "area:provenance",
+          "area:training",
+          "kind:defect",
+          "needs:review",
+          "scope:cross-cutting",
+          "state:triage"
+        ],
+        "number": 630,
+        "source_stability": {
+          "comments_post_sha256": "25867a611c26961f435c5693b82d180594c2868d062169027ac69bbfa702878d",
+          "comments_pre_sha256": "25867a611c26961f435c5693b82d180594c2868d062169027ac69bbfa702878d",
+          "post_sha256": "e0ae5148d330e73a5487475aba1b82a8dd5a9334f5b563a33da1e3544988fd08",
+          "pre_sha256": "e0ae5148d330e73a5487475aba1b82a8dd5a9334f5b563a33da1e3544988fd08"
+        },
+        "state": "open",
+        "title": "C8 O5 run-ledger: accepts fake hashes, tz-naive time compare, counts rows not runs, no launcher binding",
+        "updated_at": "2026-07-30T02:50:36Z",
+        "url": "https://github.com/wordingone/ember/issues/630"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "50b9e4289deb16761e164c8fb320ae9bdaa81ffbd0b3d6bc2b02edf8410e8b3d",
+        "comment_count": 0,
+        "comments": [],
+        "created_at": "2026-07-10T05:30:40Z",
+        "labels": [
+          "affects:EMBER-01",
+          "affects:EMBER-06",
+          "area:agent",
+          "area:cli",
+          "area:governance",
+          "kind:maintenance",
+          "needs:review",
+          "scope:cross-cutting",
+          "state:triage"
+        ],
+        "number": 642,
+        "source_stability": {
+          "comments_post_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "comments_pre_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "post_sha256": "66b11587ea6af67b72b7f402bf9004fae32c9e5c81ef0f68cbb24fb8ca264a8c",
+          "pre_sha256": "66b11587ea6af67b72b7f402bf9004fae32c9e5c81ef0f68cbb24fb8ca264a8c"
+        },
+        "state": "open",
+        "title": "goal organ: floor-conformance audit — clause-by-clause receipt table vs docs/goal-mode-mechanism.md (refs #211)",
+        "updated_at": "2026-07-30T02:50:37Z",
+        "url": "https://github.com/wordingone/ember/issues/642"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "dbbfa873137005f295a641405fdf8394dc15adc2056d476536c90faedcf08222",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "1bceced1af8d7308e2417f852a52af7c3958db8089be3ca57ee93414b2ae2058",
+            "created_at": "2026-07-19T04:35:49Z",
+            "id": 5014316646,
+            "updated_at": "2026-07-19T04:35:49Z",
+            "url": "https://github.com/wordingone/ember/issues/648#issuecomment-5014316646"
+          }
+        ],
+        "created_at": "2026-07-10T05:53:56Z",
+        "labels": [
+          "affects:EMBER-02",
+          "affects:EMBER-10",
+          "area:data",
+          "area:governance",
+          "area:provenance",
+          "kind:initiative",
+          "needs:review",
+          "scope:cross-cutting",
+          "state:triage"
+        ],
+        "number": 648,
+        "source_stability": {
+          "comments_post_sha256": "f72845755935379f3c7265104234da91f0d7aa0cf3c150d2c4d526f0c0bf447e",
+          "comments_pre_sha256": "f72845755935379f3c7265104234da91f0d7aa0cf3c150d2c4d526f0c0bf447e",
+          "post_sha256": "4533585bc8844ec757d6e4d983605cb7637d3db2c32a4120a01640bfde0bf80d",
+          "pre_sha256": "4533585bc8844ec757d6e4d983605cb7637d3db2c32a4120a01640bfde0bf80d"
+        },
+        "state": "open",
+        "title": "Corpus program: the AI-lab 11-domain floor (charter execution tracker)",
+        "updated_at": "2026-07-30T02:50:39Z",
+        "url": "https://github.com/wordingone/ember/issues/648"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "848bcc244f27f38a1dea091e8e3351824a7ae42799ef47884a34df5b4d869090",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "4dee67cc92f3f6f8aff1b3b1ee6c3d6e9e631af548034851b43efe48e8904c75",
+            "created_at": "2026-07-19T04:36:36Z",
+            "id": 5014320329,
+            "updated_at": "2026-07-19T04:36:36Z",
+            "url": "https://github.com/wordingone/ember/issues/649#issuecomment-5014320329"
+          }
+        ],
+        "created_at": "2026-07-10T05:55:16Z",
+        "labels": [
+          "affects:EMBER-02",
+          "area:data",
+          "area:provenance",
+          "kind:engineering",
+          "priority:p0",
+          "state:ready"
+        ],
+        "number": 649,
+        "source_stability": {
+          "comments_post_sha256": "f1f7ac8a444d19105b6ee4625ab8cc5281b4d409728ec061a68c138ce69c7959",
+          "comments_pre_sha256": "f1f7ac8a444d19105b6ee4625ab8cc5281b4d409728ec061a68c138ce69c7959",
+          "post_sha256": "62ca61f789898f8b8584a2566d6fa847ff6cf4972c069f2dba5d74ecda80dafb",
+          "pre_sha256": "62ca61f789898f8b8584a2566d6fa847ff6cf4972c069f2dba5d74ecda80dafb"
+        },
+        "state": "open",
+        "title": "Corpus domain A: Mathematical Foundations — acquisition spec",
+        "updated_at": "2026-07-30T02:50:40Z",
+        "url": "https://github.com/wordingone/ember/issues/649"
+      },
+      {
+        "author": "wordingone",
+        "body_sha256": "023adad1247f580716936760a24b4c09d60dcbd06b7c385c52ece4e34c66c771",
+        "comment_count": 1,
+        "comments": [
+          {
+            "author": "wordingone",
+            "body_sha256": "2012652e6b04f4787a2b1ca425ae626fed4ce4e46ebbc145b6b02248fd27bea3",
+            "created_at": "2026-07-19T04:39:12Z",
+            "id": 5014332084,
+            "updated_at": "2026-07-19T04:39:12Z",
+            "url": "https://github.com/wordingone/ember/issues/650#issuecomment-5014332084"
+          }
+        ],
+        "created_at": "2026-07-10T05:55:40Z",
+        "labels": [
+          "affects:EMBER-02",
+          "area:data",
+          "area:provenance",
+          "kind:engineering",
+          "priority:p1",
+          "state:ready"
+        ],
+        "number": 650,
+        "source_stability": {
+          "comments_post_sha256": "d3a931c15820e654155eb2c256f5038a89603019d8c069997f46a1cb45fce1f8",
+          "comments_pre_sha256": "d3a931c15820e654155eb2c256f5038a89603019d8c069997f46a1cb45fce1f8",
+          "post_sha256": "d6426b6e5ca25dd32dda3f0e14e1b50a6a7e6ee801aa2adf79b728e7c656890b",
+          "pre_sha256": "d6426b6e5ca25dd32dda3f0e14e1b50a6a7e6ee801aa2adf79b728e7c656890b"
+        },
+        "state": "open",
+        "title": "Corpus domain B: Statistics / Measurement / Inference — acquisition spec",
+        "updated_at": "2026-07-30T02:50:41Z",
+        "url": "https://github.com/wordingone/ember/issues/650"
+      }
+    ],
+    "master_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
+    "open_issue_population": 153,
+    "pagination": {
+      "comments": [
+        {
+          "issue_number": 561,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              3
+            ],
+            "page_size": 100,
+            "row_count": 3,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              3
+            ],
+            "page_size": 100,
+            "row_count": 3,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 562,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 565,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 567,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 576,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 577,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              3
+            ],
+            "page_size": 100,
+            "row_count": 3,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              3
+            ],
+            "page_size": 100,
+            "row_count": 3,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 580,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              11
+            ],
+            "page_size": 100,
+            "row_count": 11,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              11
+            ],
+            "page_size": 100,
+            "row_count": 11,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 582,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 585,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              9
+            ],
+            "page_size": 100,
+            "row_count": 9,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              9
+            ],
+            "page_size": 100,
+            "row_count": 9,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 586,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 591,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              13
+            ],
+            "page_size": 100,
+            "row_count": 13,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              13
+            ],
+            "page_size": 100,
+            "row_count": 13,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 593,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              2
+            ],
+            "page_size": 100,
+            "row_count": 2,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              2
+            ],
+            "page_size": 100,
+            "row_count": 2,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 594,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              5
+            ],
+            "page_size": 100,
+            "row_count": 5,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              5
+            ],
+            "page_size": 100,
+            "row_count": 5,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 611,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 627,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              4
+            ],
+            "page_size": 100,
+            "row_count": 4,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              4
+            ],
+            "page_size": 100,
+            "row_count": 4,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 630,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 642,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              0
+            ],
+            "page_size": 100,
+            "row_count": 0,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 648,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 649,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          }
+        },
+        {
+          "issue_number": 650,
+          "post": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          },
+          "pre": {
+            "complete": true,
+            "page_count": 1,
+            "page_lengths": [
+              1
+            ],
+            "page_size": 100,
+            "row_count": 1,
+            "terminal_page_short": true
+          }
+        }
+      ],
+      "issues_post": {
+        "complete": true,
+        "page_count": 2,
+        "page_lengths": [
+          100,
+          53
+        ],
+        "page_size": 100,
+        "row_count": 153,
+        "terminal_page_short": true
+      },
+      "issues_pre": {
+        "complete": true,
+        "page_count": 2,
+        "page_lengths": [
+          100,
+          53
+        ],
+        "page_size": 100,
+        "row_count": 153,
+        "terminal_page_short": true
+      }
+    },
+    "repository": "wordingone/ember",
+    "schema_version": "ember-oldest-issue-capture-v1",
+    "selection_sha256": "c118199ceea0763ad9707f476ac0ac92bc4831267a7f6eb7d3b730312aeba383",
+    "source_evidence": {
+      "comments-561-post.json": "6b70ef9fb2f2c862ff4098e1bb2cfacb81bd58fe7d94d2eccdf35e633819678a",
+      "comments-561-pre.json": "6b70ef9fb2f2c862ff4098e1bb2cfacb81bd58fe7d94d2eccdf35e633819678a",
+      "comments-562-post.json": "e71f7c8e3026e1dd07741ac547ffb0f852bc6fca8115aceae40d14b7349445bc",
+      "comments-562-pre.json": "e71f7c8e3026e1dd07741ac547ffb0f852bc6fca8115aceae40d14b7349445bc",
+      "comments-565-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-565-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-567-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-567-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-576-post.json": "39bc7448bcf9175727a07da3f682ff87669b357cb4d98935fe28df29c02f79a7",
+      "comments-576-pre.json": "39bc7448bcf9175727a07da3f682ff87669b357cb4d98935fe28df29c02f79a7",
+      "comments-577-post.json": "c22fc25f60631061df85638c9561a49041fd513c4f512c371e2f87acb452d025",
+      "comments-577-pre.json": "c22fc25f60631061df85638c9561a49041fd513c4f512c371e2f87acb452d025",
+      "comments-580-post.json": "7fa8a18c408e58a2d86d8ece8381ce86b3c76867bcfbdab603636402c6acf427",
+      "comments-580-pre.json": "7fa8a18c408e58a2d86d8ece8381ce86b3c76867bcfbdab603636402c6acf427",
+      "comments-582-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-582-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-585-post.json": "dfc90c3aefe0e2add016de3e75d95522c1559ff93a73a38631fad752f8810fe5",
+      "comments-585-pre.json": "dfc90c3aefe0e2add016de3e75d95522c1559ff93a73a38631fad752f8810fe5",
+      "comments-586-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-586-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-591-post.json": "d9ef8bbbbef86ccf1759539714e8cbae89b691e43692dc0eb59a236a0498116f",
+      "comments-591-pre.json": "d9ef8bbbbef86ccf1759539714e8cbae89b691e43692dc0eb59a236a0498116f",
+      "comments-593-post.json": "fd13d13bf4c68977023d261d173fcc40e92a3db60b418d2349b29b074f16753a",
+      "comments-593-pre.json": "fd13d13bf4c68977023d261d173fcc40e92a3db60b418d2349b29b074f16753a",
+      "comments-594-post.json": "693ee745e0aa8d0dde7162c6e75941def08a7502a3d2cc0543bb9408239cfdff",
+      "comments-594-pre.json": "693ee745e0aa8d0dde7162c6e75941def08a7502a3d2cc0543bb9408239cfdff",
+      "comments-611-post.json": "9333f31c4138fca7f54cbca24df61c069562522bacc31135d3df3786010c7ae2",
+      "comments-611-pre.json": "9333f31c4138fca7f54cbca24df61c069562522bacc31135d3df3786010c7ae2",
+      "comments-627-post.json": "7bf51a2e0e1ef1b29a869e3aec7b9ca6d743b61955759a4a1a69afd5296a3008",
+      "comments-627-pre.json": "7bf51a2e0e1ef1b29a869e3aec7b9ca6d743b61955759a4a1a69afd5296a3008",
+      "comments-630-post.json": "8683c867e2014722f69fc05d44ab965488ee585d7fa7ade2d7c86d948c4f82a1",
+      "comments-630-pre.json": "8683c867e2014722f69fc05d44ab965488ee585d7fa7ade2d7c86d948c4f82a1",
+      "comments-642-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-642-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-648-post.json": "e8e86946e8c378630ddb11440ad2102c692cf5836b9329cd4a5d8d3e8784f70b",
+      "comments-648-pre.json": "e8e86946e8c378630ddb11440ad2102c692cf5836b9329cd4a5d8d3e8784f70b",
+      "comments-649-post.json": "1c21d23342511b05403027ba255a46766c7288bc3ccdcdbc89ebe6561dfbba53",
+      "comments-649-pre.json": "1c21d23342511b05403027ba255a46766c7288bc3ccdcdbc89ebe6561dfbba53",
+      "comments-650-post.json": "2489236a400b51093fe7ec25819e86b8b3322a3a8d09824efd76f0adeaad84a4",
+      "comments-650-pre.json": "2489236a400b51093fe7ec25819e86b8b3322a3a8d09824efd76f0adeaad84a4",
+      "issues_post.json": "84082ccc7a889a5278d8ea4d893b8627528e42d3efafa7910cd0427b4298f861",
+      "issues_pre.json": "84082ccc7a889a5278d8ea4d893b8627528e42d3efafa7910cd0427b4298f861"
+    }
+  },
+  "capture_sha256": "9015728ca35274427204b2fe8520ddb50dd6568dd63e690b95c5501c2fd144c6",
+  "deletion_or_issue_mutation_authority": "NOT_GRANTED",
+  "disposition_counts": {
+    "CLOSE": 1,
+    "NEGATIVE-KEEP": 0,
+    "PARTIAL": 19,
+    "SUPERSEDED": 0
+  },
+  "master_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
+  "packet_sha256": "0eb135576af62c930d2160259d9f15de0a9ce5e83d83c17aba7e35cac59cddd4",
+  "public_issue_mutation_performed": false,
+  "receipts": [
+    {
+      "authority_review": {
+        "citation": "https://github.com/wordingone/ember/pull/1218#issuecomment-5134336586",
+        "review_provenance": "SELF_ONLY",
+        "reviewed_commit_sha": "3c75fb511aeffad0406d5bf8aada850982dd8299",
+        "reviewer": "self-review-authority",
+        "verdict": "PASS"
+      },
+      "capture_issue_sha256": "0dabb55d16d1dc47c073a2141eaaf474654bfc9f31a0472f6d560b810c162eac",
+      "close_evidence": [
+        {
+          "blob_sha1": "c1aec625f9b5d092bef9451c3a09ccbb674453f3",
+          "citation": "https://github.com/wordingone/ember/pull/1218#issuecomment-5134336586",
+          "clean_checkout": true,
+          "commit_sha": "3c75fb511aeffad0406d5bf8aada850982dd8299",
+          "passed": true,
+          "path": "tools/ember-cli/src/screens/repl-operator-surface.test.ts",
+          "production_shaped": true,
+          "test_command": "bun test tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/screens/repl-source-binding.test.ts"
+        },
+        {
+          "blob_sha1": "c1aec625f9b5d092bef9451c3a09ccbb674453f3",
+          "citation": "https://github.com/wordingone/ember/pull/1218",
+          "clean_checkout": true,
+          "commit_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
+          "passed": true,
+          "path": "tools/ember-cli/src/screens/repl-operator-surface.test.ts",
+          "production_shaped": true,
+          "test_command": "bun test tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/screens/repl-source-binding.test.ts tools/ember-cli/src/components/operator-surface-pane.test.ts tools/ember-cli/src/services/activity-feed.test.ts"
+        },
+        {
+          "blob_sha1": "3e8e10db119eb5980529cf091cb1f342a6878fdc",
+          "citation": "https://github.com/wordingone/ember/actions/runs/30567790368",
+          "clean_checkout": true,
+          "commit_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
+          "passed": true,
+          "path": ".github/workflows/ci-main.yml",
+          "production_shaped": true,
+          "test_command": "gh run view 30567790368 --repo wordingone/ember --json conclusion,headSha,jobs"
+        }
+      ],
+      "disposition": "CLOSE",
+      "issue_number": 561,
+      "issue_url": "https://github.com/wordingone/ember/issues/561",
+      "receipt_sha256": "8c63267216c81ee2c119b3bc7816b0b90f22ee461a4ceef8a14812cb8a21b3e7",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": null,
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/561",
+          "source_kind": "issue_body",
+          "source_sha256": "3701c3d101adc2a13aaaf82e103eb98e3bc673f574d16d33a04b11ab9f4878bb",
+          "status": "BOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/561#issuecomment-4926894008",
+          "source_kind": "issue_comment",
+          "source_sha256": "1623ee0011dc1dff54d5c7096f7157a217eb770f83530a058429a42c1a13bd1b",
+          "status": "BOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/561#issuecomment-5012422771",
+          "source_kind": "issue_comment",
+          "source_sha256": "f58c92d31b3888dc893b09c66594bd279da6dbc577f2a40264fedeb59a0d8d21",
+          "status": "BOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/561#issuecomment-5013650324",
+          "source_kind": "issue_comment",
+          "source_sha256": "716275220f7593345cb842e9f8c013a670f5b1cb944adb2f23d77f0e719ff268",
+          "status": "BOUND"
+        }
+      ],
+      "unbound_clause": null
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "7809883b50489e202780568a3a267814614509c18dfac168dd83a6c38c82fa22",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 562,
+      "issue_url": "https://github.com/wordingone/ember/issues/562",
+      "receipt_sha256": "cd0ee1ae443df5c570777118c46ecd6d5996eba37ad3f9fdb099a7a363791787",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/562",
+          "source_kind": "issue_body",
+          "source_sha256": "9ae5ac4823a5ec6e1dee6a89cb7515e655bc9ee0540f0e3155f78ba8f428fe83",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/562#issuecomment-4926044283",
+          "source_kind": "issue_comment",
+          "source_sha256": "777ef044a7665dba2d3111c334db2572c3df6157487365b19a88df2ec8ea3cb4",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/562",
+        "description": "Issue #562 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "9ae5ac4823a5ec6e1dee6a89cb7515e655bc9ee0540f0e3155f78ba8f428fe83"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "69ee6c7d50f92f495fa762dd2a89f4b050dfe710e896abc8accfe54c9af8dded",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 565,
+      "issue_url": "https://github.com/wordingone/ember/issues/565",
+      "receipt_sha256": "67e85323b7a2c3cb80b15058b553582058467c0345b015995afd2607c1b9e82c",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/565",
+          "source_kind": "issue_body",
+          "source_sha256": "23375c39301300257139e5798492fc1ea78a6236a320d4c5a563ef573158409d",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/565",
+        "description": "Issue #565 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "23375c39301300257139e5798492fc1ea78a6236a320d4c5a563ef573158409d"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "ca599001ae51a9891f961cdf338eed48ddcf65eb716b7ab40ed0dbf72cf14863",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 567,
+      "issue_url": "https://github.com/wordingone/ember/issues/567",
+      "receipt_sha256": "313953318399f610ce0185f156ebc146e8591b1e276fc6ecd7b343a04c4b7058",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/567",
+          "source_kind": "issue_body",
+          "source_sha256": "8b028045ed3101cdb556b1f0b6164a8fb2b9a4843b77ecb8ef87f45b51f2a887",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/567",
+        "description": "Issue #567 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "8b028045ed3101cdb556b1f0b6164a8fb2b9a4843b77ecb8ef87f45b51f2a887"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "5f0954e60fe6dce373691ad4c3a8dcf700967b7a92611db6ff69bd077d36f340",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 576,
+      "issue_url": "https://github.com/wordingone/ember/issues/576",
+      "receipt_sha256": "12cd61de4180a2e96eec932475c50e73fb2a9082e1f948ad3fd79c74c5272308",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/576",
+          "source_kind": "issue_body",
+          "source_sha256": "d0aa12af12581d7a57769ec76ec5859e6ed4bc69cf550b221d7e8ca194790980",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/576#issuecomment-4927816977",
+          "source_kind": "issue_comment",
+          "source_sha256": "7fe1b8b804f4f48d4c3f58d95d908b88ee9c34cf03075653b4c9f71f2fa4e3c1",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/576",
+        "description": "Issue #576 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "d0aa12af12581d7a57769ec76ec5859e6ed4bc69cf550b221d7e8ca194790980"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "60c08e04c86434afe84e88b0096192f19ab8a632720154b8f7a7503ebeca521b",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 577,
+      "issue_url": "https://github.com/wordingone/ember/issues/577",
+      "receipt_sha256": "e9a43033e5d957f1869ccb27c6afba5c5ea17d0e214de3da9751c360a1a6c9bf",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/577",
+          "source_kind": "issue_body",
+          "source_sha256": "4007ec125117a5e94fa8b6d13a1373592143a400e6a2e02af5dc19abcc56af79",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/577#issuecomment-4928038121",
+          "source_kind": "issue_comment",
+          "source_sha256": "826f464bd9c178ffaba413a3dd0d1a8450b056e3e325a409ebedecd3b1c28c55",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/577#issuecomment-4928061344",
+          "source_kind": "issue_comment",
+          "source_sha256": "1d77bf7e13e23c57d895deaff7cad5ba2c2847d27e25091a9f2d6900057d7415",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/577#issuecomment-4928194689",
+          "source_kind": "issue_comment",
+          "source_sha256": "5151af80e7b5b933c6fdd23d5e301ab664f37d7215dc7a047550e7c9a40006eb",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/577",
+        "description": "Issue #577 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "4007ec125117a5e94fa8b6d13a1373592143a400e6a2e02af5dc19abcc56af79"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "5988532f66b32931cac35fbfef760d78b60fc10cc6b4338db34448b3360c2208",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 580,
+      "issue_url": "https://github.com/wordingone/ember/issues/580",
+      "receipt_sha256": "67da9a063ef9e76b62190321f3c9ff21a66d362561e719ff66f9940a68f28d99",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580",
+          "source_kind": "issue_body",
+          "source_sha256": "320d311a2a088fc1bc71122830ba32f104f2ecda34274984851a897022e12680",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4928687874",
+          "source_kind": "issue_comment",
+          "source_sha256": "af114f3fc2fb7b4eee8257ad3ed5240fa4cc8be2f4ad3cac67ffe63c5ee25619",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937168407",
+          "source_kind": "issue_comment",
+          "source_sha256": "1dde93f2eab63a2f1804de7e7e1d4a6748ed80cb31e636a9b864057941f29a9e",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937291091",
+          "source_kind": "issue_comment",
+          "source_sha256": "f25cbd2e71d57dd06490a4b8299fc5ace7482f814ea53cb7b82aa958129a34ff",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937416672",
+          "source_kind": "issue_comment",
+          "source_sha256": "0d83598c7fc3e6cc43381be7ac0998b0fcfd53ac396630d3588b6f4127ac1556",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937528909",
+          "source_kind": "issue_comment",
+          "source_sha256": "9f52deae552181c8e20e4e835a8767eedb46a3b89e0551976f08efee62a110ee",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937562201",
+          "source_kind": "issue_comment",
+          "source_sha256": "3d438ebe7520410cd2aba922bfe982df702b8e002c099b58ecafe70d49522f0e",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937571110",
+          "source_kind": "issue_comment",
+          "source_sha256": "610bfa940ce67eee9bb469d2a5d78a6334e9e568641478af8c5fe2a19330d0a2",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937692508",
+          "source_kind": "issue_comment",
+          "source_sha256": "b5a8e254f578b43e40e0acbe1336f0bea726e41c11f6dc471b38a4372a424201",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-4937980487",
+          "source_kind": "issue_comment",
+          "source_sha256": "ce40076776199a2842bf434d5441e242b637ddc6e4d175a6724a441d364fe3c2",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-5012422079",
+          "source_kind": "issue_comment",
+          "source_sha256": "61b5f442ad0e78ffd7edb1e8438f1f1fb0b3eefaf32ab4e065cf006e260b6937",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/580#issuecomment-5013868012",
+          "source_kind": "issue_comment",
+          "source_sha256": "47a121d0c2881e505746af53b29381afe5c35754c9e3273546a270a8f519234e",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/580",
+        "description": "Issue #580 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "320d311a2a088fc1bc71122830ba32f104f2ecda34274984851a897022e12680"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "26d1df11ed7a7b21332308cbcb7392e4a6e508235ce92ab572c3f240bc46cb91",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 582,
+      "issue_url": "https://github.com/wordingone/ember/issues/582",
+      "receipt_sha256": "a0faddf7f1da52bd26f9ec673371abf64131c3d17ccf1dcd5e4a1f4a4265b792",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/582",
+          "source_kind": "issue_body",
+          "source_sha256": "52fed8365b8f45486dd85bd308816814614db69a0fbeaa0eeaa256324568151f",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/582",
+        "description": "Issue #582 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "52fed8365b8f45486dd85bd308816814614db69a0fbeaa0eeaa256324568151f"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "d7596abc9d29ddbe18c21b5288e2a695a6e448e2ddacc562862f5ad84ca1df7c",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 585,
+      "issue_url": "https://github.com/wordingone/ember/issues/585",
+      "receipt_sha256": "546df67a3ed610384fa4d52ad60904c25b64c856e49e25634a5ac4523a255ff8",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585",
+          "source_kind": "issue_body",
+          "source_sha256": "e0340ba6e41bf6fd2dad84f7ae79c42d2243ceb1576816520937f4216fe8bcb5",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4929556771",
+          "source_kind": "issue_comment",
+          "source_sha256": "964f82ea86b0dcb963c8051e78f3c78a6fce3f91af41022cfdc361c681104138",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4929605132",
+          "source_kind": "issue_comment",
+          "source_sha256": "0c55b91151b77b9e0b9f6ef77c63917ea1accf4c502540b012019bd4d1393608",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4931087645",
+          "source_kind": "issue_comment",
+          "source_sha256": "e8719e622a48f311a55cbaf16d7b2cdaf3ce17cdca5881fd089843342785eab0",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4931112873",
+          "source_kind": "issue_comment",
+          "source_sha256": "23eb75104c8cd26a651f6ac63cc4700e2b94d89c580e81875fa6a4618956f728",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4931141583",
+          "source_kind": "issue_comment",
+          "source_sha256": "896ca95ece2554d89c02927b5e39b9275462b85b5be95bca1385ccadba1575b8",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4931147752",
+          "source_kind": "issue_comment",
+          "source_sha256": "44d450b914a8a83014dab9770dfb44de115da8e8a46ea55acef90dde16e34252",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4931301214",
+          "source_kind": "issue_comment",
+          "source_sha256": "aa0dec81bbb62be88af52700d6f6ea50784384aa09f74d16b34055fa8e18fbf7",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4931892222",
+          "source_kind": "issue_comment",
+          "source_sha256": "a3bcda0ac3274aece8c3e9838c5b32f9ece872590bf8908bd2d55d6bf33e4e14",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/585#issuecomment-4932400059",
+          "source_kind": "issue_comment",
+          "source_sha256": "38caf5aacb30de2f3ac068fbb41c5ae9035c8fbfaa86034c856fbe77a8957257",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/585",
+        "description": "Issue #585 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "e0340ba6e41bf6fd2dad84f7ae79c42d2243ceb1576816520937f4216fe8bcb5"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "5bd530acc803f8cc54cce401f6904a503b2f5470a8eca923758912951cbfc631",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 586,
+      "issue_url": "https://github.com/wordingone/ember/issues/586",
+      "receipt_sha256": "63e29c544dafd867c09b7facf3ef5bb0db9e11cdd492aaaca7e2635187f75ef2",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/586",
+          "source_kind": "issue_body",
+          "source_sha256": "7b6d5a02ccc67ce7e319748e7b2197049fdf57596eb66568a27af7512aa2b32a",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/586",
+        "description": "Issue #586 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "7b6d5a02ccc67ce7e319748e7b2197049fdf57596eb66568a27af7512aa2b32a"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "cd33c0268f7db5c8aa35473c80097b6172f6f674c2f25356ea000d3e3d9f2a4a",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 591,
+      "issue_url": "https://github.com/wordingone/ember/issues/591",
+      "receipt_sha256": "298fe5579ff2b7d21db7d47e675528d1274db4063623649d4c6f57a1a4030728",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591",
+          "source_kind": "issue_body",
+          "source_sha256": "6cf49e0f1567a72f53dcd11aeb30cccae7bf76f8dd747c44aa5a717e68905031",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4929552408",
+          "source_kind": "issue_comment",
+          "source_sha256": "508535d7f233175f7e07966380a19146b470020488296369cf78a941b8afb4b0",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4929597927",
+          "source_kind": "issue_comment",
+          "source_sha256": "58c1a3e1ffa3c1e05b0cc493ffabbadc819185018dcb925de25fa3c7d6112a2d",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4929603167",
+          "source_kind": "issue_comment",
+          "source_sha256": "be0488b2d3cbd2963d5c34b67706a72848831b2a899d1e0c7468ef2e0f62ee17",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4929620565",
+          "source_kind": "issue_comment",
+          "source_sha256": "88a5a45a55a2d03716cf9e789b793dc50be1187f0b7285427dc27fc580764a66",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4929857301",
+          "source_kind": "issue_comment",
+          "source_sha256": "12339ef9a56f4724867b02e4acdc7ece6c069347b9130d220d05daf13398f0a6",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4930354482",
+          "source_kind": "issue_comment",
+          "source_sha256": "3e37546f40280615648bb6387352c5bfa90a4cf1980a749952bb36a89f864893",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4930657178",
+          "source_kind": "issue_comment",
+          "source_sha256": "d9208530c814f37b0cf2488ba8919b54e9b5bc3a60d716fec7056734ca8300cc",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4930954650",
+          "source_kind": "issue_comment",
+          "source_sha256": "309735054db2d4b346c71b3dd38e9f52a3b4ff5ae8e917ab6d4e8944b403a15c",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4937144037",
+          "source_kind": "issue_comment",
+          "source_sha256": "2b37c06a26534b5166309006ca296134b9af275edfc9a3be0f88ce7c94ae60aa",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4937903278",
+          "source_kind": "issue_comment",
+          "source_sha256": "e97dd75acbb32ab04d02e8dee1f7c9e3bfa05352c0c6e29bc2ea9df6229d876c",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4938194525",
+          "source_kind": "issue_comment",
+          "source_sha256": "6d18810c8570fa209a4c82f9a9bae779079348a2f735727bf4dc26c2bf8181e5",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-4938410153",
+          "source_kind": "issue_comment",
+          "source_sha256": "09cb461dcf139ef86561ec67628e63a5b261fd1ed36682b100a73c04cd41b1f4",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/591#issuecomment-5099100402",
+          "source_kind": "issue_comment",
+          "source_sha256": "6d5017b159b553a6319841b602aca1aeeedc7619d6293a6a5334af820e668ebf",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/591",
+        "description": "Issue #591 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "6cf49e0f1567a72f53dcd11aeb30cccae7bf76f8dd747c44aa5a717e68905031"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "36a93e0be002be1480aedb6473b29cb1e51cef43c1617f1e0daff0d90b462363",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 593,
+      "issue_url": "https://github.com/wordingone/ember/issues/593",
+      "receipt_sha256": "c2db8aa0c4486d50f1e6bd8bed93185dbdebf4ccf1052587adaa059cd5b367ef",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/593",
+          "source_kind": "issue_body",
+          "source_sha256": "346ae763f959213424fd4d25c12d20b4723eb284674c60560851d353e3628840",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/593#issuecomment-4930417098",
+          "source_kind": "issue_comment",
+          "source_sha256": "7b86e8ee047af6a67bc56cff0206c911598b2e958e5de6a3154c18ca54c3e0c7",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/593#issuecomment-4930531475",
+          "source_kind": "issue_comment",
+          "source_sha256": "604337eb6fc462cf829028b6b30587166d1e1cbb1ea9398d3c99a3b147106ba4",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/593",
+        "description": "Issue #593 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "346ae763f959213424fd4d25c12d20b4723eb284674c60560851d353e3628840"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "9aedfc8945c2f92fc6581d6496ebc499395a85f3ff6b1befd12ef743b7002c73",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 594,
+      "issue_url": "https://github.com/wordingone/ember/issues/594",
+      "receipt_sha256": "64a94654be856371bab09aa855a72cd14079fc1afd0911886faccfe62392e1e2",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/594",
+          "source_kind": "issue_body",
+          "source_sha256": "2b77942d39d6de31ad8302bb94de1df71beb2fef1b116053e5ae96f404941f60",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/594#issuecomment-4930322578",
+          "source_kind": "issue_comment",
+          "source_sha256": "4210e51937f62109825caa337c3764bc548a621ef7e02e2a0ff688ec5e233bd6",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/594#issuecomment-4930432622",
+          "source_kind": "issue_comment",
+          "source_sha256": "e054a9f50854af3d58d65b29d50e510885077d661f8f1bfcd9443ab99278e0b3",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/594#issuecomment-4930464570",
+          "source_kind": "issue_comment",
+          "source_sha256": "efd57f638cd0579b639668a39fe744870dd9af1ecfcd4e9823b5a90c660b63c3",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/594#issuecomment-4931161305",
+          "source_kind": "issue_comment",
+          "source_sha256": "87ead04d0301136ccee6256e8acecb7473bda3f61c1a2e50a118370e2ab6f540",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/594#issuecomment-4931836378",
+          "source_kind": "issue_comment",
+          "source_sha256": "8764f3322fef62af05046f4a48d9da367211e2ad86e26ac369630d7eeec0246c",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/594",
+        "description": "Issue #594 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "2b77942d39d6de31ad8302bb94de1df71beb2fef1b116053e5ae96f404941f60"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "ada41d1710de68787b2706b57312e6e676ca68523b9eb100c5ff9aea79db8957",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 611,
+      "issue_url": "https://github.com/wordingone/ember/issues/611",
+      "receipt_sha256": "d4b08d8b6eb153f7ac18b2919daa27dfd0c060957f30268f3fcbb44da9faab30",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/611",
+          "source_kind": "issue_body",
+          "source_sha256": "4d60a850f5ff71fbfc8d5203146c4cc8dc75b4fcc8893f0ba29c695c953c6a43",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/611#issuecomment-5016117751",
+          "source_kind": "issue_comment",
+          "source_sha256": "969df08506748a8a3e2021a350f79171fccd27b2d502a1644b18723c92e760a0",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/611",
+        "description": "Issue #611 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "4d60a850f5ff71fbfc8d5203146c4cc8dc75b4fcc8893f0ba29c695c953c6a43"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "7337eaca9a569d22d6fcb5ff7c4b3ef3c4831bf6db136e30d61970bcf1a47d77",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 627,
+      "issue_url": "https://github.com/wordingone/ember/issues/627",
+      "receipt_sha256": "1f18ff165c024a8e4f79919769b04512ff9907463dadd601e811a1ff98e2301c",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/627",
+          "source_kind": "issue_body",
+          "source_sha256": "ee09ad3747578dc100dfa1ada2f274d2b7e02a92122a38cd445855faaa103606",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/627#issuecomment-4936627594",
+          "source_kind": "issue_comment",
+          "source_sha256": "89a8c02e026464deb8bc6613b1a22bc1c9c2da371a3537453fc2d404afeec8be",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/627#issuecomment-4936662156",
+          "source_kind": "issue_comment",
+          "source_sha256": "c96502457d4333a67de91a821be01c386e6290721b8877df0bce029e9fa9ff34",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/627#issuecomment-4937930237",
+          "source_kind": "issue_comment",
+          "source_sha256": "53543f2a69c775b50e98619ab874354b36ce349df3090aa5dbfbc8d659c63d17",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/627#issuecomment-4937988963",
+          "source_kind": "issue_comment",
+          "source_sha256": "c0f83a1a5ac142631c8b4f8ccfee633ee79449b083334f012e79e32b3f2c0d3d",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/627",
+        "description": "Issue #627 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "ee09ad3747578dc100dfa1ada2f274d2b7e02a92122a38cd445855faaa103606"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "f9aa8c8dcb5e3c7874236da007701f03d2e1e0478f235e8855cdc44310cb8a0e",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 630,
+      "issue_url": "https://github.com/wordingone/ember/issues/630",
+      "receipt_sha256": "68b9fa7be51613ad119c095a8eb9987ba8f9abfc10706306afcd3bb62cf99726",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/630",
+          "source_kind": "issue_body",
+          "source_sha256": "1f1dd136b19dcea2e18835173154ae8ccafc4182e0f7d4b1f6f6113aed67be64",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/630#issuecomment-4932285122",
+          "source_kind": "issue_comment",
+          "source_sha256": "3cce2a7e17f7b6b3077d9ed834ba1ddd22a618ce37d5a458f162cb69cde91422",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/630",
+        "description": "Issue #630 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "1f1dd136b19dcea2e18835173154ae8ccafc4182e0f7d4b1f6f6113aed67be64"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "eccf84148bc5961d3b120243c78ea8e48cf34df3453665f34678472229f9f994",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 642,
+      "issue_url": "https://github.com/wordingone/ember/issues/642",
+      "receipt_sha256": "a65d699a334dd2bb263809c02fd98ca5cdab3aefe282e5c291f77ecea49fd802",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/642",
+          "source_kind": "issue_body",
+          "source_sha256": "50b9e4289deb16761e164c8fb320ae9bdaa81ffbd0b3d6bc2b02edf8410e8b3d",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/642",
+        "description": "Issue #642 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "50b9e4289deb16761e164c8fb320ae9bdaa81ffbd0b3d6bc2b02edf8410e8b3d"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "f78fff6503c8907d6d06de8413d51fac09e28ba1afe7e0a282208b2b5ff6d680",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 648,
+      "issue_url": "https://github.com/wordingone/ember/issues/648",
+      "receipt_sha256": "9a388470e60e87dd662daf68df576b1b566c57852a8954bb04b13b19e19ffebf",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/648",
+          "source_kind": "issue_body",
+          "source_sha256": "dbbfa873137005f295a641405fdf8394dc15adc2056d476536c90faedcf08222",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/648#issuecomment-5014316646",
+          "source_kind": "issue_comment",
+          "source_sha256": "1bceced1af8d7308e2417f852a52af7c3958db8089be3ca57ee93414b2ae2058",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/648",
+        "description": "Issue #648 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "dbbfa873137005f295a641405fdf8394dc15adc2056d476536c90faedcf08222"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "58c709d7a07661c7acfb198931b74995c43d42ea3d2de1e134c3e31ce29cc08e",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 649,
+      "issue_url": "https://github.com/wordingone/ember/issues/649",
+      "receipt_sha256": "171e68d4766755920f3348fb9e03e1a87dadccce27b6d86ed49f4a647c0f3911",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/649",
+          "source_kind": "issue_body",
+          "source_sha256": "848bcc244f27f38a1dea091e8e3351824a7ae42799ef47884a34df5b4d869090",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/649#issuecomment-5014320329",
+          "source_kind": "issue_comment",
+          "source_sha256": "4dee67cc92f3f6f8aff1b3b1ee6c3d6e9e631af548034851b43efe48e8904c75",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/649",
+        "description": "Issue #649 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "848bcc244f27f38a1dea091e8e3351824a7ae42799ef47884a34df5b4d869090"
+      }
+    },
+    {
+      "authority_review": null,
+      "capture_issue_sha256": "ef20df8d5d71f2cead07865ec5ac131e72f0a9ac92ee17895f839eef2e29e5cb",
+      "close_evidence": [],
+      "disposition": "PARTIAL",
+      "issue_number": 650,
+      "issue_url": "https://github.com/wordingone/ember/issues/650",
+      "receipt_sha256": "3316e76be14d083558933c911fa74483faf30a1ffddbffa785378606bbb31443",
+      "replacement_citation": null,
+      "retained_lesson": null,
+      "smallest_binding_action": "Execute and replay this issue's own first unmet acceptance clause before considering closure.",
+      "source_clause_inventory": [
+        {
+          "citation": "https://github.com/wordingone/ember/issues/650",
+          "source_kind": "issue_body",
+          "source_sha256": "023adad1247f580716936760a24b4c09d60dcbd06b7c385c52ece4e34c66c771",
+          "status": "UNBOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/650#issuecomment-5014332084",
+          "source_kind": "issue_comment",
+          "source_sha256": "2012652e6b04f4787a2b1ca425ae626fed4ce4e46ebbc145b6b02248fd27bea3",
+          "status": "UNBOUND"
+        }
+      ],
+      "unbound_clause": {
+        "citation": "https://github.com/wordingone/ember/issues/650",
+        "description": "Issue #650 is not implemented or fully proved by issue #561's render-integrity acceptance.",
+        "source_sha256": "023adad1247f580716936760a24b4c09d60dcbd06b7c385c52ece4e34c66c771"
+      }
+    }
+  ],
+  "repository": "wordingone/ember",
+  "schema_version": "ember-oldest-issue-disposition-packet-v1",
+  "selection_sha256": "c118199ceea0763ad9707f476ac0ac92bc4831267a7f6eb7d3b730312aeba383"
+}
