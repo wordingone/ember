@@ -1,0 +1,71 @@
+{
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02A",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "ticket":  "ISSUE-580-PR-B-RETRO-AUDIT",
+    "sha_convention":  "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+    "ts":  "2026-07-30T19:31:56.5714200Z",
+    "issue":  "wordingone/ember#580",
+    "base_commit":  "132599361745be20aa6caf086a7920aa54d0df19",
+    "policy":  "Historical receipts remain byte-identical. This dated sibling records the correction and bounded re-derivation.",
+    "corrects":  [
+                     {
+                         "path":  "receipts/cbase-grow-rung2-stabilize-transplant-wall-diagnostic-20260709T130000Z.json",
+                         "sha256":  "414a5ad6c6e748003e72b9e031b70825a35552dd8a6249b35aff6f129b6cd3f5",
+                         "old_verdict":  "TRUE_GAP (b)",
+                         "corrected_verdict":  "FALSE_GLOBAL_VS_LOCAL_ID_COMPARISON_ARTIFACT",
+                         "reason":  "The old derivation compared the union of two optimizer-local integer domains with the global model-state range. The shared checker now maps every parameter name to the correct optimizer-local slot before returning missing IDs."
+                     },
+                     {
+                         "path":  "receipts/p513-p3-forensic-20260710T170210Z.json",
+                         "corrected_by":  "receipts/p513-p3-forensic-20260710T170210Z-erratum.json",
+                         "erratum_sha256":  "2ff92fd81a077fa85f944e0d5dfdb912d91df828c261f54b4d3d5f244eca2938",
+                         "source_emitter_recurrence":  "CURED_IN_THIS_CHANGE"
+                     }
+                 ],
+    "ruling_delta":  {
+                         "old":  "N_LAYERS_VERIFIED_MOMENTUM=15 partial hybrid",
+                         "corrected":  "All 20 layers have Muon-local momentum and the corrected buffered rerun uses the full 20-layer transplant",
+                         "public_evidence":  "https://github.com/wordingone/ember/issues/580#issuecomment-4937692508",
+                         "bounded_receipt":  "receipts/cbase-grow-rung2-event-580rerun-20260710-b3.json",
+                         "bounded_receipt_sha256":  "68cf2d58069a4381a1ef238ff6294ad203601fc8050a50bba10421c16c081f61"
+                     },
+    "production_corrections":  [
+                                   {
+                                       "site":  "build_transplanted_resume_checkpoint write",
+                                       "disposition":  "Muon-local ID resolved through build_optimizer_id_maps",
+                                       "source_sha256":  "a1014772cbbff04adc150db5a6f7e6ee61c7cb544993170a8122658fd3876beb"
+                                   },
+                                   {
+                                       "site":  "materialize_optimizer_grown_bundle input",
+                                       "disposition":  "Removed obsolete local-to-global remap; shared transplant consumes the checkpoint local convention directly",
+                                       "source_sha256":  "a1014772cbbff04adc150db5a6f7e6ee61c7cb544993170a8122658fd3876beb"
+                                   },
+                                   {
+                                       "site":  "momentum_norm_by_group receipt",
+                                       "disposition":  "Maps Muon-local slot to name and then to the global 140 partition; synthetic counterexample returns 95 transplanted and 45 reset tensors",
+                                       "source_sha256":  "a1014772cbbff04adc150db5a6f7e6ee61c7cb544993170a8122658fd3876beb"
+                                   },
+                                   {
+                                       "site":  "p513 forensic source emitter",
+                                       "disposition":  "Mechanism text now names build_optimizer_id_maps and muon_name_to_id",
+                                       "source_sha256":  "9a43d21fb7e7a36833851ba7bd2aa345517563598c21dfd362cce7cce6bf297f"
+                                   }
+                               ],
+    "verification":  {
+                         "focused_cpu_command":  "python -B -m unittest discover -s tests -p \u0027test_issue_580_stabilize_optimizer_ids.py\u0027 -v",
+                         "focused_cpu_result":  "9 passed, 0 failed",
+                         "focused_test_sha256":  "355bd83bc8f635ff4df18555ddd75b0354e2a80f377bb6874769cf8f588f8e6b",
+                         "legacy_helper_command":  "python -B scripts/test_580_optimizer_id_helper.py",
+                         "legacy_helper_result":  "INCOMPLETE, exit 2",
+                         "legacy_helper_reason":  "Historical trainer import is execution-denied and the private real checkpoint is absent; no PASS is emitted."
+                     },
+    "claim_boundary":  {
+                           "new_gpu_run":  false,
+                           "private_checkpoint_replay":  false,
+                           "model_capability_claim":  false,
+                           "full_training_claim":  false,
+                           "what_is_proven":  "The three remaining source sites use the authoritative optimizer-local convention, the 95/45 receipt counterexample is corrected, the stale emitter cannot recur, and unavailable real-checkpoint ACs are reported incomplete rather than PASS."
+                       },
+    "verdict":  "PR_B_SOURCE_AND_CUSTODY_CURE_READY_FOR_INDEPENDENT_REVIEW"
+}
