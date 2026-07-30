@@ -106,6 +106,49 @@ class ChangedReceiptGateTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, self.output(result))
             self.assertIn("CHANGED_RECEIPTS_PASS count=0", self.output(result))
 
+    def test_validates_approved_disposition_packet_with_native_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = (
+                REPO
+                / "receipts"
+                / "oldest-issue-disposition"
+                / "ember-oldest-issue-disposition-015-packet-v1.json"
+            )
+            relative = (
+                "receipts/oldest-issue-disposition/approved/batch-015.json"
+            )
+            self.write_json(
+                root,
+                relative,
+                json.loads(source.read_text(encoding="utf-8")),
+            )
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 0, self.output(result))
+            self.assertIn("CHANGED_RECEIPTS_PASS count=1", self.output(result))
+
+    def test_rejects_malformed_approved_disposition_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            relative = (
+                "receipts/oldest-issue-disposition/approved/broken.json"
+            )
+            self.write_json(
+                root,
+                relative,
+                {"master_sha": "0" * 40, "packet_sha256": "1" * 64},
+            )
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 1, self.output(result))
+            self.assertIn(
+                "approved disposition packet validation failed",
+                self.output(result),
+            )
+
     def test_null_delimited_input_preserves_space_bearing_receipt_path(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
