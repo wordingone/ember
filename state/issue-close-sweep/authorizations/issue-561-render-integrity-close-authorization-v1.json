@@ -1,0 +1,13 @@
+{
+  "authorization_sha256": "df0c19c507b4a90e2344ddfa7bf94dab01063438a8ec630ff368e887313796b1",
+  "citation": "https://github.com/wordingone/ember/pull/1218#issuecomment-5134336586",
+  "close_issue_numbers": [
+    561
+  ],
+  "packet_path": "receipts/oldest-issue-disposition/approved/issue-561-render-integrity-close-v1.json",
+  "packet_sha256": "0eb135576af62c930d2160259d9f15de0a9ce5e83d83c17aba7e35cac59cddd4",
+  "repository": "wordingone/ember",
+  "review_provenance": "SELF_ONLY",
+  "reviewer": "self-review-authority",
+  "schema_version": "ember-issue-close-sweep-authorization-v1"
+}
