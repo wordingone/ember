@@ -5,6 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildCommitBanner,
+  cockpitCompileArgs,
   requireBuildCommit,
   requireCleanTrackedStatus,
 } from "./build-cockpit.ts";
@@ -27,5 +28,26 @@ describe("cockpit build commit binding", () => {
     expect(buildCommitBanner("b".repeat(40))).toBe(
       "globalThis.__EMBER_BUILD_COMMIT__=\"" + "b".repeat(40) + "\";",
     );
+  });
+
+  it("brands every compiled Windows binary as Ember", () => {
+    const commit = "c".repeat(40);
+    expect(cockpitCompileArgs(commit, "owned-temp/ember.exe")).toEqual([
+      "build",
+      "./entrypoints/main.ts",
+      "--compile",
+      "--outfile",
+      "owned-temp/ember.exe",
+      "--banner",
+      buildCommitBanner(commit),
+      "--windows-title",
+      "Ember",
+      "--windows-publisher",
+      "wordingone",
+      "--windows-version",
+      "0.1.0.0",
+      "--windows-description",
+      "Ember local AI laboratory",
+    ]);
   });
 });
