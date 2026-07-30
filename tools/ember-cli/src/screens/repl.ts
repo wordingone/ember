@@ -74,6 +74,7 @@ import {
 import { QueryEngine, type QueryEvent, type ResultEvent, type RetryAttemptInfo } from "../core/query-engine.ts";
 import type { Tool }                    from "../core/tool-interface.ts";
 import {
+  getDiagnostics,
   getState,
   startTelemetryWatch,
   type TelemetryState,
@@ -762,6 +763,7 @@ export function ReplScreen({
   if (!livenessHeartbeatRef.current) {
     livenessHeartbeatRef.current = createLivenessHeartbeatWriter({
       version: process.env["EMBER_VERSION"] ?? "0.0.0",
+      telemetryDiagnostics: getDiagnostics,
     });
   }
 

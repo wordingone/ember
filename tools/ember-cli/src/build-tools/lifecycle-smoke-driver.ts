@@ -22,7 +22,7 @@ import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import { headlessCaptureEnv } from "../services/headless-capture.ts";
 import { READY_OSC } from "../cli/ready-sentinel.ts";
-import { buildCommitBanner } from "./build-cockpit.ts";
+import { cockpitCompileArgs } from "./build-cockpit.ts";
 import {
   LIFECYCLE_ACTIONS,
   validateLifecycleActionArtifacts,
@@ -487,15 +487,7 @@ function rebuildBinaryFromSource(
   try {
     const result = spawnSync(
       bunExecutable,
-      [
-        "build",
-        "./entrypoints/main.ts",
-        "--compile",
-        "--outfile",
-        rebuiltBinary,
-        "--banner",
-        buildCommitBanner(sourceCommit),
-      ],
+      cockpitCompileArgs(sourceCommit, rebuiltBinary),
       { cwd: sourceRoot, encoding: "utf8", windowsHide: true },
     );
     if (result.status !== 0) {

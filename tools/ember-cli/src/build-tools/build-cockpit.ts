@@ -18,6 +18,32 @@ export function buildCommitBanner(commit: string): string {
   return "globalThis.__EMBER_BUILD_COMMIT__=" + JSON.stringify(requireBuildCommit(commit)) + ";";
 }
 
+export function cockpitWindowsMetadataArgs(): string[] {
+  return [
+    "--windows-title",
+    "Ember",
+    "--windows-publisher",
+    "wordingone",
+    "--windows-version",
+    "0.1.0.0",
+    "--windows-description",
+    "Ember local AI laboratory",
+  ];
+}
+
+export function cockpitCompileArgs(commit: string, outfile = "ember.exe"): string[] {
+  return [
+    "build",
+    "./entrypoints/main.ts",
+    "--compile",
+    "--outfile",
+    outfile,
+    "--banner",
+    buildCommitBanner(commit),
+    ...cockpitWindowsMetadataArgs(),
+  ];
+}
+
 export function requireCleanTrackedStatus(status: string): void {
   if (status.trim() !== "") {
     throw new Error("cockpit build refuses dirty tracked source bytes");
@@ -47,15 +73,7 @@ if (import.meta.main) {
   requireCleanTrackedStatus(status.stdout ?? "");
   const result = spawnSync(
     process.execPath,
-    [
-      "build",
-      "./entrypoints/main.ts",
-      "--compile",
-      "--outfile",
-      "ember.exe",
-      "--banner",
-      buildCommitBanner(commit),
-    ],
+    cockpitCompileArgs(commit),
     { cwd: sourceRoot, stdio: "inherit", windowsHide: true },
   );
   if (result.status !== 0) {

@@ -42,7 +42,7 @@ import { spawnSync } from "node:child_process";
 import { basename, dirname, join, resolve } from "node:path";
 import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
-import { buildCommitBanner } from "./build-cockpit.ts";
+import { cockpitCompileArgs, cockpitWindowsMetadataArgs } from "./build-cockpit.ts";
 import { headlessCaptureEnv } from "../services/headless-capture.ts";
 
 const { Terminal } = xtermHeadless;
@@ -412,15 +412,7 @@ async function main(): Promise<void> {
   const rebuiltBinary = join(rebuildTemp, "ember.exe");
   const bunResult = spawnSync(
     bunExecutable,
-    [
-      "build",
-      "./entrypoints/main.ts",
-      "--compile",
-      "--outfile",
-      rebuiltBinary,
-      "--banner",
-      buildCommitBanner(sourceCommit),
-    ],
+    cockpitCompileArgs(sourceCommit, rebuiltBinary),
     { cwd: sourceRoot, encoding: "utf8", windowsHide: true },
   );
   let rebuildBinarySha256: string;
@@ -527,6 +519,7 @@ async function main(): Promise<void> {
         "<owned-temp>/ember.exe",
         "--banner",
         "<derived-from-source-commit>",
+        ...cockpitWindowsMetadataArgs(),
       ],
     },
     transport: "windows-conpty/node-pty (driven from node, not bun -- see driver_runtime)",

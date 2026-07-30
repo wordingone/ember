@@ -108,6 +108,62 @@ describe("createLivenessHeartbeatWriter", () => {
     expect(row.version).toBe("unknown");
   });
 
+  test("persists a bounded telemetry diagnostic snapshot for installed soak evidence", () => {
+    const writer = createLivenessHeartbeatWriter({
+      repoRoot: scratchDir,
+      pid: 4242,
+      version: "abc123",
+      telemetryDiagnostics: () => ({
+        pollAttempts: 17,
+        pollsCompleted: 16,
+        overlapPollsSkipped: 1,
+        channelBytesRead: 4096,
+        maxSingleReadBytes: 1024,
+        maxPollReadBytes: 2048,
+        partialLineBytes: 7,
+        oversizedPartialLinesDropped: 2,
+      }),
+    });
+
+    writer.write(Date.UTC(2026, 6, 30, 12, 0, 0));
+    const row = JSON.parse(fs.readFileSync(requireFilePath(writer.filePath), "utf8"));
+    expect(row.telemetry).toEqual({
+      pollAttempts: 17,
+      pollsCompleted: 16,
+      overlapPollsSkipped: 1,
+      channelBytesRead: 4096,
+      maxSingleReadBytes: 1024,
+      maxPollReadBytes: 2048,
+      partialLineBytes: 7,
+      oversizedPartialLinesDropped: 2,
+    });
+  });
+
+  test("omits invalid or throwing telemetry diagnostics without stopping the heartbeat", () => {
+    const invalid = createLivenessHeartbeatWriter({
+      repoRoot: scratchDir,
+      telemetryDiagnostics: () => ({
+        pollAttempts: Number.NaN,
+        pollsCompleted: 0,
+        overlapPollsSkipped: 0,
+        channelBytesRead: 0,
+        maxSingleReadBytes: 0,
+        maxPollReadBytes: 0,
+        partialLineBytes: 0,
+        oversizedPartialLinesDropped: 0,
+      }),
+    });
+    invalid.write();
+    expect(JSON.parse(fs.readFileSync(requireFilePath(invalid.filePath), "utf8")).telemetry).toBeUndefined();
+
+    const throwing = createLivenessHeartbeatWriter({
+      repoRoot: scratchDir,
+      telemetryDiagnostics: () => { throw new Error("diagnostic source failed"); },
+    });
+    expect(() => throwing.write()).not.toThrow();
+    expect(JSON.parse(fs.readFileSync(requireFilePath(throwing.filePath), "utf8")).telemetry).toBeUndefined();
+  });
+
   test("fails open: write() never throws even when the target directory cannot be created", () => {
     // A plain FILE sits where the writer expects a directory (ENOTDIR-shaped collision) --
     // a realistic disk problem, same technique as operator-receipts.test.ts's equivalent case.
