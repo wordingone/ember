@@ -603,6 +603,13 @@ export function getOperatorRunStatus(telemetry: TelemetryState, nowMs: number = 
   const evidence = selectedRunEvidence(telemetry, nowMs);
   const runId = selectedRun ?? evidence?.runId;
   const latestTrainTs = evidence && runId === evidence.runId ? evidence.latestTs : undefined;
+  if (runId && latestTrainTs !== undefined && telemetry.runStatus?.runId === runId) {
+    const statusTs = Date.parse(telemetry.runStatus.lastTs);
+    if (Number.isFinite(statusTs) && statusTs >= latestTrainTs) {
+      if (telemetry.runStatus.phase === "FAILED") return "STALE";
+      if (telemetry.runStatus.phase === "COMPLETE") return "IDLE";
+    }
+  }
   if (channelIsOffline(telemetry, runId, latestTrainTs)) return "OFFLINE";
   if (!runId) return "IDLE";
   const eventTimes = telemetry.recentEvents

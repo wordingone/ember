@@ -161,6 +161,49 @@ describe("training telemetry custody", () => {
       handle.stop();
     }
   });
+  test("keeps a newer FAILED terminal status over an older appended line and accepts a later resume", async () => {
+    scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-terminal-order-"));
+    const channel = join(scratch, "telemetry.jsonl");
+    const events = [
+      { ts: "2026-07-17T05:00:01.000Z", kind: "train_step", source: "journal", payload: { run_id: "run-a", step: 7, loss: 2 } },
+      { ts: "2026-07-17T05:00:03.000Z", kind: "run_status", source: "journal", payload: { run_id: "run-a", phase: "FAILED", model_chat: "OFFLINE", last_completed_step: 7, failure_class: "TRAINER_ERROR" } },
+      { ts: "2026-07-17T05:00:02.000Z", kind: "run_status", source: "journal", payload: { run_id: "run-a", phase: "TRAINING", model_chat: "OFFLINE" } },
+    ];
+    await writeFile(channel, events.map((event) => JSON.stringify(event)).join("\n") + "\n", "utf8");
+    const handle = startTelemetryWatch({
+      channelPath: channel,
+      now: () => Date.parse("2026-07-17T05:00:04.000Z"),
+      pollIntervalMs: 20,
+    });
+    try {
+      await Bun.sleep(45);
+      expect(getState().runStatus).toMatchObject({
+        runId: "run-a",
+        phase: "FAILED",
+        lastCompletedStep: 7,
+        failureClass: "TRAINER_ERROR",
+      });
+      expect(getState().activeRun).toBeUndefined();
+
+      await appendFile(channel, JSON.stringify({
+        ts: "2026-07-17T05:00:04.000Z",
+        kind: "run_status",
+        source: "journal",
+        payload: { run_id: "run-a", phase: "TRAINING", model_chat: "OFFLINE" },
+      }) + "\n" + JSON.stringify({
+        ts: "2026-07-17T05:00:04.000Z",
+        kind: "train_step",
+        source: "journal",
+        payload: { run_id: "run-a", step: 8, loss: 1.5 },
+      }) + "\n", "utf8");
+      await Bun.sleep(45);
+      expect(getState().runStatus?.phase).toBe("TRAINING");
+      expect(getState().activeRun).toMatchObject({ runId: "run-a", step: 8 });
+    } finally {
+      handle.stop();
+    }
+  });
+
   test("retains measured learning, token throughput, and energy without deriving throughput from step time", async () => {
     scratch = await mkdtemp(join(tmpdir(), "ember-telemetry-measured-"));
     const channel = join(scratch, "telemetry.jsonl");

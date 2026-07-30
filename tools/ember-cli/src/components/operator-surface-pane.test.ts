@@ -51,6 +51,22 @@ describe("OperatorSurfacePane", () => {
     expect(snapshot.agentLines[0]).toContain("[receipt] checkpoint receipt landed [receipts/run/checkpoint.json]");
   });
 
+  test("a newer FAILED terminal event makes fresh training evidence STALE while COMPLETE becomes IDLE", () => {
+    const trainTs = "2026-07-17T17:30:00.000Z";
+    const terminalTs = "2026-07-17T17:30:01.000Z";
+    const now = Date.parse("2026-07-17T17:30:02.000Z");
+    const recentEvents = [train("run-terminal", 7, trainTs, 1.25)];
+
+    expect(getOperatorRunStatus(telemetry({
+      recentEvents,
+      runStatus: { runId: "run-terminal", phase: "FAILED", modelChat: "OFFLINE", lastTs: terminalTs },
+    }), now)).toBe("STALE");
+    expect(getOperatorRunStatus(telemetry({
+      recentEvents,
+      runStatus: { runId: "run-terminal", phase: "COMPLETE", modelChat: "OFFLINE", lastTs: terminalTs },
+    }), now)).toBe("IDLE");
+  });
+
   test("renders exact plotted glyph rows with a shared step/time axis and checkpoint marker", () => {
     const graphTelemetry = telemetry({
       recentEvents: [
