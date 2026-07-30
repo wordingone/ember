@@ -110,7 +110,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
       // fixed sleep guessed to be "long enough".
       // The PAUSE control renders in EVERY status (disabled-but-visible when not RUNNING), so
       // the loop must wait for RUNNING itself, not merely for the glyph to appear. R2b decorates
-      // the label with its accelerator ("[(P)AUSE]", see operatorControlLabel) plus a two-column
+      // the plain label ("[PAUSE]", see operatorControlLabel) plus a two-column
       // focus-marker slot in front of it -- the click still targets the same Box, just at the
       // new label text.
       let lines: string[] = [];
@@ -122,7 +122,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
         running = lines.some((line) => line.includes("RUNNING"));
       }
       expect(running).toBe(true);
-      const pauseAt = findGlyph(lines, "[(P)AUSE]");
+      const pauseAt = findGlyph(lines, "[PAUSE]");
       expect(pauseAt).toBeDefined();
 
       stdin.emit("data", Buffer.from(sgrLeftClick(pauseAt!.col + 1, pauseAt!.row)));

@@ -19,6 +19,19 @@ function train(runId: string, step: number, ts: string, loss: number, extra: Rec
   return { ts, kind: "train_step", source: "journal", payload: { run_id: runId, step, loss, ...extra } };
 }
 
+async function flushInk(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 10));
+}
+
+function collectText(node: unknown): string[] {
+  if (typeof node === "string") return [node];
+  if (Array.isArray(node)) return node.flatMap(collectText);
+  if (node && typeof node === "object" && "props" in node) {
+    return collectText((node as { props?: { children?: unknown } }).props?.children);
+  }
+  return [];
+}
+
 describe("OperatorSurfacePane", () => {
   test("derives scalar status metrics and binds checkpoint to the active run", () => {
     const snapshot = buildOperatorSurfaceSnapshot({
@@ -230,15 +243,15 @@ describe("OperatorSurfacePane", () => {
     const rows = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string");
     expect(body.props.width).toBeLessThanOrEqual(60);
     expect(body.props.height).toBeLessThanOrEqual(20);
-    expect(rows.some((row: string) => row.includes("TRAINING/LOSS"))).toBe(true);
-    expect(rows.some((row: string) => row.includes("RESOURCE EFFICIENCY"))).toBe(true);
+    expect(rows.some((row: string) => row.includes("+ LOSS"))).toBe(true);
+    expect(rows.some((row: string) => row.includes("+ GPU"))).toBe(true);
     expect(rows.some((row: string) => row.includes("MODEL GROWTH"))).toBe(false);
     expect(rows.some((row: string) => row.includes("CAPABILITY SCORES"))).toBe(false);
-    expect(rows.some((row: string) => row.includes("checkpoint ·▲"))).toBe(true);
+    expect(rows.some((row: string) => row.includes("more charts"))).toBe(true);
     expect(rows).not.toContain("AGENT STREAM");
   });
 
-  test("real Ink viewport keeps all four family headings visible at 60x20", () => {
+  test("real Ink viewport keeps all four family headings visible at 60x20", async () => {
     const chunks: string[] = [];
     const stdout = { columns: 60, rows: 20 };
     const element = React.createElement(OperatorSurfacePane, {
@@ -257,19 +270,19 @@ describe("OperatorSurfacePane", () => {
       terminalRows: 20,
     });
     const handle = mountInk(element, { stream: { write(s: string) { chunks.push(s); } }, stdout });
-    handle.unmount();
+    await flushInk();
     const frame = buildFrame(60, 20);
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
-    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
-      expect(rows.some((row) => row.includes(heading))).toBe(true);
-    }
+    handle.unmount();
+    expect(rows.some((row) => row.includes("+ LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("+ GPU"))).toBe(true);
     expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
     expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row) => row.includes("STALE") || row.includes("RUNNING"))).toBe(true);
   });
 
-  test("real Ink viewport remains bounded at 80x24", () => {
+  test("real Ink viewport remains bounded at 80x24", async () => {
     const chunks: string[] = [];
     const telemetryState = telemetry({
       recentEvents: [
@@ -287,19 +300,17 @@ describe("OperatorSurfacePane", () => {
       terminalRows: 24,
       nowMs: Date.parse("2026-07-17T17:30:03.000Z"),
     }), { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns: 80, rows: 24 } });
-    handle.unmount();
+    await flushInk();
     const frame = buildFrame(80, 24);
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
-    for (const heading of ["TRAINING/LOSS", "RESOURCE EFFICIENCY"]) {
-      expect(rows.some((row) => row.includes(heading))).toBe(true);
-    }
+    handle.unmount();
+    expect(rows.some((row) => row.includes("+ LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("+ GPU"))).toBe(true);
     expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
     expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
-    expect(rows.some((row) => row.includes("step/time"))).toBe(true);
-    expect(rows.some((row) => row.includes("checkpoint"))).toBe(true);
-    expect(rows.filter((row) => row.includes("step/time")).length).toBe(1);
-    expect(rows.filter((row) => row.includes("checkpoint")).length).toBe(1);
+    expect(rows.some((row) => row.includes("+ TOKENS/S"))).toBe(true);
+    expect(rows.some((row) => row.includes("more charts"))).toBe(false);
     // R1d: at 80x24 with room to spare, the loss chart GROWS beyond one row and renders via the
     // Braille canvas (U+2800-U+28FF) rather than the flat single-row block glyph (U+2588) --
     // either is a real, non-blank plotted value, which is the substantive claim here.
@@ -369,18 +380,13 @@ describe("OperatorSurfacePane", () => {
       train("run-grid", 2, "2026-07-17T17:30:02.000Z", 2, { step_ms: 900, learning_rate: 0.001 }),
       train("run-grid", 3, "2026-07-17T17:30:03.000Z", 1, { step_ms: 800, tokens_per_second: 300, learning_rate: 0.0005 }),
     ];
-    // Pinned to the exact-fit height for this fixture (R1d acceptance #4): zero surplus, so
-    // every metric line stays at its pre-R1d single-row rendering -- this test's per-point gap
-    // alignment is a claim about THAT rendering, not about growth, which a taller mount would
-    // now correctly trigger (covered separately by the R1d growth tests).
-    const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: events }), activityLines: [], width: 80, height: 20, terminalColumns: 80, terminalRows: 20, nowMs: Date.parse("2026-07-17T17:30:05.000Z") });
-    const body = (element as any).props.children;
-    const text = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string") as string[];
-    expect(text.find((line) => line.startsWith("step/time"))).toContain("1 2 3");
-    const tokenLine = text.find((line) => line.startsWith("tokens/s"))!;
-    const learningRateLine = text.find((line) => line.startsWith("learning rate"))!;
-    expect(tokenLine.slice(20, 23)).toContain(String.fromCodePoint(0x00b7));
-    expect(learningRateLine.slice(20, 23).startsWith(String.fromCodePoint(0x00b7))).toBe(true);
+    const graphs = buildOperatorSurfaceGraphs(telemetry({ recentEvents: events }), 80, Date.parse("2026-07-17T17:30:05.000Z"));
+    const text = [...graphs.loss, ...graphs.resource];
+    expect(text.find((line) => line.startsWith("step/time"))).toContain("1@17:30:01");
+    expect(text.find((line) => line.startsWith("step/time"))).toContain("2@17:30:02");
+    expect(text.find((line) => line.startsWith("step/time"))).toContain("3@17:30:03");
+    expect(graphs.points.map((point) => point.tokensPerSecond)).toEqual([100, undefined, 300]);
+    expect(graphs.points.map((point) => point.learningRate)).toEqual([undefined, 0.001, 0.0005]);
   });
 
   test("retains final point and latest checkpoint markers when markers exceed capacity", () => {
@@ -428,14 +434,38 @@ describe("OperatorSurfacePane", () => {
     const controlRow = (body.props.children as any[]).find((child) => child?.key === "controls");
     const controls = controlRow.props.children as any[];
     // R2b: labels now carry the focus marker slot (unfocused = two leading spaces) and the
-    // accelerator-decorated action name -- see operatorControlLabel.
+    // plain action label -- see operatorControlLabel.
     expect(controls.map((control) => control.props.children.props.children)).toEqual([
-      "  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]",
+      "  [START]", "  [PAUSE]", "  [RESUME]", "  [RESTART]",
     ]);
-    const pause = controls.find((control) => control.props.children.props.children === "  [(P)AUSE]");
+    const pause = controls.find((control) => control.props.children.props.children === "  [PAUSE]");
     expect(typeof pause.props.onClick).toBe("function");
     pause.props.onClick();
     expect(calls).toEqual([{ action: "PAUSE", runId: "run-control" }]);
+  });
+  test("all four lifecycle actions expose a real click handler exactly when enabled", () => {
+    const cases = [
+      { action: "START", telemetry: telemetry(), nowMs: Date.parse("2026-07-17T17:30:02.000Z"), runId: undefined },
+      { action: "PAUSE", telemetry: telemetry({ recentEvents: [train("run-pause", 1, "2026-07-17T17:30:01.000Z", 2)] }), nowMs: Date.parse("2026-07-17T17:30:02.000Z"), runId: "run-pause" },
+      { action: "RESUME", telemetry: telemetry({ runStatus: { runId: "run-resume", phase: "PAUSED", modelChat: "OFFLINE", lastTs: "2026-07-17T17:30:01.000Z" } }), nowMs: Date.parse("2026-07-17T17:30:02.000Z"), runId: "run-resume" },
+      { action: "RESTART", telemetry: telemetry({ recentEvents: [train("run-restart", 1, "2026-07-17T17:30:01.000Z", 2)] }), nowMs: Date.parse("2026-07-17T18:30:02.000Z"), runId: "run-restart" },
+    ] as const;
+    for (const candidate of cases) {
+      const calls: Array<{ action: string; runId?: string }> = [];
+      const element = OperatorSurfacePane({
+        telemetry: candidate.telemetry,
+        activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+        nowMs: candidate.nowMs,
+        onControl: (action, runId) => calls.push({ action, runId }),
+      });
+      const controlRow = ((element as any).props.children.props.children as any[])
+        .find((child) => child?.key === "controls");
+      const controls = controlRow.props.children as any[];
+      const control = controls.find((item) => item.props.children.props.children === `  [${candidate.action}]`);
+      expect(typeof control.props.onClick).toBe("function");
+      control.props.onClick();
+      expect(calls).toEqual([{ action: candidate.action, runId: candidate.runId }]);
+    }
   });
   test("RED->GREEN: a metric with zero samples on an actively RUNNING run reads AWAITING FIRST SAMPLE, not SOURCE UNBOUND", () => {
     // The run IS live (a train_step arrived just now, well inside ACTIVE_RUN_TTL_MS) and IS
@@ -475,18 +505,18 @@ describe("OperatorSurfacePane", () => {
       activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
       nowMs: now,
     });
-    const runningBody = (runningElement as any).props.children;
-    const runningRows = (runningBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
-    expect(runningRows.some((row: string) => row.startsWith("GPU watts") && row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
+    const runningRows = collectText(runningElement);
+    expect(runningRows.some((row) => row.includes("+ GPU POWER"))).toBe(true);
+    expect(runningRows.some((row) => row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
 
     const idleElement = OperatorSurfacePane({
       telemetry: telemetry(),
       activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
       nowMs: now,
     });
-    const idleBody = (idleElement as any).props.children;
-    const idleRows = (idleBody.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string");
-    expect(idleRows.some((row: string) => row.startsWith("GPU watts") && row.includes("SOURCE UNBOUND"))).toBe(true);
+    const idleRows = collectText(idleElement);
+    expect(idleRows.some((row) => row.includes("+ GPU POWER"))).toBe(true);
+    expect(idleRows.some((row) => row.includes("SOURCE UNBOUND"))).toBe(true);
   });
 
   test("legibility width sweep: AWAITING FIRST SAMPLE / SOURCE UNBOUND / a plotted curve are all distinguishable at 40, 60, and 80 columns", () => {
@@ -500,35 +530,22 @@ describe("OperatorSurfacePane", () => {
         activityLines: [], width, height: 24, terminalColumns: width, terminalRows: 24,
         nowMs: now,
       });
-      const body = (element as any).props.children;
-      const rows = (body.props.children as any[]).map((child) => child?.props?.children).filter((v) => typeof v === "string") as string[];
-      // A live curve (tokens/s has 2 real samples): must render plotted glyphs, not a fixed word.
-      const tokensRow = rows.find((row) => row.startsWith("tokens/s"));
-      expect(tokensRow).toBeDefined();
-      expect(tokensRow).not.toContain("SOURCE UNBOUND");
-      expect(tokensRow).not.toContain("AWAITING FIRST SAMPLE");
-      // A metric this run hasn't produced yet, while running: AWAITING, never UNBOUND.
-      const gpuWattsRow = rows.find((row) => row.startsWith("GPU watts"));
-      // D2 rebase interaction (legibility scope addition, 2026-07-26): "GPU watts" padded to 20
-      // cols + "AWAITING FIRST SAMPLE" (21 chars) is 41 characters -- it never fit inside the
-      // pane's true content budget (innerWidth = effectiveWidth - 4, border + padding both
-      // accounted for) at 40 columns (innerWidth 36); it only appeared to fit before because
-      // this test predates the legibility pass's border+padding accounting fix and read the
-      // pre-fix, over-generous bound. At 40 columns the correct behavior is a visible "…"
-      // marker, never a silent full-text assumption; 60/80 columns have room for the phrase
-      // whole and keep the original assertion.
-      expect(gpuWattsRow).not.toContain("SOURCE UNBOUND");
+      const rows = collectText(element);
+      const tokensIndex = rows.findIndex((row) => row.includes("+ TOKENS/S"));
       if (width === 40) {
-        expect(gpuWattsRow).toContain("AWAITING FIRST");
-        expect(gpuWattsRow).toContain("…");
-        expect(gpuWattsRow).not.toContain("AWAITING FIRST SAMPLE");
+        expect(tokensIndex).toBe(-1);
+        expect(rows.some((row) => row.includes("more charts"))).toBe(true);
       } else {
-        expect(gpuWattsRow).toContain("AWAITING FIRST SAMPLE");
+        expect(tokensIndex).toBeGreaterThanOrEqual(0);
+        expect(rows.some((row) => row.includes("110.00 tok/s"))).toBe(true);
       }
+      const powerIndex = rows.findIndex((row) => row.includes("+ GPU POWER"));
+      expect(powerIndex).toBeGreaterThanOrEqual(0);
+      expect(rows.some((row) => row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
     }
   });
 
-  test("legibility width sweep: the real Ink viewport renders both labels without a truncated/blank row at 40 columns", () => {
+  test("legibility width sweep: the real Ink viewport renders both labels without a truncated/blank row at 40 columns", async () => {
     const chunks: string[] = [];
     const element = React.createElement(OperatorSurfacePane, {
       telemetry: telemetry({ recentEvents: [
@@ -539,10 +556,11 @@ describe("OperatorSurfacePane", () => {
       nowMs: Date.parse("2026-07-26T00:00:05.000Z"),
     });
     const handle = mountInk(element, { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns: 40, rows: 24 } });
-    handle.unmount();
+    await flushInk();
     const frame = buildFrame(40, 24);
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
+    handle.unmount();
     expect(rows.every((row) => row.length === 40)).toBe(true);
     expect(rows.some((row) => row.includes("AWAITING"))).toBe(true);
     // R1d: room at 24 rows may grow the chart into Braille output (U+2800-U+28FF) instead of the
@@ -606,7 +624,7 @@ describe("OperatorSurfacePane", () => {
       return [];
     };
     const labels = collectLabels(controlsElement);
-    expect(labels).toEqual(["  [(S)TART]", "  [(P)AUSE]", "  [RES(U)ME]", "  [RES(T)ART]"]);
+    expect(labels).toEqual(["  [START]", "  [PAUSE]", "  [RESUME]", "  [RESTART]"]);
   });
 
   // -------------------------------------------------------------------------
