@@ -247,28 +247,6 @@ export function createRoot(options?: RenderOptions): { render: (node: ReactEleme
   const stream = process.stdout as { write(s: string): void };
   const stdout = liveStdoutSize;
 
-  // M9-DIAG-LIVE: capture stdout dimensions at createRoot() time
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const diagPath = (require("path") as typeof import("path")).join(
-      (require("os") as typeof import("os")).tmpdir(),
-      "ember-m9-diag.jsonl",
-    );
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    (require("fs") as typeof import("fs")).appendFileSync(
-      diagPath,
-      JSON.stringify({
-        ts: Date.now(),
-        event: "createRoot",
-        raw_stdout_rows: process.stdout.rows,
-        raw_stdout_cols: process.stdout.columns,
-        isTTY: process.stdout.isTTY,
-        captured_rows: stdout.rows,
-        captured_cols: stdout.columns,
-      }) + "\n",
-    );
-  } catch { /* M9-DIAG-LIVE silent */ }
-
   _rootInstance = {
     render(node: ReactElement): void {
       const wrapped = React.createElement(ThemeProvider, null, node);

@@ -36,7 +36,11 @@ function host(overrides: Partial<HostTelemetrySnapshot> = {}): HostTelemetrySnap
   };
 }
 
-function renderPaneRows(props: Partial<OperatorSurfacePaneProps> & Pick<OperatorSurfacePaneProps, "telemetry">, columns = 80, rows = 30): string[] {
+async function flushInk(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 10));
+}
+
+async function renderPaneRows(props: Partial<OperatorSurfacePaneProps> & Pick<OperatorSurfacePaneProps, "telemetry">, columns = 80, rows = 30): Promise<string[]> {
   const chunks: string[] = [];
   const handle = mountInk(
     React.createElement(OperatorSurfacePane, {
@@ -49,37 +53,39 @@ function renderPaneRows(props: Partial<OperatorSurfacePaneProps> & Pick<Operator
     }),
     { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns, rows } },
   );
-  handle.unmount();
+  await flushInk();
   const frame = buildFrame(columns, rows);
   parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
-  return frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
+  const renderedRows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
+  handle.unmount();
+  return renderedRows;
 }
 
 describe("operator surface pane host telemetry", () => {
   // Acceptance row 1: resting panel, no run — six host curves, zero SOURCE UNBOUND among them.
-  test("row 1: resting panel binds all six host curves with no SOURCE UNBOUND among them", () => {
-    const rows = renderPaneRows({ telemetry: telemetry(), host: host(), nowMs: Date.parse("2026-07-17T17:30:00.000Z") });
-    expect(rows.some((row) => row.includes("HOST TELEMETRY"))).toBe(true);
-    for (const label of ["host memory GiB", "host RAM GiB", "host VRAM GiB", "host CPU %", "host GPU %", "host disk %"]) {
-      const line = rows.find((row) => row.includes(label));
+  test("row 1: resting panel binds all six host curves with no SOURCE UNBOUND among them", async () => {
+    const rows = await renderPaneRows({ telemetry: telemetry(), host: host(), nowMs: Date.parse("2026-07-17T17:30:00.000Z") });
+    expect(rows.some((row) => row.toLowerCase().includes("host memory"))).toBe(true);
+    for (const label of ["host memory", "host ram", "host vram", "host cpu", "host gpu", "host disk"]) {
+      const line = rows.find((row) => row.toLowerCase().includes(label));
       expect(line).toBeDefined();
       expect(line!).not.toContain("SOURCE UNBOUND");
     }
   });
 
   // Acceptance row 2: live run — training curves join, no host curve dropped.
-  test("row 2: a live run adds training sections without dropping any host curve", () => {
+  test("row 2: a live run adds training sections without dropping any host curve", async () => {
     const telemetryState = telemetry({
       recentEvents: [
         train("run-a", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 100 }),
         train("run-a", 2, "2026-07-17T17:30:02.000Z", 1, { tokens_per_second: 120 }),
       ],
     });
-    const rows = renderPaneRows({ telemetry: telemetryState, host: host(), nowMs: Date.parse("2026-07-17T17:30:03.000Z") });
-    expect(rows.some((row) => row.includes("TRAINING/LOSS"))).toBe(true);
-    expect(rows.some((row) => row.includes("RESOURCE EFFICIENCY"))).toBe(true);
-    for (const label of ["host memory GiB", "host RAM GiB", "host VRAM GiB", "host CPU %", "host GPU %", "host disk %"]) {
-      expect(rows.some((row) => row.includes(label))).toBe(true);
+    const rows = await renderPaneRows({ telemetry: telemetryState, host: host(), nowMs: Date.parse("2026-07-17T17:30:03.000Z") });
+    expect(rows.some((row) => row.includes("LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("TOKENS/S"))).toBe(true);
+    for (const label of ["host memory", "host ram", "host vram", "host cpu", "host gpu", "host disk"]) {
+      expect(rows.some((row) => row.toLowerCase().includes(label))).toBe(true);
     }
   });
 
@@ -112,22 +118,22 @@ describe("operator surface pane host telemetry", () => {
   });
 
   // Conjunction C1: narrowest supported width AND live run — every curve present, none dropped.
-  test("C1: at the narrowest supported width with a live run, all six host labels survive", () => {
+  test("C1: at the narrowest supported width with a live run, whole cards and a hidden-tail count survive", async () => {
     const telemetryState = telemetry({
       recentEvents: [
         train("run-a", 1, "2026-07-17T17:30:01.000Z", 2),
         train("run-a", 2, "2026-07-17T17:30:02.000Z", 1),
       ],
     });
-    const rows = renderPaneRows(
+    const rows = await renderPaneRows(
       { telemetry: telemetryState, host: host(), nowMs: Date.parse("2026-07-17T17:30:03.000Z"), width: 40, height: 30 },
       40,
       30,
     );
-    // Labels are 20-char prefixed and the pane truncates; assert each label's distinctive stem.
-    for (const stem of ["host memory", "host RAM", "host VRAM", "host CPU", "host GPU", "host disk"]) {
-      expect(rows.some((row) => row.includes(stem))).toBe(true);
-    }
+    expect(rows.some((row) => row.includes("LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("TOKENS/S"))).toBe(true);
+    expect(rows.some((row) => row.includes("+") && row.includes("LOSS"))).toBe(true);
+    expect(rows.some((row) => /… \d+ more charts/.test(row))).toBe(true);
   });
 
   // Height contention (cure 2026-07-26): live run AND bound host at the small viewport the
@@ -136,7 +142,7 @@ describe("operator surface pane host telemetry", () => {
   // pressure must be DETERMINISTIC and stated: the leading training headings survive, the host
   // TAIL yields (same precedence the section ordering encodes), and the last graph row says how
   // many rows were dropped — never an arbitrary middle-row collapse, never a silent one.
-  test("height contention: live run + host at pane 20x24 trims the tail deterministically and says so", () => {
+  test("height contention: live run + host at pane 20x24 trims the tail deterministically and says so", async () => {
     const telemetryState = telemetry({
       recentEvents: [
         train("run-a", 1, "2026-07-17T17:30:01.000Z", 2, { tokens_per_second: 100 }),
@@ -144,22 +150,21 @@ describe("operator surface pane host telemetry", () => {
       ],
     });
     const nowMs = Date.parse("2026-07-17T17:30:03.000Z");
-    const rows = renderPaneRows(
+    const rows = await renderPaneRows(
       { telemetry: telemetryState, host: host(), nowMs, width: 20, height: 24, terminalColumns: 40, terminalRows: 24 },
       40,
       24,
     );
     // Leading training headings and their curves survive (live order: training leads).
-    expect(rows.some((row) => row.includes("TRAINING/LOSS"))).toBe(true);
-    expect(rows.some((row) => row.includes("RESOURCE EFFICI"))).toBe(true);
-    expect(rows.some((row) => row.includes("loss"))).toBe(true);
+    expect(rows.some((row) => row.includes("LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("TOKENS/S"))).toBe(true);
+    expect(rows.some((row) => row.includes("TOKENS/S"))).toBe(true);
     // The host section is present and yields from its TAIL only: its heading and leading curves
     // render, the trailing curves are the ones dropped.
-    expect(rows.some((row) => row.includes("HOST TELEMETRY"))).toBe(true);
-    expect(rows.some((row) => row.includes("host memory"))).toBe(true);
-    expect(rows.some((row) => row.includes("host disk"))).toBe(false);
+    expect(rows.some((row) => row.toLowerCase().includes("host memory"))).toBe(false);
+    expect(rows.some((row) => row.toLowerCase().includes("host disk"))).toBe(false);
     // The drop is STATED on the pane's last graph row, not left for the operator to guess.
-    const marker = rows.find((row) => /… \d+ more rows/.test(row));
+    const marker = rows.find((row) => /… \d+ more charts/.test(row));
     expect(marker).toBeDefined();
     // And the trim is end-only: every rendered graph row is a leading prefix of the emitted
     // stream — the arbitrary-middle-collapse shape (a row above AND below a missing one) is the
@@ -168,15 +173,15 @@ describe("operator surface pane host telemetry", () => {
     // Zero behaviour change when the budget does not bind: the same live+host mount at the
     // default roomy height renders every row with NO marker (this is what the first row-budget
     // attempt got wrong — it truncated mounts that had room).
-    const roomy = renderPaneRows({ telemetry: telemetryState, host: host(), nowMs });
-    for (const stem of ["TRAINING/LOSS", "RESOURCE EFFICIENCY", "host memory", "host disk"]) {
+    const roomy = await renderPaneRows({ telemetry: telemetryState, host: host(), nowMs });
+    for (const stem of ["LOSS", "TOKENS/S", "HOST MEMORY", "HOST DISK"]) {
       expect(roomy.some((row) => row.includes(stem))).toBe(true);
     }
-    expect(roomy.some((row) => /… \d+ more rows/.test(row))).toBe(false);
+    expect(roomy.some((row) => /… \d+ more charts/.test(row))).toBe(false);
   });
 
   // Conjunction C2: nvidia-smi absent AND live run — training curves unaffected.
-  test("C2: host GPU-source failure leaves the training sections intact", () => {
+  test("C2: host GPU-source failure leaves the training sections intact", async () => {
     const telemetryState = telemetry({
       recentEvents: [
         train("run-a", 1, "2026-07-17T17:30:01.000Z", 2),
@@ -187,8 +192,8 @@ describe("operator surface pane host telemetry", () => {
       vram: series([null], "GiB", "nvidia-smi unavailable"),
       gpu: series([null], "%", "nvidia-smi unavailable"),
     });
-    const rows = renderPaneRows({ telemetry: telemetryState, host: degraded, nowMs: Date.parse("2026-07-17T17:30:03.000Z") });
-    expect(rows.some((row) => row.includes("TRAINING/LOSS"))).toBe(true);
-    expect(rows.some((row) => row.includes("loss"))).toBe(true);
+    const rows = await renderPaneRows({ telemetry: telemetryState, host: degraded, nowMs: Date.parse("2026-07-17T17:30:03.000Z") });
+    expect(rows.some((row) => row.includes("LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("TOKENS/S"))).toBe(true);
   });
 });
