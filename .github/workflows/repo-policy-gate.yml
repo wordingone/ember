@@ -26,7 +26,7 @@ jobs:
       - name: Disable symlink materialization
         run: git config --global core.symlinks false
       - name: Checkout trusted guard kernel
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
           path: guard-kernel
@@ -34,7 +34,7 @@ jobs:
           persist-credentials: false
       - name: Checkout pull-request merge subject as hostile data
         if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ github.repository }}
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
       - name: Checkout protected push subject as data
         if: github.event_name == 'push'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           path: guard-subject
