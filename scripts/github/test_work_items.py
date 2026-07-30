@@ -22,9 +22,11 @@ class WorkItemReviewTests(unittest.TestCase):
                     "kind:defect",
                     "area:runtime",
                     "state:ready",
+                    "state:triage",
                     "priority:p2",
                     "severity:s1",
                     "severity:s2",
+                    "needs:review",
                 )
             ]
         }
@@ -63,7 +65,9 @@ class WorkItemReviewTests(unittest.TestCase):
         snapshot = self._snapshot()
         snapshot["repository"] = "wordingone/ember"
         row = build_review_plan(snapshot, self._manifest())["rows"][0]
-        self.assertEqual("FULL_BODY_AND_COMMENT_REVIEWED", row["review_status"])
+        self.assertEqual("MACHINE_CLASSIFIED", row["review_status"])
+        self.assertNotIn("reviewer_identity", row)
+        self.assertIn("needs:review", row["desired_labels"])
         self.assertEqual(
             1, len([x for x in row["desired_labels"] if x.startswith("kind:")])
         )
@@ -71,8 +75,24 @@ class WorkItemReviewTests(unittest.TestCase):
             1, len([x for x in row["desired_labels"] if x.startswith("state:")])
         )
         self.assertEqual(
-            1, len([x for x in row["desired_labels"] if x.startswith("severity:")])
+            0, len([x for x in row["desired_labels"] if x.startswith("severity:")])
         )
+
+    def test_issue_plan_excludes_open_pull_requests(self) -> None:
+        snapshot = self._snapshot()
+        snapshot["repository"] = "wordingone/ember"
+        snapshot["open_items"].append(
+            {
+                **copy.deepcopy(snapshot["open_items"][0]),
+                "number": 10000,
+                "node_id": "PR_1",
+                "item_type": "pull_request",
+            }
+        )
+        plan = build_review_plan(snapshot, self._manifest())
+        self.assertEqual([9999], [row["number"] for row in plan["rows"]])
+        self.assertEqual(1, plan["coverage"]["open_issue_count"])
+        self.assertEqual(1, plan["coverage"]["open_pull_request_count"])
 
     def test_live_preflight_detects_every_review_input_drift(self) -> None:
         snapshot = self._snapshot()

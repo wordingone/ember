@@ -30,7 +30,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python -B scripts/github/snapshot.py --without-comments --output repository-snapshot.json
-          python -B scripts/github/branch_hygiene.py --snapshot repository-snapshot.json --output branch-recovery-inventory.json
+          python -B scripts/github/branch_inventory.py --snapshot repository-snapshot.json --output branch-recovery-inventory.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: branch-recovery-inventory-${{ github.run_id }}

@@ -24,6 +24,89 @@ WorkItemError = engine.WorkItemError
 CONTROLLED_PREFIXES = ("kind:", "area:", "state:", "priority:", "severity:")
 
 
+def _review_label_cardinality(labels: list[str], number: int) -> None:
+    counts = {
+        prefix: sum(label.startswith(prefix) for label in labels)
+        for prefix in ("kind:", "area:", "state:", "priority:", "severity:")
+    }
+    if counts["kind:"] != 1 or not 1 <= counts["area:"] <= 3:
+        raise WorkItemError(f"issue #{number}: invalid semantic kind/area cardinality")
+    if counts["state:"] != 1 or counts["priority:"] != 1:
+        raise WorkItemError(f"issue #{number}: invalid semantic state/priority cardinality")
+    kind = next(label for label in labels if label.startswith("kind:"))
+    expected_severity = 1 if kind in {"kind:defect", "kind:model-behavior"} else 0
+    if counts["severity:"] != expected_severity:
+        raise WorkItemError(f"issue #{number}: invalid semantic severity cardinality")
+    if len(labels) != len(set(labels)):
+        raise WorkItemError(f"issue #{number}: duplicate semantic label")
+
+
+def apply_semantic_reviews(
+    plan: dict[str, Any], reviews: dict[str, Any]
+) -> dict[str, Any]:
+    """Overlay only content-bound human semantic decisions on machine proposals."""
+    if reviews.get("schema_version") != "ember-priority-semantic-review/v2":
+        raise WorkItemError("semantic review schema mismatch")
+    if reviews.get("repository") != plan.get("repository"):
+        raise WorkItemError("semantic review repository mismatch")
+    if reviews.get("source_snapshot_sha256") != plan.get("source_snapshot_sha256"):
+        raise WorkItemError("semantic review source snapshot mismatch")
+    reviewer = reviews.get("reviewer_identity")
+    reviewed_at = reviews.get("reviewed_at")
+    if not isinstance(reviewer, str) or not reviewer.strip():
+        raise WorkItemError("semantic reviewer identity missing")
+    if not isinstance(reviewed_at, str) or not reviewed_at.strip():
+        raise WorkItemError("semantic reviewed_at missing")
+    rows = reviews.get("rows")
+    if not isinstance(rows, list):
+        raise WorkItemError("semantic review rows missing")
+    numbers = [row.get("number") for row in rows if isinstance(row, dict)]
+    if len(numbers) != len(rows) or len(numbers) != len(set(numbers)):
+        raise WorkItemError("semantic review rows duplicate or malformed")
+    review_by_number = {row["number"]: row for row in rows}
+    plan_by_number = {row["number"]: row for row in plan["rows"]}
+    if not set(review_by_number).issubset(plan_by_number):
+        raise WorkItemError("semantic review contains unknown issue")
+    result = copy.deepcopy(plan)
+    for row in result["rows"]:
+        review = review_by_number.get(row["number"])
+        if review is None:
+            continue
+        for field in ("title_sha256", "body_sha256", "comments_sha256"):
+            if review.get(field) != row.get(field):
+                raise WorkItemError(
+                    f"issue #{row['number']}: semantic review {field} mismatch"
+                )
+        labels = review.get("desired_labels")
+        basis = review.get("classification_basis")
+        if not isinstance(labels, list) or not all(
+            isinstance(label, str) and label for label in labels
+        ):
+            raise WorkItemError(f"issue #{row['number']}: semantic labels invalid")
+        _review_label_cardinality(labels, row["number"])
+        if not isinstance(basis, str) or not basis.strip():
+            raise WorkItemError(f"issue #{row['number']}: classification basis missing")
+        row["desired_labels"] = sorted(labels)
+        row["review_status"] = "SEMANTICALLY_REVIEWED"
+        row["reviewer_identity"] = reviewer
+        row["reviewed_at"] = reviewed_at
+        row["review_source_snapshot_sha256"] = reviews["source_snapshot_sha256"]
+        row["classification_basis"] = basis
+    result["coverage"]["reviewed_issue_count"] = len(rows)
+    result["coverage"]["machine_classified_issue_count"] = (
+        len(result["rows"]) - len(rows)
+    )
+    result.pop("plan_sha256", None)
+    result["plan_sha256"] = engine._sha(
+        {
+            key: value
+            for key, value in result.items()
+            if key not in {"authority", "plan_sha256"}
+        }
+    )
+    return result
+
+
 def build_review_plan(snapshot: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
     source = copy.deepcopy(snapshot)
     parent_numbers = set(engine.PARENT_BY_MILESTONE.values())
@@ -40,12 +123,6 @@ def build_review_plan(snapshot: dict[str, Any], manifest: dict[str, Any]) -> dic
     live_by_number = {row["number"]: row for row in snapshot["open_items"]}
     for row in result["rows"]:
         labels = list(row["desired_labels"])
-        kind = next(name for name in labels if name.startswith("kind:"))
-        if kind in {"kind:defect", "kind:model-behavior"}:
-            if not any(name.startswith("severity:") for name in labels):
-                labels.append("severity:s2")
-        else:
-            labels = [name for name in labels if not name.startswith("severity:")]
         if not set(labels).issubset(canonical):
             raise WorkItemError(f"issue #{row['number']}: noncanonical normalized label")
         row["before_labels"] = sorted(
@@ -54,7 +131,13 @@ def build_review_plan(snapshot: dict[str, Any], manifest: dict[str, Any]) -> dic
         row["desired_labels"] = sorted(set(labels))
     result["source_snapshot_sha256"] = snapshot["snapshot_sha256"]
     result.pop("plan_sha256", None)
-    result["plan_sha256"] = engine._sha(result)
+    result["plan_sha256"] = engine._sha(
+        {
+            key: value
+            for key, value in result.items()
+            if key not in {"authority", "plan_sha256"}
+        }
+    )
     return result
 
 
@@ -112,6 +195,32 @@ def apply_plan(
     confirm: bool,
 ) -> dict[str, Any]:
     verify_live_snapshot(plan, live_snapshot)
+    if engine._sha(
+        {
+            key: value
+            for key, value in plan.items()
+            if key not in {"authority", "plan_sha256"}
+        }
+    ) != plan.get("plan_sha256"):
+        raise WorkItemError("review plan digest mismatch")
+    if all(
+        sorted(row["before_labels"]) == sorted(row["desired_labels"])
+        for row in plan["rows"]
+    ):
+        if not confirm:
+            raise WorkItemError("apply requires --confirm-apply")
+        receipt = {
+            **engine.receipt_metadata("EMBER-GITHUB-OPEN-WORK-APPLY"),
+            "schema_version": "ember-open-work-review-apply/v1",
+            "repository": plan["repository"],
+            "plan_sha256": plan["plan_sha256"],
+            "updated_issue_count": 0,
+            "verified_issue_count": len(plan["rows"]),
+            "body_mutation_count": 0,
+            "status": "APPLIED_NO_CHANGES",
+        }
+        receipt["receipt_sha256"] = engine._sha(receipt)
+        return receipt
     return engine.apply_plan(plan, wrapper=wrapper, confirm=confirm)
 
 
@@ -122,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--live-snapshot", type=Path)
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--plan", type=Path)
+    parser.add_argument("--semantic-reviews", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gh-wrapper", type=Path)
     parser.add_argument("--confirm-apply", action="store_true")
@@ -130,6 +240,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.snapshot is None or args.manifest is None:
             raise WorkItemError("plan requires --snapshot and --manifest")
         result = build_review_plan(load_data(args.snapshot), load_data(args.manifest))
+        if args.semantic_reviews is not None:
+            result = apply_semantic_reviews(
+                result,
+                load_data(args.semantic_reviews),
+            )
     else:
         if (
             args.plan is None

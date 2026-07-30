@@ -74,6 +74,15 @@ BASE_ISSUE_IDS = {
     "terminal_disposition",
 }
 
+OPTIONAL_ISSUE_FIELDS = {
+    "defect": {
+        "first_known_failing_version",
+        "last_known_working_version",
+        "workaround",
+        "required_regression_proof",
+    }
+}
+
 
 def _strict_yaml(path: Path) -> dict[str, Any]:
     value = yaml.safe_load(path.read_text(encoding="utf-8", errors="strict"))
@@ -126,8 +135,13 @@ def validate(root: Path) -> dict[str, Any]:
                 continue
             if row.get("type") not in {"input", "textarea", "dropdown", "checkboxes"}:
                 errors.append(f"{path.name}: unsupported form type")
-            if row.get("validations", {}).get("required") is not True:
+            field_id = row.get("id")
+            optional = field_id in OPTIONAL_ISSUE_FIELDS.get(kind, set())
+            required = row.get("validations", {}).get("required")
+            if not optional and required is not True:
                 errors.append(f"{path.name}:{row.get('id')}: field must be required")
+            if optional and required is True:
+                errors.append(f"{path.name}:{field_id}: uncertainty field must be optional")
     if seen_issue_kinds != set(ISSUE_KINDS):
         errors.append("issue form kinds are incomplete or duplicated")
 

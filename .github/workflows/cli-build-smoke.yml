@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-name: release-rehearsal
+name: cli-build-smoke
 
 on:
   workflow_dispatch:
@@ -9,13 +9,13 @@ on:
     branches: [master]
     paths:
       - "tools/ember-cli/src/**"
-      - ".github/workflows/release-rehearsal.yml"
+      - ".github/workflows/cli-build-smoke.yml"
 
 permissions:
   contents: read
 
 jobs:
-  cli-rehearsal:
+  cli-build-smoke:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -29,6 +29,6 @@ jobs:
         working-directory: tools/ember-cli/src
       - run: bun run build
         working-directory: tools/ember-cli/src
-      - name: Rehearse clean binary invocation
+      - name: Smoke-test built binary invocation
         working-directory: tools/ember-cli/src
         run: .\ember.exe --help

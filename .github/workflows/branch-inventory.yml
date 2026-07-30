@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-name: Branch hygiene audit
+name: Branch inventory
 
 on:
   schedule:
@@ -32,11 +32,11 @@ jobs:
           --output repository-snapshot.json
       - name: Produce no-delete audit
         run: >-
-          python -B scripts/github/branch_hygiene.py
+          python -B scripts/github/branch_inventory.py
           --snapshot repository-snapshot.json
-          --output branch-hygiene.json
+          --output branch-inventory.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: branch-hygiene-${{ github.run_id }}
-          path: branch-hygiene.json
+          name: branch-inventory-${{ github.run_id }}
+          path: branch-inventory.json
           retention-days: 30
