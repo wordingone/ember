@@ -66,14 +66,20 @@ def _write_json(path: Path, value: object) -> None:
     )
 
 
-def _raw_capture(root: Path, *, issue_count: int = 21) -> None:
+def _raw_capture(
+    root: Path,
+    *,
+    issue_count: int = 21,
+    include_all_comments: bool = False,
+) -> None:
     issues = [_issue(number) for number in range(1, issue_count + 1)]
     pull = _issue(999, created="2025-01-01T00:00:00Z", comments=0)
     pull["pull_request"] = {"url": "https://api.github.com/pulls/999"}
     pages = [issues[:10] + [pull], issues[10:]]
     _write_json(root / "issues_pre.json", pages)
     _write_json(root / "issues_post.json", copy.deepcopy(pages))
-    for issue in issues[:20]:
+    comment_issues = issues if include_all_comments else issues[:20]
+    for issue in comment_issues:
         comment_pages = [[_comment(issue["number"])]]
         _write_json(root / f"comments-{issue['number']}-pre.json", comment_pages)
         _write_json(
@@ -158,6 +164,50 @@ class OldestIssueDispositionTests(unittest.TestCase):
         )
         validate_capture(capture, expected_master=MASTER)
 
+    def test_capture_advances_after_content_bound_cursor_and_allows_final_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _raw_capture(root, include_all_comments=True)
+            capture = build_capture(
+                root,
+                master_sha=MASTER,
+                captured_at="2026-07-25T00:00:00Z",
+                after_created_at="2026-01-10T00:00:00Z",
+                after_issue_number=10,
+            )
+
+        self.assertEqual(
+            [row["number"] for row in capture["issues"]],
+            list(range(11, 22)),
+        )
+        self.assertEqual(
+            capture["cursor"],
+            {
+                "after_created_at": "2026-01-10T00:00:00Z",
+                "after_issue_number": 10,
+            },
+        )
+        validate_capture(capture, expected_master=MASTER)
+
+    def test_capture_rejects_partial_or_exhausted_cursor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _raw_capture(root)
+            with self.assertRaisesRegex(PacketError, "cursor"):
+                build_capture(
+                    root,
+                    master_sha=MASTER,
+                    captured_at="2026-07-25T00:00:00Z",
+                    after_created_at="2026-01-10T00:00:00Z",
+                )
+            with self.assertRaisesRegex(PacketError, "after cursor"):
+                build_capture(
+                    root,
+                    master_sha=MASTER,
+                    captured_at="2026-07-25T00:00:00Z",
+                    after_created_at="2027-01-01T00:00:00Z",
+                    after_issue_number=999,
+                )
     def test_capture_rejects_full_final_page_as_incomplete_pagination(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

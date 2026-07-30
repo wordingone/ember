@@ -34,7 +34,8 @@ def test_workflow_captures_complete_pre_and_post_populations() -> None:
     assert "issues_post.json" in text
     assert "comments-${number}-pre.json" in text
     assert "comments-${number}-post.json" in text
-    assert 'test "${#issue_numbers[@]}" -eq 20' in text
+    assert 'test "${#issue_numbers[@]}" -ge 1' in text
+    assert 'test "${#issue_numbers[@]}" -le 20' in text
     assert 'select(has("pull_request") | not)' in text
     assert "sort_by(.created_at, .number)" in text
 
@@ -60,3 +61,15 @@ def test_raw_capture_is_uploaded_even_if_semantic_classification_fails() -> None
     assert raw_upload < decisions
     assert "if: ${{ always() }}" in text[raw_upload:decisions]
     assert "oldest-issue-raw-${{ github.run_id }}-${{ github.sha }}" in text
+
+def test_workflow_consumes_explicit_content_bound_cursor() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8", errors="strict")
+    assert "after_created_at:" in text
+    assert "after_issue_number:" in text
+    assert "AFTER_CREATED_AT: ${{ inputs.after_created_at }}" in text
+    assert "AFTER_ISSUE_NUMBER: ${{ inputs.after_issue_number }}" in text
+    assert "cursor fields must be initial" in text
+    assert "--after-created-at" in text
+    assert "--after-issue-number" in text
+    assert 'test "${#issue_numbers[@]}" -ge 1' in text
+    assert 'test "${#issue_numbers[@]}" -le 20' in text

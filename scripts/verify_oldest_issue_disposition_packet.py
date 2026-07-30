@@ -11,8 +11,9 @@ import base64
 import hashlib
 import json
 import tempfile
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 if __package__ in {None, ""}:
     import sys
@@ -21,8 +22,8 @@ if __package__ in {None, ""}:
 
 from scripts.build_oldest_issue_decisions import build_decisions
 from scripts.oldest_issue_disposition import (
-    PacketError,
     _AUTHORITY,
+    PacketError,
     _load_mapping,
     build_capture,
     build_packet,
@@ -202,11 +203,22 @@ def _verify_from_raw_root(
     # The API does not encode a capture timestamp in the raw rows. The timestamp
     # is therefore subject metadata; every API-derived byte is independently
     # rebuilt and the complete capture/packet comparison still binds that value.
+    cursor = capture.get("cursor", {})
     rebuilt_capture = build_capture(
         raw_root,
         master_sha=expected_master,
         captured_at=capture["captured_at"],
+        after_created_at=cursor.get("after_created_at"),
+        after_issue_number=cursor.get("after_issue_number"),
     )
+    if "cursor" not in capture:
+        rebuilt_capture.pop("cursor")
+        rebuilt_capture["capture_sha256"] = canonical_sha256(
+            {
+                key: rebuilt_capture[key]
+                for key in sorted(set(rebuilt_capture) - {"capture_sha256"})
+            }
+        )
     if canonical_bytes(rebuilt_capture) != canonical_bytes(capture):
         raise PacketError("raw evidence does not reproduce embedded capture")
     rebuilt_decisions = build_decisions(

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import copy
 import sys
 import tempfile
 import unittest
@@ -15,15 +14,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from scripts.build_oldest_issue_decisions import (  # noqa: E402
+from test_oldest_issue_disposition import MASTER, _raw_capture
+
+from scripts.build_oldest_issue_decisions import (
     PacketError,
     build_decisions,
 )
-from scripts.oldest_issue_disposition import (  # noqa: E402
+from scripts.oldest_issue_disposition import (
     build_capture,
     build_packet,
 )
-from test_oldest_issue_disposition import MASTER, _raw_capture  # noqa: E402
 
 
 def _classifications(capture: dict) -> dict:
@@ -84,7 +84,7 @@ class BuildOldestIssueDecisionsTests(unittest.TestCase):
     def test_rejects_missing_duplicate_or_incompatible_rows(self) -> None:
         classifications = _classifications(self.capture)
         classifications["rows"].pop()
-        with self.assertRaisesRegex(PacketError, "twenty"):
+        with self.assertRaisesRegex(PacketError, "selection"):
             build_decisions(self.capture, classifications)
 
         classifications = _classifications(self.capture)
@@ -98,3 +98,18 @@ class BuildOldestIssueDecisionsTests(unittest.TestCase):
         classifications["rows"][0]["replacement_citation"] = "issue:1"
         with self.assertRaisesRegex(PacketError, "incompatible"):
             build_decisions(self.capture, classifications)
+
+    def test_decision_builder_accepts_final_partial_batch(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        _raw_capture(root, issue_count=3)
+        capture = build_capture(
+            root,
+            master_sha=MASTER,
+            captured_at="2026-07-25T00:00:00Z",
+        )
+        decisions = build_decisions(capture, _classifications(capture))
+        packet = build_packet(capture, decisions)
+        self.assertEqual(len(decisions["rows"]), 3)
+        self.assertEqual(len(packet["receipts"]), 3)
