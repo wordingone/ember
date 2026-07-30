@@ -85,6 +85,7 @@ param(
     # EMBER_KILL_RECEIPTS_PATH environment variable at arm-time.
     [string]$KillReceiptsPath = $env:EMBER_KILL_RECEIPTS_PATH,
     [int]$TickIntervalSec = 5,
+    [string]$MemoryConfigPath = $null,
     # Freshness leg (issue #545): poll public/master and auto-pull the main tree
     [int]$FreshnessPollIntervalSec = 120,
     [switch]$WhatIf = $false
@@ -200,6 +201,9 @@ $MarkerPath        = Join-Path $StateDir 'planned-outage.json'
 $WatchdogStatePath = Join-Path $StateDir 'liveness-watchdog-state.json'
 $RestartLogPath    = Join-Path $StateDir 'liveness-watchdog-restart-log.jsonl'
 $ActivityLedgerPath = Join-Path $StateDir 'activity-ledger.jsonl'
+if (-not $MemoryConfigPath) {
+    $MemoryConfigPath = Join-Path $RepoRoot 'tools\ember-cli\specs\liveness-watchdog-memory-v1.json'
+}
 $PidFilePath       = Join-Path $StateDir 'liveness-watchdog.pid'
 if (-not $LauncherBatPath) {
     $LauncherBatPath = Join-Path $RepoRoot 'tools\ember-cli\src\launch-cockpit-instrumented.bat'
@@ -256,7 +260,7 @@ function Write-StandDownDecision {
 }
 function Get-DefaultWatchdogState {
     [PSCustomObject]@{
-        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; standdownDecisionKey = $null }
+        cockpit = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; standdownDecisionKey = $null; consecutiveHardMemoryPolls = 0; memoryBreachKey = $null; softMemoryBreachActive = $false }
         server  = [PSCustomObject]@{ deaths = @(); backoffUntil = $null; backoffLevel = 0; backoffState = 'clear'; consecutiveFailures = 0; lastHealthAt = $null; lastHealthyAt = $null; lastHealthCheckAt = $null; standdownDecisionKey = $null }
         freshness = [PSCustomObject]@{ lastHeadSha = $null; lastCheckTime = $null }
     }
@@ -322,6 +326,11 @@ function Read-WatchdogState {
             }
             if (-not ($parsed.$t.PSObject.Properties.Name -contains 'standdownDecisionKey')) {
                 $parsed.$t | Add-Member -NotePropertyName 'standdownDecisionKey' -NotePropertyValue $null
+            }
+        }
+        foreach ($property in @(@{ Name = 'consecutiveHardMemoryPolls'; Value = 0 }, @{ Name = 'memoryBreachKey'; Value = $null }, @{ Name = 'softMemoryBreachActive'; Value = $false })) {
+            if (-not ($parsed.cockpit.PSObject.Properties.Name -contains $property.Name)) {
+                $parsed.cockpit | Add-Member -NotePropertyName $property.Name -NotePropertyValue $property.Value
             }
         }
         if (-not ($parsed.server.PSObject.Properties.Name -contains 'lastHealthAt')) {
@@ -515,6 +524,115 @@ function Add-DeathRecord {
 }
 
 # ---------------------------------------------------------------------------------------
+# Commit-footprint governor (issue #756)
+# ---------------------------------------------------------------------------------------
+
+function Assert-ExactObjectProperties {
+    param(
+        [Parameter(Mandatory)]$Object,
+        [Parameter(Mandatory)][string[]]$Expected,
+        [Parameter(Mandatory)][string]$Context
+    )
+    if ($null -eq $Object) { throw "$Context must be an object" }
+    $actual = @($Object.PSObject.Properties.Name | Sort-Object)
+    $wanted = @($Expected | Sort-Object)
+    if (($actual -join ',') -ne ($wanted -join ',')) {
+        throw "$Context fields must be exactly [$($wanted -join ',')], got [$($actual -join ',')]"
+    }
+}
+
+function Get-WatchdogMemoryConfig {
+    param([Parameter(Mandatory)][string]$Path)
+    try {
+        $config = (Get-Content -LiteralPath $Path -Raw -ErrorAction Stop) | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "memory-governor config unavailable or invalid at $Path`: $($_.Exception.Message)"
+    }
+    Assert-ExactObjectProperties -Object $config -Expected @('schema_version', 'goal_id', 'workstream_id', 'next_executed_outcome', 'classes') -Context 'memory config'
+    if ($config.schema_version -ne 'ember-liveness-watchdog-memory-v1') {
+        throw "memory config schema_version must be ember-liveness-watchdog-memory-v1"
+    }
+    if ($config.goal_id -ne 'EMBER-02' -or $config.workstream_id -ne 'EMBER-02A' -or $config.next_executed_outcome -ne 'EMBER-02 first sufficiently pretrained clean-genesis 3B Ember') {
+        throw "memory config authority binding does not match active EMBER-02/EMBER-02A outcome"
+    }
+    Assert-ExactObjectProperties -Object $config.classes -Expected @('brain_server', 'cockpit') -Context 'memory config classes'
+    foreach ($className in @('cockpit', 'brain_server')) {
+        $classConfig = $config.classes.$className
+        Assert-ExactObjectProperties -Object $classConfig -Expected @('soft_bytes', 'hard_bytes', 'consecutive_hard_polls', 'process_names') -Context "memory class $className"
+        $soft = 0L
+        $hard = 0L
+        $polls = 0
+        if (-not [long]::TryParse([string]$classConfig.soft_bytes, [ref]$soft) -or $soft -le 0) {
+            throw "memory class $className soft_bytes must be a positive integer"
+        }
+        if (-not [long]::TryParse([string]$classConfig.hard_bytes, [ref]$hard) -or $hard -le $soft) {
+            throw "memory class $className hard_bytes must be an integer greater than soft_bytes"
+        }
+        if (-not [int]::TryParse([string]$classConfig.consecutive_hard_polls, [ref]$polls) -or $polls -lt 1) {
+            throw "memory class $className consecutive_hard_polls must be a positive integer"
+        }
+        $names = @($classConfig.process_names)
+        if ($names.Count -lt 1 -or @($names | Where-Object { $_ -isnot [string] -or [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+            throw "memory class $className process_names must be a non-empty string array"
+        }
+    }
+    return $config
+}
+
+function Get-SupervisedProcessCommitFootprints {
+    param(
+        [Parameter(Mandatory)][int]$CockpitPid,
+        [Parameter(Mandatory)]$MemoryConfig,
+        [Parameter(Mandatory)][datetime]$Now
+    )
+    $result = @()
+    try {
+        $cockpit = Get-Process -Id $CockpitPid -ErrorAction Stop
+        $uptime = $null
+        try { $uptime = [math]::Round(($Now - $cockpit.StartTime.ToUniversalTime()).TotalSeconds, 3) } catch { $uptime = $null }
+        $result += [PSCustomObject]@{
+            Pid = $CockpitPid
+            Class = 'cockpit'
+            CommitBytes = [int64]$cockpit.PagedMemorySize64
+            UptimeSec = $uptime
+        }
+    } catch {
+        return @()
+    }
+
+    $brainNames = @($MemoryConfig.classes.brain_server.process_names | ForEach-Object { ([string]$_).ToLowerInvariant().Replace('.exe', '') })
+    try {
+        $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $CockpitPid" -ErrorAction Stop)
+        foreach ($child in $children) {
+            $name = ([System.IO.Path]::GetFileNameWithoutExtension([string]$child.Name)).ToLowerInvariant()
+            if ($name -notin $brainNames) { continue }
+            try {
+                $childProcess = Get-Process -Id ([int]$child.ProcessId) -ErrorAction Stop
+                $childUptime = $null
+                try { $childUptime = [math]::Round(($Now - $childProcess.StartTime.ToUniversalTime()).TotalSeconds, 3) } catch { $childUptime = $null }
+                $result += [PSCustomObject]@{
+                    Pid = [int]$child.ProcessId
+                    Class = 'brain_server'
+                    CommitBytes = [int64]$childProcess.PagedMemorySize64
+                    UptimeSec = $childUptime
+                }
+            } catch {
+                throw "supervised brain-server child $($child.ProcessId) disappeared or was unreadable during memory probe"
+            }
+        }
+    } catch {
+        throw "could not enumerate supervised cockpit children for memory probe: $($_.Exception.Message)"
+    }
+    return @($result)
+}
+
+function Reset-CockpitMemoryState {
+    param([Parameter(Mandatory)]$CockpitState)
+    $CockpitState.consecutiveHardMemoryPolls = 0
+    $CockpitState.memoryBreachKey = $null
+    $CockpitState.softMemoryBreachActive = $false
+}
+# ---------------------------------------------------------------------------------------
 # Cockpit tick
 # ---------------------------------------------------------------------------------------
 
@@ -549,6 +667,9 @@ function Invoke-CockpitWatchdogTick {
         [int]$StaleThresholdSec = $CockpitStaleThresholdSec,
         [string]$LauncherBatPath = $LauncherBatPath,
         [string]$RestartLogPath = $RestartLogPath,
+        [string]$ActivityLedgerPath = $ActivityLedgerPath,
+        $MemoryConfig = $null,
+        [string]$MemoryConfigPath = $MemoryConfigPath,
         [int]$DeathWindowMinutes = $DeathWindowMinutes,
         [int]$DeathThreshold = $DeathThreshold,
         [int]$BackoffMinutes = $BackoffMinutes
@@ -580,12 +701,104 @@ function Invoke-CockpitWatchdogTick {
     }
 
     $age = Get-HeartbeatAgeSeconds -Path $HeartbeatPath -Now $Now
+    $heartbeatPid = Get-HeartbeatPid -Path $HeartbeatPath
     if ($null -ne $age -and $age -le $StaleThresholdSec) {
+        if ($heartbeatPid) {
+            if ($null -eq $MemoryConfig) { $MemoryConfig = Get-WatchdogMemoryConfig -Path $MemoryConfigPath }
+            $footprints = @(Get-SupervisedProcessCommitFootprints -CockpitPid ([int]$heartbeatPid) -MemoryConfig $MemoryConfig -Now $Now)
+            if ($footprints.Count -gt 0) {
+                $hard = $null
+                $soft = $null
+                foreach ($footprint in $footprints) {
+                    $classConfig = $MemoryConfig.classes.($footprint.Class)
+                    if ($null -eq $classConfig) { throw "no memory class config for $($footprint.Class)" }
+                    if ([int64]$footprint.CommitBytes -ge [int64]$classConfig.hard_bytes) { $hard = $footprint; break }
+                    if ($null -eq $soft -and [int64]$footprint.CommitBytes -ge [int64]$classConfig.soft_bytes) { $soft = $footprint }
+                }
+                if ($hard) {
+                    $classConfig = $MemoryConfig.classes.($hard.Class)
+                    $breachKey = "$($hard.Class):$($hard.Pid)"
+                    if ($State.cockpit.memoryBreachKey -eq $breachKey) {
+                        $State.cockpit.consecutiveHardMemoryPolls = [int]$State.cockpit.consecutiveHardMemoryPolls + 1
+                    } else {
+                        $State.cockpit.memoryBreachKey = $breachKey
+                        $State.cockpit.consecutiveHardMemoryPolls = 1
+                    }
+                    $State.cockpit.softMemoryBreachActive = $true
+                    $commitGiB = [math]::Round(([double]$hard.CommitBytes / 1GB), 6)
+                    $hardGiB = [math]::Round(([double]$classConfig.hard_bytes / 1GB), 6)
+                    $requiredPolls = [int]$classConfig.consecutive_hard_polls
+                    if ([int]$State.cockpit.consecutiveHardMemoryPolls -lt $requiredPolls) {
+                        if ([int]$State.cockpit.consecutiveHardMemoryPolls -eq 1) {
+                            Write-RestartLogRow -Path $RestartLogPath -Row @{
+                                ts = $Now.ToString('o'); target = 'cockpit'; event = 'memory-hard-pending'
+                                pid = [int]$hard.Pid; supervisor_pid = [int]$heartbeatPid; process_class = [string]$hard.Class
+                                commit_gb = $commitGiB; threshold = $hardGiB; action = 'observe'
+                                consecutive_polls = [int]$State.cockpit.consecutiveHardMemoryPolls; required_polls = $requiredPolls
+                                uptime_sec = $hard.UptimeSec
+                            }
+                            Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+                                ts = $Now.ToString('o'); source = 'liveness-watchdog'; path = 'memory-governor'
+                                line = "hard memory breach pending: class=$($hard.Class) pid=$($hard.Pid) commit_gb=$commitGiB threshold_gb=$hardGiB"
+                            }
+                        }
+                        return [PSCustomObject]@{ Action = 'memory-hard-pending'; Detail = "pid=$($hard.Pid) polls=$($State.cockpit.consecutiveHardMemoryPolls)/$requiredPolls" }
+                    }
+
+                    # The receipt is intentionally persisted before any destructive/relaunch action.
+                    Write-RestartLogRow -Path $RestartLogPath -Row @{
+                        ts = $Now.ToString('o'); target = 'cockpit'; event = 'memory-hard-breach'
+                        pid = [int]$hard.Pid; supervisor_pid = [int]$heartbeatPid; process_class = [string]$hard.Class
+                        commit_gb = $commitGiB; commit_bytes = [int64]$hard.CommitBytes
+                        threshold = $hardGiB; threshold_bytes = [int64]$classConfig.hard_bytes; action = 'restart'
+                        consecutive_polls = [int]$State.cockpit.consecutiveHardMemoryPolls; required_polls = $requiredPolls
+                        uptime_sec = $hard.UptimeSec
+                    }
+                    Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+                        ts = $Now.ToString('o'); source = 'liveness-watchdog'; path = 'memory-governor'
+                        line = "hard memory breach restart: class=$($hard.Class) pid=$($hard.Pid) commit_gb=$commitGiB threshold_gb=$hardGiB"
+                    }
+                    Stop-Process -Id ([int]$heartbeatPid) -Force -ErrorAction Stop
+                    $launch = Start-CockpitLauncher -LauncherBatPath $LauncherBatPath
+                    Reset-CockpitMemoryState -CockpitState $State.cockpit
+                    $deathRecord = Add-DeathRecord -TargetState $State.cockpit -Now $Now -WindowMinutes $DeathWindowMinutes -Threshold $DeathThreshold -BackoffMinutes $BackoffMinutes
+                    $State.cockpit = $deathRecord.State
+                    $backoffNow = Get-BackoffState -TargetState $State.cockpit -Now $Now
+                    Write-RestartLogRow -Path $RestartLogPath -Row @{
+                        ts = $Now.ToString('o'); target = 'cockpit'; event = 'memory-relaunch-complete'
+                        deadPid = [int]$heartbeatPid; relaunchPid = $launch.Pid; action = 'restart-complete'
+                        deathsInWindow = $deathRecord.DeathsInWindow; backoffUntil = $backoffNow.Until; backoffState = $backoffNow.State
+                    }
+                    return [PSCustomObject]@{ Action = 'memory-restart'; Detail = "relaunchPid=$($launch.Pid)" }
+                }
+                if ($soft) {
+                    $classConfig = $MemoryConfig.classes.($soft.Class)
+                    $State.cockpit.consecutiveHardMemoryPolls = 0
+                    $State.cockpit.memoryBreachKey = $null
+                    if (-not [bool]$State.cockpit.softMemoryBreachActive) {
+                        $State.cockpit.softMemoryBreachActive = $true
+                        $commitGiB = [math]::Round(([double]$soft.CommitBytes / 1GB), 6)
+                        $softGiB = [math]::Round(([double]$classConfig.soft_bytes / 1GB), 6)
+                        Write-RestartLogRow -Path $RestartLogPath -Row @{
+                            ts = $Now.ToString('o'); target = 'cockpit'; event = 'memory-soft-breach'
+                            pid = [int]$soft.Pid; process_class = [string]$soft.Class; commit_gb = $commitGiB
+                            threshold = $softGiB; action = 'observe'; uptime_sec = $soft.UptimeSec
+                        }
+                        Write-ActivityLedgerRow -Path $ActivityLedgerPath -Row @{
+                            ts = $Now.ToString('o'); source = 'liveness-watchdog'; path = 'memory-governor'
+                            line = "soft memory breach: class=$($soft.Class) pid=$($soft.Pid) commit_gb=$commitGiB threshold_gb=$softGiB"
+                        }
+                    }
+                    return [PSCustomObject]@{ Action = 'memory-soft-breach'; Detail = "pid=$($soft.Pid)" }
+                }
+                Reset-CockpitMemoryState -CockpitState $State.cockpit
+            }
+        }
         return [PSCustomObject]@{ Action = 'none'; Detail = "ageSec=$age" }
     }
 
     # Stale (or unreadable/missing heartbeat -- can't confirm liveness either way) -> relaunch.
-    $deadPid = Get-HeartbeatPid -Path $HeartbeatPath
+    $deadPid = $heartbeatPid
     $launch = Start-CockpitLauncher -LauncherBatPath $LauncherBatPath
 
     $deathRecord = Add-DeathRecord -TargetState $State.cockpit -Now $Now -WindowMinutes $DeathWindowMinutes -Threshold $DeathThreshold -BackoffMinutes $BackoffMinutes
