@@ -33,7 +33,7 @@ jobs:
       - name: Identity and custody truth
         run: |
           python -B -m pytest -q tests/ember_01_identity/test_validate_identity.py
-          python -B scripts/ember_01_custody/verify_c0_failure_class_ledger.py
+          python -B scripts/ember_01_custody/verify_c0_failure_class_ledger.py --require-non-red
           python -B -m pytest -q tests/ember_01_custody
   ember-lab:
     runs-on: ubuntu-latest
