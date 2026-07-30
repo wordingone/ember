@@ -34,7 +34,7 @@ WRITE_KEYS = {
 }
 PR_EVENTS = {"pull_request", "pull_request_target"}
 TRUSTED_CODEQL_PR_ACTIONS = (
-    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
     "github/codeql-action/analyze@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
 )
