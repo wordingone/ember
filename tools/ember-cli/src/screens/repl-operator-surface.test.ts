@@ -2,12 +2,16 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
 import { resetCommandRegistryForTests } from "../command-registry.ts";
+import { getActivityFeedState } from "../services/activity-feed.ts";
 import { ReplScreen } from "./repl.ts";
 import { operatorSurfaceWidth } from "./repl.ts";
 
@@ -65,10 +69,20 @@ function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number): 
 }
 
 describe("repl operator surface layout", () => {
-  test("keeps the pane and prompt bounded through live resize, including with the command palette open", async () => {
+  test("keeps the banner, 500-event pane, and prompt bounded through live resize", async () => {
     resetCommandRegistryForTests();
     let handle: ReturnType<typeof mountInk> | undefined;
     let raw = "";
+    const seedActivityBurst = () => getActivityFeedState().recentLines.push(
+      ...Array.from({ length: 500 }, (_, index) => ({
+        ts: `2026-07-09T12:${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}.000Z`,
+        source: "goal" as const,
+        text: `evt${index}`,
+        sequence: index + 1,
+      })),
+    );
+    const realCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8" }).trim();
+    const realBinaryHash = createHash("sha256").update(fs.readFileSync(process.execPath)).digest("hex");
     const config = { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" };
     const render = (columns: number, rows: number) =>
       React.createElement(
@@ -77,7 +91,12 @@ describe("repl operator surface layout", () => {
         React.createElement(ReplScreen, {
           config,
           cwd: process.cwd(),
-          env: { EMBER_DISABLE_TERMINAL_TITLE: "1", EMBER_DISABLE_VIRTUAL_SCROLL: "1" },
+          env: {
+            EMBER_DISABLE_TERMINAL_TITLE: "1",
+            EMBER_DISABLE_VIRTUAL_SCROLL: "1",
+            EMBER_PUBLIC_SOURCE_COMMIT: realCommit,
+            EMBER_CLI_BINARY_SHA256: realBinaryHash,
+          },
           onExit: () => {},
         }),
       );
@@ -93,6 +112,13 @@ describe("repl operator surface layout", () => {
         handle.container.rootNode.layout.height = rows;
         raw = "";
         handle.update(element);
+      }
+      await flushRepl();
+      if (getActivityFeedState().recentLines.length === 0) {
+        seedActivityBurst();
+        expect(getActivityFeedState().recentLines).toHaveLength(500);
+        handle.update(render(columns, rows));
+        await flushRepl();
       }
       const lines = renderedLines(raw, columns, rows);
       expect(lines.length).toBe(rows);
@@ -111,6 +137,15 @@ describe("repl operator surface layout", () => {
         }
       }
       expect(lines.some((line) => line.includes("IDLE"))).toBe(true);
+      expect(lines.some((line) => line.includes("ACTIVITY/EVENT"))).toBe(true);
+      if (columns >= 60) {
+        expect(lines.some((line) => line.includes("SOURCE UNVERIFIED/UNBOUND"))).toBe(false);
+      }
+      if (columns >= 60) {
+        // At usable widths, prove the newest row from the 500-event burst reaches
+        // the mounted Repl. The 40-column fallback intentionally hides row text.
+        expect(lines.some((line) => line.includes("evt499"))).toBe(true);
+      }
 
       const promptRow = lines.find((line) => line.includes("❯"));
       expect(promptRow).toBeDefined();
@@ -148,6 +183,7 @@ describe("repl operator surface layout", () => {
       raw = "";
     }
     activeHandle.unmount();
+    getActivityFeedState().recentLines.length = 0;
   });
 
   test("keeps a bounded right pane while preserving a usable conversation column", () => {
