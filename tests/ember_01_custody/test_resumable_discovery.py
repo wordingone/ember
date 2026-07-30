@@ -195,7 +195,7 @@ def test_path_aliases_are_preserved_as_explicit_contradiction(tmp_path: Path) ->
         "alias-a",
         "alias-b",
     }
-    assert str(tmp_path) not in json.dumps(result)
+    assert str(tmp_path.resolve()).replace("\\", "/") not in json.dumps(result).replace("\\", "/")
 
 
 def test_source_root_alias_relation_is_preserved_in_root_rows(
@@ -403,6 +403,7 @@ def test_directory_discovery_classifies_git_bare_and_non_git_bytes(
         "git_worktree",
         "non_git",
     }
+    assert all("normalized_path" not in row for row in discovered)
     relatives = {
         row["source"]["relative_path"] for row in result["artifacts"]
     }
