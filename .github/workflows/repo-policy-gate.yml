@@ -81,7 +81,8 @@ jobs:
           gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
             > "${RUNNER_TEMP}/pr-files.json"
-          python "${kernel}/scripts/github/live_pr_policy.py" \
+          cd "${kernel}"
+          python -m scripts.github.live_pr_policy \
             --root "${kernel}" \
             --pr-json "${RUNNER_TEMP}/pr.json" \
             --files-json "${RUNNER_TEMP}/pr-files.json" \
