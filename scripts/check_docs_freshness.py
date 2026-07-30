@@ -21,11 +21,29 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+try:
+    from scripts.ember_cli_spec_policy import SpecPolicyError, load_spec_nodes
+except ModuleNotFoundError as exc:
+    if exc.name not in {"scripts", "scripts.ember_cli_spec_policy"}:
+        raise
+    from ember_cli_spec_policy import SpecPolicyError, load_spec_nodes
+
 class DocsFreshnessChecker:
     def __init__(self, repo_root=None):
         self.repo = Path(repo_root or '.')
         self.defects = []
         self.warnings = []
+
+    def check_ember_cli_specs(self):
+        """Validate the complete ember-cli spec-node surface fail closed."""
+        try:
+            load_spec_nodes(self.repo)
+        except SpecPolicyError as exc:
+            self.defects.append({
+                'file': 'tools/ember-cli/specs/',
+                'defect_class': 'invalid_ember_cli_spec',
+                'description': str(exc),
+            })
 
     def check_readme_references(self):
         """Check that all path references in README resolve."""
@@ -202,6 +220,7 @@ class DocsFreshnessChecker:
         self.check_claims_index_freshness()
         self.check_readme_state_marker()
         self.check_docs_reachability()
+        self.check_ember_cli_specs()
 
     def report_defects(self, fix_report=False):
         """Print defects as markdown or table."""

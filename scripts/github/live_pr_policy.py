@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from scripts.check_pr_authority_binding import load_goal_binding, validate_pr_body
+from scripts.ember_cli_spec_policy import (
+    validate_added_component_coverage_between_roots,
+)
 
 
 SNAPSHOT_FIELDS = {
@@ -157,12 +160,27 @@ def validate_live_pull_request(
         "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         ("EMBER-02A", "EMBER-02B", "EMBER-02C"),
     ),
+    base_root: Path | None = None,
+    subject_root: Path | None = None,
 ) -> list[str]:
     errors = _validate_common(snapshot)
     if errors:
         return errors
     if snapshot["actor_login"] == "dependabot[bot]":
         return _validate_dependabot(snapshot)
+
+    if base_root is not None and subject_root is None:
+        return ["spec-floor:subject-root-required"]
+    if subject_root is not None and base_root is None:
+        return ["spec-floor:base-root-required"]
+    if base_root is not None and subject_root is not None:
+        spec_errors = validate_added_component_coverage_between_roots(
+            base_root,
+            subject_root,
+            snapshot["changed_files"],
+        )
+        if spec_errors:
+            return spec_errors
 
     title = str(snapshot["title"])
     if not TITLE_RE.fullmatch(title):
@@ -238,6 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event-base-sha", required=True)
     parser.add_argument("--event-head-sha", required=True)
     parser.add_argument("--snapshot-output", type=Path)
+    parser.add_argument("--subject-root", type=Path)
     args = parser.parse_args(argv)
     try:
         pr = json.loads(args.pr_json.read_text(encoding="utf-8", errors="strict"))
@@ -249,7 +268,18 @@ def main(argv: list[str] | None = None) -> int:
             event_head_sha=args.event_head_sha,
         )
         authority = load_goal_binding(args.root.resolve())
-        errors = validate_live_pull_request(snapshot, authority=authority)
+        policy_roots = (
+            {
+                "base_root": args.root.resolve(),
+                "subject_root": args.subject_root.resolve(),
+            }
+            if args.subject_root is not None else {}
+        )
+        errors = validate_live_pull_request(
+            snapshot,
+            authority=authority,
+            **policy_roots,
+        )
         if args.snapshot_output:
             args.snapshot_output.write_text(
                 json.dumps(snapshot, sort_keys=True, separators=(",", ":")) + "\n",

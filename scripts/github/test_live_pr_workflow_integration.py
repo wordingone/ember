@@ -20,6 +20,7 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         self.assertIn("python -m scripts.github.live_pr_policy", workflow)
         self.assertIn("--event-base-sha", workflow)
         self.assertIn("--event-head-sha", workflow)
+        self.assertIn('--subject-root "${subject}"', workflow)
 
     def test_ci_pr_bootstraps_exact_head_policy_without_write_authority(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "ci-pr.yml").read_text(

@@ -11,6 +11,8 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -22,6 +24,18 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+
+
+def test_direct_cli_entrypoint_imports_shared_spec_policy() -> None:
+    result = subprocess.run(
+        [sys.executable, "-B", str(REPO / "scripts" / "check_docs_freshness.py"), "--help"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--repo" in result.stdout
 
 
 BUILDER = r"""from pathlib import Path
@@ -81,3 +95,46 @@ def test_claims_freshness_reports_both_stale_outputs_without_rewriting(
         "receipts/CLAIMS.md",
     ]
     assert (index_path.read_bytes(), claims_path.read_bytes()) == before
+
+
+def test_ember_cli_specs_report_missing_current_consumer(tmp_path: Path) -> None:
+    root = fixture(tmp_path)
+    specs = root / "tools" / "ember-cli" / "specs"
+    specs.mkdir(parents=True)
+    (specs / "current.md").write_text(
+        "# Current spec\n\nStatus: SHIPPED\n",
+        encoding="utf-8",
+    )
+
+    checker = MODULE.DocsFreshnessChecker(root)
+    checker.check_ember_cli_specs()
+
+    assert checker.defects == [
+        {
+            "file": "tools/ember-cli/specs/",
+            "defect_class": "invalid_ember_cli_spec",
+            "description": (
+                "tools/ember-cli/specs/current.md:consumer-required"
+            ),
+        }
+    ]
+
+
+def test_ember_cli_specs_accept_existing_bound_consumer(tmp_path: Path) -> None:
+    root = fixture(tmp_path)
+    specs = root / "tools" / "ember-cli" / "specs"
+    service = root / "tools" / "ember-cli" / "src" / "services"
+    specs.mkdir(parents=True)
+    service.mkdir(parents=True)
+    (service / "current.ts").write_text("export {};\n", encoding="utf-8")
+    (specs / "current.md").write_text(
+        "# Current spec\n\n"
+        "Status: SHIPPED\n"
+        "Consumer: `tools/ember-cli/src/services/current.ts`\n",
+        encoding="utf-8",
+    )
+
+    checker = MODULE.DocsFreshnessChecker(root)
+    checker.check_ember_cli_specs()
+
+    assert checker.defects == []
