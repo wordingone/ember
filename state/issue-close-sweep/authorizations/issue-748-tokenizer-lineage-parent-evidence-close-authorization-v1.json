@@ -1,0 +1,13 @@
+{
+  "authorization_sha256": "4b9913adb10a278874b63d58d459616283d8ab3e63c7dd485a88b88f9fa835b0",
+  "citation": "https://github.com/wordingone/ember/pull/1210#issuecomment-5131418456",
+  "close_issue_numbers": [
+    748
+  ],
+  "packet_path": "receipts/oldest-issue-disposition/approved/issue-748-tokenizer-lineage-parent-evidence-close-v1.json",
+  "packet_sha256": "00b93a91ade6a5c218da420edf2f7f21d77476cb1c86b1b4fc8525393f4e8952",
+  "repository": "wordingone/ember",
+  "review_provenance": "SELF_ONLY",
+  "reviewer": "self-review-authority",
+  "schema_version": "ember-issue-close-sweep-authorization-v1"
+}
