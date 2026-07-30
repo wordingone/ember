@@ -33,6 +33,11 @@ WRITE_KEYS = {
     "statuses",
 }
 PR_EVENTS = {"pull_request", "pull_request_target"}
+TRUSTED_CODEQL_PR_ACTIONS = (
+    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
+    "github/codeql-action/analyze@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
+)
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -125,6 +130,35 @@ def _job_executes_pr_controlled_workflow_code(steps: list[Any]) -> bool:
     )
 
 
+def _is_trusted_codeql_pr_write_job(
+    path: Path,
+    permissions: Any,
+    steps: list[Any],
+) -> bool:
+    if path.name != "security-codeql.yml":
+        return False
+    if permissions != {"contents": "read", "security-events": "write"}:
+        return False
+    actions = tuple(
+        str(step.get("uses", ""))
+        for step in steps
+        if isinstance(step, dict)
+    )
+    if actions != TRUSTED_CODEQL_PR_ACTIONS:
+        return False
+    if _job_executes_pr_controlled_workflow_code(steps):
+        return False
+    checkout = steps[0]
+    with_values = checkout.get("with")
+    if not isinstance(with_values, dict):
+        return False
+    return (
+        with_values.get("persist-credentials") is False
+        and "repository" not in with_values
+        and "ref" not in with_values
+    )
+
+
 def validate_workflow(path: Path) -> list[str]:
     errors: list[str] = []
     try:
@@ -150,13 +184,16 @@ def validate_workflow(path: Path) -> list[str]:
         if not isinstance(steps, list):
             errors.append(f"{context}: steps must be a list")
             continue
+        effective_permissions = _effective_permissions(workflow, job)
         job_privileged = bool(PR_EVENTS & event_names) and _permission_writes(
-            _effective_permissions(workflow, job)
+            effective_permissions
         )
         if (
             job_privileged
             and "pull_request" in event_names
-            and _job_executes_pr_controlled_workflow_code(steps)
+            and not _is_trusted_codeql_pr_write_job(
+                path, effective_permissions, steps
+            )
         ):
             errors.append(
                 f"{context}: pull_request workflow source cannot hold write authority"

@@ -156,6 +156,56 @@ jobs:
             errors,
         )
 
+    def test_pull_request_write_job_cannot_run_arbitrary_pinned_remote_action(
+        self,
+    ) -> None:
+        path = self._write(
+            """
+name: pinned-is-not-trusted
+on: pull_request
+permissions:
+  contents: read
+  issues: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: attacker/controlled@0123456789abcdef0123456789abcdef01234567
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("pull_request workflow source cannot hold write authority" in e for e in errors),
+            errors,
+        )
+
+    def test_codeql_write_exception_rejects_untrusted_action(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        path = Path(temp.name) / "security-codeql.yml"
+        path.write_text(
+            """
+name: security-codeql
+on: pull_request
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: attacker/controlled@0123456789abcdef0123456789abcdef01234567
+""",
+            encoding="utf-8",
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("pull_request workflow source cannot hold write authority" in e for e in errors),
+            errors,
+        )
+
     def test_dependabot_or_fork_token_reduction_is_not_a_safety_proof(self) -> None:
         path = self._write(
             """
