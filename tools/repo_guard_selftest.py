@@ -673,7 +673,7 @@ def test_split_kernel_scans_subject_guard_for_absolute_paths():
 
 
 def test_required_workflow_uses_base_pinned_kernel():
-    text = (REPO_ROOT / ".github" / "workflows" / "repo-guard.yml").read_text(
+    text = (REPO_ROOT / ".github" / "workflows" / "repo-policy-gate.yml").read_text(
         encoding="utf-8"
     )
     required = (
@@ -698,17 +698,25 @@ def test_required_workflow_uses_base_pinned_kernel():
     kernel_checkout = text.split(
         "- name: Checkout trusted guard kernel", 1
     )[1].split("- name: Checkout pull-request merge subject", 1)[0]
-    assert "ref:" not in kernel_checkout, (
-        "trusted kernel must resolve the current protected-base tip, not an event-stale base SHA"
+    assert (
+        "ref: ${{ github.event.pull_request.base.sha || github.sha }}"
+        in kernel_checkout
+    ), (
+        "trusted kernel must resolve the exact event base or protected push commit"
     )
+    assert "ref: refs/pull/${{ github.event.pull_request.number }}/merge" in text
+    assert "ref: ${{ github.sha }}" in text
     assert (
         "github.event_name == 'pull_request_target' && "
         "github.event.pull_request.base.sha || github.event.before"
     ) in text, "push and pull-request events must both bind an explicit changed-range base"
-    assert "explicit range base is unavailable; refusing weaker tree-only fallback" in text
-    assert "pull_request_target resolves the current" in text
-    assert "push resolves the triggering protected commit" in text
+    assert 'git cat-file -e "${BASE_SHA}^{commit}"' in text
+    assert "explicit range base unavailable; refusing fallback" in text
     assert 'bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"' in text
+    assert "gh api --paginate --slurp" in text
+    assert "python -m scripts.github.live_pr_policy" in text
+    assert "--event-base-sha" in text
+    assert "--event-head-sha" in text
 
 
 def _legacy_zero_hit_fixture(branch: str) -> Path:

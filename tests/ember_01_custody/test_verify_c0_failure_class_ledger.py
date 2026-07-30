@@ -17,6 +17,7 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 from verify_c0_failure_class_ledger import (  # noqa: E402
     LAW_LISTED_CLASS_IDS,
     LEDGER_SCHEMA,
+    main,
     verify,
 )
 
@@ -215,6 +216,52 @@ def test_blocking_row_yields_blocked_not_closed(tmp_path: Path) -> None:
     assert verdict["ok"] is False
     assert a_class in verdict["blocking"]
     assert not verdict["errors"]  # BLOCKED is well-formed, not malformed
+
+
+def test_cli_non_red_mode_accepts_an_honest_blocked_ledger(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ledger = _complete_all_closed_ledger()
+    a_class = ledger["classes"][0]["class_id"]
+    ledger["classes"][0] = _blocking_row(a_class, "still open, guard not landed")
+    ledger_path = tmp_path / "ledger.json"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--ledger",
+            str(ledger_path),
+            "--repo-root",
+            str(REPO_ROOT),
+            "--require-non-red",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["verdict"] == "BLOCKED"
+    assert payload["errors"] == []
+
+
+def test_cli_non_red_mode_still_rejects_a_red_ledger(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ledger_path = tmp_path / "ledger.json"
+    ledger_path.write_text("{", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--ledger",
+            str(ledger_path),
+            "--repo-root",
+            str(REPO_ROOT),
+            "--require-non-red",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert payload["verdict"] == "RED"
 
 
 def test_blocking_row_missing_blocking_reason_is_red(tmp_path: Path) -> None:
@@ -428,16 +475,16 @@ def test_check_collectability_direct_on_live_guard() -> None:
 # class method collects as file::Class::method, whose leaf is `method`.
 # ---------------------------------------------------------------------------
 
-# A real checked-in test file whose tests are CLASS METHODS on CheckpointArtifactTests.
-# This is the exact shape of the live CHECKPOINT_SHARD_CONTRADICTION guard_ref.
-_CLASS_METHOD_TEST_FILE = "tests/ember_restart_model/test_checkpoint_artifacts.py"
+# A dependency-light checked-in test file whose tests are class methods. This retains
+# the symbol-leaf contract without importing the full Torch model stack in policy CI.
+_CLASS_METHOD_TEST_FILE = "tests/ember_01_custody/test_checkpoint_scratch_cap.py"
 # A real collectable test that is a method on the class (leaf == this symbol).
 _REAL_CLASS_METHOD_SYMBOL = (
-    "test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap"
+    "test_rejects_before_an_over_cap_write_changes_the_destination"
 )
 # A real symbol in the same file that RESOLVES (it is the `class` def) but is NOT a
 # collected test node -- its leaf never appears as a pytest node leaf.
-_NON_TEST_SYMBOL = "CheckpointArtifactTests"
+_NON_TEST_SYMBOL = "TestScratchCappedWriter"
 
 
 def _ledger_with_symboled_test_guard(rel_path: str, symbol: str) -> dict:
