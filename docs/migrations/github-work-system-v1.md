@@ -3,7 +3,7 @@
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 # GitHub Work System v1 Migration
 
-Status: source migration ready for one-PR landing.
+Status: v1 scaffold landed; the corrective migration is in progress.
 
 ## Transaction boundary
 
@@ -58,9 +58,18 @@ branch deletion after merge.
   replaced and 73 remaining closed-history associations were removed.
 - GitHub's issue/PR event history, bodies, acceptance clauses, and closure
   states were preserved.
-- All 155 open issues were reviewed from full body plus captured comments.
-- Every open issue has exactly one kind, state, and priority; one-to-three
-  areas; and severity only for defects/model behavior.
+- The original 155-item assignment was machine-classified. It was not a
+  semantic review and the former `FULL_BODY_AND_COMMENT_REVIEWED` claim is
+  retracted.
+- The corrective transaction reviewed every live P0/P1 and S0/S1 candidate
+  against the captured title, body, and complete comment snapshot. Reviewer
+  identity, source hashes, and per-item basis are recorded in
+  `priority-semantic-review-v2.json`.
+- Every remaining uncertain item is explicitly `state:triage` and
+  `needs:review`; machine output cannot assign authoritative priority/severity.
+- Every open issue has exactly one kind and state plus zero-to-three areas.
+  Priority and, where applicable, severity are present only on semantically
+  reviewed non-triage work.
 - 123 native sub-issue edges are verified. Of those, 122 already existed and
   one missing edge was added. Cross-cutting work remains unparented rather
   than being forced into one inaccurate parent.
@@ -95,11 +104,9 @@ Permanent workflows:
 - repository, PR, label, issue-intake, and template policy gates;
 - fast PR CI, full main CI, nightly diagnostics;
 - Windows CLI lifecycle;
-- health and branch-hygiene reporting;
-- issue lifecycle communication;
+- health and branch-inventory reporting;
 - action/dependency/CodeQL security;
-- GPU receipt verification;
-- release rehearsal;
+- CLI build smoke;
 - safe auto-merge enrollment.
 
 Bounded workflows:
@@ -112,9 +119,11 @@ retirement rule. Neither creates work merely to move a counter.
 
 ## Required checks and rules
 
-The required contexts remain `guard` and `compiled-lifecycle`; no protection
-change is needed. Their successor jobs use the same stable names and always
-report for applicable pull requests. No ruleset existed to migrate.
+The stable `guard` context now includes the trusted, base-pinned live PR
+metadata policy. `compiled-lifecycle` remains the real Windows/ConPTY
+lifecycle gate. The `ci-pr` aggregate becomes required only after it reports
+successfully on the corrective head and branch protection is verified without
+reducing any existing protection.
 
 The `guard` path reads untrusted pull-request bytes without executing them
 under write authority. Privileged workflows do not run pull-request code.
@@ -127,8 +136,8 @@ explicit, and all jobs have timeouts.
   narrowly defined metadata mutation is required.
 - Auto-merge enrollment is allowlist- and policy-gated; it does not weaken
   required checks or review provenance.
-- GPU CI verifies content-addressed receipts and never schedules uncontrolled
-  training.
+- Receipt validation remains owned by the repository guard; the false-green
+  `gpu-receipt-verify` workflow was removed.
 - Dependency review and CodeQL are separated from ordinary CI.
 - Workflow policy rejects floating action references, missing timeouts,
   overbroad permissions, and privileged execution of pull-request code.
@@ -171,6 +180,13 @@ Metadata rollback:
    authoritative.
 
 Do not bulk-close, delete issue history, or infer rollback from counts.
+
+Legacy issue bodies created on or before the immutable PR #1183 merge boundary
+(`2026-07-29T18:40:52Z`) are preserved historical records. Label, milestone,
+or reopen events continue to enforce metadata cardinality but do not require a
+body rewrite. Issues created after that boundary must carry the current form
+marker and schema. A substantial body migration is a separately reviewed
+change, never an incidental consequence of metadata maintenance.
 
 ## Claim boundary
 

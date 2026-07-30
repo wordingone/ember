@@ -29,7 +29,7 @@ def build(snapshot: dict[str, Any]) -> dict[str, Any]:
             }
         )
     return {
-        "schema_version": "ember-branch-hygiene-audit/v1",
+        "schema_version": "ember-branch-inventory/v1",
         "repository": snapshot["repository"],
         "source_snapshot_sha256": snapshot["snapshot_sha256"],
         "branch_count": len(rows),

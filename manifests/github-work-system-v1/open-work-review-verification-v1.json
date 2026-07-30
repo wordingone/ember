@@ -1,0 +1,33 @@
+{
+  "schema_version": "ember-github-work-system-open-work-verification/v1",
+  "repository": "wordingone/ember",
+  "source_snapshot_sha256": "8ba9b3151c9cf0b36f2fcc05fd2eca678871a6c7d8d74bc738b48e9a8c415f43",
+  "post_apply_snapshot_sha256": "4aabc172f15dceef83fd4cb607b75b5aa9835696fcab35aeed6f8fcf5c5a1274",
+  "plan_sha256": "ab33405288c10cd1f40ef5848a5e280fb234af9ce92275369998de5f00747abb",
+  "plan_file_sha256": "a397590802ddcae146d9ca6def08f05691ef11ac04aef3f264c6442a129a5fd4",
+  "apply_receipt_sha256": "e66aacd82e11ec481fa773f59da1b54a5bbcde78a888f0dbbf2acda78d0e1bd0",
+  "apply_receipt_file_sha256": "367aae603670faac37633408811da9b39ab8ca076e18ea70db0783179b80d244",
+  "semantic_review_file_sha256": "01f60b84972fcbd9d83d64355d27f0748d054afc6912de08eaf8388e518fe28d",
+  "live_population": {
+    "open_issue_count": 155,
+    "open_pull_request_count": 5,
+    "semantically_reviewed_priority_or_severity_count": 68,
+    "machine_classified_uncertain_count": 87,
+    "state_triage_count": 87,
+    "needs_review_count": 87,
+    "priority_p0_count": 10,
+    "priority_p1_count": 41,
+    "severity_s0_count": 0,
+    "severity_s1_count": 7
+  },
+  "verification": {
+    "label_mismatch_count": 0,
+    "body_hash_mismatch_count": 0,
+    "issue_body_mutation_count": 0,
+    "issue_closure_count": 0,
+    "pull_requests_excluded_from_issue_plan": true,
+    "issue_286_corrected": true,
+    "issue_894_corrected": true
+  },
+  "claim_boundary": "This receipt proves only the bounded live metadata transaction and exact snapshot comparison. It does not prove issue completion, issue-body truth, model capability, training progress, benchmark quality, or research progress."
+}

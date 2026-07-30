@@ -62,8 +62,10 @@ Issue bodies and acceptance clauses are never rewritten by label migration.
   kernel with deterministic policy validation.
 - `cli-windows-lifecycle-e2e.yml` keeps the stable `compiled-lifecycle` job.
 - `pr-policy.yml` reports structural work-item policy for every pull request.
-- `ci-pr.yml` is an always-triggered aggregator. Optional language jobs may
-  skip, but the aggregate reports.
+- `ci-pr.yml` is an always-triggered aggregate landing gate. Optional
+  language jobs may skip only where the workflow declares that boundary; the
+  aggregate itself reports and becomes a protected required context after its
+  first successful corrective-head run.
 
 ### Pull-request evidence
 
@@ -86,7 +88,7 @@ concurrency cancels superseded unprivileged work.
   repository audits without making branch activity a correctness signal.
 - `repo-health-report.yml` publishes measurements rather than treating quiet
   trunk time as failure.
-- `branch-hygiene-audit.yml` is read-only and reports candidates; it never
+- `branch-inventory.yml` is read-only and reports candidates; it never
   deletes branches.
 
 ### Bounded campaigns
@@ -114,6 +116,12 @@ The migration is one rollback boundary:
 10. update repository settings and required checks only after successor checks
     have reported;
 11. capture and hash the post-migration snapshot.
+
+Legacy issue bodies created on or before the immutable PR #1183 merge boundary
+(`2026-07-29T18:40:52Z`) remain historical. Metadata events enforce canonical
+label cardinality without forcing those bodies through the new issue-form
+schema. New issues and deliberately rewritten legacy issues must use the
+current form marker and schema.
 
 All GitHub mutations are replayable from the plan and auditable from the
 receipt. Rollback uses the migration commit/revert plus the before snapshot and

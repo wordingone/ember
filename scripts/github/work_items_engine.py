@@ -217,9 +217,12 @@ def _milestone_code(value: str | None) -> str | None:
 def build_review_plan(snapshot: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
     candidates = build_candidates(snapshot)
     candidate_by_number = {row["number"]: row for row in candidates["rows"]}
+    issues = [
+        item for item in snapshot["open_items"] if item.get("item_type") == "issue"
+    ]
     canonical = {row["name"] for row in manifest["labels"]}
     rows: list[dict[str, Any]] = []
-    for item in snapshot["open_items"]:
+    for item in issues:
         number = int(item["number"])
         candidate = candidate_by_number[number]
         if candidate["review_status"] != "MACHINE_CANDIDATE":
@@ -238,15 +241,22 @@ def build_review_plan(snapshot: dict[str, Any], manifest: dict[str, Any]) -> dic
                 label for label in labels if not label.startswith("state:")
             ] + ["state:in-progress"]
         kept = [name for name in item.get("labels", []) if name in canonical]
-        desired = sorted(set(labels + kept))
+        desired = sorted(
+            set(
+                label
+                for label in labels + kept
+                if not label.startswith(("state:", "priority:", "severity:"))
+            )
+            | {"state:triage", "needs:review"}
+        )
         kinds = [name for name in desired if name.startswith("kind:")]
         areas = [name for name in desired if name.startswith("area:")]
         states = [name for name in desired if name.startswith("state:")]
         priorities = [name for name in desired if name.startswith("priority:")]
         if len(kinds) != 1 or not 1 <= len(areas) <= 3 or len(states) != 1:
             raise WorkItemError(f"issue #{number}: invalid kind/area/state cardinality")
-        if len(priorities) != 1:
-            raise WorkItemError(f"issue #{number}: invalid priority cardinality")
+        if priorities:
+            raise WorkItemError(f"issue #{number}: machine proposal assigned priority")
         if not set(desired).issubset(canonical):
             raise WorkItemError(f"issue #{number}: noncanonical desired label")
         code = _milestone_code(item.get("milestone"))
@@ -264,10 +274,10 @@ def build_review_plan(snapshot: dict[str, Any], manifest: dict[str, Any]) -> dic
                 "desired_labels": desired,
                 "primary_milestone": item.get("milestone"),
                 "native_parent_issue": parent,
-                "review_status": "FULL_BODY_AND_COMMENT_REVIEWED",
+                "review_status": "MACHINE_CLASSIFIED",
                 "classification_basis": (
-                    "full issue body, captured comments, current milestone, "
-                    "existing labels, and explicit semantic override table"
+                    "machine proposal only; priority and severity require "
+                    "semantic review"
                 ),
             }
         )
@@ -279,8 +289,9 @@ def build_review_plan(snapshot: dict[str, Any], manifest: dict[str, Any]) -> dic
         "canonical_label_manifest_sha256": _sha(manifest),
         "rows": rows,
         "coverage": {
-            "open_issue_count": len(snapshot["open_items"]),
-            "reviewed_issue_count": len(rows),
+            "open_issue_count": len(issues),
+            "reviewed_issue_count": 0,
+            "machine_classified_issue_count": len(rows),
             "open_pull_request_count": sum(
                 item.get("item_type") == "pull_request"
                 for item in snapshot["open_items"]

@@ -8,10 +8,26 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 MARKERS = ("<!-- ember-template: issue/", "<!-- ember-work-item:")
+LEGACY_MIGRATION_CUTOFF = datetime(
+    2026, 7, 29, 18, 40, 52, tzinfo=timezone.utc
+)
+
+
+def _is_preserved_legacy_issue(issue: dict[str, Any]) -> bool:
+    """Identify bodies that predate the immutable PR #1183 migration boundary."""
+    created_at = issue.get("created_at")
+    if not isinstance(created_at, str):
+        return False
+    try:
+        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return created <= LEGACY_MIGRATION_CUTOFF
 
 
 def validate(issue: dict[str, Any]) -> list[str]:
@@ -21,7 +37,10 @@ def validate(issue: dict[str, Any]) -> list[str]:
         row["name"] if isinstance(row, dict) else row
         for row in issue.get("labels", [])
     }
-    if not any(marker in body for marker in MARKERS):
+    if (
+        not any(marker in body for marker in MARKERS)
+        and not _is_preserved_legacy_issue(issue)
+    ):
         errors.append("missing Ember issue-form marker")
     kinds = [name for name in labels if name.startswith("kind:")]
     states = [name for name in labels if name.startswith("state:")]

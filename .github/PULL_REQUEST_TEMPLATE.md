@@ -1,4 +1,4 @@
-<!-- ember-template: pr/research@v1 -->
+<!-- ember-template: pr/engineering@v1 -->
 
 ## Ember authority binding
 
@@ -8,7 +8,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 
 # PR kind
 
-`kind:research`
+`kind:engineering`
 
 ## Linked issue or governing contract
 
@@ -24,11 +24,7 @@ Use `Closes #N` only when every acceptance clause is completed; otherwise use `R
 
 ## Intended outcome
 
-
-
 ## Why this is one coherent PR
-
-
 
 ## Affected areas
 
@@ -39,8 +35,6 @@ Use one to three canonical `area:*` labels.
 Name the primary milestone and every material `affects:EMBER-XX` impact.
 
 ## Implementation summary
-
-
 
 ## Acceptance-clause mapping
 
@@ -54,23 +48,13 @@ Map every clause to implementation and evidence. State `not closing` when applic
 
 ## Automated tests
 
-
-
 ## Executed evidence
-
-
 
 ## Generated receipts and artifacts
 
-
-
 ## Known failures
 
-
-
 ## Unverified areas
-
-
 
 ## Claim boundary
 
@@ -81,7 +65,5 @@ State exactly what this PR and its evidence do not prove.
 Bind reviewer, exact head, review type, and unresolved findings.
 
 ## Rollback or revert procedure
-
-
 
 ## Follow-up obligations that remain
