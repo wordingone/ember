@@ -1,3 +1,6 @@
+<!-- goal_id: EMBER-02 -->
+<!-- workstream_id: EMBER-02A -->
+<!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 # Ember Claim Map V0
 
 Status: DRAFT Rung 2 projection, not a result.

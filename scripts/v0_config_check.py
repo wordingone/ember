@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """v0_config_check.py — validator for the frozen v0 pretrain config contract.
 
 G-config row of docs/research/v0-launch-gate.md. The launch shim runs this

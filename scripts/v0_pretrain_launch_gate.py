@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """v0_pretrain_launch_gate.py — fail-closed dispatch gate for the owned-core
 v0 pretrain (historical c03: 0.4339B realized / 0.3684B base excluding MTP).
 

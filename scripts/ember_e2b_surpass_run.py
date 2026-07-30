@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_e2b_surpass_run.py — C-E2B surpass harness, PRE-BUILT to fire the
 moment C14 clears (issue #23 follow-on build).
 
