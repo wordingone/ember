@@ -126,7 +126,7 @@ export function modeGlyph(mode: PermissionMode): string {
  */
 export function statusBarText(mode: PermissionMode, _tasksVisible: boolean): string {
   const glyph = modeGlyph(mode);
-  const modeLabel = mode === "bypass" ? "bypass permissions on" : "regular mode";
+  const modeLabel = mode === "bypass" ? "bypass permissions on" : "sandbox";
   return `${glyph} ${modeLabel}`;
 }
 
